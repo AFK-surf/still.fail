@@ -175,6 +175,18 @@ export function ensureKept(sql: Sql): void {
   sql.exec("CREATE TABLE IF NOT EXISTS log_use (kind TEXT NOT NULL, station TEXT NOT NULL, id TEXT NOT NULL, opened INTEGER, evicted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (kind, station, id))");
 }
 
+/// What a chat shows small (an image's thumbnail, a video's poster), kept on the device as its station sent it (base64,
+/// as the calls answer it): a file sent never changes, and a chat opened again, the app started anew, shows it without
+/// reading it again (on a slow link a chat of screenshots took seconds). `size`: the characters of `bytes`; `used`: when
+/// it was last shown (to the day), the least lately shown let go first past FILES_KEPT (account.ts). Both ahead of
+/// `bytes`, so what is counted and let go is read without the images. Made as the first is kept (account.ts).
+export function ensureFilesKept(sql: Sql): void {
+  sql.exec(`CREATE TABLE IF NOT EXISTS file_kept (
+    station TEXT NOT NULL, session TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, type TEXT NOT NULL,
+    size INTEGER NOT NULL, used INTEGER NOT NULL, bytes TEXT NOT NULL, PRIMARY KEY (station, session, name, kind)
+  ); CREATE INDEX IF NOT EXISTS file_kept_used ON file_kept (used);`);
+}
+
 /// What agents said in Slack and heard from it, read from their transcripts as they are written (elsewhere.ts): kept
 /// beyond the transcript's items (let go for room, they are still shown in their chats). Made where missing at every
 /// open, as `said`; answers whether it was made now (to be filled from the transcripts held).

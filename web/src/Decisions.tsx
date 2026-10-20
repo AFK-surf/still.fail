@@ -1,63 +1,84 @@
 // Decisions an agent left to people (a block post with options, client/core-ts/src/decisions.ts), as both screens draw
-// them. In a chat: the post is a message like any other, its options right under it, one per line, the recommended one
-// last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
+// them. In a chat: the post is a message like any other, its options right under it in one card, numbered, the
+// recommended one last; once answered (or replaced), a quiet line saying how. On the decisions page (奏): one at a time, the post and
 // what came just before it drawn as the chat draws them, its options under the post and the chat's composer floating
 // over them at the foot; 待定 puts it at the back of the
 // queue on this device, 不再提醒 stops asking this viewer. The phone swipes for those two (left, right); the wide
 // screen lists them all and shows the one picked (DecisionDesk.tsx), with those two as buttons.
 //
 // A text card (`card.type` text) has a field to write in and a send button where the options would be
-// (decision.reply); a card of a type this page does not know, only a way to its chat, to answer there.
+// (decision.reply); a login card (`login`), the login an agent started (MachineLogins.tsx LoginCard); a card of a type
+// this page does not know, only a way to its chat, to answer there.
 //
 // Everything said goes through the core's calls (decision.answer / reply / defer / dismiss); what is under way shows
 // on its button (doing.ts), what failed in a toast (useAct).
-import { useLayoutEffect, useMemo, useRef, useState, type RefObject, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import type { ChatMessage, DecisionItem, DecisionOption, DecisionsView, MessageCard } from "./core/shapes.ts";
 import { useCall, useTopic } from "./core/react.ts";
-import { CoreError, useApi, useStations } from "./api.ts";
-import { StationContext, stationBase, useStation, type Station } from "./station.tsx";
+import { CoreError, useApi, useStationViews } from "./api.ts";
+import { scopeOf, StationContext, stationBase, useStation, type Station } from "./station.tsx";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
-import { useAct } from "./toast.tsx";
-import { reducedMotion } from "./motion.ts";
+import { useAct } from "@stillfail/ui/toast.tsx";
+import { ENTER, motionMs, play } from "@stillfail/ui/motion.ts";
+import { listPaneOf, reserveRow } from "./listQueue.ts";
+import { useSettling } from "./settling.tsx";
 import { ComposerView, StaticMessage } from "./Chat.tsx";
 import { DecisionsIdle } from "./DecisionsIdle.tsx";
+import { VaultCard } from "./VaultApproval.tsx";
+import { LoginCard } from "./MachineLogins.tsx";
 import { useDraft, type Draft } from "./draft.ts";
 import { MobileComposer, type HostComposer } from "./mobile/ChatHost.tsx";
 import * as css from "./Decisions.css.ts";
 import * as chatCss from "./Chat.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
+import { Option1, Option2, Option3, Option4, Option5, Option6 } from "@stillfail/ui/icons.tsx";
+import { Spinner, Waiting, type WaitNote } from "@stillfail/ui/waiting.tsx";
 
 /** How far (of its width) the decision is swiped before letting go takes it, and how fast a fling has to be (px/ms). */
 const TAKES = 0.35;
 const FLING = 0.6;
 
-/** The options of one decision, one per line; pressing one answers with it (its label, quoting the post). */
-export function DecisionOptions({ station, thread, seq, options, onPick, className }: {
+/** Each option's number, drawn (a card has at most six; past that, set as text). */
+const DIGITS = [Option1, Option2, Option3, Option4, Option5, Option6];
+
+/** The options of one decision, in one card, numbered; pressing one answers with it (its label, quoting the post). */
+export function DecisionOptions({ station, thread, seq, options, onPick, settled, className }: {
   station: string; thread: number; seq: number; options: DecisionOption[];
   /** Before the answer goes: the decisions page sends the decision on its way. */
   onPick?: (option: DecisionOption) => void;
+  /** Answered, still drawn till they close (in a chat): none pressed any more, the one picked (its label) as it was. */
+  settled?: string | null | undefined;
   className?: string;
 }) {
   const call = useCall();
   const act = useAct();
   const doing = useDoingList();
   const sending = doing.find((d) => !failed(d) && doingMatches(d, "decision.answer", { station, thread, seq }));
-  const pick = (o: DecisionOption) => {
-    if (sending) return;
-    onPick?.(o);
+  const pick = (o: DecisionOption, button: HTMLElement) => {
+    if (sending || settled !== undefined) return;
+    if (onPick) onPick(o);
+    // In a chat, the answer (its row, in the outbox) comes in first, in the turn taken now, the options closing after
+    // it; the list follows its end for it, as for words sent (Chat.tsx useToEnd).
+    else {
+      reserveRow(button, motionMs(ENTER.duration));
+      listPaneOf(button)?.dispatchEvent(new Event("sent"));
+    }
     act(call("decision.answer", { station, thread, seq, option: o.label }), t("web-main.decisions.answerWhat", { option: o.label }));
   };
   return (
     <div className={`${css.options} ${className ?? ""}`} role="group" aria-label={t("web-main.decisions.options")}>
-      {options.map((o) => {
+      {options.map((o, i) => {
         const busy = sending?.params.option === o.label;
+        const Digit = DIGITS[i];
         return (
-          <button key={o.label} type="button" className={css.option} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
-            disabled={!!sending} aria-busy={busy || undefined} onClick={() => pick(o)}>
-            <span className={css.optionLabel}>{o.label}</span>
-            {o.detail && <span className={css.optionDetail}>{o.detail}</span>}
-            {busy && <span className={`${waitingCss.spinner} ${css.optionSpinner}`} aria-hidden="true" />}
+          <button key={o.label} type="button" className={css.choice} data-recommended={o.recommended || undefined} data-busy={busy || undefined}
+            data-chosen={(settled !== undefined && settled === o.label) || undefined}
+            disabled={!!sending || settled !== undefined} aria-busy={busy || undefined} aria-description={o.recommended ? t("common.recommended") : undefined}
+            onClick={(e) => pick(o, e.currentTarget)}>
+            <span className={css.choiceNumber} aria-hidden="true">{Digit ? <Digit size={20} /> : i + 1}</span>
+            <span className={css.choiceLabel}>{o.label}</span>
+            {o.detail && <span className={css.choiceDetail}>{o.detail}</span>}
+            {busy && <Spinner inline className={css.choiceSpinner} />}
           </button>
         );
       })}
@@ -84,8 +105,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
   const act = useAct();
   const api = useApi();
   const draftKey = `decision:${station}:${thread}:${seq}`;
-  const upload = useRef((file: File, onProgress?: (sent: number) => void) => api.uploadFile(file, onProgress));
-  const shared = useDraft({ key: draftKey, station, upload: (file, onProgress) => upload.current(file, onProgress) });
+  const shared = useDraft({ key: draftKey, station });
   const [focus, setFocus] = useState(0);
   const draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const send = (written: Draft) => {
@@ -95,11 +115,12 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     const reply = call("decision.reply", {
       station, thread, seq, text: taken.text,
       attachments: taken.files.flatMap((f) => f.done ? [f.done] : []),
+      uploads: taken.files.filter((f) => !f.done && !f.error).map(({ id, name, size }) => ({ id, name, size })),
       quotes: taken.quotes.map(({ id: _, ...q }) => q),
     });
     // Not taken by the core (the card no longer waits, the station gone): back in the field, if nothing was written since.
     act(reply.catch((e: unknown) => {
-      if (e instanceof CoreError && e.code === "invalid_params" && !now.current.text.trim()) written.restore(taken);
+      if (e instanceof CoreError && e.code === "invalid_params" && !now.current.text.trim()) written.restore();
       throw e;
     }), t("web-main.decisions.replyWhat"));
   };
@@ -113,7 +134,7 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
     <div ref={root} className={css.reply} data-mobile={mobile || undefined} onPointerDown={(e) => e.stopPropagation()}>
       <div className={css.replyRoom} aria-hidden="true" />
       {mobile
-        ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} inline />
+        ? <MobileComposer shown={spec} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} inline />
         : <ComposerView draft={draft} thread={thread} sessionKey={session} draftKey={draftKey} submitDraft={send}
             placeholder={spec.placeholder} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} />}
     </div>
@@ -124,7 +145,10 @@ export function DecisionReply({ station, thread, seq, session, mobile, placehold
  * Under an agent's post with options, in its chat: the options while it waits for the viewer (none in a chat that
  * cannot be written to: `thread` null), else how it was settled, quietly, if the core says.
  */
-export function MessageDecision({ message: m, thread }: { message: ChatMessage; thread: number | null }) {
+export function MessageDecision({ message: m, thread, children }: { message: ChatMessage; thread: number | null;
+  /** Under the options, going with them (its 忽略; not under a login card, which stays). */
+  children?: ReactNode;
+}) {
   const station = useStation().address;
   const d = m.decision;
   const open = !d?.resolved && !d?.dismissed;
@@ -133,60 +157,34 @@ export function MessageDecision({ message: m, thread }: { message: ChatMessage; 
   // they are back at once.
   const [drawnOpen, setDrawnOpen] = useState(open);
   const shown = open || drawnOpen;
-  useSettling(box, open, drawnOpen, setDrawnOpen);
+  useSettling(box, open, drawnOpen, setDrawnOpen, { arriving: `.${css.settledLine}` });
   if (!m.card && !m.options?.length) return null;
+  // A login card stays as its login goes (waiting, done, failed, cancelled): it says how it ended itself, once closed.
+  if (m.card?.type === "login" && m.card.login) {
+    return (
+      <div ref={box} className={css.decision}>
+        {open && m.card.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
+        <LoginCard station={loginStation(station, m.card)} id={m.card.login} />
+      </div>
+    );
+  }
   return (
     <div ref={box} className={css.decision}>
       {shown ? <>
         {m.card?.assigneeText && <p className={css.settledLine}>{m.card.assigneeText}</p>}
-        {thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
-          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} />}
+        {/* An agent's request for a vault item: approved here (VaultApproval.tsx), not answered in words. */}
+        {m.card?.vault ? <VaultCard address={station} id={m.card.vault} />
+          : thread !== null && cardType(m.card, m.options) === "options" && !!m.options?.length &&
+          <DecisionOptions station={station} thread={thread} seq={m.seq} options={m.options} settled={open ? undefined : d?.chosen ?? null} />}
+        {children}
       </> : d?.text ? <p className={css.settledLine}>{d.text}</p> : null}
     </div>
   );
 }
 
-/**
- * A decision in its chat settling, in one motion rather than its options vanishing: what was there (read on the last
- * commit that drew it) leaves as a copy, shrinking a little and fading where it was, as the box closes to the quiet
- * line that takes its place; the line comes in once the copy has nearly gone.
- */
-function useSettling(box: RefObject<HTMLDivElement | null>, open: boolean, drawnOpen: boolean, setDrawnOpen: (open: boolean) => void) {
-  const leaving = useRef<{ height: number; copy: HTMLElement; at: DOMRect } | null>(null);
-  useLayoutEffect(() => {
-    if (open) {
-      if (!drawnOpen) setDrawnOpen(true);
-      return;
-    }
-    if (!drawnOpen) return;
-    const el = box.current;
-    leaving.current = null;
-    if (el && el.childElementCount > 0 && !reducedMotion() && document.visibilityState === "visible") {
-      const rect = el.getBoundingClientRect();
-      leaving.current = { height: rect.height, copy: el.cloneNode(true) as HTMLElement, at: rect };
-    }
-    setDrawnOpen(false);
-  }, [box, open, drawnOpen, setDrawnOpen]);
-  useLayoutEffect(() => {
-    const was = leaving.current;
-    const el = box.current;
-    if (drawnOpen || !was || !el) return;
-    leaving.current = null;
-    const timing = { duration: 320, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" };
-    const now = el.getBoundingClientRect();
-    el.animate([{ height: `${was.height}px`, overflow: "clip" }, { height: `${now.height}px`, overflow: "clip" }], timing);
-    const { copy } = was;
-    copy.removeAttribute("class");
-    copy.setAttribute("aria-hidden", "true");
-    copy.inert = true;
-    Object.assign(copy.style, { position: "absolute", left: "0", top: `${was.at.top - now.top}px`, width: `${was.at.width}px`, pointerEvents: "none", transformOrigin: "50% 0" });
-    el.append(copy);
-    void copy.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.98)" }], { ...timing, duration: 160, fill: "forwards" })
-      .finished.then(() => copy.remove(), () => copy.remove());
-    // The line comes as what was there has nearly gone, rather than over it.
-    el.querySelector<HTMLElement>(`:scope > .${css.settledLine}`)
-      ?.animate([{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }], { ...timing, duration: 220, delay: 120, fill: "backwards" });
-  }, [box, drawnOpen]);
+/** Where a login card's login is: the chat's station, or another of its workspace (the card's `station`, its key). */
+export function loginStation(chatStation: string, card: MessageCard): string {
+  return card.station ? `${scopeOf(chatStation)}/${card.station}` : chatStation;
 }
 
 export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
@@ -200,7 +198,8 @@ export const keyOf = (d: DecisionItem) => `${d.station}/${d.thread}/${d.seq}`;
 export function useDecisionQueue(workspace: string) {
   const view = useTopic<DecisionsView>({ topic: "decisions", workspace });
   const [replying, setReplying] = useState<DecisionItem | null>(null);
-  const stations = useStations(workspace).value;
+  // Only what places a station (its id, name, whether it is online): the same while those are.
+  const stations = useStationViews(workspace);
   const call = useCall();
   const act = useAct();
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
@@ -226,8 +225,28 @@ export function useDecisionQueue(workspace: string) {
   }, [listed]);
   const back = (d: DecisionItem) => setGone((was) => { const now = new Set(was); now.delete(keyOf(d)); return now; });
   const where = (d: DecisionItem) => ({ station: d.station, thread: d.thread, seq: d.seq });
+  // Kept by station while the stations are: a new one each render would draw everything under its StationContext again.
+  const stationOf = useMemo(() => {
+    const made = new Map<string, Station>();
+    return (d: DecisionItem): Station => {
+      const key = `${d.station}\n${d.stationName}`;
+      let kept = made.get(key);
+      if (!kept) {
+        const s = stations?.find((x) => x.station === d.station);
+        kept = { id: s?.id ?? d.station.split("/")[1] ?? "", name: s?.name ?? d.stationName, online: s?.online ?? true,
+          address: d.station, base: stationBase(d.station), settings: `/w/${workspace}/settings` };
+        made.set(key, kept);
+      }
+      return kept;
+    };
+  }, [stations, workspace]);
+  // None to show while some of it is still read, or could not be: what it waits on (the core's), drawn in their place.
+  const wait = view.value?.wait;
+  const waiting: WaitNote | null = items.length > 0 ? null
+    : wait ? (wait.reading || wait.failing.length > 0 ? wait : null)
+    : view.error ? null : { reading: true };
   return {
-    view, items, replying, setReplying,
+    view, items, replying, setReplying, waiting,
     /** Whether it was set aside (待定), here or by the core. */
     isAside: (d: DecisionItem) => aside.includes(keyOf(d)) || !!d.deferred,
     defer(d: DecisionItem) {
@@ -241,12 +260,8 @@ export function useDecisionQueue(workspace: string) {
     },
     /** Answered here (its option or reply sent): gone. */
     answered: drop,
-    /** The station a decision is on, for its messages (StationContext). */
-    station(d: DecisionItem): Station {
-      const s = stations?.find((x) => x.station === d.station);
-      return { id: s?.id ?? d.station.split("/")[1] ?? "", name: s?.name ?? d.stationName, online: s?.online ?? true,
-        address: d.station, base: stationBase(d.station), settings: `/w/${workspace}/settings` };
-    },
+    /** The station a decision is on, for its messages (StationContext): the same object while the stations are. */
+    station: stationOf,
   };
 }
 
@@ -255,7 +270,6 @@ export function useDecisionQueue(workspace: string) {
  * now over what `place` shows next, then goes. Answered, it draws in to about 88% and is pulled up, faster and faster.
  */
 export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right" | "up", scroller: string): void {
-  if (reducedMotion()) return;
   const ghost = el.cloneNode(true) as HTMLElement;
   ghost.classList.add(css.ghost);
   ghost.classList.remove(css.arriving);
@@ -276,7 +290,7 @@ export function flyOff(el: HTMLElement, place: HTMLElement, to: "left" | "right"
   ] : [{ transform: start }, { transform: end }];
   if (to === "up") ghost.style.transformOrigin = "50% 0%";
   const finish = () => ghost.remove();
-  void ghost.animate(frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
+  void play(ghost, frames, { duration: to === "up" ? 360 : 260, easing: to === "up" ? "cubic-bezier(.55, 0, .85, .35)" : "cubic-bezier(.4, 0, .9, .6)", fill: "forwards" })
     .finished.then(finish, finish);
 }
 
@@ -331,8 +345,9 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
   let body: ReactNode;
   if (!front) {
-    // What has come so far, at once: stations still being read add theirs as they come.
-    body = view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+    // None while stations are still read: their shapes; read and none: what was done today.
+    body = queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+      : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
       : view.error ? <p className={css.empty}>{view.error.message}</p> : null;
   } else {
     const d = front;
@@ -375,11 +390,11 @@ export function DecisionDeck({ workspace, inline, onOpen, className }: {
 
 /** Who has to decide, then the decision's post and what came just before it, as its chat draws them. */
 export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boolean }) {
-  const owner = () => d.message.by.agent ?? d.session;
+  const keeper = d.message.by.agent ?? d.session;
   return <>
     {d.card?.assigneeText && <p className={css.settledLine}>{d.card.assigneeText}</p>}
     <div className={`${chatCss.chatMessages} ${inline ? chatCss.inlineHeads : ""}`} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} owner={owner} />)}
+      {[...d.before, d.message].map((m) => <StaticMessage key={m.seq} message={m} keeper={keeper} />)}
     </div>
   </>;
 }
@@ -389,9 +404,11 @@ export function DecisionMessages({ d, inline }: { d: DecisionItem; inline: boole
  * `onAnswered` once one is picked.
  */
 export function DecisionPicks({ d, onAnswered, onOpen }: { d: DecisionItem; onAnswered: () => void; onOpen: () => void }) {
+  if (d.card?.vault) return <VaultCard address={d.station} id={d.card.vault} onDecided={onAnswered} />;
   const type = cardType(d.card, d.options);
   if (type === "options") return <DecisionOptions station={d.station} thread={d.thread} seq={d.seq} options={d.card?.options ?? d.options} onPick={onAnswered} />;
   if (type === "text") return null;
+  if (type === "login" && d.card?.login) return <LoginCard station={loginStation(d.station, d.card)} id={d.card.login} />;
   return <button type="button" className={css.elsewhere} onClick={onOpen}>{t("web-main.decisions.elsewhere")}</button>;
 }
 
@@ -403,7 +420,8 @@ export function DecisionAnswer({ d, mobile, onAnswered, onReplying }: {
   d: DecisionItem; mobile: boolean; onAnswered: () => void; onReplying: (sending: boolean) => void;
 }) {
   const type = cardType(d.card, d.options);
-  if (type !== "options" && type !== "text") return null;
+  // A vault request is approved, not replied to.
+  if ((type !== "options" && type !== "text") || d.card?.vault) return null;
   return <DecisionReply key={keyOf(d)} session={d.session} mobile={mobile} station={d.station} thread={d.thread} seq={d.seq}
     placeholder={type === "text" ? d.card?.placeholder : undefined} onSent={onAnswered} onSending={onReplying} />;
 }
@@ -469,8 +487,8 @@ function useSwipe(card: React.RefObject<HTMLDivElement | null>, under: React.Ref
     el.style.transform = "";
     delete el.dataset.dragging;
     if (under.current) delete under.current.dataset.side;
-    if (from && !reducedMotion()) {
-      const back = el.animate([{ transform: from }, { transform: "translateX(0px)" }], { duration: 320, easing: "cubic-bezier(.3, 1.25, .5, 1)" });
+    if (from) {
+      const back = play(el, [{ transform: from }, { transform: "translateX(0px)" }], { duration: 320, easing: "cubic-bezier(.3, 1.25, .5, 1)" });
       // What it uncovered stays until it is covered again.
       if (under.current) { const u = under.current; u.dataset.side = dx > 0 ? "right" : "left"; void back.finished.finally(() => { if (!go.current) delete u.dataset.side; }); }
     }

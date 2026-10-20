@@ -1,0 +1,225 @@
+# Screens: a station's browser and desktop, seen and driven from a client
+
+> chat EMBER/1792171443.604000 (2026-10-17). Two parts, joined only by the screen-source interface below:
+> **the station's browser** (agents drive a Chrome the station keeps) and **remote control** (a person sees a screen
+> of the station in a client and drives it). Transport is the mesh only: no WebRTC, no port opened to anyone.
+
+## The station's browser
+
+- Each station keeps one real Chrome (Google Chrome, not a bundled Chromium; Chromium/Edge only when no Chrome is
+  installed), started on demand as a normal browser with its own persistent profile (`<data>/browser/profile`) and
+  `--remote-debugging-port=0` (a non-default user data dir, so Chrome honours it); the port is read from
+  `DevToolsActivePort`. It stays up while used, and goes after a long idle (an hour); logins persist in the profile.
+  It outlives a station process (as jobs do): the next one finds it by `DevToolsActivePort` and takes it up; one that
+  dies in use is started again, on the same port when it is free (`station/src/browser/`).
+- Sites must see a person's browser: headful wherever the machine shows windows (`--headless=new` only where it
+  shows none), no automation switches, and two tells undone: Chrome reports `navigator.webdriver = true` for any
+  debuggable browser (`--disable-blink-features=AutomationControlled`), and headless says `HeadlessChrome` in its user
+  agent (given the headful one's). With either, Google's sign-in answers "This browser or app may not be secure";
+  without them it goes on to the next step, headful or headless, with Playwright attached (Chrome 155, 2026-10-17).
+- Agents get its CDP endpoint (`http://127.0.0.1:<port>`, and the `ws://127.0.0.1:<port>/devtools/browser/<id>` it
+  names) from the `browser` tool and drive it with chrome-devtools-mcp (`--browserUrl`/`--wsEndpoint`) or Playwright
+  (`connectOverCDP`). Sessions share the browser (and its logins) and open their own tabs.
+- Every tab is a screen source (`browser:<targetId>`): CDP screencast for frames, `Input.dispatch*` for input, on a
+  CDP connection of the view's own. Chrome draws (and casts) only the front tab of a window, so a view brings its tab
+  to the front when it opens, when a key frame is asked for and when the person clicks.
+
+## Remote control
+
+### Sources (station/src/screens/source.ts)
+
+A `ScreenSource` is something a person can see and drive: `desktop` (the station machine's display) or `browser` (a tab
+of the station's browser). The `Screens` registry lists them and opens views. A view is pull-driven: the next frame is
+captured/encoded only when the previous ones were taken, so a slow link lowers the frame rate instead of queueing.
+Each source picks its codec among those the client accepts: the desktop is H.264 (hardware encoder), a browser tab may
+be JPEG (CDP screencast) or H.264. Clients decode both.
+
+The station's own users of a screen (the agents' computer-use tool) open views in the process with
+`ScreenHub.openAs(id, options, {name, control})` (station/src/screens/hub.ts): the view is the source's, with no member
+link in between (its `input` posted as a person's is), and while it is open `name` (e.g. `agent: <chat title>`) is in
+the screen's `viewers`, and with `control` in `controlledBy`, told to people on it and in the list like theirs. The
+desktop gives H.264 when the codecs take it and else a JPEG a picture (quality 0.8, same bounds, pull-driven alike);
+JPEG frames are all key frames and their config has no `description`.
+
+### Wire (member link, ALPN `stillfail/admin/1`)
+
+- **List**: `GET /admin/api/screens` →
+  `{"screens":[{id, kind, title, width, height, viewers, controlledBy, access?, clipboard?, drop?}]}`; changes come on
+  the station's event stream as `screens` (same shape). `viewers`: the names of those with a view of it open;
+  `controlledBy`: those of them whose input is taken. `access`, only when something is missing:
+  `{capture, control, message, app?, path?}` (`message` in the asker's language says what to turn on where; the desktop
+  without macOS's grants, or on a machine it is not supported on). `clipboard`: the types a view that drives it carries
+  both ways (`"text"`, `"png"`; the desktop both, a browser tab text); `drop`: `{folder, reveal}`, where a file a person
+  drops into a view is put on the machine (with the drive's upload, `root` the folder: docs/drive.md) and whether the
+  view can show it in the machine's file manager. `peek`: it can be previewed (a tab of the browser). A station from
+  before them says none of these: clients offer none. An old station answers this route 404: a client
+  opens a view only on a station that listed the screen (an old one would read the view's head as a request whose
+  body never ends).
+- **View**: a stream whose head line carries a `screen` object:
+  `{"method":"POST","path":"/admin/api/screens/<id>/view","headers":{},"screen":{"maxWidth":1920,"maxHeight":1080,"codecs":["h264","jpeg"],"control":true}}`.
+  With `"peek": true` it is a preview (a link's card in a chat, below): it only looks (`control` is false), is not in
+  `viewers`, and brings no tab forward (a tab behind another casts nothing then); only of a screen the list says
+  `peek` (a tab of the browser: the desktop's view wakes its display), else 501.
+  The station answers `{"status":200,"headers":{"content-type":"application/x-stillfail-screen"}}`, or an error status
+  with `{error, access?}` (404 no such screen, 400 no codec it knows, 415 none it sends, 501 not supported here, 503
+  not now: no grant, the capture failed), then both directions carry frames: a kind byte, the payload's length
+  (4 bytes big-endian), the payload. Input frames of more than 64 KB end the view.
+
+| kind | direction | payload |
+|---|---|---|
+| 1 `config` | station → client | JSON `{codec:"h264"\|"jpeg", width, height, description?}`: `description` is the avcC (base64) for H.264. Sent first and whenever size or codec changes; the next video frame after it is a key frame. |
+| 2 `video` | station → client | 1 byte flags (bit 0: key frame), 8 bytes timestamp (µs, big-endian), then the frame: H.264 in AVCC (length-prefixed NALs), or one JPEG. |
+| 3 `state` | station → client | JSON `{cursor?: {x, y, shape}, title?, control?, access?, viewers?: [names], controlledBy?: [names], ended?: reason}`: first `{title, control, access?}` (`control`: whether this view's input is taken), then what changes; `ended`: `finished` (the client finished), `gone` (the source went), `stopping` (the station stops) |
+| 4 `clipboard` | station → client | 1 byte type (1 text in UTF-8, 2 PNG), the content: the screen's clipboard each time it changes (a copy made on it), only to a view that drives it; not what it held as the view opened. |
+| 16 `input` | client → station | JSON, coordinates normalised to 0..1 of the frame: `{t:"pointer", x, y, buttons, kind:"down"\|"up"\|"move"}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind:"down"\|"up", key, code, mods}`, `{t:"text", text}` (IME/paste result), `{t:"reveal", path}` (the file manager showing a file dropped into the view; a screen whose `drop` says `reveal`) |
+| 17 `ack` | client → station | 8 bytes: the timestamp of the last frame it decoded. The station keeps at most 2 frames unacknowledged. |
+| 18 `keyframe` | client → station | empty: decoder lost its state, send a key frame |
+| 19 `clipboard` | client → station | 1 byte flags (bit 0: paste it), 1 byte type (1 text, 2 PNG), the content: sets the screen's clipboard and, with paste, pastes it where its focus is. Only from a view that drives it, of a type its `clipboard` names; text at most 1 MB, a PNG 8 MB (a larger frame ends the view, as any client frame past its bound does) |
+
+- Read-only members (`viewer` role) may view but not send input (`control` ignored, input and clipboard frames
+  dropped). The clipboard goes only to and from a view that drives the screen (never one that only looks, nor an
+  agent's), and is not looked at while no such view is open.
+  Anyone else may drive. Every active view shows in `controlledBy` / `viewers`, so people and the agent see who is on it.
+- Ending: either side finishes the stream (the station says `ended` first). When the stream or its connection breaks,
+  the view ends with it; the source's capture stops either way. A client killed with a view open (Android's force
+  stop) says nothing as it goes: when its endpoint connects again, the station asks its older connections whether
+  their other end is still there and closes those that do not answer within 3 s, so the dead view leaves the screen
+  then rather than at QUIC's idle timeout, half a minute on (station/src/mesh/superseded.ts). Another live client
+  with the same key (a tab of Chrome on Android) answers and keeps its own.
+
+### The desktop (station/src/screens/desktop.ts, station/native/helper)
+
+macOS only (elsewhere it is listed with `access` saying it is not supported, and opens nothing). still.fail Helper
+(`still.fail Helper.app`, bundle id `fail.still.helper`, beside `mesh.node` in the release; docs/station-ts-native.md
+§4) does it: ScreenCaptureKit captures the main display scaled into `maxWidth`×`maxHeight`; VideoToolbox encodes H.264
+on the hardware encoder with low-latency rate control (constrained baseline, no reordering, AVCC with the avcC as
+`description`), a picture only when one is asked for and the screen changed (a still screen sends nothing), a key frame
+on request; CGEvent posts the input (mouse with click counts, wheel in pixels, keys by their `code` as the Mac's virtual
+keys, text as Unicode). A view is a connection to the helper's socket. A display asleep is captured black but for the
+cursor: opening a view wakes it (as a person touching the Mac does) and keeps it on until the view ends (an IOKit
+assertion), after which it sleeps as the Mac's settings say.
+
+Screen Recording and Accessibility are granted to the helper app, not to the station: LaunchServices starts it as its
+own process, and a grant, which takes effect only once the process holding it starts again, restarts the helper alone
+(the station and its sessions run on; a view open then ends and the client opens it again). Opening the desktop while a
+grant is missing puts the helper's window up on that Mac (as Cue's Computer Use has it, with PermissionFlow): a row per
+grant, Allow opens the System Settings pane with a panel holding the app to drag into its list. The 503 and the list's
+`access` say what is missing and that the window is up (`asking`), or that opening the screen puts it up. The system's
+own prompt is not used (it would fight the window).
+
+The same app opens the drive's folders macOS protects (`files.*`, docs/drive.md): its window then shows only the rows
+asked for (`permissions.show {grants}`), a folder's row asking macOS's own prompt (the only way a folder is granted).
+
+### Grants (station/src/helper/grants.ts, api/routes/permissions.ts)
+
+What macOS lets the helper do is one look the station keeps (the helper's `status`), shared by the desktop's screen, the
+drive, the station's page and the agents: fresh where it matters (a view opened, a grant asked for), looked at again
+when the helper says a grant changed (its window sees each change while it is up) or comes back, and in the background
+once a page reads it 30 s after the last look. The window too is one: it is put up for a grant once, not again (nor
+brought forward) while it is up asking for it, nor for 3 minutes after it was shown for it, whoever asks.
+
+- The overview (`GET /overview`) carries `permissions` on a Mac's station: `{grants: [{grant, state}], asking, screen,
+  request}`, the grants in order (`capture`, `control`, `documents`, `desktop`, `downloads`, `removable`, `network`;
+  state `granted`, `denied` (a folder refused before), `unknown` (not granted)), those the window asks for now,
+  whether the screen can be seen and driven (Screen Recording and Accessibility both), and whether the viewer may ask
+  (not a read-only member). It is told again (`overview`) as they change. Elsewhere, and on a station from before them,
+  there is none: clients show nothing.
+- `POST /permissions/request {grant}` puts the window up for that grant on the Mac (a folder's Allow then asks macOS's
+  own prompt; a disk's needs one of its kind mounted, which macOS asks about) and answers `{window: "up"|"granted",
+  screen}`; refused in the asker's words: 409 shown a moment ago (or no disk of its kind), 503 not shown, 400 no such
+  grant; a read-only member's 403. With `screen`, the client opens the desktop (`screen/desktop`, the viewer as a link
+  opens it: driving it unless someone else does), so the person clicks in the window and System Settings from wherever
+  they are; without, it says to go to that Mac and click Allow there, the grants on the page changing as they do.
+- The agents' `permissions` tool lists them and, with `request`, puts the window up for one and says what to post with
+  need_human: the desktop's link when the screen can be driven, else to go to the Mac.
+- `localNetwork`, last, is the station's own, not the helper's: macOS's Local Network for the app the station runs in
+  (the desktop app, or the launcher under launchd), told as `localNetworkName`. The station sends a byte to the first
+  address of each LAN it is on (mesh/lan.ts `lanReach`): not let, macOS refuses it at once ("No route to host"), and
+  devices on that LAN reach the station only past a router or a relay (a firewall refusing the LAN is told the same).
+  Listed only while the station is on a LAN. No window asks for it (macOS asks once, as the app first reaches the LAN):
+  asked for, System Settings' Local Network list comes up on the Mac, as rarely as the window does; it takes once the
+  app starts again.
+
+### Clipboard and files
+
+While a person drives a screen, its clipboard goes both ways. The desktop: the helper sets NSPasteboard (text, or PNG
+with a TIFF beside it) and, to paste, posts ⌘V after the input before it; while a view that drives it is open it looks
+at NSPasteboard's changeCount every half a second (nothing else is read until it changes, and what the view set is not
+said back) and sends what was copied: text first, else a picture as PNG; what is past its bound is not sent. A tab of
+the station's browser: text only. The view's own CDP session adds a binding (`Runtime.addBinding`, no `Runtime.enable`)
+and a script that calls it with what the page copies (a copy or cut, as the page set it or as it was selected;
+`navigator.clipboard.writeText`), both taken away as the view ends (Chrome then stops telling of the binding; a page
+open then keeps the function until it loads again); a paste is `Input.insertText` where the focus is.
+
+The clients carry the types the view's state names (`clipboard`; none from a station or helper before them, so nothing
+of another type is offered or sent): a copy made on the screen goes onto the device's clipboard, and their paste sets
+the screen's and pastes it there. The web: as the browser lets it (web/src/screen/Transfer.tsx). Android
+(remote/ScreenClips.kt): text, or a picture as a PNG file in its cache the clip points at (`image/png`, through its
+FileProvider; the newest three kept); Android 13 and later show their own preview of it, before that the viewer says
+so. Its 粘贴 sends the phone's picture where the screen carries pictures (a PNG as it is, another kind converted; past
+8 MB it says so and sends nothing), else its text.
+
+A file dropped into the view (the web) or picked (Android) goes up with the drive's upload (`drive.upload.part`, root
+the screen's `drop.folder`, a free name beside one already there) while its progress shows; once there the page says
+where it is, offers to show it in the machine's file manager (`reveal`) and to paste its path (`clipboard` with paste).
+The folder is the machine's Downloads, where files from elsewhere land (a browser's, AirDrop's) and file dialogs look
+first; the home where there is none (drive/drive.ts `dropFolder`). Only the folder's entry is looked at to say so,
+never what is in it: on macOS listing a protected folder can put a privacy prompt up and hold the station until it is
+answered. A station macOS keeps from Downloads is refused as any upload there is (`permission`, said on the file's
+row) until the drive reaches protected folders through still.fail Helper.
+
+### Clients
+
+The core (client/core-ts/src/screens.ts; docs/client-core.md, the `screens` topic and the `screen.*` calls) holds each
+station's list (read as its stream opens, then its `screens` events; in memory only) and opens views. A view's frames
+go to the page as they come, their bytes beside the JSON rather than in it (the web's worker transfers them, the
+desktop's utility process posts them on the page's port, Android's engine hands them to Kotlin with `emitBytes`); the
+page decodes (WebCodecs or `createImageBitmap` on the web, MediaCodec or a bitmap on Android) and acknowledges each
+frame it drew. What the page draws of the view (its phase, 只看/控制, who else is on it) the core says whole as it
+changes; it opens the view again when the link drops or 只看/控制 changes. Opened with no `control` asked (a link, the
+station's page), it only looks while someone other than the viewer drives the screen (an agent at work, another
+person); the viewer's own views, however many the list names (another window, or those an app killed with the view
+open left), are not someone else. A station from before screens answers `GET /screens` 404: its list is empty and says
+it needs an update, and a link to one of its screens says so without opening a stream (such a station would take the
+stream for a request and wait for a body).
+
+On a phone (Android, the phone web) a finger drives a screen as a trackpad unless the device keeps `direct`
+(`prefs.screenTouch`, switched on the viewer's foot): one finger moves the pointer (relative, faster strokes further:
+`padGain`), a tap clicks where it points, tapped again and moved (or held) it drags, two fingers tapped right-click, two
+moving together scroll. The page draws its own pointer while the finger moves it and takes the station's `cursor` again
+once the finger has been still 600 ms. Directly, a tap clicks where it is, a press held right-clicks, a drag drags. Either
+way two fingers spreading zoom the picture on the phone only (never sent); zoomed, the trackpad's pointer is kept in sight.
+A keys row under the picture while driving sends what a phone's keyboard lacks (Esc, Tab, the arrows) and holds ⌘ ⌃ ⌥ ⇧
+for the next key, typed or tapped (⌘ then c: `{t:"key", code:"KeyC", mods:4}`). On Android a stage made shorter by the
+keyboard keeps the picture as large as it was, the pointer in sight (`ViewZoom.refit`), rather than fitting it smaller. 全屏 puts
+the screen alone on the phone: Android hides the system bars, turns sideways and draws it edge to edge; the phone web
+asks the browser's full screen and, where it lets a page, to turn sideways. The tools fold into one button over the
+corner (the letterbox, for a screen wider than the phone).
+
+### Asking a person to take over
+
+The agents' `screen` tool lists the station's screens and gives a link to one: `<cloud>/w/<workspace>/s/<station>/screen/<id>`.
+The agent posts it with `chat_post` (need_human: "log in here", "solve the captcha") and ends its turn; clients open
+the link in their screen viewer (web: a page; Android: a full-screen activity; in a chat, `link.parse` → `screen`).
+
+In a message the link alone on its line is the screen's card (the core's `screenCard` topic: its title and line from
+the list, `gone` once the list has it no more); within a sentence, its title. A screen the list says `peek` shows live
+in its card: a preview view (JPEG, about the card's width in device pixels) while the card is on the screen and the
+app shown, each frame acknowledged half a second after the one before, so about two pictures a second; its mark until
+the first comes.
+
+### Agents on a screen (station/src/tools/computer.ts)
+
+The agents' `computer` tool operates a screen the way a person's view does, on the same contract: `screenshot`, then
+`click`/`move`/`drag`/`scroll`/`type`/`key` (and `wait`), with a fresh screenshot after each action unless
+`screenshot: false` (`wait` ms first, 500 by default). A session keeps one view per screen open while it uses it
+(`codecs: ["jpeg"]`, scaled into 1280×1280), closed after 60 s unused or when its chat is archived; it joins the
+screen's people as `agent: <chat title>` with control, so it is in `controlledBy` and a person watching sees it work.
+The screenshot is the newest frame the view had (a source sends one only when the screen changed), given as MCP image
+content with its size and its scale to the source's; coordinates are the screenshot's pixels, sent as 0..1. A click
+is move, down, up (twice for a double click); a drag is move, down, 8 moves held, up; a key combination (`cmd+c`) is
+the modifiers down, the key down and up, the modifiers up; text goes as `text`, a newline as Enter. While a person
+(any view in `controlledBy` that is not an agent's) drives the screen, the agent's input is refused with a message to
+wait or ask; screenshots still work. A missing grant answers with the access message and the screen's link, for the
+agent to post with need_human. Clients open a view with `control: false` while a person only watches, so the agent is
+not held off by a watcher.

@@ -2,9 +2,10 @@
 // new chats, uploads, messages, archiving, deleting, stopping, a session's settings, jobs. A real store in a temporary
 // data directory, the real readers over it, a hub with runtimes scripted in-process (test/hub-fakes.ts).
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, basename } from "node:path";
+import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import { Admin } from "../src/api/admin.ts";
 import type { Request } from "../src/api/request.ts";
@@ -15,6 +16,8 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { Hub } from "../src/sessions/hub.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
 import { Store, newMessage } from "../src/store/store.ts";
+import { digest } from "../src/read/digest.ts";
+import { isDeepStrictEqual } from "node:util";
 import { FakeDriver, settle } from "./hub-fakes.ts";
 
 const viewer = { sub: "u", email: "a@x", name: "A", role: "member", workspace: "w", device: "d" };
@@ -116,7 +119,7 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     assert.deepEqual(Object.keys(up), ["name", "path", "size"]);
     assert.equal(up.name, "a_.png");
     assert.equal(up.size, 3);
-    assert.match(up.path, /\/uploads\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-a_\.png$/);
+    assert.match(up.path, /[\\/]uploads[\\/]\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-a_\.png$/);
     assert.ok(!existsSync(join(staged, "old")), "a day-old upload is swept");
     const [, unnamed] = await r.ask("POST", "/uploads", Buffer.from(""));
     assert.match(unnamed.name, /^file$/);
@@ -134,7 +137,7 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     };
     const [sent, said] = await r.ask("POST", `/threads/${id}/messages`, send);
     assert.equal(sent, 200);
-    const moved = join(workspace, "uploads", up.path.split("/").at(-1));
+    const moved = join(workspace, "uploads", basename(up.path));
     assert.ok(existsSync(moved) && !existsSync(up.path), "moved into the session's uploads");
     assert.equal(readFileSync(moved, "utf8"), "png");
     const message = r.store.messagesBefore(id, null, 10).find((m) => m.n === said.n)!;
@@ -150,7 +153,14 @@ test("uploads wait in the station's uploads, a message takes them into its chat 
     assert.equal(again, 200);
     // Named by its place in the uploads when the page gives no name.
     const [, named] = await r.ask("POST", `/threads/${id}/messages`, { attachments: [{ path: moved, width: 5 }] });
-    assert.deepEqual(r.store.messagesBefore(id, null, 10).find((m) => m.n === named.n)!.attachments, [{ name: moved.split("/").at(-1), path: moved, size: 0 }]);
+    assert.deepEqual(r.store.messagesBefore(id, null, 10).find((m) => m.n === named.n)!.attachments, [{ name: basename(moved), path: moved, size: 0 }]);
+
+    // A PNG sent without its size (the desktop's page could not read it): its header says it.
+    const head = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x05, 0xb4, 0, 0, 0, 0x66]);
+    const [, strip] = await r.ask("POST", "/uploads", head, [["name", "strip.png"]]);
+    const [, unsized] = await r.ask("POST", `/threads/${id}/messages`, { attachments: [{ path: strip.path, name: "strip.png", size: head.length }] });
+    const [kept] = r.store.messagesBefore(id, null, 10).find((m) => m.n === unsized.n)!.attachments;
+    assert.deepEqual([kept!.width, kept!.height], [1460, 102]);
 
     const slack = r.store.openThread("slack:T1", "C1", "1.1", null, null);
     assert.deepEqual(await r.ask("POST", `/threads/${slack.id}/messages`, { text: "hi" }), [400, { error: en("station.admin.postOnlyStillfail") }]);
@@ -179,7 +189,7 @@ test("a file in parts: each added where the file ends, asked again or out of pla
     assert.equal(status, 200);
     assert.equal(done.have, 10);
     assert.deepEqual([done.file.name, done.file.size], ["big.bin", 10]);
-    assert.match(done.file.path, /\/uploads\/\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-big\.bin$/);
+    assert.match(done.file.path, /[\\/]uploads[\\/]\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-[0-9a-f]{6}-big\.bin$/);
     assert.equal(readFileSync(done.file.path, "utf8"), "0123456789");
     assert.ok(!existsSync(join(staged, ".part-abcdefgh12")));
     // The last part asked again after it was put together: the same file.
@@ -297,6 +307,47 @@ test("a chat's ended jobs cleared, a job stopped from the pages", async () => {
   }
 });
 
+test("open jobs name their chats: the session's own, listed or archived", async () => {
+  const r = rig();
+  try {
+    const [, listed] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const [, gone] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    await r.ask("POST", `/sessions/${gone.key}/archive`);
+    // Never end by themselves: still running as they are listed, however slow the machine.
+    const a = r.jobs.start(listed.key, "watch", "tail -f /dev/null", r.store.getSession(listed.key)!.workspace, null, false);
+    const b = r.jobs.start(gone.key, "watch", "tail -f /dev/null", r.store.getSession(gone.key)!.workspace, null, false);
+    const [status, open] = await r.ask("GET", "/jobs");
+    assert.equal(status, 200);
+    const chatOf = (id: string) => open.find((j: any) => j.id === id)?.chat;
+    assert.deepEqual([chatOf(a.id)?.id, chatOf(a.id)?.archived], [listed.key, false]);
+    assert.deepEqual([chatOf(b.id)?.id, chatOf(b.id)?.archived], [gone.key, true]);
+    await r.ask("POST", `/jobs/${a.id}/stop`);
+    await r.ask("POST", `/jobs/${b.id}/stop`);
+  } finally {
+    await r.close();
+  }
+});
+
+test("where a session's transcript is: none before its runtime writes it, then the file in its profile's home", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const url = `/sessions/${encodeURIComponent(made.key)}/transcript`;
+    assert.deepEqual(await r.ask("GET", url), [200, { path: null }]);
+    const id = "11111111-aaaa-bbbb-cccc-000000000002";
+    r.store.setRuntimeSessionId(made.key, id);
+    assert.deepEqual(await r.ask("GET", url), [200, { path: null }], "begun, but nothing written yet");
+    // Its profile's home as the reads find it: in the station's config.json.
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }] }));
+    const dir = join(r.data, "homes", "cc", "projects", "-project");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${id}.jsonl`), "");
+    assert.deepEqual(await r.ask("GET", url), [200, { path: join(dir, `${id}.jsonl`) }]);
+  } finally {
+    await r.close();
+  }
+});
+
 test("going on with one of the machine's own sessions", async () => {
   const r = rig();
   const home = process.env.HOME;
@@ -332,6 +383,156 @@ test("without the agents' side: the hub's routes answer that the station is star
   try {
     assert.deepEqual(await r.ask("POST", "/sessions", { runtime: "claude" }), [503, { error: "station starting" }]);
     assert.deepEqual(await r.ask("POST", "/jobs/x/stop"), [503, { error: "station starting" }]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("a file a message names by its path: its peek and the file whole, only within the session's own directories", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude" });
+    const key = encodeURIComponent(made.key);
+    const workspace = r.store.getSession(made.key)!.workspace;
+    mkdirSync(join(workspace, "src"), { recursive: true });
+    writeFileSync(join(workspace, "src", "a.ts"), Array.from({ length: 40 }, (_, i) => `line ${i + 1}`).join("\n"));
+    writeFileSync(join(workspace, "bin.dat"), Buffer.from([1, 0, 2]));
+    const peek = (path: string, line?: string) => r.ask("GET", `/sessions/${key}/peek`, undefined, [["path", path], ...(line ? [["line", line] as [string, string]] : [])]);
+    // Relative to its working directory, and absolute; lines around the one named.
+    const [status, a] = await peek("src/a.ts", "20");
+    assert.equal(status, 200);
+    assert.deepEqual([a.kind, a.name, a.lines.start, a.lines.at, a.lines.text[0], a.lines.text.length], ["text", "a.ts", 17, 20, "line 17", 12]);
+    assert.equal((await peek(join(workspace, "src", "a.ts")))[1].lines.start, 1);
+    assert.deepEqual((await peek("src"))[1].entries, ["a.ts"]);
+    assert.equal((await peek("bin.dat"))[1].kind, "binary");
+    // The agents' home too: their skills and memory.
+    const skill = join(r.data, "agent", "skills", "x", "SKILL.md");
+    mkdirSync(dirname(skill), { recursive: true });
+    writeFileSync(skill, "---\nname: x\n---\n");
+    assert.deepEqual((await peek(skill))[1].lines.text[1], "name: x");
+    // A path from inside a repository of its workspace, as agents write one: the file whose path ends with it.
+    const repo = join(workspace, "cue");
+    mkdirSync(join(repo, "apps", "x", "lib", "ifc"), { recursive: true });
+    writeFileSync(join(repo, "apps", "x", "lib", "ifc", "destination.ex"), "defmodule D do\nend\n");
+    execFileSync("git", ["init", "-q", repo]);
+    execFileSync("git", ["-C", repo, "add", "."]);
+    const [found, d] = await peek("x/lib/ifc/destination.ex");
+    assert.deepEqual([found, d.lines?.text[0]], [200, "defmodule D do"]);
+    assert.equal((await peek("y/ifc/destination.ex"))[0], 404);
+    // Else one of the station's clones (<data>/repos), as agents read them without a worktree: the one fetched last.
+    for (const [name, age] of [["old", 3600], ["new", 0]] as const) {
+      const clone = join(r.data, "repos", name);
+      mkdirSync(join(clone, "web", "src"), { recursive: true });
+      writeFileSync(join(clone, "web", "src", "Peeks.tsx"), `// ${name}\n`);
+      execFileSync("git", ["init", "-q", clone]);
+      execFileSync("git", ["-C", clone, "add", "."]);
+      writeFileSync(join(clone, ".git", "FETCH_HEAD"), "");
+      for (const f of ["FETCH_HEAD", "HEAD", "index"]) utimesSync(join(clone, ".git", f), new Date(Date.now() - age * 1000), new Date(Date.now() - age * 1000));
+    }
+    const [cloned, c] = await peek("web/src/Peeks.tsx");
+    assert.deepEqual([cloned, c.path, c.lines?.text[0]], [200, realpathSync(join(r.data, "repos", "new", "web", "src", "Peeks.tsx")), "// new"]);
+    // Nothing outside, however named; nothing that is not there.
+    assert.deepEqual(await peek("../../../../stillfail.db"), [403, { error: en("station.files.outside") }]);
+    // A file there is, outside: Windows has its own.
+    const outside = process.platform === "win32" ? join(process.env.SystemRoot ?? "C:\\Windows", "win.ini") : "/etc/hosts";
+    assert.deepEqual(await peek(outside), [403, { error: en("station.files.outside") }]);
+    assert.deepEqual(await peek("src/nope.ts"), [404, { error: en("station.files.notFound") }]);
+    const [, whole] = await r.ask("GET", `/sessions/${key}/open`, undefined, [["path", "src/a.ts"]]);
+    assert.equal(Buffer.from(whole.bytes, "base64").toString("utf8").split("\n").length, 40);
+    assert.equal(whole.name, "a.ts");
+  } finally {
+    await r.close();
+  }
+});
+
+test("a row's digest is the core's, whatever the order of its fields", () => {
+  // The values client/core-ts/test/station-flows.test.ts takes: the core makes the same digests.
+  const v = { b: [1, "x", null, true, { z: 2, y: [] }], a: { d: 1.5, c: '中文 \u2028 "q"' }, e: -0 };
+  const w = { e: 0, a: { c: '中文 \u2028 "q"', d: 1.5 }, b: [1, "x", null, true, { y: [], z: 2 }] };
+  assert.deepEqual([digest(v), digest(w), digest({ k: 1 }), digest({ k: 2 })], ["txw0i07ix8", "txw0i07ix8", "1x451bsuzqf", "1jui8glvs7p"]);
+});
+
+test("a list read as what changed of it: its order, and the rows the client does not hold as they are", async () => {
+  const r = rig();
+  try {
+    const made: any[] = [];
+    for (const title of ["a", "b", "c"]) made.push((await r.ask("POST", "/sessions", { runtime: "claude", title }))[1]);
+    const lists: [string, string, [string, string][]][] = [["chats", "id", []], ["chats", "id", [["archived", "1"]]], ["threads", "id", []], ["sessions", "key", []]];
+    const read = async () => Promise.all(lists.map(async ([list, , query]) => (await r.ask("GET", `/${list}`, undefined, query))[1] as any[]));
+    // Held as read, each row's fields in another order.
+    const heldOf = (rows: any[], id: string) => Object.fromEntries(rows.map((x) => [String(x[id]), digest(Object.fromEntries(Object.entries(x).reverse()))]));
+    const before = await read();
+    for (const [i, [list, id, query]] of lists.entries()) {
+      assert.deepEqual(await r.ask("POST", `/changed/${list}`, { held: heldOf(before[i]!, id) }, query), [200, { order: before[i]!.map((x) => x[id]), rows: [] }], list);
+      assert.deepEqual(await r.ask("POST", `/changed/${list}`, { held: {} }, query), [200, { order: before[i]!.map((x) => x[id]), rows: before[i] }], list);
+    }
+    // a renamed, b archived, c as it was.
+    assert.equal((await r.ask("PUT", `/threads/${made[0].thread.id}/title`, { title: "renamed" }))[0], 200);
+    assert.equal((await r.ask("POST", `/sessions/${made[1].key}/archive`))[0], 200);
+    const now = await read();
+    for (const [i, [list, id, query]] of lists.entries()) {
+      const was = new Map(before[i]!.map((x) => [String(x[id]), x]));
+      const [status, changed] = await r.ask("POST", `/changed/${list}`, { held: heldOf(before[i]!, id) }, query);
+      assert.equal(status, 200);
+      assert.deepEqual(changed.order, now[i]!.map((x) => x[id]), list);
+      assert.deepEqual(changed.rows, now[i]!.filter((x) => !isDeepStrictEqual(was.get(String(x[id])), x)), list);
+    }
+    const [, chats] = await r.ask("POST", "/changed/chats", { held: heldOf(before[0]!, "id") });
+    assert.deepEqual([[...chats.order].sort(), chats.rows.map((x: any) => x.id)], [[made[0].key, made[2].key].sort(), [made[0].key]], "c held as it is: not sent");
+    assert.deepEqual(await r.ask("POST", "/changed/chats", { held: [] }), [400, { error: "held: each held row's digest by its id" }]);
+    assert.deepEqual(await r.ask("POST", "/changed/chats", "{"), [400, { error: "held: each held row's digest by its id" }]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("several reads in one: each answered as its GET is, in their order, only the reads of a history", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "hi"));
+    const key = encodeURIComponent(made.key);
+    const gets = [`/threads/${id}/entries?limit=50`, `/threads/${id}`, `/sessions/${key}`, `/sessions/${key}/timeline?before=1000000000000000&limit=200&brief=1`, "/threads/999/entries?after=0", "/usage?from=0", "/events", `/sessions/${key}/files?name=x`];
+    const [status, batch] = await r.ask("POST", "/batch", { gets });
+    assert.equal(status, 200);
+    assert.equal(batch.answers.length, gets.length);
+    for (const [i, get] of gets.slice(0, 5).entries()) {
+      const [path, query] = get.split("?");
+      const [s, body] = await r.ask("GET", path!, undefined, [...new URLSearchParams(query ?? "")]);
+      assert.deepEqual(batch.answers[i], { status: s, body }, get);
+    }
+    assert.equal(batch.answers[4].status, 404);
+    for (const [i, get] of gets.slice(5).entries()) assert.deepEqual(batch.answers[5 + i], { status: 400, body: { error: `not read in a batch: ${get.split("?")[0]}` } });
+    assert.deepEqual(await r.ask("POST", "/batch", { gets: Array.from({ length: 65 }, () => `/threads/${id}`) }), [400, { error: "gets: at most 64 paths to read" }]);
+    assert.deepEqual(await r.ask("POST", "/batch", "{"), [400, { error: "gets: at most 64 paths to read" }]);
+  } finally {
+    await r.close();
+  }
+});
+
+test("an archived chat is listed from its file, and anew once it is archived again", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const id = made.thread.id;
+    r.store.insertMessage(newMessage(id, "1.2", "person", "a@x", "first"));
+    const listed = async () => ((await r.ask("GET", "/threads"))[1] as any[]).find((t) => t.id === id);
+    const before = await listed();
+    // Archived: its entries go to its file, and the lists read it from there (once: a second list is the same).
+    const file = join(r.data, "archive", "threads", `${id}.jsonl.zst`);
+    assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
+    assert.ok(existsSync(file));
+    const archived = await listed();
+    assert.deepEqual([archived.last, archived.lastMessage.text, archived.unread, archived.people], [before.last, "first", before.unread, before.people]);
+    assert.deepEqual(await listed(), archived);
+    // Brought back by what is said in it and archived again: listed as its new file has it.
+    r.store.insertMessage(newMessage(id, "1.3", "person", "b@x", "second"));
+    assert.ok(!existsSync(file));
+    assert.equal((await r.ask("POST", `/sessions/${made.key}/archive`))[0], 200);
+    assert.ok(existsSync(file));
+    const again = await listed();
+    assert.deepEqual([again.last, again.lastMessage.text, again.people.map((p: any) => p.email)], [archived.last + 1, "second", ["a@x", "b@x"]]);
   } finally {
     await r.close();
   }

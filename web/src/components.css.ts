@@ -1,10 +1,10 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { muted } from "./styles/shell.css.ts";
 import { personLetter } from "./styles/cloud.css.ts";
 
 export const creator = style({
-  flex: "none", fontSize: vars.textXs, color: vars.muted, fontWeight: "400", whiteSpace: "nowrap",
+  flex: "none", fontSize: vars.textMeta, color: vars.muted, fontWeight: "400", whiteSpace: "nowrap",
 });
 export const mineFilterBtn = style({
   selectors: {
@@ -15,60 +15,57 @@ export const mineFilterBtn = style({
 });
 export const mineFilterWide = style({});
 export const owner = style({
-  display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textXs, color: vars.text,
+  display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, color: vars.text,
   whiteSpace: "nowrap",
 });
 export const ownerNone = style({ color: vars.subtle });
 export const quota = style({ display: "grid", gap: "10px" });
 export const quotaRow = style({
   display: "grid", gridTemplateColumns: "5.5em minmax(80px, 1fr) 3.2em minmax(7em, auto)", alignItems: "center",
-  gap: "10px", fontSize: vars.textSm,
+  gap: "10px", fontSize: vars.textUi,
 });
-export const quotaReset = style({ fontSize: vars.textXs, color: vars.subtle });
+export const quotaReset = style({ fontSize: vars.textMeta, color: vars.subtle });
 /** A window of an allowance, compact: a rounded box, what is left written in it and its edge drawn as far as is left. */
-export const quotaChips = style({ display: "inline-flex", alignItems: "center", gap: "4px", flex: "none" });
+/** The boxes side by side, onto a second line rather than squeezed where the room is narrow (a hover card). */
+export const quotaChips = style({ display: "inline-flex", flexWrap: "wrap", alignItems: "center", gap: "6px 8px", flex: "none", minWidth: "0" });
 export const quotaChip = style({
-  position: "relative", display: "inline-flex", alignItems: "center", height: "20px", padding: "0 7px",
-  overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  color: vars.green, fontSize: "11px", fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
+  position: "relative", display: "inline-flex", alignItems: "center", flex: "none", whiteSpace: "nowrap", height: "20px", padding: "0 8px",
+  overflow: "hidden", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.neutralBg,
+  color: vars.green, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "1", fontVariantNumeric: "tabular-nums",
   cursor: "default",
   selectors: {
     "&[data-level=\"amber\"]": { color: vars.amber },
     "&[data-level=\"red\"]": { color: vars.red },
     "&[data-level=\"progress\"]": { color: vars.accent },
-    "&[data-small]": { height: "16px", padding: "0 5px", fontSize: "10px" },
+    "&[data-small]": { height: "16px", padding: "0 5px", fontSize: vars.textCaption },
   },
 });
-export const quotaChipEdge = style({
-  position: "absolute", inset: "0", width: "100%", height: "100%", overflow: "visible", pointerEvents: "none",
+/** How full: a quiet grey while there is plenty, its level's colour faintly once it runs low (the accent, moving, for a
+ * download). */
+export const quotaChipFill = style({
+  position: "absolute", top: "0", bottom: "0", left: "0", background: vars.muted, opacity: 0.22, pointerEvents: "none",
+  selectors: {
+    [`${quotaChip}:is([data-level="amber"], [data-level="red"], [data-level="progress"]) > &`]: { background: "currentColor", opacity: 0.2 },
+    [`${quotaChip}[data-level="progress"] > &`]: { transition: "width .5s ease-out" },
+  },
 });
-export const quotaChipTrack = style({ stroke: vars.line });
-export const quotaChipLeft = style({
-  stroke: "currentColor", strokeLinecap: "round",
-  selectors: { [`${quotaChip}[data-level="progress"] &`]: { transition: "stroke-dasharray .5s ease-out" } },
-});
-/** Its number quiet while there is plenty; in its colour once it runs low. */
+/** Its number in the text's colour while there is plenty (the muted grey over the fill read too faint); in its colour
+ * once it runs low. Its mark a step quieter, halfway to the muted grey (still about 6:1 over the fill). */
 export const quotaChipText = style({
-  position: "relative", display: "inline-flex", gap: "4px", color: vars.muted,
+  position: "relative", display: "inline-flex", gap: "5px", color: vars.text,
   selectors: {
     [`${quotaChip}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
 });
-export const quotaChipMark = style({ color: vars.muted });
-export const quotaRing = style({
-  selectors: {
-    "&[data-level=\"amber\"]": { color: vars.amber },
-    "&[data-level=\"red\"]": { color: vars.red },
-  },
-});
-export const quotaRingTrack = style({ fill: "none", stroke: vars.neutralBg });
-export const quotaRingFill = style({ fill: "none", stroke: "currentColor", strokeLinecap: "round" });
-export const quotaRingNumber = style({
-  position: "relative", fontSize: "9.5px", fontWeight: "600", color: vars.text, fontVariantNumeric: "tabular-nums",
-  letterSpacing: "-0.02em",
-});
+export const quotaChipMark = style({ color: `color-mix(in srgb, ${vars.text} 50%, ${vars.muted})` });
+// Its mark and number trimmed to their capitals and figures, so they sit in the middle of the box (as the font sets
+// them, lower by the room it keeps above for accents).
+globalStyle(`${quotaChipText} > span`, { display: "inline-block", textBoxTrim: "trim-both", textBoxEdge: "cap alphabetic" });
 /** A profile's own page: per window its number large, ten cells lit as far as is left, its name and when it refills. */
-export const quotaDials = style({ display: "flex", flexWrap: "wrap", gap: "12px 36px" });
+export const quotaDials = style({
+  display: "flex", flexWrap: "wrap", gap: "12px 36px",
+  selectors: { "&[data-row]": { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px 16px" } },
+});
 export const quotaDial = style({
   display: "grid", justifyItems: "start", gap: "2px", minWidth: "96px", color: vars.green,
   selectors: {
@@ -78,46 +75,27 @@ export const quotaDial = style({
 });
 /** Its number quiet (the text's colour) while there is plenty; in its colour once it runs low. */
 export const quotaDialNumber = style({
-  fontSize: "28px", fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text,
+  fontSize: vars.textDisplay, fontWeight: "600", lineHeight: "1.15", letterSpacing: "-0.02em", color: vars.text,
   fontVariantNumeric: "tabular-nums",
   selectors: {
     [`${quotaDial}:is([data-level="amber"], [data-level="red"]) &`]: { color: "currentColor" },
   },
 });
 export const quotaDialCells = style({ display: "flex", gap: "3px", margin: "4px 0 6px" });
-export const quotaDialLabel = style({ fontSize: vars.textSm, fontWeight: "500", color: vars.text });
-export const quotaDialReset = style({ fontSize: vars.textXs, color: vars.muted });
+export const quotaDialLabel = style({ fontSize: vars.textUi, fontWeight: "500", color: vars.text });
+export const quotaDialReset = style({ fontSize: vars.textMeta, color: vars.muted });
 export const quotaNote = style({});
 export const peopleStack = style({ display: "inline-flex", alignItems: "center", flex: "none" });
 export const peopleMore = style({
-  fontSize: "10px", color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
+  fontSize: vars.textCaption, color: vars.muted, paddingLeft: "6px", boxShadow: "none !important",
 });
-export const ring = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", fontSize: vars.textXs, color: vars.muted,
-});
-export const ringTrack = style({ fill: "none", strokeWidth: "3", stroke: vars.line });
-export const ringFill = style({
-  fill: "none", strokeWidth: "3", stroke: vars.green, strokeLinecap: "round",
-  selectors: {
-    "&[data-level=\"amber\"]": { stroke: vars.amber },
-    "&[data-level=\"red\"]": { stroke: vars.red },
-  },
-});
-globalStyle(`${quotaChipEdge} rect`, {
-  x: "1.25px", y: "1.25px", width: "calc(100% - 2.5px)", height: "calc(100% - 2.5px)",
-  rx: `calc(6px * ${vars.cornerScale} - 1.25px)`, fill: "none", strokeWidth: "2.5px",
-});
-globalStyle(`${quotaChip}[data-small] ${quotaChipEdge} rect`, {
-  x: "1px", y: "1px", width: "calc(100% - 2px)", height: "calc(100% - 2px)", rx: `calc(6px * ${vars.cornerScale} - 1px)`, strokeWidth: "2px",
-});
-globalStyle(`${quotaRing} svg`, { position: "absolute", inset: "0" });
 globalStyle(`${quotaDialNumber} small`, { fontSize: "0.55em", fontWeight: "500", marginLeft: "1px", color: vars.muted });
 globalStyle(`${quotaDialCells} i`, { width: "8px", height: "14px", borderRadius: "2px", background: vars.neutralBg });
+// Three across a phone: the cells a little narrower, so ten of them fit a third of it.
+globalStyle(`${quotaDials}[data-row] ${quotaDial}`, { minWidth: "0" });
+globalStyle(`${quotaDials}[data-row] ${quotaDialCells}`, { gap: "2px" });
+globalStyle(`${quotaDials}[data-row] ${quotaDialCells} i`, { width: "7px" });
 globalStyle(`${quotaDialCells} i[data-on]`, { background: "currentColor" });
 globalStyle(`${peopleStack} > :first-child`, { marginLeft: "0" });
-globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: "9px" });
-globalStyle(`${ring} svg`, { flex: "none" });
-globalStyle(`${ring} text`, {
-  fontSize: "9px", fontWeight: "600", fill: vars.text, fontVariantNumeric: "tabular-nums",
-});
+globalStyle(`${peopleStack} ${personLetter}`, { width: "16px", height: "16px", fontSize: vars.textCaption });
 

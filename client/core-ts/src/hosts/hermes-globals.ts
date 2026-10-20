@@ -2,13 +2,15 @@
 // timers on the engine's loop (`__native.setTimer`), TextEncoder/TextDecoder, structuredClone of plain data,
 // AbortController, a URL that reads absolute URLs, performance.now, crypto.getRandomValues, console. Each is put in only
 // where the engine has none of its own; case conversion always (hermes-case.ts: the engine's needs Java the app has
-// not). Imported first by hosts/hermes.ts.
+// not). Imported first by hosts/hermes-start.ts.
 
-/// What the engine (C++) puts on the global object for the JS (also hosts/hermes.ts's).
+/// What the engine (C++) puts on the global object for the JS (also hosts/engine.ts's).
 export interface HermesNative {
   call(id: number, op: string, json: string, bytes: ArrayBuffer | undefined): void;
   callSync(op: string, json: string): string;
   emit(client: number, json: string): void;
+  /// A message with bytes beside its JSON (a screen view's frame): the bytes reach Kotlin as they are.
+  emitBytes(client: number, json: string, bytes: ArrayBuffer): void;
   fatal(reason: string): void;
   now(): number;
   monotonic(): number;

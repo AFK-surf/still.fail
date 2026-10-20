@@ -1,25 +1,59 @@
-import { style } from "@vanilla-extract/css";
+import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { composerFiles, composerThumb, fileCard } from "../Chat.css.ts";
 
 /** A new chat and a chat: one page, what is above and one composer at the foot (ChatHost.tsx; --m-bottom is its height). */
 export const mChatHost = style({
   position: "absolute", inset: "0",
+  // --m-bottom is this element's own, not inherited, and --m-composer-room a length worked out here (both registered,
+  // ChatHost.tsx): the composer's height changing changes what a chat's elements inherit only when the room it leaves
+  // does, rather than having every message's style worked out anew. A new chat's page reads the height itself.
   vars: { "--m-bottom": "72px", "--m-composer-room": "max(var(--m-bottom), calc(110px + var(--m-foot)))" },
+  selectors: { "&[data-new]": { vars: { "--m-new-bottom": "var(--m-bottom)" } } },
+  "@media": {
+    // Wider (app.tsx WIDE): a new chat keeps a column up to 680 wide in the middle, with at least 72 of room either
+    // side, its composer too; a chat is the screen's width.
+    "(min-width: 680px)": {
+      selectors: { "&[data-new]": { left: "max(72px, calc(50% - 340px))", right: "max(72px, calc(50% - 340px))" } },
+    },
+  },
 });
 /** The composer: a capsule floating over the list, which runs on around it. */
 export const mComposer = style({
   position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "3",
   padding: "8px 10px calc(10px + var(--m-foot))",
+  "@media": {
+    // Wider (app.tsx WIDE): beside the latest chats' button, which is level with it (app.css.ts mRecentButton: 10 + 52 + 10).
+    "(min-width: 680px)": {
+      paddingLeft: "72px",
+      // A new chat's column is clear of it already.
+      selectors: { [`${mChatHost}[data-new] &`]: { paddingLeft: "10px" } },
+    },
+  },
 });
-/** The same composer, in the decisions page's footer rather than over a chat. */
-export const mInlineComposer = style({ position: "relative", padding: "8px 0 0" });
+/** The same composer, in the decisions page's footer rather than over a chat (wider, clear of the latest chats' button too). */
+export const mInlineComposer = style({
+  position: "relative", padding: "8px 0 0",
+  "@media": {
+    "(min-width: 680px)": { paddingLeft: "62px" },
+  },
+});
 export const mHostComposer = style({
   selectors: {
     [`${mComposer}&`]: { zIndex: "6" },
   },
 });
+/** The capsule's corner, and how far in from it what it holds stands (its padding, and the files' own 2). */
+const CAPSULE = 26;
+const FILES_IN = 10;
 export const mComposerCapsule = style({
   viewTransitionName: "composer", display: "flex", flexDirection: "column", gap: "8px", padding: "8px",
-  borderRadius: "26px",
+  borderRadius: `${CAPSULE}px`,
 });
-export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: "13px", color: "var(--m-muted)" });
-export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: "12px" });
+/** The files in it as far from its edge as from its top, rounded as its corner less that: one curve. */
+globalStyle(`${mComposerCapsule} ${composerFiles}`, { padding: `${FILES_IN - 8}px ${FILES_IN - 8}px 0` });
+globalStyle(`${mComposerCapsule} ${composerFiles} :is(${composerThumb}, ${fileCard})`, { borderRadius: `${CAPSULE - FILES_IN}px` });
+export const mComposerOffline = style({ margin: "0", padding: "2px 8px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+export const mComposerError = style({ margin: "0", padding: "0 6px", fontSize: vars.textCaption });
+
+/** What is said on top of the capsule (the chat's waiting): a little inset, just over it. */

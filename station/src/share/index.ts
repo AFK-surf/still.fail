@@ -22,16 +22,21 @@
 // Config: a shared profile has `share: {id, allow}` on its host and `share: {id, borrowed: true, host}` where copied
 // (made and removed only here). Shared skills are config.json `sharedSkills: {name: {id, allow}}`.
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, symlinkSync, unlinkSync, watch, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, unlinkSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import type { Clock } from "effect";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { codexAuthFile } from "../agents/machine-logins.ts";
+import { CONSOLE_FILE } from "../accounts/console.ts";
+import { grokEmail } from "../accounts/profiles.ts";
 import type { Cloud } from "../cloud/state.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { Fibers } from "../ops/fibers.ts";
 import { writePrivate } from "../ops/files.ts";
 import { log } from "../ops/log.ts";
+import { linkSync } from "../ops/links.ts";
+import { joinPath, relativeParts } from "../ops/paths.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -41,6 +46,8 @@ const MAX_SKILL_FILES = 200;
 /// A host lends a Codex token it has for at least this long; one closer to its end is renewed first (when it can be).
 const CODEX_LEND_MS = 24 * 3600_000;
 const CODEX_MIN_MS = 3600_000;
+/// A login lent before is used again while its host does not answer, if it still has this long.
+const KEEP_LENT_MS = 3600_000;
 /// Edits to a skill are taken once they have settled this long.
 const SETTLE_MS = 2000;
 /// What could not be done because another station did not answer is tried again after this, then twice as long each
@@ -67,7 +74,8 @@ export type SharingDeps = {
   /// The station's environment (the machine's own logins are found in it).
   env: Env;
   /// A Claude profile's current access token, renewed when about to run out (the accounts module's).
-  claudeToken: (profile: Json) => Promise<MachineToken>;
+  /// `rejected`: the token a borrower was refused with, renewed first if it is still the current one.
+  claudeToken: (profile: Json, rejected?: string) => Promise<MachineToken>;
   /// Whether a Codex app-server runs on a profile here now (its login must not be renewed under it).
   codexRunning: (profileId: string) => boolean;
   /// A profile's check and allowance as this station has them (for the stations borrowing it).
@@ -96,6 +104,9 @@ type State = {
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const hashOf = (v: unknown) => createHash("sha256").update(typeof v === "string" ? v : JSON.stringify(v)).digest("hex");
 const newId = () => `sh-${randomBytes(10).toString("hex")}`;
+/// The files of a login in a profile's home, handed over with it when it moves: Claude's, Codex's, an OpenCode Console
+/// sign-in's (accounts/console.ts).
+const SIGN_INS = [".credentials.json", ".claude.json", "auth.json", CONSOLE_FILE];
 const keyed = (kind: unknown) => kind === "opencode-go" || kind === "anthropic-api" || kind === "api-provider";
 
 /// A profile as another station gets it: what it is, its key when it has one, never where its files are or a login.
@@ -132,8 +143,12 @@ function readSkill(dir: string): Record<string, Buffer> {
 const skillHash = (files: Record<string, Buffer>) =>
   hashOf(Object.keys(files).sort().map((k) => `${k}\0${createHash("sha256").update(files[k]!).digest("hex")}`).join("\n"));
 
-/// A relative path that stays inside the skill.
-const safePath = (p: string) => p !== "" && !p.startsWith("/") && !p.split("/").some((s) => s === ".." || s === "." || s === "");
+/// A relative path that stays inside the skill (relativeParts: not rooted, no `..`), none of its components `.` or
+/// empty.
+const safePath = (p: string) => {
+  const parts = relativeParts(p);
+  return parts !== null && !parts.some((s) => s === "." || s === "");
+};
 
 function writeSkill(dir: string, files: Record<string, string>) {
   const temp = `${dir}.tmp-${randomBytes(4).toString("hex")}`;
@@ -161,6 +176,15 @@ function jwtExpiry(token: unknown): number | null {
   }
 }
 
+/// When the Codex login lent before, kept in a borrowed profile's home, runs out (0 when there is none).
+function keptCodexExpiry(file: string): number {
+  try {
+    return jwtExpiry(JSON.parse(readFileSync(file, "utf8"))?.tokens?.access_token) ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export class Sharing {
   private deps: SharingDeps;
   private time: Fibers;
@@ -173,6 +197,8 @@ export class Sharing {
   private unreachable = new Map<string, number>();
   /// Shares this station is handing to another right now: not lent meanwhile.
   private moving = new Set<string>();
+  /// The Claude token each borrowed profile was last lent (Codex keeps its own in its home's auth.json).
+  private lentClaude = new Map<string, MachineToken>();
   private reconciling: Promise<void> | null = null;
   private again = false;
   /// Copies asked about in this run (what changed while this station was away is found that way).
@@ -232,7 +258,8 @@ export class Sharing {
 
   private home(p: Json): string {
     const home = String(p.home ?? `homes/${p.id}`);
-    return home.startsWith("/") ? home : join(this.deps.data, home);
+    // Relative to the data directory unless rooted (as each machine roots paths: C:\… on Windows).
+    return joinPath(this.deps.data, home);
   }
 
   private skillsDir(): string {
@@ -500,7 +527,8 @@ export class Sharing {
         if (!meta.isSymbolicLink() || readlinkSync(link) !== target) continue;
       } catch {
         mkdirSync(this.skillsDir(), { recursive: true });
-        symlinkSync(target, link);
+        // Where links are refused, a junction will do: its target is the copy's own directory, which stays where it is.
+        linkSync(target, link, { junction: true });
       }
       this.watchBorrowed(id, target);
     }
@@ -594,7 +622,7 @@ export class Sharing {
       }
       if (method === "share.lend") {
         if (this.moving.has(id)) throw new Error("the login is being moved to another station");
-        return this.lend(p);
+        return this.lend(p, typeof request.rejected === "string" ? request.rejected : undefined);
       }
       if (method === "share.status") return this.deps.status(p.id);
     } else {
@@ -653,6 +681,7 @@ export class Sharing {
   private emailOf(p: Json): string | null {
     if (typeof p.share?.email === "string") return p.share.email;
     const home = this.home(p);
+    if (p.runtime === "grok") return grokEmail(home);
     if (p.runtime === "codex") {
       try {
         const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
@@ -706,10 +735,10 @@ export class Sharing {
   }
 
   /// A short-lived access token of a shared subscription, renewed here when needed.
-  private async lend(p: Json): Promise<Json> {
+  private async lend(p: Json, rejected?: string): Promise<Json> {
     if (p.access?.kind !== "subscription") throw new Error("only a subscription is lent");
     if (p.runtime === "claude") {
-      const t = await this.deps.claudeToken(p);
+      const t = await this.deps.claudeToken(p, rejected);
       return { runtime: "claude", token: t.token, expiresAt: t.expiresAt };
     }
     const file = p.machine === true ? codexAuthFile(this.deps.env) : join(this.home(p), "auth.json");
@@ -732,7 +761,7 @@ export class Sharing {
   private async renewCodex(file: string, auth: Json): Promise<Json> {
     const refresh = auth?.tokens?.refresh_token;
     if (typeof refresh !== "string" || refresh === "") throw new Error("no refresh token");
-    const response = await fetch(this.deps.codexTokenUrl ?? CODEX_TOKEN_URL, {
+    const response = await profileFetch(this.deps.codexTokenUrl ?? CODEX_TOKEN_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ client_id: CODEX_CLIENT_ID, grant_type: "refresh_token", refresh_token: refresh, scope: "openid profile email" }),
@@ -761,17 +790,24 @@ export class Sharing {
     return host;
   }
 
-  /// A borrowed Claude subscription's token, from its host.
-  async lendClaude(profile: Json): Promise<MachineToken> {
+  /// A borrowed Claude subscription's token, from its host; `rejected`, the one a process here was refused with.
+  async lendClaude(profile: Json, rejected?: string): Promise<MachineToken> {
     const host = this.hostOf(profile);
     try {
-      const got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id });
+      const got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id, ...(rejected !== undefined ? { rejected } : {}) });
       this.unreachable.delete(host);
       if (typeof got?.token !== "string") throw new Error("the host lent no token");
-      return { token: got.token, expiresAt: Number(got.expiresAt ?? 0) };
+      const token = { token: got.token, expiresAt: Number(got.expiresAt ?? 0) };
+      this.lentClaude.set(profile.id, token);
+      return token;
     } catch (e) {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
+      const kept = this.lentClaude.get(profile.id);
+      if (kept && kept.token !== rejected && kept.expiresAt - this.time.now() >= KEEP_LENT_MS) {
+        log.warn("share", "the host did not lend a new token; the one lent before is used", { profile: profile.id, error: (e as Error).message });
+        return kept;
+      }
       throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
     }
   }
@@ -780,6 +816,7 @@ export class Sharing {
   /// Codex never renews it here); when they run out.
   async lendCodex(profile: Json): Promise<number> {
     const host = this.hostOf(profile);
+    const home = this.home(profile);
     let got: Json;
     try {
       got = await this.deps.ask(host, { method: "share.lend", id: profile.share.id });
@@ -787,6 +824,11 @@ export class Sharing {
     } catch (e) {
       this.unreachable.set(host, this.time.now());
       this.deps.changed();
+      const kept = keptCodexExpiry(join(home, "auth.json"));
+      if (kept - this.time.now() >= KEEP_LENT_MS) {
+        log.warn("share", "the host did not lend a new login; the one lent before is used", { profile: profile.id, error: (e as Error).message });
+        return kept;
+      }
       throw new Error(`the station this subscription is signed in on did not lend it: ${(e as Error).message}`);
     }
     const auth = {
@@ -795,7 +837,6 @@ export class Sharing {
       tokens: { ...got.tokens, refresh_token: "lent-by-another-station" },
       last_refresh: new Date(this.time.now()).toISOString(),
     };
-    const home = this.home(profile);
     mkdirSync(home, { recursive: true });
     writePrivate(join(home, "auth.json"), JSON.stringify(auth, null, 2));
     return Number(got.expiresAt ?? 0);
@@ -821,6 +862,8 @@ export class Sharing {
     const p = this.profiles().find((x) => x.id === profileId);
     if (!p) throw new Error(`unknown profile ${profileId}`);
     if (isObject(p.share) && p.share.borrowed === true) throw new Error("this profile is another station's");
+    // Grok Build's sign-in is not lent yet (only Claude Code's and Codex's are: lendClaude, lendCodex).
+    if (on && p.access?.kind === "subscription" && p.runtime === "grok") throw new Error("a SuperGrok subscription cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
     this.deps.config.update((raw) => {
       for (const x of raw.profiles ?? []) {
@@ -862,7 +905,7 @@ export class Sharing {
     const allow: string[] | null = Array.isArray(p.share.allow) ? p.share.allow : null;
     const credentials: Record<string, string> = {};
     const home = this.home(p);
-    for (const name of [".credentials.json", ".claude.json", "auth.json"]) {
+    for (const name of SIGN_INS) {
       try {
         const path = join(home, name);
         if (!lstatSync(path).isSymbolicLink()) credentials[name] = readFileSync(path).toString("base64");
@@ -909,7 +952,7 @@ export class Sharing {
     const home = join(this.deps.data, "homes", localId);
     mkdirSync(home, { recursive: true });
     for (const [name, data] of Object.entries(isObject(request.credentials) ? request.credentials : {})) {
-      if (![".credentials.json", ".claude.json", "auth.json"].includes(name) || typeof data !== "string") continue;
+      if (!SIGN_INS.includes(name) || typeof data !== "string") continue;
       const path = join(home, name);
       try {
         if (lstatSync(path).isSymbolicLink()) unlinkSync(path);

@@ -16,6 +16,7 @@ const APP = BETA ? "https://app.youdid.wtf" : "https://app.still.fail";
 const NAME = BETA ? { head: "youdid", tail: ".wtf" } : { head: "still", tail: ".fail" };
 /** The apps' latest builds (cloud's /releases/latest/<app> goes to the one released last; -beta: the beta apps'). */
 const MAC = `https://app.still.fail/releases/latest/${BETA ? "mac-beta" : "mac"}`;
+const WINDOWS = `https://app.still.fail/releases/latest/${BETA ? "win-beta" : "win"}`;
 const ANDROID = `https://app.still.fail/releases/latest/${BETA ? "android-beta" : "android"}`;
 const INSTALL = "curl -fsSL https://app.still.fail/install.sh | sh -s -- <token>";
 
@@ -83,13 +84,16 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
         <div className={`${css.wrap} ${css.navRow}`}>
           <a href="/" className={css.brand} aria-label={NAME.head + NAME.tail}><Themed name="mark" className={css.logo} /><span>{NAME.head}<span className={css.brandTail}>{NAME.tail}</span></span></a>
           {/* The apps, for the device the page is on (data-platform, set before the first paint by site/index.html): on
-              Android the app itself; on a computer a card under the word, with the Mac's and a code to scan for Android. */}
+              Android the app itself; on a computer a card under the word, with the Mac's, Windows' and a code to scan for Android. */}
           <a className={`${css.navLink} ${css.forAndroid}`} href={ANDROID}>下载</a>
           <span className={`${css.menu} ${css.forComputer}`}>
             <button type="button" className={css.navLink}>下载</button>
             <span className={css.menuCard}>
               <a className={css.menuItem} href={MAC}>
                 <b>Mac</b><span>Apple 芯片</span><span className={css.menuGo}>下载 →</span>
+              </a>
+              <a className={css.menuItem} href={WINDOWS}>
+                <b>Windows</b><span>x64</span><span className={css.menuGo}>下载 →</span>
               </a>
               <span className={css.menuItem}>
                 <img className={css.scanCode} src={BETA ? "/android-beta-qr.svg" : "/android-qr.svg"} alt="下载 Android 版的二维码" width={33} height={33} />
@@ -151,8 +155,13 @@ export function Site({ mountDemo, demo }: { mountDemo?: (root: HTMLElement) => v
           <span className={css.footerFirst}>© 2026 {NAME.head + NAME.tail}</span>
           <a className={css.navLink} href={APP}>网页版</a>
           <a className={css.navLink} href={MAC}>Mac</a>
+          <a className={css.navLink} href={WINDOWS}>Windows</a>
           <a className={css.navLink} href={ANDROID}>Android</a>
           <a className={css.navLink} href="https://github.com/AFK-surf/still.fail">GitHub</a>
+          {/* The legal pages: static files in web/public (terms.html, privacy.html, trademark.html; en/ their English). */}
+          <a className={css.navLink} href="/terms">服务条款</a>
+          <a className={css.navLink} href="/privacy">隐私政策</a>
+          <a className={css.navLink} href="/trademark">商标</a>
         </div>
       </footer>
     </div>

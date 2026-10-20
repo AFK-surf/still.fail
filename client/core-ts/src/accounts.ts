@@ -2,7 +2,7 @@
 // token and a rotating refresh token. Tokens are refreshed at most once at a time per account (every caller waits on
 // the same refresh).
 //
-// Wire: POST /v1/auth/token {code, code_verifier, redirect_uri}, POST /v1/auth/refresh (Bearer refresh)
+// Wire: POST /v1/auth/token {code, code_verifier, redirect_uri} (or /v1/auth/password {email, password, name}), POST /v1/auth/refresh (Bearer refresh)
 // {request_id: ULID}, POST /v1/auth/logout (Bearer refresh) {all:false}; tokens answer {access_token, refresh_token,
 // subject, email, name?, expires_at}. Sign-in starts at GET /v1/auth/google/start?state&code_challenge&…&name.
 //
@@ -160,7 +160,31 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(expired().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(expired());
-      if ((pending.epoch ?? 0) !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变，请重新登录"));
+      const account = yield* this.#signedIn(tokens, pending.epoch ?? 0);
+      const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
+      return [account, returnTo] as [AccountView, string];
+    });
+  }
+
+  /// Signs in with an email and a password: only the accounts still.fail cloud set up for that (App Store review's).
+  passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
+      const failed = () => new CoreError("login_failed", t("core-logic.accounts.login.password_failed"));
+      const response = yield* Effect.mapError(this.#post("/v1/auth/password", null, { email, password, name: deviceName }, null), failed);
+      if (response.status === 401) return yield* Effect.fail(new CoreError("login_wrong_password", t("core-logic.accounts.login.wrong_password")).withStatus(401));
+      if (!ok(response)) return yield* Effect.fail(failed().withStatus(response.status));
+      const tokens = readTokens(parseJson(response.body));
+      if (!tokens) return yield* Effect.fail(failed());
+      return yield* this.#signedIn(tokens, epoch);
+    });
+  }
+
+  /// Keeps the account a sign-in answered with, unless accounts changed since it began (`epoch`: one deleted, or all
+  /// signed out) or it is one deleted here.
+  #signedIn(tokens: Tokens, epoch: number): Effect.Effect<AccountView, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      if (epoch !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", t("core-logic.accounts.login.superseded")));
       const account: StoredAccount = {
         sub: tokens.subject,
         email: tokens.email,
@@ -173,12 +197,11 @@ export class Accounts {
       yield* this.#put(account);
       // The picture comes with the profile; fetched once, best effort.
       const picture = yield* this.#picture(account.access);
-      if (picture !== null && (pending.epoch ?? 0) === this.#epoch && this.#get(account.sub)) {
+      if (picture !== null && epoch === this.#epoch && this.#get(account.sub)) {
         account.picture = picture;
         yield* Effect.ignore(this.#put(account));
       }
-      const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
-      return [view(account), returnTo] as [AccountView, string];
+      return view(account);
     });
   }
 
@@ -187,9 +210,9 @@ export class Accounts {
       const epoch = this.#epoch;
       const value = yield* Effect.flatMap(this.#post("/v1/auth/apple/challenge", null, {}, null), (r) => this.#authResponse(r)).pipe(Effect.mapError(asCoreError));
       if (!isObject(value) || ["attempt", "nonce", "state"].some((k) => typeof value[k] !== "string" || value[k].length !== 43)) {
-        return yield* Effect.fail(new CoreError("apple_login_failed", "Apple 登录挑战无效"));
+        return yield* Effect.fail(new CoreError("apple_login_failed", t("core-logic.accounts.apple.challenge_invalid")));
       }
-      if (epoch !== this.#epoch) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变"));
+      if (epoch !== this.#epoch) return yield* Effect.fail(new CoreError("login_superseded", t("core-logic.accounts.login.superseded")));
       const pending: AppleAttempt = { attempt: value.attempt as string, nonce: value.nonce as string, state: value.state as string, epoch };
       yield* Effect.mapError(this.#host.storageSet(APPLE_LOGIN_KEY, toJsonBytes(pending)), asCoreError);
       return { attempt: pending.attempt, nonce: pending.nonce, state: pending.state };
@@ -199,18 +222,16 @@ export class Accounts {
   appleComplete(attempt: string, identityToken: string, authorizationCode: string, name: string | null, state: string | null): Effect.Effect<unknown, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const pending = parseJson(yield* Effect.mapError(this.#host.storageGet(APPLE_LOGIN_KEY), asCoreError));
-      if (!isObject(pending) || typeof pending.state !== "string") return yield* Effect.fail(new CoreError("login_expired", "请重新发起 Apple 登录"));
+      if (!isObject(pending) || typeof pending.state !== "string") return yield* Effect.fail(new CoreError("login_expired", t("core-logic.accounts.apple.restart")));
       if (pending.attempt !== attempt || pending.epoch !== this.#epoch || (state !== null && state !== pending.state)) {
-        return yield* Effect.fail(new CoreError("login_state_mismatch", "Apple 登录状态不匹配"));
+        return yield* Effect.fail(new CoreError("login_state_mismatch", t("core-logic.accounts.apple.state_mismatch")));
       }
       yield* Effect.mapError(this.#host.storageDelete(APPLE_LOGIN_KEY), asCoreError);
       const response = yield* Effect.mapError(this.#post("/v1/auth/apple/token", null, { attempt, identityToken, authorizationCode, name: name ?? "", state: pending.state }, null), asCoreError);
       const tokens = readTokens(yield* this.#authResponse(response));
-      if (!tokens) return yield* Effect.fail(new CoreError("apple_login_failed", "Apple 登录回复无效"));
-      if (pending.epoch !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", "账号状态已改变，请重新登录"));
-      const account: StoredAccount = { sub: tokens.subject, email: tokens.email, name: tokens.name ?? "", picture: "", access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at };
-      yield* this.#put(account);
-      return { account: view(account), accounts: this.list() };
+      if (!tokens) return yield* Effect.fail(new CoreError("apple_login_failed", t("core-logic.accounts.apple.reply_invalid")));
+      const account = yield* this.#signedIn(tokens, pending.epoch as number);
+      return { account, accounts: this.list() };
     });
   }
 
@@ -227,7 +248,7 @@ export class Accounts {
       const receipt = yield* this.#authResponse(yield* Effect.mapError(this.#post("/v1/auth/delete-account", access, {}, null), asCoreError));
       if (!isObject(receipt) || receipt.deleted !== true || receipt.state !== "completed" || receipt.account !== sub ||
           typeof receipt.fence_expires_at !== "number" || !Number.isFinite(receipt.fence_expires_at) || receipt.fence_expires_at <= this.#host.nowMs() / 1000) {
-        return yield* Effect.fail(new CoreError("deletion_incomplete", "服务器尚未完成账号删除"));
+        return yield* Effect.fail(new CoreError("deletion_incomplete", t("core-logic.accounts.delete.incomplete")));
       }
       this.#epoch++;
       this.#deleted.set(sub, receipt.fence_expires_at);
@@ -245,12 +266,12 @@ export class Accounts {
     const raw = isObject(value) ? value.error : undefined;
     const code = typeof raw === "string" && /^[a-z_]{1,80}$/.test(raw) ? raw : "auth_failed";
     const messages: Record<string, string> = {
-      apple_not_configured: "Apple 登录尚未配置，请使用 Google 登录",
-      deletion_coverage_incomplete: "远端个人数据删除尚未支持，账号未被删除",
-      reauth_required: "请重新登录后再删除账号",
-      last_owner: "请先转移所有权或单独删除工作区",
+      apple_not_configured: t("core-logic.accounts.apple.not_configured"),
+      deletion_coverage_incomplete: t("core-logic.accounts.delete.coverage_incomplete"),
+      reauth_required: t("core-logic.accounts.delete.reauth_required"),
+      last_owner: t("core-logic.accounts.delete.last_owner"),
     };
-    return Effect.fail(new CoreError(code, messages[code] ?? "请求未完成，请重试", response.status));
+    return Effect.fail(new CoreError(code, messages[code] ?? t("core-logic.accounts.request_failed"), response.status));
   }
 
   /// A usable access token, refreshing it when it expires within a minute (once at a time per account). A refused

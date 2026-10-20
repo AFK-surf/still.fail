@@ -1,7 +1,7 @@
 // What an agent at work is doing, as a chat shows it (activity.rs): one line, the thing it does now. From a `live`
 // topic's value into `activity`: `{ now: { key, text } }`.
 import { t } from "./i18n.ts";
-import { get, isObject } from "./util.ts";
+import { get } from "./util.ts";
 
 /// A tool's name without its MCP prefix.
 export function toolName(tool: string): string {
@@ -9,25 +9,32 @@ export function toolName(tool: string): string {
   return tool;
 }
 
-/// What kind of thing a tool does, for its icon and its verb.
+/// What kind of thing a tool does, for its icon and its verb. Claude Code's names, Codex's, and DeepSeek Harness's
+/// (lowercase: read, bash, …).
 export function kindOf(tool: string): string {
   switch (toolName(tool)) {
     case "Read":
     case "NotebookRead":
     case "view_image":
+    case "read":
       return "read";
     case "Glob":
     case "Grep":
     case "LS":
     case "ToolSearch":
+    case "glob":
+    case "grep":
       return "search";
     case "Edit":
     case "MultiEdit":
     case "Write":
     case "NotebookEdit":
     case "apply_patch":
+    case "edit":
+    case "write":
       return "edit";
     case "Bash":
+    case "bash":
     case "BashOutput":
     case "KillShell":
     case "exec_command":
@@ -39,10 +46,12 @@ export function kindOf(tool: string): string {
     case "WebFetch":
     case "WebSearch":
     case "web_search":
+    case "web_fetch":
       return "web";
     case "Task":
     case "Agent":
     case "spawn_agent":
+    case "subagent":
       return "agent";
     case "chat_history":
     case "chat_list":
@@ -58,54 +67,156 @@ function verb(kind: string): string {
   return ["read", "search", "edit", "command", "web", "agent", "thread"].includes(kind) ? t(`core-logic.activity.verb.${kind}`) : t("core-logic.activity.verb.other");
 }
 
-/// A string field of a tool's input, read even when the input is cut short.
-export function field(input: string, name: string): string | null {
+// deno-lint-ignore no-explicit-any
+type J = any;
+
+function parseObject(text: string): Record<string, J> | null {
   try {
-    const args = JSON.parse(input) as unknown;
-    if (isObject(args)) {
-      const v = args[name];
-      if (typeof v === "string") return v;
-      if (Array.isArray(v)) return v.filter((p): p is string => typeof p === "string").join(" ");
-      return null;
-    }
-  } catch {}
-  const at = input.indexOf(`"${name}"`);
-  if (at < 0) return null;
-  let rest = input.slice(at + name.length + 2).trimStart();
-  if (!rest.startsWith(":")) return null;
-  rest = rest.slice(1).trimStart();
-  if (!rest.startsWith('"')) return null;
-  rest = rest.slice(1);
-  let out = "";
-  const chars = [...rest];
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (c === '"') break;
-    if (c === "\\") {
-      const next = chars[++i];
-      if (next === undefined) break;
-      out += next === "n" ? "\n" : next === "t" ? "\t" : next;
-    } else out += c;
+    const v = JSON.parse(text);
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/// A call's input as an object: whole, kept to its first characters (a transcript's `… (n more characters)`), or cut
+/// short anywhere (an older station's live step carried its first 300 characters).
+export function args(text: string): Record<string, J> | null {
+  try {
+    const v = JSON.parse(text);
+    return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null;
+  } catch {
+    // Not whole: read below.
+  }
+  // A long call is kept to its first characters, then `… (n more characters)`: read what is there.
+  const at = text.lastIndexOf("\n… (");
+  if (at >= 0 && text.endsWith(" more characters)")) return cutShort(text.slice(0, at));
+  return text.trimStart().startsWith("{") ? cutShort(text) : null;
+}
+
+/// JSON cut short, read as far as it goes: closed where it stops, or (cut in a key, `{"a":"x","descr`) at the field before.
+function cutShort(json: string): Record<string, J> | null {
+  const whole = parseObject(close(json));
+  if (whole) return whole;
+  let quoted = false;
+  let escaped = false;
+  let comma = -1;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i];
+    if (escaped) escaped = false;
+    else if (quoted) {
+      if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") comma = i;
+  }
+  return comma < 0 ? null : parseObject(close(json.slice(0, comma)));
+}
+
+/// JSON cut short, closed where it stops: the string it was in ends with an ellipsis, and what was open is closed.
+function close(json: string): string {
+  const open: string[] = [];
+  let quoted = false;
+  let escaped = false;
+  for (const c of json) {
+    if (escaped) escaped = false;
+    else if (quoted) {
+      if (c === "\\") escaped = true;
+      else if (c === '"') quoted = false;
+    } else if (c === '"') quoted = true;
+    else if (c === "{") open.push("}");
+    else if (c === "[") open.push("]");
+    else if (c === "}" || c === "]") open.pop();
+  }
+  let out = json;
+  if (quoted) {
+    if (escaped) out = out.slice(0, -1);
+    out += '…"';
+  }
+  out = out.trimEnd();
+  if (out.endsWith(":")) out += "null";
+  else if (out.endsWith(",")) out = out.slice(0, -1);
+  return out + open.reverse().join("");
+}
+
+const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim() !== "") ?? "").trim();
+
+/// What a call's words need beyond its input: the workspace's stations' names by id, and what the tasks prepared on
+/// them earlier in the transcript run, by `<station>/<key>` (tasksOf).
+export type Known = { stations?: ReadonlyMap<string, string>; tasks?: ReadonlyMap<string, string> };
+
+/// The line of a command that says what it does: not `exec 2>&1`, `set -e`, a comment or a shebang.
+function commandLine(command: string): string {
+  const lines = command.split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== "");
+  return lines.find((l) => !/^(#|set\s+-|exec\s+\d*[<>])/.test(l)) ?? lines[0] ?? "";
+}
+
+/// What a station task runs, in a few words: the name it was given, else its command.
+function taskOf(a: Record<string, J>): string {
+  const name = typeof a.name === "string" ? firstLine(a.name) : "";
+  return name || (typeof a.command === "string" ? commandLine(a.command) : "");
+}
+
+/// The tasks a transcript prepares on other stations (station_task prepare), by `<station>/<key>`: what each runs.
+export function tasksOf(timeline: J[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const e of timeline) {
+    if (e?.kind !== "tool_call" || typeof e.tool !== "string" || toolName(e.tool) !== "station_task" || typeof e.text !== "string") continue;
+    const a = args(e.text);
+    if (a?.action !== "prepare" || typeof a.station !== "string" || typeof a.key !== "string") continue;
+    const what = taskOf(a);
+    if (what) out.set(`${a.station}/${a.key}`, what);
   }
   return out;
 }
 
-/// What a call does, in a few words.
-export function callText(tool: string, input: string): string {
-  const said = field(input, "description")?.trim();
-  if (said) return said;
-  const kind = kindOf(tool);
-  let target: string | null = null;
-  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"]) {
-    const v = field(input, name);
-    if (v !== null) {
-      const line = (v.split(/\r?\n/)[0] ?? "").trim();
-      target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
-      break;
+/// A call of still.fail's own tools said in words rather than by its name: what it does on which station (station_task,
+/// station_file), the tools it loads (ToolSearch's `select:`); null for any other.
+export function told(tool: string, input: string, known: Known = {}): string | null {
+  const a = args(input);
+  if (!a) return null;
+  const name = toolName(tool);
+  if (name === "station_task" || name === "station_file") {
+    const id = typeof a.station === "string" ? a.station : "";
+    // An id not among the workspace's (or not read yet) is not shown as its 64 hex digits.
+    const station = known.stations?.get(id) ?? (id === "" || /^[0-9a-f]{16,}$/.test(id) ? t("core-logic.activity.remote.another") : id);
+    const key = typeof a.key === "string" ? a.key : "";
+    if (name === "station_file") {
+      const path = typeof a.path === "string" ? (a.path.split("/").pop() ?? a.path) : "";
+      return t(`core-logic.activity.remote.${a.direction === "download" ? "download" : "upload"}`, { station, what: path || key });
     }
+    if (a.action === "list") return t("core-logic.activity.remote.list", { station });
+    if (!["prepare", "start", "get", "log", "stop"].includes(a.action)) return null;
+    const what = (a.action === "prepare" ? taskOf(a) : "") || known.tasks?.get(`${id}/${key}`) || key;
+    return t(`core-logic.activity.remote.${a.action}`, { station, what });
   }
-  const what = target ? `${verb(kind)} ${[...target].slice(0, 80).join("")}` : verb(kind);
-  return kind === "other" && toolName(tool) !== "" ? `${verb(kind)} ${toolName(tool)}` : what;
+  if (name === "ToolSearch" && typeof a.query === "string" && a.query.startsWith("select:")) {
+    const names = a.query.slice("select:".length).split(",").map((n) => toolName(n.trim())).filter((n) => n !== "");
+    if (names.length > 0) return t("core-logic.activity.tools", { names: names.join(t("core-logic.history.did.sep")) });
+  }
+  return null;
+}
+
+/// What a call does, in a few words: its own description, else what still.fail's own tools say of it (told), else its
+/// verb and what it works on. The chat's activity says a running call so, and an execution history names a group of
+/// calls by its latest the same way.
+export function doing(tool: string, input: string, known: Known = {}): string {
+  const a = args(input) ?? {};
+  const said = typeof a.description === "string" ? firstLine(a.description) : "";
+  if (said) return said;
+  const own = told(tool, input, known);
+  if (own) return own;
+  const kind = kindOf(tool);
+  let target = "";
+  for (const name of ["command", "cmd", "file_path", "path", "pattern", "url", "query", "queries", "prompt"]) {
+    const v = a[name];
+    const s = typeof v === "string" ? v : Array.isArray(v) ? v.filter((p): p is string => typeof p === "string").join(" ") : null;
+    if (s === null) continue;
+    const line = firstLine(s);
+    target = kind === "read" || kind === "edit" ? (line.split("/").pop() ?? line) : line;
+    break;
+  }
+  return `${kind === "other" ? toolName(tool) : verb(kind)} ${target}`.trim();
 }
 
 /// Milliseconds since the epoch of an RFC 3339 time; null for anything else.
@@ -126,53 +237,4 @@ export function epochMs(at: string): number | null {
   const doe = yoe * 365 + Math.trunc(yoe / 4) - Math.trunc(yoe / 100) + doy;
   const days = era * 146097 + doe - 719468;
   return (((days * 24 + hh!) * 60 + mm!) * 60 + ss!) * 1000 + ms;
-}
-
-/// What the agent does now.
-export function present(live: unknown): unknown {
-  const steps = (get(live, "steps") as unknown[] | undefined) ?? [];
-  const s = (v: unknown, k: string) => {
-    const x = get(v, k);
-    return typeof x === "string" ? x : "";
-  };
-  const flag = (v: unknown, k: string) => get(v, k) === true;
-  let call: [string, string] | null = null;
-  let replying = false;
-  let thinking = false;
-  for (const step of Array.isArray(steps) ? steps : []) {
-    if (flag(step, "ended") || flag(step, "subagent")) continue;
-    const kind = s(step, "step");
-    if (kind === "thinking") thinking = true;
-    else if (kind === "tool") {
-      const tool = s(step, "tool");
-      const name = toolName(tool);
-      if (name === "chat_post") replying = true;
-      else if (name === "chat_state") {
-      } else if (s(step, "input").trim() === "" && kindOf(tool) !== "other") {
-      } else call = [s(step, "id"), callText(tool, s(step, "input"))];
-    }
-  }
-  const r = get(live, "rate");
-  const rate = typeof r === "number" && Number.isInteger(r) && r >= 0 ? r : 0;
-  const phase = s(get(live, "phase"), "phase");
-  let key: string;
-  let text: string;
-  if (call) [key, text] = call;
-  else if (replying) {
-    key = "reply";
-    text = rate > 0 ? `${t("core-logic.activity.replying")} · ≈ ${rate} token/s` : t("core-logic.activity.replying");
-  } else {
-    let k: string;
-    let w: string;
-    if (thinking) [k, w] = ["think", "core-logic.activity.thinking"];
-    else if (phase === "starting") [k, w] = ["starting", "core-logic.activity.starting"];
-    else if (phase === "requesting") [k, w] = ["requesting", "core-logic.activity.requesting"];
-    else if (phase === "thinking") [k, w] = ["think", "core-logic.activity.thinking"];
-    else if (phase === "responding") [k, w] = ["write", "core-logic.activity.writing"];
-    else [k, w] = ["busy", "core-logic.activity.busy"];
-    key = k;
-    const said = t(w);
-    text = rate > 0 ? `${said} · ≈ ${rate} token/s` : said;
-  }
-  return { now: { key, text } };
 }

@@ -98,6 +98,20 @@ export interface Host {
   storageSet(key: string, value: Uint8Array): Effect.Effect<void, HostError>;
   storageDelete(key: string): Effect.Effect<void, HostError>;
 
+  /// Values the system keeps sealed (docs/vault.md, "设备上的钥匙"): an app's only (Android's Keystore; the desktop's
+  /// Electron safeStorage, its key in the macOS keychain or Windows' DPAPI); a web page has none. `user: true`: reading
+  /// it takes the person (biometrics or the device's credential; Touch ID on a Mac that has it), `reason` said in the
+  /// prompt; `user: false`: sealed at rest, read without asking. A value is read as it was kept: asked with the other
+  /// `user`, it fails. The host's errors say `user_cancelled` (the person said no), `no_device_lock` (no screen lock,
+  /// so nothing can need the person) or `not_in_front` (no screen to ask on) as their message.
+  secureGet?(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError>;
+  secureSet?(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError>;
+  secureDelete?(key: string): Effect.Effect<void, HostError>;
+  /// The person asked to say yes, as reading a `user: true` value asks them, `reason` in the prompt: before what they
+  /// should mean (turning the workspace lock off). Succeeds at once where nothing can ask (Windows, Linux, a Mac
+  /// without Touch ID); fails as `secureGet` does (`user_cancelled`, `no_device_lock`, `not_in_front`).
+  secureAsk?(reason: string): Effect.Effect<void, HostError>;
+
   /// An account's SQLite database by name (`account-<sub>`), made empty if it is not there: one file per signed-in
   /// account (docs/core-db.md). Fails when it cannot be opened, or another process holds it (`SqlError` "busy").
   /// A host without one keeps nothing on the device.
@@ -121,6 +135,9 @@ export interface Host {
   resetConnections(): void;
 
   randomBytes(buf: Uint8Array): void;
+  /// Whether what this host keeps is out of reach of still.fail cloud's code: an app's (desktop, Android), not a web
+  /// page's, whose code the cloud serves. Only such a host keeps a key that signs for the workspace lock (lock.ts).
+  appKeys?: boolean;
 
   /// Delivers a message to one connected UI.
   emit(client: ClientId, message: CoreMessage): void;
@@ -128,7 +145,22 @@ export interface Host {
   /// A TCP connection to this machine's `port` (adbd, for the adb share: adb.ts), open while the scope is; only a
   /// native host has one.
   tcp?(port: number): Effect.Effect<TcpConnection, HostError, Scope.Scope>;
+
+  /// An HTTP listener on this machine's loopback `host` (127.0.0.1 or ::1, nothing else) at `port`, open while the scope
+  /// is: what comes to it, a request at a time (a login's browser coming back, docs/remote-login.md). Fails when the port
+  /// is taken there. Only a native host has one (a web page cannot listen).
+  listen?(port: number, host: "127.0.0.1" | "::1" | string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope>;
 }
+
+/// A request that came to a loopback listener (`Host.listen`): what it asked, and how it is answered (once).
+export type LoopbackRequest = {
+  method: string;
+  /// With its query.
+  path: string;
+  headers: [string, string][];
+  body: Uint8Array;
+  respond(status: number, headers: [string, string][], body: Uint8Array): void;
+};
 
 /// A TCP connection: what comes in, as it comes; what goes out; `end`, no more goes out.
 export type TcpConnection = { read: Pull<Uint8Array>; write(bytes: Uint8Array): Effect.Effect<void, HostError>; end(): void };

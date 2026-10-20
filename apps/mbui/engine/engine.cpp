@@ -1,0 +1,444 @@
+// The still.fail core in Hermes, for the mbui app on Windows (engine.h): Android's engine
+// (apps/android/core/src/main/cpp/engine.cpp) with its JNI taken out. One thread per core runs the Hermes runtime and
+// its loop (tasks posted to it, timers due, microtasks drained after each); the core's script gets `__native`, whose
+// calls go to the Rust shell (client/shell: HTTP, still.fail cloud's socket, files and the accounts' SQLite, TCP, iroh)
+// and whose answers come back as tasks; what the core says, and the calls only the app can do (`secure.*`, `listen.*`),
+// go to the host (sf_engine_host). A JS error that escapes, or a bug the core reports, ends the core as on Android:
+// `{"fatal": …}`, and the host starts another.
+#ifdef _WIN32
+#include <windows.h>
+#include <bcrypt.h>
+#include <process.h>
+#else
+#include <pthread.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#endif
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdio>
+#include <cstring>
+#include <deque>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+
+#include <hermes/hermes.h>
+#include <jsi/jsi.h>
+
+#include "engine.h"
+
+namespace jsi = facebook::jsi;
+
+extern "C" {
+typedef void (*sf_complete)(void*, uint64_t, const uint8_t*, size_t, const uint8_t*, size_t, const uint8_t*, size_t, uint8_t);
+void* sf_shell_start(const char* data_dir, sf_complete complete, void* ctx);
+void sf_shell_call(const void* shell, uint64_t id, const char* op, const uint8_t* json, size_t json_len, const uint8_t* bytes, size_t bytes_len, uint8_t has_bytes);
+uint8_t* sf_shell_call_sync(const void* shell, const char* op, const uint8_t* json, size_t json_len, size_t* out_len);
+void sf_free(uint8_t* ptr, size_t len);
+void sf_shell_stop(void* shell);
+int32_t sf_utc_offset_min(double at_ms);
+}
+
+namespace {
+
+/// Milliseconds since 1970 (the wall clock).
+double wallMs() {
+#ifdef _WIN32
+  FILETIME ft;
+  GetSystemTimePreciseAsFileTime(&ft);
+  uint64_t t = (uint64_t(ft.dwHighDateTime) << 32) | ft.dwLowDateTime;  // 100 ns since 1601
+  return double(t - 116444736000000000ULL) / 10000.0;
+#else
+  timeval tv{};
+  gettimeofday(&tv, nullptr);
+  return double(tv.tv_sec) * 1000.0 + double(tv.tv_usec) / 1000.0;
+#endif
+}
+
+/// Milliseconds on the clock the timers run on, which never goes back.
+double steadyMs() {
+  using namespace std::chrono;
+  return double(duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count()) / 1000.0;
+}
+
+void randomBytes(uint8_t* p, size_t n) {
+#ifdef _WIN32
+  BCryptGenRandom(nullptr, p, ULONG(n), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+#else
+  arc4random_buf(p, n);
+#endif
+}
+
+/// A JSON string literal of `s` (for `{"fatal": …}`).
+std::string quote(const std::string& s) {
+  std::string out = "\"";
+  for (unsigned char c : s) {
+    switch (c) {
+      case '"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default:
+        if (c < 0x20) {
+          char buf[8];
+          snprintf(buf, sizeof buf, "\\u%04x", c);
+          out += buf;
+        } else out += char(c);
+    }
+  }
+  return out + "\"";
+}
+
+class Engine;
+
+/// What the shell answers through (as on Android): stopping the shell does not wait for what it is doing, so an answer
+/// can come after the engine is gone. The shell holds this rather than the engine; stopping takes the engine out of it.
+/// Never freed: a few bytes per restart.
+struct Gate {
+  std::mutex mutex;
+  Engine* engine;
+};
+
+/// Bytes the runtime keeps as its script.
+class Bytes : public jsi::Buffer {
+ public:
+  explicit Bytes(std::string data) : data_(std::move(data)) {}
+  size_t size() const override { return data_.size(); }
+  const uint8_t* data() const override { return reinterpret_cast<const uint8_t*>(data_.data()); }
+
+ private:
+  std::string data_;
+};
+
+class Engine {
+ public:
+  Engine(std::string script, std::string url, std::string dataDir, std::string cloudOrigin, bool beta, std::string os, sf_engine_host host)
+      : script_(std::move(script)), url_(std::move(url)), dataDir_(std::move(dataDir)), cloudOrigin_(std::move(cloudOrigin)), os_(std::move(os)), beta_(beta), host_(host) {}
+
+  bool start() {
+#ifdef _WIN32
+    // Hermes's parser and interpreter want more native stack than a thread gets by default (1 MB on Windows).
+    thread_ = reinterpret_cast<HANDLE>(_beginthreadex(nullptr, 8 * 1024 * 1024, &Engine::threadMain, this, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr));
+    return thread_ != nullptr;
+#else
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 8 * 1024 * 1024);
+    int failed = pthread_create(&thread_, &attr, [](void* self) -> void* {
+      static_cast<Engine*>(self)->run();
+      return nullptr;
+    }, this);
+    pthread_attr_destroy(&attr);
+    return failed == 0;
+#endif
+  }
+
+  void receive(std::string json, std::string bytes, bool hasBytes) {
+    post([this, json = std::move(json), bytes = std::move(bytes), hasBytes](jsi::Runtime& rt) {
+      if (hasBytes) {
+        stillfail(rt).getPropertyAsFunction(rt, "receiveBytes").callWithThis(rt, stillfail(rt), jsi::Value(client_), jsi::String::createFromUtf8(rt, json), arrayBuffer(rt, bytes.data(), bytes.size()));
+      } else {
+        stillfail(rt).getPropertyAsFunction(rt, "receive").callWithThis(rt, stillfail(rt), jsi::Value(client_), jsi::String::createFromUtf8(rt, json));
+      }
+    });
+  }
+
+  /// Ends the loop and waits for it; the shell's answers still on their way are let go.
+  void stop() {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      stopping_ = true;
+    }
+    wake_.notify_all();
+#ifdef _WIN32
+    WaitForSingleObject(thread_, INFINITE);
+    CloseHandle(thread_);
+#else
+    pthread_join(thread_, nullptr);
+#endif
+    {
+      // An answer under way finishes posting first; none reaches this engine after.
+      std::lock_guard<std::mutex> lock(gate_->mutex);
+      gate_->engine = nullptr;
+    }
+    if (shell_) sf_shell_stop(shell_);
+  }
+
+  /// An answer (the shell's, from one of its threads, or the app's): a task for the loop.
+  void completed(uint64_t id, std::string json, std::string error, std::string bytes, bool hasBytes) {
+    post([id, json = std::move(json), error = std::move(error), bytes = std::move(bytes), hasBytes](jsi::Runtime& rt) {
+      jsi::Value j = error.empty() ? jsi::Value(jsi::String::createFromUtf8(rt, json)) : jsi::Value::null();
+      jsi::Value e = error.empty() ? jsi::Value::null() : jsi::Value(jsi::String::createFromUtf8(rt, error));
+      jsi::Value b = hasBytes ? jsi::Value(arrayBuffer(rt, bytes.data(), bytes.size())) : jsi::Value::undefined();
+      stillfail(rt).getPropertyAsFunction(rt, "complete").callWithThis(rt, stillfail(rt), jsi::Value(double(id)), j, e, b);
+    });
+  }
+
+ private:
+  using Task = std::function<void(jsi::Runtime&)>;
+
+#ifdef _WIN32
+  static unsigned __stdcall threadMain(void* self) {
+    static_cast<Engine*>(self)->run();
+    return 0;
+  }
+#endif
+
+  static jsi::Object stillfail(jsi::Runtime& rt) { return rt.global().getPropertyAsObject(rt, "__stillfail"); }
+
+  static jsi::Object arrayBuffer(jsi::Runtime& rt, const void* data, size_t size) {
+    jsi::Object buffer = rt.global().getPropertyAsFunction(rt, "ArrayBuffer").callAsConstructor(rt, double(size)).asObject(rt);
+    if (size > 0) std::memcpy(buffer.getArrayBuffer(rt).data(rt), data, size);
+    return buffer;
+  }
+
+  void post(Task task) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      tasks_.push_back(std::move(task));
+    }
+    wake_.notify_one();
+  }
+
+  void say(const std::string& json, const uint8_t* bytes, size_t size) {
+    if (host_.say) host_.say(host_.ctx, json.data(), json.size(), bytes, size);
+  }
+
+  void log(int level, const std::string& text) {
+    if (host_.log) host_.log(host_.ctx, level, text.data(), text.size());
+    else fprintf(stderr, "[core] %s\n", text.c_str());
+  }
+
+  void fatal(const std::string& reason) {
+    if (dead_) return;
+    dead_ = true;
+    log(3, "the core failed: " + reason);
+    say("{\"fatal\":" + quote(reason) + "}", nullptr, 0);
+  }
+
+  void install(jsi::Runtime& rt) {
+    jsi::Object native(rt);
+    auto fn = [&](const char* name, unsigned args, jsi::HostFunctionType f) {
+      native.setProperty(rt, name, jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, name), args, std::move(f)));
+    };
+    fn("call", 4, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+      uint64_t id = uint64_t(a[0].asNumber());
+      std::string op = a[1].asString(rt).utf8(rt);
+      std::string json = a[2].asString(rt).utf8(rt);
+      bool hasBytes = n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt);
+      const uint8_t* data = nullptr;
+      size_t size = 0;
+      static const uint8_t none = 0;
+      if (hasBytes) {
+        jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
+        data = b.size(rt) ? b.data(rt) : &none;
+        size = b.size(rt);
+      }
+      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) {
+        if (host_.app_call) host_.app_call(host_.ctx, id, op.c_str(), json.data(), json.size(), hasBytes ? data : nullptr, size);
+        else completed(id, "", "unsupported", "", false);
+        return jsi::Value::undefined();
+      }
+      sf_shell_call(shell_, id, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), data, size, hasBytes ? 1 : 0);
+      return jsi::Value::undefined();
+    });
+    fn("callSync", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      std::string op = a[0].asString(rt).utf8(rt);
+      std::string json = a[1].asString(rt).utf8(rt);
+      size_t len = 0;
+      uint8_t* out = sf_shell_call_sync(shell_, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), &len);
+      jsi::String s = jsi::String::createFromUtf8(rt, out, len);
+      sf_free(out, len);
+      return s;
+    });
+    fn("emit", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      say(a[1].asString(rt).utf8(rt), nullptr, 0);
+      return jsi::Value::undefined();
+    });
+    fn("emitBytes", 3, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+      static const uint8_t none = 0;
+      std::string json = a[1].asString(rt).utf8(rt);
+      if (n > 2 && a[2].isObject() && a[2].asObject(rt).isArrayBuffer(rt)) {
+        jsi::ArrayBuffer b = a[2].asObject(rt).getArrayBuffer(rt);
+        say(json, b.size(rt) ? b.data(rt) : &none, b.size(rt));
+      } else {
+        say(json, &none, 0);
+      }
+      return jsi::Value::undefined();
+    });
+    fn("fatal", 1, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      fatal(a[0].isString() ? a[0].asString(rt).utf8(rt) : "the core failed");
+      return jsi::Value::undefined();
+    });
+    fn("now", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value { return jsi::Value(wallMs()); });
+    fn("monotonic", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value { return jsi::Value(steadyMs()); });
+    fn("utcOffset", 1, [](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value { return jsi::Value(double(sf_utc_offset_min(a[0].asNumber()))); });
+    fn("random", 1, [](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      size_t n = size_t(a[0].asNumber());
+      std::string bytes(n, '\0');
+      if (n) randomBytes(reinterpret_cast<uint8_t*>(bytes.data()), n);
+      return arrayBuffer(rt, bytes.data(), n);
+    });
+    fn("setTimer", 2, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      uint64_t id = uint64_t(a[0].asNumber());
+      double due = steadyMs() + a[1].asNumber();
+      std::lock_guard<std::mutex> lock(mutex_);
+      timers_[id] = due;
+      dues_.emplace(due, id);
+      return jsi::Value::undefined();
+    });
+    fn("clearTimer", 1, [this](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      std::lock_guard<std::mutex> lock(mutex_);
+      timers_.erase(uint64_t(a[0].asNumber()));
+      return jsi::Value::undefined();
+    });
+    fn("log", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
+      log(int(a[0].asNumber()), a[1].asString(rt).utf8(rt));
+      return jsi::Value::undefined();
+    });
+    native.setProperty(rt, "os", jsi::String::createFromUtf8(rt, os_));
+    rt.global().setProperty(rt, "__native", native);
+  }
+
+  static void onComplete(void* ctx, uint64_t id, const uint8_t* json, size_t jl, const uint8_t* error, size_t el, const uint8_t* bytes, size_t bl, uint8_t has) {
+    auto* gate = static_cast<Gate*>(ctx);
+    std::lock_guard<std::mutex> lock(gate->mutex);
+    Engine* self = gate->engine;
+    if (!self) return;
+    self->completed(id, std::string(reinterpret_cast<const char*>(json), jl), std::string(reinterpret_cast<const char*>(error), el),
+                    has ? std::string(reinterpret_cast<const char*>(bytes), bl) : std::string(), has != 0);
+  }
+
+  void run() {
+    double t0 = steadyMs();
+    shell_ = sf_shell_start(dataDir_.c_str(), &Engine::onComplete, gate_);
+    if (!shell_) {
+      fatal("the core's files cannot be kept: " + dataDir_);
+    }
+    std::unique_ptr<facebook::hermes::HermesRuntime> rt;
+    if (!dead_) {
+      auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).build();
+      rt = facebook::hermes::makeHermesRuntime(config);
+      try {
+        double t1 = steadyMs();
+        install(*rt);
+        rt->evaluateJavaScript(std::make_shared<Bytes>(std::move(script_)), url_);
+        double t2 = steadyMs();
+        stillfail(*rt).getPropertyAsFunction(*rt, "start").callWithThis(*rt, stillfail(*rt), jsi::String::createFromUtf8(*rt, cloudOrigin_), jsi::Value(beta_), jsi::String::createFromUtf8(*rt, os_));
+        client_ = stillfail(*rt).getPropertyAsFunction(*rt, "connect").callWithThis(*rt, stillfail(*rt)).asNumber();
+        rt->drainMicrotasks();
+        char line[160];
+        snprintf(line, sizeof line, "started in Hermes: shell %.1f ms, script %.1f ms, start %.1f ms", t1 - t0, t2 - t1, steadyMs() - t2);
+        log(1, line);
+      } catch (const std::exception& e) {
+        fatal(std::string("the core did not start: ") + e.what());
+      }
+    }
+    for (;;) {
+      Task task;
+      uint64_t timer = 0;
+      {
+        std::unique_lock<std::mutex> lock(mutex_);
+        for (;;) {
+          if (stopping_) break;
+          if (!tasks_.empty()) {
+            task = std::move(tasks_.front());
+            tasks_.pop_front();
+            break;
+          }
+          // The next timer still set (one cleared, or set again later, is passed over).
+          while (!dues_.empty()) {
+            auto first = dues_.begin();
+            auto it = timers_.find(first->second);
+            if (it == timers_.end() || it->second != first->first) {
+              dues_.erase(first);
+              continue;
+            }
+            break;
+          }
+          if (!dues_.empty()) {
+            double left = dues_.begin()->first - steadyMs();
+            if (left <= 0) {
+              timer = dues_.begin()->second;
+              timers_.erase(timer);
+              dues_.erase(dues_.begin());
+              break;
+            }
+            wake_.wait_for(lock, std::chrono::microseconds(int64_t(left * 1000)));
+          } else {
+            wake_.wait(lock);
+          }
+        }
+        if (stopping_) break;
+      }
+      if (dead_ || !rt) continue;
+      try {
+        if (task) task(*rt);
+        else rt->global().getPropertyAsFunction(*rt, "__stillfail_timer").call(*rt, jsi::Value(double(timer)));
+        rt->drainMicrotasks();
+      } catch (const std::exception& e) {
+        fatal(e.what());
+      }
+    }
+    tasks_.clear();
+    rt.reset();
+  }
+
+  std::string script_, url_, dataDir_, cloudOrigin_, os_;
+  bool beta_;
+  sf_engine_host host_;
+  void* shell_ = nullptr;
+  Gate* gate_ = new Gate{{}, this};
+#ifdef _WIN32
+  HANDLE thread_ = nullptr;
+#else
+  pthread_t thread_{};
+#endif
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  std::deque<Task> tasks_;
+  std::unordered_map<uint64_t, double> timers_;
+  std::multimap<double, uint64_t> dues_;
+  bool stopping_ = false;
+  bool dead_ = false;
+  double client_ = 0;
+};
+
+}  // namespace
+
+struct sf_engine {
+  std::unique_ptr<Engine> engine;
+};
+
+extern "C" SF_ENGINE_API sf_engine* sf_engine_start(const uint8_t* script, size_t script_len, const char* script_url, const char* data_dir,
+                                                    const char* cloud_origin, int beta, const char* os, const sf_engine_host* host) {
+  auto* e = new sf_engine{std::make_unique<Engine>(std::string(reinterpret_cast<const char*>(script), script_len), script_url ? script_url : "core.hbc",
+                                                   data_dir, cloud_origin, beta != 0, os ? os : "windows", *host)};
+  if (!e->engine->start()) {
+    delete e;
+    return nullptr;
+  }
+  return e;
+}
+
+extern "C" SF_ENGINE_API void sf_engine_receive(sf_engine* e, const char* json, size_t len, const uint8_t* bytes, size_t blen) {
+  e->engine->receive(std::string(json, len), bytes ? std::string(reinterpret_cast<const char*>(bytes), blen) : std::string(), bytes != nullptr);
+}
+
+extern "C" SF_ENGINE_API void sf_engine_complete(sf_engine* e, uint64_t id, const char* json, size_t len, const char* error, size_t elen,
+                                                 const uint8_t* bytes, size_t blen) {
+  e->engine->completed(id, error && elen ? std::string() : std::string(json ? json : "", json ? len : 0), error ? std::string(error, elen) : std::string(),
+                      bytes ? std::string(reinterpret_cast<const char*>(bytes), blen) : std::string(), bytes != nullptr);
+}
+
+extern "C" SF_ENGINE_API void sf_engine_stop(sf_engine* e) {
+  e->engine->stop();
+  delete e;
+}

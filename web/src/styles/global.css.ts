@@ -1,6 +1,7 @@
 import { globalStyle } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
-import { searchStrokeKeyframes, splashFloatKeyframes } from "./keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { passageFlashHeldKeyframes, passageFlashKeyframes, searchStrokeKeyframes, splashFloatKeyframes, strokeRevealKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { STILL, stillAtOnce, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /**
  * Corners, after Codex: plain rounding by default; where the browser draws superellipses, rounded rectangles get a
@@ -14,6 +15,26 @@ globalStyle(":root", {
     },
   },
 });
+/**
+ * The screen's safe area (a phone's status bar, notch or island, its home indicator or navigation buttons), as every
+ * style reads it: through these, never env() itself (scripts/check.sh), so the stories (web/stories) can put the page
+ * on each phone's.
+ */
+globalStyle(":root", {
+  vars: {
+    "--safe-top": "env(safe-area-inset-top, 0px)", "--safe-bottom": "env(safe-area-inset-bottom, 0px)",
+    "--safe-left": "env(safe-area-inset-left, 0px)", "--safe-right": "env(safe-area-inset-right, 0px)",
+  },
+});
+/**
+ * The Windows app's window buttons (apps/desktop/src/main.ts): the system draws them over the page's top right, as
+ * wide as the title bar area leaves (Window Controls Overlay). What sits there keeps this much room; full screen, none.
+ */
+globalStyle(':root[data-desktop="overlay"]:not([data-fullscreen])', {
+  vars: { "--window-buttons": "calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw))" },
+});
+// Three 32px buttons, two 2px gaps, a 1px separator with 8px either side, and the right 12px inset.
+globalStyle(':root[data-desktop="custom"]:not([data-fullscreen])', { vars: { "--window-buttons": "129px" } });
 /**
  * Zork's approved desktop tokens (apps/zork-design-pc/tokens), so ember reads as
  * part of the same family: white canvas, warm sidebar, ink text, brand orange,
@@ -65,11 +86,19 @@ globalStyle(":root", {
     "--r-nav": `calc(12px * ${vars.cornerScale})`,
     "--r-menu": `calc(20px * ${vars.cornerScale})`,
     "--r-option": `calc(12px * ${vars.cornerScale})`,
-    "--text-xs": "12px",
-    "--text-sm": "13px",
-    "--text-body": "14px",
-    "--text-md": "16px",
-    "--text-lg": "22px",
+    // Six roles, each a size with its line (leading-*): times and tags; a row's second line and notes; lists, menus,
+    // buttons and settings; what is read; a section's or dialog's title; a page's. The phone's are a size up
+    // (mobile/styles/root.css.ts). Weights are three: 400, 500 to stand out, 600 for titles.
+    "--text-caption": "11px", "--leading-caption": "16px",
+    "--text-meta": "12px", "--leading-meta": "18px",
+    "--text-ui": "13px", "--leading-ui": "20px",
+    "--text-body": "14px", "--leading-body": "22px",
+    // What is typed in: as what is read (the phone's 16, iOS zooms into less).
+    "--text-input": "14px",
+    "--text-title": "16px", "--leading-title": "24px",
+    "--text-heading": "22px", "--leading-heading": "30px",
+    // Big numbers (usage).
+    "--text-display": "28px",
     "--ease-out": "cubic-bezier(.2, .7, .2, 1)",
     "--dur": "140ms",
   },
@@ -154,10 +183,13 @@ globalStyle(":root[data-theme=\"dark\"]", {
 });
 globalStyle("*, *::before, *::after", { boxSizing: "border-box" });
 globalStyle("html, body, #app", { height: "100%", margin: "0" });
+/**
+ * Lines break the usual way, not `text-wrap: pretty`: Safari's (iOS's every browser) breaks Chinese in a narrow box
+ * after every character (a 64px label: 缓/存/命/中/率), and a line of 5 to 30 characters in one a character wide.
+ */
 globalStyle("body", {
   background: vars.canvas, color: vars.text, font: `400 ${vars.textBody}/1.55 ${vars.fontBody}`,
   fontFeatureSettings: "\"cv11\", \"ss01\"", WebkitFontSmoothing: "antialiased", lineBreak: "strict",
-  textWrap: "pretty",
 });
 /**
  * Headings and the short lines under them break evenly, never one long line and a stub, and only where the words
@@ -168,14 +200,35 @@ globalStyle("button, input, select, textarea", { font: "inherit", color: "inheri
 // The browser pads a button 1px 6px: an icon button narrower than its icon plus that pushes the icon off center.
 globalStyle("button", { padding: "0" });
 globalStyle("a", { color: "inherit", textDecoration: "none" });
+/**
+ * A checkbox as the app draws its controls, not the system's blue one: a small soft square with a line round it;
+ * ticked, the primary colour with a check in the colour on it (a switch's on, ui.tsx Switch).
+ */
+globalStyle('input[type="checkbox"]', {
+  appearance: "none", display: "inline-grid", placeItems: "center", flex: "none", width: "18px", height: "18px", margin: "0",
+  border: `1px solid ${vars.lineStrong}`, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: vars.canvas, cursor: "pointer", transition: `background ${vars.dur} ${vars.easeOut}, border-color ${vars.dur} ${vars.easeOut}`,
+});
+globalStyle('input[type="checkbox"]:hover:not(:disabled)', { borderColor: vars.fieldHover });
+globalStyle('input[type="checkbox"]:checked', { background: vars.primary, borderColor: vars.primary });
+globalStyle('input[type="checkbox"]::before', {
+  content: '""', width: "12px", height: "12px", background: vars.onPrimary, transform: "scale(0)",
+  transition: `transform ${vars.dur} ${vars.easeOut}`,
+  mask: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 6.2l2.4 2.4 4.6-5'/%3E%3C/svg%3E") center / contain no-repeat`,
+});
+globalStyle('input[type="checkbox"]:checked::before', { transform: "scale(1)" });
+globalStyle('input[type="checkbox"]:disabled', { opacity: ".45", cursor: "default" });
+globalStyle('input[type="checkbox"]:focus-visible', { outline: `2px solid ${vars.fieldFocus}`, outlineOffset: "2px" });
 globalStyle("code, pre", { fontFamily: vars.fontMono });
 globalStyle("[hidden]", { display: "none !important" });
-globalStyle("*, *::before, *::after", {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animationDuration: "1ms !important", transitionDuration: "1ms !important",
-    },
-  },
+/**
+ * Motion reduced (styles/still.ts): every animation in 1ms, once, its end and its end events as ever; every transition
+ * none, its change there at once (after its delay, if it has one). Not 1ms for transitions: with every element's
+ * `transition-property: all`, everything would go over 1ms, and a thing shown again (visibility) stayed hidden for
+ * the frame the change was in. A loop says where it rests (stillLoop): once in 1ms it stands as it is without it.
+ */
+globalStyle(`${STILL} *, ${STILL} *::before, ${STILL} *::after`, {
+  animationDuration: "1ms !important", animationIterationCount: "1 !important", transitionDuration: "0s !important",
 });
 /** The app starting: the buddy floats; what it waits for comes up only if it takes a while. */
 globalStyle(".splash", {
@@ -183,13 +236,7 @@ globalStyle(".splash", {
   padding: "24px", background: vars.canvas, textAlign: "center",
 });
 globalStyle(".splash-mark", { display: "block", animation: `${splashFloatKeyframes} 1.8s ease-in-out infinite` });
-globalStyle(".splash-mark", {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
+globalStyle(`${STILL} .splash-mark`, stillLoop());
 globalStyle("body[data-resizing]", { cursor: "col-resize", userSelect: "none" });
 /** The page itself never scrolls or bounces; only the panes inside do. */
 globalStyle("html, body", { height: "100%", overflow: "hidden", overscrollBehavior: "none" });
@@ -212,13 +259,8 @@ globalStyle("::view-transition-old(root), ::view-transition-new(root)", { animat
  */
 globalStyle("::view-transition-group(dock), ::view-transition-new(dock)", { animation: "none" });
 globalStyle("::view-transition-old(dock)", { display: "none" });
-globalStyle("::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*)", {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
+// The 1ms of every motion, which `*` does not reach.
+globalStyle(`${STILL}::view-transition-group(*), ${STILL}::view-transition-old(*), ${STILL}::view-transition-new(*)`, { animationDuration: "1ms !important" });
 /** The words a search found, marked in the message it opened, until the chat is left. */
 globalStyle("::highlight(search-hit)", {
   // Bold without laying the words out anew (a highlight cannot change the font): the glyphs drawn a little wider.
@@ -232,9 +274,24 @@ globalStyle("[data-search-marks] path", {
   strokeDasharray: "1", strokeDashoffset: "1", animation: `${searchStrokeKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) forwards`,
 });
 globalStyle("[data-search-marks][data-settled] path", { animation: "none", strokeDashoffset: "0" });
-globalStyle("[data-search-marks] path", { "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", strokeDashoffset: "0" } } });
-/** The quoted passage, highlighted where it was said after following a quote. */
-globalStyle("::highlight(quote-flash)", {
-  backgroundColor: `color-mix(in srgb, ${vars.accent} 28%, transparent)`, color: "inherit",
+globalStyle(`${STILL} [data-search-marks] path`, stillAtOnce);
+/** The words in a found line (⌘K's and the phones' search, Marked.tsx): the same hand-drawn stroke under each, drawn in
+ *  from its left one after another (`--n`: which it is). */
+const STROKE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 9' preserveAspectRatio='none'%3E%3Cpath d='M1 6 C 25 3, 55 8, 99 4' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E")`;
+globalStyle("mark[data-stroke]", { position: "relative" });
+globalStyle("mark[data-stroke]::after", {
+  content: '""', position: "absolute", left: "-2px", right: "-2px", top: "calc(100% - 5px)", height: "6px", pointerEvents: "none",
+  background: vars.accent, maskImage: STROKE, WebkitMaskImage: STROKE, maskSize: "100% 100%", WebkitMaskSize: "100% 100%",
+  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", clipPath: "inset(0 100% 0 0)",
+  animation: `${strokeRevealKeyframes} 520ms cubic-bezier(.4, 0, .2, 1) calc(var(--n, 0) * 180ms) forwards`,
 });
-globalStyle(":root[data-quote-flash=\"fading\"] ::highlight(quote-flash)", { backgroundColor: `color-mix(in srgb, ${vars.accent} 12%, transparent)` });
+globalStyle(`${STILL} mark[data-stroke]::after`, stillAtOnce);
+/** The quoted passage, marked for a moment where it was said after following a quote (Chat.tsx flashRange): a rounded
+ *  ground behind each of its lines, under the words (the layer is below the text of the block it is in). */
+globalStyle("[data-passage-host]", { position: "relative", isolation: "isolate" });
+globalStyle("[data-passage-marks]", { position: "absolute", inset: "0", zIndex: "-1", pointerEvents: "none" });
+globalStyle("[data-passage-marks] > span", {
+  position: "absolute", borderRadius: `calc(4px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.accent} 24%, transparent)`, animation: `${passageFlashKeyframes} 2400ms both`,
+});
+globalStyle(`${STILL} [data-passage-marks] > span`, stillFlash(passageFlashHeldKeyframes, "2400ms"));

@@ -5,24 +5,32 @@
 //   pastes back and the station types in.
 // - Codex: `codex login --device-auth` prints a link and a one-time code; the person enters the code on that page and
 //   the command finishes by itself.
+// - Grok Build: `grok login --device-auth` the same, its link at accounts.x.ai with the code in it; its home is the
+//   profile's grok/ (agents/grok.ts).
+// - OpenCode Go (`startConsole`): no command; the station asks the OpenCode Console for a code itself (console.ts) and
+//   keeps asking until it is approved, then leaves the tokens in the profile's home. The page shows it as Codex's.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
 // job (`changes`): pushed, not asked again.
 import type { Clock } from "effect";
 import { type ChildProcess, spawn } from "node:child_process";
-import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
+import { CONSOLE, type ConsoleLogin, deviceToken, startDevice, whoIs, writeConsole } from "./console.ts";
 import { cleanEnv } from "../agents/runtime.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
-import { Fibers } from "../ops/fibers.ts";
+import { Fibers, wall } from "../ops/fibers.ts";
+import { platform } from "../platform/index.ts";
 
 export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifying" | "done" | "failed" | "cancelled";
 
 export type LoginJob = {
   profile: string;
   runtime: Runtime;
+  /// Signing in to OpenCode (an OpenCode Go profile) rather than the runtime's subscription (absent: the runtime's).
+  provider?: "opencode";
   state: LoginState;
   url: string | null;
   userCode: string | null;
@@ -33,15 +41,16 @@ export type LoginJob = {
 
 const TIMEOUT_MS = 15 * 60_000;
 /// Variables that would make the login command talk to something other than the subscription.
-const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY"];
+const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY", "GROK_HOME", "GROK_AUTH", "GROK_AUTH_PATH", "XAI_API_KEY"];
 
 /// The login commands, by runtime.
-export type LoginCommands = { claude: string; codex: string };
+export type LoginCommands = { claude: string; codex: string; grok?: string };
 
 /// What a sign-in is for: a profile's id, the runtime it signs in to, and its home.
 export type LoginProfile = { id: string; runtime: Runtime; home: string };
 
-type Running = { run: number; job: LoginJob; child: ChildProcess; output: string; cancelTimer: () => void; exited: boolean; lang: Lang };
+/// A sign-in under way: its command (none for OpenCode's, which `stop` ends).
+type Running = { run: number; job: LoginJob; child: ChildProcess | null; output: string; cancelTimer: () => void; exited: boolean; lang: Lang; stop?: () => void };
 
 export class LoginManager {
   private jobs = new Map<string, Running>();
@@ -54,7 +63,11 @@ export class LoginManager {
   /// The environment the commands start from (the station's, less what points elsewhere).
   private env: () => Record<string, string>;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock) {
+  /// The OpenCode Console signed in to (console.ts CONSOLE; a test's stand-in).
+  private console: string;
+
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE) {
+    this.console = console;
     this.background = new Fibers("login", clock);
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
@@ -79,16 +92,20 @@ export class LoginManager {
     this.cancel(profile.id);
     this.finished.delete(profile.id);
     mkdirSync(profile.home, { recursive: true });
-    const noBrowser = this.noBrowser();
-    const env = this.env();
-    env.PATH = `${noBrowser}:${env.PATH ?? ""}`;
-    env.BROWSER = join(noBrowser, "open");
+    const [noBrowser, open] = this.noBrowser();
+    const env = platform.prependPath(this.env(), noBrowser) as Record<string, string>;
+    env.BROWSER = open;
     let command: string;
     let args: string[];
     if (profile.runtime === "claude") {
       env.CLAUDE_CONFIG_DIR = profile.home;
       fileCredentials(env);
       [command, args] = [this.commands.claude, ["auth", "login", "--claudeai"]];
+    } else if (profile.runtime === "grok") {
+      env.GROK_HOME = join(profile.home, "grok");
+      env.GROK_DISABLE_AUTOUPDATER = "1";
+      mkdirSync(env.GROK_HOME, { recursive: true });
+      [command, args] = [this.commands.grok ?? "grok", ["login", "--device-auth"]];
     } else {
       env.CODEX_HOME = profile.home;
       [command, args] = [this.commands.codex, ["login", "--device-auth"]];
@@ -97,7 +114,8 @@ export class LoginManager {
     const job: LoginJob = { profile: profile.id, runtime: profile.runtime, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
     const id = profile.id;
-    const child = spawn(command, args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"] });
+    const r = platform.runnable(command, args, env);
+    const child = spawn(r.file, r.args, { cwd: profile.home, env, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
     const spawned = await new Promise<Error | null>((resolve) => {
       child.once("spawn", () => resolve(null));
       child.once("error", (e) => resolve(e));
@@ -137,6 +155,70 @@ export class LoginManager {
     return { ...job };
   }
 
+  /// Starts signing an OpenCode Go profile in to the person's OpenCode Console account, replacing any running sign-in:
+  /// a code from the Console, then asked about at the interval it gives until it is approved, refused or runs out.
+  async startConsole(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+    this.cancel(profile.id);
+    this.finished.delete(profile.id);
+    mkdirSync(profile.home, { recursive: true });
+    const id = profile.id;
+    const now = this.background.now();
+    const job: LoginJob = { profile: id, runtime: "claude", provider: "opencode", state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
+    const run = ++this.runs;
+    const running: Running = { run, job, child: null, output: "", exited: true, lang, cancelTimer: () => {} };
+    this.jobs.set(id, running);
+    this.emit(id);
+    const current = () => this.jobs.get(id)?.run === run;
+    let device;
+    try {
+      device = await startDevice(this.console);
+    } catch (e) {
+      if (current()) this.finish(id, "failed", tr(lang, "station.login.consoleFailed", { error: (e as Error).message }));
+      return this.get(id)!;
+    }
+    if (!current()) return this.get(id)!;
+    Object.assign(job, { state: "needs_approval", url: device.url, userCode: device.userCode, expiresAt: now + Math.min(device.expiresInMs, TIMEOUT_MS) });
+    running.cancelTimer = this.background.after(job.expiresAt - now, () => this.failRun(id, run, tr(lang, "station.login.consoleExpired")));
+    let interval = device.intervalMs;
+    const ask = async () => {
+      if (!current()) return;
+      let answer;
+      try {
+        answer = await deviceToken(this.console, device.deviceCode);
+      } catch (e) {
+        // The network, for once: asked again at the next interval.
+        log.warn("login", "could not ask the OpenCode Console about a sign-in", { profile: id, error: (e as Error).message });
+        answer = { pending: true as const, slowDown: false };
+      }
+      if (!current()) return;
+      if ("pending" in answer) {
+        if (answer.slowDown) interval += 5_000;
+        running.stop = this.background.after(interval, ask);
+        return;
+      }
+      if ("error" in answer) {
+        const denied = answer.error === "access_denied";
+        return this.finish(id, "failed", denied ? tr(lang, "station.login.consoleDenied") : tr(lang, answer.error === "expired_token" ? "station.login.consoleExpired" : "station.login.consoleFailed", { error: answer.error }));
+      }
+      job.state = "verifying";
+      this.emit(id);
+      const token = answer.token;
+      const who = await whoIs(this.console, token.access, token.org);
+      if (!current()) return;
+      const login: ConsoleLogin = { access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, org: token.org, ...who };
+      try {
+        writeConsole(profile.home, login);
+      } catch (e) {
+        return this.finish(id, "failed", tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
+      }
+      this.finish(id, "done", null);
+    };
+    running.stop = this.background.after(interval, ask);
+    log.info("login", "OpenCode sign-in started", { profile: id });
+    this.emit(id);
+    return { ...job };
+  }
+
   /// Claude only: the code the browser showed after approving.
   async submitCode(profile: string, code: string, lang: Lang = stationLang()): Promise<LoginJob> {
     const running = this.jobs.get(profile);
@@ -146,7 +228,7 @@ export class LoginManager {
     running.job.state = "verifying";
     const job = { ...running.job };
     await new Promise<void>((resolve, reject) => {
-      const stdin = running.child.stdin;
+      const stdin = running.child?.stdin;
       if (!stdin || stdin.destroyed) return resolve();
       stdin.write(`${clean}\n`, (error) => (error ? reject(error) : resolve()));
     });
@@ -186,7 +268,8 @@ export class LoginManager {
     if (!running) return;
     this.jobs.delete(profile);
     running.cancelTimer();
-    if (!running.exited) {
+    running.stop?.();
+    if (!running.exited && running.child) {
       try {
         running.child.kill("SIGTERM");
       } catch {}
@@ -206,15 +289,12 @@ export class LoginManager {
     }
   }
 
-  /// A directory whose `open` and `xdg-open` do nothing, put first on the login command's PATH.
-  private noBrowser(): string {
+  /// A directory whose `open` and `xdg-open` do nothing, put first on the login command's PATH; and what `open` is to
+  /// be called by (BROWSER).
+  private noBrowser(): [dir: string, open: string] {
     mkdirSync(this.noBrowserDir, { recursive: true });
-    for (const name of ["open", "xdg-open"]) {
-      const path = join(this.noBrowserDir, name);
-      writeFileSync(path, "#!/bin/sh\nexit 0\n");
-      chmodSync(path, 0o755);
-    }
-    return this.noBrowserDir;
+    const [open] = ["open", "xdg-open"].map((name) => platform.makeCommand(join(this.noBrowserDir, name), "#!/bin/sh\nexit 0\n", true));
+    return [this.noBrowserDir, open!];
   }
 }
 
@@ -233,7 +313,8 @@ export function parse(job: LoginJob, output: string): boolean {
       return true;
     }
   } else {
-    const url = urls.find((u) => u.startsWith("https://auth.openai.com/") && u.includes("device"));
+    const site = job.runtime === "grok" ? "https://accounts.x.ai/" : "https://auth.openai.com/";
+    const url = urls.find((u) => u.startsWith(site) && u.includes("device"));
     const code = deviceCode(output);
     if (url !== undefined && code !== null) {
       job.url = url;

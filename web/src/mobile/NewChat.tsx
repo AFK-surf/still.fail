@@ -5,9 +5,10 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { ModelOption, RuntimeKind, StationView } from "../api.ts";
 import { FrequentCombos } from "../FrequentCombos.tsx";
 import type { NewChatView } from "../core/shapes.ts";
-import { useNewChat, type PickPatch } from "../pick.ts";
+import { useNewChat, usePick, type PickPatch } from "../pick.ts";
+import { FromMark, openBorrow } from "./Borrow.tsx";
 import { RUNTIME_LABEL } from "../format.ts";
-import { Server } from "../icons.tsx";
+import { StationMark } from "../StationMark.tsx";
 import { sendDraft } from "../Chat.tsx";
 import { useEnsureChat, type Made } from "../NewChat.tsx";
 import { StationContext, stationBase, type Station } from "../station.tsx";
@@ -16,9 +17,10 @@ import { notSent, sendingFirst, toMadeChat } from "../madeChat.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import type { Draft } from "./Chat.tsx";
 import { useHost } from "./ChatHost.tsx";
-import { Button, Illustration, Loading, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { Button, Illustration, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
-import { Buddy, FirstStation } from "./Stations.tsx";
+import { FirstStation } from "./Stations.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./NewChat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -39,7 +41,7 @@ export function NewChatScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${css.mNewchatScreen}`}>
       <NavBar back={t("common.cancel")} onBack={app.pop} title={t("web-mobile.newChat.title")} />
-      {!choice?.stations ? <Loading text={choice?.error ?? chat.error?.message ?? t("web-mobile.memory.readingStations")} />
+      {!choice?.stations ? <Waiting fill shape="cards" count={2} text={t("common.readingStations")} error={choice?.error ?? chat.error?.message} />
         : !view ? (
           !choice.any ? <FirstStation /> : (
             <div className={newChatCss.mNewNone}>
@@ -59,7 +61,7 @@ function NewChatOn({ choice, view, stations, pick, create }: {
 }) {
   const app = useApp();
   // The page's composer is its host's (ChatHost.tsx): kept as this new chat becomes its chat.
-  const { draft, use } = useHost();
+  const { use } = useHost();
   // What it runs on, as the core resolved it against what the station has now (the same on both screens).
   const entry = choice.model;
   const model = entry?.model;
@@ -67,6 +69,16 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   const effort = choice.effort ?? "";
   const navigate = useNavigate();
   const problem = choice.problem;
+  // The models as its model control has them (the core's `pick`): its own, and those another station could lend it.
+  const control = usePick(view.station, "new", choice);
+  const options = choice.pick?.options ?? view.models;
+  const lendable = options.filter((m) => m.availability === "borrowable");
+  // Another station's not borrowed yet: picked in the control, then borrowed, asked again first.
+  const choose = (m: ModelOption) => {
+    if (m.availability !== "borrowable") return pick({ model: m.model });
+    control.set({ model: m.model });
+    openBorrow(app, view.station, "new");
+  };
   // The first message makes the chat as the wide screen's does (../NewChat.tsx's useEnsureChat, then ../Chat.tsx's
   // sendDraft: the message waits in its outbox, its quotes and files with it), and the page becomes it; what follows
   // goes in after it. The chat is started on this station: the next new chat starts here too.
@@ -90,6 +102,18 @@ function NewChatOn({ choice, view, stations, pick, create }: {
   };
   useLayoutEffect(() => use({ station: view.station, placeholder: t("web-mobile.newChat.placeholder"), offline: false, send }));
   const scene = useRef<HTMLDivElement>(null);
+  // The scene's end clear of the band of glass at its foot, whatever its height.
+  const foot = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = foot.current;
+    const body = scene.current;
+    if (!el || !body) return;
+    const set = () => body.style.setProperty("--m-new-foot", `${el.offsetHeight}px`);
+    set();
+    const observer = new ResizeObserver(set);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   return (
     <>
       <div className={css.mNewBody} ref={scene} data-made-leave="up">
@@ -101,29 +125,33 @@ function NewChatOn({ choice, view, stations, pick, create }: {
         {/* No profile yet: adding one is the first step, here (the machine's own logins, when there are any, offered too). */}
         {choice.blocked === "profile" && <NoProfile view={view} />}
       </div>
-      {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
-      {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
-      {/* The choices, then the composer as a floating capsule, as in a chat. */}
-      <div className={css.mNewBottom} data-made-leave="fade">
-        <div className={css.mChoosers}>
-          <Chooser leading={<Server size={14} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
-          {!runtime || !model ? (
-            // Nothing to choose from: the chooser leads to where models are enabled.
-            <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
-          ) : (
-            <>
-              <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
-                onClick={() => pickModel(app, view, model, (m) => pick({ model: m.model }))} />
-              {/* The runtime only when the model runs on more than one. */}
-              {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
-                onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
-              <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
-              {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
-                <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
-                <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
-              </> })} />}
-            </>
-          )}
+      <div className={css.mNewFoot} ref={foot} data-made-leave="fade">
+        {/* Chosen anyway (it is the person's call), but said: what is sent waits for its quota. */}
+        {choice.spent && <p className={css.mNewSpent}>{choice.spent}</p>}
+        {/* The choices, then the composer as a floating capsule, as in a chat. */}
+        <div className={css.mNewBottom}>
+          <div className={css.mChoosers}>
+            <Chooser leading={<StationMark emoji={view.emoji} icon={view.icon} />} label={view.name} onClick={() => pickStation(app, stations, view.station, (id) => pick({ station: id }))} />
+            {!runtime || !model ? (
+              // Nothing of its own to choose from: another station's models to borrow, else where models are enabled.
+              lendable.length > 0
+                ? <Chooser label={t("web-mobile.newChat.pickModel")} onClick={() => pickModel(app, lendable, "", choose)} />
+                : <Chooser label={t("web-mobile.newChat.noModels")} onClick={() => app.push(app.at("/settings/profiles"))} />
+            ) : (
+              <>
+                <Chooser leading={<MakerIcon maker={entry.maker} runtime={runtime} size={14} />} label={entry.name}
+                  onClick={() => pickModel(app, options, model, choose)} />
+                {/* The runtime only when the model runs on more than one. */}
+                {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
+                  onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
+                <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+                {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
+                  <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
+                  <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
+                </> })} />}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </>
@@ -139,19 +167,21 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickStation")} />
-      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<StationMark emoji={s.emoji} icon={s.icon} size={22} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
 }
 
-function pickModel(app: MobileApp, view: StationView, current: string, onPick: (m: ModelOption) => void) {
+function pickModel(app: MobileApp, models: ModelOption[], current: string, onPick: (m: ModelOption) => void) {
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickModel")} />
       <div className={sheetsCss.mSheetScroll}>
-        {view.models.map((m) => (
+        {/* Another station's: its station after its name, faint till borrowed. */}
+        {models.map((m) => (
           <PickRow key={m.model} label={m.name} sub={[m.runtimes.map((r) => RUNTIME_LABEL[r] ?? r).join(" · "), m.spent?.text].filter(Boolean).join(" · ")}
-            checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { onPick(m); app.sheet(null); }} />
+            mark={<FromMark option={m} picked={m.model === current} />}
+            checked={m.model === current} leading={<ModelMark maker={m.maker} runtime={m.runtimes[0]!} size={36} />} onClick={() => { app.sheet(null); onPick(m); }} />
         ))}
       </div>
     </>

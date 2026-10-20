@@ -9,7 +9,8 @@
 // while the chat mounts. The message flies as a copy because its row can be replaced by the station receipt.
 import { pageChanging, transitionLive } from "./ui.tsx";
 import { cubicBezier } from "motion";
-import { reducedMotion } from "./motion.ts";
+import { motionMs, play } from "@stillfail/ui/motion.ts";
+import { listQueue } from "./listQueue.ts";
 import * as msgCss from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 
@@ -21,7 +22,8 @@ function textAt(el: Element): Typed {
   const style = getComputedStyle(el);
   return {
     x: box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
-    y: box.top + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) - parseFloat(style.fontSize)) / 2,
+    // Its first line, above the box when it is scrolled (a long draft, its end in view).
+    y: box.top - el.scrollTop + parseFloat(style.borderTopWidth) + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) - parseFloat(style.fontSize)) / 2,
     size: parseFloat(style.fontSize),
   };
 }
@@ -29,8 +31,16 @@ function textAt(el: Element): Typed {
 /** How what arrives slows into place. */
 const EASE = "cubic-bezier(.2, .8, .2, 1)";
 
+/**
+ * An image on its way, drawn as the message draws it (its picture covering its box, object-fit: cover, so cropped by
+ * the same rule at every size), its box going from its thumbnail's to the message's: `rect` and `radius`, the
+ * thumbnail's; `ground`, what the message's box is filled with behind it (seen through a picture's clear parts).
+ */
+interface Picture {
+  key: string; rect: DOMRect; radius: number; stand: HTMLElement; ratio: number;
+  ground?: string;
+}
 /** A first message on its way: the words sent, where they were, until the chat's page takes them. */
-interface Picture { key: string; rect: DOMRect; stand: HTMLElement }
 interface Sending { field: HTMLElement; from: Typed; top: number; stand: HTMLElement | null; pictures: Picture[]; release?: (() => void) | undefined }
 let sending: Sending | null = null;
 
@@ -50,7 +60,23 @@ export function sendingFirst(field: HTMLElement, text: string, layer: HTMLElemen
   const pictures = picturesIn(composer, layer, z);
   sending = { field, from: textAt(field), top: composer.getBoundingClientRect().top, stand, pictures, release: hold.detail.release };
   field.dataset.madeField = "";
-  document.documentElement.dataset.madeHint = "hidden";
+  field.dataset.madeHint = "hidden";
+}
+
+/**
+ * Where an image lands in `to` (its box in a message, at `end`): the whole box; or a letterboxed one's picture, its own
+ * proportions fitted inside it (Chat.css.ts's `data-letterbox`, object-fit: contain).
+ */
+function landsAt(to: HTMLElement, end: DOMRect, ratio: number): { left: number; top: number; width: number; height: number } {
+  if (to.dataset.letterbox === undefined) return { left: end.left, top: end.top, width: end.width, height: end.height };
+  const height = Math.min(end.height, end.width / ratio), width = height * ratio;
+  return { left: end.left + (end.width - width) / 2, top: end.top + (end.height - height) / 2, width, height };
+}
+
+/** `to` given the shape of `from`'s corners (their radius is copied apart): without it a squircle's radius is drawn
+ * round, and one as large as the composer thumbnail's is near a circle. */
+function corners(to: HTMLElement, from: Element) {
+  to.style.setProperty("corner-shape", getComputedStyle(from).getPropertyValue("corner-shape"));
 }
 
 /** The images going with the message, drawn in `layer` (at `z`) where their thumbnails are in `composer`, cropped as there. */
@@ -68,11 +94,16 @@ function picturesIn(composer: Element, layer: HTMLElement, z: string): Picture[]
       width: `${rect.width}px`, height: `${rect.height}px`, overflow: "hidden",
       borderRadius: getComputedStyle(source).borderRadius, zIndex: z, pointerEvents: "none",
     });
-    const copy = img.cloneNode(true) as HTMLImageElement;
-    Object.assign(copy.style, { width: "100%", height: "100%", objectFit: "cover", display: "block" });
+    corners(picture, source);
+    const ratio = img.naturalWidth / img.naturalHeight;
+    // As the thumbnail and the message draw it: covering its box, whatever shape the box has on the way.
+    const copy = document.createElement("img");
+    copy.src = img.currentSrc || img.src;
+    copy.alt = "";
+    Object.assign(copy.style, { width: "100%", height: "100%", objectFit: "cover", display: "block", maxWidth: "none", maxHeight: "none" });
     picture.append(copy);
     layer.append(picture);
-    pictures.push({ key: source.dataset.sendImage!, rect, stand: picture });
+    pictures.push({ key: source.dataset.sendImage!, rect, radius: parseFloat(getComputedStyle(source).borderTopLeftRadius) || 0, stand: picture, ratio });
   }
   return pictures;
 }
@@ -93,6 +124,8 @@ function standIn(field: HTMLElement, text: string, layer: HTMLElement, z: string
     overflowWrap: style.overflowWrap, wordBreak: style.wordBreak, textAlign: style.textAlign,
   });
   layer.append(stand);
+  // Scrolled as the field was: the lines seen there, not its first ones.
+  stand.scrollTop = field.scrollTop;
   return stand;
 }
 
@@ -103,7 +136,7 @@ export function notSent(): void {
   sending.stand?.remove();
   for (const picture of sending.pictures) picture.stand.remove();
   delete sending.field.dataset.madeField;
-  delete document.documentElement.dataset.madeHint;
+  delete sending.field.dataset.madeHint;
   sending = null;
 }
 
@@ -124,7 +157,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   // while the chat mounts, and turns its layout work into a visible pause before any of the flight can move.
   const leaving: { el: HTMLElement; original: HTMLElement; visibility: string; up: boolean }[] = [];
   const scene = layer();
-  if (scene && !reducedMotion()) {
+  if (scene) {
     const base = scene.getBoundingClientRect();
     for (const el of scope.querySelectorAll<HTMLElement>("[data-made-leave]")) {
       const at = el.getBoundingClientRect();
@@ -147,8 +180,9 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
   const moves: Promise<unknown>[] = [transitionLive(go, () => findList()?.querySelector(`.${msgCss.msgMine}`) != null, 480 + wait)];
   let ghost: HTMLElement | null = null;
   let list: HTMLElement | null = null;
+  let following: MutationObserver | null = null;
   // The departing scene responds now, while the first row becomes ready behind it.
-  for (const { el, up } of leaving) moves.push(el.animate([
+  for (const { el, up } of leaving) moves.push(play(el, [
     { opacity: 1, transform: "none" },
     { opacity: 0, transform: up ? "translateY(-32px) scale(.96)" : "none" },
   ], { duration: up ? 140 : 80, easing: EASE, fill: "forwards" }).finished);
@@ -168,14 +202,14 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     const frame = into.getBoundingClientRect();
     // Capture image destinations before translating the list itself.
     const destinations = new Map([...first.querySelectorAll<HTMLElement>("[data-send-image]")].map((el) =>
-      [el.dataset.sendImage!, { rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius }]));
+      [el.dataset.sendImage!, { el, rect: el.getBoundingClientRect(), radius: getComputedStyle(el).borderRadius, corner: getComputedStyle(el).getPropertyValue("corner-shape"), ground: getComputedStyle(el).backgroundColor }]));
     const { from, top } = now;
     const timing = { duration: 480, delay: wait, easing: EASE, fill: "backwards" } as const;
     // The rest of the list comes up with it, out of the composer's top edge: cut there, wherever it has got to.
     const rise = from.y - to.y;
     const clip = Math.max(0, box.bottom - top);
     list.dataset.madeList = "";
-    moves.push(list.animate([
+    moves.push(play(list, [
       { transform: `translateY(${rise}px)`, clipPath: `inset(0 0 ${clip + rise}px 0)` },
       { transform: "none", clipPath: `inset(0 0 ${clip}px 0)` },
     ], timing).finished);
@@ -204,7 +238,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       const target = destinations.get(picture.key);
       const covered = [...copy.querySelectorAll<HTMLElement>("[data-send-image]")].find((el) => el.dataset.sendImage === picture.key);
       if (!target || !covered) continue;
-      const end = target.rect;
+      const end = landsAt(target.el, target.rect, picture.ratio);
       covered.style.visibility = "hidden";
       ghost.append(picture.stand);
       Object.assign(picture.stand.style, {
@@ -212,26 +246,52 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
         width: `${end.width}px`, height: `${end.height}px`, transformOrigin: "0 0",
         borderRadius: target.radius,
       });
-      moves.push(picture.stand.animate([
-        { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px` },
-        { transform: "none", width: `${end.width}px`, height: `${end.height}px` },
+      picture.stand.style.setProperty("corner-shape", target.corner);
+      // Its box's ground, if it has one, comes in on the way (the thumbnail has none): landed, it is on what the message's is.
+      picture.stand.style.backgroundColor = target.ground;
+      // Its corners from the thumbnail's to the message's, as its box grows.
+      moves.push(play(picture.stand, [
+        { transform: `translate(${picture.rect.left - end.left}px, ${picture.rect.top - end.top}px)`, width: `${picture.rect.width}px`, height: `${picture.rect.height}px`, borderRadius: `${picture.radius}px`, backgroundColor: "transparent" },
+        { transform: "none", width: `${end.width}px`, height: `${end.height}px`, borderRadius: target.radius, backgroundColor: target.ground },
       ], timing).finished);
     }
-    moves.push(copy.animate([
+    const clock = play(copy, [
       { transform: `translate(${from.x - to.x}px, ${rise}px) scale(${from.size / to.size})` },
       { transform: "none" },
-    ], timing).finished);
+    ], timing);
+    moves.push(clock.finished);
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
-    if (bubble) moves.push(bubble.animate([{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
-    for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) {
+    if (bubble) moves.push(play(bubble, [{ backgroundColor: "transparent" }, { backgroundColor: getComputedStyle(bubble).backgroundColor }], timing).finished);
+    const lines = (row: Element) => [...row.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)];
+    const comeIn = (el: HTMLElement) => {
       // "sending" shows when the row's does (its row, the copy gone, shows it then).
       if (el.dataset.showsAt) showAt(el);
       else el.style.animation = "none";
-      moves.push(el.animate([{ opacity: 0 }, { opacity: 1 }], timing).finished);
-    }
+      const a = play(el, [{ opacity: 0 }, { opacity: 1 }], timing);
+      a.currentTime = clock.currentTime;
+      moves.push(a.finished);
+    };
+    for (const el of lines(copy)) comeIn(el);
+    // The station's message taking the outbox row's place on the way: its line under it ("刚刚" for "sending") in the
+    // copy from then on, as far in as the rest, rather than appearing as the copy goes.
+    let shown: Element = first;
+    following = new MutationObserver(() => {
+      const row = list?.querySelector<HTMLElement>(`.${msgCss.msgMine}`);
+      if (!row || row === shown) return;
+      shown = row;
+      const was = lines(copy);
+      for (const [i, line] of lines(row).entries()) {
+        const next = line.cloneNode(true) as HTMLElement;
+        const old = was[i];
+        if (old) old.replaceWith(next); else copy.append(next);
+        comeIn(next);
+      }
+      for (const old of was.slice(lines(row).length)) old.remove();
+    });
+    following.observe(list, { childList: true, subtree: true });
     // The composer's hint comes in once the words are out of it (above its top edge), not while they pass over it.
     const out = () => {
-      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) delete root.dataset.madeHint;
+      if (!copy.isConnected || copy.getBoundingClientRect().bottom <= top) { if (now) delete now.field.dataset.madeHint; }
       else requestAnimationFrame(out);
     };
     requestAnimationFrame(out);
@@ -240,6 +300,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
     // The page's own moves, begun as the new page settled (within the transition), are over too.
     await Promise.allSettled(moves);
     for (const { el, original, visibility } of leaving) { el.remove(); original.style.visibility = visibility; }
+    following?.disconnect();
     ghost?.remove();
     now?.release?.();
     now?.stand?.remove();
@@ -251,7 +312,7 @@ export function toMadeChat(go: () => void, { scope, layer, z, list: findList, wa
       delete list.dataset.madeList;
     }
     delete root.dataset.made;
-    delete root.dataset.madeHint;
+    if (now) delete now.field.dataset.madeHint;
   });
 }
 
@@ -277,14 +338,32 @@ function flight(t: number): { up: number; across: number } {
   return { across: FLIGHT(Math.min(1, t / 0.88)), up: FLIGHT(Math.max(0, (t - 0.12) / 0.88)) };
 }
 
+/** What a chat's list says of what it had (`data-last-seq`, `data-outbox`), for `sendingHere` to know the row sent. */
+export function sentAfter(chat: { messages: readonly { seq: number }[]; outbox: readonly { id: string }[]; newer?: boolean }): Record<string, string> {
+  return { "data-last-seq": chat.newer ? "" : String(chat.messages.at(-1)?.seq ?? 0), "data-outbox": chat.outbox.map((o) => o.id).join(" ") };
+}
+
 /** Words sent in an open chat, waiting for their row or on their way to it; `done` lets them go (at once). */
 let flying: { done(): void } | null = null;
+/** Whether words sent from a composer are waiting for their row or on their way to it (the outbox's row coming now is theirs). */
+export const sendingNow = (): boolean => flying !== null;
+
+/** Told once the row of what the reader just sent is in its chat's list (or it will not be): `sendingHere` waits for it. */
+const rowIn: (() => void)[] = [];
+let rowAwaited = false;
+const rowCame = () => { rowAwaited = false; for (const then of rowIn.splice(0)) then(); };
+/** Calls `then` once the row of what the reader just sent is in its chat's list (in the frame it comes, before it is
+ *  painted), or now if none is awaited. */
+export function whenRowIn(then: () => void): () => void {
+  if (!rowAwaited) { then(); return () => {}; }
+  rowIn.push(then);
+  return () => { const i = rowIn.indexOf(then); if (i >= 0) rowIn.splice(i, 1); };
+}
 
 /**
  * A message is sent in an open chat from `field` (a composer's text box, still showing `text`) into `list` (the chat's
  * list): its words stay where they were typed, drawn in `layer` (over the composer, at `z`), its hint gone, until this
- * device's own row for it is in the list (the first of the viewer's own not there when it was sent: the outbox's, or
- * the station's message itself when it is quick). Then that row is drawn from there to its place, over what it
+ * device's own row for it is in the list (the outbox's, or the station's message itself when it is quick). Then that row is drawn from there to its place, over what it
  * passes, its words from the size they were typed at to their own, its bubble's ground and its time coming in on the
  * way; where it goes is read again every frame (the list may move as it settles), and the list itself does not move.
  * The row itself, hidden meanwhile, is shown again as the copy of it goes, in the same frame. The images going with it
@@ -294,29 +373,43 @@ let flying: { done(): void } | null = null;
  */
 export function sendingHere(field: HTMLElement, text: string, { layer, z, list }: { layer: HTMLElement; z: string; list: HTMLElement }): void {
   flying?.done();
-  if (reducedMotion()) return;
   const composer = field.closest("[data-made-composer]") ?? field;
   const stand = standIn(field, text, layer, z);
   const pictures = picturesIn(composer, layer, z);
   if (!stand && !pictures.length) return;
-  const root = document.documentElement;
   const mine = `.${msgCss.msgMine}`;
-  const before = new Set(list.querySelectorAll(mine));
+  // Which of the viewer's rows is this message's, by what the chat had when it was sent (`sentAfter`, on the list): an
+  // outbox entry it did not have, or a message after its last (or, short of the chat's end, the one an entry it took
+  // became). Not "any row not drawn before": rows of the viewer's older messages are made too as the list goes to its end
+  // or grows taller, and the words would fly to them.
+  const { lastSeq, outbox } = list.dataset;
+  const after = lastSeq === undefined || lastSeq === "" ? null : Number(lastSeq);
+  const queued = new Set(outbox?.split(" "));
+  const sent = (el: HTMLElement) => {
+    const key = el.dataset.vk ?? "";
+    if (key.startsWith("o:")) return !queued.has(key.slice(2));
+    if (!key.startsWith("m:")) return false;
+    if (el.dataset.outgoing && rows.some((r) => r.dataset.vk === `o:${el.dataset.outgoing}`)) return true;
+    return after !== null && Number(key.slice(2)) > after;
+  };
   const from = textAt(field);
   field.dataset.madeField = "";
   // Only words pass over the hint; images alone leave it where it is.
-  if (stand) root.dataset.madeHint = "hidden";
-  root.dataset.sent = "";
+  // On the field, not the page's root: a mark there has every element's style worked out anew (a long chat's, at once).
+  if (stand) field.dataset.madeHint = "hidden";
+  field.dataset.sent = "";
   // The rows it went into (the outbox's, then the message that takes its place): hidden while their copy is on its way,
   // and never easing in by themselves.
   const rows: HTMLElement[] = [];
   const take = () => {
     for (const el of list.querySelectorAll<HTMLElement>(mine)) {
-      if (before.has(el) || rows.includes(el)) continue;
+      if (rows.includes(el) || !sent(el)) continue;
       el.style.animation = "none";
       // Hide the row and its delayed status together, without changing opacity: the chat's emphasis transition
       // would otherwise fade the real row back in after its flying copy has already gone.
       el.dataset.sendCovered = "";
+      // Waiting its turn (listQueue.ts), it takes no room yet.
+      if (!begun) el.dataset.queued = "";
       rows.push(el);
     }
     return rows.findLast((el) => el.isConnected) ?? null;
@@ -325,13 +418,21 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
   let copy: HTMLElement | null = null;
   let of: HTMLElement | null = null;
   let ground = "";
+  /** Where the copy was set down (in the layer), its width: from there it is only moved (a transform), not laid out anew. */
+  let set: { left: number; top: number; width: number } | null = null;
   let clock: Animation | null = null;
   let frame = 0;
   let over = false;
   const done = () => {
     if (over) return;
     over = true;
-    if (flying?.done === done) flying = null;
+    if (flying?.done === done) {
+      flying = null;
+      rowCame();
+    }
+    // Over: its turn ends once the list is where it moved it to; given up before it came, it is taken out.
+    if (turn) landed();
+    else out();
     observer.disconnect();
     clearTimeout(timeout);
     cancelAnimationFrame(frame);
@@ -339,14 +440,14 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     ghost?.remove();
     stand?.remove();
     for (const picture of pictures) picture.stand.remove();
-    for (const el of rows) delete el.dataset.sendCovered;
-    delete root.dataset.madeHint;
+    for (const el of rows) { delete el.dataset.sendCovered; delete el.dataset.queued; }
+    delete field.dataset.madeHint;
     // The hint eases back (data-sent), then the field is as it was.
     setTimeout(() => {
       if (flying) return;
       delete field.dataset.madeField;
-      delete root.dataset.sent;
-    }, 200);
+      delete field.dataset.sent;
+    }, motionMs(200));
   };
   // Where the row is now, its copy drawn so far on its way from the composer.
   const place = () => {
@@ -364,6 +465,7 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
       }
       if (copy) copy.replaceWith(next); else ghost.append(next);
       copy = next;
+      set = null;
       if (!ground) {
         const bubble = copy.querySelector(`.${conversationCss.msgBubble}`);
         ground = bubble ? getComputedStyle(bubble).backgroundColor : "";
@@ -374,29 +476,42 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     const box = layer.getBoundingClientRect();
     const { up, across } = flight(clock.effect?.getComputedTiming().progress ?? 1);
     const e = Math.min(1, across);
-    Object.assign(copy.style, { position: "absolute", left: `${at.left - box.left}px`, top: `${at.top - box.top}px`, width: `${at.width}px`, margin: "0" });
+    // Set down once where the row is (again only if its width changes); followed from there by a transform alone, on a
+    // layer of its own: moving it each frame lays nothing out and draws nothing anew (a phone's frames go on that).
+    if (!set || Math.abs(set.width - at.width) > 0.5) {
+      set = { left: at.left - box.left, top: at.top - box.top, width: at.width };
+      Object.assign(copy.style, { position: "absolute", left: `${set.left}px`, top: `${set.top}px`, width: `${set.width}px`, margin: "0", willChange: "transform" });
+    }
+    const dx = at.left - box.left - set.left, dy = at.top - box.top - set.top;
     if (words) {
       const to = textAt(words);
       const s = from.size / to.size + (1 - from.size / to.size) * up;
       Object.assign(copy.style, {
         transformOrigin: `${to.x - at.left}px ${to.y - at.top}px`,
-        transform: `translate(${(from.x - to.x) * (1 - across)}px, ${(from.y - to.y) * (1 - up)}px) scale(${s})`,
+        transform: `translate(${dx + (from.x - to.x) * (1 - across)}px, ${dy + (from.y - to.y) * (1 - up)}px) scale(${s})`,
       });
-    }
+    } else copy.style.transform = `translate(${dx}px, ${dy}px)`;
     // Each image from its thumbnail to its place in the row as it is now: across and up as the words go, its box
     // growing from the thumbnail's to its own.
     for (const picture of pictures) {
       const target = row.querySelector<HTMLElement>(`[data-send-image="${picture.key}"]`);
       if (!target) continue;
-      const end = target.getBoundingClientRect();
+      const end = landsAt(target, target.getBoundingClientRect(), picture.ratio);
       const a = picture.rect;
       if (!picture.stand.dataset.flying) {
         picture.stand.dataset.flying = "";
-        picture.stand.style.borderRadius = getComputedStyle(target).borderRadius;
+        corners(picture.stand, target);
       }
+      // Its corners from the thumbnail's to the message's, and its box's ground, if it has one, coming in (the thumbnail
+      // has none): landed, it is as the message draws it.
+      const style = getComputedStyle(target);
+      picture.ground ??= style.backgroundColor;
+      const radius = parseFloat(style.borderTopLeftRadius) || 0;
       Object.assign(picture.stand.style, {
         left: `${a.left + (end.left - a.left) * across - box.left}px`, top: `${a.top + (end.top - a.top) * up - box.top}px`,
         width: `${a.width + (end.width - a.width) * up}px`, height: `${a.height + (end.height - a.height) * up}px`,
+        borderRadius: `${picture.radius + (radius - picture.radius) * up}px`,
+        backgroundColor: `color-mix(in srgb, ${picture.ground} ${up * 100}%, transparent)`,
       });
     }
     const bubble = copy.querySelector<HTMLElement>(`.${conversationCss.msgBubble}`);
@@ -404,13 +519,29 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     // (Its own delay kept: "sending" shows when the row's does.)
     for (const el of copy.querySelectorAll<HTMLElement>(`.${conversationCss.msgTime}`)) el.style.opacity = `${e}`;
     // Out of the composer (its top edge as it is now): its hint comes back.
-    if (words && root.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete root.dataset.madeHint;
+    if (words && field.dataset.madeHint && copy.getBoundingClientRect().bottom <= composer.getBoundingClientRect().top) delete field.dataset.madeHint;
   };
   const tick = () => { place(); frame = requestAnimationFrame(tick); };
-  // The row comes as the list is drawn anew: its copy takes the words' place before the frame is painted.
+  // Its turn among what changes the list's height (listQueue.ts), asked as it is sent (what comes after it, the agent
+  // starting on it, waits for it): the words wait in the composer till then, its row taking no room. Its turn come
+  // before its row, it waits for the row. Over once it has landed.
+  let begun = false;
+  let turn = false;
+  let landed: () => void = () => {};
+  let out: () => void = () => {};
+  // The row comes as the list is drawn anew: in its turn, its copy takes the words' place before the frame is painted.
   const start = () => {
     const row = take();
-    if (!row || ghost) return;
+    if (!row || !turn || begun) return;
+    clearTimeout(timeout);
+    begun = true;
+    for (const el of rows) delete el.dataset.queued;
+    begin();
+  };
+  const begin = () => {
+    const row = take();
+    if (!row || ghost) { done(); return; }
+    rowCame();
     const flies = (stand && row.querySelector(`.${msgCss.msgPlain}`)) || pictures.some((p) => row.querySelector(`[data-send-image="${p.key}"]`));
     if (!flies) { done(); return; }
     clearTimeout(timeout);
@@ -426,13 +557,19 @@ export function sendingHere(field: HTMLElement, text: string, { layer, z, list }
     // Under the row's copy: where they cross the words on the way, the words stay readable.
     for (const picture of pictures) ghost.append(picture.stand);
     // The one timeline all of it follows (what it moves is read anew each frame): paused and stepped, so is it.
-    clock = ghost.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
+    clock = play(ghost, [{ opacity: 1 }, { opacity: 1 }], { duration: ARRIVE, easing: "linear" });
     place();
     frame = requestAnimationFrame(tick);
     void clock.finished.then(done, () => {});
   };
-  const observer = new MutationObserver(() => { if (ghost) take(); else start(); });
+  const observer = new MutationObserver(() => { if (begun) take(); else start(); });
   observer.observe(list, { childList: true, subtree: true });
   const timeout = setTimeout(done, WAIT_FOR_ROW);
   flying = { done };
+  rowAwaited = true;
+  out = listQueue(list).take(() => new Promise<void>((resolve) => {
+    landed = resolve;
+    turn = true;
+    start();
+  }));
 }

@@ -11,7 +11,7 @@ import type { Host, Sql } from "./host.ts";
 import { HostError, SqlError } from "./host.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
-import { equal, isObject, parseJson, toJsonBytes } from "./util.ts";
+import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
 export { frozen };
@@ -33,7 +33,14 @@ export function num(n: number): string {
 export const SOON_MS = 300;
 
 /// The topics whose values are held here.
-const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs"]);
+const HELD = new Set(["workspace", "overview", "session", "chatRows", "sessions", "threads", "archivedRows", "jobs", "job", "slackApp", "stationUsage", "footprint", "loginSessions", "admin", "draft", "prefs", "drive", "drivePlace"]);
+
+/// What a folder of a station's drive is kept as among the station's documents (the `drive` topic).
+export const driveDoc = (root: string, path: string) => `drive\n${root}\n${path}`;
+/// Where a file of a drive was left (the `drivePlace` topic), as the device keeps it.
+const placeOf = (topic: Topic) => `${String(topic.station)}\n${String(topic.root)}\n${String(topic.path)}`;
+/// The most places of files kept: the oldest go.
+const PLACES_KEPT = 500;
 
 /// Whether a topic's value is held here.
 export function holds(topic: Topic): boolean {
@@ -52,7 +59,7 @@ export function dbName(sub: string): string {
 }
 
 /// The device's own values (not an account's): kept in the host's storage, one storage value per table, read at start.
-export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref"] as const;
+export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive_place"] as const;
 export type DeviceTable = (typeof DEVICE_TABLES)[number];
 
 class Device {
@@ -80,7 +87,10 @@ class Device {
       for (const table of DEVICE_TABLES) {
         const bytes = yield* Effect.orElseSucceed(host.storageGet(`device/${table}`), () => null);
         const v = bytes ? parseJson(bytes) : undefined;
-        if (isObject(v) && !this.#tables.has(table)) this.#tables.set(table, v as Record<string, unknown>);
+        if (!isObject(v) || this.#tables.has(table)) continue;
+        // Each value frozen, as `put` keeps it: shared by whoever reads it (`shared`).
+        for (const key of Object.keys(v)) frozen(v[key]);
+        this.#tables.set(table, v as Record<string, unknown>);
       }
     });
   }
@@ -320,6 +330,7 @@ export class Data {
   shared(topic: Topic): unknown {
     const s = (k: string) => String(topic[k]);
     if (topic.topic === "prefs") return this.device.get("prefs", "device");
+    if (topic.topic === "drivePlace") return this.device.get("drive_place", placeOf(topic));
     if (topic.topic === "draft") {
       const soon = this.#soon.get(`${s("station")}${SEP}${s("chat")}`);
       if (soon) return soon[1];
@@ -342,6 +353,8 @@ export class Data {
         return db.stationDoc(station, "footprint");
       case "stationUsage":
         return db.stationDoc(station, "usage");
+      case "drive":
+        return db.stationDoc(station, driveDoc(s("root"), s("path")));
       case "session":
         return db.detail(station, s("key"));
       case "job":
@@ -424,6 +437,15 @@ export class Data {
       if (this.device.put("prefs", "device", value)) this.#tell(topic);
       return;
     }
+    if (topic.topic === "drivePlace") {
+      if (this.device.put("drive_place", placeOf(topic), value)) this.#tell(topic);
+      const keys = this.device.keys("drive_place");
+      if (keys.length > PLACES_KEPT) {
+        const changed = (k: string) => Number(get(this.device.get("drive_place", k), "changed") ?? 0);
+        for (const k of keys.sort((a, b) => changed(a) - changed(b)).slice(0, keys.length - PLACES_KEPT)) this.device.put("drive_place", k, undefined);
+      }
+      return;
+    }
     if (topic.topic === "draft") return this.of(s("station"))?.putDraft(s("station"), s("chat"), value);
     if (topic.topic === "loginSessions") return this.#dbs.get(s("account"))?.putAccountDoc("login_sessions", value, at, topic);
     if (topic.topic === "admin") return this.#dbs.get(s("account"))?.putAccountDoc(`admin/${s("list")}`, value, at, topic);
@@ -450,6 +472,8 @@ export class Data {
         return db.putStationDoc(station, "footprint", value, at, topic);
       case "stationUsage":
         return db.putStationDoc(station, "usage", value, at, topic);
+      case "drive":
+        return db.putStationDoc(station, driveDoc(s("root"), s("path")), value, at, topic);
       case "session":
         return db.setDetail(station, s("key"), value);
       case "job":
@@ -493,6 +517,13 @@ export class Data {
 
   /// A held topic known no more (a draft sent or emptied).
   forgetTopic(topic: Topic): void {
+    if (topic.topic === "drive") {
+      const station = String(topic.station);
+      const kind = driveDoc(String(topic.root), String(topic.path));
+      const db = this.of(station);
+      if (db && db.stationDoc(station, kind) !== undefined) db.dropStationDoc(station, kind, topic);
+      return;
+    }
     if (topic.topic !== "draft") return;
     const key = `${String(topic.station)}${SEP}${String(topic.chat)}`;
     const soon = this.#soon.delete(key);
@@ -542,9 +573,20 @@ export class Data {
       const ws = key.slice(6);
       return [this.#ofWorkspace(ws) ?? null, [ws, "links"]];
     }
-    if (table === "place" || table === "link") {
+    // A workspace's lock as the cloud keeps it (views/lock.ts): in the workspace's, by its id.
+    if (table === "lock") return [this.#ofWorkspace(key) ?? null, [key, "lock"]];
+    // A workspace's vaults as its stations hold them (views/vault.ts): the vaults, box certificates and requests by the
+    // workspace's id; each vault's items by `<workspace>/<vault>`.
+    if (table === "vault") return [this.#ofWorkspace(key) ?? null, [key, "vault"]];
+    if (table === "vaultItems") {
+      const ws = ofAddress(key);
+      return [this.#ofWorkspace(ws) ?? null, [ws, `vaultItems:${key.slice(ws.length + 1)}`]];
+    }
+    if (table === "place" || table === "link" || table === "heard" || table === "memberships") {
       // A station's own, kept by its address (`<workspace>/<station>…`), in its workspace's: where a chat was left
-      // (`place`, `<address>/<thread>`), how its link was last time (`link`). Read with what shows them, not on the way.
+      // (`place`, `<address>/<thread>`), how its link was last time (`link`), the last event its stream told (`heard`,
+      // written with what it told), the workspaces it is in (`memberships`, views/memberships.ts). Read with what shows
+      // them, not on the way.
       const ws = ofAddress(key);
       return [this.#ofWorkspace(ws) ?? null, [ws, `${table}:${key}`]];
     }
@@ -666,6 +708,11 @@ export class Data {
       if (db) by.set(db, [...(by.get(db) ?? []), s]);
     }
     return [...by].flatMap(([db, list]) => db.desk(list));
+  }
+
+  /// The messages of one thread that have all of `terms`, oldest first (AccountDb.findInThread).
+  findInThread(station: string, thread: number, terms: string[]): ReturnType<AccountDb["findInThread"]> {
+    return this.of(station)?.findInThread(station, thread, terms) ?? [];
   }
 
   /// The messages of these stations that have all of `terms`, newest first, across their databases (AccountDb.findSaid).
@@ -852,6 +899,16 @@ export class Data {
   /// Forgets what is kept of a chat (AccountDb.forgetChat).
   forgetChat(station: string, thread: number): void {
     this.of(station)?.forgetChat(station, thread);
+  }
+
+  /// What a chat shows small, as kept on the device (AccountDb.keptFile), noted as shown now.
+  keptFile(station: string, session: string, name: string, kind: string): { type: string; bytes: string } | null {
+    return this.of(station)?.keptFile(station, session, name, kind, this.#host.nowMs()) ?? null;
+  }
+
+  /// Keeps what a chat shows small (AccountDb.keepFile).
+  keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string): void {
+    this.of(station)?.keepFile(station, session, name, kind, type, bytes, this.#host.nowMs());
   }
 
   /// What a host error is, as a note's detail.

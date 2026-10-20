@@ -1,9 +1,14 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const mSheetScroll = style({
   flex: "1", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain", paddingBottom: "24px",
 });
 export const mForm = style({ display: "flex", flexDirection: "column", gap: "10px", padding: "0 20px 24px" });
-export const mFormLabel = style({ fontSize: "13px", fontWeight: "600" });
+export const mFormLabel = style({ fontSize: vars.textMeta, fontWeight: "600" });
 export const mFormActions = style({ display: "flex", justifyContent: "flex-end", gap: "8px", paddingTop: "6px" });
-globalStyle(`${mForm} > p`, { fontSize: "14px" });
+/** What stays above a sheet's scrolling part (a choice of what it shows), in line with its form. */
+export const mSheetTop = style({ padding: "0 20px 10px" });
+/** A sheet's actions kept under its scrolling part, in line with its form. */
+export const mSheetFoot = style({ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "10px 20px 24px" });
+globalStyle(`${mForm} > p`, { fontSize: vars.textUi });

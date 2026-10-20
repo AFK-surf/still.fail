@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { centredX, centredY } from "@stillfail/ui/styles/align.ts";
 
 /** Frosted, as the composer is. */
 const glass = {
@@ -55,8 +56,8 @@ export const edge = style({
       content: "\"\"", position: "absolute", borderRadius: "999px", background: vars.muted, opacity: "0",
       transition: `opacity ${vars.dur} ${vars.easeOut}`,
     },
-    "&[data-side=right]::after": { left: "5px", top: "50%", width: "4px", height: "36px", marginTop: "-18px" },
-    "&[data-side=bottom]::after": { top: "5px", left: "50%", width: "36px", height: "4px", marginLeft: "-18px" },
+    "&[data-side=right]::after": { left: "5px", ...centredY, width: "4px", height: "36px" },
+    "&[data-side=bottom]::after": { top: "5px", ...centredX, width: "36px", height: "4px" },
     "&[data-side=corner]::after": { display: "none" },
     [`${stage}:hover &::after`]: { opacity: ".45" },
     "&:hover::after, :root[data-viewport-resizing] &::after": { opacity: "1" },
@@ -72,7 +73,7 @@ export const size = style({
   ...glass,
   position: "absolute", zIndex: "3", display: "flex", alignItems: "center", gap: "6px", height: "26px",
   padding: "0 11px", borderRadius: "999px", transform: "translate(-50%, -100%)", pointerEvents: "none",
-  boxShadow: "0 1px 4px rgb(0 0 0 / .1)", color: vars.text, fontSize: vars.textXs, fontWeight: "500",
+  boxShadow: "0 1px 4px rgb(0 0 0 / .1)", color: vars.text, fontSize: vars.textMeta, fontWeight: "500",
   whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", opacity: "0", transition: `opacity 240ms ${vars.easeOut}`,
   selectors: { "&[data-shown]": { opacity: "1", transition: "opacity 80ms linear" } },
 });
@@ -98,7 +99,7 @@ export const chips = style({
 });
 export const chip = style({
   flex: "none", height: "36px", padding: "0 13px", border: "0", borderRadius: "999px", background: "none",
-  color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
+  color: vars.muted, font: "inherit", fontSize: vars.textUi, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums",
   selectors: {
     "&[aria-pressed=true]": { background: vars.canvas, color: vars.text, fontWeight: "600", boxShadow: "0 1px 3px rgb(0 0 0 / .1)" },
   },
@@ -111,5 +112,5 @@ export const tool = style({
 });
 export const fitTool = style({
   height: "36px", padding: "0 12px", border: "0", borderRadius: "999px", background: vars.canvas, color: vars.text,
-  font: "inherit", fontSize: vars.textSm, fontWeight: "500", whiteSpace: "nowrap",
+  font: "inherit", fontSize: vars.textUi, fontWeight: "500", whiteSpace: "nowrap",
 });

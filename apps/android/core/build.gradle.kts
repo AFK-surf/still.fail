@@ -12,9 +12,15 @@ android {
     namespace = "fail.still.core"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
+    lint {
+        ignoreTestSources = true
+        lintConfig = rootProject.file("lint.xml")
+    }
     defaultConfig {
         minSdk = 29
         ndk { abiFilters += "arm64-v8a" }
+        // The frame path's benchmark (src/androidTest/kotlin/fail/still/core/FramePathBench.kt), run by hand.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         if (!prebuiltEngine) externalNativeBuild { cmake { arguments += listOf("-DANDROID_STL=c++_shared") } }
     }
     buildFeatures { prefab = !prebuiltEngine }
@@ -39,4 +45,6 @@ dependencies {
     implementation(libs.hermes.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.junit)
 }

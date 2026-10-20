@@ -35,8 +35,11 @@ notifications), and only for people who take part in them (the sidebar's
 | `message` | another person said something in the chat, while no agent there is at work | `<name>: <text>` |
 
 The title is the chat's title as the sidebar shows it. Texts are one line
-(whitespace collapsed), cut to 140 characters. A notification opens the chat:
-`/o/<workspace>/<station>/<session>` (the link every client already opens).
+(whitespace collapsed), cut to 140 characters. A notification opens the chat at
+the message it is about: `/o/<workspace>/<station>/<session>?message=<seq>` (the
+link every client already opens; the chat's list goes to that message and flashes
+it, as when a row's state line is pressed, and the link loses `message`). Without
+a `seq` (an older station) it is the chat's link alone.
 
 ## Client core: the `notices` topic
 
@@ -50,9 +53,10 @@ that workspace's (the last 20), with none every workspace's. Its value:
   "kind": "done",                  // done | block | failed | message
   "station": "ws/st", "workspace": "ws", "stationId": "st",
   "session": "<row id>", "thread": 7,
+  "seq": 12,                       // the message it is about: the card for `wait`, else the chat's last
   "title": "部署挂了", "body": "Claude: 修好了",
   "tag": "ws/st/<row id>",
-  "url": "/o/ws/st/<row id, URI-encoded>",
+  "url": "/o/ws/st/<row id, URI-encoded>?message=12",
   "at": 1790000000000
 }] }                               // oldest first, the last 20
 ```
@@ -78,12 +82,14 @@ Calls:
 | `push.key` | — | `{ vapid }`: still.fail cloud's VAPID public key (base64url), to subscribe a browser |
 | `push.register` | `{ kind: "web", endpoint, keys: { p256dh, auth } }` or `{ kind: "fcm", token }` | — ; registers this device with every signed-in account, and again with each account signed in later (kept in storage) |
 | `push.unregister` | — | — ; takes this device's registration off every account |
-| `notify.set` | `on?`, `asked?` | the `notify` value; kept on the device. Off also takes this device's registration off every account, and `push.register` does nothing while off |
+| `notify.set` | `on?`, `asked?`, `kinds?`, `preview?` | the `notify` value; kept on the device. `kinds` (`{ wait, failed, done, message }`, each given one changing) says which notices are shown: `wait` covers `wait` and `block`; `done` is `off`, `away` (only while no page of the app is in front: shown and focused; the default) or `always`. `preview` off: a notice's body says only what kind of thing happened (等你决定, 出错了, 做完了, 有新消息), not what was said (local notices only: a push's body is the cloud's). Off also takes this device's registration off every account, and `push.register` does nothing while off |
+| `notify.permission` | `state` | — ; what the system lets this device show, as its app finds it: `granted`, `denied`, `default` (not asked yet) or `unknown`. Not kept: each app says it as it starts and again as it comes back to the front (a browser also as its site permission changes: web/src/notify.ts; the desktop app from its main process: apps/desktop/src/notify-permission.ts; Android from its activity) |
 | `client.focus` | `visible?`, `focused?`, `chat?` (`{ station, thread?, session?, end? }` or null), `left?` (a chat), `workspace?` | — ; where this UI's attention is (each field given changes; `left`: that chat is not shown any more, if it is the one; `workspace`: the one it is in, else its chat's) |
 | `notice.claim` | `id` | `{ show }`: true for the first page that takes a notice of `notify.show` |
-| `notice.pushed` | `workspace?` | `{ show }`: whether a push that came is shown (on, no page in view, and of the workspace the viewer is in) |
+| `notice.pushed` | `workspace?`, `kind?` | `{ show }`: whether a push that came is shown (on, its kind on, no page in view, and of the workspace the viewer is in) |
+| `notice.bring` | `station`, `session`, `seq?` | — once what a shown push is about is on the device: the chat's messages after what is held (none when `seq` is held already), its chat found in the station's chats if the device holds none; nothing for a station it does not reach |
 
-`notify` (no params, attend.ts) is what the clients show from: `{ on, asked, push, show }`. `on` and `asked` (the
+`notify` (no params, attend.ts) is what the clients show from: `{ on, asked, push, kinds, preview, permission, show }`; every client's notifications page shows `permission` the same way (a refused one on the banner tile, with the way to the system's settings where the app can open them). `on` and `asked` (the
 system asked to allow them, once) are kept on the device, on by default. `push`: this device should hold a push
 registration. `show`: the notices to show now, decided as they come: none while off; none for a chat a UI is looking at
 (`client.focus`: `visible`, `focused`, that chat); none while this device has pushes and no page is in view (the push
@@ -108,6 +114,7 @@ with `notice.claim`, so it is shown once however many pages are open; one not ta
   { "notices": [{
     "to": ["a@b.c"],               // people's emails; only members of the station's workspace get it
     "kind": "done", "session": "<key>", "thread": 7,
+    "seq": 12,                     // the message it is about (its number in the chat); optional
     "title": "部署挂了", "by": "Claude", "text": "修好了", "at": 1790000000000
   }] }
   ```
@@ -121,8 +128,9 @@ high priority, every value a string):
 
 ```jsonc
 { "type": "notice", "kind": "done", "title": "…", "body": "…",
-  "tag": "ws/st/<session>", "url": "/o/ws/st/<session>",
-  "workspace": "ws", "station": "st", "session": "<key>", "at": "1790000000000" }
+  "tag": "ws/st/<session>", "url": "/o/ws/st/<session>?message=12",
+  "workspace": "ws", "station": "st", "session": "<key>", "at": "1790000000000",
+  "seq": "12" }                    // when the station gave one
 ```
 
 Secrets: `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` (P-256, base64url raw
@@ -152,7 +160,11 @@ cloud sends nothing. An older cloud answers 404, and nothing more comes of it.
   none themselves. The setting is the same page.
 - Android: `POST_NOTIFICATIONS` is asked for; one channel (消息); local notices
   while the app is in front (not for the open chat; the core's `notify`), FCM
-  pushes while it is not (`notice.pushed`). The token is registered with
-  `push.register`. Tapping either kind opens the notification’s workspace on
-  the decisions page (奏), with Back returning to its chat list. Ordinary chat
-  links still open their chat. 我 → 通知 turns them off, kept by the core.
+  pushes while it is not (`notice.pushed`). A push shown also brings its
+  chat's new messages onto the phone while FCM lets the app run
+  (`notice.bring`, after `client.wake` for how long the app was away), so
+  tapping it opens on them instead of waiting for the station to be reached
+  again. The token is registered with `push.register`. Tapping either kind opens its chat at the message it is
+  about (`seq`: the card for `wait`, else the message noticed), with Back
+  returning to its chat list; without a `seq` (an older station or cloud) the
+  chat opens where it would. 我 → 通知 turns them off, kept by the core.

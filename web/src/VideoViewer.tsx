@@ -5,12 +5,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CanvasSink, Input, WrappedCanvas } from "mediabunny";
 import { REST_MS, TAP_REST_MS, useZoom } from "./FilePreview.tsx";
-import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "./icons.tsx";
-import * as css from "./VideoViewer.css.ts";
+import { Camera, ChevronLeft, ChevronRight, Landscape, Pause, Play } from "@stillfail/ui/icons.tsx";
+import * as css from "@stillfail/ui/viewer/media.css.ts";
 import * as fpCss from "./FilePreview.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
-import { Tip } from "./ui.tsx";
+import { Tip, Spinner } from "./ui.tsx";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 
@@ -33,7 +33,8 @@ class Frames {
   private last = 0;
   private closed = false;
 
-  private constructor(private input: Input, private sink: CanvasSink, readonly starts: number[], readonly lastDuration: number, private room: number) {}
+  /** `keys`: the frames decoding can start at (its key frames), in order. */
+  private constructor(private input: Input, private sink: CanvasSink, readonly starts: number[], private keys: number[], readonly lastDuration: number, private room: number) {}
 
   /** The frames of a video, or null when there is no video track the browser can decode. */
   static async open(blob: Blob): Promise<Frames | null> {
@@ -42,14 +43,15 @@ class Frames {
     try {
       const track = await input.getPrimaryVideoTrack();
       if (!track || !(await track.canDecode())) { input.dispose(); return null; }
-      const packets: { timestamp: number; duration: number }[] = [];
-      for await (const p of new mb.EncodedPacketSink(track).packets(undefined, undefined, { metadataOnly: true })) packets.push({ timestamp: p.timestamp, duration: p.duration });
+      const packets: { timestamp: number; duration: number; key: boolean }[] = [];
+      for await (const p of new mb.EncodedPacketSink(track).packets(undefined, undefined, { metadataOnly: true })) packets.push({ timestamp: p.timestamp, duration: p.duration, key: p.type === "key" });
       if (!packets.length) { input.dispose(); return null; }
       // Packets come in decoding order; frames show in time order.
       packets.sort((a, b) => a.timestamp - b.timestamp);
       const pixels = (await track.getDisplayWidth()) * (await track.getDisplayHeight());
       const room = Math.max(10, Math.min(90, Math.floor(KEEP_BYTES / (pixels * 4))));
-      return new Frames(input, new mb.CanvasSink(track), packets.map((p) => p.timestamp), packets.at(-1)!.duration, room);
+      const keys = packets.flatMap((p, i) => (p.key ? [i] : []));
+      return new Frames(input, new mb.CanvasSink(track), packets.map((p) => p.timestamp), keys, packets.at(-1)!.duration, room);
     } catch (e) {
       input.dispose();
       throw e;
@@ -65,11 +67,6 @@ class Frames {
       if (s[mid]! <= time + 1e-4) lo = mid; else hi = mid - 1;
     }
     return lo;
-  }
-
-  /** How long frame `i` stays on screen, in seconds. */
-  held(i: number): number {
-    return i + 1 < this.starts.length ? this.starts[i + 1]! - this.starts[i]! : this.lastDuration;
   }
 
   /** Frame `i` decoded; null when another was asked for before its turn came (only the latest is decoded). */
@@ -91,8 +88,10 @@ class Frames {
     let c = this.cursor;
     if (!c || c.next > i || i - c.next > this.room) {
       await c?.canvases.return();
-      // Going back, the frames before it are decoded along with it: the steps back after it are then at hand.
-      const from = i < this.last ? Math.max(0, i - this.room + 2) : i;
+      // Going back, the frames before it are decoded along with it: the steps back after it are then at hand. Only
+      // those from its key frame on, which are decoded to reach it anyway: from further back, the key frame before
+      // would be decoded from too, and a drag back would wait on a few dozen frames more than one forward does.
+      const from = i < this.last ? Math.max(this.keyAt(i), i - this.room + 2) : i;
       c = this.cursor = { canvases: this.sink.canvases(this.starts[from]), next: from };
     }
     while (c.next <= i) {
@@ -109,6 +108,18 @@ class Frames {
     }
     this.last = i;
     return this.kept.get(i) ?? null;
+  }
+
+  /** The key frame decoding frame `i` starts from. */
+  private keyAt(i: number): number {
+    const k = this.keys;
+    let lo = 0, hi = k.length - 1;
+    if (hi < 0 || k[0]! > i) return 0;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (k[mid]! <= i) lo = mid; else hi = mid - 1;
+    }
+    return k[lo]!;
   }
 
   private nearest(time: number): number {
@@ -145,7 +156,11 @@ function rateOf(starts: number[]): { fps: number; steady: boolean } {
 type Turnable = ScreenOrientation & { lock?(orientation: "landscape"): Promise<void>; unlock?(): void };
 const canTurn = () => !!document.fullscreenEnabled && typeof (screen.orientation as Turnable | undefined)?.lock === "function";
 
-export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name: string }) {
+/**
+ * `onMeta`: what the video is (its size in pixels, how long, its rate), for the preview's bar on top; the bar below is
+ * for what is done with it, and where it is.
+ */
+export function VideoViewer({ url, blob, name, onMeta }: { url: string; blob: Blob; name: string; onMeta?: (meta: string | null) => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const picture = useRef<HTMLCanvasElement>(null);
   const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
@@ -223,18 +238,26 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
     return () => v.cancelVideoFrameCallback(id);
   }, []);
 
-  // Paused, the frame is drawn from the file.
+  // Paused, the frame is drawn from the file. Each is drawn as it comes, though another was asked for since: dragging
+  // along the timeline, the picture follows as fast as the frames are decoded, not only once the pointer rests. What
+  // is drawn stays until the next is (the video under it was left where it paused), and goes as it plays again.
+  const drawing = useRef({ live: false });
+  useEffect(() => {
+    if (!decoded || playing) return;
+    const d = { live: true };
+    drawing.current = d;
+    return () => { d.live = false; setDrawn(-1); };
+  }, [decoded, playing]);
   useEffect(() => {
     if (!decoded || playing || at < 0) return;
-    let live = true;
+    const d = drawing.current;
     decoded.get(at).then((frame) => {
       const el = picture.current;
-      if (!live || !frame || !el) return;
+      if (!d.live || !frame || !el) return;
       if (el.width !== frame.width || el.height !== frame.height) { el.width = frame.width; el.height = frame.height; }
       el.getContext("2d", { willReadFrequently: true })!.drawImage(frame, 0, 0);
       setDrawn(at);
     }, (e: unknown) => console.warn("video frame:", e));
-    return () => { live = false; };
   }, [decoded, playing, at]);
 
   useEffect(() => { if (video.current) video.current.playbackRate = Number(rate); }, [rate]);
@@ -309,12 +332,18 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
   const facts = decoded ? [
     { key: "frame", text: <><b className={css.vvNow}>{at + 1}</b><span className={css.vvDim}> / {t("web-main.video.frames", { n: count })}</span></> },
     { key: "time", text: clock(now) },
-    { key: "held", text: <Tip label={t("web-main.video.heldTip")}><span>{t("web-main.video.held", { ms: (decoded.held(at) * 1000).toFixed(1) })}</span></Tip> },
-    ...(rateInfo ? [{ key: "fps", text: <span className={css.vvDim}>{rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })}</span> }] : []),
   ] : [
     { key: "time", text: <><b className={css.vvNow}>{clock(time)}</b><span className={css.vvDim}> / {clock(duration)}</span></> },
-    { key: "note", text: <span className={css.vvDim}>{frames === null ? t("web-main.video.readingFrames") : t("web-main.video.guessed")}</span> },
+    { key: "note", text: <span className={css.vvDim}>{frames === null ? <><Spinner inline />{" "}{t("web-main.video.readingFrames")}</> : t("web-main.video.guessed")}</span> },
   ];
+  const end = decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration;
+  const meta = natural ? [
+    `${natural.w}×${natural.h}`,
+    end > 0 ? clock(end) : null,
+    rateInfo ? (rateInfo.steady ? `${Math.round(rateInfo.fps)} fps` : t("web-main.video.variableRate", { fps: Math.round(rateInfo.fps) })) : null,
+  ].filter(Boolean).join(" · ") : null;
+  useEffect(() => { onMeta?.(meta); }, [onMeta, meta]);
+  useEffect(() => () => onMeta?.(null), [onMeta]);
   // Beside the pointer, on the side with room.
   const left = pixel && pixel.clientX > window.innerWidth - 220;
   return (
@@ -334,7 +363,7 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
           onLoadedMetadata={(e) => { const v = e.currentTarget; setNatural({ w: v.videoWidth, h: v.videoHeight }); setDuration(v.duration); }}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
         <canvas ref={picture} className={css.vvPicture} data-pixelated={pixelated} aria-label={decoded ? t("web-main.video.frame", { n: at + 1 }) : undefined}
-          style={{ ...(zoom.place ?? {}), visibility: still && zoom.place ? "visible" : "hidden" }} />
+          style={{ ...(zoom.place ?? {}), visibility: !playing && drawn >= 0 && zoom.place ? "visible" : "hidden" }} />
       </div>
       {pixel && (
         <span className={css.vvPixel} style={{ top: pixel.clientY + 16, ...(left ? { right: window.innerWidth - pixel.clientX + 12 } : { left: pixel.clientX + 16 }) }}>
@@ -346,14 +375,14 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onControls.current = false; wake(); }}
         // A finger on them keeps them a while longer.
         onPointerDown={(e) => { if (e.pointerType !== "mouse") wake(TAP_REST_MS); }}>
-        <Timeline start={decoded?.starts[0] ?? 0} end={decoded ? decoded.starts.at(-1)! + decoded.lastDuration : duration} now={now} onSeek={seek} />
+        <Timeline start={decoded?.starts[0] ?? 0} end={end} now={now} onSeek={seek} />
         <div className={css.vvRow}>
           <span className={css.vvGroup}>
-            <Tip label={t("web-main.video.prevKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
-            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={pagesCss.iconBtn} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
+            <Tip label={t("web-main.video.prevKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.prev")} onClick={() => go((i) => i - 1)}><ChevronLeft size={18} /></button></Tip>
+            <Tip label={playing ? t("web-main.video.pauseKey") : t("web-main.video.playKey")}><button type="button" className={pageCss.iconBtn} aria-label={playing ? t("web-main.video.pause") : t("web-main.video.play")} onClick={toggle}>
               {playing ? <Pause size={18} /> : <Play size={18} />}
             </button></Tip>
-            <Tip label={t("web-main.video.nextKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.next")} onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
+            <Tip label={t("web-main.video.nextKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.next")} onClick={() => go((i) => i + 1)}><ChevronRight size={18} /></button></Tip>
           </span>
           <span className={css.vvInfo}>
             {facts.map((f) => <span key={f.key} className={css.vvFact} data-fact={f.key}>{f.text}</span>)}
@@ -362,8 +391,8 @@ export function VideoViewer({ url, blob, name }: { url: string; blob: Blob; name
             {zoomTools}
             <Tip label={t("web-main.video.rate")}><button type="button" className={css.vvRate}
               onClick={() => setRate((r) => RATES[(RATES.indexOf(r) + RATES.length - 1) % RATES.length]!)}>{rate}×</button></Tip>
-            <Tip label={t("web-main.video.saveTip")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.video.save")} disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
-            {canTurn() && <button type="button" className={`${pagesCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? t("web-main.video.unturn") : t("web-main.video.turn")} aria-pressed={turned}
+            <Tip label={t("web-main.video.saveTip")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.video.save")} disabled={!still} onClick={save}><Camera size={18} /></button></Tip>
+            {canTurn() && <button type="button" className={`${pageCss.iconBtn} ${css.vvTurn}`} aria-label={turned ? t("web-main.video.unturn") : t("web-main.video.turn")} aria-pressed={turned}
               onClick={() => void turn().catch((e: unknown) => console.warn("full screen:", e))}><Landscape size={18} /></button>}
           </span>
         </div>
@@ -381,14 +410,15 @@ function Timeline({ start, end, now, onSeek }: { start: number; end: number; now
     return start + Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * span;
   };
   const dragging = useRef(false);
-  const where = `${Math.min(100, Math.max(0, ((now - start) / span) * 100))}%`;
+  const share = Math.min(1, Math.max(0, (now - start) / span));
+  // Moved as it plays (each frame of the video), not laid out anew: the played part scaled, the head slid along.
   return (
     <div ref={box} className={css.vvTimeline} role="slider" aria-label={t("web-main.video.position")} aria-valuemin={0} aria-valuemax={Math.round(span * 1000)} aria-valuenow={Math.round((now - start) * 1000)}
       onPointerDown={(e) => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); dragging.current = true; onSeek(at(e.clientX)); }}
       onPointerMove={(e) => { if (dragging.current) onSeek(at(e.clientX)); }}
       onPointerUp={() => { dragging.current = false; }} onPointerCancel={() => { dragging.current = false; }}>
-      <span className={css.vvTrack}><span className={css.vvPlayed} style={{ width: where }} /></span>
-      <span className={css.vvHead} style={{ left: where }} />
+      <span className={css.vvTrack}><span className={css.vvPlayed} style={{ transform: `scaleX(${share})` }} /></span>
+      <span className={css.vvHeadRail} style={{ transform: `translateX(${share * 100}%)` }}><span className={css.vvHead} /></span>
     </div>
   );
 }

@@ -1,33 +1,40 @@
-// The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, and
-// everything else is a page pushed over it (no tab bar), or a sheet from the bottom. Pages move side by side: the new
+// The app on a narrow screen, as the Android app is (apps/android/…/App.kt): the chats of one workspace are home, its
+// places (奏, 文件, Station…) the other top pages, gone to from the bottom bar under them (Bar.tsx) in place of the one
+// in view; everything else is a page pushed over them, or a sheet from the bottom. Pages move side by side: the new
 // one pushes in whole from the right and the old goes out to the left (and back the other way); settings (from the
 // gear at the top left) come from the left instead, a new chat rises from the bottom. Each page is an address, so the browser's back and a
 // link work as the desktop's do; pages under the top one stay as they were left (their scroll, what was typed). What
 // lies over a page (a sheet, the menu, the reader) is closed by back first.
 //
-// Wider (WIDE: an opened foldable, a phone on its side), the pages keep a column with a little room at either side, and
-// a button at the bottom left of the screen, level with the composer, opens the latest chats over the page: another chat
+// Wider (WIDE: an opened foldable, a phone on its side), the pages are the screen's whole width, and a button at its
+// bottom left, level with the composer (which starts beside it), opens the latest chats over the page: another chat
 // from there takes the place of the one open.
 import { transitionTo } from "../ui.tsx";
-import { said, ToastTo } from "../toast.tsx";
-import { afterBack, useBackClose } from "../backClose.ts";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { said, ToastTo } from "@stillfail/ui/toast.tsx";
+import { afterBack, useBackClose } from "@stillfail/ui/backClose.ts";
+import { backPage } from "../backPage.ts";
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useLocation, useNavigate, useNavigationType, type Location } from "react-router";
 import type { Account } from "../cloud/accounts.ts";
 import { NavBack } from "./parts.tsx";
-import { Chats } from "../icons.tsx";
+import { Chats } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as css from "./app.css.ts";
-import { follower, type Follower } from "../motion.ts";
+import { follower, motionMs, type Follower } from "@stillfail/ui/motion.ts";
 import { useInWorkspace } from "../notify.ts";
+import { BottomBar, PLACE_PATHS, placeOfPath, useBars, type BarPlace } from "./Bar.tsx";
 import { t } from "../i18n.ts";
+import { MobileContext } from "./narrow.ts";
 
 /** The workspace in view and the signed-in account that reaches it. */
 export interface Entry { id: string; name: string; account: Account }
 
-/** A sheet: how much of the screen it takes at first, and whether its grabber drags it. */
-export interface SheetSpec { height: number; draggable?: boolean; content: () => ReactNode }
+/**
+ * A sheet: how much of the screen it takes at first, and whether its grabber drags it. `keep`: it stays as the page
+ * changes under it; `onClose`: told when it is closed by hand (a tap beside it, dragged down, back), not otherwise.
+ */
+export interface SheetSpec { height: number; draggable?: boolean; keep?: boolean; onClose?: () => void; content: () => ReactNode }
 export interface MenuItem { label: string; icon: ReactNode; action: () => void }
 export interface MenuSpec { anchor: DOMRect; items: MenuItem[]; onDismiss?: () => void }
 /** One thing in full over everything: what it is (a line, as the history labels it), then all of it. */
@@ -40,23 +47,58 @@ export interface MobileApp {
   push: (path: string) => void;
   /** From the list: pushed; from the latest chats (WIDE), in place of the page open. */
   open: (path: string) => void;
-  /** The page in view's path (`/w/<id>…`, as the address has it): the latest chats mark its row. */
-  current: string;
   pop: () => void;
   /** The top page gives way to another (a new chat becomes the chat it made); `state`, the history's for it. */
   replace: (path: string, state?: unknown) => void;
   home: () => void;
+  /** To a place's top page from the bottom bar: in place of the place's page in view, no page pushed. */
+  tab: (place: BarPlace) => void;
+  /** The place whose page is under the one in view (what its back goes to), if one is. */
+  under: () => BarPlace | null;
   sheet: (spec: SheetSpec | null) => void;
   menu: (spec: MenuSpec | null) => void;
   toast: (text: string) => void;
   reader: (spec: ReaderSpec | null) => void;
 }
 
-const Context = createContext<MobileApp | null>(null);
+const Context = MobileContext;
 
-/** Whether this is drawn in the narrow app (a phone's way of doing things: ../annotate/ImageMarks.tsx). */
-export function useNarrow(): boolean {
-  return useContext(Context) !== null;
+/**
+ * The browser drew the last back or forward itself (Safari's own swipe from the screen's edge, its picture of the page
+ * under following the finger): the page is not moved again after it. Heard before the router hears it (this listens
+ * from when the module loads), so it is known by the time the page changes.
+ */
+let drawnByBrowser = false;
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", (event) => { drawnByBrowser = (event as PopStateEvent & { hasUAVisualTransition?: boolean }).hasUAVisualTransition === true; });
+}
+
+export { useNarrow } from "./narrow.ts";
+
+/** The page in view's path (`/w/<id>…`, as the address has it), for the rows that mark theirs (useOpenPage). */
+let shown = "";
+const shownHeard = new Set<() => void>();
+function showPage(path: string): void {
+  if (path === shown) return;
+  shown = path;
+  for (const heard of shownHeard) heard();
+}
+const hearShown = (heard: () => void) => { shownHeard.add(heard); return () => { shownHeard.delete(heard); }; };
+/** Hears the page in view change (another pushed over it, or it gone back from): what is picked on a page lets go then (pick.tsx). */
+export const hearPageShown = hearShown;
+
+/** Whether `path` is the page in view (the latest chats mark its row): redrawn only when that changes. */
+export function useOpenPage(path: string): boolean {
+  return useSyncExternalStore(hearShown, () => shown === path, () => false);
+}
+
+/**
+ * Whether the page is a place's top page with the bottom bar under it (Bar.tsx): the first page of the stack, at a
+ * place's address. Its back button is not drawn (there is no page under it to go back to; the bar goes elsewhere).
+ */
+const RootPage = createContext(false);
+export function useRootPage(): boolean {
+  return useContext(RootPage);
 }
 
 export function useApp(): MobileApp {
@@ -90,8 +132,8 @@ function wayOf(path: string): Way {
 /** `way`: how the page came in, and so how it goes (a new chat become its chat still sinks back down). */
 interface Page { key: string; location: Location; way: Way }
 
-/** The workspace's pages, one route each; `routes` draws the one a location is. */
-export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode }) {
+/** The workspace's pages, one route each; `routes` draws the one a location is. `over`: what puts itself up over any page. */
+export function MobileShell({ entry, routes, recent, over }: { entry: Entry; routes: (location: Location) => ReactNode; recent: () => ReactNode; over?: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const type = useNavigationType();
@@ -101,6 +143,21 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   const [pages, setPages] = useState<Page[]>(() => [{ key: location.key, location, way: wayOf(location.pathname) }]);
   const [moving, setMoving] = useState<{ from: Page; to: Page; forward: boolean } | null>(null);
   const top = pages.at(-1)!;
+  // A finger swiping the page back: how far (null: none); let go far enough, where it left the page, which the back goes
+  // on from (`from`), the page held there until the back lands.
+  const [swipe, setSwipe] = useState<number | null>(null);
+  const from = useRef(0);
+  // The places' top pages switched away from on the bottom bar, kept drawn out of sight: switched back to, each is as it
+  // was left (where it was scrolled to, what it had read), not made anew. The order they were first drawn in, which
+  // they keep (a page moved in the document loses where it was scrolled to).
+  const placesKept = useRef(new Map<BarPlace, Page>());
+  // A place's page coming in (switched to on the bar): which, from how far across; gone once it is in.
+  const [placeIn, setPlaceIn] = useState<{ key: string; from: number; n: number } | null>(null);
+  useEffect(() => { if (!placeIn) return; const timer = setTimeout(() => setPlaceIn(null), motionMs(260)); return () => clearTimeout(timer); }, [placeIn]);
+  const bars = useBars();
+  const barsNow = useRef(bars);
+  barsNow.current = bars;
+  const drawnFirst = useRef(new Map<string, number>());
   useLayoutEffect(() => {
     if (location.key === top.location.key) return;
     const page = { key: location.key, location, way: wayOf(location.pathname) };
@@ -111,8 +168,19 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       next = pages.slice(0, at + 1);
       forward = false;
     } else if (type === "REPLACE" && (location.state as { fresh?: boolean } | null)?.fresh) {
-      // Another chat from the latest chats: a page of its own in place of the one that was open.
-      next = [...pages.slice(0, -1), page];
+      // Another chat from the latest chats: a page of its own in place of the one that was open. A place switched to
+      // on the bar: its page as it was left, if it was.
+      const to = placeOfPath(location.pathname, home);
+      const kept = to && placesKept.current.get(to);
+      const now = kept ? { ...page, key: kept.key } : page;
+      next = [...pages.slice(0, -1), now];
+      // Another place on the bar: the way its page comes in, as the ball goes (none from another bar's).
+      const from = placeOfPath(top.location.pathname, home);
+      if (to && from && pages.length === 1) {
+        const set = barsNow.current.sets[barsNow.current.current] ?? [];
+        const i = set.indexOf(from), j = set.indexOf(to);
+        setPlaceIn({ key: now.key, from: i >= 0 && j >= 0 ? Math.sign(j - i) * 30 : 0, n: Date.now() });
+      }
     } else if (type === "REPLACE") {
       // The page becoming another in place (a new chat its chat) stays the same page: what is on it that both have (the
       // composer, with what is typed) is kept.
@@ -121,11 +189,19 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       next = [...pages, page];
     }
     setPages(next);
-    if (type !== "REPLACE" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) setMoving({ from: top, to: page, forward });
+    const drawn = type === "POP" && drawnByBrowser;
+    drawnByBrowser = false;
+    const moves = type !== "REPLACE" && !drawn;
+    // Back, the page as it is in the list (its key the one it was first opened with, kept as it became another in place:
+    // a chat opened by a link becoming the list), or it would not be the one coming in, and stay hidden as it comes.
+    if (moves) setMoving({ from: top, to: type === "POP" && at >= 0 ? pages[at]! : page, forward });
+    else from.current = 0;
+    // A page swiped back was held where the finger let it go: in the same frame, its going on from there takes over.
+    setSwipe(null);
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!moving) { from.current = 0; return; }
-    const timer = setTimeout(() => setMoving(null), 400);
+    const timer = setTimeout(() => setMoving(null), motionMs(400));
     return () => clearTimeout(timer);
   }, [moving]);
 
@@ -141,15 +217,22 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
   // Folded below WIDE with them open: they go, and back off their entry of the history with them.
   useEffect(() => { if (!wide) setDrawer(false); }, [wide]);
   // A move to another page leaves what lay over this one.
-  useEffect(() => { setSheet(null); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
+  useEffect(() => { setSheet((s) => (s?.keep ? s : null)); setMenu(null); setReader(null); setDrawer(false); }, [location.key]);
   const isHome = (p: Page) => p.location.pathname.replace(/\/$/, "") === home;
 
-  const app: MobileApp = {
+  // The same object while the page in view is: everything under it reads it (every row of a chat), and a new one each
+  // time the shell draws (a finger swiping back draws it each move) would draw them all again. What it does reads the
+  // shell as it is now.
+  const now = useRef({ navigate, drawer, top, pages });
+  now.current = { navigate, drawer, top, pages };
+  const current = top.location.pathname;
+  const app = useMemo<MobileApp>(() => ({
     entry,
     at: (path) => `${home}${path}`,
     // Each after the back that a sheet or menu closed just before takes (../backClose.ts), or that back would undo it.
-    push: (path) => afterBack(() => navigate(path)),
+    push: (path) => afterBack(() => now.current.navigate(path)),
     open: (path) => {
+      const { navigate, drawer, top } = now.current;
       if (!drawer) return afterBack(() => navigate(path));
       setDrawer(false);
       if (path === top.location.pathname) return;
@@ -158,76 +241,149 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
       const go = () => afterBack(() => (isHome(top) ? navigate(path) : navigate(path, { replace: true, state: { fresh: true } })));
       setTimeout(() => setTimeout(go));
     },
-    current: top.location.pathname,
     // Back through the pages opened here; from the first one (opened by a link), to the list.
-    pop: () => afterBack(() => (pages.length > 1 ? navigate(-1) : navigate(home, { replace: true }))),
+    pop: () => afterBack(() => (now.current.pages.length > 1 ? backPage(() => now.current.navigate(-1)) : now.current.navigate(home, { replace: true }))),
     // One page becoming another (a new chat its chat): crossfaded, what both have (the composer) moving between them.
     // The wait for a closing sheet's back is inside the crossfade, which starts a frame later: a sheet closed in the same
     // tap (another workspace from the workspace sheet) starts its back in between, and replacing before that back lands
     // would put the new page on the sheet's entry, which the back then leaves for the old page.
-    replace: (path, state) => void transitionTo(() => afterBack(() => navigate(path, { replace: true, state }))),
-    home: () => afterBack(() => navigate(home)),
+    replace: (path, state) => void transitionTo(() => afterBack(() => now.current.navigate(path, { replace: true, state }))),
+    home: () => afterBack(() => now.current.navigate(home)),
+    // A page of its own (scrolled to its top), in place of the one in view, without the side's slide. Only from a place's
+    // top page: one pushed meanwhile (令 tapped while a bar switch was landing) stays, and is not made the place.
+    under: () => { const p = now.current.pages.at(-2); return p ? placeOfPath(p.location.pathname, home) : null; },
+    tab: (place) => afterBack(() => { if (now.current.pages.length === 1) now.current.navigate(`${home}${PLACE_PATHS[place]}`, { replace: true, state: { fresh: true } }); }),
     sheet: setSheet,
     menu: setMenu,
     toast: showToast,
     reader: setReader,
-  };
+  }), [entry, home, showToast]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Said apart from the app (which everything reads): only the rows it is, or was, draw again as the page changes.
+  useLayoutEffect(() => showPage(current), [current]);
 
   // With a finger, the page is swiped back from the screen's left edge: it follows the finger, the page under it shows,
   // and past a third of the way (or flung) it goes, from where the finger left it.
-  const home_ = isHome(top);
-  const [swipe, setSwipe] = useState<number | null>(null);
-  const swiping = useRef<{ x: number; at: number; dx: number } | null>(null);
-  const from = useRef(0);
+  // A place's top page (the first of the stack, at a place's address): the bottom bar under it, no swipe back from it.
+  const place = placeOfPath(top.location.pathname, home);
+  const rootKey = pages[0]!.key;
+  const atRoot = pages.length === 1 && place !== null;
+  const home_ = isHome(top) || atRoot;
+  const swiping = useRef<{ x: number; y: number; at: number; dx: number; tapped: boolean } | null>(null);
+  // Where the finger has the page now. Each move puts it (and the page under it) there itself, once a frame, rather than
+  // through a render of the shell; a render meanwhile draws them where this says.
+  const dragged = useRef(0);
+  const pageEls = useRef(new Map<string, HTMLDivElement>());
+  const step = useRef(0);
+  const follow = () => {
+    if (step.current) return;
+    step.current = requestAnimationFrame(() => {
+      step.current = 0;
+      if (!swiping.current) return;
+      const { top, pages } = now.current;
+      const page = pageEls.current.get(top.key), under = pages.at(-2) && pageEls.current.get(pages.at(-2)!.key);
+      if (page) page.style.transform = `translateX(${dragged.current}px)`;
+      if (under) under.style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
+    });
+  };
   const swipeProps = home_ ? {} : {
     onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
       if (e.pointerType !== "touch" || sheet || reader) return;
-      swiping.current = { x: e.clientX, at: e.timeStamp, dx: 0 };
+      swiping.current = { x: e.clientX, y: e.clientY, at: e.timeStamp, dx: 0, tapped: true };
+      dragged.current = 0;
+      // The page and the one under it made ready to move as the finger lands (each a layer of its own, the one under
+      // drawn), not on its first move: that move would wait for both to be drawn.
+      setSwipe(0);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
     onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
       if (!s) return;
       s.dx = Math.max(0, e.clientX - s.x);
-      setSwipe(s.dx);
+      // A drag stays a drag even when it is vertical or the finger comes back to where it started.
+      if (Math.hypot(e.clientX - s.x, e.clientY - s.y) >= 6) s.tapped = false;
+      dragged.current = s.dx;
+      follow();
     },
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       const s = swiping.current;
       swiping.current = null;
+      cancelAnimationFrame(step.current);
+      step.current = 0;
       if (!s) return;
+      dragged.current = s.dx;
       const flung = s.dx > 40 && s.dx / Math.max(1, e.timeStamp - s.at) > 0.6;
-      if (s.dx > window.innerWidth / 3 || flung) { from.current = s.dx; setSwipe(null); app.pop(); } else setSwipe(null);
+      if (s.dx > window.innerWidth / 3 || flung) {
+        // Held where it is (and the page under it) until the back lands, then on from there (the effect above): not
+        // sprung back meanwhile, nor started over.
+        from.current = s.dx;
+        setSwipe(s.dx);
+        app.pop();
+        const leaving = top.key;
+        setTimeout(() => { if (now.current.top.key === leaving && from.current === s.dx) { from.current = 0; setSwipe(null); } }, 1000);
+      } else { dragged.current = 0; setSwipe(null); }
+      // A tap, not a swipe: it is for what lies under the strip (the bar's back button reaches into it).
+      if (s.tapped && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) {
+        const strip = e.currentTarget;
+        strip.style.pointerEvents = "none";
+        const under = document.elementFromPoint(e.clientX, e.clientY);
+        strip.style.pointerEvents = "";
+        under?.closest<HTMLElement>("button, a[href], [role=button]")?.click();
+      }
     },
-    onPointerCancel: () => { swiping.current = null; setSwipe(null); },
+    onPointerCancel: () => { swiping.current = null; cancelAnimationFrame(step.current); step.current = 0; dragged.current = 0; setSwipe(null); },
   };
 
   // The page leaving on the way back is no longer in the list; it is drawn until it has gone.
   const shown = moving && !moving.forward && !pages.some((p) => p.key === moving.from.key) ? [...pages, moving.from] : pages;
+  if (atRoot && place) placesKept.current.set(place, pages[0]!);
+  const away = [...placesKept.current.values()].filter((k) => !shown.some((p) => p.key === k.key));
+  for (const p of [...shown, ...away]) if (!drawnFirst.current.has(p.key)) drawnFirst.current.set(p.key, drawnFirst.current.size);
+  const drawn = [...shown, ...away].sort((a, b) => drawnFirst.current.get(a.key)! - drawnFirst.current.get(b.key)!);
+  const kept = (p: Page) => away.includes(p);
   const below = pages.at(-2)?.key;
   return (
     <Context.Provider value={app}>
+      {over}
       {/* What shared parts say (../toast.tsx useToast, useAct) shows as the phone's own toast. */}
       <ToastTo show={showToast}>
         <div className={rootCss.m}>
-          {shown.map((p) => {
+          {drawn.map((p) => {
+            if (kept(p)) {
+              return (
+                <div key={p.key} className={css.mPage} data-role="kept" data-root="" style={{ visibility: "hidden", pointerEvents: "none" }} inert aria-hidden="true">
+                  <RootPage.Provider value><PageBody location={p.location} routes={routes} /></RootPage.Provider>
+                </div>
+              );
+            }
             const isTop = p.key === top.key;
             const inMove = moving && (p.key === moving.from.key || p.key === moving.to.key);
             const role = !moving ? (isTop ? "top" : swipe !== null && p.key === below ? "peek" : "under") : p.key === moving.to.key ? "in" : p.key === moving.from.key ? "out" : "under";
-            const way = moving ? (moving.forward ? moving.to : moving.from).way : "side";
+            // A completed edge swipe goes on to the right even for settings and a new chat. A button/browser back
+            // still reverses the page's original entry direction.
+            const way = moving && !moving.forward && from.current > 0 ? "side" : moving ? (moving.forward ? moving.to : moving.from).way : "side";
             const style: React.CSSProperties & Record<string, string | number> = { zIndex: moving ? (p.key === (moving.forward ? moving.to.key : moving.from.key) ? 2 : 1) : isTop ? 1 : 0 };
-            if (swipe !== null && isTop) style.transform = `translateX(${swipe}px)`;
-            if (role === "peek") style.transform = `translateX(calc(-30% + ${swipe! * 0.3}px))`;
-            // A page swiped back leaves from where the finger let it go.
-            if (role === "out" && moving && !moving.forward) style["--m-from"] = `${from.current}px`;
+            const comingIn = placeIn && placeIn.key === p.key && isTop && !moving ? placeIn : null;
+            if (comingIn) style["--m-place-from"] = `${comingIn.from}px`;
+            if (swipe !== null && isTop) style.transform = `translateX(${dragged.current}px)`;
+            if (role === "peek") style.transform = `translateX(calc(-30% + ${dragged.current * 0.3}px))`;
+            // A page swiped back leaves from where the finger let it go, the one under it comes on from where it showed,
+            // in what is left of the time.
+            if (moving && !moving.forward && from.current > 0 && (role === "out" || role === "in")) {
+              if (role === "out") style["--m-from"] = `${from.current}px`;
+              else style["--m-under-from"] = `calc(-30% + ${from.current * 0.3}px)`;
+              style.animationDuration = `${Math.round(300 * Math.max(0.5, 1 - from.current / window.innerWidth))}ms`;
+            }
             return (
-              <div key={p.key} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
-                data-swiping={(swipe !== null && isTop) || undefined} style={style}>
-                {routes(p.location)}
+              <div key={p.key} ref={(el) => { if (el) pageEls.current.set(p.key, el); else pageEls.current.delete(p.key); }} className={css.mPage} data-role={role} data-way={inMove ? way : undefined} data-forward={moving?.forward || undefined}
+                data-swiping={(swipe !== null && isTop) || undefined} data-place-in={comingIn ? comingIn.n : undefined} data-root={(p.key === rootKey && placeOfPath(p.location.pathname, home) !== null) || undefined} style={style}>
+                <RootPage.Provider value={p.key === rootKey && placeOfPath(p.location.pathname, home) !== null}>
+                  <PageBody location={p.location} routes={routes} />
+                </RootPage.Provider>
               </div>
             );
           })}
           {/* Where a swipe back starts: a strip along the left edge that the browser leaves to it (a finger only). */}
-          {!home_ && !moving && <div className={css.mEdge} {...swipeProps} />}
+          {!home_ && !moving && <EdgeStrip {...swipeProps} />}
           {/* The latest chats, from the screen's bottom left, level with the composer; over the page, rising from the button. */}
           {wide && !home_ && <>
             <button type="button" className={`${pagesCss.mFloating} ${css.mRecentButton}`} data-open={drawer || undefined}
@@ -237,7 +393,9 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
               <div className={css.mRecent}>{drawer && recent()}</div>
             </div>
           </>}
-          <SheetHost spec={sheet} close={() => setSheet(null)} />
+          {/* The bottom bar: under a place's top page; away (down and out) while a page is pushed over it. */}
+          <BottomBar scope={entry.id} place={place} shown={atRoot && !moving} go={app.tab} />
+          <SheetHost spec={sheet} close={() => { sheet?.onClose?.(); setSheet(null); }} />
           <ReaderHost spec={reader} close={() => setReader(null)} />
           <MenuHost spec={menu} close={() => { menu?.onDismiss?.(); setMenu(null); }} />
           <ToastHost toast={toast} />
@@ -246,6 +404,30 @@ export function MobileShell({ entry, routes, recent }: { entry: Entry; routes: (
     </Context.Provider>
   );
 }
+
+
+/**
+ * The strip along the left edge a swipe back starts from. A touch there is the page's, not the browser's: iOS would
+ * otherwise start its own swipe back over ours, in Safari and in an app on the home screen alike (its edge gesture is
+ * let go only by the touch's start being taken, a listener that is not passive, as React's are).
+ */
+function EdgeStrip(props: React.HTMLAttributes<HTMLDivElement>) {
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const take = (event: TouchEvent) => { if (event.cancelable) event.preventDefault(); };
+    el.addEventListener("touchstart", take, { passive: false });
+    return () => el.removeEventListener("touchstart", take);
+  }, []);
+  return <div ref={strip} className={css.mEdge} {...props} />;
+}
+
+/** A page's own content: drawn again only when its address or the routes do, not each time the shell is (a swipe's
+ *  every move, a toast). */
+const PageBody = memo(function PageBody({ location, routes }: { location: Location; routes: (location: Location) => ReactNode }) {
+  return routes(location);
+});
 
 
 // ── the sheet ──────────────────────────────────────────────────────────
@@ -263,9 +445,38 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
   const [dragging, setDragging] = useState(false);
   const sheet = useRef<HTMLDivElement>(null);
   // Its height: following the finger at once while dragged, then on to where it settles at the speed it was let go of.
+  // Shown by moving it (`translate`, on top of the transform it opens and closes with) within the height it is laid out
+  // at, not by laying it out anew each frame (frosted glass and all): the finger taking it, it is laid out as tall as
+  // it may go; come to rest, as tall as it is.
+  const laid = useRef(0);
+  const resizing = useRef(false);
+  const rest = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lay = (to: number) => {
+    const el = sheet.current;
+    if (!el) return;
+    laid.current = to;
+    el.style.height = `${to}px`;
+  };
   const height = useRef<Follower | null>(null);
-  height.current ??= follower(0, (v) => { if (sheet.current) sheet.current.style.height = `${v}px`; });
-  useEffect(() => () => height.current?.stop(), []);
+  height.current ??= follower(0, (v) => {
+    const el = sheet.current;
+    if (!el) return;
+    if (resizing.current || v > laid.current + 0.5) lay(v);
+    el.style.translate = laid.current - v > 0.5 ? `0 ${laid.current - v}px` : "";
+    atRest();
+  });
+  /** Once it has stopped (no finger on it, nothing moving it), laid out as tall as it shows. */
+  function atRest() {
+    clearTimeout(rest.current);
+    rest.current = setTimeout(() => {
+      const el = sheet.current;
+      if (!el || el.hasAttribute("data-dragging") || height.current?.moving) return;
+      lay(height.current!.value);
+      el.style.translate = "";
+      resizing.current = false;
+    }, 120);
+  }
+  useEffect(() => () => { height.current?.stop(); clearTimeout(rest.current); }, []);
   const total = () => window.innerHeight;
   useBackClose(!!spec, close);
   useEffect(() => {
@@ -278,11 +489,11 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
       return;
     }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 300);
+    const timer = setTimeout(() => setShown(null), motionMs(300));
     return () => clearTimeout(timer);
   }, [spec]);
   // Drawn as it is when it (re)appears.
-  useLayoutEffect(() => { if (shown && sheet.current) sheet.current.style.height = `${height.current!.value}px`; }, [shown]);
+  useLayoutEffect(() => { if (shown && sheet.current) { lay(height.current!.value); sheet.current.style.translate = ""; } }, [shown]);
   useEffect(() => {
     if (!spec) return;
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -305,13 +516,24 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     return first && last && last.t > first.t ? ((first.y - last.y) / (last.t - first.t)) * 1000 : 0;
   };
   const settle = (to: number) => height.current!.to(to, { type: "spring", visualDuration: 0.32, bounce: 0, velocity: speed() });
-  const grab = (y: number) => { from.current = { y, h: h(), moved: false }; trail.current = [{ y, t: performance.now() }]; setDragging(true); };
+  const grab = (y: number) => {
+    from.current = { y, h: h(), moved: false };
+    trail.current = [{ y, t: performance.now() }];
+    // Making a scrolled body's viewport taller can clamp its scrollTop before the finger has even moved. Keep
+    // resizing that sheet as it moves, so taking hold cannot jump the reader to a different part of the list.
+    resizing.current = !!sheet.current && [...sheet.current.querySelectorAll("*")].some((el) => el.scrollTop > 0);
+    // Laid out once as tall as the finger can take it; moved within that from here.
+    const most = shown.draggable ? total() * 0.94 : Math.max(h(), shown.height * total());
+    if (!resizing.current && most > laid.current + 0.5) { lay(most); if (sheet.current) sheet.current.style.translate = `0 ${most - h()}px`; }
+    setDragging(true);
+  };
   const drag: Drag = {
     draggable: !!shown.draggable,
     start: grab,
     move: (y) => follow(y, total() * 0.94),
     end: () => {
       setDragging(false);
+      atRest();
       if (!from.current.moved) return;
       const f = h() / total();
       if (f < 0.3) close();
@@ -335,6 +557,7 @@ function SheetHost({ spec, close }: { spec: SheetSpec | null; close: () => void 
     onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => {
       if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
       setDragging(false);
+      atRest();
       if (!from.current.moved) return;
       if (shown.draggable) return drag.end();
       if (base - h() > 80) close();
@@ -392,7 +615,7 @@ function MenuHost({ spec, close }: { spec: MenuSpec | null; close: () => void })
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 200);
+    const timer = setTimeout(() => setShown(null), motionMs(200));
     return () => clearTimeout(timer);
   }, [spec]);
   if (!shown) return null;
@@ -433,7 +656,7 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
   useEffect(() => {
     if (spec) { setShown(spec); requestAnimationFrame(() => requestAnimationFrame(() => setOpen(true))); return; }
     setOpen(false);
-    const timer = setTimeout(() => setShown(null), 320);
+    const timer = setTimeout(() => setShown(null), motionMs(320));
     return () => clearTimeout(timer);
   }, [spec]);
   if (!shown) return null;
@@ -447,4 +670,3 @@ function ReaderHost({ spec, close }: { spec: ReaderSpec | null; close: () => voi
     </div>
   );
 }
-

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useDark } from "./theme.ts";
 import type { AppUpdate } from "./core/client.ts";
@@ -6,7 +6,10 @@ import { shortcutOf, useKeymap, useShortcut } from "./keymap.ts";
 import * as css from "./brand.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import * as sidebarCss from "./styles/sidebar.css.ts";
-import { moveState } from "./motion.ts";
+import * as railCss from "./Rail.css.ts";
+import * as listCss from "./Sidebar.css.ts";
+import * as bubblesCss from "./SystemBubbles.css.ts";
+import { motionMs, moveState } from "@stillfail/ui/motion.ts";
 import { Tip } from "./ui.tsx";
 import { NAME } from "./channel.ts";
 import { t } from "./i18n.ts";
@@ -43,25 +46,30 @@ export function Lockup({ height = 30, alt = NAME }: { height?: number; alt?: str
   return <Themed name={LOCKUP.name} width={Math.round((height * LOCKUP.width) / 60)} height={height} alt={alt} className={css.brandLockup} />;
 }
 
+/** The macOS app's window: its buttons are in the page's top row at the left, no room for the name (Windows' are at the right). */
+const titleless = () => !!window.stillfailDesktop && (window.stillfailDesktop.frame ?? "inset") === "inset";
+
 /**
  * The sidebar's top. The buddy holds the sidebar open: it stands on the sidebar's edge pushing it, and a click closes
  * the sidebar while it hops to rest at the top left (beside the window's buttons in the desktop app); a click there
- * opens it again. On the web the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
+ * opens it again. On the web and in the Windows app the name stays at the top; on a phone, where the sidebar is a page, it is the lockup.
  */
-export function SidebarBrand() {
+export function SidebarBrand({ rail }: { rail?: boolean }) {
+  // Beside the rail (Rail.tsx) the top is the window's: its buttons, 更新; the rail opens and closes the sidebar.
   return (
     <>
-      {!window.stillfailDesktop && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
-      {!window.stillfailDesktop && <span className={css.brandPhone}><Lockup /></span>}
-      <SidebarBuddy />
-      <UpdateButton />
+      {!titleless() && !rail && <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />}
+      {!titleless() && <span className={css.brandPhone}><Lockup /></span>}
+      {!rail && <SidebarBuddy />}
+      {/* Beside the rail the app's newer build is one of its bubbles (SystemBubbles.tsx). */}
+      {!rail && <UpdateButton />}
     </>
   );
 }
 
-/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app, whose window has its title bar there. */
+/** The wordmark alone, for a page with no sidebar (a workspace's onboarding); none in the desktop app on macOS, whose window has its buttons there. */
 export function PageBrand() {
-  return window.stillfailDesktop ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
+  return titleless() ? null : <Themed name={WORDMARK.name} width={WORDMARK.width} height={WORDMARK.height} alt={NAME} className={css.brandWordmark} />;
 }
 
 type Pose = "push" | "hop" | "rest";
@@ -86,36 +94,106 @@ function onPage(node: ReactNode): ReactNode {
   return page ? createPortal(node, page) : node;
 }
 
-function SidebarBuddy() {
-  const [closed, setClosed] = useState(() => document.documentElement.dataset.sidebar === "closed");
-  const [pose, setPose] = useState<Pose>(closed ? "rest" : "push");
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+/** The sidebar's latest opening or closing: only its end lets the sidebar overflow again. */
+let moving = 0;
+
+/**
+ * The sidebar opened, closed or made wider or narrower by `change`, the page following as it moves (and the sidebar with
+ * it, the page bars' room for it, 更新 by it). Only so: resizing the sidebar follows the pointer at once.
+ */
+export function moveSidebar(change: () => void): void {
+  const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
+  // Cut to its column while it moves, opening too (open, it is not: its resize handle stands over its edge). Else what
+  // is drawn over the list (its frosted top and foot) shows at its whole width over the page from the first frame.
+  const turn = ++moving;
+  document.documentElement.dataset.sidebarMoving = "";
+  void moveState([
+    ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
+    // The page as wide as it was, moved aside for the folded sidebar shown a while (shell.css.ts main, Rail.tsx peekShift).
+    ...moves(`.${shellCss.shell} > .${shellCss.main}`, ["left"]),
+    ...moves(`.${css.sidebarBuddy}`, ["left"]),
+    ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
+    ...moves(`.${railCss.edge}`, ["left"]),
+    // The rail as narrow as the closed bar and its places as far from its edges, with its margins (no transitions of
+    // their own: on other clocks and eases they shook the places).
+    ...moves(`.${railCss.rail}`, ["width", "padding-top", "padding-bottom"]),
+    ...moves(`.${railCss.top}`, ["height", "margin-bottom"]),
+    // The block's margins (closed, it stands off the window's edges; shown a while, it reaches over the page) at the same
+    // pace as its column, not a transition of their own that would run ahead of it.
+    // Its corner, ground, shadow and line as well: every part of it on one clock and ease (Motion), no CSS transitions.
+    ...moves(`.${shellCss.dock}`, ["margin-top", "margin-right", "margin-bottom", "margin-left", "border-radius", "background-color", "box-shadow", "--dock-line"]),
+    // The sidebar in it (open, reaching 8 into the rail; its width the group's) and its frosted bands' ground.
+    ...moves(`.${shellCss.dock} > .${listCss.sidebar}`, ["margin-inline-start", "width"]),
+    ...moves(`.${listCss.navTop}, .${listCss.navFoot}`, ["background-color"]),
+    // Its top row, none in the closed bar (under the window's buttons).
+    ...moves(`.${listCss.brand}`, ["height"]),
+    // The lists' marks on the rail, and the app's bubbles beside it.
+    ...moves(`.${railCss.listMark}`, ["opacity", "transform"]),
+    ...moves(`.${bubblesCss.stack}`, ["left", "bottom"]),
+    ...moves(`.${sidebarCss.pageBar}`, ["padding-left", "margin-left", "margin-right"]),
+  ], change).then(() => { if (turn === moving) delete document.documentElement.dataset.sidebarMoving; });
+}
+
+/**
+ * Opening and closing the sidebar (its shortcut too, unless `keys` is false: one place on the page holds it), the page
+ * following as it moves; `moved` is told where it goes as it starts.
+ */
+/** Whether the sidebar is closed, as the page's root says: the same to everything reading it. */
+export function useSidebarClosed(): boolean {
+  return useSyncExternalStore((changed) => {
+    const watch = new MutationObserver(changed);
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sidebar"] });
+    return () => watch.disconnect();
+  }, () => document.documentElement.dataset.sidebar === "closed", () => false);
+}
+
+/** Told when the person opens or closes the sidebar (its edge, its shortcut), not when a place shows or hides it. */
+let chosen: ((closed: boolean) => void) | null = null;
+export function onSidebarChosen(told: ((closed: boolean) => void) | null): void {
+  chosen = told;
+}
+
+/** The sidebar shown or not as a place has it (Rail.tsx), moving as when toggled (with `also` in the same move: its new
+ * width); not the person's choice. */
+export function showSidebar(open: boolean, also?: () => void): void {
+  if ((document.documentElement.dataset.sidebar === "closed") !== open) { also?.(); return; }
+  moveSidebar(() => { also?.(); closeSidebar(!open); });
+}
+
+export function useSidebarToggle(moved?: (closed: boolean) => void, { keys: owns = true }: { keys?: boolean } = {}): { closed: boolean; toggle: () => void; label: string } {
+  const closed = useSidebarClosed();
   const toggle = () => {
     const next = !closed;
-    // It moves (and the sidebar with it, the page bars' room for it, 更新 by it) only now: resizing the sidebar follows
-    // the pointer at once.
-    const moves = (selector: string, props: string[]) => [...document.querySelectorAll<HTMLElement>(selector)].map((el) => [el, props] as [HTMLElement, string[]]);
-    moveState([
-      ...moves(`.${shellCss.shell}`, ["grid-template-columns"]),
-      ...moves(`.${css.sidebarBuddy}`, ["left"]),
-      ...moves(`.${css.sidebarUpdate}`, ["left", "transform"]),
-      ...moves(`.${sidebarCss.pageBar}`, ["padding-left"]),
-    ], () => closeSidebar(next));
-    setClosed(next);
-    // It hops on the way, and lands in the pose of where it goes.
-    setPose("hop");
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), 380);
+    // A page with no sidebar of its own (Rail.tsx): nothing to open.
+    if (!next && "sidebarNone" in document.documentElement.dataset) return;
+    chosen?.(next);
+    moveSidebar(() => closeSidebar(next));
+    moved?.(next);
   };
-  useShortcut("sidebar.toggle", toggle);
+  // One place on the page holds the shortcut (the rail, or the buddy where there is none).
+  useShortcut("sidebar.toggle", owns ? toggle : null);
   useKeymap();
   const keys = shortcutOf("sidebar.toggle");
+  return { closed, toggle, label: `${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}` };
+}
+
+function SidebarBuddy() {
+  const [pose, setPose] = useState<Pose>(() => document.documentElement.dataset.sidebar === "closed" ? "rest" : "push");
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // It hops on the way, and lands in the pose of where it goes.
+  const { closed, toggle, label } = useSidebarToggle((next) => {
+    setPose("hop");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setPose(next ? "rest" : "push"), motionMs(380));
+  });
   // On the page itself, not in the sidebar: a closed sidebar clips what is in it, and the desktop app's window would
   // then take a click on the buddy for a drag of the window.
   const buddy = (
-    <Tip label={`${closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}${keys ? `  ${keys}` : ""}`}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
+    <Tip label={label}><button type="button" className={css.sidebarBuddy} data-pose={pose} onClick={toggle} aria-label={closed ? t("web-main.sidebar.open") : t("web-main.sidebar.close")}>
       <Themed name={`buddy/${pose}`} width={28} height={28} />
+      {/* Its drawing unmoving, shown instead with motion reduced (brand.css.ts buddyStill): an <img>'s SVG goes by the system's setting, not the app's. */}
+      <Themed name={pose === "hop" ? "buddy/hop" : `buddy/${pose}-still`} width={28} height={28} className={css.buddyStill} />
     </button></Tip>
   );
   return onPage(buddy);
@@ -137,15 +215,20 @@ export function useAppUpdate(): AppUpdate | null {
 
 /**
  * The desktop app has a newer build: 更新 beside the buddy, wherever it stands. Clicked, the build is downloaded (the
- * button says how far) and the app restarts as it.
+ * button says how far) and the app restarts as it; a newer web app alone (kind "web") is downloaded already, and
+ * clicked, the pages reload on it.
  */
 function UpdateButton() {
   const updates = window.stillfailDesktop?.appUpdate;
   const state = useAppUpdate();
   if (!updates || !state) return null;
-  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent }) : state.phase === "installing" ? t("web-main.appUpdate.restarting") : state.phase === "failed" ? t("web-main.appUpdate.failed") : t("web-main.versions.update");
+  const web = state.kind === "web";
+  const label = state.phase === "downloading" ? t("web-main.appUpdate.downloading", { percent: state.percent })
+    : state.phase === "installing" ? t(web ? "web-main.appUpdate.reloading" : "web-main.appUpdate.restarting")
+    : state.phase === "failed" ? t("web-main.appUpdate.failed")
+    : t(web ? "web-main.webUpdate.refresh" : "web-main.versions.update");
   const busy = state.phase === "downloading" || state.phase === "installing";
-  const title = state.phase === "failed" ? state.message : t("web-main.appUpdate.title", { version: state.version, app: NAME });
+  const title = state.phase === "failed" ? state.message : t(web ? "web-main.appUpdate.webTitle" : "web-main.appUpdate.title", { version: state.version, app: NAME });
   return onPage(
     <Tip label={title}><button type="button" className={css.sidebarUpdate} disabled={busy} aria-busy={busy} onClick={() => updates.start()}>
       {label}

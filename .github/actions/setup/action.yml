@@ -7,6 +7,9 @@ inputs:
   android:
     description: Install the Android SDK and NDK
     default: 'false'
+  ndk:
+    description: With android, the NDK too (what packs the app strips its native parts with; lint does without it)
+    default: 'true'
   cross:
     description: Install Linux station cross compilers
     default: 'false'
@@ -23,7 +26,25 @@ runs:
       run: |
         # The pnpm every package.json names (packageManager, one version for all: a mix had each install switch
         # versions, and installs side by side raced to fetch the other one, 2026-10-04).
-        npm install --global "pnpm@$(node -p 'require("./package.json").packageManager.split("@")[1]')"
+        version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
+        if [ "$RUNNER_OS" = Windows ]; then
+          # (Windows: pnpm's own single executable of that version, from its release, checked against the SHA-256 kept
+          # here for it; npm's global install took 16-18 s there, 1 s on Linux, 2026-10-20. A new packageManager
+          # version: its pnpm-win-x64.exe's digest, as the release lists it, here.)
+          case "$version" in
+            10.33.0) sha=afc96009dc39fe23a835d65192049e6a995f342496b175585dc2beda7d42d33f ;;
+            *) echo "no SHA-256 here for pnpm $version's pnpm-win-x64.exe (.github/actions/setup/action.yml)"; exit 1 ;;
+          esac
+          dir="$(cygpath -u "$RUNNER_TEMP")/pnpm"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/pnpm.exe" "https://github.com/pnpm/pnpm/releases/download/v$version/pnpm-win-x64.exe"
+          echo "$sha  $dir/pnpm.exe" | sha256sum -c --quiet || { echo "pnpm-win-x64.exe $version: not the SHA-256 kept for it"; exit 1; }
+          cygpath -w "$dir" >> "$GITHUB_PATH"
+          export PATH="$dir:$PATH"
+          [ "$(pnpm --version)" = "$version" ] || { echo "pnpm.exe is not $version"; exit 1; }
+        else
+          npm install --global "pnpm@$version"
+        fi
         echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
     # pnpm's store, which every install here links from: kept between runs by the lockfiles.
     - uses: actions/cache@v4
@@ -73,10 +94,14 @@ runs:
       with:
         distribution: temurin
         java-version: '17'
+    # The runner's own SDK tools (ubuntu-24.04 has cmdline-tools/latest, platform-tools and the licenses): setup-android
+    # fetched a newer cmdline-tools from Google each run, and a download that hung there took 347 s of a lint job's
+    # 422 (2026-10-19).
     - if: inputs.android == 'true'
-      uses: android-actions/setup-android@v3
-      with:
-        packages: platform-tools
+      shell: bash
+      run: |
+        echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+        echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
     # Gradle's own downloads and its build cache, kept between runs (main writes them, a branch reads; the build cache
     # is on in apps/android/gradle.properties): a run without them spent ~2 min fetching and compiling what had not
     # changed. A branch writing them too spent ~10 s saving at every end, for caches its next run seldom needed.
@@ -86,7 +111,8 @@ runs:
         cache-read-only: ${{ github.ref != 'refs/heads/main' }}
     - if: inputs.android == 'true'
       shell: bash
-      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+      # The NDK is a gigabyte from Google's servers each run; a download cut short failed a lint job on main (2026-10-19).
+      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' ${{ inputs.ndk == 'true' && '''ndk;28.2.13676358''' || '' }}
     - if: inputs.cross == 'true'
       shell: bash
       run: |

@@ -1,18 +1,23 @@
 // The station on the mesh, once it is in a workspace (cloud.json there): its endpoint, its relays, its presence at
 // its control plane, members' connections, and the control plane's gateways' (the device tools, mesh/tools.ts). Everything here lives in the layer's scope: stopping the station closes
 // the endpoint and every connection and loop it started.
-import { Effect, FiberSet, Layer, Option, Stream } from "effect";
+import { Cause, Effect, FiberSet, Layer, Option, Stream } from "effect";
 import { log } from "../ops/log.ts";
-import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, Store, Up } from "../services.ts";
+import { AdbShares, AdminApi, ControlPlane, Key, MeshNative, MeshSide, Own, Parts, Peers, Previous, ScreenRegistry, StationConfig, Store, Up } from "../services.ts";
 import { DeviceTools, accessOf } from "../device/tools.ts";
-import { claudeCredentialsFile, codexAuthFile } from "../agents/machine-logins.ts";
 import { TOOLS_ALPN, adminSessions, presenceTools, serveTools } from "./tools.ts";
-import { Agents } from "../sessions/agents.ts";
-import { PEER_ALPN, followRoster, peerCall, servePeer } from "./peer.ts";
+import { PEER_ALPN, peerCall, servePeer } from "./peer.ts";
+import { PEER_HTTP_ALPN, PeerHttp, serveHttp } from "./peer-http.ts";
+import { followLock } from "./lock-sync.ts";
 import { Traces } from "./traces.ts";
 import { SubscriptionRef } from "effect";
 import { keepRelays } from "./relays.ts";
 import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
+import { bindStation } from "./native.ts";
+import { lanAddrs } from "./lan.ts";
+import { Superseded } from "./superseded.ts";
+import { Storms } from "./storms.ts";
+import { Fibers } from "../ops/fibers.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -23,55 +28,82 @@ export const MeshLive = Layer.effectDiscard(
     const native = yield* MeshNative;
     const admin = yield* AdminApi;
     const up = yield* Up;
-    const agents = yield* Agents;
+    // What it shares with the agents' side (services.ts MeshSide), filled by the one that has it.
+    const side = yield* MeshSide;
+    const own = yield* Own;
+    const previous = yield* Previous;
+    const peers = yield* Peers;
+    // The protocols the station's parts answer themselves (parts.ts): a published chat's visitors, say.
+    const parts = yield* Parts;
+    const config = yield* StationConfig;
     const shares = yield* AdbShares;
+    const screens = yield* ScreenRegistry;
     const run = Effect.gen(function* () {
       // Not in a workspace yet: on the mesh once `enroll` writes cloud.json.
       if (!cloud.state.state) yield* cloud.changes.pipe(Stream.filter(() => cloud.state.state !== null), Stream.runHead);
+      // The launcher starts this process before stopping the old one. Its fixed UDP socket cannot be shared;
+      // wait in this background fiber (not layer construction, which must signal ready to start the handover).
+      // An unset address or port 0 gets a fresh port and can bind alongside the old process.
+      if (Number(process.env.STILLFAIL_MESH_BIND_ADDR?.split(":").at(-1)) > 0) {
+        yield* Effect.promise(() => previous.gone);
+      }
+      // The order is the one the endpoint prefers: a station asking for web requests offers the station transport's
+      // protocol after it (to tell a station from before it), and is to be answered in the first (peer-http.ts).
       const endpoint = yield* Effect.acquireRelease(
-        Effect.promise(() => native.bind({ secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_ALPN, TOOLS_ALPN], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
+        Effect.promise(() => bindStation(native, { secretKey: key.seed, alpns: [ALPN, FORMER_ALPN, PEER_HTTP_ALPN, PEER_ALPN, TOOLS_ALPN, ...parts.allAlpns().map((p) => p.alpn)], relayUrls: cloud.state.relays(), discovery: process.env.STILLFAIL_NO_DISCOVERY !== "1" })),
         // iroh closes gracefully, waiting on every connection (the keepers' too): up to ~12 s. A station stopping or
         // handing over doesn't wait that long: a second, then it is gone (clients reconnect, as they do anyway).
         (endpoint) => Effect.ignore(Effect.timeoutOption(Effect.promise(() => endpoint.close()), "1 second")),
       );
       log.info("mesh", "mesh listening", { station: endpoint.id(), workspace: cloud.state.state!.workspace_name, sockets: endpoint.sockets() });
-      yield* Effect.forkScoped(keepRelays(endpoint));
+      // What other stations are told of this one's relay (jobs/load.ts), while it is on the mesh.
+      yield* Effect.acquireRelease(Effect.sync(() => side.net.attach(() => endpoint.home())), (off) => Effect.sync(off));
+      yield* Effect.forkScoped(keepRelays(endpoint, side.net));
       // Online at the cloud only once a relay can reach the station: a device that saw "online" and connected before
       // the relay link was up had its first packets dropped (~3 s of retransmits).
       const online = yield* Effect.timeoutOption(Effect.promise(() => endpoint.online()), "15 seconds");
       if (Option.isNone(online)) log.warn("mesh", `no relay link after 15 s; going online at ${plane.spec().name} anyway`);
       yield* Effect.forkScoped(plane.presence);
       // The workspace's other stations: asked through this endpoint, their tasks stopped once they are not in it.
-      agents.remote.attach(peerCall(endpoint, cloud.state));
+      // And the stations of other workspaces chats are shared with or from (xshare/index.ts).
+      const call = peerCall(endpoint, cloud.state, undefined, { reaches: (target, workspace) => side.outside?.reaches(target, workspace) === true });
+      peers.attach(call);
+      // The agents' door's way to the other stations' web services (peer-http.ts).
       yield* Effect.acquireRelease(
-        Effect.sync(() => followRoster(cloud.state, agents.remote, agents.config)),
+        Effect.sync(() => {
+          const http = new PeerHttp(endpoint, cloud.state);
+          side.peers.route = http;
+          return http;
+        }),
+        (http) => Effect.sync(() => {
+          if (side.peers.route === http) side.peers.route = null;
+          http.close();
+        }),
+      );
+      // The workspace lock, kept level with the other stations it names (lock-sync.ts).
+      yield* Effect.acquireRelease(
+        Effect.sync(() => followLock(cloud.state, call)),
         (stop) => Effect.sync(stop),
       );
       const connections = yield* FiberSet.make();
       // The mesh's spans, when the config turns traces on (read at start, as the Rust does).
       const traces = yield* Effect.acquireRelease(
-        Effect.sync(() => new Traces(agents.config.raw()?.telemetry?.traces === true)),
+        Effect.sync(() => new Traces(config.raw()?.telemetry?.traces === true)),
         (traces) => Effect.promise(() => traces.close()),
       );
       if (traces.enabled) traces.exportTo((spans) => Effect.runPromise(plane.traces(spans)));
-      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, traces, accepted: plane.credential };
+      const members = { cloud: cloud.state, admin, up: () => SubscriptionRef.getUnsafe(up), shares, screens, traces, accepted: plane.credential, lan: () => lanAddrs(endpoint.sockets()) };
       // The control plane's gateways: the device tools, as far as the station's own setting lets them.
       const device = yield* Effect.acquireRelease(
         Effect.sync(() =>
           new DeviceTools({
             // Never reachable: the station's data (its key, cloud.json, the profiles' homes), its config, the machine's
             // runtime logins.
-            protect: () => [
-              cloud.state.data,
-              agents.config.path,
-              ...agents.hub.config().profiles.map((p) => p.home),
-              claudeCredentialsFile(process.env),
-              codexAuthFile(process.env),
-            ],
+            protect: () => own.paths(),
             sessions: adminSessions(
               () => admin,
               () => store,
-              () => agents.hub.config().profiles.flatMap((p) => p.runtimes),
+              () => side.runtimes(),
               () => cloud.state.state?.workspace ?? "",
               endpoint.id(),
             ),
@@ -79,19 +111,34 @@ export const MeshLive = Layer.effectDiscard(
         ),
         (tools) => Effect.sync(() => tools.close()),
       );
-      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(agents.config.raw()), enabled: () => plane.spec().tools };
+      const gateways = { cloud: cloud.state, tools: device, access: () => accessOf(config.raw()), enabled: () => plane.spec().tools };
       // The same tools for requests Comma pushes on the presence socket.
       cloud.state.toolCalls = presenceTools(gateways);
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
+      // A member's device connecting again: its connections left by a process that died are found and closed.
+      const superseded = new Superseded();
+      // Connections trading only packets that carry nothing, thousands a second: said, and closed (storms.ts).
+      const { storms } = yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const fibers = new Fibers("mesh");
+          const storms = new Storms(fibers);
+          storms.start();
+          return { storms, fibers };
+        }),
+        ({ fibers }) => Effect.promise(() => fibers.close()),
+      );
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
+        storms.watch(conn);
+        if (conn.alpn().equals(ALPN) || conn.alpn().equals(FORMER_ALPN)) void superseded.arrived(conn);
         yield* FiberSet.run(
           connections,
           Effect.tryPromise(() =>
-            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, agents.remote)
+            conn.alpn().equals(PEER_ALPN) ? servePeer(conn, cloud.state, peers)
+            : conn.alpn().equals(PEER_HTTP_ALPN) ? serveHttp(conn, cloud.state, { forwarded: (port) => side.forwarded(port) })
             : conn.alpn().equals(TOOLS_ALPN) ? serveTools(gateways, conn)
-            : serve(members, conn),
+            : (parts.allAlpns().find((p) => conn.alpn().equals(p.alpn))?.serve(conn) ?? serve(members, conn)),
           ).pipe(
             Effect.catch((e) => Effect.sync(() => log.info("mesh", "connection ended", { error: String((e as Error).cause ?? e) }))),
             Effect.ensuring(Effect.sync(() => conn.close(0, "station stopping"))),
@@ -99,6 +146,8 @@ export const MeshLive = Layer.effectDiscard(
         );
       }
     });
-    yield* Effect.forkScoped(Effect.scoped(run));
+    yield* Effect.forkScoped(Effect.scoped(run).pipe(Effect.tapCause((cause) => Effect.sync(() => {
+      if (!Cause.hasInterruptsOnly(cause)) log.error("mesh", "mesh stopped", { error: Cause.pretty(cause) });
+    }))));
   }),
 );

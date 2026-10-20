@@ -13,9 +13,25 @@ These patched crates come from the corresponding crates.io releases. The iroh an
 | noq-udp | 1.3.0 | MIT OR Apache-2.0 | [MIT](vendor/noq-udp/LICENSE-MIT), [Apache](vendor/noq-udp/LICENSE-APACHE) |
 | swarm-discovery | 0.6.3 | Apache-2.0 | [Apache](vendor/swarm-discovery/LICENSE.Apache_2.0) |
 
+## FFmpeg in the media service's package
+
+The media service's package (`media/service`, installed by stations as the module `media`) carries `ffmpeg` and `ffprobe` in its `bin/`, one build per platform (darwin-arm64, linux-x64, linux-arm64). They are built in CI from the unmodified upstream sources below by `scripts/ffmpeg.ts` (the native part `ffmpeg` of `scripts/native.ts`), each tarball checked against its SHA-256. still.fail keeps a copy of each, the same bytes, in the release [`third-party-sources`](https://github.com/AFK-surf/still.fail/releases/tag/third-party-sources) of this repository (with `SHA256SUMS`); the build falls back to it when upstream cannot be reached. Each package's `bin/` also holds FFmpeg's `LICENSE.md` and `COPYING.LGPLv2.1` (as `ffmpeg-LICENSE.md`, `ffmpeg-COPYING.LGPLv2.1`), the notices of what is linked in, and `SOURCE`, which names these sources and the exact configure flags.
+
+| Component | Version | License | Source | In |
+| --- | --- | --- | --- | --- |
+| FFmpeg | 9.0.2 | LGPL-2.1-or-later | <https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz> (sha256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`) | all three |
+| OpenH264 (Cisco Systems) | 2.6.0 | BSD-2-Clause | <https://github.com/cisco/openh264/archive/refs/tags/v2.6.0.tar.gz> (sha256 `558544ad358283a7ab2930d69a9ceddf913f4a51ee9bf1bfb9e377322af81a69`) | Linux (the H.264 encoder) |
+| zlib | 1.3.2 | Zlib | <https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz> (sha256 `bb329a0a2cd0274d05519d61c667c062e06990d72e125ee2dfa8de64f0119d16`) | Linux (macOS uses the system's libz) |
+
+FFmpeg is configured as LGPL only: `--disable-gpl --disable-nonfree --disable-version3` (no libx264, libx265 or any other GPL or non-free library), `--disable-autodetect` (nothing from the build machine is picked up) and `--disable-everything`, then only the demuxers, muxers, decoders, encoders, parsers, bitstream filters, filters and protocols the media service uses (`COMPONENTS` in `scripts/ffmpeg.ts`). H.264 is encoded by Apple's VideoToolbox on macOS (`--enable-videotoolbox`, `h264_videotoolbox`) and by OpenH264 on Linux (`--enable-libopenh264`); audio by FFmpeg's own AAC encoder. The binaries are static apart from the operating system's own libraries (macOS: libSystem, libz and the VideoToolbox, CoreMedia, CoreVideo, CoreFoundation and CoreServices frameworks; Linux: glibc 2.28 or later). The full flag list is in each package's `bin/SOURCE` and printed by `ffmpeg -buildconf`.
+
+Whoever has the package may replace these binaries with their own build: the media service runs `$MEDIA_FFMPEG` and `$MEDIA_FFPROBE` when they are set. NASM 3.02 (BSD-2-Clause) assembles the x86-64 code during the Linux x64 build and is not distributed.
+
+Patents are a separate question from copyright: H.264, HEVC, AAC, AC-3 and others may be covered by patents in some countries. Cisco's royalty-free H.264 patent coverage applies only to the OpenH264 binaries Cisco distributes, not to OpenH264 built from source as here.
+
 ## Model and runtime marks
 
-The AI model and runtime logos (`web/public/models/`, `design/mobile/assets/`, the Android `maker_*` drawables and the marks drawn in `web/src/ui.tsx`) are adapted from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0-1.0) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT). The names and logos are trademarks of their respective owners; their use here identifies the services and does not imply endorsement.
+The AI model and runtime logos (`web/public/models/`, `design/mobile/assets/`, the Android `maker_*` drawables, their copies in `apps/mbui/src/sf/drawable_data.mbt` and the marks drawn in `web/src/ui.tsx`) are adapted from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0-1.0) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT). The names and logos are trademarks of their respective owners; their use here identifies the services and does not imply endorsement.
 
 LobeHub Icons is distributed under this notice:
 
@@ -43,8 +59,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## still.fail mbui
+
+`apps/mbui` is written in [mbui](https://github.com/zzj3720/mbui) (MIT, Copyright (c) 2026 still.fail contributors), which it builds with at the commit `apps/mbui/mbui.rev` names; its notices are mbui's `THIRD_PARTY_NOTICES.md`. Its ThumbHash decoder (`apps/mbui/src/gallery/thumbhash.mbt`) is ported from [ThumbHash](https://github.com/evanw/thumbhash)'s reference implementation (MIT, Copyright (c) 2023 Evan Wallace), as `web/src/thumbhash.ts` has it. Its Android build fetches Hermes, JSI and fbjni (MIT, Meta Platforms) and AndroidX Media3 (Apache-2.0) from Maven Central. The pictures its photos and books apps show are drawn by mbui's `scripts/test_images.swift` (CC0 1.0); its `goldens/` are its own output over made-up data, drawn with the system's fonts.
+
 ## Installed dependencies
 
-JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
+JavaScript, Rust and Android dependencies are recorded in their package manifests and lockfiles and retain their respective licenses. Inter is supplied by `@fontsource-variable/inter` under the SIL Open Font License. The Android app carries JetBrains Mono (Copyright 2020 The JetBrains Mono Project Authors) under the SIL Open Font License 1.1; the license text ships with it in `apps/android/app/src/main/assets/licenses/JetBrainsMono-OFL.txt`. Electron and application bundles include additional third-party components; preserve the notices distributed with them.
 
 This inventory of vendored code is not a complete license inventory for compiled distributions. Review the exact dependency versions and bundled notices for each release target before redistribution.

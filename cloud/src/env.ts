@@ -2,6 +2,9 @@ import type { AppleConfig } from "./apple";
 import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
+import type { Mailer } from "./mail";
+import type { RelayLoad } from "./relay-load";
+import type { Relay } from "./relay-worker";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env extends AppleConfig {
@@ -29,8 +32,15 @@ export interface Env extends AppleConfig {
   RELAY_URL?: string;
   /** More relays beside it (comma-separated), for where it is slow or out of reach (relays.ts). */
   RELAY_URLS?: string;
+  /** Ways into the relays for devices alone (comma-separated): one relay machine's address forwarding to another's relay
+   * (relays.ts). */
+  RELAY_ENTRIES?: string;
   /** What the relays are called (by their URL) where people see which one a connection goes through (relays.ts). */
   RELAY_NAMES?: Record<string, string>;
+  /** How loaded the relays are, for the console (relay-load.ts). */
+  RELAY_LOAD: DurableObjectNamespace<RelayLoad>;
+  /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
+  RELAY?: DurableObjectNamespace<Relay>;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;
@@ -49,4 +59,11 @@ export interface Env extends AppleConfig {
   VAPID_SUBJECT?: string;
   /** The Firebase project's service account (its JSON) that sends to the Android app (fcm.ts). Without it there is no FCM. */
   FCM_SERVICE_ACCOUNT?: string;
+  /** The accounts that sign in with an email and a password (password.ts): a JSON list of {email, password, name?}, App Store review's. Unset: none. */
+  REVIEW_ACCOUNTS?: string;
+  /** Cloudflare Email Service's send_email binding (wrangler.jsonc), which sends the sign-in codes (mail.ts). */
+  EMAIL?: Mailer;
+  /** The address the codes come from (its domain onboarded for sending). Unset, or without EMAIL: nobody signs in with
+   * an email, and a sign-in goes straight to Google, as before there was another way. */
+  EMAIL_FROM?: string;
 }

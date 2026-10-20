@@ -31,15 +31,17 @@ import {
   rename,
   rm,
   stat,
-  symlink,
   unlink,
   utimes,
 } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { segments } from "../ops/paths.ts";
+import { link as symlinkOrStandIn } from "../ops/links.ts";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { constants, createZstdCompress, createZstdDecompress } from "node:zlib";
+import { platform } from "../platform/index.ts";
 
 // ── paths ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -240,8 +242,10 @@ async function drain(stream: AsyncIterable<Buffer>) {
   for await (const _ of stream);
 }
 
-/// A directory's entries made durable (File::open(dir).sync_all()).
+/// A directory's entries made durable (File::open(dir).sync_all()), where a directory syncs (on Windows Node's is
+/// refused, EPERM: NTFS journals a directory's entries itself).
 async function syncDir(dir: string) {
+  if (!platform.syncsDirectories) return;
   const handle = await open(dir, "r");
   try {
     await handle.sync();
@@ -472,22 +476,30 @@ export async function packWorkspaceIf(room: string, ready: () => boolean): Promi
   }
 }
 
+/// Links the machine refused while the restored tree was being made (Windows without the privilege): by their path in
+/// it, their target as written. Made once the tree is at its final path (restoreWorkspace), where what stands in for
+/// them (a junction's absolute target, a copy) stays right; a path written again later is no longer one.
+type Refused = Map<string, string>;
+
 /// Copy files created since the snapshot into the restored tree. Originals stay intact until the final swap, so an
 /// interrupted/failed restoration can be retried without discarding new files or the archive.
-async function overlay(source: string, dest: string): Promise<void> {
+async function overlay(source: string, dest: string, refused: Refused): Promise<void> {
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const from = join(source, entry.name);
     const into = join(dest, entry.name);
     const there = await lstatOrNull(into);
+    refused.delete(into);
     if (entry.isDirectory()) {
       if (there && !there.isDirectory()) throw new Error(`restore path conflict: ${into}`);
       await mkdir(into, { recursive: true });
-      await overlay(from, into);
+      await overlay(from, into, refused);
     } else {
       if (there?.isDirectory()) throw new Error(`restore path conflict: ${into}`);
       if (there) await unlink(into);
-      if (entry.isSymbolicLink()) await symlink(await readlink(from), into);
-      else if (entry.isFile()) await copyFile(from, into);
+      if (entry.isSymbolicLink()) {
+        const target = await readlink(from);
+        if ((await symlinkOrStandIn(target, into, {})) === "refused") refused.set(into, target);
+      } else if (entry.isFile()) await copyFile(from, into);
       else throw new Error(`cannot restore special file ${from}`);
     }
   }
@@ -503,9 +515,10 @@ export async function restoreWorkspace(room: string): Promise<void> {
   await mkdir(stage);
   await chmod(stage, 0o700);
   const stream = unzstd(archive);
+  const refused: Refused = new Map();
   try {
     const bytes = new ByteReader(stream[Symbol.asyncIterator]());
-    await unpack(tarEntries(bytes), stage);
+    await unpack(tarEntries(bytes), stage, refused);
     await bytes.drain();
   } catch (error) {
     throw new Error(`restoring the archived workspace: ${(error as Error).message}`, { cause: error });
@@ -516,11 +529,17 @@ export async function restoreWorkspace(room: string): Promise<void> {
   const retiring = join(room, "workspace.retiring");
   const old = join(room, "workspace.restored-old");
   for (const live of [retiring, old, workspace]) {
-    if (await isDir(live)) await overlay(live, stage);
+    if (await isDir(live)) await overlay(live, stage, refused);
   }
   if (await exists(old)) await rm(old, { recursive: true });
   if (await exists(workspace)) await rename(workspace, old);
   await rename(stage, workspace);
+  // The links refused on the way, at their final path now: a junction or a copy stands in (a target that is not
+  // there, a dangling link, leaves nothing to stand in for: the link is not restored).
+  for (const [path, target] of refused) {
+    const at = join(workspace, relative(stage, path));
+    if (!(await lstatOrNull(at))) await symlinkOrStandIn(target, at, { junction: true, copy: true });
+  }
   await syncDir(room);
   // Everything is now back at its original path. Any interrupted deletion is harmless on the next restore.
   if (await exists(retiring)) await rm(retiring, { recursive: true });
@@ -529,12 +548,74 @@ export async function restoreWorkspace(room: string): Promise<void> {
   await unlockWorktrees(room);
 }
 
+/// What an archived workspace keeps once it has been archived long enough: the files sent in its chat (`uploads/`), out
+/// of its archive and on the disk again; the rest of it is removed, packed or not, and its worktrees are let go (`git
+/// worktree prune` cleans them up). The caller holds the room's lock. The archive goes only once the uploads are out of
+/// it: one interrupted is done again from the start.
+export async function emptyWorkspace(room: string): Promise<void> {
+  const workspace = join(room, "workspace");
+  const archive = workspaceArchive(room);
+  await mkdir(workspace, { recursive: true });
+  if (await exists(archive)) {
+    const stage = join(room, "workspace.emptying");
+    if (await exists(stage)) await rm(stage, { recursive: true });
+    await mkdir(stage);
+    await chmod(stage, 0o700);
+    const stream = unzstd(archive);
+    try {
+      const bytes = new ByteReader(stream[Symbol.asyncIterator]());
+      const uploads = async function* () {
+        for await (const entry of tarEntries(bytes)) {
+          if (entry.parts[0] === "uploads" && (entry.kind === "file" || entry.kind === "dir")) yield entry;
+        }
+      };
+      await unpack(uploads(), stage, new Map());
+      await bytes.drain();
+    } finally {
+      stream.destroy();
+    }
+    await takeUploads(stage, workspace);
+    await unlink(archive);
+    await rm(stage, { recursive: true });
+  }
+  // What an interrupted packing or restoring left beside it (restoreWorkspace overlays these too).
+  for (const left of ["workspace.retiring", "workspace.restored-old", "workspace.restoring"]) {
+    if (!(await isDir(join(room, left)))) continue;
+    await takeUploads(join(room, left), workspace);
+    await rm(join(room, left), { recursive: true });
+  }
+  for (const entry of await readdir(workspace)) {
+    if (entry !== "uploads") await rm(join(workspace, entry), { recursive: true, force: true });
+  }
+  await unlockWorktrees(room);
+}
+
+/// The files in `from`'s uploads moved into `workspace`'s, durably; those already there are kept (one put back on the
+/// disk to be read, api/routes/sessions.ts, is the same file).
+async function takeUploads(from: string, workspace: string): Promise<void> {
+  if (!(await isDir(join(from, "uploads")))) return;
+  const into = join(workspace, "uploads");
+  await mkdir(into, { recursive: true });
+  for (const entry of await readdir(join(from, "uploads"))) {
+    if (!(await lstatOrNull(join(into, entry)))) await rename(join(from, "uploads", entry), join(into, entry));
+  }
+  await syncDir(into);
+}
+
+/// Whether an archived workspace holds anything `emptyWorkspace` would remove.
+export async function holdsMore(room: string): Promise<boolean> {
+  if (await exists(workspaceArchive(room))) return true;
+  const names = await readdir(join(room, "workspace")).catch(() => [] as string[]);
+  return names.some((name) => name !== "uploads");
+}
+
 /// An archived attachment is read directly from the tar stream, without inflating the whole workspace on disk.
 /// `relative`: its path in the workspace.
 export async function workspaceFile(room: string, relative: string): Promise<Buffer | null> {
   const archive = workspaceArchive(room);
   if (!(await exists(archive))) return null;
-  const wanted = relative.split("/").filter((p) => p !== "" && p !== ".");
+  // The archive's names are `/`-separated; a path from Windows has `\` too.
+  const wanted = segments(relative).filter((p) => p !== "" && p !== ".");
   const stream = unzstd(archive);
   try {
     const bytes = new ByteReader(stream[Symbol.asyncIterator]());
@@ -897,12 +978,12 @@ const execFileP = promisify(execFile);
 /// Archive::unpack with preserve_permissions: entries with `..` skipped, a leading `/` dropped, nothing written through
 /// a symlink out of `dest`; directories made last, deepest first, with their modes; files with their modes and
 /// modification times.
-async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<void> {
+async function unpack(entries: AsyncGenerator<Entry>, dest: string, refused: Refused): Promise<void> {
   const root = await realpath(dest);
   const dirs: { path: string; key: string; mode: number }[] = [];
   const inside = async (dir: string) => {
     const real = await realpath(dir);
-    if (real !== root && !real.startsWith(`${root}/`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
+    if (real !== root && !real.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)) throw new Error(`trying to unpack outside of destination path: ${root}`);
   };
   for await (const entry of entries) {
     const parts = entry.parts.filter((p) => p !== "/");
@@ -935,7 +1016,9 @@ async function unpack(entries: AsyncGenerator<Entry>, dest: string): Promise<voi
       await utimes(path, mtime, mtime);
       await chmod(path, entry.mode & 0o7777);
     } else if (entry.kind === "symlink") {
-      await replace(() => symlink(entry.linkName!, path));
+      await replace(async () => {
+        if ((await symlinkOrStandIn(entry.linkName!, path, {})) === "refused") refused.set(path, entry.linkName!);
+      });
     } else if (entry.kind === "hardlink") {
       const target = entry.linkName!.split("/").filter((p) => p !== "" && p !== ".");
       if (target.includes("..")) throw new Error(`hard link outside of destination path: ${entry.linkName}`);

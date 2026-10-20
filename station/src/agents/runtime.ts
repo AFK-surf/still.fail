@@ -1,10 +1,19 @@
-// The seam between the station and a coding-agent runtime (Claude Code, Codex), as the Rust station's runtime/mod.rs has it:
-// everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does comes back as events,
-// in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a station that starts
-// again takes its sessions up from the runners (`adopt`), from what the previous one left (`snapshot`) or, after a
-// crash, from what the runner kept unread.
+// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness, Grok Build), as the Rust station's
+// runtime/mod.rs has it: everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does
+// comes back as events, in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a
+// station that starts again takes its sessions up from the runners (`adopt`), from what the previous one left
+// (`snapshot`) or, after a crash, from what the runner kept unread.
+import { startEnv } from "../ops/agent-env.ts";
 
-export type FailureReason = "auth" | "rate_limit" | "model" | "exited" | "other";
+/// The runtimes a station runs, in the order they are offered.
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok";
+export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok"];
+/// A runtime as stored or sent (a name of one of them), none for anything else.
+export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KINDS as unknown[]).includes(v) ? (v as RuntimeKind) : undefined;
+/// How a runtime is named to people.
+export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : "Grok Build");
+
+export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
 
 export type TurnOutcome = { kind: "completed" } | { kind: "aborted" } | { kind: "failed"; reason: FailureReason; message: string };
 
@@ -22,12 +31,15 @@ export type RuntimeEvent =
   | { type: "turnEnded"; outcome: TurnOutcome }
   /// The runtime process (or its shared host) went away; the session is unusable.
   | { type: "closed"; why: string }
+  /// The station's tools (its MCP endpoint) failed it as unreachable: what it says through them reaches nobody until its
+  /// process starts again.
+  | { type: "toolsLost"; why: string }
   | { type: "live"; event: LiveEvent };
 
 export type Profile = {
   id: string;
-  runtime: "claude" | "codex";
-  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME).
+  runtime: RuntimeKind;
+  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME / DSH_HOME; Grok Build's GROK_HOME is its grok/).
   home: string;
   /// Whatever else the profile's config says (env, access kind, machine…): read by the drivers as runtime/*.rs do.
   [key: string]: unknown;
@@ -53,7 +65,7 @@ export type OpenOptions = {
 };
 
 export interface AgentSession {
-  /// Runtime-native id: claude session id, codex thread id. Persist it to resume.
+  /// Runtime-native id: claude session id, codex thread id, dsh or grok session id. Persist it to resume.
   id(): string;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
@@ -65,16 +77,30 @@ export interface AgentSession {
   backgroundTools(): Promise<void>;
   /// Interrupts the running turn; its end still arrives as turnEnded.
   abort(): Promise<void>;
+  /// Between turns, takes the model and effort of `options` (opened as they were otherwise) from its next turn on,
+  /// without a new process. False when it cannot: it is then started again on them.
+  retune?(options: OpenOptions): boolean;
   /// Releases the session; ends the runtime process when it is not shared.
   dispose(): Promise<void>;
   /// What a next station needs to take this session up (its turn's state): written by the session layer at handover.
   snapshot(): unknown;
   /// Lets go of the process without ending it (this station stops; a next one adopts it).
   detach(): void;
+  /// The address of the station's tools the runtime was given (one taken up from another station: as it was given
+  /// then); null when not known.
+  mcpUrl?(): string | null;
+}
+
+/// The station's tools by their server's name (before the rename: ember).
+export const TOOL_SERVERS = ["stillfail", "ember"];
+
+/// A tool call's error that says the station's tools could not be reached at all (not that the tool refused).
+export function unreachable(text: string): boolean {
+  return /ECONNREFUSED|ECONNRESET|Unable to connect|is not connected|fetch failed|socket hang up|connection refused/i.test(text);
 }
 
 export interface AgentDriver {
-  runtime(): "claude" | "codex";
+  runtime(): RuntimeKind;
   open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession>;
   /// Takes up a session whose process a runner kept: `snapshot` as the previous station left it, or null after a crash
   /// (then what the runner kept unread says where the turn is). What it does comes to `events` from now on.
@@ -88,7 +114,6 @@ export interface AgentDriver {
 /// A random UUID (v4), as runtimes take for session ids.
 export const uuid = () => crypto.randomUUID();
 
-/// The station's own environment, less what would let a runtime authenticate as something other than its profile.
-export function cleanEnv(scrubbed: string[]): Record<string, string> {
-  return Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !scrubbed.includes(e[0])));
-}
+/// The station's own environment with the variables its owners set for what it starts over it (ops/agent-env.ts), less
+/// what would let a runtime authenticate as something other than its profile.
+export const cleanEnv = (scrubbed: string[]): Record<string, string> => startEnv(scrubbed);

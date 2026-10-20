@@ -8,8 +8,10 @@
   <script>try{[localStorage,sessionStorage].forEach(function(s){try{if(s.getItem("stillfail.renamed"))return;var k=[],i;for(i=0;i<s.length;i++)if(s.key(i).indexOf("ember.")===0)k.push(s.key(i));k.forEach(function(o){var n="stillfail."+o.slice(6);if(s.getItem(n)===null)s.setItem(n,s.getItem(o))});s.setItem("stillfail.renamed","1")}catch(e){}})}catch(e){}</script>
   <!-- The appearance chosen (src/theme.ts) before the first paint: a page that paints light and then turns dark blinks. -->
   <script>try{var a=localStorage.getItem("stillfail.appearance");if(a==="light"||a==="dark")document.documentElement.dataset.theme=a}catch(e){}</script>
-  <!-- In the desktop app (its preload gives stillfailDesktop) the window has no title bar: the page's top row is it (its styles). -->
-  <script>if("stillfailDesktop"in window)document.documentElement.dataset.desktop="";try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
+  <!-- Motion as chosen (src/theme.ts, @stillfail/ui motion.ts followMotion), the splash's too: reduced, full, or as the system asks. -->
+  <script>try{var m=localStorage.getItem("stillfail.motion");if(m==="reduce"||(m!=="full"&&matchMedia("(prefers-reduced-motion: reduce)").matches))document.documentElement.setAttribute("data-reduced-motion","")}catch(e){}</script>
+  <!-- In the desktop app (its preload gives stillfailDesktop) the window has no title bar on macOS (frame "inset", its buttons at the left; an app from before frames says none) and Windows ("overlay", at the right): the page's top row is it (its styles). -->
+  <script>if("stillfailDesktop"in window&&stillfailDesktop.frame!=="system")document.documentElement.dataset.desktop=stillfailDesktop.frame||"inset";try{if(localStorage.getItem("stillfail.sidebar")==="closed")document.documentElement.dataset.sidebar="closed"}catch(e){}</script>
   <title>still.fail</title>
   <meta name="description" content="still.fail — 一直在干活的编码 agent">
   <!-- 以 / 开头的 public 文件，Vite 会按 base 补全路径 -->
@@ -33,6 +35,8 @@
   <!-- The splash (src/ui.tsx, Splash) as the first paint, before any script: the app replaces it when it draws. -->
   <div id="app"><div class="splash" role="status"><img class="splash-mark" id="splash-mark" src="/mark.svg" width="56" height="56" alt=""></div></div>
   <script>try{var t=document.documentElement.dataset.theme;if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.getElementById("splash-mark").src=document.getElementById("splash-mark").src.replace(/mark\.svg$/,"mark-dark.svg")}catch(e){}</script>
+  <!-- Still this splash after a while (the app's scripts never ran: a load that hung): a way to load the page again, as an app on the home screen has no reload of its own. -->
+  <script>setTimeout(function(){var m=document.getElementById("splash-mark");if(!m)return;var b=document.createElement("button");b.type="button";b.textContent=/^zh/i.test(navigator.language)?"重新加载":"Reload";b.style.cssText="margin-top:8px;height:32px;padding:0 14px;border:0;border-radius:999px;background:rgba(128,128,128,.14);color:inherit;font:inherit;font-size:14px";b.onclick=function(){location.reload()};m.parentNode.appendChild(b)},15000)</script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

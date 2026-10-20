@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@xterm/headless':
+        specifier: 6.0.0
+        version: 6.0.0
       effect:
         specifier: 4.0.0
         version: 4.0.0
@@ -239,6 +242,9 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  '@xterm/headless@6.0.0':
+    resolution: {integrity: sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw==}
+
   effect@4.0.0:
     resolution: {integrity: sha512-ooc1TG5t+FfzgYnFz2ff6BBKyZ7EwBRVXC7c4RhQUAD6/TZ2gTXXMeb4WX7a19ozQo4J73/QW+S00YAIresoMQ==}
 
@@ -380,6 +386,8 @@ snapshots:
       '@typescript/native-preview-linux-x64': 7.0.0-dev.20260707.2
       '@typescript/native-preview-win32-arm64': 7.0.0-dev.20260707.2
       '@typescript/native-preview-win32-x64': 7.0.0-dev.20260707.2
+
+  '@xterm/headless@6.0.0': {}
 
   effect@4.0.0: {}
 

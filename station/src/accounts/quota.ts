@@ -4,13 +4,17 @@
 // - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows), with the token Claude Code keeps in the
 //   profile's home (renewed first when about to run out, and once more when the provider says it is not good: oauth.ts);
 // - Anthropic API keys and other providers bill per use and have no allowance to show.
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { platform } from "../platform/index.ts";
 import { codexAuthFile, type Env } from "../agents/machine-logins.ts";
 import type { Profile } from "../sessions/config.ts";
 import { accessKind } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -97,7 +101,7 @@ async function refused(provider: string, response: Response, lang: Lang): Promis
   return quota("unavailable", [], tr(lang, "station.quota.providerStatus", { provider, status }));
 }
 
-const get = (url: string, headers: Record<string, string>) => fetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+const get = (url: string, headers: Record<string, string>) => profileFetch(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
 
 async function opencode(urls: Urls, key: string, lang: Lang): Promise<ProfileQuota> {
   const response = await get(`${urls.opencode}/v1/usage`, { authorization: `Bearer ${key}` });
@@ -199,12 +203,75 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
     if (kind === "opencode-go") return await opencode(urls, String((profile.access as Json)?.key ?? "").trim(), lang);
     if (kind === "anthropic-api" || kind === "api-provider") return quota("unsupported", [], tr(lang, "station.quota.payAsYouGo"));
     if (kind === "env") return quota("unsupported", [], tr(lang, "station.quota.envUnsupported"));
+    if (profile.runtime === "grok") return await grokQuota(profile, env, lang);
     if (profile.runtime === "claude") return await claudeWithRefresh(env, profile.machine === true ? null : profile.home, urls, lang);
     if (!codexRateLimits) throw new Error("no codex app-server to ask");
     return codexQuota(await codexRateLimits(profile), lang);
   } catch (e) {
     return failed(e);
   }
+}
+
+/// A SuperGrok subscription's allowance: what Grok Build's own pages show (its `x.ai/billing`: the included credits
+/// used of the current period), asked of a `grok agent stdio` started for it in the profile's Grok home.
+async function grokQuota(profile: Profile, env: Env, lang: Lang): Promise<ProfileQuota> {
+  const said = await grokBilling({ ...env, GROK_HOME: join(profile.home, "grok"), GROK_DISABLE_AUTOUPDATER: "1", GROK_TELEMETRY_ENABLED: "0" });
+  return grokQuotaOf(said, lang);
+}
+
+/// The allowance in Grok Build's billing answer.
+export function grokQuotaOf(said: Json, lang: Lang = stationLang()): ProfileQuota {
+  const config = said?.config;
+  const period = config?.currentPeriod;
+  // Its answer leaves zero out (proto3 JSON): a period with no percentage is one nothing of was used yet.
+  const used = typeof config?.creditUsagePercent === "number" ? config.creditUsagePercent : isObject(period) ? 0 : null;
+  if (used === null) return quota("unavailable", [], tr(lang, "station.quota.grokNoWindows"));
+  const start = at(period?.start ?? config?.billingPeriodStart);
+  const end = at(period?.end ?? config?.billingPeriodEnd);
+  const type = String(period?.type ?? "");
+  const minutes = start !== null && end !== null && end > start ? (end - start) / 60_000 : type.includes("WEEKLY") ? WEEK_MINUTES : type.includes("MONTHLY") ? 30 * DAY_MINUTES : null;
+  const window: QuotaWindow = { label: windowLabel(minutes, type.includes("WEEKLY") ? "每周" : "每月"), usedPercent: percent(used), resetsAt: end, minutes };
+  return quota("ok", [window], typeof said?.subscription_tier === "string" ? said.subscription_tier : null);
+}
+
+/// Asks a Grok Build started for it (ACP over stdio) for its billing: initialize, then `x.ai/billing`.
+function grokBilling(env: Env): Promise<Json> {
+  return new Promise((resolve, reject) => {
+    const r = platform.runnable("grok", ["agent", "--no-leader", "stdio"], env as NodeJS.ProcessEnv);
+    const child = spawn(r.file, r.args, { env: env as NodeJS.ProcessEnv, stdio: ["pipe", "pipe", "pipe"], windowsVerbatimArguments: r.windowsVerbatimArguments, windowsHide: true });
+    let buffer = "";
+    let stderr = "";
+    let over = false;
+    const done = (error: Error | null, value?: Json) => {
+      if (over) return;
+      over = true;
+      child.kill("SIGKILL");
+      if (error) reject(error);
+      else resolve(value);
+    };
+    AbortSignal.timeout(30_000).addEventListener("abort", () => done(new Error("grok did not say its billing in time")));
+    child.once("error", (e) => done(e));
+    child.once("close", (code) => done(new Error(`grok exited (${code})${stderr.trim() === "" ? "" : `: ${stderr.trim().slice(-300)}`}`)));
+    child.stderr?.on("data", (d: Buffer) => (stderr = (stderr + d.toString("utf8")).slice(-2000)));
+    child.stdout?.on("data", (d: Buffer) => {
+      buffer += d.toString("utf8");
+      let i;
+      while ((i = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, i);
+        buffer = buffer.slice(i + 1);
+        let m: Json;
+        try {
+          m = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (m?.id === "init") child.stdin?.write(`${JSON.stringify({ jsonrpc: "2.0", id: "billing", method: "_x.ai/billing", params: {} })}\n`);
+        else if (m?.id === "billing") done(m.error !== undefined ? new Error(String(m.error?.message ?? JSON.stringify(m.error))) : null, m.result);
+      }
+    });
+    child.stdin?.on("error", () => {});
+    child.stdin?.write(`${JSON.stringify({ jsonrpc: "2.0", id: "init", method: "initialize", params: { protocolVersion: 1, clientCapabilities: {} } })}\n`);
+  });
 }
 
 /// A ChatGPT subscription's allowance read with the tokens of a Codex auth.json (the machine's own login, which no

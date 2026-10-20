@@ -6,6 +6,7 @@ import { Accounts } from "../accounts.ts";
 import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
@@ -23,6 +24,14 @@ export const handlers: Partial<Record<Call["kind"] | "migrateDevice", Handler>> 
 export const hooks: {
   device?: (inner: Inner, facts: unknown) => void;
   updateNoticeOpen?: (inner: Inner, station: string, open: boolean) => void;
+  /// A station's enrollment made: its commands, as the workspace lock has them say (views/lock.ts).
+  enrolled?: (inner: Inner, sub: string, workspace: string, made: unknown) => Effect.Effect<unknown, CoreError>;
+  /// A station refused this device for the workspace lock (what to say of it); why a station is not asked now
+  /// (views/lock.ts).
+  lockRefused?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  lockWaiting?: (inner: Inner, workspace: string, station: string) => CoreError | null;
+  /// A new device's connection, met face to face (views/pair.ts).
+  lockPair?: (inner: Inner, connection: import("../iroh.ts").IrohConnection) => void;
 } = {};
 
 /// Runs a call; `at` is the client and id it came with, `ctx` its trace.
@@ -33,6 +42,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
         return Effect.map(inner.accounts.beginSignIn(call.redirectUri, call.returnTo, deviceName), (url) => ({ url }));
       }
+      case "authPassword": {
+        const deviceName = call.deviceName ?? prefs.deviceName(inner.data) ?? brand.name();
+        return Effect.map(inner.accounts.passwordSignIn(call.email, call.password, deviceName), (account) => ({ account }));
+      }
       case "authComplete":
         return Effect.map(inner.accounts.completeSignIn(call.query), ([account, returnTo]) => ({ account, return_to: returnTo }));
       case "appleBegin":
@@ -40,7 +53,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       case "deletionSummary":
       case "deleteAccount": {
         const accounts = inner.accounts;
-        if (!(accounts instanceof Accounts)) return Effect.fail(new CoreError("unsupported", "当前账号服务不支持此操作"));
+        if (!(accounts instanceof Accounts)) return Effect.fail(new CoreError("unsupported", t("core-logic.accounts.unsupported")));
         switch (call.kind) {
           case "appleBegin": return accounts.appleBegin();
           case "appleComplete": return accounts.appleComplete(call.attempt, call.identityToken, call.authorizationCode, call.name, call.state);
@@ -72,6 +85,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       }
       case "signOut":
         return Effect.as(inner.accounts.signOut(call.account), null);
+      // The account deleted in the cloud (DELETE /v1/me), then forgotten here as signing out does.
+      case "deleteAccount":
+        return Effect.as(Effect.andThen(inner.provider.request(call.account, "DELETE", "/v1/me", null), inner.accounts.signOut(call.account)), null);
       case "pushKey":
         return inner.provider.pushKey();
       case "op":
@@ -80,7 +96,10 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           const sub = call.op.target.cloud;
           return Effect.gen(function* () {
             const made = op.method === "POST" && op.path === "/v1/workspaces";
-            const result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            let result = yield* inner.provider.request(sub, op.method, op.path, op.body, ctx);
+            // A locked workspace's station joins with the lock's hash, to pin it (views/lock.ts).
+            const enrolling = op.method === "POST" ? /^\/v1\/workspaces\/([^/]+)\/enrollments$/.exec(op.path) : null;
+            if (enrolling && hooks.enrolled) result = yield* hooks.enrolled(inner, sub, decodeURIComponent(enrolling[1]!), result);
             // A workspace made: the invite code kept through signing in is done with.
             if (made) prefs.inviteUsed(inner.data);
             // A write may rename, join or leave a workspace: what the account's topics show is read again first.
@@ -96,6 +115,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
           try: () => {
             prefs.device(inner.data, call.facts);
             hooks.device?.(inner, call.facts);
+            const build = isObject(call.facts) ? call.facts.build : undefined;
+            if (typeof build === "string" && build.trim() !== "") inner.tracer.setVersion(build.trim());
             return null;
           },
           catch: asCoreError,
@@ -111,20 +132,13 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {
-        const topic = { topic: "draft", station: call.station, chat: call.chat };
-        const draft = call.draft;
-        const empty = (field: string) => {
-          const v = isObject(draft) ? draft[field] : undefined;
-          return v === undefined || (typeof v === "string" && v.trim() === "") || (Array.isArray(v) && v.length === 0);
-        };
-        if (empty("text") && empty("quotes") && empty("files")) inner.data.forgetTopic(topic);
-        else inner.data.setSoon(topic, draft);
-        return Effect.succeed(null);
+        return Effect.succeed(inner.composers.putDraft(call.station, call.chat, call.draft));
       }
       case "draftGet": {
-        const v = inner.data.get({ topic: "draft", station: call.station, chat: call.chat });
-        return Effect.succeed(v === undefined ? { text: "", quotes: [], files: [] } : v);
+        return Effect.succeed(inner.composers.readDraft(call.station, call.chat));
       }
+      case "module":
+        return call.call.def.run(call.call.params, { progress, client: at[0], id: at[1], trace: ctx });
       case "migrate":
         return Effect.gen(function* () {
           if (call.accounts !== null) yield* inner.accounts.migrate(call.accounts);

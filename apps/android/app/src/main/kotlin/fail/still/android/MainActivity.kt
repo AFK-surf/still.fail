@@ -26,7 +26,6 @@ import fail.still.android.data.Prefs
 import fail.still.android.data.Topics
 import fail.still.android.data.decode
 import fail.still.android.ui.StillFailTheme
-import fail.still.android.ui.Loading
 import fail.still.core.CoreException
 import fail.still.core.StillFailCore
 import kotlinx.coroutines.Job
@@ -36,9 +35,16 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.ListKeys
 import fail.still.android.ui.LocalUi
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        /** A chat to open at (share/ShareActivity.kt): its station's address, and its session (none: a new chat there). */
+        const val OPEN_STATION = "fail.still.android.OPEN_STATION"
+        const val OPEN_SESSION = "fail.still.android.OPEN_SESSION"
+    }
+
     private var app by mutableStateOf<AppState?>(null)
 
     /**
@@ -68,7 +74,20 @@ class MainActivity : ComponentActivity() {
         app?.inFront = true
         listen()
         app?.let { lifecycleScope.launch { it.checkUpdates() } }
+        tellPermission()
         wake()
+    }
+
+    /** What the system allows now, to the core: again each time the app comes back (from the system's settings, say). */
+    private fun tellPermission() {
+        val app = app ?: return
+        lifecycleScope.launch {
+            try {
+                app.core.call("notify.permission", buildJsonObject { put("state", Notifier.permission(applicationContext, app.notifyAsked)) })
+            } catch (_: CoreException) {
+                // An older core without it.
+            }
+        }
     }
 
     override fun onStop() {
@@ -112,8 +131,14 @@ class MainActivity : ComponentActivity() {
         // composition is laid out inside the system bars and moves when they are taken away.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // The app's clock, reduced motion or not, under every window it draws (ui/Motion.kt).
+        fail.still.android.ui.Motion.install(applicationContext)
         Crashes.install(applicationContext)
+        MemoryWatch.start(applicationContext)
+        BarTiming.start(applicationContext)
         StillFailCore.onFailed = { reason -> Crashes.coreFailed(applicationContext, reason) }
+        ListKeys.onDuplicate = { list, key -> Crashes.duplicateKey(applicationContext, list, key) }
+        StillFailCore.restartedText = { t("android-misc.core.restarted") }
         fail.still.android.data.I18n.load(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
@@ -124,12 +149,14 @@ class MainActivity : ComponentActivity() {
             Prefs.moveIn(core, shared)
             val first = Prefs.first(core)
             fail.still.android.data.I18n.follow(first.lang)
-            Notifier.keepLang(shared, first.lang)
+            KeptLang.keep(shared, first.lang)
             val made = AppState(core, shared, BuildConfig.CLOUD_ORIGIN, Updates(applicationContext, BuildConfig.CLOUD_ORIGIN, core), first)
             // The notification settings the app kept, into the core before anything goes by them.
             made.moveNotify()
             made.inFront = Notifier.inFront
+            made.openScreen = { station, screen, title -> fail.still.android.remote.ScreenActivity.open(this@MainActivity, station, screen, title) }
             app = made
+            tellPermission()
             launch { made.followNotify() }
             launch { made.followPrefs() }
             launch { made.followDoing() }
@@ -165,10 +192,16 @@ class MainActivity : ComponentActivity() {
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable((if (dark) fail.still.android.ui.Dark else fail.still.android.ui.Light).bg.toArgb()))
             }
             StillFailTheme(dark) {
-                if (current == null) Loading(t("android-misc.starting"))
+                // The app's state made in a moment: the same buddy as the app starting (App.kt), so startup is one picture.
+                if (current == null) fail.still.android.ui.Splash()
                 else CompositionLocalProvider(LocalApp provides current, LocalUi provides current) { StillFailApp(current) }
             }
         }
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        BarTiming.touched(ev)
+        return super.dispatchTouchEvent(ev)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -185,13 +218,21 @@ class MainActivity : ComponentActivity() {
      * an invitation's link and a chat's reference link go as links tapped in the app (AppState.openLink).
      */
     private fun handle(intent: Intent?) {
-        val uri = intent?.data ?: return
         val app = app ?: return
+        // Something shared into a chat's composer (share/ShareActivity.kt): that chat, or a new chat on its station.
+        intent?.getStringExtra(OPEN_STATION)?.let { station ->
+            setIntent(Intent())
+            val workspace = station.substringBefore('/')
+            val session = intent.getStringExtra(OPEN_SESSION)
+            if (session != null) app.openItem(workspace, station.substringAfter('/'), session) else app.openNew(workspace)
+            return
+        }
+        val uri = intent?.data ?: return
         // What the link opens is the core’s (`link.parse`), including a dev cloud’s http origin.
-        // Notifications keep the chat URL to identify the workspace, but land on its decisions page.
+        // A notification's opens its chat at the message it is about.
         if (uri.scheme == "https" || uri.scheme == "http") {
             setIntent(Intent())
-            app.openLink(uri.toString(), outside = true, notification = intent.getBooleanExtra(Notifier.OPEN_DECISIONS, false))
+            app.openLink(uri.toString(), outside = true, at = intent.getLongExtra(Notifier.AT, 0L).takeIf { it > 0 })
             return
         }
         if (uri.scheme !in AUTH_SCHEMES || uri.host != "auth") return
@@ -215,9 +256,10 @@ private val AUTH_SCHEMES = setOf("stillfail", "ember", "stillfail-beta")
 
 /**
  * Since when the app has been off screen (elapsedRealtime: it counts deep sleep too); null while on it. The process's,
- * not an activity's: one closed with back and made again later is the same app coming back to the same core.
+ * not an activity's: one closed with back and made again later is the same app coming back to the same core. A push
+ * that came meanwhile wakes the core by it too (Push.kt).
  */
-private var hidden: Long? = null
+internal var hidden: Long? = null
 
 /**
  * The default network, followed: `changed` when it becomes another one than before (Wi-Fi to mobile data, back

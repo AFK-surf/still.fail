@@ -183,3 +183,16 @@ test("people are added by email: members at once with an account, else from thei
     await h.close();
   }
 });
+
+test("an account over its requests a minute is told to wait (429), not that it is signed out", async () => {
+  const h = await harness();
+  try {
+    const alice = h.as(await h.login("alice"));
+    let last = await alice("GET", "/v1/me");
+    for (let i = 0; i < 130 && last.status === 200; i++) last = await alice("GET", "/v1/me");
+    assert.equal(last.status, 429);
+    assert.deepEqual(await last.json(), { error: "rate_limited" });
+  } finally {
+    await h.close();
+  }
+});

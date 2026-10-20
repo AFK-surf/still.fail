@@ -4,7 +4,7 @@ import { callDetails, captureCall } from "./core/client.ts";
 import { useTopic } from "./core/react.ts";
 import { doingMatches, failed } from "./doing.ts";
 import type { DoingView } from "./core/shapes.ts";
-import { useToast, failure } from "./toast.tsx";
+import { useToast, failure } from "@stillfail/ui/toast.tsx";
 
 export interface Action<A extends unknown[], T> {
   run(...args: A): Promise<T | undefined>;

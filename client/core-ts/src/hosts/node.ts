@@ -12,7 +12,9 @@ import { webcrypto } from "node:crypto";
 import { Effect, Queue, Scope } from "effect";
 import WebSocket from "ws";
 import { connect as tcpConnect } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { Core } from "../core.ts";
+import type { CoreModule } from "../module.ts";
 import type { AccountProviderFactory } from "../account-provider.ts";
 // What an app embedding this bundle gives `start` (one bundle: one copy of the core's classes).
 export { commaAccountProvider, type CommaOptions } from "../comma.ts";
@@ -21,12 +23,15 @@ import { nodeIroh } from "./node-iroh.ts";
 import { NodeSql } from "./node-sql.ts";
 import { HostWire } from "../station/wire.ts";
 import { HostError } from "../error.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Host, type Sql, SqlError, sqlError, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type TcpConnection, type DbRange, type Host, type LoopbackRequest, type Sql, SqlError, sqlError, type HttpRequest, type HttpResponse, type Pull, type StreamResponse } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { service } from "../trace.ts";
 import { t } from "../i18n.ts";
+export { CoreFiles } from "./file-port.ts";
 
-export type Listener = (client: ClientId, json: string) => void;
+/// What the core says to one UI, as JSON; `bytes` beside it for a message that carries some (a screen view's frame,
+/// protocol.ts), left out of the JSON.
+export type Listener = (client: ClientId, json: string, bytes?: Uint8Array) => void;
 
 function fetchError(e: unknown): HostError {
   // undici says "fetch failed" and keeps the cause: say what failed.
@@ -39,6 +44,19 @@ function fetchError(e: unknown): HostError {
   return new HostError(message);
 }
 
+/// What seals values for the core where Node cannot itself (the desktop app: Electron's safeStorage and Touch ID are the
+/// main process's, apps/desktop/src/secure.ts, asked from the utility process the core runs in). Its failures' messages
+/// are the host's (host.ts `secureGet`).
+export interface Sealer {
+  get(key: string, user: boolean, reason: string): Promise<Uint8Array | null>;
+  set(key: string, value: Uint8Array, user: boolean): Promise<void>;
+  delete(key: string): Promise<void>;
+  /// The person asked to say yes (host.ts `secureAsk`).
+  ask?(reason: string): Promise<void>;
+}
+
+const sealError = (e: unknown) => new HostError(e instanceof Error ? e.message : String(e));
+
 export class NodeHost implements Host {
   readonly #origin: string;
   readonly #beta: boolean;
@@ -47,13 +65,25 @@ export class NodeHost implements Host {
   readonly #open = new Map<string, NodeSql>();
   readonly #listener: Listener;
   readonly #started = performance.now();
+  readonly secureGet?: Host["secureGet"];
+  readonly secureSet?: Host["secureSet"];
+  readonly secureDelete?: Host["secureDelete"];
+  readonly secureAsk?: Host["secureAsk"];
 
-  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener) {
+  /// `sealer`: what seals values, where the app has one; without, the host has no `secure*` (tests, the side runs).
+  constructor(dataDir: string, cloudOrigin: string, beta: boolean, listener: Listener, sealer?: Sealer) {
     mkdirSync(dataDir, { recursive: true });
     this.#dir = dataDir;
     this.#origin = cloudOrigin.replace(/\/+$/, "");
     this.#beta = beta;
     this.#listener = listener;
+    if (sealer) {
+      this.secureGet = (key, opts) => Effect.tryPromise({ try: () => sealer.get(key, opts.user, opts.reason ?? ""), catch: sealError });
+      this.secureSet = (key, value, opts) => Effect.tryPromise({ try: () => sealer.set(key, value, opts.user), catch: sealError });
+      this.secureDelete = (key) => Effect.tryPromise({ try: () => sealer.delete(key), catch: sealError });
+      const ask = sealer.ask?.bind(sealer);
+      if (ask) this.secureAsk = (reason) => Effect.tryPromise({ try: () => ask(reason), catch: sealError });
+    }
   }
 
   cloudOrigin(): string {
@@ -143,6 +173,10 @@ export class NodeHost implements Host {
     return nodeTcp(port);
   }
 
+  listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+    return nodeListen(port, host);
+  }
+
   /// Keys may hold anything; file names only letters, digits, `-` and `_` (the rest is %XX).
   path(key: string): string {
     let name = "";
@@ -173,7 +207,7 @@ export class NodeHost implements Host {
           throw e;
         }
       },
-      (e) => `读不了：${e.message}`,
+      (e) => t("core-misc.host.storage.read", { error: e.message }),
     );
   }
 
@@ -192,12 +226,12 @@ export class NodeHost implements Host {
         }
         await rename(partial, path);
       },
-      (e) => `写不进去：${e.message}`,
+      (e) => t("core-misc.host.storage.write", { error: e.message }),
     );
   }
 
   storageDelete(key: string): Effect.Effect<void, HostError> {
-    return this.#file(() => rm(this.path(key), { force: true }), (e) => `删不掉：${e.message}`);
+    return this.#file(() => rm(this.path(key), { force: true }), (e) => t("core-misc.host.storage.delete", { error: e.message }));
   }
 
   /// The former records store (`core.db`, its `records` table), opened to be read; none when there is none.
@@ -228,7 +262,7 @@ export class NodeHost implements Host {
           (r) => [r.key, new Uint8Array(r.value)] as [string, Uint8Array],
         );
       },
-      catch: (e) => new HostError(`数据库出错：${(e as Error).message}`),
+      catch: (e) => new HostError(t("core-misc.host.db_error", { error: (e as Error).message })),
     });
   }
 
@@ -264,7 +298,7 @@ export class NodeHost implements Host {
         this.#open.delete(path);
         for (const end of ["", "-wal", "-shm", "-journal"]) rmSync(`${path}${end}`, { force: true });
       },
-      catch: (e) => new HostError(`删不掉：${(e as Error).message}`),
+      catch: (e) => new HostError(t("core-misc.host.storage.delete", { error: (e as Error).message })),
     });
   }
 
@@ -277,11 +311,17 @@ export class NodeHost implements Host {
   utcOffsetMin(atMs: number): number {
     return -new Date(atMs).getTimezoneOffset();
   }
+  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts).
+  readonly appKeys = true;
+
   randomBytes(buf: Uint8Array): void {
     webcrypto.getRandomValues(buf);
   }
   emit(client: ClientId, message: CoreMessage): void {
-    this.#listener(client, JSON.stringify(message));
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.#listener(client, JSON.stringify(rest), bytes);
+    } else this.#listener(client, JSON.stringify(message));
   }
 
   close(): void {
@@ -297,11 +337,13 @@ export class NodeHost implements Host {
 /// starts another (apps/desktop/src/core.ts).
 /// `hostWire`: its stations answer at the cloud's origin over plain HTTP, not on the mesh (the side-by-side run,
 /// harness/run.ts). `account`: who the accounts are with, when not still.fail cloud (an app embedding the core gives
-/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding").
-export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory } = {}) {
+/// `commaAccountProvider({origin, bearer})`; docs/core-ts.md, "Account providers and embedding"). `sealer`: what seals
+/// values for it (the desktop app's main process: apps/desktop/src/core.ts). `modules`: what the app adds to the core
+/// (module.ts).
+export function start(dataDir: string, cloudOrigin: string, listener: Listener, channel?: string, options: { hostWire?: boolean; account?: AccountProviderFactory; sealer?: Sealer; modules?: readonly CoreModule[] } = {}) {
   service.name = "stillfail-native";
   service.os = process.platform === "darwin" ? "macos" : process.platform;
-  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener);
+  const host = new NodeHost(dataDir, cloudOrigin, channel === "beta", listener, options.sealer);
   const clients = new Set<number>();
   let dead = false;
   let running: Core | null = null;
@@ -318,7 +360,7 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     void ready.then((core) => core.close(), () => {});
   };
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
-  const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account }).then((core) => {
+  const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account, modules: options.modules }).then((core) => {
     running = core;
     core.inner.runner.onDefect = fatal;
     core.keepTime();
@@ -340,6 +382,9 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     receive(client: number, json: string): void {
       later((core) => core.receiveJson(client, json));
     },
+    receiveRaw(client: number, message: unknown): void {
+      later((core) => core.receiveRaw(client, message));
+    },
     disconnect(client: number): void {
       clients.delete(client);
       later((core) => core.disconnect(client));
@@ -350,6 +395,58 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
       host.close();
     },
   };
+}
+
+/// Most of a request's body a loopback listener takes (a login's callback: a query, or a small form).
+const LISTEN_BODY = 1_000_000;
+
+/// An HTTP listener on loopback `host` at `port` (a login's browser coming back), open while the scope is.
+export function nodeListen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+  return Effect.gen(function* () {
+    if (host !== "127.0.0.1" && host !== "::1") return yield* Effect.fail(new HostError(`not a loopback address: ${host}`));
+    const requests = yield* Queue.unbounded<LoopbackRequest | null>();
+    yield* Effect.acquireRelease(
+      Effect.callback<import("node:http").Server, HostError>((resume) => {
+        const server = createHttpServer((req, res) => {
+          const parts: Buffer[] = [];
+          let size = 0;
+          req.on("data", (chunk: Buffer) => {
+            size += chunk.length;
+            if (size <= LISTEN_BODY) parts.push(chunk);
+          });
+          req.on("end", () => {
+            const headers: [string, string][] = [];
+            for (let i = 0; i + 1 < req.rawHeaders.length; i += 2) headers.push([req.rawHeaders[i]!, req.rawHeaders[i + 1]!]);
+            let answered = false;
+            Queue.offerUnsafe(requests, {
+              method: req.method ?? "GET",
+              path: req.url ?? "/",
+              headers,
+              body: new Uint8Array(Buffer.concat(parts)),
+              respond: (status, headers, body) => {
+                if (answered) return;
+                answered = true;
+                const out: Record<string, string> = {};
+                for (const [k, v] of headers) if (!["connection", "transfer-encoding", "content-length", "keep-alive"].includes(k.toLowerCase())) out[k] = v;
+                res.writeHead(status, { ...out, connection: "close", "content-length": String(body.length) });
+                res.end(Buffer.from(body));
+              },
+            });
+          });
+        });
+        server.once("error", (e) => resume(Effect.fail(new HostError(e.message))));
+        server.listen({ port, host, exclusive: true }, () => resume(Effect.succeed(server)));
+        return Effect.sync(() => server.close());
+      }),
+      (server) =>
+        Effect.sync(() => {
+          Queue.offerUnsafe(requests, null);
+          server.close();
+          server.closeAllConnections();
+        }),
+    );
+    return { take: Queue.take(requests) };
+  });
 }
 
 /// A TCP connection to this machine's `port` (adbd), open while the scope is.

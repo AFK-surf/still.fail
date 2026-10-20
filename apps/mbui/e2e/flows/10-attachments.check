@@ -1,0 +1,3 @@
+check "the station has the message with both files" 'entry_attachments "一张照片和一个文件 $TAG" | grep -q e2e-photo.jpg && entry_attachments "一张照片和一个文件 $TAG" | grep -q e2e-data.bin'
+check "the 9 MB file arrived whole (3 parts of 4 MB)" 'station_file_same $FILES/e2e-data.bin'
+check "the photo arrived whole" 'station_file_same $FILES/e2e-photo.jpg'

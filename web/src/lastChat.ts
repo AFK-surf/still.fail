@@ -25,13 +25,18 @@ function chatPath(chat: OpenChat): string {
   return `${stationBase(chat.station)}/chats/${encodeURIComponent(chat.key)}`;
 }
 
+/** The page of the chat last open in `workspace`, from the marks of any workspace; undefined when none is known. */
+export function lastChatOf(marks: WorkspaceMarksView | undefined, workspace: string): string | undefined {
+  const chat = marks?.workspaces[workspace]?.chat;
+  return chat ? chatPath(chat) : undefined;
+}
+
 /** Where "back to chats" goes in `scope`: the chat last open, else `fallback`; undefined until the core has said. */
 export function useLastChat(scope: string, fallback: string): string | undefined {
   const marks = useMarks(scope);
   if (marks.error) return prefs().lastChat[scope] ?? fallback;
   if (!marks.value) return undefined;
-  const chat = marks.value.workspaces[scope]?.chat;
-  return chat ? chatPath(chat) : fallback;
+  return lastChatOf(marks.value, scope) ?? fallback;
 }
 
 /** With a core from before `workspaceMarks` only: remembers the current path while it is a chat (or a new chat). */

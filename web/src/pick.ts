@@ -4,7 +4,7 @@
 import { useMemo } from "react";
 import { useCall, useTopic } from "./core/react.ts";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import type { NewChatView, PickView, RuntimeKind } from "./core/shapes.ts";
 import { t } from "./i18n.ts";
 
@@ -35,6 +35,10 @@ export interface Picking {
   saving?: boolean;
   /** Why `pick.save` failed a moment ago (shown a few seconds where it turned); undefined when it did not. */
   saveFailed?: string | undefined;
+  /** The picked model is another station's: that station shares its account with this one (`pick.borrow`). */
+  borrow?(): Promise<{ borrowed: boolean }>;
+  /** A borrowing under way. */
+  borrowing?: boolean;
 }
 
 /**
@@ -48,9 +52,11 @@ export function usePick(station: string, of: string, page?: NewChatView): Pickin
   const toast = useToast();
   const saving = useDoing("pick.save", { station, of });
   const saveFailed = useDoingFailed("pick.save", { station, of });
+  const borrowing = useDoing("pick.borrow", { station, of });
   const actions = useMemo(() => ({
     set: (patch: PickPatch & { open?: boolean; clear?: boolean }) => void call("pick.set", { station, of, ...patch }).catch((e: unknown) => toast(t("web-main.pick.failed", { error: failure(e) }))),
     save: () => call("pick.save", { station, of }) as Promise<{ saved: boolean }>,
+    borrow: () => call("pick.borrow", { station, of }) as Promise<{ borrowed: boolean }>,
   }), [call, station, of, toast]);
-  return useMemo(() => ({ view: value, saving, saveFailed, ...actions }), [value, saving, saveFailed, actions]);
+  return useMemo(() => ({ view: value, saving, saveFailed, borrowing, ...actions }), [value, saving, saveFailed, borrowing, actions]);
 }

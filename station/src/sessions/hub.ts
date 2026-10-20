@@ -24,25 +24,27 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import { Clock, Effect, Fiber } from "effect";
 import { liveClock, within } from "../ops/fibers.ts";
-import type { AgentDriver, AgentSession } from "../agents/runtime.ts";
+import type { AgentDriver, AgentSession, RuntimeKind } from "../agents/runtime.ts";
 import { runnerId } from "../agents/process.ts";
 import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
-import { iso, transcriptPath } from "../read/transcript.ts";
-import { type Attachment, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
+import { iso, transcriptPaths } from "../read/transcript.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
+import { Places } from "../ops/places.ts";
 import { isStopCommand } from "./args.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
-import { type Connect, type HubConfig, profilesFor, runtimeNamed } from "./config.ts";
+import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
 import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
-import { agentHomePaths } from "./agent-home.ts";
+import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
 import { startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
+import { settled } from "./opened.ts";
 import { imageSize } from "./image-size.ts";
 
 type Json = any;
@@ -65,6 +67,9 @@ export const newToken = () => randomBytes(24).toString("base64url");
 /// - unbound: the station is in no workspace (never joined one, or removed from it): it does no work until it is.
 export type Hold = "drain" | "unbound";
 
+/// A chat of another workspace shared with this one, as chat_list lists it (xshare/index.ts `Borrowed`).
+export type OutsideChat = { workspace: string; workspaceName: string; station: string; chat: string; title: string; link: string; write: boolean };
+
 /// Cold storage of archived sessions' files (archive.rs, footprint.rs): an archived, idle session's workspace and
 /// transcripts packed, and restored before its runtime starts again or when it is shown again. The station's is
 /// cold.ts; the default keeps nothing cold.
@@ -73,6 +78,9 @@ export interface ColdStorage {
   restore(key: string): void | Promise<void>;
   /// Packs what it can of an archived, idle session.
   pack(key: string): void | Promise<void>;
+  /// Whether an archived session's directory holds more than its chat's files, and empties it of that.
+  holdsMore?(key: string): Promise<boolean>;
+  expire?(key: string, before: number): Promise<void>;
 }
 
 /// The most of a shared file the station fetches, as much as an agent may attach.
@@ -94,8 +102,13 @@ export type HubOptions = {
   mcpUrl: string | (() => string);
   /// The station's own chat on its pages; sessions can be talked to there too.
   internal?: InternalChat | null;
+  /// How the directories and files people and agents name are looked at (ops/places.ts: never on this thread in a
+  /// folder macOS protects); default: without still.fail Helper.
+  places?: Places;
   /// A session's page in still.fail (its /o/ link), when the station is in a workspace.
   link?: (key: string) => string | undefined;
+  /// The workspaces the station is in now, its home one first (docs/multi-workspace.md); none outside any.
+  workspaces?: () => string[];
   /// The runners alive on this machine now, by id (default: <data>/run/runners).
   runners?: () => string[];
   cold?: ColdStorage;
@@ -112,9 +125,13 @@ export class Hub {
   readonly internal: InternalChat | null;
   readonly drivers: Map<string, AgentDriver>;
   readonly link: (key: string) => string | undefined;
+  readonly workspaces: () => string[];
   readonly cold: ColdStorage;
   readonly accounts: Accounts;
   readonly clock: Clock.Clock;
+  readonly places: Places;
+  /// Told when a session's runtime was not found on PATH as it started (the pages read it again).
+  private runtimeMissing: (runtime: RuntimeKind) => void = () => {};
   /// What running turns are doing, for the pages' live view.
   readonly live: LiveHub;
   readonly actors = new Map<string, SessionActor>();
@@ -137,6 +154,7 @@ export class Hub {
   jobs: Jobs | null = null;
   private closedHook: ((key: string) => void) | null = null;
   private peersHook: ((station: string, request: Json) => Promise<Json>) | null = null;
+  private outsideHook: ((ws: string | null) => OutsideChat[]) | null = null;
   readonly deps: SessionDeps;
 
   constructor(options: HubOptions) {
@@ -146,12 +164,15 @@ export class Hub {
     this.internal = options.internal ?? null;
     this.drivers = new Map(options.drivers.map((d) => [d.runtime(), d]));
     this.link = options.link ?? (() => undefined);
+    this.workspaces = options.workspaces ?? (() => []);
     this.cold = options.cold ?? NOTHING_COLD;
+    this.places = options.places ?? new Places();
     this.accounts = new Accounts({
       config: () => this.config(),
       store: this.store,
       running: () => [...this.actors.values()].filter((a) => a.processState() !== "cold").flatMap((a) => this.store.getSession(a.key)?.profile ?? []),
       clock: this.clock,
+      allows: (key, profile) => allowedIn(profile, this.wsOf(key), this.workspaces()[0] ?? null),
     });
     this.live = new LiveHub(
       (key) => {
@@ -159,8 +180,9 @@ export class Hub {
         const profile = row && this.config().profiles.find((p) => p.id === row.profile);
         const runtime = row && runtimeNamed(row.runtime);
         if (!row || !profile || !runtime || !row.runtimeSessionId) return null;
-        const paths = this.store.runtimeSessions(key).flatMap((id) => transcriptPath(runtime, profile.home, id) ?? []);
-        return paths.length === 0 ? null : { runtime, paths };
+        const homes = [profile.home, ...this.config().profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+        const { paths, current } = transcriptPaths(runtime, homes, this.store.runtimeSessions(key));
+        return paths.length === 0 ? null : { runtime, paths, current };
       },
       this.clock,
     );
@@ -218,6 +240,31 @@ export class Hub {
     this.adopted.clear();
     await Promise.all([...this.actors.values()].map((a) => a.suspend()));
     await Promise.all([...this.drivers.values()].map((d) => d.shutdown()));
+  }
+
+  /// Whether a session's workspace is one the station is in now (a joined one may have taken it out): held otherwise.
+  /// Outside every workspace the "unbound" hold says so instead.
+  private inAWorkspace(key: string): boolean {
+    const all = this.workspaces();
+    if (all.length === 0) return true;
+    const ws = this.store.getSession(key)?.ws ?? null;
+    return ws === null || all.includes(ws);
+  }
+
+  /// The station left one of its workspaces but is still in others (docs/multi-workspace.md): that workspace's
+  /// sessions end their processes as `suspendAll` ends everyone's; `backIn` resumes them once it is back.
+  async leftWorkspace(ws: string) {
+    const keys = new Set(this.store.listSessions().filter((s) => s.ws === ws).map((s) => s.key));
+    for (const [key, fiber] of this.deadlines) if (keys.has(key)) (this.interrupt(fiber), this.deadlines.delete(key));
+    await Promise.all([...this.actors.values()].filter((a) => keys.has(a.key)).map((a) => a.suspend()));
+  }
+
+  /// The station is in a workspace again: its sessions' cut-off turns resume, and what waited goes on.
+  backIn(ws: string) {
+    for (const row of this.store.listSessions().filter((s) => s.ws === ws)) {
+      if (row.running && this.online(row)) void this.actor(row).recover();
+      else if (this.store.sessionsWithPending().includes(row.key) && this.online(row)) void this.actor(row).kick();
+    }
   }
 
   /// How many turns are running.
@@ -293,9 +340,9 @@ export class Hub {
     for (const row of this.store.listSessions()) {
       if (taken.has(row.key)) continue;
       const runtime = runtimeNamed(row.runtime);
-      // Claude's runner is the session's own (an idle one is taken up too); codex sessions share their profile's host,
-      // which its driver finds, for a turn that was running.
-      if (!runtime || (runtime === "claude" ? !runners.has(runnerId("claude", row.key)) : !row.running)) continue;
+      // Claude's and dsh's runner is the session's own (an idle one is taken up too); codex sessions share their
+      // profile's host, which its driver finds, for a turn that was running.
+      if (!runtime || (runtime !== "codex" ? !runners.has(runnerId(runtime, row.key)) : !row.running)) continue;
       const turn = row.running ? this.store.listTurns(row.key).at(-1) : undefined;
       const snap: Snapshot = {
         key: row.key,
@@ -400,6 +447,13 @@ export class Hub {
     // Chatter this connect is not part of, in a thread no session takes part in.
     if (!wanted && members.length === 0) return;
     const here: ThreadRef = { channel: message.channel, threadTs: message.threadTs };
+    // Archived by hand: it takes no messages until someone shows it again; told so, once per message.
+    if (existing && this.store.manuallyArchived(existing.id)) {
+      if (this.store.messageAt(existing.id, message.ts) === null) {
+        await chat.post(here, `⚠️ ${tr(stationLang(), "station.chat.archived")}`, []).catch((error) => log.warn("hub", "archived notice not posted", { thread: existing.id, error: (error as Error).message }));
+      }
+      return;
+    }
     const createdBy = `slack:${connect.id}:${message.user}`;
     if (wanted && !exists) {
       try {
@@ -413,8 +467,9 @@ export class Hub {
       // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for. In
       // Slack's own link form: what the station posts is sent as written.
       const link = single ? undefined : this.link(key);
-      if (link !== undefined) {
-        chat.post(here, `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
+      const said = link === undefined ? null : chat.sessionLink ? chat.sessionLink(link, tr(stationLang(), "station.slack.viewSession")) : `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`;
+      if (said !== null) {
+        chat.post(here, said, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
       }
     }
     const thread = existing ?? (await this.openSlackThread(chat, surface, message, createdBy, key));
@@ -479,8 +534,10 @@ export class Hub {
   }
 
   /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`).
+  /// A session archived by hand hears nothing until shown again.
   deliver(thread: number, n: number, sessions: string[], text: string) {
-    for (const key of this.store.deliver(thread, n, sessions)) {
+    const hearing = sessions.filter((key) => this.store.getSession(key)?.archivedBy !== MANUAL);
+    for (const key of this.store.deliver(thread, n, hearing)) {
       this.store.touch(key);
       const row = this.store.getSession(key);
       if (!row) continue;
@@ -498,6 +555,12 @@ export class Hub {
     if (others.length > 0) this.deliver(thread, n, others, text);
   }
 
+  /// The station's tools are open at `url`: a process taken up that was told another address (the station before had
+  /// them elsewhere) starts again, as it can (SessionActor `toolsAt`).
+  toolsAt(url: string) {
+    for (const actor of this.actors.values()) void actor.toolsAt(url);
+  }
+
   /// After a restart: resume cut-off turns (those not taken up with their runtime), then deliver whatever is still
   /// pending.
   recover() {
@@ -513,15 +576,30 @@ export class Hub {
     }
   }
 
+  /// What to do when a session's runtime was not found as it started.
+  onRuntimeMissing(f: (runtime: RuntimeKind) => void) {
+    this.runtimeMissing = f;
+  }
+
+  /// A runtime installed here (from the pages): the sessions on it whose messages wait (their start found it missing)
+  /// take them now.
+  installed(runtime: RuntimeKind) {
+    for (const key of this.store.sessionsWithPending()) {
+      const row = this.store.getSession(key);
+      if (row && row.runtime === runtime && this.online(row)) void this.actor(row).kick();
+    }
+  }
+
   // ── warm processes ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  /// Ends idle claude processes beyond the warm limit, oldest first, once they have idled past warmMs. Codex threads
-  /// share a process and stay. Runs when a process goes idle (the count grew) and at each idle process's deadline.
+  /// Ends idle claude and dsh processes (one per session) beyond the warm limit, oldest first, once they have idled
+  /// past warmMs. Codex threads share a process and stay. Runs when a process goes idle (the count grew) and at each
+  /// idle process's deadline.
   private evictIdle() {
     const config = this.config();
     const now = this.now();
     const idle = [...this.actors.values()]
-      .filter((a) => a.runtime === "claude")
+      .filter((a) => a.runtime !== "codex")
       .flatMap((a) => {
         const ms = a.idleMs(now);
         return ms === null ? [] : [[a, ms] as const];
@@ -563,6 +641,36 @@ export class Hub {
   /// Ends the session's runtime process if it is idle; the conversation resumes on the next message.
   async evict(key: string) {
     await this.actors.get(key)?.evict();
+  }
+
+  /// How a session runs changed: its process ends now if idle, else before its next turn (SessionActor.changed).
+  async changed(key: string) {
+    await this.actors.get(key)?.changed();
+  }
+
+  /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each
+  /// session's process ends now if idle, else before its next turn, and the next starts with it (none retuned in place).
+  everyChanged() {
+    for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
+  }
+
+  /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
+  /// idle, else when its turn is over); those no other profile can run are stopped, and their process ends.
+  async profileGone(id: string) {
+    for (const row of this.store.listSessions()) {
+      if (row.profile !== id) continue;
+      let movable = true;
+      try {
+        this.accounts.runOn(row.key);
+      } catch {
+        movable = false;
+      }
+      log.info("hub", "profile deleted under a session", { session: row.key, profile: id, movedTo: movable ? (this.store.getSession(row.key)?.profile ?? "") : "" });
+      const actor = this.actors.get(row.key);
+      if (!actor) continue;
+      if (!movable) await actor.stop();
+      await actor.changed();
+    }
   }
 
   /// Starts a session's runtime ahead of a message (SessionActor.warm).
@@ -630,6 +738,16 @@ export class Hub {
     return this.peersHook;
   }
 
+  /// Hooks chat_list up to the chats other workspaces share with this one (xshare/index.ts).
+  onOutsideChats(list: (ws: string | null) => OutsideChat[]) {
+    this.outsideHook = list;
+  }
+
+  /// The chats other workspaces share with workspace `ws` (null: the home one).
+  outsideChats(ws: string | null = null): OutsideChat[] {
+    return this.outsideHook?.(ws) ?? [];
+  }
+
   async shutdown() {
     this.stopTimers();
     this.live.close();
@@ -682,9 +800,11 @@ export class Hub {
     return this.options.chats(connect);
   }
 
-  /// Where a connect's threads live; the rule the v10 migration follows too.
+  /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
+  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
+    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 
@@ -703,10 +823,30 @@ export class Hub {
     return false;
   }
 
+  /// Which workspace a session's chat is in: its own, or the station's home one for those from before (null outside
+  /// any workspace).
+  wsOf(row: SessionRow | string | null): string | null {
+    const s = typeof row === "string" ? this.store.getSession(row) : row;
+    return s?.ws ?? this.workspaces()[0] ?? null;
+  }
+
+  /// The profiles sessions of workspace `ws` may run on (docs/multi-workspace.md): every one for the home workspace's.
+  profilesIn(ws: string | null): Profile[] {
+    const home = this.workspaces()[0] ?? null;
+    return this.config().profiles.filter((p) => allowedIn(p, ws, home));
+  }
+
+  /// Whether a session's chat is in `workspace` (a viewer's): what a member of one workspace may see and use.
+  inWorkspace(row: SessionRow | string | null, workspace: string): boolean {
+    const s = typeof row === "string" ? this.store.getSession(row) : row;
+    return s !== null && s !== undefined && this.wsOf(s) === workspace;
+  }
+
   /// A session for a connect: the connect's own profile when it keeps to one (and it still can run it); else any of its
   /// runtime, the model's first (pool.ts).
   createSession(config: HubConfig, key: string, connect: Connect, scope: "thread" | "all", message: InboundMessage | null, title: string | null, createdBy: string | null) {
-    const fits = profilesFor(config, connect);
+    const fits = profilesFor(config, connect, this.workspaces()[0] ?? null);
+    if (fits.length === 0 && profilesFor(config, connect).length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(connect.bind.runtime) }));
     const model = connect.bind.model ?? null;
     const kept = connect.bind.profile !== undefined ? fits.find((p) => p.id === connect.bind.profile && serves(p, model)) : undefined;
     const profile = kept ?? this.accounts.pick(fits, model, false);
@@ -733,6 +873,7 @@ export class Hub {
       token: newToken(),
       createdAt: now,
       lastActiveAt: now,
+      ws: connect.workspace ?? null,
     });
     log.info("hub", "session created", { session: key, connect: connect.id, scope, runtime: connect.bind.runtime, profile: profile.id });
   }
@@ -772,9 +913,10 @@ export class Hub {
       driver: (runtime) => this.sessionDriver(runtime),
       runOn: (key) => this.accounts.runOn(key),
       spend: (key) => this.accounts.spend(key),
+      refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
-      memoryPath: () => agentHomePaths(this.config().agentHome)[0],
+      memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,
       backgroundOnMessage: (key) => {
         const row = this.store.getSession(key);
@@ -788,7 +930,7 @@ export class Hub {
       archiveIsCold: (key) => this.cold.isCold(key),
       restoreArchive: (key) => this.cold.restore(key),
       cleanArchive: (key) => this.cold.pack(key),
-      held: () => this.holdsNow.size > 0,
+      held: (key) => this.holdsNow.size > 0 || !this.inAWorkspace(key),
       stopJobs: async (key) => {
         const jobs = this.jobs;
         const running = this.store.listJobs(key).filter((j) => j.state === "running" && (j.watch || j.port === null));
@@ -802,7 +944,23 @@ export class Hub {
           }
         }
       },
+      endJobs: async (key) => {
+        const jobs = this.jobs;
+        if (!jobs) return;
+        for (const job of this.store.listJobs(key).filter((j) => j.state === "running" || (j.state === "exited" && j.port !== null))) {
+          try {
+            await jobs.stop(job.id);
+            log.info("hub", "job stopped with its session archived", { session: key, job: job.id });
+          } catch (error) {
+            log.warn("hub", "job not stopped", { session: key, job: job.id, error: (error as Error).message });
+          }
+        }
+      },
+      settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
+      pageOf: (key) => this.link(key),
+      places: this.places,
+      runtimeMissing: (runtime) => this.runtimeMissing(runtime),
       nextTs: () => this.nextTs(),
       clock: this.clock,
     };

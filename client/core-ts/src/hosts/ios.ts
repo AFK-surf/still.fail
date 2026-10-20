@@ -9,6 +9,8 @@ const shell: Native = {
   call: (id, op, json, bytes) => native.call(id, op, json, bytes === null ? null : Array.from(bytes)),
   callSync: (op, json) => native.callSync(op, json),
   emit: (client, json) => native.emit(client, json),
+  // A screen view's frames (protocol.ts): the iOS app shows no screen views, so it hears the message without them.
+  emitBytes: (client, json) => native.emit(client, json),
   now: () => native.now(),
   monotonic: () => native.monotonic(),
   utcOffset: (at) => native.utcOffset(at),

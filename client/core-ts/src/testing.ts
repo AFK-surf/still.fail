@@ -4,7 +4,7 @@ import { Deferred, Duration, Effect, Queue, Scope, type Clock } from "effect";
 import { TestClock } from "effect/testing";
 import { COALESCE_MS } from "./store.ts";
 import { HostError } from "./error.ts";
-import type { DbRange, Host, HttpRequest, HttpResponse, Pull, Sql, StreamResponse, TcpConnection } from "./host.ts";
+import type { DbRange, Host, HttpRequest, HttpResponse, LoopbackRequest, Pull, Sql, StreamResponse, TcpConnection } from "./host.ts";
 import { DatabaseSync } from "node:sqlite";
 import { NodeSql } from "./hosts/node-sql.ts";
 import type { ClientId, CoreMessage } from "./protocol.ts";
@@ -260,6 +260,10 @@ export class FakeHost implements Host {
     return this.tcpConnect ? this.tcpConnect(port) : Effect.fail(new HostError(`nothing listens on ${port}`));
   }
 
+  /// This machine's loopback listeners (a login's callback, station/machine-logins.ts): none unless a test sets it,
+  /// as a web page has none.
+  listen?: (port: number, host: string) => Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope>;
+
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.sync(() => this.storage.get(key) ?? null);
   }
@@ -269,6 +273,31 @@ export class FakeHost implements Host {
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.sync(() => void this.storage.delete(key));
   }
+
+  /// The system's secure storage, in memory (an app's host has one; a test of a web page's sets these undefined):
+  /// what was kept (and whether reading it asks the person), what was asked of the person, and whether they say no.
+  readonly secure = new Map<string, { value: Uint8Array; user: boolean }>();
+  readonly secureAsked: { key: string; reason?: string }[] = [];
+  secureRefused = false;
+  secureGet?: (key: string, opts: { user: boolean; reason?: string }) => Effect.Effect<Uint8Array | null, HostError> = (key, opts) =>
+    Effect.suspend(() => {
+      const kept = this.secure.get(key);
+      if (kept === undefined) return Effect.succeed(null);
+      if (kept.user || opts.user) {
+        this.secureAsked.push({ key, ...(opts.reason !== undefined ? { reason: opts.reason } : {}) });
+        if (this.secureRefused) return Effect.fail(new HostError("the person did not confirm"));
+      }
+      return Effect.succeed(kept.value.slice());
+    });
+  secureSet?: (key: string, value: Uint8Array, opts: { user: boolean }) => Effect.Effect<void, HostError> = (key, value, opts) =>
+    Effect.sync(() => void this.secure.set(key, { value: value.slice(), user: opts.user }));
+  secureDelete?: (key: string) => Effect.Effect<void, HostError> = (key) => Effect.sync(() => void this.secure.delete(key));
+  /// Asking the person by itself (host.ts `secureAsk`): noted in `secureAsked` without a key; `secureRefused`, they say no.
+  secureAsk?: (reason: string) => Effect.Effect<void, HostError> = (reason) =>
+    Effect.suspend(() => {
+      this.secureAsked.push({ key: "", reason });
+      return this.secureRefused ? Effect.fail(new HostError("user_cancelled")) : Effect.void;
+    });
 
   legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
     return Effect.sync(() => {
@@ -331,6 +360,9 @@ export class FakeHost implements Host {
   }
 
   /// A deterministic xorshift: tests see the same "random" values every run.
+  /// Whether it keeps keys as an app does (lock.ts): as a test says.
+  appKeys?: boolean;
+
   randomBytes(buf: Uint8Array): void {
     const mask = (1n << 64n) - 1n;
     let s = this.#seed;
@@ -344,7 +376,11 @@ export class FakeHost implements Host {
   }
 
   emit(client: ClientId, message: CoreMessage): void {
-    this.emitted.push([client, JSON.parse(JSON.stringify(message)) as CoreMessage]);
+    // Bytes beside the JSON (a screen view's frame) are kept as they came (a copy).
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.emitted.push([client, { ...(JSON.parse(JSON.stringify(rest)) as object), bytes: bytes.slice() } as CoreMessage]);
+    } else this.emitted.push([client, JSON.parse(JSON.stringify(message)) as CoreMessage]);
   }
 }
 

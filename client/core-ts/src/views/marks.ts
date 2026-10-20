@@ -4,6 +4,7 @@
 import { decodeComponent } from "../accounts.ts";
 import * as decisions from "../decisions.ts";
 import { tr, current, type Lang } from "../i18n.ts";
+import { badgeKindsOf, type BadgeKinds } from "../prefs.ts";
 import * as present from "../present.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, get as getU, isObject } from "../util.ts";
@@ -22,13 +23,52 @@ export function workspaceIds(workspaces: J): string[] {
     .flatMap((w) => (typeof get(w, "id") === "string" ? [w.id as string] : []));
 }
 
-/// What a chat's row asks of its person.
-export function rowTone(row: J): string | null {
+/// What a chat's row asks of its person: alert when an agent of a chat they started (or, a row that does not say who
+/// started it, take part in) went wrong, done when it is unread with nobody at work. A row waiting for someone is
+/// counted by whom it waits for (`decisions.forViewer`), not here: an agent needing whoever started a chat of someone
+/// else's waits for them.
+export function rowTone(row: J, me: J = null): string | null {
   if (get(row, "mine") !== true) return null;
   const state = present.rowState(arr(get(row, "agents")));
-  if (state === "failed") return "alert";
-  if (state === "block") return "wait";
-  return get(row, "unread") === true && state !== "run" ? "done" : null;
+  if (state === "failed") return startedBy(row, me) ? "alert" : null;
+  return get(row, "unread") === true && state !== "run" && state !== "block" ? "done" : null;
+}
+
+/// Whether the viewer started a chat (a row that does not say: whether they take part in it).
+function startedBy(row: J, me: J): boolean {
+  const creator = get(row, "creator");
+  const who = typeof creator === "string" ? creator : (str(get(creator, "email")) ?? str(get(creator, "id")));
+  return me === null || who === null ? get(row, "mine") === true : present.isViewer(me, who, []);
+}
+
+/// A row's state line as its list says it (its agents presented as the chats view has them).
+function stateText(row: J): string {
+  const shown = isObject(row) && Array.isArray(row.agents) ? { ...row, agents: row.agents.map((a: J) => present.session(a)) } : row;
+  return present.rowStateText(shown) ?? "";
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+
+/// What the badge counts (the prefs' `badgeKinds`, or as their `badge` says), of what came since the person last looked
+/// (`c`; `said`: of its unread, those someone else said last): the cards waiting for them, the chats of theirs that went
+/// wrong, the unread an agent said last, the unread someone else did. A chat looked at stays on the list (`items`,
+/// `seen`) but is not counted until it wants them anew.
+export function badgeOf(prefs: J, c: Counts, said = 0): number {
+  const k = badgeKindsOf(prefs);
+  if (!k.on) return 0;
+  return (k.wait ? c.wait : 0) + (k.failed ? c.alert : 0) + (k.done ? c.unread - said : 0) + (k.message ? said : 0);
+}
+
+/// Whether the last thing said in a row is someone else's (not an agent's or the station's): what the badge's `message`
+/// counts of the unread.
+function saidByPerson(row: J): boolean {
+  const last = get(row, "last");
+  return isObject(last) && (str(last.authorKind) ?? "person") === "person";
+}
+
+/// What `badgeCounts` says for the kinds: `decisions` when only the cards count (the 待处理 list then has only them).
+function counted(k: BadgeKinds): string {
+  return k.wait && !k.failed && !k.done && !k.message ? "decisions" : "attention";
 }
 
 /// The chat last open in a workspace, from the prefs.
@@ -75,40 +115,89 @@ export function marks(views: Views, local: Local, currentWorkspace: string | nul
   const prefs = views.ok({ topic: "prefs" }) ?? null;
   const all: Record<string, J> = {};
   const others = new Counts();
+  let total = 0;
+  const names = new Map<string, string>();
+  for (const a of arr(views.ok({ topic: "workspaces" }))) for (const w of arr(get(a, "workspaces"))) if (typeof get(w, "id") === "string") names.set(w.id, str(get(w, "name")) ?? w.id);
   for (const id of workspaceIds(views.ok({ topic: "workspaces" }))) {
     const counts = new Counts();
+    // The same of the lists the rail leads to besides the whole one (我参与的, 监控中).
+    const mine = new Counts();
+    const watching = new Counts();
+    // Of those, the ones not looked at since they came to want them: what the badge counts.
+    const fresh = new Counts();
+    let said = 0;
     let waiting = 0;
+    let elsewhere = 0;
+    const items: J[] = [];
+    const me = views.me(id);
     // Only the rows that ask something or are unread count (db/account.ts: found by their columns, not loaded whole).
-    const stations = (views.stations(id) ?? []).map((s) => s.address);
-    for (const [address, row] of views.marked(stations)) {
+    const stations = views.stations(id) ?? [];
+    const nameOf = new Map(stations.map((s) => [s.address, s.name]));
+    for (const [address, row] of views.marked(stations.map((s) => s.address))) {
       if (local.beingArchived(address, row)) continue;
-      const d = decisions.forViewer(row, views.me(id));
+      const d = decisions.forViewer(row, me);
       const thread = get(row, "thread");
       const waits = d !== null && !(typeof thread === "number" && local.answered(address, thread, typeof d.seq === "number" ? d.seq : 0));
+      const tone = waits ? "wait" : rowTone(row, me);
       if (waits) waiting++;
-      const tone = rowTone(row);
-      if (tone === "alert") counts.alert++;
-      else if (tone === "wait" || waits) counts.wait++;
-      else if (tone !== null) counts.unread++;
+      const seen = get(row, "unread") !== true;
+      const lists = [counts];
+      if (get(row, "mine") === true) lists.push(mine);
+      if (present.rowWatch(arr(get(row, "agents"))) !== null) lists.push(watching);
+      for (const c of lists) {
+        if (tone === "alert") c.alert++;
+        else if (tone === "wait") c.wait++;
+        else if (tone === "done") c.unread++;
+      }
+      if (!seen && (tone === "alert" || tone === "wait" || tone === "done")) fresh[tone === "done" ? "unread" : tone]++;
+      if (!seen && tone === "done" && saidByPerson(row)) said++;
+      else if (get(row, "mine") === true && present.rowState(arr(get(row, "agents"))) === "block") elsewhere++;
+      if (tone === "alert" || tone === "wait") {
+        const item: J = {
+          kind: tone,
+          workspace: id,
+          workspaceName: names.get(id) ?? id,
+          station: address,
+          stationName: nameOf.get(address) ?? address,
+          session: get(row, "id") ?? null,
+          thread: typeof thread === "number" ? thread : null,
+          title: str(get(row, "title")) ?? "",
+          text: stateText(row),
+          at: typeof get(row, "lastActiveAt") === "number" ? row.lastActiveAt : 0,
+        };
+        if (waits && typeof d.seq === "number") item.seq = d.seq;
+        if (seen) item.seen = true;
+        items.push(item);
+      }
     }
+    // Most urgent first, the latest first within.
+    items.sort((a, b) => (a.kind === b.kind ? b.at - a.at : a.kind === "alert" ? -1 : 1));
     if (currentWorkspace !== id) {
       others.alert += counts.alert;
       others.wait += counts.wait;
       others.unread += counts.unread;
     }
-    const mark: J = { alert: counts.alert, unread: counts.unread };
+    const badge = badgeOf(prefs, fresh, said);
+    total += badge;
+    const mark: J = { alert: counts.alert, unread: counts.unread, badge, items };
     if (counts.wait > 0) mark.wait = counts.wait;
     if (waiting > 0) mark.decisions = waiting;
+    if (elsewhere > 0) mark.elsewhere = elsewhere;
     const tone = counts.tone();
     if (tone !== null) {
       mark.tone = tone;
       mark.label = counts.label();
     }
+    if (mine.tone() !== null) mark.mineTone = mine.tone();
+    if (watching.tone() !== null) mark.watchingTone = watching.tone();
     const chat = lastChat(prefs, id);
     if (chat !== null) mark.chat = chat;
     all[id] = mark;
   }
-  const value: J = { workspaces: all };
+  const kinds = badgeKindsOf(prefs);
+  const by = get(prefs, "badge");
+  const badgeCounts = isObject(get(prefs, "badgeKinds")) ? counted(kinds) : ["decisions", "all"].includes(by) ? by : "attention";
+  const value: J = { workspaces: all, badge: total, badgeCounts, badgeKinds: kinds };
   const tone = others.tone();
   if (tone !== null) {
     value.others = tone;

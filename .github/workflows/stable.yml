@@ -16,7 +16,8 @@ permissions:
 jobs:
   plan:
     if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       sha: ${{ steps.plan.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
@@ -33,14 +34,13 @@ jobs:
 
   android:
     needs: plan
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
-      - uses: ./.github/actions/setup
-        with: { native: 'true', android: 'true' }
+      - uses: ./.github/actions/setup-mac
       - name: Publish stable Android with its original signing key
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -52,7 +52,7 @@ jobs:
     needs: plan
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 90
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -63,13 +63,14 @@ jobs:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: python3 .github/release-desktop.py --stable
 
   web:
     needs: [plan, android, desktop]
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -87,7 +88,7 @@ jobs:
     needs: [plan, web]
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
@@ -96,11 +97,48 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # The key the release is signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
         run: sh .github/release.sh --stable station
 
-  done:
-    needs: [plan, android, desktop, web, station]
+  # The modules' packages (scripts/module-bundle.ts) on the stable channel, after the station they may need: each one's
+  # archive is the beta's when its version is out already (the same bytes, checked), its stable feed signed anew.
+  modules:
+    needs: [plan, station]
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: Publish the modules' stable packages from the pinned source
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # The key the feeds are signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: sh .github/release.sh --stable modules
+
+  # The official site, still.fail, from the same revision: the pipeline deploys only youdid.wtf's (site-beta), and a
+  # stable release that left it out kept still.fail at 2026-10-01's for two weeks (no Windows download on it).
+  site:
+    needs: [plan, web]
     runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: '${{ needs.plan.outputs.sha }}', fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Deploy still.fail
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh .github/deploy.sh site
+
+  done:
+    needs: [plan, android, desktop, web, station, modules, site]
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:

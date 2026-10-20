@@ -1,4 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mGrow } from "./parts.css.ts";
 import { mForm } from "./sheets.css.ts";
 import { mCard } from "./lists.css.ts";
@@ -11,17 +12,18 @@ export const mModelRow = style({
   border: "0", background: "none", textAlign: "left", cursor: "pointer",
 });
 export const mCheck = style({
-  display: "grid", placeItems: "center", flex: "none", width: "20px", height: "20px", borderRadius: "6px",
+  display: "grid", placeItems: "center", flex: "none", width: "20px", height: "20px",
+  borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-chip)", color: "var(--m-bg)",
   selectors: {
     "&[data-on]": { background: "var(--m-accent)" },
   },
 });
 /** Connects: a page's note, a row's status, the mode choices, a switch, tokens, steps. */
-export const mPageNote = style({ padding: "0 24px 10px", fontSize: "13px", color: "var(--m-muted)" });
-export const mRowAside = style({ fontSize: "13px", color: "var(--m-muted)" });
+export const mPageNote = style({ padding: "0 24px 10px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+export const mRowAside = style({ fontSize: vars.textMeta, color: "var(--m-muted)" });
 export const mRowStatus = style({
-  display: "inline-flex", alignItems: "center", gap: "5px", flex: "none", fontSize: "12px", color: "var(--m-muted)",
+  display: "inline-flex", alignItems: "center", gap: "5px", flex: "none", fontSize: vars.textCaption, color: "var(--m-muted)",
   whiteSpace: "nowrap",
 });
 export const mPresence = style({
@@ -36,10 +38,12 @@ export const mPresence = style({
 });
 export const mWrap = style({ whiteSpace: "normal" });
 export const mCallout = style({
-  margin: "0 12px 10px", padding: "10px 12px", borderRadius: "12px",
-  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: "13px", lineHeight: "1.5",
+  margin: "0 12px 10px", padding: "10px 12px", borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "color-mix(in srgb, var(--m-warn) 12%, transparent)", fontSize: vars.textMeta, lineHeight: "1.5",
   selectors: {
     [`${mForm} &`]: { margin: "0" },
+    // Done: what was asked happened (a station joined).
+    "&[data-tone=\"green\"]": { display: "flex", alignItems: "center", gap: "8px", background: "color-mix(in srgb, var(--m-green) 12%, transparent)", color: "var(--m-green)" },
   },
 });
 export const mFormGroup = style({

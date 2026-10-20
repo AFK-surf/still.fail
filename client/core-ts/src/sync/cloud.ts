@@ -6,7 +6,7 @@
 import { Effect, Exit, Fiber, Scope } from "effect";
 import type { AccountView } from "../accounts.ts";
 import { NOT_BETA, notBetaText, readCredential, type Credential } from "../cloud.ts";
-import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
+import { CREDENTIAL_FOR_S, CREDENTIAL_KEY, CREDENTIAL_OTHERS, CREDENTIAL_OTHERS_KEPT, entriesOf, PUSH_KEY, relaysOf, type Inner } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import type { Pull } from "../host.ts";
 import { current, t } from "../i18n.ts";
@@ -15,6 +15,8 @@ import { topicKey, type Topic } from "../protocol.ts";
 import { CLOUD } from "../status.ts";
 import { GONE, NETWORK } from "../wake.ts";
 import { isObject, parseJson, pointer, toJsonBytes } from "../util.ts";
+import type { LockClaim } from "../lock.ts";
+import * as prefs from "../prefs.ts";
 import { Priority } from "./scheduler.ts";
 
 /// The first wait before an events socket is opened again; it doubles up to a minute, back to the first after one
@@ -39,10 +41,12 @@ export class CloudSync {
   readonly #sockets = new Map<string, Fiber.Fiber<void, never>>();
   /// The relays the mesh uses, as the first `/v1/me` of this run or the kept one said.
   relays: string[] | null = null;
-  /// Told when the relays are first known: the mesh comes up (station links).
-  onRelays: (() => void) | null = null;
+  /// Told the relays and entries the first `/v1/me` of this run names (the mesh may be up on those kept from the last).
+  onRelays: ((relays: string[], entries: string[]) => void) | null = null;
   /// Told when the stations each account reaches may have changed (the station sync follows).
   onReach: (() => void) | null = null;
+  /// The lock entries a hello to a station of the workspace brings (views/lock.ts `carried`): none, null.
+  carry: ((workspace: string) => import("../lock.ts").Entry[] | null) | null = null;
   /// Whose operator lists are synced (as `admin.me` answered).
   readonly #admins = new Set<string>();
 
@@ -68,6 +72,12 @@ export class CloudSync {
     const stations = isObject(workspace) && Array.isArray(workspace.stations) ? workspace.stations : [];
     const station = stations.find((s) => isObject(s) && s.id === id);
     return isObject(station) && typeof station.name === "string" ? station.name : null;
+  }
+
+  /// A workspace's name, as it is held; null while not known.
+  workspaceName(id: string): string | null {
+    const workspace = this.#core.data.shared({ topic: "workspace", workspace: id });
+    return isObject(workspace) && typeof workspace.name === "string" && workspace.name !== "" ? workspace.name : null;
   }
 
   /// Every account with what its `/v1/me` said. `loaded` only once it answered this run.
@@ -156,11 +166,10 @@ export class CloudSync {
       if (!core.accounts.list().some((a) => a.sub === sub)) return;
       if (answer._tag === "Success") {
         const relays = relaysOf(answer.success);
-        if (relays && this.relays === null) {
-          this.relays = relays;
-          this.onRelays?.();
-        }
+        const first = relays !== null && this.relays === null;
+        if (first) this.relays = relays;
         core.data.put("me", sub, answer.success);
+        if (first) this.onRelays?.(relays, entriesOf(answer.success));
         this.mes.set(sub, null);
       } else {
         // A beta app the account may not use: what it reached is not reached through this app.
@@ -184,7 +193,15 @@ export class CloudSync {
       if (answer._tag === "Success") {
         this.errors.delete(id);
         this.forgetGoneStations(id, answer.success);
+        // Stations it said were not online and now says are (their `station` event went by while the socket was
+        // down): tried now, as when the event says so.
+        const was = core.data.shared(topic);
+        const offline = new Set((isObject(was) && Array.isArray(was.stations) ? was.stations : []).flatMap((s) => (isObject(s) && typeof s.id === "string" && s.online === false ? [s.id] : [])));
         core.data.set(topic, answer.success);
+        const now = answer.success;
+        for (const s of isObject(now) && Array.isArray(now.stations) ? now.stations : []) {
+          if (isObject(s) && typeof s.id === "string" && s.online === true && offline.has(s.id)) core.stations?.cameOnline(`${id}/${s.id}`);
+        }
         this.onReach?.();
       } else {
         const error = answer.failure;
@@ -224,22 +241,23 @@ export class CloudSync {
         return;
       }
       this.#admins.add(sub);
-      yield* Effect.all(
-        ADMIN_LISTS.map((list) =>
-          Effect.gen({ self: this }, function* () {
-            const topic: Topic = { topic: "admin", account: sub, list };
-            const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/admin/${list}`, null));
-            if (answer._tag === "Success") {
-              this.errors.delete(topicKey(topic));
-              core.data.set(topic, answer.success);
-            } else if (core.data.get(topic) === undefined) {
-              this.errors.set(topicKey(topic), answer.failure);
-              core.store.invalidate(topic);
-            }
-          }),
-        ),
-        { concurrency: "unbounded" },
-      );
+      yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+    });
+  }
+
+  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails.
+  adminList(sub: string, list: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const core = this.#core;
+      const topic: Topic = { topic: "admin", account: sub, list };
+      const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/admin/${list}`, null));
+      if (answer._tag === "Success") {
+        this.errors.delete(topicKey(topic));
+        core.data.set(topic, answer.success);
+      } else if (core.data.get(topic) === undefined) {
+        this.errors.set(topicKey(topic), answer.failure);
+        core.store.invalidate(topic);
+      }
     });
   }
 
@@ -333,6 +351,15 @@ export class CloudSync {
     });
   }
 
+  /// The relay entries any account's `/v1/me` named, as held now (`entriesOf`); none from a cloud from before them.
+  entriesNow(): string[] {
+    for (const account of this.#core.accounts.list()) {
+      const entries = entriesOf(this.#core.data.record("me", account.sub));
+      if (entries.length > 0) return entries;
+    }
+    return [];
+  }
+
   /// A workspace's own relays, as its members' `/v1/me` name them: used besides still.fail's for its stations alone.
   workspaceRelays(workspace: string): string[] {
     for (const account of this.#core.accounts.list()) {
@@ -347,7 +374,15 @@ export class CloudSync {
   /// with no still.fail cloud on the way. Kept, it serves for a day; then, or when a station refused it (`fresh`), a
   /// new one is asked for — and if still.fail cloud cannot be reached, the kept one serves until it runs out. `main`:
   /// the mesh's device key, when the mesh is up (another key's are kept apart).
-  credential(workspace: string, device: string, fresh: boolean, main: string | null): Effect.Effect<Credential, CoreError> {
+  /// `claim`: the device's base key's word that `device` is its own endpoint (lock.ts), told to the cloud with the ask
+  /// (it lists the devices for a lock's owner to check) and to the station with the credential.
+  credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null = null): Effect.Effect<Credential, CoreError> {
+    const entries = claim === null ? null : (this.carry?.(workspace) ?? null);
+    const claimed = (c: Credential): Credential => (claim === null ? c : { ...c, lock: entries ? { ...claim, entries } : claim });
+    return Effect.map(this.#credential(workspace, device, fresh, main, claim), claimed);
+  }
+
+  #credential(workspace: string, device: string, fresh: boolean, main: string | null, claim: LockClaim | null): Effect.Effect<Credential, CoreError> {
     return Effect.gen({ self: this }, function* () {
       const core = this.#core;
       const sub = yield* this.owner(workspace);
@@ -372,7 +407,8 @@ export class CloudSync {
       }
       const kept: Credential | null = keptOne && keptOne.expires_at > now + 60 && !fresh ? strip(keptOne) : null;
       if (kept && now - kept.issued_at < CREDENTIAL_FOR_S) return kept;
-      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device));
+      const said = claim === null ? undefined : { base: claim.device, proof: claim.proof, kind: core.host.appKeys ? "app" : "web", label: prefs.deviceName(core.data) ?? "" };
+      const asked = yield* Effect.result(core.provider.credential(sub, workspace, device, said));
       if (asked._tag === "Failure") {
         if (kept) return kept;
         return yield* Effect.fail(asked.failure);
@@ -475,6 +511,8 @@ export class CloudSync {
         }
         return w;
       });
+      // Back: tried now rather than when its wait ends (station/sync.ts OFFLINE_RETRY_MS).
+      if (online) core.stations?.cameOnline(`${event.workspace}/${id}`);
       this.onReach?.();
     }
   }

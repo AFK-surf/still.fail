@@ -20,12 +20,14 @@ export type BoundConnection = {
   close(code: number, reason: string): void;
   closeReason(): CloseReason | null | undefined;
   closedInfo(): Promise<CloseReason>;
-  paths(): { selected: boolean; relay?: string | null; rttMs: number }[];
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+  paths(): { id: string; selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
+  stats(): { rxBytes: number; txBytes: number };
 };
 export type BoundEndpoint = {
   id(): string;
   connect(addr: IrohAddr, alpn: never, additional: never[]): Promise<BoundConnection>;
+  /// The addon's alone (iroh-wasm takes no connections): the next one coming, its handshake done, and the ALPN agreed.
+  accept?(): Promise<(BoundConnection & { alpn(): Uint8Array }) | null>;
   addAddr(addr: IrohAddr): void;
   networkChange(): Promise<void>;
   relayStatus(): { url: string; connected: boolean }[];
@@ -34,6 +36,8 @@ export type BoundEndpoint = {
 
 const host = (e: unknown) => new HostError(e instanceof Error ? e.message : String(e));
 const call = <A>(f: () => Promise<A>): Effect.Effect<A, HostError> => Effect.tryPromise({ try: f, catch: host });
+/// The binding's bytes (a Buffer) as plain ones, not copied.
+const view = (b: Uint8Array) => new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
 
 /// `bind` the binding's; `bytes` makes bytes as it takes them (Node's addon: a Buffer).
 export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes: (b: Uint8Array) => unknown): Iroh {
@@ -42,7 +46,7 @@ export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes
     read: () =>
       call(async () => {
         const b = await s.read();
-        return b === null || b === undefined ? null : new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+        return b === null || b === undefined ? null : view(b);
       }),
     write: (b) => call(() => s.write(out(b))),
     finish: () => call(() => s.finish()),
@@ -61,16 +65,23 @@ export function wrapIroh(bind: (o: BindOptions) => Promise<BoundEndpoint>, bytes
     close: (code, reason) => c.close(code, reason),
     closeReason: () => c.closeReason() ?? null,
     closed: () => Effect.promise(() => c.closedInfo()),
-    paths: () => c.paths().map((p) => ({ selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs })),
+    paths: () => c.paths().map((p) => ({ id: p.id, selected: p.selected, relay: p.relay ?? null, ip: p.ip ?? null, rttMs: p.rttMs, txPackets: p.txPackets, lostPackets: p.lostPackets })),
     stats: () => c.stats(),
   });
-  const endpoint = (e: BoundEndpoint): IrohEndpoint => ({
-    id: () => e.id(),
-    connect: (addr, alpn, additional) => Effect.map(call(() => e.connect(addr, out(alpn), additional.map(out))), connection),
-    addAddr: (addr) => e.addAddr(addr),
-    networkChange: () => Effect.promise(() => e.networkChange()),
-    relayStatus: () => e.relayStatus(),
-    close: () => Effect.promise(() => e.close()),
-  });
+  const endpoint = (e: BoundEndpoint): IrohEndpoint => {
+    const accept = e.accept?.bind(e);
+    return {
+      id: () => e.id(),
+      connect: (addr, alpn, additional) => Effect.map(call(() => e.connect(addr, out(alpn), additional.map(out))), connection),
+      // Only where the binding takes connections: a host without has no `accept` (iroh.ts).
+      ...(accept && {
+        accept: () => Effect.orElseSucceed(Effect.map(call(accept), (c) => (c === null ? null : { connection: connection(c), alpn: view(c.alpn()) })), () => null),
+      }),
+      addAddr: (addr) => e.addAddr(addr),
+      networkChange: () => Effect.promise(() => e.networkChange()),
+      relayStatus: () => e.relayStatus(),
+      close: () => Effect.promise(() => e.close()),
+    };
+  };
   return { bind: (o) => Effect.map(call(() => bind(o)), endpoint) };
 }

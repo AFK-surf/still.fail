@@ -21,12 +21,13 @@ type NConnection = {
   close(code: number, reason: string): void;
   closeReason(): CloseReason | null;
   closedInfo(): Promise<CloseReason>;
-  paths(): { selected: boolean; relay?: string | null; rttMs: number }[];
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+  paths(): { id: string; selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
+  stats(): { rxBytes: number; txBytes: number };
 };
 type NEndpoint = {
   id(): string;
   connect(addr: IrohAddr, alpn: Buffer, additional?: Buffer[]): Promise<NConnection>;
+  accept(): Promise<(NConnection & { alpn(): Buffer }) | null>;
   addAddr(addr: IrohAddr): void;
   networkChange(): Promise<void>;
   relayStatus(): { url: string; connected: boolean }[];
@@ -59,12 +60,12 @@ export function loadAddon(): Addon | null {
   return loaded;
 }
 
-/// The iroh of the addon; null where there is none.
-export function nodeIroh(): Iroh | null {
-  const addon = loadAddon();
+/// The iroh of the addon (`addon`: a test's, to see what is bound); null where there is none.
+export function nodeIroh(addon: Addon | null = loadAddon()): Iroh | null {
   if (addon === null) return null;
   return wrapIroh(
-    (o: BindOptions) => addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: [], relayUrls: o.relayUrls, discovery: false, lookup: o.lookup, relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
+    (o: BindOptions) =>
+      addon.bind({ secretKey: Buffer.from(o.secretKey), alpns: (o.alpns ?? []).map((a) => Buffer.from(a)), relayUrls: o.relayUrls, discovery: false, lookup: o.lookup, relayOnly: o.relayOnly }) as Promise<BoundEndpoint>,
     (bytes) => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
   );
 }

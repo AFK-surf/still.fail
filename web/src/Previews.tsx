@@ -13,10 +13,10 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useHref, useLocation, useNavigate } from "react-router";
 import { fileService, ServiceFrame, type FileSource, type Restarting } from "./Preview.tsx";
 import { useLink } from "./station.tsx";
-import { Close, Minus, Web } from "./icons.tsx";
+import { Close, Minus, Web } from "@stillfail/ui/icons.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, viewportOf } from "./viewport.ts";
-import { follower, type Follower } from "./motion.ts";
+import { follower, type Follower } from "@stillfail/ui/motion.ts";
 import * as css from "./Previews.css.ts";
 import { t } from "./i18n.ts";
 

@@ -48,8 +48,8 @@ test("days_split_by_who_and_lists_ranked_by_cost", () => {
   const profiles = list(2);
   assert.deepEqual([profiles[0].title, profiles[1].title], ["公司账号", "gone（已删除）"]);
   const models = list(3);
-  assert.deepEqual([models[0].title, models[1].sub], ["Opus 5.5", "没有价目，不计费用"]);
-  assert.deepEqual(v.notes, ["4 次调用的模型没有价目，没算进费用"]);
+  assert.deepEqual([models[0].title, models[1].sub], ["Opus 5.5", "无价目，不计入费用"]);
+  assert.deepEqual(v.notes, ["4 次调用的模型无价目，未计入费用"]);
 });
 
 test("price_tables_keep_station_rates_separate_and_handle_older_stations", () => {
@@ -114,7 +114,7 @@ test("unknown_people_keep_their_usage_and_the_view_decodes", () => {
     const people = decoded.ok.lists[0].items;
     assert.equal(decoded.ok.tiles[0].value, "$4.00");
     assert.equal(decoded.ok.tiles[1].value, "3 次");
-    assert.equal(people[0].title, "说不清是谁");
+    assert.equal(people[0].title, "未知用户");
     assert.equal(people[0].person ?? null, null);
     assert.equal(people[0].cost, 3.0);
     assert.equal(people[1].person.via, "cloud");
@@ -128,8 +128,8 @@ test("stations_that_cannot_say_are_noted_and_one_not_read_yet_is_loading", () =>
     { address: "ws/c", name: "gamma", online: false, value: undefined },
   ];
   const v = usageView(sources, 30, NOW, 0, {}, []);
-  assert.deepEqual([v.loading, v.empty, v.daily.length], [true, true, 30]);
-  assert.deepEqual(v.notes, ["beta 的 station 还没更新到记用量的版本", "gamma 离线，它的用量没算进来"]);
+  assert.deepEqual([v.wait.reading, v.empty, v.daily.length], [true, true, 30]);
+  assert.deepEqual(v.notes, ["beta 的 station 尚未更新到支持记录用量的版本", "gamma 离线，其用量未计入"]);
 });
 
 test("numbers_read_as_people_say_them", () => {

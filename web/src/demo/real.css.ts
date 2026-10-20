@@ -1,6 +1,6 @@
 // The note that a step needs a real still.fail instance (real.tsx): over the demo, frosted as still.fail's floating things are.
 import { keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const fade = keyframes({ from: { opacity: 0 } });
 const rise = keyframes({ from: { opacity: 0, transform: "translateY(12px) scale(.97)" } });
@@ -15,10 +15,10 @@ export const card = style({
   boxShadow: `0 20px 50px -20px ${vars.shadow}`, animation: `${rise} .28s ${vars.easeOut}`,
 });
 export const mark = style({ display: "block", width: "56px", height: "56px", margin: "0 auto 14px" });
-export const title = style({ margin: "0 0 20px", fontSize: vars.textMd, fontWeight: "650", color: vars.text });
+export const title = style({ margin: "0 0 20px", fontSize: vars.textTitle, fontWeight: "600", color: vars.text });
 export const actions = style({ display: "flex", gap: "8px", justifyContent: "center" });
 export const button = style({
   display: "inline-flex", alignItems: "center", height: "36px", padding: "0 18px", borderRadius: "999px", border: "0",
-  fontSize: vars.textBody, fontWeight: "550", cursor: "pointer", background: vars.hover, color: vars.text,
+  fontSize: vars.textBody, fontWeight: "500", cursor: "pointer", background: vars.hover, color: vars.text,
   selectors: { "&[data-primary]": { background: vars.primary, color: vars.onPrimary } },
 });

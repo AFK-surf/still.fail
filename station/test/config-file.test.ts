@@ -18,7 +18,8 @@ test("an edit is checked, written privately and told; unknown fields are kept", 
   config.listen((raw) => told.push(raw));
   config.update((raw) => (raw.profiles = [{ id: "cc", home: "homes/cc" }]));
   assert.equal(told.length, 1);
-  assert.equal(statSync(join(dir, "config.json")).mode & 0o777, 0o600);
+  // Private on Windows by the data directory's ACL (the user's profile's), which keeps no Unix modes.
+  if (process.platform !== "win32") assert.equal(statSync(join(dir, "config.json")).mode & 0o777, 0o600);
   const stored = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
   assert.deepEqual(stored, { someday: { x: 1 }, profiles: [{ id: "cc", home: "homes/cc" }] });
   assert.throws(() => config.update((raw) => (raw.profiles[0].id = "Bad")), /lowercase/);

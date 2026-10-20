@@ -43,12 +43,45 @@ test("frequent_combos_deduplicate_aliases_and_limit_visible_and_stored_history",
 });
 
 test("speed_choices_preserve_false_and_follow_the_runtime", () => {
-  const options = [{ model: "gpt-6-astra", runtimes: ["codex", "claude"], efforts: {}, accounts: {} }];
+  const options = [{ model: "gpt-6-astra", runtimes: ["codex", "claude", "dsh"], efforts: {}, accounts: {} }];
   for (const fast of [true, false, null]) {
     const r = resolve(options, { runtime: "codex", model: "gpt-6-astra", fast });
     assert.equal(r.fast, fast);
   }
   assert.equal(resolve(options, { runtime: "claude", fast: true }).fast, null);
+  assert.deepEqual([resolve(options, { runtime: "dsh", fast: true }).runtime, resolve(options, { runtime: "dsh", fast: true }).fast], ["dsh", null]);
+});
+
+test("the_runtimes_a_chat_starts_on_are_offered_claude_codex_then_deepseek_harness", () => {
+  const overview = {
+    profiles: [
+      { id: "ds", runtimes: ["dsh"], models: ["deepseek-v4"] },
+      { id: "oc", runtimes: ["dsh", "codex", "claude"], models: ["glm-5"] },
+    ],
+  };
+  const list = models(overview, 0);
+  assert.deepEqual(list.find((m: J) => m.model === "glm-5").runtimes, ["claude", "codex", "dsh"]);
+  const ds = list.find((m: J) => m.model === "deepseek-v4");
+  assert.deepEqual([ds.runtimes, ds.efforts.dsh], [["dsh"], ["low", "medium", "high", "max"]]);
+  assert.equal(machineMeta({ runtime: "dsh", cwd: "/tmp/x" }, 0).meta, "DeepSeek Harness · /tmp/x");
+});
+
+test("grok_build_is_offered_after_deepseek_harness_with_its_own_efforts_and_no_fast_mode", () => {
+  const overview = {
+    profiles: [
+      { id: "super", runtimes: ["grok"], models: ["grok-5"], access: { kind: "subscription" } },
+      { id: "xai", runtimes: ["grok", "dsh", "codex"], models: ["grok-5-fast"], access: { kind: "api-provider", provider: "xai" } },
+    ],
+  };
+  const list = models(overview, 0);
+  assert.deepEqual(list.find((m: J) => m.model === "grok-5-fast").runtimes, ["codex", "dsh", "grok"]);
+  const grok = list.find((m: J) => m.model === "grok-5");
+  assert.deepEqual([grok.runtimes, grok.efforts.grok], [["grok"], ["low", "medium", "high", "xhigh", "max"]]);
+  assert.equal(grok.maker?.id, "xai");
+  const options = [{ model: "grok-5", runtimes: ["grok"], efforts: { grok: ["low", "high"] }, accounts: {} }];
+  const r = resolve(options, { runtime: "grok", model: "grok-5", fast: true, effort: "high" });
+  assert.deepEqual([r.runtime, r.fast, r.effort], ["grok", null, "high"]);
+  assert.equal(machineMeta({ runtime: "grok", cwd: "/tmp/x" }, 0).meta, "Grok Build · /tmp/x");
 });
 
 test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () => {
@@ -71,8 +104,8 @@ test("model_efforts_follow_the_account_and_survive_resolving_saved_choices", () 
 
 test("a_machines_session_is_a_line_its_home_as_tilde", () => {
   const meta = (cwd: string, ago: number) => {
-    const s: J = { runtime: "claude", cwd, updatedAt: 1_000_000_000 };
-    machineMeta(s, 1_000_000_000 + ago);
+    let s: J = { runtime: "claude", cwd, updatedAt: 1_000_000_000 };
+    s = machineMeta(s, 1_000_000_000 + ago);
     return s.meta;
   };
   assert.equal(meta("/Users/bob/src/x", 3_000), "Claude Code · ~/src/x · 刚刚");
@@ -85,7 +118,7 @@ test("a_machines_session_is_a_line_its_home_as_tilde", () => {
 test("a_quota_in_a_line_names_only_the_window_running_low", () => {
   const q = (windows: J) => quotaLine({ state: "ok", windows });
   assert.deepEqual(q([{ label: "每周", usedPercent: 10 }, { label: "5 小时", usedPercent: 40 }]), { text: "5 小时 60% · 每周 90%" });
-  assert.deepEqual(q([{ label: "每周", usedPercent: 95 }, { label: "5 小时", usedPercent: 75 }]), { text: "每周只剩 5%", level: "red" });
+  assert.deepEqual(q([{ label: "每周", usedPercent: 95 }, { label: "5 小时", usedPercent: 75 }]), { text: "每周剩余 5%", level: "red" });
   assert.deepEqual(quotaLine({ state: "unavailable", windows: [], detail: "读不到" }), { text: "读不到" });
   assert.equal(quotaLine(null), null);
 });

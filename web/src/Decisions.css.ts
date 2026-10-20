@@ -1,19 +1,65 @@
 import { globalStyle, keyframes, style } from "@vanilla-extract/css";
 import { composerWrap } from "./styles/cloud.css.ts";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { glass } from "./styles/glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { CARD_PAD, LIST_PAD, ROW_CORNER, listCardLook } from "./styles/pages.css.ts";
 
 // A decision's options (Decisions.tsx): under the message that asks it in a chat, and at the foot of the decisions
-// page. One per line, as wide as the message's column; the recommended one last, in the accent. The phone's page colours
-// (`--m-*`) where they are set, the wide screen's otherwise.
+// page. One card, a row each, numbered in a circle; the recommended one last, told by its number in the accent
+// alone. The phone's page colours (`--m-*`) where they are set, the wide screen's otherwise.
 const ground = `var(--m-bg, ${vars.canvas})`;
 const accent = `var(--m-accent, ${vars.accent})`;
 const chip = `var(--m-chip, color-mix(in srgb, ${vars.text} 7%, transparent))`;
 
-export const options = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: "6px", marginTop: "6px" });
+/** A card of pressable rows (pages.css.ts listCard, docs/ui-panels.md 页面卡片): each option LIST_PAD from its edge. */
+export const options = style({
+  ...listCardLook, display: "flex", flexDirection: "column", width: "fit-content", minWidth: "min(100%, 460px)", maxWidth: "100%",
+  boxSizing: "border-box", marginTop: "8px", padding: LIST_PAD,
+  background: `var(--m-chip, color-mix(in srgb, ${vars.text} 5%, transparent))`,
+});
 
-export const archiveOptions = style([options, { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }]);
+/** Its number in its row's corner, as far from both its edges and concentric with it: the row's corner less its half. */
+const NUMBER = 20;
+const NUMBER_IN = 8;
+/**
+ * One option: its number, then its label over its detail; a row of the card's, its ground under the pointer, rounded as
+ * the card less its padding.
+ */
+export const choice = style({
+  position: "relative", display: "grid", gridTemplateColumns: `${NUMBER}px minmax(0, 1fr)`, columnGap: "12px", width: "100%",
+  boxSizing: "border-box", padding: `${NUMBER_IN}px ${CARD_PAD - LIST_PAD}px ${NUMBER_IN}px ${NUMBER_IN}px`, border: "0",
+  borderRadius: ROW_CORNER, cornerShape: vars.cornerShape, background: "none", color: vars.text,
+  fontFamily: "inherit", textAlign: "left", cursor: "pointer", WebkitTapHighlightColor: "transparent",
+  transition: `background-color ${vars.dur}, opacity ${vars.dur}`,
+  selectors: {
+    "&:hover:not(:disabled)": { background: vars.hover },
+    "&:disabled": { cursor: "default" },
+    // Another one of them is being sent, or was picked: the rest step back.
+    "&:disabled:not([data-busy]):not([data-chosen])": { opacity: ".5" },
+  },
+});
+/**
+ * Its number: a circle as tall as the label's line and level with it, the digit drawn (icons Option1…6,
+ * scripts/option-digits.py) rather than set, so that it is in the middle at any scale.
+ */
+export const choiceNumber = style({
+  gridRow: "1 / span 2", alignSelf: "start", display: "grid", placeItems: "center", width: "20px", height: "20px",
+  borderRadius: "50%", background: `color-mix(in srgb, ${vars.text} 9%, transparent)`,
+  color: vars.muted, fontSize: vars.textCaption, fontWeight: "600", lineHeight: "20px", fontVariantNumeric: "tabular-nums",
+  selectors: { [`${choice}[data-recommended] &`]: { background: accent, color: "#fff" } },
+});
+globalStyle(`${choiceNumber} > svg`, { display: "block" });
+export const choiceLabel = style({
+  gridColumn: "2", fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
+  selectors: { [`${choice}[data-busy] &`]: { paddingRight: "22px" } },
+});
+/** Being sent: a small ring at the option's right, level with its label. */
+export const choiceSpinner = style({ position: "absolute", right: `${CARD_PAD - LIST_PAD}px`, top: `${NUMBER_IN + 4}px` });
+export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
+
+// 留着 and 归档这个 chat under an agent's post that said it is all done (Chat.tsx ArchiveOption): two buttons side by
+// side, the second in the accent.
+export const archiveOptions = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "6px", marginTop: "6px" });
 
 export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
@@ -25,27 +71,22 @@ export const option = style({
     "&[data-recommended]": { background: accent, color: "#fff" },
     "&[data-recommended]:hover:not(:disabled)": { filter: "none", opacity: ".88" },
     "&:disabled": { cursor: "default" },
-    // Another one of them is being sent: the rest step back.
+    // The other one is under way: this one steps back.
     "&:disabled:not([data-busy])": { opacity: ".5" },
   },
 });
 export const optionLabel = style({
-  fontSize: vars.textSm, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
+  fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500", overflowWrap: "anywhere",
   selectors: { [`${option}[data-busy] &`]: { paddingRight: "22px" } },
-});
-export const optionDetail = style({
-  fontSize: vars.textXs, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere",
-  selectors: { [`${option}[data-recommended] &`]: { color: "rgba(255, 255, 255, .78)" } },
 });
 /** Being sent: a small ring at the button's right. */
 export const optionSpinner = style({ position: "absolute", right: "14px", top: "12px" });
-globalStyle(`${optionSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
 
 /** Under an agent's post in its chat: its options, or how it was settled; what settles leaves over it (useSettling). */
 export const decision = style({ position: "relative" });
 
 /** Answered (or replaced), in the chat: who did what, quiet, where the options were. */
-export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textXs, lineHeight: "18px", color: vars.subtle });
+export const settledLine = style({ margin: "2px 0 0", fontSize: vars.textMeta, lineHeight: "18px", color: vars.subtle });
 
 // ── the decisions page ────────────────────────────────────────────────
 
@@ -90,12 +131,12 @@ export const head = style({ display: "flex", alignItems: "center", gap: "8px", m
 /** The chat's title: small, opening the chat. */
 export const chatLink = style({
   flex: "0 1 auto", minWidth: "0", padding: "0", border: "0", background: "none", color: vars.muted,
-  fontFamily: "inherit", fontSize: vars.textXs, lineHeight: "20px", textAlign: "left", cursor: "pointer",
+  fontFamily: "inherit", fontSize: vars.textMeta, lineHeight: "20px", textAlign: "left", cursor: "pointer",
   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   selectors: { "&:hover": { color: vars.text } },
 });
 export const count = style({
-  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textXs, lineHeight: "20px",
+  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textMeta, lineHeight: "20px",
   fontVariantNumeric: "tabular-nums",
 });
 
@@ -126,25 +167,25 @@ globalStyle(`${footColumn} > :not(${reply}), ${reply} > *`, { pointerEvents: "au
  */
 export const hint = style({
   display: "flex", justifyContent: "center", alignItems: "center", gap: "16px", width: "fit-content", height: "24px",
-  margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textXs, lineHeight: "24px",
+  margin: "8px auto 0", padding: "0 12px", borderRadius: "12px", color: vars.subtle, fontSize: vars.textMeta, lineHeight: "24px",
   ...glass,
 });
 export const hintButton = style({
-  height: "20px", padding: "0 4px", border: "0", borderRadius: "6px", background: "none", color: vars.subtle,
-  fontFamily: "inherit", fontSize: vars.textXs, lineHeight: "20px", cursor: "pointer",
+  height: "20px", padding: "0 4px", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "none", color: vars.subtle,
+  fontFamily: "inherit", fontSize: vars.textMeta, lineHeight: "20px", cursor: "pointer",
   selectors: { "&:hover": { color: vars.text } },
 });
 
 export const empty = style({
   position: "absolute", inset: "0", display: "grid", placeItems: "center", margin: "0", color: vars.muted,
-  fontSize: vars.textSm,
+  fontSize: vars.textUi,
 });
 
 const rise = keyframes({ from: { transform: "translateY(12px) scale(.98)", opacity: "0" }, to: { transform: "none", opacity: "1" } });
 /** The next decision, as the one before goes. */
 export const arriving = style({
   animation: `${rise} 240ms ${vars.easeOut} both`,
-  "@media": { "(prefers-reduced-motion: reduce)": { animation: "none" } },
 });
 
 // ── entries ───────────────────────────────────────────────────────────
@@ -160,7 +201,7 @@ export const page = style({ flex: "1", minHeight: "0", display: "flex", flexDire
 /** A card this page does not know: the way to its chat, to answer there. */
 export const elsewhere = style({
   display: "block", width: "100%", height: "38px", padding: "0 14px", border: "0", borderRadius: vars.rField,
-  cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textSm,
+  cornerShape: vars.cornerShape, background: chip, color: vars.text, fontFamily: "inherit", fontSize: vars.textUi,
   fontWeight: "500", cursor: "pointer",
   selectors: { "&:hover": { filter: "brightness(.96)" } },
 });

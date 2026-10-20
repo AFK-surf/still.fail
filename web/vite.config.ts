@@ -2,7 +2,9 @@ import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { uiAlias } from "./ui/alias.ts";
 import { defineConfig } from "vite";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -36,6 +38,10 @@ function buildNumber(): string | null {
 // Two builds of one client. Default (or --mode cloud): still.fail cloud's web app at /, into dist/cloud-web, the static
 // Worker ember-web's assets (the desktop app carries it too); `pnpm dev:web` serves it. --mode cloud-admin: the admin's
 // console (admin/index.html), at / on its own host, into dist/cloud-admin (ember-admin's). A station serves no page.
+// STILLFAIL_PROFILE=1: a build to measure React's work in (test/perf/renders.mjs), into dist/profile: React's profiling
+// build, which times each render, and nothing minified, so what rendered is told by its component's name.
+const profiling = process.env.STILLFAIL_PROFILE === "1";
+
 export default defineConfig(({ mode }) => {
   const consoleBuild = mode === "cloud-admin";
   // The admin's console reports nothing.
@@ -73,11 +79,21 @@ export default defineConfig(({ mode }) => {
     worker: { format: "es" },
     // SQLite's WASM build finds its .wasm beside its module (new URL(…, import.meta.url)): not prebundled in dev.
     optimizeDeps: { exclude: ["@sqlite.org/sqlite-wasm"] },
-    resolve: { alias: [{ find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") }] },
+    resolve: {
+      alias: [
+        uiAlias,
+        { find: "@stillfail/core-ts/web", replacement: here("../client/core-ts/src/hosts/web.ts") },
+        // Markdown's character references (client/core-ts/src/markdown.ts, in the core's worker) by their table: the
+        // browser's build of it reads them through `document`, which a worker has not.
+        { find: /^decode-named-character-reference$/, replacement: createRequire(here("../client/core-ts/package.json")).resolve("decode-named-character-reference") },
+        ...(profiling ? [{ find: /^react-dom\/client$/, replacement: "react-dom/profiling" }] : []),
+      ],
+    },
     build: {
-      outDir: here(consoleBuild ? "../dist/cloud-admin" : "../dist/cloud-web"),
+      outDir: here(consoleBuild ? "../dist/cloud-admin" : profiling ? "../dist/profile/cloud-web" : "../dist/cloud-web"),
       emptyOutDir: true,
       target: "es2022",
+      ...(profiling ? { minify: false } : {}),
       rollupOptions: {
         output: {
           // Scripts that come in as files (pdf.js's worker, `pdf.worker.min.mjs?url`) keep their .mjs, and a module

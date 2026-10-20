@@ -4,8 +4,8 @@
 
 /** A reference as the composer holds it. */
 export const REF_MARK = /@\[([^\]\n]{1,120})\]/g;
-/** A reference as sent: a link to a chat's page. */
-export const REF_LINK = /\[([^\]\n]{1,120})\]\((\S*?\/chats\/[^\s)]+)\)/g;
+/** A reference as sent: a link to a chat's page, or its still.fail link (…/o/<workspace>/<station>/<key>, as copied). */
+export const REF_LINK = /\[([^\]\n]{1,120})\]\((\S*?(?:\/chats\/|\/o\/[^/\s)]+\/[^/\s)]+\/)[^\s)]+)\)/g;
 
 /** Text split into its plain runs and the parts `pattern` finds (with its groups). */
 export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArray)[] {
@@ -22,5 +22,84 @@ export function splitBy(text: string, pattern: RegExp): (string | RegExpExecArra
 
 /** A link to a chat's page (…/chats/<key>, or still.fail cloud's /o/<workspace>/<station>/<key>). */
 export function isChatLink(href: string | undefined): boolean {
-  return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:#|$)/.test(href));
+  return !!href && (/\/chats\/[^/?#\s]+\/?(?:[?#]|$)/.test(href) || /^https?:\/\/[^/]+\/o\/[^/]+\/[^/]+\/[^/?#]+\/?(?:[?#]|$)/.test(href));
+}
+
+/**
+ * The link a chat is given away by (copied from its row's menu): still.fail's, `…/o/<workspace>/<station>/<session>`,
+ * which opens it wherever it is pasted and which an agent on any station of the workspace reads it by (chat_read);
+ * `history`: an agent's execution history there (session_history), opened at `entry` (copied from the history). A
+ * station of no workspace has no such link: its page here (`root`, where this page's routes start).
+ */
+export function shareLink(item: { station: string; session: string; id: string }, root: string, history?: { key: string; entry?: number | undefined }): string {
+  const at = item.station.indexOf("/");
+  const here = /^https?:$/.test(location.protocol) ? location.origin : null;
+  const cloud = window.stillfailDesktop?.cloudOrigin || here;
+  const page = at >= 0 && cloud
+    ? `${cloud.replace(/\/+$/, "")}/o/${item.station.slice(0, at)}/${item.station.slice(at + 1)}/${encodeURIComponent(item.session)}`
+    : `${here ?? ""}${root.replace(/\/+$/, "")}/chats/${encodeURIComponent(item.id)}`;
+  return history ? `${page}?history=${encodeURIComponent(history.key)}${history.entry === undefined ? "" : `&entry=${history.entry}`}` : page;
+}
+
+/**
+ * Puts a link to a chat on the clipboard: as a reference is sent, `[its title](link)`, for plain text (a composer,
+ * where it becomes a reference again, or a terminal), and as a link for what takes HTML (Slack, documents).
+ */
+export function copyChatLink(title: string, link: string): Promise<void> {
+  const shown = Array.from(title.replace(/[[\]\n]/g, " ").trim() || link).slice(0, 120).join("");
+  const plain = `[${shown}](${link})`;
+  if (typeof ClipboardItem === "undefined" || !navigator.clipboard.write) return navigator.clipboard.writeText(plain);
+  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const html = `<a href="${escape(link)}">${escape(shown)}</a>`;
+  return navigator.clipboard.write([new ClipboardItem({ "text/plain": new Blob([plain], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
+}
+
+/**
+ * The chat a link names, when it is one of a workspace's chats: a still.fail link (`…/o/<workspace>/<station>/<session>`)
+ * or its page (`…/w/<workspace>/s/<station>/chats/<id>`), and what follows it when that is its agent's execution
+ * history (`?history=<session>`, maybe `&entry=<n>`; else ""). Null otherwise.
+ */
+export function chatOfLink(href: string): { station: string; id: string; history: string } | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href)
+    ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)\/?(\?history=[^&#\s]+(?:&entry=\d+)?)?$/.exec(href);
+  if (!m) return null;
+  try {
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!), history: m[4] ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+/** The station (`<workspace>/<station>`) a link to a chat is on, as chatOfLink reads it; null for a link that does not say. */
+export function stationOfLink(href: string): string | null {
+  const m = /\/o\/([^/?#\s]+)\/([^/?#\s]+)\/[^/?#\s]+/.exec(href) ?? /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\//.exec(href);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
+/**
+ * The screen a link names, when it is one of a station's screens (`…/w/<workspace>/s/<station>/screen/<id>`, as its
+ * agents' `screen` tool links it): its station (`<workspace>/<station>`) and its id. Null otherwise.
+ */
+export function screenOfLink(href: string): { station: string; screen: string } | null {
+  const m = /^(?:https?:\/\/[^/]+)?\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/screen\/([^/?#\s]+)\/?$/.exec(href);
+  if (!m) return null;
+  try {
+    return { station: `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`, screen: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The station a link to its 共享调试 names (`…/w/<workspace>/s/<station>/adb`, as its agents' `adb_devices` tool links
+ * it: docs/adb-share.md), as `<workspace>/<station>`. Null otherwise.
+ */
+export function adbOfLink(href: string): string | null {
+  const m = /^(?:https?:\/\/[^/]+)?\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/adb\/?$/.exec(href);
+  if (!m) return null;
+  try {
+    return `${decodeURIComponent(m[1]!)}/${decodeURIComponent(m[2]!)}`;
+  } catch {
+    return null;
+  }
 }

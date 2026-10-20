@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import * as fp from "../src/footprint.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ago, chatJobs, LONG, log, longJobs, nextChange, shown, span } from "../src/jobs.ts";
+import { ago, chatJobs, type From, LONG, log, longJobs, nextChange, remoteOwner, shown, span } from "../src/jobs.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -23,13 +23,13 @@ test("times_in_words_and_when_they_change", () => {
 
 test("a_job_is_shown_by_its_dot_its_word_and_its_line", () => {
   const live = shown(job("w"), c());
-  assert.deepEqual([live.tone, live.word, texts(live)], ["live", "在盯着", "在盯着 · 3 秒"]);
+  assert.deepEqual([live.tone, live.word, texts(live)], ["live", "运行中", "运行中 · 3 秒"]);
   assert.equal(live.meta[0].kind, "word");
   const said = shown(job("w", { notices: [{ at: NOW - 60_000, text: "CI 绿了" }], outputAt: NOW - 1_000 }), c());
   assert.deepEqual([texts(said), said.meta[0].kind], ["CI 绿了 · 1 分钟前", "notice"]);
-  assert.deepEqual([said.notices[0].ago, said.notices[0].clock, said.detail], ["1 分钟前", "07:59", "在盯着 · 3 秒 · 1 条通知"]);
+  assert.deepEqual([said.notices[0].ago, said.notices[0].clock, said.detail], ["1 分钟前", "07:59", "运行中 · 3 秒 · 1 条通知"]);
   const quiet = shown(job("w", { outputAt: NOW - 20_000 }), c());
-  assert.deepEqual([texts(quiet), quiet.outputSaid], ["还没通知过 · 最后输出 20 秒前", "最后输出 · 20 秒前"]);
+  assert.deepEqual([texts(quiet), quiet.outputSaid], ["暂无通知 · 最后输出 20 秒前", "最后输出 · 20 秒前"]);
   const died = shown(job("w", { state: "exited", exitCode: 2, endedAt: NOW - 7_200_000 }), c());
   assert.deepEqual([died.tone, texts(died), died.ended, died.current], ["fail", "意外退出 · 退出码 2 · 2 小时前", true, true]);
   const old = shown(job("w", { state: "exited", endedAt: NOW - 2 * NEWS }), c());
@@ -51,9 +51,9 @@ test("a_chats_jobs_put_what_matters_first_and_say_how_many", () => {
   };
   const [v, next] = chatJobs(chat, c());
   assert.deepEqual(v.jobs.map((j: J) => j.id), ["x", "r", "w", "s", "old"]);
-  assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个在盯着"]);
+  assert.deepEqual([v.alarm, v.servicesNote, v.jobsNote], ["fail", "1 个在线，1 个在重启", "1 个运行中"]);
   assert.deepEqual([v.current, v.ended, v.clear], [4, 2, ["b", "a"]]);
-  assert.deepEqual([v.allText, v.clearText, v.hiddenText], ["全部 5 个", "清掉 2 个已结束的", "另有 1 个已停止或结束"]);
+  assert.deepEqual([v.allText, v.clearText, v.hiddenText], ["全部 5 个", "清除 2 个已结束的", "另有 1 个已停止或结束"]);
   assert.ok(next <= 1000);
   const [none, next2] = chatJobs({ agents: [] }, c());
   assert.deepEqual([none.alarm, none.jobs, next2], [null, [], Infinity]);
@@ -73,8 +73,8 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
     c(),
   );
   const g = v.groups;
-  assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "开了很久的网页服务 · 1", "不在任何对话里"]);
-  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["一直在跑的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
+  assert.deepEqual([g[0].key, g[0].head, g[0].jobs[0].whereText], ["services", "长时间运行的网页服务 · 1", "不属于任何对话"]);
+  assert.deepEqual([g[1].head, g[1].jobs[0].id, g[1].jobs[0].whereText, g[1].jobs[0].age], ["长时间运行的后台任务 · 2", "j1", "studio · 对话", "3 小时"]);
   assert.equal(g[1].jobs[1].whereText, "studio · 修登录 · 已归档");
   assert.deepEqual(longJobs([st(null, [job("new")])], c()), { groups: [] });
   const watch = job("w", { startedAt: NOW - 5 * LONG, watch: true });
@@ -82,12 +82,26 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   assert.equal(shown(watch, c()).word, "监控中");
 });
 
+test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
+  assert.deepEqual(remoteOwner("remote:w:ccvm:ember:c-1"), { station: "w/ccvm", session: "ember:c-1" });
+  assert.equal(remoteOwner("ember:c-1"), null);
+  const chat = { id: "ember:c-1", title: "编译器", archived: false, station: "w/ccvm" };
+  const from = (session: string): From | null =>
+    session === "remote:w:ccvm:ember:c-1" ? { name: "ccvm", chat } : session === "remote:w:ccvm:ember:c-2" ? { name: "ccvm", chat: null } : null;
+  const ran = (session: string) => job(session, { session, startedAt: NOW - 2 * LONG });
+  const v = longJobs([["w/studio", "studio", [ran("remote:w:ccvm:ember:c-1"), ran("remote:w:ccvm:ember:c-2"), ran("a")]]], c(), from);
+  const [known, unknown, own] = v.groups[0].jobs;
+  assert.deepEqual([known.whereText, known.chat, known.station], ["studio · 编译器 · 来自 ccvm", chat, "w/studio"]);
+  assert.deepEqual([unknown.whereText, unknown.chat], ["studio · 对话 · 来自 ccvm", undefined]);
+  assert.equal(own.whereText, "studio · 不属于任何对话");
+});
+
 test("a_logs_last_line_and_when", () => {
-  const v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
-  log(v, c());
+  let v: J = { text: "a\nbuilt ok\n", outputAt: NOW - 3_000, state: "running" };
+  v = log(v, c());
   assert.deepEqual([v.last, v.said], ["a\nbuilt ok", "最后输出 · 刚刚"]);
-  const empty: J = { text: "" };
-  log(empty, c());
+  let empty: J = { text: "" };
+  empty = log(empty, c());
   assert.deepEqual([empty.last, empty.said], [undefined, undefined]);
 });
 
@@ -122,7 +136,7 @@ const shape = (v: unknown) => assert.ok("ok" in conform("FootprintView", v), JSO
 test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
   const v = fp.shown(raw(true), fc());
   shape(v);
-  assert.equal(v.checkedText, "2 分钟前统计");
+  assert.equal(v.checkedText, "统计于2 分钟前");
   assert.equal(v.totalText, "9.0 GB");
   assert.equal(v.legend[2].level, "red");
   assert.deepEqual(v.actions.map((a: J) => a.id), ["rebuild", "archived", "idle"]);
@@ -131,7 +145,7 @@ test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
   assert.deepEqual(archived.map((x: J) => x.keys), [["b", "d"], ["b"]]);
   assert.equal(archived[0].confirms.length, 2);
   assert.deepEqual(v.actions[2].choices[0].keys, ["a"]);
-  assert.equal(v.chats[1].title, "未命名的 chat");
+  assert.equal(v.chats[1].title, "新对话");
   assert.deepEqual(v.chats[2].choices, []);
   assert.equal(v.chats[1].choices[1].confirms.length, 2);
   assert.equal(v.memory[2].label, "在跑");
@@ -141,12 +155,12 @@ test("the_page_says_what_takes_the_disk_and_what_can_be_cleaned", () => {
 
 test("members_look_and_a_first_scan_is_waited_for", () => {
   const v = fp.shown(raw(false), fc());
-  assert.deepEqual([v.actions, v.actionsNote], [[], "只有 workspace 的 owner 和管理员能清理"]);
+  assert.deepEqual([v.actions, v.actionsNote], [[], "只有 workspace 的 owner 和管理员可以清理"]);
   assert.ok(v.chats.every((x: J) => x.choices.length === 0));
   const first = fp.shown({ scanning: true, manage: true, disk: {}, parts: [], chats: [], processes: [] }, fc());
   shape(first);
   assert.deepEqual([first.measured, first.totalText], [false, "—"]);
-  const b: J = { bytes: null, scanning: true };
-  fp.brief(b);
-  assert.equal(b.text, "正在统计…");
+  let b: J = { bytes: null, scanning: true };
+  b = fp.brief(b);
+  assert.equal(b.text, "正在统计");
 });

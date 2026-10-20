@@ -38,20 +38,29 @@ function plain(status: number, text: string): PreviewAnswer {
   return { status, headers: [["content-type", "text/plain; charset=utf-8"]], body: Readable.from([Buffer.from(text)]) };
 }
 
+/// Who a request comes from: a preview's page (through the admin API: its authorization is the admin call's, its answer
+/// shown framed and read plain), or a program on another station of the workspace (mesh/peer-http.ts: its own
+/// authorization and encodings go to the service, its answer comes back whole).
+export type Asker = "preview" | "peer";
+
 /// Passes a request to localhost:`port` and its answer back. `headers` are the request's, by lowercase name; `lang` is
 /// what its refusals are said in. Redirects are not followed (they go back as they are), and no proxy is used.
-export function proxyPreview(method: string, headers: [string, string][], body: Buffer | string | Readable | null, port: number, path: string, lang: Lang): Promise<PreviewAnswer> {
+export function proxyPreview(method: string, headers: [string, string][], body: Buffer | string | Readable | null, port: number, path: string, lang: Lang, asker: Asker = "preview"): Promise<PreviewAnswer> {
   if (!TOKEN.test(method)) return Promise.resolve(plain(400, tr(lang, "station.preview.badMethod", { method })));
+  const peer = asker === "peer";
   const sent: Record<string, string | string[]> = {};
   for (const [name, value] of headers) {
-    if (HOP.includes(name) || name.startsWith("x-stillfail-") || name.startsWith("x-ember-") || name === "accept-encoding") continue;
+    if (peer ? HOP.includes(name) && name !== "authorization" : HOP.includes(name) || name === "accept-encoding") continue;
+    if (name.startsWith("x-stillfail-") || name.startsWith("x-ember-")) continue;
     const was = sent[name];
     sent[name] = was === undefined ? value : [...(Array.isArray(was) ? was : [was]), value];
   }
-  // The body goes back as it is: a client that cannot undo an encoding (a service worker's Response does not) gets it
-  // plain.
   sent.host = `localhost:${port}`;
-  sent["accept-encoding"] = "identity";
+  // The body goes back as it is: a client that cannot undo an encoding (a service worker's Response does not) gets it
+  // plain. A peer's program asked for what it can undo.
+  if (!peer) sent["accept-encoding"] = "identity";
+  // A body that comes as it is sent, of no length said, goes in chunks (Node sends a GET's unframed otherwise).
+  else if (body instanceof Readable && sent["content-length"] === undefined) sent["transfer-encoding"] = "chunked";
   const service = ["http", "https"].flatMap((s) => [`${s}://localhost:${port}`, `${s}://127.0.0.1:${port}`, `${s}://[::1]:${port}`]);
   return new Promise((resolve) => {
     let request;
@@ -68,7 +77,7 @@ export function proxyPreview(method: string, headers: [string, string][], body: 
       for (let i = 0; i + 1 < raw.length; i += 2) {
         const name = raw[i].toLowerCase();
         let value = raw[i + 1];
-        if (HOP.includes(name) || FRAMING.includes(name)) continue;
+        if (HOP.includes(name) || (!peer && FRAMING.includes(name))) continue;
         // A redirect to the service itself stays on the preview's path.
         if (name === "location") {
           const origin = service.find((o) => value.startsWith(o));
@@ -80,7 +89,11 @@ export function proxyPreview(method: string, headers: [string, string][], body: 
     });
     if (body === null) request.end();
     else if (typeof body === "string" || Buffer.isBuffer(body)) request.end(body);
-    else body.pipe(request);
+    else {
+      // A body that fails on the way (its sender gone) ends the request, not leaves the service waiting for the rest.
+      body.on("error", (error) => request.destroy(error));
+      body.pipe(request);
+    }
   });
 }
 
@@ -198,12 +211,13 @@ export class SocketRefused extends Error {
 /// Opens `path` of ws://localhost:`port` for a preview's page, with its headers (by lowercase name). Gives the socket
 /// (with the sub-protocol the service chose), or throws a SocketRefused: the service's own refusal, 502 when it does
 /// not answer.
-export function openSocket(headers: [string, string][], port: number, path: string, lang: Lang): Promise<ServiceSocket> {
+export function openSocket(headers: [string, string][], port: number, path: string, lang: Lang, asker: Asker = "preview"): Promise<ServiceSocket> {
   return new Promise((resolve, reject) => {
     const passed: Record<string, string> = {};
     let protocols: string[] = [];
     for (const [name, value] of headers) {
-      if (!SOCKET_HEADERS.includes(name)) continue;
+      // A peer's program's own authorization goes too (a preview's is the admin call's).
+      if (!SOCKET_HEADERS.includes(name) && !(asker === "peer" && name === "authorization")) continue;
       if (name === "sec-websocket-protocol") protocols = value.split(",").map((p) => p.trim()).filter((p) => p !== "");
       else passed[name] = value;
     }

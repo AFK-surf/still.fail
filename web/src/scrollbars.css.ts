@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** No z-index: layered by where it is (beside its pane), over the pane, under what comes after it (menus, dialogs). */
 export const floatingThumb = style({

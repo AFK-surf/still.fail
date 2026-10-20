@@ -13,6 +13,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Viewer } from "../mesh/credential.ts";
 import { type Lang, tr as translate } from "../ops/i18n.ts";
+import { sees } from "../store/rows.ts";
 import * as store from "./store.ts";
 
 export { makeStore, openStore } from "./store.ts";
@@ -340,7 +341,8 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
   const s = api.store;
   const mine = isMine(api, viewer);
   const stats = store.sessionStats(s, null);
-  const sessions = store.listSessions(s);
+  // Only the chats of the viewer's workspace (docs/multi-workspace.md).
+  const sessions = store.listSessions(s).filter((x) => sees(viewer, x.ws));
   const shown = new Map(sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => [x.key, x]));
   const order = sessions.filter((x) => (x.archivedAt !== null) === archived).map((x) => x.key);
   // In the archive, a chat of its own shows its agents whatever they are doing elsewhere.
@@ -363,7 +365,7 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
     if (watch !== undefined) v.watch = watch;
     return v;
   };
-  const threads = store.listThreads(s, viewer.email, null, null);
+  const threads = store.listThreads(s, viewer.email, null, null).filter((t) => t.sessions.some((m) => all.has(m.session)));
   // Per agent: the Slack thread it came from (the latest one it is in), and whether it has an internal chat.
   const origins = new Map<string, ThreadSummary>();
   const chatted = new Set<string>();
@@ -493,6 +495,12 @@ export function chats(station: Store, viewer: Viewer, archived: boolean): Json[]
   // When the viewer pinned each to the top of their list, or null.
   const pins = store.pins(s, viewer.email);
   for (const row of rows) row.pinned = typeof row.id === "string" ? (pins.get(row.id) ?? null) : null;
+  // Which other workspaces each is shared with (docs/chat-share.md), only those that are.
+  const shares = store.chatShares(s);
+  for (const row of rows) {
+    const shared = typeof row.id === "string" ? shares.get(row.id) : undefined;
+    if (shared) row.xshare = { to: shared.to.map((t) => t.workspace), write: shared.write };
+  }
   return rows;
 }
 
@@ -558,6 +566,7 @@ function entryJson(e: EntryRow): Json {
   });
   if (e.client !== null) v.client = e.client;
   if (e.profile !== null) v.profile = e.profile;
+  if (e.runtime !== null) v.runtime = e.runtime;
   if (e.options !== undefined) v.options = e.options;
   if (e.card !== undefined) v.card = e.card;
   v.at = e.at;

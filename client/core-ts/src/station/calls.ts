@@ -1,18 +1,41 @@
 // The station calls (core/execute.rs, the station's part): operations, a chat's pages and place, what is read,
 // files, uploads and previews.
 import { Deferred, Effect, Scope } from "effect";
-import type { Inner } from "../core.ts";
+import type { Inner, Progress } from "../core.ts";
 import { handlers } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
-import { base64 } from "../util.ts";
+import { base64, fromBase64 } from "../util.ts";
+import { Beside } from "../protocol.ts";
+import { folderOf } from "../ops.ts";
 import * as looks from "../looks.ts";
 import { machineMeta } from "../views/models.ts";
 import { StationAddr } from "./addr.ts";
 import { readAll, replyHeader, takeFrames, encodeFrame, type Frame } from "./wire.ts";
+import * as logins from "./machine-logins.ts";
 
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
+
+/// A part read's answer: its bytes beside `said`, or none when they went as they came (`stream`).
+function partAnswer(c: { stream: boolean }, said: Record<string, unknown>, bytes: Uint8Array): unknown {
+  return c.stream ? said : new Beside(said, bytes);
+}
+
+/// What is kept small on the device (base64 there), its bytes beside `{ type }`.
+function keptBeside(kept: { type: string; bytes: string }): Beside {
+  return new Beside({ type: kept.type }, fromBase64(kept.bytes) ?? new Uint8Array());
+}
+
+/// What a part read says as it comes: with `stream`, each piece of its bytes beside `{ loaded }`; else with `progress`,
+/// `{ loaded }` alone now and then.
+function partProgress(c: { progress: boolean; stream: boolean }, progress: Progress): [((loaded: number) => void) | undefined, ((piece: Uint8Array) => void) | undefined] {
+  if (c.stream) {
+    let loaded = 0;
+    return [undefined, (piece) => progress({ loaded: (loaded += piece.length) }, piece)];
+  }
+  return [c.progress ? (loaded) => progress({ loaded }) : undefined, undefined];
+}
 
 /// Preview sockets open, by client and the name its UI gave each: where `preview.socket.send` puts the page's messages.
 const sockets = new Map<string, (frame: Frame) => void>();
@@ -28,8 +51,8 @@ export function install(): void {
         if (op.method === "GET" && op.path.startsWith("/machine-sessions") && answer !== null && typeof answer === "object") {
           const now = inner.host.nowMs();
           const a = answer as { sessions?: unknown; session?: unknown };
-          if (Array.isArray(a.sessions)) for (const s of a.sessions) machineMeta(s, now);
-          if (a.session !== undefined) machineMeta(a.session, now);
+          if (Array.isArray(a.sessions)) a.sessions = a.sessions.map((s) => machineMeta(s, now));
+          if (a.session !== undefined) a.session = machineMeta(a.session, now);
         }
         // What the clients show of it, put in here.
         looks.answer(op.method, op.path, answer);
@@ -54,9 +77,21 @@ export function install(): void {
     inner.stationTopics.place(c.station, c.thread, c.seq, c.offset);
     return Effect.succeed(null);
   };
+  handlers.chatAround = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatAround" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stationTopics.around(c.station, c.thread, c.seq), null));
+  };
+  handlers.chatFind = (inner, call) => {
+    const c = call as Extract<Call, { kind: "chatFind" }>;
+    return Effect.andThen(parse(c.station), inner.stationTopics.find(c.station, c.thread, c.query, c.bring));
+  };
   handlers.historyOlder = (inner, call) => {
     const c = call as Extract<Call, { kind: "historyOlder" }>;
     return Effect.andThen(parse(c.station), Effect.map(inner.stationTopics.historyOlder(c.station, c.key), (more) => ({ more })));
+  };
+  handlers.historyDetail = (inner, call) => {
+    const c = call as Extract<Call, { kind: "historyDetail" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stationTopics.historyDetail(c.station, c.key, c.from, c.to), null));
   };
   handlers.chatRead = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "chatRead" }>;
@@ -70,28 +105,100 @@ export function install(): void {
     const c = call as Extract<Call, { kind: "stationUpload" }>;
     return inner.stations.upload(c.station, c.name, c.bytes, ctx);
   };
-  handlers.stationUploadPart = (inner, call, _p, _a, ctx) => {
+  // `progress`: the bytes of the part gone so far, as they go (a part is megabytes: its end alone is too seldom to show).
+  handlers.stationUploadPart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationUploadPart" }>;
-    return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx));
+    return Effect.flatMap(parse(c.station), (addr) => inner.stations.requests.uploadPart(addr, c, c.bytes, ctx, c.progress ? (sent) => progress({ sent }) : undefined));
   };
   handlers.stationFile = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFile" }>;
+    // A thumbnail is kept on the device: a file sent never changes (AccountDb.keptFile).
+    // Its bytes beside its answer `{ type }` (kept as base64, small).
+    const kept = c.thumb ? inner.data.keptFile(c.station, c.key, c.name, "thumb") : null;
+    if (kept !== null) return Effect.succeed(keptBeside(kept));
     return Effect.flatMap(parse(c.station), (addr) =>
       Effect.map(
         inner.stations.requests.file(addr, c.key, c.name, c.thumb, (loaded, total) => c.progress && progress({ loaded, total }), ctx),
-        ([type, bytes]) => ({ type, bytes: base64(bytes) }),
+        ([type, bytes]) => {
+          if (c.thumb) inner.data.keepFile(c.station, c.key, c.name, "thumb", type, base64(bytes));
+          return new Beside({ type }, bytes);
+        },
       ),
     );
   };
-  handlers.stationFilePart = (inner, call, _p, _a, ctx) => {
+  // `progress`: the bytes of the part so far, as they come (a part is megabytes: its end alone is too seldom to show).
+  // Its bytes beside its answer `{ type, total }`; with `stream`, beside values `{ loaded }` as they come instead (what
+  // takes them writes each where it goes, and nothing waits for the whole part).
+  handlers.stationFilePart = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationFilePart" }>;
+    const [heard, sink] = partProgress(c, progress);
     return Effect.flatMap(parse(c.station), (addr) =>
-      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx), (got) => ({ type: got.type, total: got.total, bytes: base64(got.bytes) })),
+      Effect.map(inner.stations.requests.filePart(addr, c.key, c.name, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total }, got.bytes)),
     );
   };
   handlers.stationPoster = (inner, call, _p, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPoster" }>;
-    return Effect.flatMap(parse(c.station), (addr) => Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => (bytes === null ? null : { type: "image/jpeg", bytes: base64(bytes) })));
+    // Kept on the device as a thumbnail is.
+    const kept = inner.data.keptFile(c.station, c.key, c.name, "poster");
+    if (kept !== null) return Effect.succeed(keptBeside(kept));
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.poster(addr, c.key, c.name, ctx), (bytes) => {
+        if (bytes === null) return null;
+        inner.data.keepFile(c.station, c.key, c.name, "poster", "image/jpeg", base64(bytes));
+        return new Beside({ type: "image/jpeg" }, bytes);
+      }),
+    );
+  };
+  handlers.fileOpen = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "fileOpen" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.fileOpen(addr, c.key, c.path, ctx), (got) => new Beside({ name: got.name, path: got.path, type: got.type, size: got.size }, got.bytes)),
+    );
+  };
+  handlers.driveRead = (inner, call, progress, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "driveRead" }>;
+    const [heard, sink] = partProgress(c, progress);
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.map(inner.stations.requests.driveRead(addr, c.root, c.path, c.offset, c.length, ctx, heard, sink), (got) => partAnswer(c, { type: got.type, total: got.total, mtime: got.mtime }, got.bytes)),
+    );
+  };
+  handlers.driveUploadPart = (inner, call, _p, _a, ctx) => {
+    const c = call as Extract<Call, { kind: "driveUploadPart" }>;
+    return Effect.flatMap(parse(c.station), (addr) =>
+      Effect.tap(inner.stations.requests.driveUploadPart(addr, c, c.bytes, ctx), (got) =>
+        // Whole: the folder it went into, as it is now, before the call answers.
+        got.entry !== null ? inner.stations.afterWrite(c.station, { kind: "drive", root: c.root, paths: [folderOf(c.path)] }, got) : Effect.void,
+      ),
+    );
+  };
+  handlers.driveRefresh = (inner, call) => {
+    const c = call as Extract<Call, { kind: "driveRefresh" }>;
+    return Effect.andThen(parse(c.station), Effect.as(inner.stations.driveRefresh(c.station, c.root, c.path), null));
+  };
+  // A login's page to open (docs/remote-login.md): its device code's page, the page to open, or a loopback login's,
+  // whose callback this device listens for first (on a host that can: the desktop app), unless the station is this
+  // machine. Answers what to open; fails (the port taken here) before anything is.
+  handlers.machineLoginOpen = (inner, call) => {
+    const c = call as Extract<Call, { kind: "machineLoginOpen" }>;
+    return Effect.gen(function* () {
+      yield* parse(c.station);
+      const login = logins.held(inner.stations.link(c.station)).logins.find((l) => l.id === c.id);
+      if (login === undefined) return yield* Effect.fail(new CoreError("http_404", t("core-logic.machineLogin.gone"), 404));
+      const page = (v: unknown) => (typeof v === "string" && v.startsWith("https://") ? v : null);
+      const url = page(login.codeUrl) ?? page(login.url);
+      if (url === null) return yield* Effect.fail(CoreError.invalid(t("core-logic.machineLogin.noPage")));
+      const expect = logins.expectOf(login);
+      if (login.step === "loopback" && expect !== null && !c.here && typeof login.endedAt !== "number") yield* inner.stations.relays.start(c.station, c.id, expect);
+      return { url };
+    });
+  };
+  handlers.drivePlace = (inner, call) => {
+    const c = call as Extract<Call, { kind: "drivePlace" }>;
+    return Effect.sync(() => {
+      // Whole ms (DrivePlace.changed is an integer): a host's clock can have a fraction (Android's does).
+      inner.data.set({ topic: "drivePlace", station: c.station, root: c.root, path: c.path }, { at: c.at, of: c.of, changed: Math.floor(inner.host.nowMs()) }, false);
+      return null;
+    });
   };
   handlers.cacheUsage = (inner) => Effect.sync(() => ({ chats: inner.data.cacheUsage() }));
   handlers.cacheClear = (inner, call) => {
@@ -104,8 +211,9 @@ export function install(): void {
   handlers.stationPreview = (inner, call, progress, _a, ctx) => {
     const c = call as Extract<Call, { kind: "stationPreview" }>;
     return Effect.flatMap(parse(c.station), (addr) => {
-      if (!c.stream) return Effect.map(inner.stations.requests.preview(addr, c.port, c.method, c.path, c.headers, c.body, ctx), (r) => ({ status: r.status, headers: r.headers, body: base64(r.body) }));
-      // As it comes: its head, then each piece of its body; null at its end. Cancelling the call stops it.
+      if (!c.stream) return Effect.map(inner.stations.requests.preview(addr, c.port, c.method, c.path, c.headers, c.body, ctx), (r) => new Beside({ status: r.status, headers: r.headers }, r.body));
+      // As it comes: its head, then each piece of its body (`{ chunk: true }`, the piece beside it); null at its end.
+      // Cancelling the call stops it.
       return Effect.scoped(
         Effect.gen(function* () {
           const reply = yield* inner.stations.requests.previewStream(addr, c.port, c.method, c.path, c.headers, c.body, ctx);
@@ -113,7 +221,7 @@ export function install(): void {
           for (;;) {
             const chunk = yield* Effect.mapError(reply.body.take, asCoreError);
             if (chunk === null) return null;
-            progress({ chunk: base64(chunk) });
+            progress({ chunk: true }, chunk);
           }
         }),
       );
@@ -166,7 +274,7 @@ export function install(): void {
           buf = rest;
           for (const frame of frames) {
             if ("text" in frame) progress({ text: frame.text });
-            else if ("binary" in frame) progress({ binary: base64(frame.binary) });
+            else if ("binary" in frame) progress({ binary: true }, frame.binary);
             else return { code: frame.close[0], reason: frame.close[1] };
           }
         }

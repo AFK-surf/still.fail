@@ -13,10 +13,13 @@ Fixes: FB-12
 Session: ember:c-…
 ```
 
-- `Changelog:` 一行给用户看的中文，可以写多行（每行一个 `Changelog:`）。用「修复：」「新功能：」或「手机：」「安卓：」这类开头，说用户感受得到的变化，不写实现。CI、重构、文档、测试这类用户感觉不到的不写。
+- `Changelog:` 一行给用户看的中文，可以写多行（每行一个 `Changelog:`）。用「修复：」「新功能：」或「手机：」「安卓：」这类开头，说用户感受得到的变化，不写实现。CI、重构、文档、测试这类用户感觉不到的不写，没有要说的就不写这一行：`Changelog: none`、`无`、`n/a` 这类会被 commit-msg hook 和 CI 拒掉。
 - `Fixes: FB-n` 说这个提交修的是哪条反馈（可以写多个）。只写 `Fixes` 不写 `Changelog`，反馈照样会被标成已修复，但日志里不显示。
+- 这几行放在正文后面、整段都是 `Key: value` 的段落里。和 `Co-Authored-By:` 隔一个空行也读得到：scripts/changelog.ts 读标题之后每个这样的段落，不只 git 当成 trailer 的最后一段（以前只读最后一段，2026-10-01 到 10-08 有 37 个提交的条目因此没进日志）。
 - 版本是这个提交在 main 历史里的序号（`git rev-list --count`，各端的 `0.1.<n>` 就是它），不用手填。
-- 归哪一端，看提交改了哪些目录（scripts/changelog.ts `PARTS`）：`station/src/`、`station/native/` 归 station（之前的提交里 `mesh/` 也是），`web/` 归网页版（桌面 app 带着网页，也算），`client/` 归网页和安卓，`apps/android/` 归安卓，`apps/desktop/` 归桌面，`cloud/src/` 归云端（一部署就上线）。其余（官网、文档、脚本）不需要发版。
+- 归哪一端，看提交改了哪些文件（scripts/changelog.ts `partsOf`）：`station/src/`、`station/native/` 归 station（之前的提交里 `mesh/` 也是），`web/` 归网页版（桌面 app 带着网页，也算），`client/` 归网页和安卓（`apps/android/not-carried.txt` 列的只归网页，`client/shell/` 只归安卓），`apps/android/` 归安卓，`apps/desktop/` 归桌面，`cloud/src/` 归云端（一部署就上线）。其余（官网、文档、脚本）不需要发版。
+  - 测试、安卓的 `carries.sh`/`not-carried.txt`、`client/core-ts/src/shapes/schema.ts` 和从它生成的类型，自己不让提交归到哪一端；提交只改了这些时才按上面的目录算。
+  - 界面文字（`client/i18n/catalog/`）各端的都打在 core 里，但只跟着代码走：同一个提交也改了代码，就只归代码到的那几端（桌面功能的文字不会让它出现在安卓的「已更新」里）；只改了文字，按文件名归：`android-*` 安卓，`web-*` 网页，`desktop` 桌面，`station`、`cloud` 各自，`core-*`、`common` 网页和安卓。
 - 写错了或漏写了：在 `docs/changelog-notes.json` 里按提交号（至少 7 位）补或改：`{ "<提交>": { "text": [...], "fixes": [...] } }`，它的 `text` 会替换提交里的那几行。
 
 ## 正式版的日志：每次正式发布写一份
@@ -43,8 +46,9 @@ parts: [web, station, android, desktop, cloud]   # 这次发出去的端
 
 - `node scripts/changelog.ts` 从 main 的历史生成 JSON（新的在前）。CI 的 pipeline 在 main 每次部署完（api 没失败）跑它，把结果放进 releases 桶的 `changelog.json`。
 - cloud `GET /v1/changelog`（cloud/src/changelog.ts，谁都能读）给 `{ entries, released }`。`released` 是这个通道（按域名或 `x-stillfail-channel`）各端已经发出去的版本，来自更新器读的那些文件：`station(-beta).json`、`android/(beta/)latest.json`、`desktop/stillfail(-beta)-mac.yml`，以及 deploy.py 部署或转正网页时写的 `web(-beta).json`（取自构建出的 `build.json`）。
-- core 的 `changelog` topic（client/core-ts/src/changelog.ts）显示时最多每小时读一次，存在本机。它按这个 app（`client.device` 说的 app 和 build）算出每条的 `has`/`note`：你的版本已包含、更新到 0.1.n 后就有、还没发布、已发布、已上线。`news` 是这次更新带来的、这个 app 的改动（上次看过的 build 之后、当前 build 之前），一直显示到 `changelog.seen`；第一次见到的 build 不算更新。
-- 界面：PC 设置 →「更新日志」（web/src/pages/Changelog.tsx），侧栏底部的「已更新到 …」卡片；手机 web 和安卓在设置 →「更新日志」，首页列表顶上有卡片（web/src/mobile/Changelog.tsx、screens/Changelog.kt）。打开日志页或点 × 就算看过。
+- core 的 `changelog` topic（client/core-ts/src/changelog.ts）在 core 启动时、每次连上 still.fail cloud 的事件 socket 时读一次，存在本机（显示它不会去读）。它按这个 app（`client.device` 说的 app 和 build）算出每条的 `has`/`note`：你的版本已包含、更新到 0.1.n 后就有、还没发布、已发布、已上线。`news` 是这次更新带来的、这个 app 的改动（上次看过的 build 之后、当前 build 之前），一直显示到 `changelog.seen`；第一次见到的 build 不算更新。
+- 界面：PC 设置 →「更新日志」（web/src/pages/Changelog.tsx），按端分 tab（桌面、网页、安卓、Station、云端，这个 app 自己的排第一、默认打开；桌面的含网页的改动，core 的 topic 给每个 tab 各自的按天分组），侧栏底部的「已更新到 …」卡片；手机 web 和安卓在设置 →「更新日志」，首页列表顶上有卡片（web/src/mobile/Changelog.tsx、screens/Changelog.kt）。打开日志页或点 × 就算看过。
+- 安卓的更新提示：core 的 `app.update` 找到更新的版本时，带上它给这个 app 带来的条目（`news`：装着的 build 之后、新版本为止，归这个 app 的那些行）。本机存的日志比新版本旧时（`released` 还没到它）先重读一次。首页的下载按钮只在 `news` 不为空时出现，没有条目的版本只在设置 → 版本里能装，等下一个有条目的版本一起提示（2026-10-08 起：之前每个版本都提示，一天 29 次，大多更新完什么都看不到）。所以手机上看得见的改动一定要写 `Changelog:`，不写就不会提示用户更新。
 
 ## 反馈修好了，告诉提的人
 

@@ -1,5 +1,5 @@
 import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { cardGround } from "./styles/pages.css.ts";
 
 // The people a day's bar is split by, in the order the usage view ranks them (client/core-ts/src/views/usage.ts SERIES),
@@ -51,17 +51,17 @@ export const tiles = style({
 export const tile = style({
   display: "grid", gap: "2px", padding: "14px 16px", borderRadius: vars.rCard, background: u.tile, cornerShape: vars.cornerShape,
 });
-export const tileLabel = style({ fontSize: vars.textXs, color: u.muted });
-export const tileValue = style({ fontSize: "22px", lineHeight: "30px", fontWeight: "650", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" });
-export const tileSub = style({ fontSize: vars.textXs, color: u.subtle });
+export const tileLabel = style({ fontSize: vars.textMeta, color: u.muted });
+export const tileValue = style({ fontSize: vars.textHeading, lineHeight: "30px", fontWeight: "600", fontVariantNumeric: "tabular-nums", letterSpacing: "-.01em" });
+export const tileSub = style({ fontSize: vars.textMeta, color: u.subtle });
 
 // ── the days ──────────────────────────────────────────────────────────────
 
 export const chartHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "12px", minHeight: "20px" });
-export const legend = style({ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: vars.textXs, color: u.muted });
+export const legend = style({ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: vars.textMeta, color: u.muted });
 export const legendItem = style({ display: "inline-flex", alignItems: "center", gap: "6px" });
 export const swatch = style({ width: "8px", height: "8px", borderRadius: "2px", flex: "none" });
-export const top = style({ fontSize: vars.textXs, color: u.subtle, fontVariantNumeric: "tabular-nums", marginLeft: "auto", whiteSpace: "nowrap" });
+export const top = style({ fontSize: vars.textMeta, color: u.subtle, fontVariantNumeric: "tabular-nums", marginLeft: "auto", whiteSpace: "nowrap" });
 
 const PLOT = 150;
 export const plot = style({
@@ -74,18 +74,20 @@ export const ceiling = style({ position: "absolute", left: "0", right: "0", top:
 /** A day: the whole column is what hovers, the bar sits at its foot. */
 export const day = style({
   flex: "1", minWidth: "0", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "stretch",
-  padding: "0", border: "0", background: "none", cursor: "default", borderRadius: "4px 4px 0 0",
+  padding: "0", border: "0", background: "none", cursor: "default",
+  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
   transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "&:hover": { background: u.hover } },
 });
 export const bar = style({
   display: "flex", flexDirection: "column-reverse", gap: "2px", margin: "0 auto", width: "min(100%, 28px)",
-  borderRadius: "4px 4px 0 0", overflow: "hidden",
+  borderRadius: `calc(4px * ${vars.cornerScale}) calc(4px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
+  overflow: "hidden",
 });
 export const part = style({ flex: "none", minHeight: "1px" });
 export const labels = style({ display: "flex", gap: "6px", marginTop: "6px", selectors: { "&[data-many]": { gap: "3px" } } });
 export const label = style({
-  flex: "1", minWidth: "0", textAlign: "center", fontSize: "11px", color: u.subtle, whiteSpace: "nowrap", overflow: "visible",
+  flex: "1", minWidth: "0", textAlign: "center", fontSize: vars.textCaption, color: u.subtle, whiteSpace: "nowrap", overflow: "visible",
   fontVariantNumeric: "tabular-nums",
   selectors: { "&[data-today]": { color: u.text, fontWeight: "500" } },
 });
@@ -100,30 +102,30 @@ export const rows = style({ display: "grid" });
 export const row = style({
   display: "grid", gridTemplateColumns: "auto minmax(0, 1fr) auto", alignItems: "center", columnGap: "12px", rowGap: "6px",
   padding: "10px 12px", borderRadius: vars.rField, cornerShape: vars.cornerShape, color: u.text, textDecoration: "none",
-  fontSize: vars.textSm, transition: `background ${vars.dur} ${vars.easeOut}`,
+  fontSize: vars.textUi, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: { "a&:hover, button&:hover": { background: u.hover }, "button&": { width: "100%", border: "0", background: "none", font: "inherit", textAlign: "left", cursor: "pointer" } },
 });
-export const rank = style({ width: "20px", textAlign: "right", color: u.subtle, fontSize: vars.textXs, fontVariantNumeric: "tabular-nums" });
+export const rank = style({ width: "20px", textAlign: "right", color: u.subtle, fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums" });
 export const face = style({ width: "20px", height: "20px", borderRadius: "50%", overflow: "hidden", display: "grid", placeItems: "center" });
 export const rowText = style({ display: "grid", gap: "1px", minWidth: "0" });
 export const rowTitle = style({ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const rowSub = style({ fontSize: vars.textXs, color: u.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const rowSub = style({ fontSize: vars.textMeta, color: u.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const rowCost = style({ display: "grid", justifyItems: "end", gap: "1px", fontVariantNumeric: "tabular-nums" });
-export const rowShare = style({ fontSize: vars.textXs, color: u.muted });
+export const rowShare = style({ fontSize: vars.textMeta, color: u.muted });
 /** Its share of the whole, under its words. */
 export const share = style({ gridColumn: "2 / 4", height: "4px", borderRadius: "2px", background: u.hover, overflow: "hidden" });
 export const shareFill = style({ height: "100%", borderRadius: "2px", background: u.strong });
 export const more = style({
   justifySelf: "start", marginTop: "4px", padding: "6px 12px", border: "0", borderRadius: vars.rField, background: "none",
-  color: u.muted, font: "inherit", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  color: u.muted, font: "inherit", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: { "&:hover": { background: u.hover, color: u.text } },
 });
 
-export const notes = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textXs, color: u.subtle });
-export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", fontSize: vars.textSm, color: u.muted });
+export const notes = style({ display: "grid", gap: "4px", margin: "0", padding: "0", listStyle: "none", fontSize: vars.textMeta, color: u.subtle });
+export const empty = style({ margin: "0", padding: "28px 0", textAlign: "center", fontSize: vars.textUi, color: u.muted });
 
 /** The phone's: what sits on a card of its own (the days, a list). */
-export const card = style({ padding: "14px 12px", borderRadius: "18px", background: u.tile });
+export const card = style({ padding: "14px 12px", borderRadius: `calc(18px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: u.tile });
 export const cardHead = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "0 4px 10px" });
 
 /** The picks over the page and the lists: each option on one line, as wide as the widest. */
@@ -133,5 +135,5 @@ globalStyle(`${pick} > button, ${pickLists} > button`, { whiteSpace: "nowrap", p
 
 // Inspect the rates behind the total, with the same cards on wide and narrow screens.
 export const tileLink = style({ color: "inherit", textDecoration: "none", selectors: { "&:hover": { background: u.hover } } });
-export const priceStation = style({ fontSize: "16px", margin: "0 0 8px", fontWeight: 600 });
-export const priceNote = style({ fontSize: "12px", color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });
+export const priceStation = style({ fontSize: vars.textTitle, margin: "0 0 8px", fontWeight: 600 });
+export const priceNote = style({ fontSize: vars.textMeta, color: u.muted, margin: "0 0 20px", lineHeight: 1.6 });

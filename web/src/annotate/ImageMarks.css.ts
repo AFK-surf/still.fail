@@ -1,8 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
-import { iconBtn } from "../styles/pages.css.ts";
-import { glass } from "../FilePreview.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { darkGlass as glass } from "../FilePreview.css.ts";
 import { note as marksNote, said as marksSaid } from "./Marks.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
 /** What is drawn on an image: still.fail's accent, as a preview's marks are (literal: the image viewer redefines the theme's). */
 export const INK = "oklch(68% .175 39)";
@@ -34,10 +34,10 @@ export const handle = style({ fill: "#fff", stroke: INK, pointerEvents: "auto" }
 
 /** The tools, at the bottom over the image, frosted as the top bar. */
 export const toolbar = style({
-  ...glass, position: "absolute", zIndex: "3", left: "50%", bottom: "max(16px, env(safe-area-inset-bottom))", transform: "translateX(-50%)",
+  ...glass, position: "absolute", zIndex: "3", left: "50%", bottom: "max(16px, var(--safe-bottom))", transform: "translateX(-50%)",
   display: "flex", alignItems: "center", gap: "2px", height: "44px", padding: "0 6px", boxSizing: "border-box",
   borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, color: vars.text, whiteSpace: "nowrap",
-  "@media": { "(max-width: 640px)": { bottom: "max(8px, env(safe-area-inset-bottom))", padding: "0 2px" } },
+  "@media": { "(max-width: 640px)": { bottom: "max(8px, var(--safe-bottom))", padding: "0 2px" } },
 });
 export const gap = style({ width: "1px", height: "18px", margin: "0 4px", background: vars.line, flex: "none" });
 globalStyle(`${toolbar} ${iconBtn}[aria-pressed="true"]`, { background: vars.selected, color: vars.text });
@@ -64,19 +64,19 @@ export const paletteItem = style({
 export const actions = style({ display: "flex", alignItems: "center", gap: "4px" });
 export const cancel = style({
   height: "30px", padding: "0 10px", border: "0", borderRadius: "15px", background: "none", color: vars.muted,
-  font: "inherit", fontSize: vars.textXs, cursor: "pointer", flex: "none",
+  font: "inherit", fontSize: vars.textMeta, cursor: "pointer", flex: "none",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const done = style({
   flex: "none", display: "inline-flex", alignItems: "center", gap: "5px", height: "30px", padding: "0 12px", marginLeft: "4px",
-  border: "0", borderRadius: "15px", background: INK, color: "#fff", font: "inherit", fontSize: vars.textXs,
+  border: "0", borderRadius: "15px", background: INK, color: "#fff", font: "inherit", fontSize: vars.textMeta,
   fontWeight: "600", cursor: "pointer",
   selectors: {
     "&:hover:not(:disabled)": { filter: "brightness(1.08)" },
     "&:disabled": { opacity: ".4", cursor: "default" },
   },
 });
-export const error = style({ color: vars.red, fontSize: vars.textXs, whiteSpace: "nowrap", padding: "0 6px" });
+export const error = style({ color: vars.red, fontSize: vars.textMeta, whiteSpace: "nowrap", padding: "0 6px" });
 
 /** Over the sheet, placed as it is: the numbered marks' pins (and their bubbles), only those taking the pointer. */
 export const pins = style({
@@ -92,9 +92,9 @@ globalStyle(`${note} input::placeholder, ${note} span`, { color: "rgba(255, 255,
 
 /** A phone's foot while marking (as a message's notes page's): the notes' cards over the tools, or the note being written. */
 export const foot = style({
-  position: "absolute", zIndex: "3", left: "0", right: "0", bottom: "max(16px, env(safe-area-inset-bottom))", display: "flex",
+  position: "absolute", zIndex: "3", left: "0", right: "0", bottom: "max(16px, var(--safe-bottom))", display: "flex",
   flexDirection: "column", alignItems: "stretch", gap: "10px", padding: "0 12px", pointerEvents: "none", color: "var(--m-ink)",
-  "@media": { "(max-width: 640px)": { bottom: "max(8px, env(safe-area-inset-bottom))" } },
+  "@media": { "(max-width: 640px)": { bottom: "max(8px, var(--safe-bottom))" } },
 });
 globalStyle(`${foot} > *`, { pointerEvents: "auto" });
 globalStyle(`${foot} ${toolbar}[data-in-foot]`, { position: "static", transform: "none", alignSelf: "center" });

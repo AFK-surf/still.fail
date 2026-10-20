@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
 import { fileURLToPath } from "node:url";
+import { uiAlias } from "./ui/alias.ts";
 import { defineConfig, type Plugin } from "vite";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
@@ -38,6 +39,7 @@ export default defineConfig({
     alias: [
       { find: /^\.\/iroh-pkg\/built\.js$/, replacement: here("src/demo/stubs/built.js") },
       { find: /^\.\/iroh-pkg\/stillfail_iroh_wasm\.js$/, replacement: here("src/demo/stubs/stillfail_iroh_wasm.js") },
+      uiAlias,
       { find: "@stillfail/core-ts/web", replacement: here("src/demo/stubs/core-ts-web.js") },
       { find: "@sqlite.org/sqlite-wasm", replacement: here("src/demo/stubs/sqlite-wasm.js") },
     ],

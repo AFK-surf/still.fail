@@ -141,6 +141,7 @@ test("the test channel's pages are the web app's, not to be indexed, and say the
       const page = await h.fetchBeta(path);
       assert.equal(page.status, 200);
       assert.equal(page.headers.get("x-robots-tag"), "noindex, nofollow");
+      assert.equal(page.headers.get("cache-control"), "no-store");
       // Named the test channel's before any script runs: the title and the link previews' tags, not the URLs.
       const named = INDEX.replace("<title>still.fail", "<title>youdid.wtf").replace('content="still.fail —', 'content="youdid.wtf —');
       assert.equal(await page.text(), named.replace("<head>", `<head><meta name="stillfail-beta" content="${h.origin}">`), path);
@@ -175,6 +176,13 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
   assert.equal(releaseType("desktop/stillfail-beta-0.1.1300-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-beta-0.1.1300-arm64-mac.zip.blockmap"), "application/octet-stream");
   assert.equal(releaseType("android/beta/stillfail-beta-1300.apk"), null);
+  // still.fail mbui's (apps/mbui), a test app of its own: its feed and builds.
+  assert.equal(releaseType("android/mbui/latest.json"), "application/json");
+  assert.equal(releaseType("android/stillfail-mbui-1300.apk"), "application/vnd.android.package-archive");
+  assert.equal(releaseType("android/mbui/stillfail-mbui-1300.apk"), null);
+  assert.equal(releaseType("mac/mbui/latest.json"), "application/json");
+  assert.equal(releaseType("mac/stillfail-mbui-1300-arm64-mac.zip"), "application/zip");
+  assert.equal(releaseType("mac/stillfail-mbui-1300.zip"), null);
   for (const file of ["beta/ember-station-linux-x64.tar.gz", "beta/station.json", "android/beta/stillfail-1.apk", "desktop/beta/stillfail-mac.yml", "beta/../station.json"]) assert.equal(releaseType(file), null, file);
 
   assert.match(installScript("https://ember.test"), /channel="\$\{STILLFAIL_CHANNEL:-stable\}"/);
@@ -204,10 +212,49 @@ test("the test channel's releases: served by name, installed with ?channel=beta,
     assert.equal(await latest("android"), "/releases/android/stillfail-1.apk");
     await bucket.put("android/beta/latest.json", JSON.stringify({ versionCode: 2, file: "android/stillfail-beta-2.apk" }));
     assert.equal(await latest("android-beta"), "/releases/android/stillfail-beta-2.apk");
+    assert.equal(await latest("android-mbui"), null, "none before its first build");
+    await bucket.put("android/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "android/stillfail-mbui-3.apk" }));
+    assert.equal(await latest("android-mbui"), "/releases/android/stillfail-mbui-3.apk");
+    await bucket.put("mac/mbui/latest.json", JSON.stringify({ versionCode: 3, file: "mac/stillfail-mbui-3-arm64-mac.zip" }));
+    assert.equal(await latest("mac-mbui"), "/releases/mac/stillfail-mbui-3-arm64-mac.zip");
     await bucket.put("desktop/stillfail-mac.yml", "version: 0.1.1\npath: stillfail-0.1.1-arm64-mac.zip\n");
     await bucket.put("desktop/stillfail-beta-mac.yml", "version: 0.1.2\npath: stillfail-beta-0.1.2-arm64-mac.zip\n");
     assert.equal(await latest("mac"), "/releases/desktop/stillfail-0.1.1-arm64-mac.zip");
     assert.equal(await latest("mac-beta"), "/releases/desktop/stillfail-beta-0.1.2-arm64-mac.zip");
+  } finally {
+    await h.close();
+  }
+});
+
+test("a station added on the test channel installs its release: on its host, or from a beta app", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    await h.as(aliceTokens, "admin")("POST", `/v1/admin/users/${aliceTokens.subject}/beta`, { on: true });
+    const alice = h.as(aliceTokens);
+    const home = (await (await alice("POST", "/v1/workspaces", { name: "Home" })).json()) as { id: string };
+    type Made = { token: string; install: string; installWindows: string; command: string };
+    const add = async (on: "main" | "beta") => {
+      const made = await h.as(aliceTokens, on)("POST", `/v1/workspaces/${home.id}/enrollments`, { name: "studio" });
+      return (await made.json()) as Made;
+    };
+    const fromApp = async () => {
+      const made = await h.fetch(`/v1/workspaces/${home.id}/enrollments`, { method: "POST", headers: { authorization: `Bearer ${aliceTokens.access_token}`, "content-type": "application/json", "x-stillfail-channel": "beta" }, body: JSON.stringify({ name: "studio" }) });
+      return (await made.json()) as Made;
+    };
+
+    const stable = await add("main");
+    assert.equal(stable.install, `curl -fsSL ${h.origin}/install.sh | sh -s -- ${stable.token}`);
+    assert.equal(stable.installWindows, `& ([scriptblock]::Create((irm ${h.origin}/install.ps1))) ${stable.token}`);
+    for (const made of [await add("beta"), await fromApp()]) {
+      // The test channel's installer, from its host (the station joins the stable host all the same).
+      assert.equal(made.install, `curl -fsSL ${h.betaOrigin}/install.sh | sh -s -- ${made.token}`);
+      assert.equal(made.installWindows, `& ([scriptblock]::Create((irm ${h.betaOrigin}/install.ps1))) ${made.token}`);
+      assert.equal(made.command, `stillfail station enroll ${h.origin} ${made.token}`);
+    }
+    const windows = await (await h.fetchBeta("/install.ps1")).text();
+    assert.match(windows, /else \{ 'beta' \}/);
+    assert.match(windows, new RegExp(`origin = '${h.origin}'`));
   } finally {
     await h.close();
   }

@@ -1,11 +1,16 @@
 #!/bin/sh
 # Builds the still.fail station's releases (the station in TypeScript, laid out by scripts/station-bundle.sh) and puts
 # them in the cloud's releases bucket, where install.sh (cloud/src/install.ts) gets them: darwin-arm64, linux-x64 and
-# linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts).
-# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/) and
+# linux-arm64, each with its Node and its native parts (prebuilt for that platform: scripts/native.ts); and win32-x64,
+# a zip, which install.ps1 gets (cloud/src/install-windows.ts), its Node nodejs.org's zip.
+# The apps too, for their updaters: `desktop` (apps/desktop/build.sh: the zip, its blockmap and stillfail-mac.yml, in desktop/),
+# `desktop-win` (build.sh --win, from the Mac too: the NSIS installer stillfail-<version>-x64-win.exe, its blockmap and
+# stillfail.yml, in desktop/; not signed yet) and
 # `android` (apps/android/build.py --release: stillfail-<n>.apk and latest.json, in android/). Their version is the
 # commits in the history, so a release is made from a new commit; the latest is put last, once its files are there.
-#   release.sh [--beta] [PLATFORM…]   (default: the station's three; desktop and android only when named)
+# And `modules`: the packages of the modules stations install themselves (scripts/module-bundle.ts: each one's archive
+# in modules/<id>/, and its feed, modules/<id>/<id>.json or with --beta <id>-beta.json; any machine builds them).
+#   release.sh [--beta] [PLATFORM…]   (default: the station's four; desktop, android and modules only when named)
 #   release.sh promote [station]
 # --beta: to the test channel instead (cloud/src/install.ts): the station's tarballs in beta/ and station-beta.json; the
 # beta apps, apps of their own beside the released ones (fail.still.desktop.beta: apps/desktop/build.sh --beta, its
@@ -13,7 +18,7 @@
 # stillfail-beta; fail.still.android.beta: apps/android/build.py --release --beta, android/stillfail-beta-<n>.apk and
 # android/beta/latest.json).
 # promote: the test channel's station release becomes the stable one: its tarballs and station.json copied to the
-# stable names, nothing built. (The beta apps are other apps: a released app is released by release.sh desktop/android.
+# stable names, nothing built (the signed words name no channel: they hold for both). (The beta apps are other apps: a released app is released by release.sh desktop/android.
 # The web app is promoted by cloud/deploy.py promote-web.)
 # A station's release names the Node it runs on (its NODE_VERSION), which is not in it: that Node goes beside the releases, once
 # per version (node/node-v<version>-<platform>.tar.gz and its .sha256: scripts/node-dist.sh), when they lack it.
@@ -55,6 +60,7 @@ if [ "${1:-}" = promote ]; then
       # The tarballs first, the feed that says they are out last.
       station)
         for platform in darwin-arm64 linux-x64 linux-arm64; do copy "beta/stillfail-station-$platform.tar.gz" "stillfail-station-$platform.tar.gz" application/gzip; done
+        copy beta/stillfail-station-win32-x64.zip stillfail-station-win32-x64.zip application/zip
         copy station-beta.json station.json application/json
         ;;
       *) echo "promote what? only the station (the beta apps are apps of their own: release.sh desktop or android releases the stable ones), not $what" >&2; exit 2 ;;
@@ -65,9 +71,9 @@ fi
 
 beta=""
 if [ "${1:-}" = --beta ]; then beta=yes; shift; fi
-platforms=${*:-darwin-arm64 linux-x64 linux-arm64}
+platforms=${*:-darwin-arm64 linux-x64 linux-arm64 win32-x64}
 for platform in $platforms; do
-  if [ "$platform" != android ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
+  if [ "$platform" != android ] && [ "$platform" != modules ] && [ "$(uname -s)-$(uname -m)" != Darwin-arm64 ]; then
     echo "$platform releases require a Mac with Apple silicon" >&2; exit 1
   fi
 done
@@ -103,6 +109,21 @@ for platform in $platforms; do
       put "$root/apps/desktop/out/$zip.blockmap" "desktop/$zip.blockmap" application/octet-stream
       put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
       ;;
+    desktop-win)
+      # The Windows app on stillfail.yml; with --beta the beta app on stillfail-beta.yml (electron-updater's feed for
+      # Windows is named by the channel alone).
+      sh "$root/apps/desktop/build.sh" --win ${beta:+--beta}
+      exe="stillfail${beta:+-beta}-0.1.$build-x64-win.exe"
+      feed="stillfail${beta:+-beta}.yml"
+      put "$root/apps/desktop/out/$exe" "desktop/$exe" application/vnd.microsoft.portable-executable
+      put "$root/apps/desktop/out/$exe.blockmap" "desktop/$exe.blockmap" application/octet-stream
+      # Its signature, which the app checks before it installs the update (main.ts; docs/release-signing.md): before
+      # the feed that offers it.
+      rm -f "$root/apps/desktop/out/$exe.sig"
+      node "$root/scripts/release-sign.ts" file "$root/apps/desktop/out/$exe" --kind stillfail-desktop-win --build "$build" ${RELEASE_DIR:+--unsigned-ok}
+      [ ! -f "$root/apps/desktop/out/$exe.sig" ] || put "$root/apps/desktop/out/$exe.sig" "desktop/$exe.sig" application/json
+      put "$root/apps/desktop/out/$feed" "desktop/$feed" "text/yaml; charset=utf-8"
+      ;;
     android)
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json.
       ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release ${beta:+--beta} --tasks :app:assembleRelease
@@ -113,19 +134,53 @@ for platform in $platforms; do
         "$build" "$build" "$name" "$(shasum -a 256 "$apk" | cut -d' ' -f1)" "$(wc -c < "$apk" | tr -d ' ')" > "$out/latest.json"
       put "$out/latest.json" "android/${beta:+beta/}latest.json" application/json
       ;;
+    modules)
+      # Each module's package (scripts/module-bundle.ts, docs/station-modules.md): its archive, named by its version, and
+      # its feed on this channel, signed as the station's is. The archive is the same bytes whenever its version is packed
+      # (the other channel's, a later commit's): one already out is checked to be these, never put over (it is kept for
+      # good where it is served: cloud/src/releases.ts). A module with native parts (the media service's ffmpeg) has an
+      # archive per platform, each carrying the parts the release native-artifacts has (the natives job published them).
+      ids=$(node "$root/scripts/module-bundle.ts" list)
+      for id in $ids; do
+        node "$root/scripts/module-bundle.ts" pack "$id" "$out/module" ${beta:+--beta} ${RELEASE_DIR:+--unsigned-ok} > "$out/module.names"
+        names=$(cat "$out/module.names")
+        feed=${names##* }
+        for archive in ${names% *}; do
+          if released "$archive"; then
+            { { [ -n "${RELEASE_DIR:-}" ] && [ -f "$RELEASE_DIR/$archive" ] && cp "$RELEASE_DIR/$archive" "$out/module.was"; } || curl -fsS -o "$out/module.was" "$releases/$archive"; } &&
+              cmp -s "$out/module.was" "$out/module/$archive" ||
+              { echo "$archive is out already, with other bytes than packed here: not put over (a change to how modules are packed, or to a native part they carry, is a new version)" >&2; exit 1; }
+            echo "$archive is out already, the same"
+          else
+            put "$out/module/$archive" "$archive" application/gzip
+          fi
+        done
+        put "$out/module/$feed" "$feed" application/json
+      done
+      ;;
     *)
       sh "$root/scripts/station-bundle.sh" "$out/$platform" "$platform"
       # Under the new name only: the old name (ember-station-*.tar.gz) keeps the last release from before the rename,
       # for the cloud's installer from before it, which would not know this layout (cloud/src/install.ts).
       # Packed and put beside the next platform's bundling (each ~20 s, one after another before 2026-10-04).
-      file="stillfail-station-$platform.tar.gz"
-      (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
+      # Windows' a zip (install.ps1 opens it with Expand-Archive), its Node nodejs.org's own zip (node-dist.sh).
+      if [ "$platform" = win32-x64 ]; then
+        file="stillfail-station-$platform.zip"
+        (rm -f "$out/$file" && (cd "$out/$platform" && zip -qr "$out/$file" stillfail) && put "$out/$file" "${beta:+beta/}$file" application/zip) &
+        node_file="node/node-v$(cat "$root/.node-version")-win-x64.zip"
+      else
+        file="stillfail-station-$platform.tar.gz"
+        (tar -czf "$out/$file" -C "$out/$platform" stillfail && put "$out/$file" "${beta:+beta/}$file" application/gzip) &
+        node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
+      fi
       putting="${putting:-} $!"
-      # Its Node, unless the releases have that version already.
-      node_file="node/node-v$(cat "$root/.node-version")-$platform.tar.gz"
+      # Its Node (cached by node-dist.sh): its binary's hash is in the signed words; put unless the releases have that
+      # version already.
+      dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
+      signing="${signing:-} $platform=$out/$file,$dist"
       if ! released "$node_file"; then
-        dist=$(sh "$root/scripts/node-dist.sh" "$out/node-$platform" "$platform")
-        put "$dist" "$node_file" application/gzip
+        node_type=application/gzip; [ "$platform" = win32-x64 ] && node_type=application/zip
+        put "$dist" "$node_file" "$node_type"
         put "$dist.sha256" "$node_file.sha256" "text/plain; charset=utf-8"
       fi
       station=yes
@@ -133,8 +188,11 @@ for platform in $platforms; do
   esac
 done
 for pid in ${putting:-}; do wait "$pid" || { echo "a station release was not put" >&2; exit 1; }; done
-# What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there.
+# What stations read to say a newer release is out (station/src/updates/updates.ts), once its files are there: its
+# version, and the words naming each archive and its Node, signed with $RELEASE_SIGNING_KEY (scripts/release-sign.ts,
+# docs/release-signing.md). Not signing is an error but into RELEASE_DIR outside CI (a dev cloud's), where it warns.
 if [ -n "${station:-}" ]; then
-  printf '{"version":"0.1.%s","build":%s,"commit":"%s"}\n' "$build" "$build" "$(git -C "$root" rev-parse HEAD)" > "$out/station.json"
+  node "$root/scripts/release-sign.ts" station "$out/station.json" --build "$build" --commit "$(git -C "$root" rev-parse HEAD)" \
+    --node "$(cat "$root/.node-version")" ${RELEASE_DIR:+--unsigned-ok} $signing
   put "$out/station.json" "station${beta:+-beta}.json" application/json
 fi

@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { ClaudeDriver, classifyResult } from "../src/agents/claude.ts";
@@ -14,12 +15,12 @@ import { existingRunners } from "../src/agents/runner.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 // Inherited, and not to reach the agent.
 process.env.CLAUDECODE = "1";
 process.env.CLAUDE_CODE_OAUTH_TOKEN = "leaked";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync("/tmp/cl-");
+const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cl-") : "/tmp/cl-");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /// Looks every 20 ms until `done` holds: what real processes do has no event here. No deadline (it comes, however
 /// slow the machine, or the test hangs).
@@ -29,7 +30,7 @@ async function eventually(done: () => boolean) {
 /// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/claude.mjs): `open(part)` lets it go on.
 function gates(dump: string, name: string) {
   const at = `${dump}.${name}`;
-  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  if (process.platform !== "win32") for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
   return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: ClaudeDriver[] = [];
@@ -38,7 +39,7 @@ after(async () => {
   rmSync(data, { recursive: true, force: true });
 });
 
-function driver(machineToken?: () => Promise<{ token: string; expiresAt: number }>) {
+function driver(machineToken?: (env?: unknown, rejected?: string) => Promise<{ token: string; expiresAt: number }>) {
   const d = new ClaudeDriver({ data, machineToken });
   drivers.push(d);
   return d;
@@ -143,6 +144,8 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     assert.deepEqual(outcome(events, 3), { kind: "completed" }, "a successful text saying a limit is no failure");
     assert.equal(classifyResult("Claude AI usage limit reached"), "rate_limit");
     assert.equal(classifyResult("session limit configuration is invalid"), "model");
+    assert.equal(classifyResult('API Error: 403 {"error":{"type":"forbidden","message":"Request not allowed"}}'), "refused");
+    assert.equal(classifyResult("API Error: 403 OAuth token does not meet scope requirement"), "auth");
     await session.dispose();
   });
 
@@ -157,6 +160,16 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     const interrupts = stdin(o.dump).filter((m) => m.type === "control_request" && m.request.subtype === "interrupt");
     assert.equal(interrupts.length, 1, "interrupted once");
     assert.match(interrupts[0].request_id, /^interrupt-/);
+    await session.dispose();
+  });
+
+  test("an api_retry 403 Request not allowed fails as refused, not auth: signing in again would not help", async () => {
+    const d = driver();
+    const { events, push, until } = listen();
+    const session = await d.open(options(), push);
+    await session.prompt("retry403");
+    await until(ended(1));
+    assert.deepEqual(outcome(events), { kind: "failed", reason: "refused", message: "403 Request not allowed" });
     await session.dispose();
   });
 
@@ -242,7 +255,7 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await session.dispose();
   });
 
-  test("a machine profile runs on the machine's token, and is not prompted once it is about to run out", async () => {
+  test("a machine profile runs on the machine's token, and a token about to run out does not stop it", async () => {
     let expiresAt = Date.now() + 3600_000;
     const d = driver(async () => ({ token: "machine-token", expiresAt }));
     const o = options({ machine: true });
@@ -255,9 +268,43 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     if (process.platform === "darwin") assert.doesNotMatch(env.PATH.split(":")[0], /stillfail-no-keychain/);
     await session.dispose();
     expiresAt = Date.now() + 60_000;
-    const soon = await d.open(options({ machine: true }), () => {});
-    await assert.rejects(soon.prompt("say:hi"), /token runs out/);
-    await soon.dispose();
+    const soon = listen();
+    const s2 = await d.open(options({ machine: true }), soon.push);
+    await s2.prompt("say:hi");
+    await soon.until(ended(1));
+    await s2.dispose();
+  });
+
+  test("a token handed over is renewed in the process: claude asks on a 401 and the turn goes on, never started again", async () => {
+    const given: (string | undefined)[] = [];
+    let next = 1;
+    const d = driver(async (_env?: unknown, rejected?: string) => {
+      given.push(rejected);
+      return { token: `machine-${next}`, expiresAt: Date.now() + 60_000 };
+    });
+    const o = options({ machine: true });
+    const { events, push, until } = listen();
+    const session = await d.open(o, push);
+    // A token about to run out no longer stops a turn: it is renewed when refused.
+    next = 2;
+    await session.prompt("expired");
+    await until(ended(1));
+    const env = JSON.parse(readFileSync(o.dump, "utf8").trim()).env;
+    assert.equal(env.CLAUDE_CODE_OAUTH_TOKEN, "machine-1");
+    assert.equal(env.CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH, "1");
+    assert.equal(env.CLAUDE_CODE_ENTRYPOINT, "claude-desktop");
+    assert.deepEqual(outcome(events), { kind: "completed" });
+    assert.deepEqual(given, [undefined, "machine-1"], "renewed with the refused one named");
+    const answers = stdin(o.dump).filter((m) => m.type === "control_response");
+    assert.equal(answers.length, 1);
+    assert.equal(answers[0].response.response.accessToken, "machine-2");
+    assert.equal(stdin(o.dump).filter((m) => m.type === "control_request").length, 0, "not interrupted");
+    // No newer token: it is told so, and the turn fails on authentication as before.
+    await session.prompt("expired");
+    await until(ended(2));
+    assert.equal((outcome(events, 1) as { reason?: string }).reason, "auth");
+    assert.equal(stdin(o.dump).filter((m) => m.type === "control_response").at(-1).response.response.reason, "refresh_failed");
+    await session.dispose();
   });
 
   for (const crashed of [false, true]) {

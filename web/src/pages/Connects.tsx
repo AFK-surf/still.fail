@@ -1,17 +1,17 @@
 // Connects, as a settings page: every station's connects in the workspace.
 // Each shows who added it, and the list can be narrowed to the viewer's own.
 import { Illustration } from "../brand.tsx";
-import { Key, Plug, Plus } from "../icons.tsx";
+import { Key, Plug, Plus } from "@stillfail/ui/icons.tsx";
 import { DropdownMenu } from "radix-ui";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useAction, useApi, useConnects, useStations, type MadeSlackApp } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
-import { About, Button, Confirm, ConnectAvatar, FirstOne, Menu, MobileBack, SlackLogo, StatusDot } from "../ui.tsx";
+import { About, Button, Confirm, ConnectAvatar, ConnectKindIcon, FirstOne, Menu, MobileBack, SlackLogo, StatusDot, Waiting, WaitMore } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 import { DoingMark } from "../DoingMark.tsx";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./Connects.css.ts";
@@ -19,6 +19,7 @@ import * as cloudCss from "../styles/cloud.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The connects of a workspace, from the core's `connects` view; `settings` is where the scope's settings live. */
 export function ConnectList({ scope, settings }: { scope: string; settings: string }) {
   const [onlyMine] = useOnlyMine();
@@ -27,7 +28,9 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
   // A connect being added on a station: from the start, or (`resume`) from a Slack app made before.
   const [adding, setAdding] = useState<{ station: Station; resume?: string } | null>(null);
   const shown = connects.value?.items ?? [];
-  const loading = !connects.value || connects.value.loading;
+  // What the list still waits on (the core's: stations not read yet, those that could not be); undefined: not come.
+  const wait = connects.value?.wait;
+  const loading = !wait || wait.reading;
   const targets: Station[] = (stations.value ?? []).filter((s) => s.online).map((s) => ({
     id: s.id, name: s.name, base: stationBase(s.station), address: s.station, online: true, settings,
   }));
@@ -72,7 +75,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
         </FirstOne>
       ) : <MineFilter label={t("web-pages.settings.nav.connects")} />}
       {waiting.length > 0 && (
-        <section className={pagesCss.section} aria-label={t("web-pages.connects.waiting")}>
+        <section className={pageCss.section} aria-label={t("web-pages.connects.waiting")}>
           <h2 className={css.sectionTitleQuiet}>{t("web-pages.connects.waiting")}</h2>
           <ul className={pagesCss.list}>
             {waiting.map(({ app, station, stationName }) => (
@@ -87,16 +90,17 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
           </ul>
         </section>
       )}
-      {first ? null : shown.length === 0 ? (
-        <p className={connects.error ? controlsCss.fieldError : shellCss.muted}>{connects.error?.message ?? (loading ? t("web-pages.settings.reading") : onlyMine ? t("web-pages.connects.noneMine") : t("web-pages.connects.none"))}</p>
-      ) : (
+      {first ? null : shown.length === 0 && !connects.error && (loading || wait!.failing.length > 0) ? <Waiting note={wait} />
+        : shown.length === 0 ? (
+        <p className={connects.error ? controlsCss.fieldError : shellCss.muted}>{connects.error?.message ?? (onlyMine ? t("web-pages.connects.noneMine") : t("web-pages.connects.none"))}</p>
+      ) : (<>
         <ul className={pagesCss.list}>
           {shown.map(({ connect: c, station, stationName }) => (
             <li key={`${station}/${c.id}`}>
               <Link className={pagesCss.listRow} to={`${stationBase(station)}/connects/${c.id}`}>
                 <ConnectAvatar connect={c} />
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><SlackLogo size={11} />{c.team}</span>}</span>
+                  <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><ConnectKindIcon kind={c.kind} size={11} />{c.team}</span>}</span>
                   <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
                 </span>
                 <span className={css.connectFacts}>
@@ -105,13 +109,14 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
                 </span>
                 <span className={css.navNote}>{c.statusText}</span>
                 {/* Being deleted (asked on its page, which has gone back here): a ring until the station has dropped it. */}
-                <DoingMark calls="connect.delete" on={{ station, id: c.id }} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} />
+                <DoingMark calls="connect.delete" on={{ station, id: c.id }} inline label={t("web-main.activity.busy")} />
                 <StatusDot state={c.presence} label={c.statusText} />
               </Link>
             </li>
           ))}
         </ul>
-      )}
+        <WaitMore note={wait} />
+      </>)}
       </div>
       {adding && (
         <StationContext.Provider value={adding.station}>
@@ -141,7 +146,7 @@ function WaitingApp({ app, stationName, onGo }: { app: MadeSlackApp; stationName
       {stationName && <span className={css.connectFacts}><span className={cloudCss.stationTag}>{stationName}</span></span>}
       {onGo ? <Button onClick={onGo}>{t("web-pages.connects.continue")}</Button> : <span className={css.navNote}>{t("web-pages.connects.stationOffline")}</span>}
       {/* Dropped from the Confirm, which closes at once: a ring in the menu's place until it is gone, a failure said by toast. */}
-      <DoingMark calls="slack.dropApp" on={{ appId: app.appId }} className={controlsCss.iconSpinner} size={14} label={t("web-main.activity.busy")} />
+      <DoingMark calls="slack.dropApp" on={{ appId: app.appId }} label={t("web-main.activity.busy")} />
       {onGo && !drop.busy && <Menu items={[{ label: t("web-pages.connects.removeHere"), danger: true, onSelect: () => setDropping(true) }]} />}
       <Confirm open={dropping} onClose={() => setDropping(false)} onConfirm={() => { setDropping(false); void drop.run(); }}
         title={t("web-pages.settings.stations.removeConfirm", { name: app.name })} action={t("web-pages.settings.members.unadd")} description={t("web-pages.connects.removeBody", { name: NAME })} />

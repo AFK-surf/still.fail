@@ -2,7 +2,7 @@
 // pinning, archiving. Each takes effect here at once (local.ts: the outbox, a chat asked for, a change laid over its
 // row) and answers once its station has it; nothing a person does waits on the network to show (rule 4). What was on
 // its way when the core stopped goes on as it starts again, under the same idempotency key.
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import type { Inner } from "../core.ts";
 import { handlers, hooks } from "../core/execute.ts";
 import type { Call } from "../core/calls.ts";
@@ -36,10 +36,14 @@ const settle = <A>(r: { _tag: "Success"; success: A } | { _tag: "Failure"; failu
 const parse = (station: string) => Effect.try({ try: () => StationAddr.parse(station), catch: asCoreError });
 
 /// What goes out of a message written here, with the key that makes it go once however often it is sent.
-function outgoing(inner: Inner, station: string, text: string, attachments: unknown, quotes: unknown, client: string | null): J {
+function outgoing(inner: Inner, station: string, text: string, attachments: unknown, quotes: unknown, client: string | null, uploads: { id: string; name: string; size: number; width?: number; height?: number }[] = []): J {
   const key = new Uint8Array(16);
   inner.host.randomBytes(key);
-  const message: J = { text: refs.expand(inner.data, station, text), attachments, quotes, idem: hex(key) };
+  // An image's size the page had not heard of yet when it sent it: as the core has read it since.
+  uploads = uploads.map((u) => u.width && u.height ? u : { ...u, ...inner.composers.sizeOf(u.id) });
+  // And how far it has gone already: its card goes on from there.
+  uploads = uploads.map((u) => ({ ...u, ...inner.composers.sentOf(u.id) }));
+  const message: J = { text: refs.expand(inner.data, station, text), attachments, quotes, queued: true, ...(uploads.length ? { uploads } : {}), idem: hex(key) };
   const from = client ?? prefs.sentFrom(inner.data);
   if (from !== null && from !== "") message.client = from;
   return message;
@@ -48,6 +52,8 @@ function outgoing(inner: Inner, station: string, text: string, attachments: unkn
 export class ViewCalls {
   readonly #inner: Inner;
   readonly #views: Views;
+  readonly #deliveries = new Map<string, Deferred.Deferred<unknown, CoreError>>();
+  readonly #tails = new Map<string, Deferred.Deferred<unknown, CoreError>>();
 
   constructor(inner: Inner, views: Views) {
     this.#inner = inner;
@@ -60,16 +66,52 @@ export class ViewCalls {
 
   /// Posts an outgoing message into a chat: it leaves the outbox as the chat's entries reach it; a failure leaves it
   /// there as `failed`.
-  deliver(station: string, thread: number, id: string, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+  deliver(station: string, thread: number, id: string, ctx: SpanContext | null, retry = false): Effect.Effect<unknown, CoreError> {
+    return Effect.suspend(() => {
+      const chat = `${station}:${thread}`;
+      const key = `${chat}:${id}`;
+      const existing = this.#deliveries.get(key);
+      if (existing) return Deferred.await(existing);
+      const before = this.#tails.get(chat);
+      const done = Deferred.makeUnsafe<unknown, CoreError>();
+      this.#deliveries.set(key, done);
+      this.#tails.set(chat, done);
+      return Effect.andThen(before ? Effect.ignore(Deferred.await(before)) : Effect.void, this.#deliver(station, thread, id, ctx, retry)).pipe(
+        Effect.onExit((exit) => Effect.sync(() => {
+          Deferred.doneUnsafe(done, exit);
+          this.#deliveries.delete(key);
+          if (this.#tails.get(chat) === done) this.#tails.delete(chat);
+        })),
+      );
+    });
+  }
+
+  #deliver(station: string, thread: number, id: string, ctx: SpanContext | null, retry: boolean): Effect.Effect<unknown, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      const entry = this.#local.outboxGet(station, thread, id);
+      let entry = this.#local.outboxGet(station, thread, id);
       if (entry === undefined) return yield* Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
-      const result = yield* Effect.result(Effect.andThen(parse(station), this.#inner.stations.post(station, thread, sentAs(entry), ctx, typeof entry.idem === "string" ? entry.idem : undefined)));
+      const result = yield* Effect.result(Effect.gen({ self: this }, function* () {
+        if (entry.uploads?.length) {
+          const files = yield* this.#inner.composers.uploaded(station, entry.uploads, retry);
+          // The user may discard the queued message while its uploads are running.
+          if (!this.#local.outboxGet(station, thread, id)) return null;
+          this.#local.outboxUploaded(station, thread, id, files);
+          this.#inner.composers.release(entry.uploads);
+          entry = this.#local.outboxGet(station, thread, id)!;
+        }
+        if (!this.#local.outboxGet(station, thread, id)) return null;
+        yield* parse(station);
+        this.#local.outboxDelivering(station, thread, id);
+        return yield* this.#inner.stations.post(station, thread, sentAs(entry), ctx, typeof entry.idem === "string" ? entry.idem : undefined);
+      }));
       if (result._tag === "Success") {
+        if (result.success === null) return null;
         this.#views.outboxSent(station, thread, id, result.success);
         return { seq: result.success };
       }
-      this.#local.outboxState(station, thread, id, result.failure.message);
+      // A 400 is the station refusing the message as it is (a file it does not have: one that went up to another
+      // station): sent again, it would be refused again.
+      this.#local.outboxState(station, thread, id, result.failure.message, result.failure.status === 400);
       return yield* Effect.fail(result.failure);
     });
   }
@@ -164,7 +206,7 @@ export class ViewCalls {
     };
     handlers.chatSend = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatSend">;
-      return Effect.andThen(parse(c.station), Effect.suspend(() => send(c.station, c.thread, outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client), ctx)));
+      return Effect.andThen(parse(c.station), Effect.suspend(() => send(c.station, c.thread, outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client, c.uploads), ctx)));
     };
     handlers.chatCreate = (_inner, call) => {
       const c = call as Of<"chatCreate">;
@@ -180,7 +222,7 @@ export class ViewCalls {
     handlers.chatSendTo = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatSendTo">;
       return Effect.suspend((): Effect.Effect<unknown, CoreError> => {
-        const message = outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client);
+        const message = outgoing(inner, c.station, c.text, c.attachments, c.quotes, c.client, c.uploads);
         const pending = local.pendingThread(c.station, c.session);
         if (typeof pending === "number") return send(c.station, pending, message, ctx);
         if (pending === null) {
@@ -201,9 +243,11 @@ export class ViewCalls {
     handlers.chatRetry = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatRetry">;
       return Effect.suspend(() => {
-        if (local.outboxGet(c.station, c.thread, c.id) === undefined) return Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
+        const entry = local.outboxGet(c.station, c.thread, c.id);
+        if (entry === undefined) return Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
+        if (entry.final === true) return Effect.fail(CoreError.invalid(t("core-misc.call.refused_for_good")));
         local.outboxState(c.station, c.thread, c.id, null);
-        return this.deliver(c.station, c.thread, c.id, ctx);
+        return this.deliver(c.station, c.thread, c.id, ctx, true);
       });
     };
     handlers.chatDiscard = (_inner, call) => {
@@ -261,7 +305,7 @@ export class ViewCalls {
         const row: Record<string, unknown> = {};
         if (c.title !== null) row.title = c.title;
         if (c.pinned !== null) row.pinned = c.pinned ? inner.host.nowMs() : null;
-        if (c.keep) row.archiveReminderDismissed = true;
+        if (c.keep !== null) row.archiveReminderDismissed = c.keep;
         const change = local.changing(station, c.thread, c.session, row, null);
         const result = yield* Effect.result(handlers.op!(inner, { kind: "op", op: c.op }, progress, at, ctx));
         local.changed(change, result._tag === "Success", inner.data.rowsRev(station));
@@ -292,17 +336,17 @@ export class ViewCalls {
       const self = this;
       return Effect.gen(function* () {
         const card = yield* self.#pendingCard(c.station, c.thread, c.seq);
-        const extras = arr(c.attachments).length > 0 || arr(c.quotes).length > 0;
+        const extras = arr(c.attachments).length > 0 || (c.uploads?.length ?? 0) > 0 || arr(c.quotes).length > 0;
         const reply = decisions.reply(card, c.text, extras);
         if (reply === null) return yield* Effect.fail(CoreError.invalid(t("core-misc.call.reply_in_chat")));
         const [text, quotes] = reply;
         prefs.undeferDecision(inner.data, decisions.deferralKey(c.station, c.thread, c.seq));
-        return yield* send(c.station, c.thread, outgoing(inner, c.station, text, c.attachments, [...quotes, ...arr(c.quotes)], null), ctx);
+        return yield* send(c.station, c.thread, outgoing(inner, c.station, text, c.attachments, [...quotes, ...arr(c.quotes)], null, c.uploads), ctx);
       });
     };
     handlers.chatRef = (_inner, call) => {
       const c = call as Of<"chatRef">;
-      return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title) }));
+      return Effect.sync(() => ({ mark: refs.mark(inner.data, c.base ?? inner.host.cloudOrigin(), c.station, c.id, c.title, c.into) }));
     };
     handlers.chatRefsKeep = (_inner, call) => {
       const c = call as Of<"chatRefsKeep">;

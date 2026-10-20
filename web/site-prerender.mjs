@@ -1,4 +1,4 @@
-// Static generation of the official site: after `vite build` (the page and its scripts, dist/site) and its server build
+// Static generation of the official site: after `vp build` (the page and its scripts, dist/site) and its server build
 // (web/src/site/prerender.tsx, dist/site-ssr), the page's HTML goes into dist/site/index.html, where the scripts take
 // it over. Both builds name the styles alike (vanilla-extract, production), so what is built matches what hydrates.
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ Object.assign(globalThis, {
   addEventListener: noop,
   removeEventListener: noop,
   // A document with no body: what the app would put on the page (the sidebar's buddy) is drawn in place (brand.tsx).
-  document: { documentElement: { dataset: { theme: "dark" } }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
+  document: { documentElement: { dataset: { theme: "dark" }, hasAttribute: () => false }, body: null, getElementById: () => null, querySelector: () => null, addEventListener: noop, removeEventListener: noop },
 });
 
 const dist = (path) => fileURLToPath(new URL(`../dist/${path}`, import.meta.url));

@@ -2,10 +2,11 @@
 // chat's unread line, what is read, what comes in with a motion while a chat shows, which notices a page shows now,
 // and the workspace the viewer is in. Whether notifications are on, and whether the system was asked, are kept on the
 // device.
-import { Effect } from "effect";
-import type { ChatOf, FocusCall } from "./attend-parse.ts";
+import { Deferred, Effect } from "effect";
+import type { ChatOf, FocusCall, Permission } from "./attend-parse.ts";
 import type { Host } from "./host.ts";
 import type { ClientId } from "./protocol.ts";
+import { t } from "./i18n.ts";
 import { parseJson, toJsonBytes } from "./util.ts";
 import { ofAddress } from "./workspace.ts";
 
@@ -17,7 +18,25 @@ const KEY = "notify";
 /// A notice no page took this long is not shown any more.
 const SHOW_FOR_MS = 30_000;
 
-type Settings = { on: boolean; asked: boolean };
+/// Which notices are shown (docs/notifications.md): a card or an agent needing them (wait, block), something gone
+/// wrong, a turn done (never, only while no page of the app is in front, or always), someone else saying something.
+export type Kinds = { wait: boolean; failed: boolean; done: "off" | "away" | "always"; message: boolean };
+export const ALL_KINDS: Kinds = { wait: true, failed: true, done: "away", message: true };
+
+/// `preview`: a notice says what was said; off, only what kind of thing happened (as a phone's 「显示预览」).
+type Settings = { on: boolean; asked: boolean; kinds: Kinds; preview: boolean };
+
+/// Kinds as given (or kept): what is not given stays as `base` has it.
+export function kindsOf(v: J, base: Kinds = ALL_KINDS): Kinds {
+  const k = v !== null && typeof v === "object" ? v : {};
+  const flag = (name: "wait" | "failed" | "message") => (typeof k[name] === "boolean" ? k[name] : base[name]);
+  return { wait: flag("wait"), failed: flag("failed"), done: ["off", "away", "always"].includes(k.done) ? k.done : base.done, message: flag("message") };
+}
+
+/// A notice's body with `preview` off: what kind of thing happened, not what was said.
+function hidden(kind: unknown): string {
+  return t(kind === "wait" || kind === "block" ? "core-misc.notice.hidden.wait" : kind === "failed" ? "core-misc.notice.hidden.failed" : kind === "message" ? "core-misc.notice.hidden.message" : "core-misc.notice.hidden.done");
+}
 
 function is(c: ChatOf, station: string, thread: number | null, session: string | null): boolean {
   return c.station === station && ((thread !== null && c.thread === thread) || (session !== null && c.session === session));
@@ -50,7 +69,11 @@ export class Attend {
   readonly #host: Host;
   #settings: Settings;
   #pushing = false;
+  /// What the system lets this device do, as its app last said (`notify.permission`); not kept: said again each start.
+  #permission: Permission = "unknown";
   readonly #focus = new Map<ClientId, Focus>();
+  /// Done when a page comes into view again (`untilShown`).
+  #shownAgain = Deferred.makeUnsafe<void>();
   readonly visits = new Map<string, Visit>();
   readonly #reads = new Map<string, number>();
   #show: [J, number][] = [];
@@ -63,7 +86,7 @@ export class Attend {
   static load(host: Host): Effect.Effect<Attend> {
     return Effect.map(Effect.orElseSucceed(host.storageGet(KEY), () => null), (bytes) => {
       const kept = parseJson(bytes) as J;
-      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true } : { on: true, asked: false };
+      const settings = kept && typeof kept.on === "boolean" ? { on: kept.on, asked: kept.asked === true, kinds: kindsOf(kept.kinds), preview: kept.preview !== false } : { on: true, asked: false, kinds: { ...ALL_KINDS }, preview: true };
       return new Attend(host, settings);
     });
   }
@@ -75,16 +98,23 @@ export class Attend {
   /// The `notify` topic: the settings, whether this device should hold a push registration, what to show now.
   value(workspace: string | null): J {
     const now = this.#host.nowMs();
-    const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => structuredClone(n));
-    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, show };
+    const show = this.#show.filter(([n, at]) => now - at < SHOW_FOR_MS && (workspace === null || of(n) === workspace)).map(([n]) => this.#settings.preview ? structuredClone(n) : { ...structuredClone(n), body: hidden(n.kind) });
+    return { on: this.#settings.on, asked: this.#settings.asked, push: this.#settings.on, kinds: { ...this.#settings.kinds }, preview: this.#settings.preview, permission: this.#permission, show };
   }
 
   /// Changes the settings and keeps them.
-  set(on: boolean | null, asked: boolean | null): Effect.Effect<void> {
-    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked };
+  set(on: boolean | null, asked: boolean | null, kinds: J = null, preview: boolean | null = null): Effect.Effect<void> {
+    const s = { on: on ?? this.#settings.on, asked: asked ?? this.#settings.asked, kinds: kinds === null ? this.#settings.kinds : kindsOf(kinds, this.#settings.kinds), preview: preview ?? this.#settings.preview };
     this.#settings = s;
     if (!s.on) this.#show = [];
     return Effect.ignore(this.#host.storageSet(KEY, toJsonBytes(s)));
+  }
+
+  /// The app found what the system allows; whether that changed.
+  permit(state: Permission): boolean {
+    if (state === this.#permission) return false;
+    this.#permission = state;
+    return true;
   }
 
   setPushing(on: boolean): void {
@@ -94,6 +124,38 @@ export class Attend {
   /// Any page in view.
   seen(): boolean {
     return [...this.#focus.values()].some((f) => f.visible);
+  }
+
+  /// Any page in view, or none said where it is (a UI that never says is taken as looking): what is measured only to
+  /// be shown (a station's connection) is measured only then.
+  shown(): boolean {
+    return this.#focus.size === 0 || this.seen();
+  }
+
+  /// Returns once a page is in view (at once if one is).
+  untilShown(): Effect.Effect<void> {
+    return this.shown() ? Effect.void : Deferred.await(this.#shownAgain);
+  }
+
+  #told(): void {
+    if (!this.shown()) return;
+    Deferred.doneUnsafe(this.#shownAgain, Effect.void);
+    this.#shownAgain = Deferred.makeUnsafe<void>();
+  }
+
+  /// Whether a notice of this kind is shown at all; `inFront`: a page of the app is in front (a turn done is shown
+  /// then only with `done: always`).
+  wants(kind: unknown, inFront: boolean): boolean {
+    const k = this.#settings.kinds;
+    if (kind === "wait" || kind === "block") return k.wait;
+    if (kind === "failed") return k.failed;
+    if (kind === "message") return k.message;
+    return k.done === "always" || (k.done === "away" && !inFront);
+  }
+
+  /// Any page in front: shown and focused.
+  #inFront(): boolean {
+    return [...this.#focus.values()].some((f) => f.visible && f.focused);
   }
 
   /// The workspaces the viewer is in; null while no UI says.
@@ -122,12 +184,14 @@ export class Attend {
     if (call.chat !== undefined) f.chat = call.chat;
     if (call.workspace !== null) f.workspace = call.workspace;
     this.#endVisits();
+    this.#told();
   }
 
   /// A UI went away.
   gone(client: ClientId): void {
     this.#focus.delete(client);
     this.#endVisits();
+    this.#told();
   }
 
   #endVisits(): void {
@@ -153,11 +217,12 @@ export class Attend {
     return [...this.#focus.values()].filter((f) => f.chat !== null && is(f.chat, station, thread, session));
   }
 
-  /// A chat's value as computed: its unread line goes in, and what it asks of the core comes back.
-  chat(station: string, session: string | null, value: J): Due[] {
+  /// A chat's value as computed, with its unread line (and what was said and started while it showed) put in, and
+  /// what it asks of the core.
+  chat(station: string, session: string | null, value: J): { due: Due[]; value: J } {
     const due: Due[] = [];
     const thread = value?.thread?.id;
-    if (typeof thread !== "number") return due;
+    if (typeof thread !== "number") return { due, value };
     const shown = this.#showing(station, thread, session);
     const known = typeof value.thread.read === "number" ? value.thread.read : 0;
     const messages: J[] = Array.isArray(value.messages) ? value.messages : [];
@@ -169,10 +234,10 @@ export class Attend {
       const m = messages.find((x) => seq(x) > read && typeof x.createdAt === "number" && x.createdAt <= opened && x.mine !== true);
       return m === undefined ? null : seq(m);
     };
-    value.unreadAbove = false;
+    const out: J = { ...value, unreadAbove: false };
     if (shown.length === 0) {
-      value.unreadLine = unreadLine(known, now);
-      return due;
+      out.unreadLine = unreadLine(known, now);
+      return { due, value: out };
     }
     const key = `${station}\u0001${thread}`;
     const newest = messages.length > 0 ? seq(messages[messages.length - 1]) : 0;
@@ -187,8 +252,10 @@ export class Attend {
       if (visit.visible && n > visit.top && n > caught && (visit.resumedAt === null || (typeof m.createdAt === "number" && m.createdAt >= visit.resumedAt))) visit.said.add(n);
     }
     visit.top = Math.max(visit.top, newest);
-    for (const m of messages) if (visit.said.has(seq(m))) m.said = true;
-    for (const a of Array.isArray(value.agents) ? value.agents : []) {
+    if (messages.some((m) => visit.said.has(seq(m)))) out.messages = messages.map((m) => (visit.said.has(seq(m)) ? { ...m, said: true } : m));
+    const agents: J[] = Array.isArray(value.agents) ? value.agents : [];
+    const started: J[] = [];
+    for (const a of agents) {
       const k = a?.session?.key;
       if (typeof k !== "string") continue;
       const status = typeof a.status === "string" ? a.status : "";
@@ -197,9 +264,10 @@ export class Attend {
       visit.statuses.set(k, status);
       if (!running) visit.started.delete(k);
       else if (was !== undefined && visit.visible && was !== "running" && (visit.resumedAt === null || (typeof a.since === "number" && a.since >= visit.resumedAt))) visit.started.add(k);
-      if (visit.started.has(k)) a.started = true;
+      if (visit.started.has(k)) started.push(a);
     }
-    value.unreadLine = unreadLine(visit.read, visit.at);
+    if (started.length > 0) out.agents = agents.map((a) => (started.includes(a) ? { ...a, started: true } : a));
+    out.unreadLine = unreadLine(visit.read, visit.at);
     const short = value.newer === true;
     if (!short && shown.some((f) => f.visible && f.chat?.end === true) && newest > known) {
       const sent = this.#reads.get(key) ?? 0;
@@ -208,7 +276,7 @@ export class Attend {
         due.push({ read: { thread, seq: newest } });
       }
     }
-    return due;
+    return { due, value: out };
   }
 
   /// What was due could not be done: asked again the next time.
@@ -224,7 +292,7 @@ export class Attend {
     this.#show = this.#show.filter(([, at]) => now - at < SHOW_FOR_MS);
     const before = this.#show.length;
     for (const n of added) {
-      if (!this.#currentHas(of(n))) continue;
+      if (!this.#currentHas(of(n)) || !this.wants(n.kind, this.#inFront())) continue;
       const station = typeof n.station === "string" ? n.station : "";
       const looking = this.#showing(station, typeof n.thread === "number" ? n.thread : null, typeof n.session === "string" ? n.session : null).some((f) => f.visible && f.focused);
       if (!looking) this.#show.push([structuredClone(n), now]);
@@ -240,8 +308,8 @@ export class Attend {
   }
 
   /// A push came: shown unless notifications are off, a page is in view, or it is of another workspace.
-  pushed(workspace: string | null): boolean {
-    return this.on() && !this.seen() && (workspace === null || this.#currentHas(workspace));
+  pushed(workspace: string | null, kind: string | null = null): boolean {
+    return this.on() && !this.seen() && (kind === null || this.wants(kind, false)) && (workspace === null || this.#currentHas(workspace));
   }
 }
 

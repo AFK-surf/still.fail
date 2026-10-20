@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pageBar } from "./sidebar.css.ts";
 import { pageBarTitle } from "./conversation.css.ts";
 
@@ -44,7 +44,7 @@ export const chatPane = style({
 });
 /** These panes keep their distance from the bottom themselves; the browser's top anchoring would fight it. */
 export const chatList = style({
-  flex: "1", minHeight: "0", overflowY: "auto", padding: "24px 32px", display: "flex", flexDirection: "column",
+  flex: "1", minHeight: "0", overflowY: "auto", padding: "24px 40px", display: "flex", flexDirection: "column",
   gap: "28px", position: "relative", overflowAnchor: "none",
   selectors: {
     // What floats over its foot: its scrollbar (scrollbars.ts) ends a little above the composer, not under it.
@@ -57,7 +57,7 @@ export const chatList = style({
   },
   // Making way for the small web services in the corner (Previews.tsx, which moves it), with its composer: what it
   // shows, not its scrollbar, which stays at the window's edge.
-  paddingRight: "calc(32px + var(--avoid-previews, 0px))",
+  paddingRight: "calc(40px + var(--avoid-previews, 0px))",
   "@media": {
     "(max-width: 700px)": {
       padding: "16px",
@@ -65,7 +65,11 @@ export const chatList = style({
     },
   },
 });
-globalStyle(`${sessionPage} ${pageBar}`, { gridTemplateColumns: "minmax(0, 1fr) auto" });
+/** A long title's people and agents run up to its buttons: a space keeps them two groups (the phone's bar has its own gap). */
+globalStyle(`${sessionPage} ${pageBar}`, {
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  "@media": { "(min-width: 701px)": { columnGap: "16px" } },
+});
 /** Not clipped: an agent mark's state dot sits partly outside it (the title ellipsises by itself). */
 globalStyle(`${sessionPage} ${pageBarTitle}`, {
   gridColumn: "1", justifySelf: "stretch", gap: "10px", minWidth: "0", paddingLeft: "8px",

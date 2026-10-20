@@ -1,8 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { phrase } from "./styles/base.css.ts";
 import { runtimeTags } from "./styles/waiting.css.ts";
-import { btn } from "./styles/controls.css.ts";
+import { btn } from "@stillfail/ui/styles/controls.css.ts";
+import { outset } from "@stillfail/ui/styles/align.ts";
 
 /**
  * A profile or an account (ProfileCard.tsx), laid out by its own width: in one line when wide; name and state over what
@@ -10,10 +11,10 @@ import { btn } from "./styles/controls.css.ts";
  */
 export const profileCard = style({
   containerType: "inline-size", display: "block", padding: "10px 12px", borderRadius: vars.rField,
-  cornerShape: vars.cornerShape, fontSize: vars.textSm, color: "inherit", textDecoration: "none",
+  cornerShape: vars.cornerShape, fontSize: vars.textUi, color: "inherit", textDecoration: "none",
   selectors: {
     // Standing alone (not a row of a list): its text lines up with what is around it.
-    "&[data-framed]": { margin: "0 -12px" },
+    "&[data-framed]": { marginBlock: 0, ...outset(12) },
   },
 });
 export const profileCardLink = style({
@@ -33,7 +34,7 @@ export const profileCardTitle = style({
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 /** What it is wraps rather than cutting off (an account's long address would hide its plan). */
-export const profileCardSub = style({ color: vars.muted, fontSize: vars.textXs, lineHeight: "18px", overflowWrap: "anywhere" });
+export const profileCardSub = style({ color: vars.muted, fontSize: vars.textMeta, lineHeight: "18px", overflowWrap: "anywhere" });
 export const profileCardEmail = style({
   display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
 });

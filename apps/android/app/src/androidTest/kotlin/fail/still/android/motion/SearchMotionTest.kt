@@ -39,7 +39,7 @@ class SearchMotionTest {
     )
 
     /** The search page's text field's width (px), or null once the page is gone. */
-    private fun typed(): Float? = rule.onAllNodesWithContentDescription("搜索对话和消息").fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.width
+    private fun typed(): Float? = rule.onAllNodesWithContentDescription("搜索全部内容").fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.width
 
     @Test fun light() = openAndClose(false)
     @Test fun dark() = openAndClose(true)
@@ -56,7 +56,7 @@ class SearchMotionTest {
         val theme = if (dark) "dark" else "light"
         // The shown list's field (each list has one, the others off the screen): its text
         // field would be as wide as it, less its padding, icon and gap (Search.kt).
-        val fields = rule.onAllNodesWithText("搜索对话和消息")
+        val fields = rule.onAllNodesWithText("搜索全部内容")
         val at = fields.fetchSemanticsNodes().indexOfFirst { it.boundsInRoot.left >= 0f && it.boundsInRoot.left < 100f }
         val list = fields.fetchSemanticsNodes()[at].boundsInRoot.width
         val full = list - with(rule.density) { (24 + 17 + 8).dp.toPx() }

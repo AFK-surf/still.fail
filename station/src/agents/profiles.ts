@@ -1,11 +1,11 @@
 // How a profile's account reaches its models (the Rust station's profiles.rs `access_env`, `codex_overrides`), and the
 // environment a profile's runtime is started with, as config.rs parse_config makes it (`envs`: what the access kind
 // needs there plus the profile's own variables, which win). A profile here is config.json's, its home made absolute.
-import type { Profile } from "./runtime.ts";
+import { runtimeKind, type Profile, type RuntimeKind } from "./runtime.ts";
 import { cleanEndpoint, endpoints, find, runtimesOf, type Endpoints, type Source } from "./providers.ts";
 
 export type AccessKind = "subscription" | "opencode-go" | "anthropic-api" | "env" | "api-provider";
-export type Runtime = "claude" | "codex";
+export type Runtime = RuntimeKind;
 
 /// Which provider an API-provider profile is on, and where.
 export type Via = { provider?: string; endpoint?: string; protocol?: string };
@@ -39,6 +39,9 @@ const NO_KEY = "none";
 export const OPENCODE = "https://opencode.ai/zen/go";
 /// The variable a Codex provider config reads an API provider's key from.
 const CODEX_KEY = "EMBER_API_KEY";
+/// The variable DeepSeek Harness reads a profile's key from (its route's `apiKeyEnv`, dsh.ts); DeepSeek's own route
+/// and its web search read DEEPSEEK_API_KEY.
+export const DSH_KEY = "STILLFAIL_DSH_KEY";
 
 /// Environment an access kind needs. `{route}` is expanded per session later.
 export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model: string | undefined, via: Via): Record<string, string> {
@@ -56,6 +59,9 @@ export function accessEnv(runtime: Runtime, kind: AccessKind, key: string, model
   }
   // The provider's session key keeps the name of before the rename: its sessions go on under it.
   if (kind === "opencode-go" && runtime === "codex") return { OPENCODE_GO_KEY: key, OPENCODE_SESSION: "ember-{route}" };
+  if ((kind === "opencode-go" || kind === "anthropic-api") && runtime === "dsh") return { [DSH_KEY]: key };
+  // Grok Build on SuperGrok signs in in its own home (grok.ts); on an xAI key, it is given it.
+  if (runtime === "grok") return kind === "api-provider" && via.provider === "xai" ? { XAI_API_KEY: key } : {};
   if (kind === "anthropic-api") return { ANTHROPIC_API_KEY: key };
   if (kind === "api-provider") return apiEnv(runtime, key, model, via);
   return {};
@@ -80,6 +86,11 @@ function apiEnv(runtime: Runtime, key: string, model: string | undefined, via: V
     if (model !== undefined) Object.assign(env, { ANTHROPIC_DEFAULT_HAIKU_MODEL: model, ANTHROPIC_SMALL_FAST_MODEL: model });
     env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
     return env;
+  }
+  if (runtime === "dsh") {
+    const route = dshRoute({ id: "", runtime: "dsh", home: "", access: { kind: "api-provider", ...via } });
+    if (route === null) return {};
+    return route.kind === "deepseek" ? { DEEPSEEK_API_KEY: keyOrNone } : { [DSH_KEY]: keyOrNone };
   }
   if (at.responses === undefined) return {};
   const env: Record<string, string> = { [CODEX_KEY]: keyOrNone };
@@ -124,17 +135,47 @@ export function codexOverrides(kind: AccessKind, model: string | undefined, via:
   return sorted();
 }
 
-/// The runtimes an account runs (profiles.rs runtimes_for): an OpenCode Go key both, an Anthropic key Claude Code, a
-/// provider's what it speaks; a subscription (and custom variables) the runtime it was made for.
+/// Where a DeepSeek Harness session's model requests go: DeepSeek's own API through dsh's own DeepSeek route; any other
+/// provider through dsh's pi-ai routes, on the protocol it speaks (chat completions first: every model of a gateway
+/// answers there). `{route}` in a header is expanded per session. None: dsh as its home and variables set it up.
+export type DshRoute =
+  | { kind: "deepseek" }
+  | { kind: "pi"; name: string; api: "openai-completions" | "anthropic-messages" | "openai-responses"; baseURL: string; headers?: Record<string, string> };
+
+export function dshRoute(p: Profile): DshRoute | null {
+  const kind = accessKind(p);
+  const session = { "x-opencode-session": "ember-{route}" };
+  if (kind === "opencode-go") return { kind: "pi", name: "OpenCode Go", api: "openai-completions", baseURL: `${OPENCODE}/v1`, headers: session };
+  if (kind === "anthropic-api") return { kind: "pi", name: "Anthropic", api: "anthropic-messages", baseURL: "https://api.anthropic.com" };
+  if (kind !== "api-provider") return null;
+  const found = apiSource(profileVia(p));
+  if (!found) return null;
+  const [source, at] = found;
+  if (source.id === "deepseek") return { kind: "deepseek" };
+  const headers = source.sessionHeader ? session : undefined;
+  const pi = (api: "openai-completions" | "anthropic-messages" | "openai-responses", baseURL: string): DshRoute => ({ kind: "pi", name: source.name, api, baseURL, ...(headers ? { headers } : {}) });
+  if (at.chat !== undefined) return pi("openai-completions", at.chat);
+  if (at.anthropic !== undefined) return pi("anthropic-messages", at.anthropic);
+  if (at.responses !== undefined) return pi("openai-responses", at.responses);
+  return null;
+}
+
+/// The runtimes an account runs (profiles.rs runtimes_for): an OpenCode Go key all three, an Anthropic key Claude Code
+/// and DeepSeek Harness, a provider's what it speaks; a subscription (and custom variables) the runtime it was made for.
 export function profileRuntimes(p: Profile): Runtime[] {
   const kind = accessKind(p);
   if (kind === "api-provider") {
     const found = apiSource(profileVia(p));
-    return found ? runtimesOf(found[1]) : [];
+    if (!found) return [];
+    // xAI's key runs Grok Build too (its own API, not one of the protocols).
+    return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : runtimesOf(found[1]);
   }
-  if (kind === "opencode-go") return ["claude", "codex"];
-  if (kind === "anthropic-api") return ["claude"];
-  return p.runtime === "claude" || p.runtime === "codex" ? [p.runtime] : [];
+  if (kind === "opencode-go") return ["claude", "codex", "dsh"];
+  if (kind === "anthropic-api") return ["claude", "dsh"];
+  const own = runtimeKind(p.runtime);
+  // DeepSeek Harness has no subscription to sign in to here: its own account is set up by variables.
+  if (own === "dsh" && kind === "subscription") return [];
+  return own ? [own] : [];
 }
 
 /// The environment for a profile's processes of `runtime` (config.rs `envs`, Profile::env): none for a runtime it does

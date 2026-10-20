@@ -1,0 +1,8 @@
+# Started again on the same files: signed in at once, Home (a PC-sized window).
+timeout 60000
+wait 6000
+gone 登录或注册
+#station until 端到端测试
+wait 2000
+shot 3-home-again
+exit

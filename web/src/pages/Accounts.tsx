@@ -1,21 +1,25 @@
-import type { MachineLogin } from "../core/shapes.ts";
+import type { MachineLogin, RuntimeInstall } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
-import { Edit, External, LogIn, Plus, Refresh, Trash } from "../icons.tsx";
+import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useAction, useApi, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile, type RuntimeKind } from "../api.ts";
-import { KEYED } from "../format.ts";
+import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
+import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
+import { useUsage, usageCss } from "../Usage.tsx";
+import { useProfilesSidebar } from "../ProfilesNav.tsx";
+import { hosts } from "../cloud/settings.tsx";
+import type { WorkspaceProfile } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { useAct } from "../toast.tsx";
-import { useToast } from "../toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Loading, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Progress, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as waitingCss from "../styles/waiting.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
@@ -25,6 +29,7 @@ import * as chatCss from "../styles/chat.css.ts";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The plans a machine's own login can be signed in again with (the add page: a vendor's subscription). */
 export type Choice = "claude-sub" | "chatgpt-sub";
 
@@ -45,6 +50,8 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
+  // Whose logins: the page may list several stations', and is read from any machine.
+  const station = useStation();
   const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
     toast(t("web-pages.profiles.machineAdded"));
     navigate(link(`/settings/accounts/${id}`));
@@ -53,7 +60,7 @@ export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] |
   if (!offers.length) return null;
   return (
     <div className={css.machineLogins}>
-      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn")}</p>
+      <p className={css.machineLoginsHead}>{t("web-pages.profiles.machineSignedIn", { station: station.name || t("web-main.machine.this") })}</p>
       {offers.map((l) => (
         // A refused account is said so, with nothing to do with it here.
         <MachineLoginCard key={l.runtime} login={l} action={l.quota?.state === "blocked" ? null : l.usable
@@ -69,7 +76,7 @@ export function AccountPage() {
   const { id } = useParams();
   const overview = useOverview(useStation().address);
   const profile = overview.value?.profiles.find((p) => p.id === id);
-  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <Loading label={t("web-pages.profiles.loading")} />;
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.profiles.loading")} /></div>;
   if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id: id ?? "" })}</p></Empty>;
   return <AccountView key={profile.id} profile={profile} overview={overview.value} />;
 }
@@ -86,7 +93,7 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const remove = useAction(() => api.deleteProfile(profile.id), () => toast(profile.machine ? t("web-pages.profiles.disabled") : t("web-pages.profiles.deleted")));
   // One on the machine's login is stopped rather than deleted: the login stays the machine's, to be used again.
   const removal = profile.machine
-    ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: MACHINE_RUNTIME[profile.runtime] }) }
+    ? { item: t("web-pages.profiles.disable"), title: t("web-pages.profiles.disableConfirm", { name: profile.name }), action: t("web-pages.profiles.disable"), description: t("web-pages.profiles.disableBody", { name: NAME, runtime: RUNTIME_LABEL[profile.runtime] }) }
     : { item: t("web-pages.profiles.delete"), title: t("web-pages.archive.deleteConfirm", { title: profile.name }), action: t("web-pages.profiles.delete"), description: t("web-pages.profiles.deleteBody", { name: NAME }) };
   const check = useAction(() => api.checkProfile(profile.id));
   const saveThen = (input: ProfileInput, done: () => void) => void save.run(input).then((ok) => { if (ok) done(); });
@@ -101,13 +108,25 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   const users = profile.usedBy.map((id) => overview.connects.find((c) => c.id === id)).filter((c) => c !== undefined);
   const [deleting, setDeleting] = useState(false);
 
-  const signIn = profile.access.kind === "subscription";
+  // A subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) rather than given a key.
+  const signIn = profile.access.kind === "subscription" || (profile.access.kind === "opencode-go" && !!profile.access.login);
   // A copy of another station's: shown, used, but changed only there.
   const copy = profile.share?.role === "user";
   const signingIn = profile.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(profile.login.state);
+  // Beside the profiles' sidebar (ProfilesNav.tsx) the list is there: no way back to it.
+  const sidebar = useProfilesSidebar();
+  const workspace = station.address.split("/")[0]!;
+  // Its row of the workspace's list: the account it is, on whichever stations have it.
+  const entry = useProfiles(workspace).value?.items.find((e) => e.members?.some((m) => m.station === station.address && m.profileId === profile.id));
+  // What it is, in a line: its kind, the address signed in (when not its name), where it is.
+  const facts = [
+    profile.machine ? t("web-main.profile.machine") : profile.providerName ?? ACCESS[profile.access.kind].label,
+    profile.email && profile.email !== profile.name ? profile.email : null,
+    entry?.where,
+  ].filter(Boolean).join(" · ");
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
-      <BackLink to={profilesPage(station)} label="Profile" />
+      {!sidebar && <BackLink to={profilesPage(station)} label="Profile" />}
       {/* Who the account is and whether it works now: its provider, name, runtimes, and its last check. */}
       <header className={pagesCss.identity}>
         <span className={`${pagesCss.mark} ${waitingCss.runtimeMark}`} style={{ width: 48, height: 48 }}><ProviderLogo runtime={profile.runtime} kind={profile.access.kind} mark={profile.providerMark} size={26} /></span>
@@ -117,8 +136,9 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
               onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) rename(); if (e.key === "Escape") { setName(profile.name); setEditingName(false); } }} />
           ) : (
             <h1 className={pagesCss.identityName}>{renamingTo ?? profile.name}
-              {renamingTo && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
+              {renamingTo && <Spinner label={t("web-pages.settings.stations.renaming")} />}<RuntimeTags runtimes={profile.runtimes} decision={profile.uses?.includes("decision")} />{!profile.machine && !copy && <IconButton label={t("web-pages.settings.stations.rename")} icon={Edit} onClick={() => setEditingName(true)} />}</h1>
           )}
+          {facts && <p className={pagesCss.identitySub}>{facts}</p>}
           <p className={`${pagesCss.identitySub} ${css.profileState}`}>
             {profile.checkTone !== "green" && <Pill tone={profile.checkTone}>{profile.checkText}</Pill>}
             {/* Keep check details without repeating the healthy status. */}
@@ -128,15 +148,21 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
           </p>
           {check.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.checkFailed", { error: check.error.message })}</p>}
         </div>
-        {!copy && <Menu items={[{ label: profile.usedBy.length ? t("web-pages.profiles.inUse", { item: removal.item }) : removal.item, icon: Trash, danger: true, disabled: profile.usedBy.length > 0, onSelect: () => setDeleting(true) }]} />}
+        {!copy && <Menu items={[{ label: removal.item, icon: Trash, danger: true, onSelect: () => setDeleting(true) }]} />}
       </header>
       {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
       {/* A subscription that needs signing in, or is signing in: that comes first. */}
-      {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pagesCss.section}><SignIn profile={profile} needed /></section>}
+      {!copy && signIn && !profile.machine && (latest?.state === "login" || signingIn) && <section className={pageCss.section}><SignIn profile={profile} needed /></section>}
 
       <QuotaSection profile={profile} />
 
+      <UsageSection profile={profile} entry={entry} workspace={workspace} />
+
+      {entry && hosts(entry).length > 1 && <StationsSection entry={entry} here={station.address} />}
+
       {overview.sharing && <ShareSection profile={profile} />}
+
+      {!copy && <WorkspacesSection profile={profile} />}
 
       {!copy && profile.fast !== undefined && profile.fast !== null && <FastSection profile={profile} />}
 
@@ -174,7 +200,87 @@ function AccountView({ profile, overview }: { profile: Profile; overview: Overvi
   );
 }
 
-const MACHINE_RUNTIME: Record<RuntimeKind, string> = { claude: "Claude Code", codex: "Codex" };
+
+/**
+ * What it spent in the last 7 days (the core's `usage`, its row by account): on this station, and on the others that
+ * have the same account when there are some (each its own line of 各 station).
+ */
+function UsageSection({ profile, entry, workspace }: { profile: Profile; entry: WorkspaceProfile | undefined; workspace: string }) {
+  const station = useStation();
+  const usage = useUsage(workspace, "7").value;
+  if (!usage) return null;
+  const item = usage.lists.find((l) => l.key === "profiles")?.items.find((i) => i.key === `${station.address}/${profile.id}`);
+  const several = (entry?.members?.length ?? 0) > 1;
+  return (
+    <Section title={several ? t("web-pages.profiles.usageHere", { station: station.name }) : t("web-pages.profiles.usage")}
+      actions={<Link className={`${controlsCss.btn} ${controlsCss.btnGhost}`} to={`/w/${workspace}/settings/usage`}><Chart {...ICON} />{t("web-pages.profiles.usageAll")}</Link>}>
+      {item ? (
+        <div className={`${usageCss.usage} ${usageCss.tiles} ${css.usageTiles}`}>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>{t("web-pages.profiles.usageCost")}</span><span className={usageCss.tileValue}>{item.costText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageShare", { share: item.shareText })}</span></div>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>{t("web-pages.profiles.usageCalls")}</span><span className={usageCss.tileValue}>{item.callsText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageCallsSub")}</span></div>
+          <div className={usageCss.tile}><span className={usageCss.tileLabel}>Tokens</span><span className={usageCss.tileValue}>{item.tokensText}</span><span className={usageCss.tileSub}>{t("web-pages.profiles.usageTokensSub")}</span></div>
+        </div>
+      ) : usage.wait.reading ? <WaitLine /> : <p className={shellCss.muted}>{t("web-pages.profiles.usageNone")}</p>}
+    </Section>
+  );
+}
+
+/** The same account on several stations: each's part (lending it, borrowing it, signed in on its own), its state and
+ * who uses it there, leading to its page there. */
+function StationsSection({ entry, here }: { entry: WorkspaceProfile; here: string }) {
+  return (
+    <Section title={t("web-pages.profiles.account.each")}>
+      <ul className={pagesCss.list}>
+        {(entry.members ?? []).map((m) => (
+          <li key={`${m.station}/${m.profileId}`}>
+            <Link className={pagesCss.listRow} to={`${stationBase(m.station)}/settings/accounts/${encodeURIComponent(m.profileId)}`} aria-current={m.station === here ? "page" : undefined}>
+              <StatusDot state={m.online ? "online" : "offline"} />
+              <span className={pagesCss.listRowText}>
+                <span className={pagesCss.listRowTitle}>{m.stationName}</span>
+                <span className={shellCss.muted}>{[m.about, m.usedBy > 0 ? t("web-pages.settings.profiles.usedBy", { n: m.usedBy }) : ""].filter(Boolean).join(" · ")}</span>
+              </span>
+              {!m.online ? <Pill tone="neutral">{t("web-pages.stations.offline")}</Pill> : !m.usable ? <Pill tone="red">{t("web-pages.settings.profiles.hostAway", { station: entry.hostName })}</Pill> : m.checkTone !== "green" && <Pill tone={m.checkTone as never}>{m.checkText}</Pill>}
+              <ChevronRight {...ICON} className={shellCss.muted} />
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+/**
+ * Which of the workspaces the station joined may run their chats on it (docs/multi-workspace.md), a switch each:
+ * for the owners and admins of its home workspace (the core's `memberships`), once the station is in more than one.
+ * All are ticked at first: a profile serves every workspace the station is in until one is turned off.
+ */
+function WorkspacesSection({ profile }: { profile: Profile }) {
+  const station = useStation();
+  const api = useApi();
+  const toast = useToast();
+  const m = useMemberships(station.address).value;
+  const joined = m?.manages ? m.workspaces.filter((w) => !w.home) : [];
+  const now = profile.workspaces ?? [];
+  const put = useAction((next: string[]) => api.putProfile(profile.id, { workspaces: next }));
+  // What is being saved shows at once, its switch turning beside its ring.
+  const shown = put.busy && put.args ? put.args[0] : now;
+  if (joined.length === 0) return null;
+  return (
+    <Section title={t("web-pages.profiles.workspaces.title")} description={t("web-pages.profiles.workspaces.lead")}>
+      {joined.map((w) => {
+        const on = shown.includes(w.workspace);
+        return (
+          <SwitchRow key={w.workspace} title={t("web-pages.profiles.workspaces.for", { name: w.name })} checked={on}
+            description={t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}
+            busy={put.busy && (put.args?.[0].includes(w.workspace) ?? false) !== now.includes(w.workspace)} disabled={put.busy}
+            onChange={(next) => void put.run(next ? [...now, w.workspace] : now.filter((x) => x !== w.workspace)).then((ok) => {
+              if (ok) toast(t(next ? "web-pages.profiles.workspaces.turnedOn" : "web-pages.profiles.workspaces.turnedOff", { name: w.name }));
+            })} />
+        );
+      })}
+    </Section>
+  );
+}
 
 /**
  * Sharing with the workspace's other stations: a switch; once on, where a subscription is signed in (moved to another
@@ -209,7 +315,7 @@ function ShareSection({ profile }: { profile: Profile }) {
   }
   const shared = share !== undefined;
   const allowed = share?.allow ?? null;
-  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join(t("web-main.list.separator"));
   const describe = !shared
     ? t("web-pages.profiles.share.onlyHere", { station: station.name })
     : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied");
@@ -228,7 +334,7 @@ function ShareSection({ profile }: { profile: Profile }) {
       )}
       <div className={pagesCss.cardRow}>
         <span className={pagesCss.cardRowText}><b>{t("web-pages.profiles.share.stations")}</b>
-          {(share?.users?.length ?? 0) > 0 && <span className={shellCss.muted}>{t("web-pages.profiles.share.users", { stations: share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}</span>
+          {(share?.users?.length ?? 0) > 0 && <span className={shellCss.muted}>{t("web-pages.profiles.share.users", { stations: share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join(t("web-main.list.separator")) })}</span>}</span>
         <span className={css.shareValue}>{names}</span>
         <Button variant="ghost" disabled={sharing} onClick={() => setPicking(true)}>{t("web-pages.profiles.share.change")}</Button>
       </div>
@@ -281,7 +387,7 @@ export function PickStations({ stations, self, allowed, onClose, onSave }: {
 /** A profile on the machine's own login: whose it is, and that it is changed on the machine. */
 function MachineAccount({ profile }: { profile: Profile }) {
   const station = useStation();
-  const runtime = MACHINE_RUNTIME[profile.runtime];
+  const runtime = RUNTIME_LABEL[profile.runtime];
   return (
     <Section title={t("web-pages.profiles.account")}>
       <p>{station.name ? t("web-pages.profiles.machineLoginOn", { station: station.name, runtime }) : t("web-pages.profiles.machineLoginHere", { runtime })}<About>{t("web-pages.profiles.machineLoginAbout", { runtime })}</About></p>
@@ -298,8 +404,9 @@ function AccountSection({ profile, signedIn, onSave, busy }: { profile: Profile;
   const [key, setKey] = useState("");
   // Where a provider is at an address of the person's own, that too can be changed (a blank key keeps the stored one).
   const [endpoint, setEndpoint] = useState(profile.access.endpoint ?? "");
-  const keyed = KEYED.has(profile.access.kind);
-  if (!keyed && profile.access.kind !== "subscription") return null;
+  // An OpenCode Go profile on an OpenCode account is signed in again, as a subscription is.
+  const keyed = KEYED.has(profile.access.kind) && !profile.access.login;
+  if (!keyed && profile.access.kind !== "subscription" && !profile.access.login) return null;
   const label = profile.access.kind === "opencode-go" ? "OpenCode Go key" : profile.providerName ? `${profile.providerName} key` : "API key";
   const changed = !!key || (profile.access.endpoint !== undefined && endpoint.trim() !== profile.access.endpoint);
   const stop = () => { setReplacing(false); setKey(""); setEndpoint(profile.access.endpoint ?? ""); };
@@ -398,7 +505,7 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   const cancel = useAction(() => api.cancelLogin(profile.id));
   const send = useAction(() => api.loginCode(profile.id, code), () => setCode(""));
   const active = job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = profile.runtime === "claude" ? "Claude" : "ChatGPT";
+  const provider = signInProvider(profile);
   // Announce a sign-in finishing while the page is open, not one that finished earlier.
   const previous = useRef(job?.state);
   useEffect(() => {
@@ -409,52 +516,59 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   if (!active) {
     return (
       <div className={pagesCss.card}>
-        <div className={pagesCss.cardRow}>
-          <div className={pagesCss.cardRowText}>
-            <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
-            <span className={shellCss.muted}>
-              {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
-            </span>
-          </div>
-          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
-            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
-          </Button>
+        <div className={pagesCss.cardRowText}>
+          <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
+          <span className={shellCss.muted}>
+            {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
+          </span>
         </div>
         {start.error && <p className={controlsCss.fieldError} role="alert">{start.error.message}</p>}
-        <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>
-        {manual && <CopyCommand text={profile.loginCommand} />}
+        {manual && profile.loginCommand && <CopyCommand text={profile.loginCommand} />}
+        {/* Its one button solid, signed in or not: the card's others are words (pageControls.css.ts). */}
+        <div className={pagesCss.cardFoot}>
+          <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
+            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
+          </Button>
+          {/* OpenCode's has no command to run by hand. */}
+          {profile.loginCommand && <Button variant="ghost" onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</Button>}
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`${pagesCss.card} ${css.signIn}`} aria-live="polite">
-      <div className={pagesCss.cardRow}>
-        <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
-        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button>
-      </div>
-      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
       <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      {/* Under the steps, words: the steps' own buttons are what to press. */}
+      <div className={pagesCss.cardFoot}><Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button></div>
     </div>
   );
 }
 
+/** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : "ChatGPT");
+
 /**
- * Codex's device sign-in: the code comes first and is copied as the login page opens, so it is pasted there with no
- * trip back; the rest finishes by itself.
+ * A device sign-in (Codex's, Grok's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
+ * there with no trip back; the rest finishes by itself. OpenCode's page has the code in its address: it is only
+ * compared there, not copied.
  */
-function DeviceCode({ url, code }: { url: string; code: string }) {
+function DeviceCode({ url, code, provider }: { url: string; code: string; provider: string }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
+  const filled = provider === "OpenCode";
   const go = () => {
+    if (filled) return void window.open(url, "_blank", "noopener");
     // Not copied: the page opens all the same, the code to type in by hand.
     void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast(t("web-pages.profiles.copyFailed"))).finally(() => window.open(url, "_blank", "noopener"));
   };
   return (
     <div className={css.deviceCode}>
       <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
-      <Button variant="primary" icon={External} onClick={go}>{copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      <p className={shellCss.muted}>{t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
+      <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
+      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
@@ -484,10 +598,32 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
           </li>
         </ol>
       )}
-      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} />}
+      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} provider={provider} />}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>
+  );
+}
+
+/**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`): installing it first, how that
+ * stands, and its button when the viewer may (`software.update`). The sign-in starts once it is installed.
+ */
+export function InstallStep({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  const installing = install.state === "installing";
+  return (
+    <div className={pagesCss.card}>
+      <div className={pagesCss.cardRowText}>
+        <strong>{install.title}</strong>
+        {install.detail ? <span className={controlsCss.fieldError} role="alert">{install.detail}</span> : <span className={shellCss.muted}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</span>}
+      </div>
+      {installing && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
+      {install.action && <div className={pagesCss.cardFoot}><Button variant="primary" busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button></div>}
+    </div>
   );
 }
 
@@ -501,7 +637,7 @@ function FastSection({ profile }: { profile: Profile }) {
   return <Section title={t("web-pages.profiles.run")}><SwitchRow title={t("web-pages.profiles.fast")} checked={!!profile.fast} disabled={busy}
     description={t("web-pages.profiles.fastLead")}
     onChange={(fast) => act(api.putProfile(profile.id, { fast }), t("web-pages.profiles.fastSave"), fast ? t("web-pages.profiles.fastOn") : t("web-pages.profiles.fastOff"))} />
-    {busy && <p className={shellCss.muted}>{t("web-pages.profiles.saving")}</p>}
+    {busy && <WaitLine text={t("common.saving")} />}
     {error && <p className={controlsCss.fieldError}>{error}</p>}
   </Section>;
 }
@@ -536,9 +672,10 @@ function QuotaSection({ profile }: { profile: Profile }) {
 }
 
 /**
- * Which of the profile's models may be used: none until picked here. Chats
- * and connects offer only enabled models, and the account pool sends a chat
- * only to a profile that has its model enabled.
+ * Which of the profile's models may be used, picked here (one just signed in
+ * starts with those the others of its runtime have, the station's
+ * accounts/models.ts). Chats and connects offer only enabled models, and the
+ * account pool sends a chat only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
   const api = useApi();
@@ -585,57 +722,59 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
   return (
     <Section title={<>{t("web-pages.profiles.models")}<About>{all.length ? t("web-pages.profiles.modelsAbout") : t("web-pages.profiles.modelsAboutNone")}</About></>}
       actions={all.length > 0 && <Button variant="ghost" onClick={() => setChoosing(!choosing)}>{choosing ? t("web-pages.profiles.collapse") : t("web-pages.profiles.chooseModels", { on: enabled.size, all: all.length })}</Button>}>
-      {/* What it can be used for now, first; the whole list only when choosing. */}
-      {all.length > 0 && !choosing && (
-        on.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.noModels")}</p> : (
-          <ul className={css.modelChips}>
-            {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
-          </ul>
-        )
-      )}
-      {all.length > 0 && choosing && (
-        <div className={chatCss.modelPool}>
-          <div className={chatCss.modelPoolTools}>
-            {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
-            <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
-          </div>
-          {series.map((s) => {
-            const list = s.models.filter((m) => shown.includes(m));
-            if (list.length === 0) return null;
-            const every = list.every((m) => enabled.has(m));
-            return (
-              <div key={s.name} className={modelCss.poolSeries}>
-                <div className={modelCss.poolSeriesHead}>
-                  <h4>{s.name}</h4>
-                  <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
+      <div className={css.modelsBody}>
+        {/* What it can be used for now, first; the whole list only when choosing. */}
+        {all.length > 0 && !choosing && (
+          on.length === 0 ? <p className={shellCss.muted}>{t("web-pages.profiles.noModels")}</p> : (
+            <ul className={css.modelChips}>
+              {on.map((m) => <Tip key={m} label={m}><li className={css.modelChip}><ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} /><span>{name(m)}</span></li></Tip>)}
+            </ul>
+          )
+        )}
+        {all.length > 0 && choosing && (
+          <div className={chatCss.modelPool}>
+            <div className={chatCss.modelPoolTools}>
+              {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
+              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
+              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
+            </div>
+            {series.map((s) => {
+              const list = s.models.filter((m) => shown.includes(m));
+              if (list.length === 0) return null;
+              const every = list.every((m) => enabled.has(m));
+              return (
+                <div key={s.name} className={modelCss.poolSeries}>
+                  <div className={modelCss.poolSeriesHead}>
+                    <h4>{s.name}</h4>
+                    <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
+                  </div>
+                  <ul className={chatCss.modelPoolList}>
+                    {list.map((m) => (
+                      <li key={m}>
+                        <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
+                          <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
+                          <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
+                          <span>{name(m)}</span>
+                          {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
+                          {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
+                        </label></Tip>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className={chatCss.modelPoolList}>
-                  {list.map((m) => (
-                    <li key={m}>
-                      <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
-                        <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
-                        <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
-                        <span>{name(m)}</span>
-                        {profile.modelsSaving?.includes(m) && <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner}`} role="status" aria-label={t("web-pages.profiles.saving")} />}
-                        {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
-                      </label></Tip>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {/* A provider that does not list its models: one is named by hand. */}
-      {profile.canAddModel && (
-        <div className={additionsCss.inputRow}>
-          <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
-            onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
-          <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+        {/* A provider that does not list its models: one is named by hand. */}
+        {profile.canAddModel && (
+          <div className={additionsCss.inputRow}>
+            <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
+              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
+            <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
+          </div>
+        )}
+      </div>
     </Section>
   );
 }

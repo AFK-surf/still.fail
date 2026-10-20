@@ -4,21 +4,30 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, net, Notification, powerMonitor, protocol, shell, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
-import { autoUpdater } from "electron-updater";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
+import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { hostname, networkInterfaces } from "node:os";
-import { join, normalize } from "node:path";
+import { homedir, hostname, networkInterfaces } from "node:os";
+import { isAbsolute, join, normalize } from "node:path";
 import { pathToFileURL } from "node:url";
 import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/previewSocket";
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
+import { verifyDesktop } from "../../../station/src/updates/signed.ts";
 import { LocalStation, type Place } from "./station";
+import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
+import { systemPermission } from "./notify-permission.ts";
+import { kept, localNetwork } from "./local-network.ts";
+import { LOCAL_NETWORK_SETTINGS } from "../../../station/src/mesh/lan.ts";
+import { Dock, dockHelper, dockKinds, type DockKinds, type DockSettings } from "./dock.mts";
 import { moveUserData } from "./moves.mts";
+import { attachWindowControls, loadSnapTarget } from "./window-controls.ts";
 import { exportOriginStorage, importOriginStorage, type OriginSnapshot } from "./origin-storage";
+import { type WebBuild, WebUpdates } from "./web-update.mts";
+import { SealedFiles } from "./secure.ts";
 import zhWords from "../../../client/i18n/catalog/zh/desktop.json" with { type: "json" };
 import enWords from "../../../client/i18n/catalog/en/desktop.json" with { type: "json" };
 
@@ -64,7 +73,15 @@ function t(key: string, args?: Record<string, string | number>): string {
 }
 /** build/ (apps/desktop/build.sh) when run from the source, the app's Resources when packaged: web/, mesh.node (the core's iroh) and station/. */
 const resources = app.isPackaged ? process.resourcesPath : join(__dirname, "..");
+const snapTarget = loadSnapTarget(resources);
 const web = join(resources, "web");
+/**
+ * The web app newer than the one the app carries, on the beta app (web-update.mts, docs/desktop-web-updates.md): set as
+ * the app is ready; none run from the source, or on the released app.
+ */
+let webUpdates: WebUpdates | null = null;
+/** This app's build: 0.1.<build>. */
+const appBuild = () => Number(app.getVersion().split(".").at(-1));
 const station = new LocalStation(join(resources, app.isPackaged ? "station" : "station/stillfail"));
 
 /**
@@ -88,20 +105,37 @@ function carryOverUserData(): void {
 // the released app's.
 if (process.env.STILLFAIL_USER_DATA) app.setPath("userData", process.env.STILLFAIL_USER_DATA);
 else if (!BETA) carryOverUserData();
+// Windows shows an app's notices under its AppUserModelID, the installer's shortcut's (package.json build.appId).
+const APP_ID = BETA ? "fail.still.desktop.beta" : "fail.still.desktop";
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 
 // A standard, secure origin: the page's absolute paths, storage and clipboard work as on https://.
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, codeCache: true } },
   // A web service on a station's machine, shown in a frame (see preview below): an origin of its own per station and port.
   { scheme: "stillfail-preview", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  // A file of a station's drive played as it comes (see drive below): what the web app's service worker does for it.
+  { scheme: "stillfail-drive", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
-/** A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it (cloud/src/index.ts). */
+/**
+ * A file of the web app, or for any other path (a client-side route) its index.html, as the cloud serves it
+ * (cloud/src/index.ts). A newer web app taken (webUpdates) is looked in first, then the ones before it: a page opened on
+ * one of them asks for its own files (a chunk it loads late).
+ */
 async function serve(request: Request): Promise<Response> {
   if (new URL(request.url).pathname === "/__stillfail_storage_migration__") return new Response("<!doctype html><title>Storage migration</title>", { headers: { "content-type": "text/html" } });
-  const file = join(web, normalize(decodeURIComponent(new URL(request.url).pathname)));
-  const found = await stat(file).then((s) => s.isFile(), () => false);
-  return net.fetch(pathToFileURL(found ? file : join(web, "index.html")).toString());
+  let path: string;
+  try {
+    path = normalize(decodeURIComponent(new URL(request.url).pathname));
+  } catch {
+    return new Response("Bad path", { status: 400 });
+  }
+  for (const root of webUpdates?.roots() ?? [web]) {
+    const file = join(root, path);
+    if (await stat(file).then((s) => s.isFile(), () => false)) return net.fetch(pathToFileURL(file).toString());
+  }
+  return net.fetch(pathToFileURL(join(webUpdates?.current().dir ?? web, "index.html")).toString());
 }
 
 /** Copy origin-bound settings and the former browser core before loading application code. On failure use the old
@@ -128,10 +162,61 @@ async function migrateOrigin(): Promise<void> {
 
 let core: UtilityProcess | null = null;
 
+/**
+ * The core's iroh: the station's addon, carried once in the station the app carries (build.sh); an app without a
+ * station (SKIP_STATION) carries it beside it.
+ */
+const meshAddon = () => {
+  const alone = join(resources, "mesh.node");
+  return existsSync(alone) ? alone : join(resources, app.isPackaged ? "station" : "station/stillfail", "station", "mesh.node");
+};
+
+/**
+ * What the core keeps sealed (secure.ts): safeStorage, where it seals for real (not Linux's plain-text fallback); null
+ * where it does not, and the core keeps its keys as files as before. A value kept with `user` asks for Touch ID first,
+ * on a Mac that has it; `user_cancelled` when the person said no.
+ */
+let sealed: SealedFiles | null | undefined;
+function sealedFiles(): SealedFiles | null {
+  if (sealed !== undefined) return sealed;
+  if (!app.isReady()) return null;
+  const real = safeStorage.isEncryptionAvailable() && (process.platform !== "linux" || safeStorage.getSelectedStorageBackend() !== "basic_text");
+  const ask = process.platform === "darwin"
+    ? async (reason: string) => {
+        if (!systemPreferences.canPromptTouchID()) return;
+        await systemPreferences.promptTouchID(reason).catch(() => { throw new Error("user_cancelled"); });
+      }
+    : null;
+  sealed = real ? new SealedFiles(join(app.getPath("userData"), "sealed"), safeStorage, ask) : null;
+  return sealed;
+}
+
+/** The core's ask of what is sealed (core.ts `sealer`), answered on its process. */
+type SealedAsk = { id: number; op: "get" | "set" | "delete" | "ask"; key: string; user?: boolean; reason?: string; value?: string };
+async function answerSealed(files: SealedFiles, ask: SealedAsk): Promise<{ value?: string | null }> {
+  if (ask.op === "get") {
+    const value = await files.get(ask.key, ask.user === true, ask.reason ?? "");
+    return { value: value === null ? null : Buffer.from(value).toString("base64") };
+  }
+  if (ask.op === "ask") await files.ask(ask.reason ?? "");
+  else if (ask.op === "set") await files.set(ask.key, Buffer.from(ask.value ?? "", "base64"), ask.user === true);
+  else await files.delete(ask.key);
+  return {};
+}
+
 /** The core's process, started when a page first asks for it and again after it exited. */
 function coreProcess(): UtilityProcess {
   if (core) return core;
-  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, join(resources, "mesh.node"), BETA ? "beta" : ""], { serviceName: `${NAME} core` });
+  const files = sealedFiles();
+  const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, meshAddon(), BETA ? "beta" : "", files ? "sealed" : ""], { serviceName: `${NAME} core` });
+  child.on("message", (message: { sealed?: SealedAsk }) => {
+    const ask = message?.sealed;
+    if (!ask || !files) return;
+    answerSealed(files, ask).then(
+      (answer) => child.postMessage({ sealed: { id: ask.id, ...answer } }),
+      (error: unknown) => child.postMessage({ sealed: { id: ask.id, error: error instanceof Error ? error.message : String(error) } }),
+    );
+  });
   child.on("exit", (code) => {
     if (core === child) core = null;
     dropOwnLink(t("desktop.core.exited"));
@@ -158,18 +243,37 @@ ipcMain.on("app:version", (event) => { event.returnValue = app.getVersion(); });
 // The beta app or not, and the scheme its sign-in comes back on (web/src/cloud/accounts.ts).
 ipcMain.on("app:beta", (event) => { event.returnValue = BETA; });
 ipcMain.on("app:scheme", (event) => { event.returnValue = SCHEMES[0]; });
+// The window's frame, for the page's top row (preload.ts `frame`, open below).
+ipcMain.on("app:frame", (event) => { event.returnValue = frames.get(event.sender.id) ?? "system"; });
+function ownControls(event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) {
+  if (event.senderFrame !== event.sender.mainFrame || !event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return;
+  return windowControls.get(event.sender.id);
+}
+ipcMain.on("window:action", (event, action: unknown) => ownControls(event)?.action(action));
+ipcMain.on("window:bounds", (event, bounds: unknown) => ownControls(event)?.bounds(bounds));
+ipcMain.handle("window:state", (event) => ownControls(event)?.state() ?? null);
+// The colours of the window's buttons on Windows, from the page's own (web/src/titleBar.ts): its top row under them.
+ipcMain.on("window:colors", (event, color: unknown, symbolColor: unknown) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!window || frames.get(event.sender.id) !== "overlay" || typeof color !== "string" || typeof symbolColor !== "string") return;
+  if (!/^#[0-9a-f]{6}$/i.test(color) || !/^#[0-9a-f]{6}$/i.test(symbolColor)) return;
+  window.setTitleBarOverlay({ color, symbolColor });
+  window.setBackgroundColor(color);
+});
 // The language the page speaks (web/src/main.tsx): the app's menus and dialogs speak it too.
 ipcMain.on("app:language", (event, lang: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || (lang !== "zh" && lang !== "en") || lang === chosenLang) return;
   chosenLang = lang;
   if (app.isReady()) setMenu();
+  dock?.words();
 });
 
 // The app's own way to the core, for what it serves itself (previews): a client of the core as a page is, making calls.
 interface OwnLink {
   port: MessagePortMain;
   next: number;
-  waiting: Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void; onProgress?: ((value: unknown) => void) | undefined }>;
+  /** Calls under way: their answers and values, with the bytes beside them when they carry some. */
+  waiting: Map<number, { resolve: (value: unknown, bytes?: Uint8Array) => void; reject: (error: Error) => void; onProgress?: ((value: unknown, bytes?: Uint8Array) => void) | undefined }>;
   /** Topics it holds: each value as it is now, deltas applied. */
   topics: Map<number, { value: unknown; onValue: (value: unknown) => void }>;
 }
@@ -181,7 +285,7 @@ function dropOwnLink(reason: string): void {
   own.port.close();
   own = null;
   // What it held goes on on a new link, once the core is back.
-  setTimeout(followNotices, 1000);
+  setTimeout(() => { followNotices(); followBadge(); dock?.follow(); }, 1000);
 }
 
 /** The app's own link to the core, opened when first needed. */
@@ -191,7 +295,10 @@ function ownLink(): OwnLink {
     coreProcess().postMessage(null, [port1]);
     const link: OwnLink = { port: port2, next: 1, waiting: new Map(), topics: new Map() };
     port2.on("message", ({ data }) => {
-      const message = JSON.parse(String(data)) as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: { message?: string } };
+      // JSON, or JSON with bytes beside it (core.ts).
+      const said = data as string | { json: string; bytes: Uint8Array };
+      const bytes = typeof said === "string" ? undefined : said.bytes;
+      const message = JSON.parse(typeof said === "string" ? said : said.json) as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: { message?: string } };
       const topic = message.id === undefined ? undefined : link.topics.get(message.id);
       if (topic) {
         if ("value" in message) topic.value = message.value;
@@ -203,12 +310,12 @@ function ownLink(): OwnLink {
       const waiting = message.id === undefined ? undefined : link.waiting.get(message.id);
       if (!waiting) return;
       if ("value" in message && !message.error) {
-        waiting.onProgress?.(message.value);
+        waiting.onProgress?.(message.value, bytes);
         return;
       }
       link.waiting.delete(message.id!);
       if (message.error) waiting.reject(new Error(message.error.message ?? t("desktop.core.callFailed")));
-      else waiting.resolve(message.ok);
+      else waiting.resolve(message.ok, bytes);
     });
     port2.start();
     own = link;
@@ -218,14 +325,95 @@ function ownLink(): OwnLink {
 
 /** A call of the core's; `onProgress` hears the values it sends before its answer, `signal` cancels it. */
 function coreCall(name: string, params: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+  return coreBytes(name, params, undefined, onProgress, signal).then((got) => got.value);
+}
+
+/** A call with bytes beside it (`bytes`) and beside its answer and values, never base64; otherwise as coreCall. */
+function coreBytes(name: string, params: unknown, bytes?: Uint8Array, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<{ value: unknown; bytes?: Uint8Array }> {
   const link = ownLink();
   const id = link.next++;
   return new Promise((resolve, reject) => {
-    link.waiting.set(id, { resolve, reject, onProgress });
-    link.port.postMessage({ id, call: name, params });
+    link.waiting.set(id, { resolve: (value, got) => resolve(got === undefined ? { value } : { value, bytes: got }), reject, onProgress });
+    link.port.postMessage(bytes === undefined ? { id, call: name, params } : { id, call: name, params, bytes });
     signal?.addEventListener("abort", () => { if (link.waiting.has(id)) link.port.postMessage({ id, cancel: true }); }, { once: true });
   });
 }
+
+/** A topic of the core's held on the app's own link: its value each time it changes (deltas applied). Returns the letting go. */
+function coreSubscribe(topic: Record<string, unknown>, onValue: (value: unknown) => void): () => void {
+  const link = ownLink();
+  const id = link.next++;
+  link.topics.set(id, { value: undefined, onValue });
+  link.port.postMessage({ id, subscribe: topic });
+  return () => { if (own === link && link.topics.delete(id)) link.port.postMessage({ id, unsubscribe: true }); };
+}
+
+// The dock (dock.mts, docs/desktop-dock.md): on a Mac, the chats that want the person on the screen's edge, also with no
+// window open. Its settings (on: off until turned on, 2026-10-15; new ones peeking out and plain unread ones in it: on
+// unless turned off) are kept in userData/dock.json, set from the settings page (dock:set) or the app menu (on or off).
+const DOCK_FILE = () => join(app.getPath("userData"), "dock.json");
+const dockPath = dockHelper(resources);
+let dock: Dock | null = null;
+
+function dockWords(): Record<string, string> {
+  const words: Record<string, string> = {};
+  for (const name of ["open", "read", "later", "empty", "waiting", "hide"]) words[name] = t(`desktop.dock.${name}`);
+  words.locale = (chosenLang ?? langOf(app.getLocale())) === "zh" ? "zh-Hans" : "en";
+  return words;
+}
+
+function dockSettings(): DockSettings {
+  let kept: Partial<DockSettings> = {};
+  try { kept = JSON.parse(readFileSync(DOCK_FILE(), "utf8")) as Partial<DockSettings>; } catch { /* none kept: the defaults */ }
+  const kinds = dockKinds(kept);
+  return { on: kept.on === true, peek: kept.peek !== false, unread: kinds.done || kinds.message, kinds };
+}
+
+type DockChange = Omit<Partial<DockSettings>, "kinds"> & { kinds?: Partial<DockKinds> };
+
+function setDock(change: DockChange): DockSettings | null {
+  if (!dockPath) return null;
+  const now = dockSettings();
+  // A page from before kinds says only `unread`: both kinds of unread.
+  const kinds = { ...now.kinds, ...(change.unread !== undefined && !change.kinds ? { done: change.unread, message: change.unread } : {}), ...change.kinds };
+  const settings = { ...now, ...change, kinds, unread: kinds.done || kinds.message };
+  writeFileSync(DOCK_FILE(), JSON.stringify(settings));
+  if (settings.on) {
+    dock ??= new Dock(dockPath, {
+      subscribe: coreSubscribe,
+      call: (name, params) => coreCall(name, params),
+      open: (path) => { app.focus({ steal: true }); openPath(path); },
+      words: dockWords,
+      turnedOff: () => setDock({ on: false }),
+    });
+    dock.settings({ peek: settings.peek, kinds: settings.kinds });
+    dock.start();
+  } else {
+    dock?.stop();
+  }
+  setMenu();
+  return settings;
+}
+
+ipcMain.handle("dock:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && dockPath ? dockSettings() : null);
+ipcMain.handle("dock:set", (event, change: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof change !== "object" || change === null) return null;
+  const valid: DockChange = {};
+  for (const key of ["on", "peek", "unread"] as const) {
+    const v = (change as Record<string, unknown>)[key];
+    if (typeof v === "boolean") valid[key] = v;
+  }
+  const kinds = (change as Record<string, unknown>).kinds;
+  if (typeof kinds === "object" && kinds !== null) {
+    const given: Partial<DockKinds> = {};
+    for (const key of ["wait", "failed", "done", "message"] as const) {
+      const v = (kinds as Record<string, unknown>)[key];
+      if (typeof v === "boolean") given[key] = v;
+    }
+    valid.kinds = given;
+  }
+  return setDock(valid);
+});
 
 // Previews: a page asks for a station's port as a host of stillfail-preview:// (p<port>-<the station's hash>), puts that
 // host's /_ember/frame (FRAME below) in a frame, and every other request of the host comes here and goes to the station
@@ -316,20 +504,20 @@ function plain(status: number, text: string): Response {
  * A request to the service as its answer comes (station.preview with `stream`): its status and headers, then its body,
  * which stops the request at the station when it is cancelled (its page gave it up) or `signal` aborts.
  */
-function previewStream(params: Record<string, unknown>, signal: AbortSignal): Promise<{ status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> }> {
+function previewStream(params: Record<string, unknown>, sent: Uint8Array | undefined, signal: AbortSignal): Promise<{ status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> }> {
   const stop = new AbortController();
   signal.addEventListener("abort", () => stop.abort(), { once: true });
   return new Promise((resolve, reject) => {
     let body!: ReadableStreamDefaultController<Uint8Array>;
     const stream = new ReadableStream<Uint8Array>({ start(c) { body = c; }, cancel() { stop.abort(); } });
     let headed = false;
-    coreCall("station.preview", { ...params, stream: true }, (value) => {
-      const v = value as { head?: { status: number; headers: [string, string][] }; chunk?: string };
+    coreBytes("station.preview", { ...params, stream: true }, sent, (value, bytes) => {
+      const v = value as { head?: { status: number; headers: [string, string][] }; chunk?: boolean };
       if (v.head && !headed) {
         headed = true;
         resolve({ status: v.head.status, headers: v.head.headers, body: stream });
-      } else if (typeof v.chunk === "string") {
-        try { body.enqueue(new Uint8Array(Buffer.from(v.chunk, "base64"))); } catch { /* cancelled */ }
+      } else if (v.chunk === true && bytes) {
+        try { body.enqueue(bytes); } catch { /* cancelled */ }
       }
     }, stop.signal).then(
       () => { try { body.close(); } catch { /* cancelled */ } },
@@ -359,13 +547,14 @@ async function previewSocket(request: Request, url: URL, station: string, port: 
     const bytes = new Uint8Array(await request.arrayBuffer());
     const kind = bytes[0];
     const payload = Buffer.from(bytes.subarray(5));
+    // A binary frame's bytes beside the call (`binary: true`).
     const message = kind === 1 ? { text: payload.toString("utf8") }
-      : kind === 2 ? { binary: payload.toString("base64") }
+      : kind === 2 ? { binary: true }
       : kind === 8 ? { close: [payload.length >= 2 ? payload.readUInt16BE(0) : 1000, payload.subarray(2).toString("utf8")] }
       : null;
     if (!message) return plain(400, t("desktop.preview.badMessage"));
     try {
-      await coreCall("preview.socket.send", { socket: sid, ...message });
+      await coreBytes("preview.socket.send", { socket: sid, ...message }, kind === 2 ? new Uint8Array(payload) : undefined);
       return new Response(null, { status: 204 });
     } catch (error) {
       return plain(410, error instanceof Error ? error.message : String(error));
@@ -382,16 +571,16 @@ async function previewSocket(request: Request, url: URL, station: string, port: 
         put(socketFrame(8, new Uint8Array([code >> 8, code & 255, ...utf8.encode(reason)])));
         try { out.close(); } catch { /* cancelled */ }
       };
-      coreCall("preview.socket", {
+      coreBytes("preview.socket", {
         station, port, path: url.searchParams.get("path") ?? "/", socket: sid,
         headers: protocols.length ? [["sec-websocket-protocol", protocols.join(", ")]] : [],
-      }, (value) => {
-        const v = value as { open?: { protocol: string }; text?: string; binary?: string };
+      }, undefined, (value, bytes) => {
+        const v = value as { open?: { protocol: string }; text?: string; binary?: boolean };
         if (v.open) put(socketFrame(0, utf8.encode(v.open.protocol)));
         else if (typeof v.text === "string") put(socketFrame(1, utf8.encode(v.text)));
-        else if (typeof v.binary === "string") put(socketFrame(2, new Uint8Array(Buffer.from(v.binary, "base64"))));
+        else if (v.binary === true) put(socketFrame(2, bytes ?? new Uint8Array()));
       }, stop.signal).then(
-        (closed) => { const { code, reason } = closed as { code: number; reason: string }; close(code, reason); },
+        (closed) => { const { code, reason } = closed.value as { code: number; reason: string }; close(code, reason); },
         () => close(1006, ""),
       );
     },
@@ -410,7 +599,7 @@ async function preview(request: Request): Promise<Response> {
   if (url.pathname === "/_ember/socket.js") return new Response(SOCKET, { headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" } });
   const socket = /^\/_ember\/socket\/([0-9a-f-]{36})$/.exec(url.pathname);
   if (socket) return previewSocket(request, url, station, Number(host[1]), socket[1]!);
-  const body = request.method === "GET" || request.method === "HEAD" ? "" : Buffer.from(await request.arrayBuffer()).toString("base64");
+  const body = request.method === "GET" || request.method === "HEAD" ? undefined : new Uint8Array(await request.arrayBuffer());
   const headers: [string, string][] = [];
   request.headers.forEach((value, name) => headers.push([name, value]));
   try {
@@ -425,7 +614,7 @@ async function preview(request: Request): Promise<Response> {
     let path = url.pathname + url.search;
     let answer: { status: number; headers: [string, string][]; body: ReadableStream<Uint8Array> } | null = null;
     for (let hops = 0; hops < 5 && !answer; hops++) {
-      const got = await previewStream({ station, port: Number(host[1]), method: request.method, path, headers, body }, signal);
+      const got = await previewStream({ station, port: Number(host[1]), method: request.method, path, headers }, body, signal);
       const location = got.status >= 300 && got.status < 400 ? got.headers.find(([k]) => k.toLowerCase() === "location")?.[1] : undefined;
       if (!location) { answer = got; break; }
       void got.body.cancel();
@@ -448,6 +637,65 @@ async function preview(request: Request): Promise<Response> {
   }
 }
 
+// The drive (web/src/drive/stream.ts): the app's page has no service worker to answer a <video>'s ranges, so a file it
+// opens is played from stillfail-drive://f/<token> and each range is read here from the station through the core
+// (drive.read), a part at a time, as the player takes it. Only the app's own page opens one, and lets it go.
+const driveFiles = new Map<string, { station: string; root: string; path: string; size: number; type: string }>();
+/** How much of a file one read asks the core for. */
+const DRIVE_PART = 1024 * 1024;
+
+ipcMain.handle("drive:open", (event, file: unknown) => {
+  const f = file as { station?: unknown; root?: unknown; path?: unknown; size?: unknown; type?: unknown } | null;
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof f?.station !== "string" || typeof f.root !== "string" || typeof f.path !== "string" || !Number.isSafeInteger(f.size) || (f.size as number) < 0) return null;
+  const token = randomUUID();
+  driveFiles.set(token, { station: f.station, root: f.root, path: f.path, size: f.size as number, type: typeof f.type === "string" && f.type ? f.type : "application/octet-stream" });
+  return `stillfail-drive://f/${token}`;
+});
+ipcMain.on("drive:close", (event, url: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof url !== "string") return;
+  driveFiles.delete(url.slice("stillfail-drive://f/".length));
+});
+
+/** A 206 with the range asked for (all of it, 200, when none was), its bytes read as the player takes them. */
+function drive(request: Request): Response {
+  const file = driveFiles.get(new URL(request.url).pathname.slice(1));
+  if (!file) return new Response(null, { status: 404 });
+  const total = file.size;
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get("range") ?? "");
+  let start = 0;
+  let end = total - 1;
+  if (range) {
+    if (range[1] === "" && range[2] !== "") start = Math.max(0, total - Number(range[2]));
+    else {
+      start = Number(range[1]);
+      if (range[2] !== "") end = Math.min(Number(range[2]), total - 1);
+    }
+    if (start >= total || start > end) return new Response(null, { status: 416, headers: { "content-range": `bytes */${total}` } });
+  }
+  const stop = new AbortController();
+  let at = start;
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (at > end) { controller.close(); return; }
+      try {
+        const got = await coreBytes("drive.read", { station: file.station, root: file.root, path: file.path, offset: at, length: Math.min(DRIVE_PART, end - at + 1) }, undefined, undefined, stop.signal);
+        const bytes = got.bytes ?? new Uint8Array();
+        if (bytes.length === 0) throw new Error("nothing read");
+        controller.enqueue(bytes);
+        at += bytes.length;
+        if (at > end) controller.close();
+      } catch (error) {
+        if (!stop.signal.aborted) controller.error(error);
+      }
+    },
+    // The player moved on (a seek): no more of this range is read.
+    cancel() { stop.abort(); },
+  }, { highWaterMark: 0 });
+  const headers: Record<string, string> = { "content-type": file.type, "accept-ranges": "bytes", "content-length": String(end - start + 1), "cache-control": "no-store" };
+  if (range) headers["content-range"] = `bytes ${start}-${end}/${total}`;
+  return new Response(request.method === "HEAD" ? null : body, { status: range ? 206 : 200, headers });
+}
+
 // This machine as a station: the one the app runs (station.ts), or one installed here. A page in a workspace says so
 // (web/src/cloud/workspace.tsx); a station in no workspace yet joins it, once: one removed from its workspace later is
 // not joined again by itself (its cloud.json says removed, and the join-once file is there). Only the workspace's
@@ -468,11 +716,26 @@ function carriedStation(): { carried: boolean } & Place {
 
 ipcMain.handle("station:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? carriedStation() : null);
 
+// A file a message names, on this machine's station (web/src/Peeks.tsx): shown in Finder, a directory opened in it.
+// Absolute, or `~/…`; false when it is not there.
+ipcMain.handle("file:reveal", async (event, given: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof given !== "string") return false;
+  const path = given.startsWith("~/") ? join(homedir(), given.slice(2)) : given;
+  if (!isAbsolute(path)) return false;
+  try {
+    if ((await stat(path)).isDirectory()) return (await shell.openPath(path)) === "";
+  } catch {
+    return false;
+  }
+  shell.showItemInFolder(path);
+  return true;
+});
+
 // Asked for (「添加这台 Mac」): joins whether or not it joined a workspace before, but not over one it is in.
 ipcMain.handle("station:join", async (event, account: unknown, workspace: unknown) => {
   if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof account !== "string" || typeof workspace !== "string") return null;
   if (!station.carried) return { error: t("desktop.station.notCarried") };
-  if (station.enrolled) return { error: t("desktop.station.enrolled") };
+  if (station.enrolled) return { error: t(process.platform === "win32" ? "desktop.station.enrolledPc" : "desktop.station.enrolled") };
   if (joining) return { error: t("desktop.station.joining") };
   try {
     await joinHere(account, workspace);
@@ -514,34 +777,144 @@ function machineName(): string {
   }
 }
 
+// The settings' 本机 Station page (web/src/pages/LocalStation.tsx): this machine's station whoever runs it (the app, a
+// service installed on its own: installed.ts, or a station started by hand), where it stands, and starting, stopping,
+// restarting it, an installed one brought up to the app's release in place. Which workspace it joins is not decided
+// here (the workspace's station settings, station:join).
+type LocalAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
+let localDoing: LocalAction | null = null;
+
+/** run/station.json of a station running the data: the launcher's pid and the release it runs. */
+function runningStation(data: string): { pid: number; version?: string } | null {
+  try {
+    const s = JSON.parse(readFileSync(join(data, "run", "station.json"), "utf8")) as { pid?: unknown; version?: unknown };
+    if (typeof s.pid !== "number" || s.pid <= 0) return null;
+    process.kill(s.pid, 0);
+    return { pid: s.pid, ...(typeof s.version === "string" ? { version: s.version } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+/** The release an installed station has, running or not (its app/BUILD, the installer's). */
+function installedVersion(data: string): string | undefined {
+  try {
+    return `0.1.${readFileSync(join(data, "app", "BUILD"), "utf8").trim()}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 0.1.<n>'s n; -1 for one that does not say. */
+const buildOf = (version: string | undefined) => Number(/^0\.1\.(\d+)$/.exec(version ?? "")?.[1] ?? -1);
+
+/** What the page is told (web/src/core/client.ts, LocalStationState). */
+function localStation() {
+  const data = station.data;
+  const service = installedService();
+  const running = runningStation(data);
+  const runner = !running ? "none" : running.pid === station.pid ? "app" : service ? "service" : "other";
+  const version = running?.version ?? (service ? installedVersion(data) : undefined);
+  let workspace: { id: string; name?: string | undefined; station?: string | undefined; stationName?: string | undefined; removed: boolean } | undefined;
+  try {
+    const c = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+    const id = str(c.workspace);
+    if (id) workspace = { id, name: str(c.workspace_name), station: str(c.station), stationName: str(c.name), removed: c.removed_at != null };
+  } catch { /* in none */ }
+  return {
+    carried: station.carried,
+    carriedVersion: station.version,
+    data,
+    runner,
+    ...(version ? { version } : {}),
+    ...(service ? { service: { kind: service.kind, name: service.name } } : {}),
+    // An installed one behind the app's release (or saying none: one from before versions were said).
+    outdated: !!service && !!station.version && buildOf(version) < buildOf(station.version),
+    ...(workspace ? { workspace } : {}),
+    ...(localDoing ? { doing: localDoing } : {}),
+  };
+}
+
+ipcMain.handle("station:local", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? localStation() : null);
+
+ipcMain.handle("station:act", async (event, action: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof action !== "string") return null;
+  if (!["start", "stop", "restart", "update", "log", "folder"].includes(action)) return null;
+  const data = station.data;
+  if (action === "log") return { opened: (await shell.openPath(join(data, "stillfail.log"))) === "" };
+  if (action === "folder") return { opened: (await shell.openPath(data)) === "" };
+  if (localDoing) return { error: t("desktop.local.busy") };
+  localDoing = action as LocalAction;
+  try {
+    const service = installedService();
+    const running = runningStation(data);
+    if (action === "update") {
+      if (!service) throw new Error(t("desktop.local.noService"));
+      await updateInstalled(service, CLOUD_ORIGIN, { ...process.env, PATH: servicePath(service, station.path), STILLFAIL_CHANNEL: BETA ? "beta" : "stable" });
+    } else if (service) {
+      await controlService(service, action as "start" | "stop" | "restart");
+    } else if (running && running.pid !== station.pid) {
+      // Started by hand (`stillfail start`): only stopped from here, it has no service to start it again.
+      if (action !== "stop") throw new Error(t("desktop.local.byHand"));
+      process.kill(running.pid, "SIGTERM");
+    } else {
+      if (action !== "start") await station.stop();
+      if (action !== "stop") station.resume();
+    }
+    return { station: localStation() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    localDoing = null;
+  }
+});
+
 // Keeping the app current: the cloud has the latest build (scripts/release.sh desktop puts it in /releases/desktop/,
 // stillfail-mac.yml; the beta app's, stillfail-beta-mac.yml beside it), looked for at start and every few hours. A newer one is said to the pages, which show 更新
 // beside the buddy (web/src/brand.tsx); clicked, it is downloaded, and once it is the app quits (the station stopped
 // first) and opens as the new one.
 const UPDATE_EVERY = 4 * 60 * 60 * 1000;
 
-/** What the pages are told of an update (web/src/core/client.ts, AppUpdate). */
-type UpdateState =
+/**
+ * What the pages are told of an update (web/src/core/client.ts, AppUpdate): the app's (it restarts), else a newer web
+ * app's, downloaded already (kind "web": the pages reload, the app does not restart).
+ */
+type UpdateState = (
   | { phase: "available"; version: string }
   | { phase: "downloading"; version: string; percent: number }
   | { phase: "installing"; version: string }
-  | { phase: "failed"; version: string; message: string };
+  | { phase: "failed"; version: string; message: string }
+) & { kind?: "web" };
 let update: UpdateState | null = null;
+let webUpdate: UpdateState | null = null;
+/** What the pages are shown: a new app comes with its web app, so it is said before a web app alone. */
+const shownUpdate = () => update ?? webUpdate;
 
-function sayUpdate(next: UpdateState | null): void {
-  update = next;
+function tellUpdate(): void {
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send("update:state", next);
+    if (!window.isDestroyed()) window.webContents.send("update:state", shownUpdate());
   }
 }
 
-ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? update : null);
+function sayUpdate(next: UpdateState | null): void {
+  update = next;
+  tellUpdate();
+}
+
+function sayWebUpdate(next: UpdateState | null): void {
+  webUpdate = next;
+  tellUpdate();
+}
+
+ipcMain.handle("update:state", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? shownUpdate() : null);
 
 /** Downloads the update said to be there (set by keepUpdated). */
 let download = () => {};
 
-/** Downloads the newer build found, unless one is under way already. */
+/** Downloads the newer build found, unless one is under way already; a newer web app alone, the pages reload on it. */
 function startUpdate(): void {
+  if (!update && webUpdate && webUpdate.phase !== "installing") return void takeWebUpdate();
   if (!update || update.phase === "downloading" || update.phase === "installing") return;
   sayUpdate({ phase: "downloading", version: update.version, percent: 0 });
   download();
@@ -569,25 +942,101 @@ async function checkFromMenu(): Promise<void> {
   } else if (!found.latest) {
     await show({ message: t("desktop.update.latest"), detail: `${NAME} ${found.current}` });
   } else {
+    // A newer web app alone (keepWebUpdated's check found it): the windows reload on it, the app does not restart.
+    const web = !update && webUpdate?.version === found.latest;
     const { response } = await show({
-      message: t("desktop.update.available", { version: found.latest }), detail: t("desktop.update.availableDetail", { current: found.current, app: NAME }),
-      buttons: [t("desktop.update.update"), t("desktop.update.later")], defaultId: 0, cancelId: 1,
+      message: t("desktop.update.available", { version: found.latest }),
+      detail: t(web ? "desktop.update.availableWebDetail" : "desktop.update.availableDetail", { current: found.current, app: NAME }),
+      buttons: [t(web ? "desktop.update.reload" : "desktop.update.update"), t("desktop.update.later")], defaultId: 0, cancelId: 1,
     });
     if (response === 0) startUpdate();
   }
 }
 
 /**
- * The menu bar: Electron's own, but for 检查更新… in the app's menu (macOS; elsewhere the app keeps the default one).
+ * The page's actions the menu bar offers (web/src/keymap.ts), as the window in front says them (menu:state): the first
+ * key each is bound to there, and which it can do now. The keys are the page's: it takes a key press before the menu
+ * does, so a menu item's key only shows it (menuItem).
+ */
+interface MenuState { keys: Record<string, string | null>; on: string[] }
+const menuStates = new Map<number, MenuState>();
+/** The app's window last in front (open): the one the menu bar's page items act in, not the dock's. */
+let front: BrowserWindow | null = null;
+/** The keys the menu bar was built with: other keys build it again, which can be done now only enables its items. */
+let menuKeys = "";
+
+ipcMain.on("menu:state", (event, state: MenuState) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || typeof state?.keys !== "object" || !Array.isArray(state.on)) return;
+  menuStates.set(event.sender.id, state);
+  if (front?.webContents === event.sender) followMenu();
+});
+
+/** The menu bar as the window in front would have it. */
+function followMenu(): void {
+  if (process.platform !== "darwin") return;
+  const state = frontState();
+  if (JSON.stringify(state.keys) !== menuKeys) return setMenu();
+  const menu = Menu.getApplicationMenu();
+  for (const action of MENU_ACTIONS) {
+    const item = menu?.getMenuItemById(`page:${action}`);
+    if (item) item.enabled = state.on.includes(action);
+  }
+}
+
+function frontState(): MenuState {
+  return (front && !front.isDestroyed() && menuStates.get(front.webContents.id)) || { keys: {}, on: [] };
+}
+
+/** The page's actions in the menu bar; the others (Space to the composer, Escape) are keys in a chat, not commands. */
+const MENU_ACTIONS = [
+  "chat.new", "chat.switch", "settings", "shortcuts", "sidebar.toggle", "nav.back", "nav.forward", "chat.prev", "chat.next",
+  "chat.latest", "chat.find", "chat.history", "chat.jobs", "composer.file", "chat.stop", "chat.archive",
+] as const;
+
+/** A page's binding (Mod+Shift+H) as the menu shows it; none for a key a text field types (one with no ⌘, ⌥ or ⌃). */
+function accelerator(binding: string | null | undefined): string | undefined {
+  if (!binding) return undefined;
+  const parts = binding.split("+");
+  const key = parts.pop()!;
+  if (!parts.some((part) => part === "Mod" || part === "Alt" || part === "Ctrl") && !/^F\d{1,2}$/.test(key)) return undefined;
+  return [...parts.map((part) => (part === "Mod" ? "CmdOrCtrl" : part)), key].join("+");
+}
+
+/**
+ * A menu item doing one of the page's actions in the window in front. Its key is pressed in the page first, which does
+ * the action or leaves it (in a text field, under a dialog); the menu then hears it too, and leaves it to the page.
+ */
+function menuItem(action: (typeof MENU_ACTIONS)[number], state: MenuState): Electron.MenuItemConstructorOptions {
+  const keys = accelerator(state.keys[action]);
+  return {
+    id: `page:${action}`,
+    label: t(`desktop.menu.${action}`),
+    ...(keys ? { accelerator: keys } : {}),
+    enabled: state.on.includes(action),
+    click: (_item, _window, event) => {
+      if (!event.triggeredByAccelerator && front && !front.isDestroyed()) front.webContents.send("menu:action", action);
+    },
+  };
+}
+
+/**
+ * The menu bar (macOS), in the app's language, with the page's actions. Elsewhere the window has none: the page has
+ * all its actions and keys itself (web/src/keymap.ts), and Electron's own would be a row of English menus over it.
  */
 function setMenu(): void {
-  if (process.platform !== "darwin") return;
+  if (process.platform !== "darwin") return Menu.setApplicationMenu(null);
+  const state = frontState();
+  menuKeys = JSON.stringify(state.keys);
+  const item = (action: (typeof MENU_ACTIONS)[number]) => menuItem(action, state);
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     {
       label: app.name,
       submenu: [
         { role: "about", label: t("desktop.menu.about", { app: app.name }) },
         { label: t("desktop.menu.checkUpdates"), click: () => void checkFromMenu() },
+        ...(dockPath ? [{ label: t("desktop.menu.dock"), type: "checkbox" as const, checked: dockSettings().on, click: () => setDock({ on: !dockSettings().on }) }] : []),
+        { type: "separator" },
+        { ...item("settings"), label: t("desktop.menu.settings") },
         { type: "separator" },
         { role: "services", label: t("desktop.menu.services") },
         { type: "separator" },
@@ -598,25 +1047,267 @@ function setMenu(): void {
         { role: "quit", label: t("desktop.menu.quit", { app: app.name }) },
       ],
     },
-    { role: "fileMenu" },
-    { role: "editMenu" },
-    { role: "viewMenu" },
-    { role: "windowMenu" },
+    {
+      label: t("desktop.menu.file"),
+      submenu: [
+        item("chat.new"),
+        { label: t("desktop.menu.newWindow"), accelerator: "CmdOrCtrl+Shift+N", click: () => void open() },
+        item("chat.switch"),
+        { type: "separator" },
+        item("composer.file"),
+        { type: "separator" },
+        { role: "close", label: t("desktop.menu.close") },
+      ],
+    },
+    {
+      label: t("desktop.menu.edit"),
+      submenu: [
+        { role: "undo", label: t("desktop.menu.undo") },
+        { role: "redo", label: t("desktop.menu.redo") },
+        { type: "separator" },
+        { role: "cut", label: t("desktop.contextMenu.cut") },
+        { role: "copy", label: t("desktop.contextMenu.copy") },
+        { role: "paste", label: t("desktop.contextMenu.paste") },
+        { role: "pasteAndMatchStyle", label: t("desktop.menu.pasteAndMatchStyle") },
+        { role: "delete", label: t("desktop.menu.delete") },
+        { role: "selectAll", label: t("desktop.contextMenu.selectAll") },
+      ],
+    },
+    {
+      label: t("desktop.menu.view"),
+      submenu: [
+        item("sidebar.toggle"),
+        { type: "separator" },
+        item("chat.history"),
+        item("chat.jobs"),
+        { type: "separator" },
+        { role: "resetZoom", label: t("desktop.menu.resetZoom") },
+        { role: "zoomIn", label: t("desktop.menu.zoomIn") },
+        { role: "zoomOut", label: t("desktop.menu.zoomOut") },
+        { type: "separator" },
+        { role: "reload", label: t("desktop.menu.reload") },
+        { role: "toggleDevTools", label: t("desktop.menu.devTools") },
+        { type: "separator" },
+        { role: "togglefullscreen", label: t("desktop.menu.fullScreen") },
+      ],
+    },
+    {
+      label: t("desktop.menu.go"),
+      submenu: [
+        item("nav.back"),
+        item("nav.forward"),
+        { type: "separator" },
+        item("chat.prev"),
+        item("chat.next"),
+        item("chat.latest"),
+        item("chat.find"),
+      ],
+    },
+    {
+      label: t("desktop.menu.chat"),
+      submenu: [
+        item("chat.stop"),
+        { type: "separator" },
+        item("chat.archive"),
+      ],
+    },
+    {
+      role: "window",
+      label: t("desktop.menu.window"),
+      submenu: [
+        { role: "minimize", label: t("desktop.menu.minimize") },
+        { role: "zoom", label: t("desktop.menu.zoom") },
+        { type: "separator" },
+        { role: "front", label: t("desktop.menu.front") },
+      ],
+    },
+    {
+      role: "help",
+      label: t("desktop.menu.help"),
+      submenu: [item("shortcuts")],
+    },
   ]));
+}
+
+/** How often the beta app asks for a newer web app (its feed is a few hundred bytes; the web app changes a commit). */
+const WEB_UPDATE_EVERY = 30 * 60 * 1000;
+
+/** At start, how long the feed may take to answer before the app opens on what it has (a download then goes on behind). */
+const WEB_ASK_MS = 5_000;
+/** At start, how long the feed may take to answer before the window saying so shows (a quick "nothing newer" shows none). */
+const WEB_SAY_MS = 500;
+
+/**
+ * At start, before the window opens: an app that has not asked for a newer web app for a while (closed since, or just
+ * updated: the newest app is often older than the newest web app) asks first, in a small window saying so, and opens
+ * on the build it gets. Skipped, the feed slow to answer, or failing, it opens on what it has; a download under way goes
+ * on and is offered (刷新) once done.
+ */
+async function webAtStart(): Promise<void> {
+  const updates = webUpdates;
+  if (!updates || !updates.stale(WEB_UPDATE_EVERY)) return;
+  const shown = startUpdateWindow();
+  const got = await new Promise<WebBuild | null>((resolve) => {
+    let downloading = false;
+    const asking = setTimeout(() => { if (!downloading) resolve(null); }, WEB_ASK_MS);
+    const saying = setTimeout(() => shown.show(), WEB_SAY_MS);
+    updates.progress = (p) => {
+      downloading = true;
+      shown.show();
+      shown.say(t("desktop.startUpdate.downloading", { version: `0.1.${p.build}`, got: mb(p.received), size: mb(p.size) }), p.received / p.size);
+    };
+    shown.skipped(() => resolve(null));
+    updates.check().then(resolve, (error: Error) => {
+      console.warn("looking for a newer web app at start failed", error.message);
+      resolve(null);
+    }).finally(() => {
+      clearTimeout(asking);
+      clearTimeout(saying);
+    });
+  });
+  updates.progress = null;
+  if (got) await updates.take().catch((error: Error) => console.warn("taking the web app downloaded failed", error.message));
+  shown.close();
+}
+
+const mb = (bytes: number) => (bytes / 1e6).toFixed(1);
+
+/** The small window webAtStart shows: what it does, a bar of the download, and 跳过. */
+function startUpdateWindow(): { show: () => void; say: (detail: string, done: number) => void; skipped: (then: () => void) => void; close: () => void } {
+  const dark = nativeTheme.shouldUseDarkColors;
+  const [canvas, ink] = dark ? ["#1f2023", "#e9e9ea"] : ["#ffffff", "#3b3e43"];
+  const window = new BrowserWindow({
+    width: 380, height: 128, show: false, frame: false, resizable: false, maximizable: false, fullscreenable: false,
+    backgroundColor: canvas, title: NAME, webPreferences: { sandbox: true, contextIsolation: true },
+  });
+  const page = `<!doctype html><meta charset="utf-8"><style>
+    html, body { margin: 0; height: 100%; background: ${canvas}; color: ${ink}; font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; user-select: none; cursor: default; }
+    body { box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; gap: 10px; -webkit-app-region: drag; }
+    b { font-size: 14px; font-weight: 600; }
+    #detail { opacity: 0.6; font-variant-numeric: tabular-nums; flex: 1; }
+    .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, ${ink} 14%, transparent); overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; background: ${ink}; transition: width 0.15s; }
+    .row { display: flex; align-items: center; gap: 12px; }
+    .row .bar { flex: 1; }
+    button { -webkit-app-region: no-drag; font: inherit; color: inherit; background: none; border: 0; padding: 2px 4px; opacity: 0.7; cursor: pointer; }
+    button:hover { opacity: 1; }
+  </style><b>${t("desktop.startUpdate.title", { app: NAME })}</b><div id="detail"></div>
+  <div class="row"><div class="bar"><i id="bar"></i></div><button id="skip">${t("desktop.startUpdate.skip")}</button></div>
+  <script>
+    window.say = (detail, done) => { document.getElementById("detail").textContent = detail; document.getElementById("bar").style.width = (done * 100).toFixed(1) + "%"; };
+    document.getElementById("skip").onclick = () => { location.hash = "skip"; };
+  </script>`;
+  let state = { detail: t("desktop.startUpdate.checking"), done: 0 };
+  let loaded = false;
+  const push = () => { if (loaded && !window.isDestroyed()) void window.webContents.executeJavaScript(`say(${JSON.stringify(state.detail)}, ${state.done})`); };
+  window.webContents.on("did-finish-load", () => {
+    loaded = true;
+    push();
+  });
+  let showing = false;
+  let drawn = false;
+  window.once("ready-to-show", () => {
+    drawn = true;
+    if (showing) window.show();
+  });
+  let skip = () => {};
+  window.webContents.on("did-navigate-in-page", (_event, url) => { if (url.endsWith("#skip")) skip(); });
+  // Closed (⌘W) is skipped too.
+  window.on("closed", () => skip());
+  void window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);
+  return {
+    show: () => {
+      if (showing) return;
+      showing = true;
+      if (drawn && !window.isDestroyed()) window.show();
+    },
+    say: (detail, done) => {
+      // A bar's step a thousandth at least: not a script run for each chunk read.
+      if (detail === state.detail && Math.abs(done - state.done) < 0.001 && done < 1) return;
+      state = { detail, done };
+      push();
+    },
+    skipped: (then) => { skip = then; },
+    close: () => {
+      skip = () => {};
+      if (!window.isDestroyed()) window.destroy();
+    },
+  };
+}
+
+/** Asks for a newer web app: one downloaded is offered to the pages (刷新). */
+async function lookForWeb(): Promise<boolean> {
+  if (!webUpdates) return false;
+  // One downloaded before and not taken yet is still the one to offer (the feed says nothing newer than it).
+  const ready = (await webUpdates.check()) ?? webUpdates.ready;
+  if (ready && webUpdate?.phase !== "installing") sayWebUpdate({ phase: "available", version: `0.1.${ready.build}`, kind: "web" });
+  return !!ready;
+}
+
+function keepWebUpdated(): void {
+  if (!webUpdates) return;
+  const check = () => void lookForWeb().catch((error: Error) => console.warn("looking for a newer web app failed", error.message));
+  check();
+  setInterval(check, WEB_UPDATE_EVERY);
+  // The menu's 检查更新… and the version page ask for the app first, then for a web app alone.
+  const appCheck = checkNow;
+  checkNow = async () => {
+    const found = await appCheck();
+    const current = `0.1.${webUpdates!.current().build}`;
+    if (found.latest) return found;
+    try {
+      return (await lookForWeb()) && webUpdate ? { current, latest: webUpdate.version } : { ...found, current };
+    } catch (error) {
+      return { current, error: found.error ?? (error as Error).message };
+    }
+  };
+}
+
+/** The newer web app downloaded made the one served, and the app's pages reloaded on it: no restart. */
+async function takeWebUpdate(): Promise<void> {
+  if (!webUpdates || !webUpdate) return;
+  const version = webUpdate.version;
+  sayWebUpdate({ phase: "installing", version, kind: "web" });
+  try {
+    await webUpdates.take();
+  } catch (error) {
+    sayWebUpdate({ phase: "failed", version, message: (error as Error).message, kind: "web" });
+    return;
+  }
+  sayWebUpdate(null);
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed() && window.webContents.getURL().startsWith(`${APP_ORIGIN}/`)) window.webContents.reload();
+  }
+}
+
+/**
+ * A page of a web app downloaded that did not come up (its page was not there, or its renderer crashed as it started):
+ * that build is put away (webUpdates.back) and the page loads again on the one before it, else the one the app carries.
+ */
+function backFromWeb(window: BrowserWindow, build: number): void {
+  if (!webUpdates) return;
+  void webUpdates.back(build).then((went) => {
+    if (went && !window.isDestroyed()) window.webContents.reload();
+  }).catch((error: Error) => console.warn("going back from the web app failed", error.message));
 }
 
 function keepUpdated(): void {
   if (!app.isPackaged) return;
-  download = () => void autoUpdater.downloadUpdate().catch(() => {});
+  // The feed is asked again first: what a check found hours ago is often not the latest any more (the beta app gets a
+  // build a commit), and the build downloaded would ask for the next one as soon as it opened.
+  download = () => void autoUpdater.checkForUpdates().then(() => autoUpdater.downloadUpdate()).catch(() => {});
   autoUpdater.setFeedURL({ provider: "generic", url: `${CLOUD_ORIGIN}/releases/desktop`, channel: BETA ? "stillfail-beta" : "stillfail" });
   autoUpdater.logger = null;
   autoUpdater.autoDownload = false;
   autoUpdater.on("update-available", ({ version }) => {
-    if (update?.version !== version) sayUpdate({ phase: "available", version });
+    if (update?.version === version) return;
+    // Found by the check a download starts with: the download goes on, of this one.
+    sayUpdate(update?.phase === "downloading" ? { ...update, version } : { phase: "available", version });
   });
   autoUpdater.on("download-progress", ({ percent }) => {
     if (update?.phase === "downloading") sayUpdate({ ...update, percent: Math.floor(percent) });
   });
+  if (process.platform === "win32") verifyWindowsUpdates();
   autoUpdater.on("update-downloaded", ({ version }) => {
     sayUpdate({ phase: "installing", version });
     void stopStation().then(() => autoUpdater.quitAndInstall(true, true));
@@ -643,6 +1334,32 @@ function keepUpdated(): void {
   };
   check();
   setInterval(check, UPDATE_EVERY);
+}
+
+/**
+ * On Windows the installer downloaded is checked before it runs (docs/release-signing.md): its .sig beside it on the
+ * feed (scripts/release-sign.ts) must be signed by a release key, for the version offered, newer than this app, and
+ * name its very bytes; else electron-updater throws it away (ERR_UPDATER_INVALID_SIGNATURE). It asks only when
+ * app-update.yml names a publisher (build.sh sets one for Windows). macOS's update is checked by its code signature.
+ */
+function verifyWindowsUpdates(): void {
+  let offered: UpdateInfo | null = null;
+  autoUpdater.on("update-available", (info: UpdateInfo) => (offered = info));
+  (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = async (_publishers, file) => {
+    try {
+      const info = offered;
+      const exe = info?.files.find((f) => f.url.endsWith(".exe"));
+      if (!info || !exe) return "no update was offered";
+      const url = new URL(`${exe.url}.sig`, `${CLOUD_ORIGIN}/releases/desktop/`);
+      const response = await net.fetch(url.href, { cache: "no-store" });
+      if (!response.ok) return `${url.href}: ${response.status}`;
+      const build = appBuild();
+      verifyDesktop(await response.json(), await readFile(file), info.version, build);
+      return null;
+    } catch (error) {
+      return (error as Error).message;
+    }
+  };
 }
 
 /** Pages outside the app open in the system browser, as a new tab would. */
@@ -710,25 +1427,56 @@ function wholeImage(page: WebContents, src: string): Promise<Uint8Array<ArrayBuf
   });
 }
 
+type Frame = "inset" | "overlay" | "custom" | "system";
+/** Each window's frame, by its page (webContents id): what preload.ts tells the page. */
+const frames = new Map<number, Frame>();
+const windowControls = new Map<number, ReturnType<typeof attachWindowControls>>();
+
 /**
- * A window of the app at `path`. The app's own window has no title bar: its buttons sit in the page's top row (44 px,
- * web/src/styles), centred on it. A page of the app opened in a new window (a web service's page of its own) has one:
- * its page has no row for them.
+ * A window of the app at `path`. The app's own window has no title bar: the page's top row (44 px, web/src/styles)
+ * is it, and drags the window. On macOS its buttons sit in it at the left, centred on it; on Windows at the right, drawn
+ * by the page with its toolbar icons. A native input target retains Windows' maximize-hover Snap Layouts menu.
+ * A page of the app opened in a new window (a web service's page of its own) has the system's title bar: its page has
+ * no row for them; so has every window on Linux (preload.ts `frame`).
  */
 function open(path = "/", titled = false): BrowserWindow {
+  const frame: Frame = titled ? "system" : process.platform === "darwin" ? "inset" : process.platform === "win32" ? (snapTarget ? "custom" : "overlay") : "system";
+  // Before the page says its colours: the canvas of the system's theme (web/src/styles/global.css.ts), and its text.
+  const dark = nativeTheme.shouldUseDarkColors;
   const window = new BrowserWindow({
     width: titled ? 1100 : 1280,
     height: 820,
     show: false,
-    ...(titled ? {} : { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const),
+    ...(frame === "inset" ? { titleBarStyle: "hiddenInset", trafficLightPosition: { x: 16, y: 15 } } as const : {}),
+    ...(frame === "custom" || frame === "overlay" ? {
+      titleBarStyle: "hidden",
+      ...(frame === "overlay" ? { titleBarOverlay: { color: dark ? "#1f2023" : "#ffffff", symbolColor: dark ? "#e9e9ea" : "#3b3e43", height: 44 } } : {}),
+      backgroundColor: dark ? "#1f2023" : "#ffffff",
+    } as const : {}),
     webPreferences: { preload: join(__dirname, "preload.js"), sandbox: true, contextIsolation: true },
   });
   window.once("ready-to-show", () => window.show());
+  // The menu bar's page items follow the window in front (followMenu): a new one is, though the app may not be.
+  const contents = window.webContents.id;
+  frames.set(contents, frame);
+  if (frame === "custom" && snapTarget) windowControls.set(contents, attachWindowControls(window, snapTarget));
+  front = window;
+  window.on("focus", () => {
+    front = window;
+    followMenu();
+  });
+  window.on("closed", () => {
+    menuStates.delete(contents);
+    frames.delete(contents);
+    windowControls.delete(contents);
+    if (front === window) front = null;
+    followMenu();
+  });
   // Full screen, the window's buttons are gone: the page's top row stops keeping room for them (preload.ts).
-  const fullScreen = () => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", window.isFullScreen()); };
-  window.on("enter-full-screen", fullScreen);
-  window.on("leave-full-screen", fullScreen);
-  window.webContents.on("did-finish-load", fullScreen);
+  const fullScreen = (on: boolean) => { if (!window.isDestroyed()) window.webContents.send("window:fullscreen", on); };
+  window.on("enter-full-screen", () => fullScreen(true));
+  window.on("leave-full-screen", () => fullScreen(false));
+  window.webContents.on("did-finish-load", () => fullScreen(window.isFullScreen()));
   // A new window of the app's own pages opens in the app, as another window like this one; anything else is outside.
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith(`${APP_ORIGIN}/`)) {
@@ -745,6 +1493,19 @@ function open(path = "/", titled = false): BrowserWindow {
   });
   // A right-click gets a menu, as in a browser (showContextMenu).
   window.webContents.on("context-menu", (_event, params) => showContextMenu(window, params));
+  // A newer web app that does not come up is put away (backFromWeb): the build the page started on, when its page was
+  // not there (-6, ERR_FILE_NOT_FOUND) or its renderer crashed within 30 s of it starting. Not for what any page may
+  // meet (a renderer killed for memory, a frame's load failing).
+  let started = { at: 0, build: 0 };
+  window.webContents.on("did-start-navigation", (details) => {
+    if (details.isMainFrame && !details.isSameDocument && webUpdates) started = { at: Date.now(), build: webUpdates.current().build };
+  });
+  window.webContents.on("did-fail-load", (_event, code, _description, url, mainFrame) => {
+    if (mainFrame && code === -6 && url.startsWith(`${APP_ORIGIN}/`)) backFromWeb(window, started.build);
+  });
+  window.webContents.on("render-process-gone", (_event, details) => {
+    if ((details.reason === "crashed" || details.reason === "launch-failed") && Date.now() - started.at < 30_000) backFromWeb(window, started.build);
+  });
   void window.loadURL(`${APP_ORIGIN}${path}`);
   return window;
 }
@@ -761,8 +1522,15 @@ const shownNotices = new Map<string, Notification>();
 
 interface Notice { id: string; title: string; body: string; tag: string; url: string; workspace: string; stationId: string; session: string }
 
+/** What the system lets the app show (notify-permission.ts), told to the core: what the notifications page shows of it,
+ * on every client of this device. Said again whenever the app comes to the front (back from the system's settings). */
+function tellPermission(): void {
+  void coreCall("notify.permission", { state: systemPermission(APP_ID) }).catch(() => undefined);
+}
+
 function followNotices(): void {
   if (noticesHeld !== null && own?.topics.has(noticesHeld)) return;
+  tellPermission();
   const link = ownLink();
   const id = link.next++;
   const taken = new Set<string>();
@@ -782,6 +1550,29 @@ function followNotices(): void {
   link.port.postMessage({ id, subscribe: { topic: "notify" } });
 }
 
+// The count on the Dock's icon (macOS): the core's `badge` (client/core-ts/src/views/marks.ts), every workspace's: the
+// cards waiting for the person (奏) and the chats of theirs that went wrong, or as the notifications page chose; the same
+// number, and the chats it is made of, as the sidebar's 待处理. A core from before it: failed or waiting, added up.
+let badgeHeld: number | null = null;
+
+interface Mark { alert?: number; wait?: number }
+
+function followBadge(): void {
+  if (badgeHeld !== null && own?.topics.has(badgeHeld)) return;
+  const link = ownLink();
+  const id = link.next++;
+  link.topics.set(id, {
+    value: undefined,
+    onValue: (value) => {
+      const view = value as { workspaces?: Record<string, Mark>; badge?: number } | undefined;
+      const marks = Object.values(view?.workspaces ?? {});
+      app.setBadgeCount(typeof view?.badge === "number" ? view.badge : marks.reduce((n, m) => n + (m.alert ?? 0) + (m.wait ?? 0), 0));
+    },
+  });
+  badgeHeld = id;
+  link.port.postMessage({ id, subscribe: { topic: "workspaceMarks" } });
+}
+
 function show(n: Notice): void {
   shownNotices.get(n.tag)?.close();
   const notification = new Notification({ title: n.title, body: n.body });
@@ -790,6 +1581,38 @@ function show(n: Notice): void {
   shownNotices.set(n.tag, notification);
   notification.show();
 }
+
+// The system's own notification settings for the app, to allow what it refused.
+ipcMain.handle("notify:settings", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return;
+  if (process.platform === "darwin") void shell.openExternal(`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${APP_ID}`);
+  else if (process.platform === "win32") void shell.openExternal("ms-settings:notifications");
+});
+// The permissions page asks again each second while it shows, so a change in the system's settings shows at once.
+ipcMain.handle("notify:check", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return null;
+  const state = systemPermission(APP_ID);
+  void coreCall("notify.permission", { state }).catch(() => undefined);
+  return state;
+});
+// Not asked yet: macOS asks the person the first time the app shows a notification, so it shows one.
+ipcMain.handle("notify:request", (event) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) || !Notification.isSupported()) return;
+  new Notification({ title: NAME, body: t("desktop.notify.allowed") }).show();
+});
+app.on("browser-window-focus", tellPermission);
+
+// macOS's Local Network for the app (local-network.ts): whether it may reach its LAN (the permissions page), whether a
+// station's LAN addresses are kept from it (its row says so), and System Settings' list, where it is switched on.
+ipcMain.handle("lan:check", (event) => (event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? localNetwork() : "unknown"));
+ipcMain.handle("lan:kept", (event, addrs: unknown) => {
+  if (!event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`)) return false;
+  if (!Array.isArray(addrs) || addrs.length > 16 || !addrs.every((a) => typeof a === "string")) return false;
+  return kept(addrs);
+});
+ipcMain.handle("lan:settings", (event) => {
+  if (event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) && process.platform === "darwin") void shell.openExternal(LOCAL_NETWORK_SETTINGS);
+});
 
 ipcMain.handle("notify:get", (event) => event.senderFrame?.url.startsWith(`${APP_ORIGIN}/`) ? notifyOn : null);
 ipcMain.handle("notify:set", (event, on: unknown) => {
@@ -869,21 +1692,37 @@ if (!app.requestSingleInstanceLock()) {
     else BrowserWindow.getAllWindows()[0]?.focus();
   });
   startup = app.whenReady().then(async () => {
+    // The beta app takes newer web apps (web-update.mts); run from the source the page is the source's.
+    if (app.isPackaged && BETA && !DEV_URL) {
+      webUpdates = new WebUpdates({
+        dir: join(app.getPath("userData"), "web"), carried: web, app: appBuild(),
+        feed: `${CLOUD_ORIGIN}/releases/desktop/web/stillfail-beta-web.json`, fetch: (url) => net.fetch(url, { cache: "no-store" }),
+      });
+      void webUpdates.settle().catch((error: Error) => console.warn("settling the web apps downloaded failed", error.message));
+    }
+    // Asked while the rest gets ready; the window waits for it.
+    const asked = webAtStart();
     protocol.handle("app", serve);
     await migrateOrigin();
     protocol.handle("stillfail-preview", preview);
+    protocol.handle("stillfail-drive", drive);
     setMenu();
+    await asked;
     started = true;
     open();
     station.start();
     keepUpdated();
+    keepWebUpdated();
     try { notifyOn = JSON.parse(readFileSync(NOTIFY_FILE(), "utf8")).on !== false; } catch { /* on, as it starts */ }
     followNotices();
+    followBadge();
+    if (dockSettings().on) setDock({});
     followSleep();
     followNetwork();
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
+    dock?.stop();
     if (stationStopped) return;
     event.preventDefault();
     void stopStation().then(() => app.quit());

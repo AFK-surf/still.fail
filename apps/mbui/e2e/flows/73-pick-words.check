@@ -1,0 +1,4 @@
+Q73=$(sql "select quotes from entries where author_kind=\"person\" and text = \"引用了一个词 $TAG\"")
+check "the station has the message with its quote, the agent's" 'echo "$Q73" | grep -q "\"role\":\"agent\""'
+check "the quote is a passage of the agent's words, not all of them" 'T=$(echo "$Q73" | python3 -c "import json,sys; print(json.load(sys.stdin)[0][\"text\"])"); [ -n "$T" ] && echo "选词测试 $TAG 这一句话里有好几个可以单独选中的词语" | grep -qF "$T" && [ "$T" != "选词测试 $TAG 这一句话里有好几个可以单独选中的词语" ]'
+check "复制 put just a word of it on the clipboard (macOS's pasteboard, read as UTF-8 and kept in clipboard.txt; not read on Android)" '[ "$PLATFORM" = android ] || { LANG=en_US.UTF-8 pbpaste > $OUT/$name/clipboard.txt; python3 -c "import sys; c = open(sys.argv[1], encoding=\"utf-8\").read(); s = sys.argv[2]; sys.exit(0 if c and c in s and len(c) < len(s) // 2 else 1)" $OUT/$name/clipboard.txt "选词测试 $TAG 这一句话里有好几个可以单独选中的词语"; }'

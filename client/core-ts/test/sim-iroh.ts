@@ -12,9 +12,9 @@ import { flush, type HostTime } from "../src/testing.ts";
 import type { CloseReason, Iroh, IrohAddr } from "../src/iroh.ts";
 import { wrapIroh } from "../src/iroh-bindings.ts";
 
-/// One side of a relay: how long a packet takes between it and the endpoint each way, and how fast that line is (bytes a
-/// second; none: as fast as can be).
-export type Leg = { ms: number; bps?: number };
+/// One side of a relay: how long a packet takes between it and the endpoint each way, how fast that line is (bytes a
+/// second; none: as fast as can be), and what share of the packets on it are lost (none: none are).
+export type Leg = { ms: number; bps?: number; loss?: number };
 /// A relay as the test sets it: the device's line to it, and the station's.
 export type RelaySpec = { device?: Leg; station?: Leg };
 
@@ -42,6 +42,8 @@ const href = (url: string) => new URL(url).href;
 export const START = Date.UTC(2026, 9, 6, 9, 0, 0);
 /// QUIC's idle timeout, as iroh has it.
 export const IDLE_MS = 30_000;
+/// How long iroh hears nothing on a path before it lets it go (iroh socket.rs PATH_MAX_IDLE_TIMEOUT).
+export const PATH_IDLE_MS = 15_000;
 
 /// Time for a simulated run: nothing passes but what it is moved on by, and moving on goes from one timer to the next,
 /// each run in order (by when it is due, then by when it was set), what it wakes run before the next. A test's clock
@@ -139,10 +141,11 @@ export class SimTime implements HostTime {
 }
 const NEVER = new Promise<never>(() => {});
 
-/// Where a connection goes: through a relay (its two endpoints' legs to it, as they are now) or direct.
+/// Where a connection goes: through a relay (its two endpoints' legs to it, as they are now) or direct (from the
+/// start, or once a hole is punched: `SimNet.lan`).
 class Way {
   readonly net: SimNet;
-  readonly relay: string | null;
+  relay: string | null;
   readonly sides: ["device" | "station", "device" | "station"];
   constructor(net: SimNet, relay: string | null, sides: ["device" | "station", "device" | "station"]) {
     this.net = net;
@@ -159,14 +162,28 @@ class Way {
     const least = Math.min(...this.#legs().map((leg) => leg.bps ?? Infinity));
     return Number.isFinite(least) ? least : undefined;
   }
-  /// Until when it is down (its relay's), or 0.
+  /// The share of packets lost on the way, all its legs together.
+  loss(): number {
+    return 1 - this.#legs().reduce((kept, leg) => kept * (1 - (leg.loss ?? 0)), 1);
+  }
+  /// How long a packet lost on it takes to be sent again, the first time (QUIC's probe timeout: some two round trips);
+  /// each time again twice as long.
+  pto(): number {
+    return 4 * this.oneWay() + 25;
+  }
+  /// Until when nothing gets through it any more, a hole punched for it gone quiet (`SimNet.lan`).
+  silentUntil = 0;
+  /// Until when it is down (its relay's, or it gone quiet), or 0.
   downUntil(): number {
-    return this.relay === null ? 0 : this.net.downUntil(this.relay);
+    const silent = this.silentUntil > this.net.now() ? this.silentUntil : 0;
+    return Math.max(silent, this.relay === null ? 0 : this.net.downUntil(this.relay));
   }
 }
 
 /// One way of a connection: what goes in comes out after the way's latency (and its jitter), at its speed, in order;
-/// sent while its relay is down, it goes once the relay is back (QUIC sends it again), unless the connection is gone.
+/// sent while its relay is down, it goes once the relay is back (QUIC sends it again), unless the connection is gone. A
+/// packet lost on the way (drawn from the seed, as the way loses them) comes a probe timeout later, or more: those
+/// after it wait for it, as a stream's do.
 class Line {
   #free = 0;
   #queue: { at: number; deliver: () => void }[] = [];
@@ -174,10 +191,12 @@ class Line {
   readonly net: SimNet;
   readonly way: Way;
   readonly live: () => boolean;
-  constructor(net: SimNet, way: Way, live: () => boolean) {
+  readonly lost: () => void;
+  constructor(net: SimNet, way: Way, live: () => boolean, lost: () => void = () => {}) {
     this.net = net;
     this.way = way;
     this.live = live;
+    this.lost = lost;
   }
 
   /// `always`: delivered though its connection is gone meanwhile (word of its closing).
@@ -189,7 +208,13 @@ class Line {
     // before it.
     const leaves = Math.max(this.#free, now, this.way.downUntil()) + (bps ? (size / bps) * 1000 : 0);
     this.#free = leaves;
-    const at = Math.max(leaves + latency, this.#queue.at(-1)?.at ?? 0);
+    let again = 0;
+    const loss = this.way.loss();
+    for (let pto = this.way.pto(); loss > 0 && this.net.rng.next() < loss; pto *= 2) {
+      again += pto;
+      this.lost();
+    }
+    const at = Math.max(leaves + latency + again, this.#queue.at(-1)?.at ?? 0);
     this.#queue.push({ at, deliver: always ? deliver : () => this.live() && deliver() });
     if (!this.#pumping) void this.#pump();
   }
@@ -357,7 +382,12 @@ export class SimConnection {
     this.way = way;
     this.rttMs = firstSample;
     this.heard = net.now();
-    this.out = new Line(net, way, () => this.reason === null);
+    this.out = new Line(
+      net,
+      way,
+      () => this.reason === null,
+      () => this.counts.lostPackets++,
+    );
     this.#closed = new Promise((r) => (this.#resolveClosed = r));
   }
 
@@ -438,11 +468,12 @@ export class SimConnection {
   closedInfo(): Promise<CloseReason> {
     return this.#closed;
   }
-  stats(): { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number } {
-    return { ...this.counts };
+  stats(): { rxBytes: number; txBytes: number } {
+    return { rxBytes: this.counts.rxBytes, txBytes: this.counts.txBytes };
   }
-  paths(): { selected: boolean; relay: string | null; rttMs: number }[] {
-    return [{ selected: true, relay: this.way.relay, rttMs: this.rttMs }];
+  paths(): { id: string; selected: boolean; relay: string | null; ip: string | null; rttMs: number; txPackets: number; lostPackets: number }[] {
+    const ip = this.way.relay === null ? (this.peer.endpoint.sockets()[0] ?? null) : null;
+    return [{ id: "0", selected: true, relay: this.way.relay, ip, rttMs: this.rttMs, txPackets: this.counts.txPackets, lostPackets: this.counts.lostPackets }];
   }
 }
 
@@ -463,16 +494,19 @@ export class SimEndpoint {
   readonly key: Uint8Array;
   readonly relays: string[];
   readonly relayOnly: boolean;
+  /// It looks other endpoints up (the DHT, mDNS): it finds the relays they are at home on.
+  readonly lookup: boolean;
   /// A station's ALPNs, and whether it is at an address on this machine.
   readonly alpns: Uint8Array[];
   readonly direct: boolean;
 
-  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean) {
+  constructor(net: SimNet, side: "device" | "station", key: Uint8Array, relays: string[], relayOnly: boolean, alpns: Uint8Array[], direct: boolean, lookup = false) {
     this.net = net;
     this.side = side;
     this.key = key;
     this.relays = relays;
     this.relayOnly = relayOnly;
+    this.lookup = lookup;
     this.alpns = alpns;
     this.direct = direct;
     for (const r of relays) this.#goOnto(r);
@@ -486,6 +520,7 @@ export class SimEndpoint {
   #goOnto(relay: string): Promise<void> {
     let on = this.#on.get(relay);
     if (!on) {
+      this.net.onto(this, relay);
       const leg = this.net.leg(relay, this.side);
       on = this.net.sleep(4 * leg.ms);
       this.#on.set(relay, on);
@@ -493,9 +528,10 @@ export class SimEndpoint {
     return on;
   }
 
-  /// Whether a connection can come to it through `relay`.
+  /// Whether a connection can come to it through `relay` (an entry: through the relay it goes on to).
   reachableOn(relay: string): boolean {
-    return !this.#closed && (this.relays.includes(relay) || this.#keeps.includes(relay));
+    const to = this.net.server(relay);
+    return !this.#closed && [...this.relays, ...this.#keeps].some((r) => this.net.server(r) === to);
   }
 
   // ── what the core calls (BoundEndpoint) ──
@@ -506,17 +542,28 @@ export class SimEndpoint {
     const known = this.#known.get(addr.id);
     const spoken = [alpn, ...additional].find((a) => there.alpns.some((b) => Buffer.from(a).equals(Buffer.from(b))));
     if (!spoken) throw new Error("no ALPN in common");
+    this.net.tries.push({ to: addr.id, ips: (addr.ips?.length ?? 0) > 0 });
     const started = this.net.now();
     let relay: string | null = null;
-    if (this.relayOnly || !there.direct || (known?.ips?.length ?? 0) === 0) {
-      relay = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href).find((r) => there.reachableOn(r)) ?? null;
+    // Addresses it is dialled at: none reached from off the station's LAN (`SimNet.away`).
+    const ips = [...(addr.ips ?? []), ...(known?.ips ?? [])];
+    if (this.relayOnly || !there.direct || ips.length === 0 || (this.net.away && (addr.ips?.length ?? 0) > 0)) {
+      const told = [...(addr.relays ?? []), ...(known?.relays ?? []), ...this.relays].map(href);
+      relay = told.find((r) => there.reachableOn(r)) ?? null;
       if (relay === null) return NEVER;
+      // iroh sends its first packets on every path it knows of, going onto each relay of them: those it was told of, and
+      // those its lookups found (the relays the other end is at home on).
+      for (const r of new Set([...told, ...(this.lookup ? there.relays : [])])) this.net.onto(this, r);
       await this.#goOnto(relay);
     }
     const way = new Way(this.net, relay, [this.side, there.side]);
-    // A handshake: a round trip. One the other end holds, or through a relay that is down, is never answered.
-    await this.net.sleep(2 * way.oneWay() + this.net.jitter());
-    if (way.downUntil() > this.net.now()) return NEVER;
+    // A handshake: a round trip, its packets lost as the way loses them (sent again after QUIC's initial probe timeout,
+    // a second, twice as long each time). One the other end holds, or through a relay that is down, is never answered.
+    let handshake = 2 * way.oneWay() + this.net.jitter();
+    const loss = way.loss();
+    for (let pto = 1000; loss > 0 && this.net.rng.next() < 1 - (1 - loss) ** 2; pto *= 2) handshake += pto;
+    await this.net.sleep(handshake);
+    if (way.downUntil() > this.net.now() || this.#closed || there.#closed) return NEVER;
     if (there.#held > 0) {
       there.#held--;
       return NEVER;
@@ -529,7 +576,33 @@ export class SimEndpoint {
     this.net.opened(mine);
     this.conns.push(mine);
     there.#arrived(theirs);
+    // Through a relay to a station on the device's LAN, from an endpoint not on relays alone: iroh punches a hole and
+    // the connection goes direct.
+    const lan = this.net.lan;
+    if (relay !== null && lan !== null && !this.net.away && !this.relayOnly && there.direct) {
+      const through = relay;
+      void this.net.sleep(lan.punchMs).then(() => {
+        if (mine.reason !== null) return;
+        mine.way.relay = theirs.way.relay = null;
+        this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct`);
+        if (lan.quietAfterMs === undefined) return;
+        // The punched path goes quiet; iroh hears nothing on it for its idle time, then goes back to the relay.
+        void this.net.sleep(lan.quietAfterMs).then(() => {
+          if (mine.reason !== null) return;
+          mine.way.silentUntil = theirs.way.silentUntil = this.net.now() + PATH_IDLE_MS;
+          this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} direct gone quiet`);
+          void this.net.sleep(PATH_IDLE_MS).then(() => {
+            mine.way.relay = theirs.way.relay = through;
+            this.net.note(`${this.id().slice(0, 8)} to ${there.id().slice(0, 8)} back through ${through}`);
+          });
+        });
+      });
+    }
     return mine;
+  }
+
+  isClosed(): boolean {
+    return this.#closed;
   }
 
   addAddr(addr: IrohAddr): void {
@@ -588,7 +661,19 @@ export class SimNet {
   readonly rng: Rng;
   /// A direct way between two endpoints on this machine.
   direct: Leg = { ms: 1 };
+  /// The device on the LAN of the stations bound at an address: a connection to one through a relay goes direct
+  /// `punchMs` after it opens, and (`quietAfterMs`) goes quiet that long after, back through the relay iroh's idle
+  /// time later (studio and a phone, 2026-10-17). Null: none does.
+  lan: { punchMs: number; quietAfterMs?: number } | null = null;
+  /// The device is off the stations' LAN: their LAN addresses lead nowhere, no hole is punched.
+  away = false;
+  /// Every dial, in order: whom to, and whether at addresses it was given.
+  readonly tries: { to: string; ips: boolean }[] = [];
   readonly #relays = new Map<string, { device: Leg; station: Leg }>();
+  /// Entries (cloud relays.ts RELAY_ENTRIES): a URL on one relay's machine taking what comes to it on to another relay.
+  readonly #entries = new Map<string, string>();
+  /// Where each endpoint went: by endpoint, then relay (the one an entry goes on to), the URLs it went there through.
+  readonly #onto = new Map<SimEndpoint, Map<string, Set<string>>>();
   readonly #down = new Map<string, number>();
   readonly #conns: SimConnection[] = [];
   /// What befell it, as a failure says: the run's events in order (`note`).
@@ -627,6 +712,41 @@ export class SimNet {
     return at;
   }
 
+  /// An entry at `url` into the relay at `to`: who goes onto it is on that relay. Its lines as given: the device's to the
+  /// entry's machine, the station's through the relay it goes on to.
+  entry(url: string, to: string, spec: RelaySpec = {}): string {
+    const at = this.relay(url, spec);
+    this.#entries.set(at, href(to));
+    return at;
+  }
+
+  /// The relay one is on through `url`: the one an entry goes on to, or its own.
+  server(url: string): string {
+    const at = href(url);
+    return this.#entries.get(at) ?? at;
+  }
+
+  /// `endpoint` went onto a relay through `url`.
+  onto(endpoint: SimEndpoint, url: string): void {
+    let on = this.#onto.get(endpoint);
+    if (!on) this.#onto.set(endpoint, (on = new Map()));
+    const server = this.server(url);
+    let urls = on.get(server);
+    if (!urls) on.set(server, (urls = new Set()));
+    urls.add(href(url));
+  }
+
+  /// Each endpoint that went onto one relay through two URLs or more (`open`: of those still open): one key there twice,
+  /// which iroh-relay takes as one connection taking the other's place, back and forth.
+  twice(open = false): string[] {
+    const out: string[] = [];
+    for (const [endpoint, on] of this.#onto) {
+      if (open && endpoint.isClosed()) continue;
+      for (const [server, urls] of on) if (urls.size > 1) out.push(`${endpoint.id().slice(0, 8)} on ${server} through ${[...urls].join(" and ")}`);
+    }
+    return out;
+  }
+
   /// The relay at `url` answers nothing for `ms`: what is sent through it is lost, and its connections that stay quiet
   /// IDLE_MS meanwhile are gone (QUIC's idle timeout).
   down(url: string, ms: number): void {
@@ -657,7 +777,8 @@ export class SimNet {
   }
   #legs(at: string): string {
     const r = this.#relays.get(at)!;
-    return `device ${r.device.ms} ms${r.device.bps ? ` ${r.device.bps} B/s` : ""}, station ${r.station.ms} ms${r.station.bps ? ` ${r.station.bps} B/s` : ""}`;
+    const leg = (l: Leg) => `${l.ms} ms${l.bps ? ` ${l.bps} B/s` : ""}${l.loss ? ` ${Math.round(l.loss * 100)}% lost` : ""}`;
+    return `device ${leg(r.device)}, station ${leg(r.station)}`;
   }
   leg(relay: string, side: "device" | "station"): Leg {
     return this.#relays.get(href(relay))?.[side] ?? { ms: 0 };
@@ -674,7 +795,7 @@ export class SimNet {
   /// The device's iroh, as a host gives the core.
   iroh(): Iroh {
     return wrapIroh(
-      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false)) as never,
+      async (o) => this.#add(new SimEndpoint(this, "device", o.secretKey, o.relayUrls.map(href), o.relayOnly, [], false, o.lookup)) as never,
       (b) => b,
     );
   }

@@ -11,7 +11,7 @@ import { latest as latestNote } from "../agents/migrations.ts";
 // the same points as the Rust, in the same order.
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
@@ -19,14 +19,14 @@ import { liveClock } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { archiveText, readArchive, threadFile, writeCompressed } from "./archive.ts";
 import {
-  type Attachment, type AutoTitle, type CardAnswer, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
-  type MessageRow, type NewMessage, type NewSession, type PendingMessage, type ProcessRow, type ProfileStatus,
+  type Attachment, type AutoTitle, type CardAnswer, type ChatShare, type EntryRow, type JobNotice, type JobRow, type Json, type Membership,
+  type MessageRow, type NewMessage, type NewSession, type Opened, type PendingMessage, type Published, type ProcessRow, type ProfileStatus,
   type Quote, type SessionRow, type SessionStats, type SessionThread, type StoreChange, type ThreadRow, type ThreadSummary,
-  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
+  type TurnFor, type TurnRow, type TurnSummary, type WidgetModel, AUTO, XSHARE_IDLE_MS, I64_MAX, MANUAL, STILLFAIL_SURFACE, attachment,
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
-  toMessage, toSession, toSessionThread, toThread, toTurnSummary,
+  liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 
 export * from "./rows.ts";
@@ -38,6 +38,8 @@ export type { UsageCall, UsageFile, UsageFor, UsageGroup, UsageTurn } from "./us
 const ARCHIVE_CACHE = 32;
 /// How many of a job's notices are kept.
 const JOB_NOTICES = 50;
+/// A chat shared with another workspace being used there is noted at most this often (chat_shares `used`).
+const USED_NOTE_MS = 60_000;
 
 type Changes = StoreChange[];
 type Arg = SQLInputValue;
@@ -50,6 +52,9 @@ export class Store {
   readonly #archiveDir: string;
   /// Removed on close: an in-memory store's archive.
   readonly #temp: string | null;
+  /// Where published snapshots are kept (docs/public-share.md): published/ beside the database (in an in-memory store's
+  /// archive directory).
+  readonly publishedDir: string;
   /// Entries of archived threads read lately (they never change), the most recent last.
   #archived: [number, EntryRow[]][] = [];
   #listeners: ((change: StoreChange) => void)[] = [];
@@ -63,6 +68,7 @@ export class Store {
     this.clock = clock;
     this.#archiveDir = archiveDir;
     this.#temp = temp;
+    this.publishedDir = temp !== null ? join(temp, "published") : join(dirname(archiveDir), "published");
   }
 
   /// Opens the store at `path` (":memory:" for one of its own); archived threads go to `archive`, else `archive/`
@@ -86,6 +92,7 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      addWorkspaceColumns(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
       db.close();
@@ -207,15 +214,26 @@ export class Store {
     return this.#all("SELECT * FROM sessions ORDER BY last_active_at DESC").map(toSession);
   }
 
+  /// Says the sessions of workspace `from` (null: those that say none, the home one's) are `to`'s (null: the home
+  /// one's): when the station's home workspace changes (docs/multi-workspace.md).
+  setSessionsWs(from: string | null, to: string | null): void {
+    this.#with((changes) => {
+      const keys = (from === null ? this.#all("SELECT key FROM sessions WHERE ws IS NULL") : this.#all("SELECT key FROM sessions WHERE ws = ?", from)).map((r) => r.key as string);
+      if (from === null) this.#run("UPDATE sessions SET ws = ? WHERE ws IS NULL", to);
+      else this.#run("UPDATE sessions SET ws = ? WHERE ws = ?", to, from);
+      for (const key of keys) changes.push({ type: "session", key });
+    });
+  }
+
   insertSession(s: NewSession): void {
     this.#with((changes) => {
       this.#run(
-        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sessions (key, connect, scope, title, created_by, runtime, profile, profile_pinned, model, effort, workspace, cwd, runtime_session_id, token, created_at, last_active_at, told_notes, fast, ws)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         s.key, s.connect, s.scope ?? "thread", s.title ?? null, s.createdBy ?? null, s.runtime, s.profile, flag(s.profilePinned ?? false),
         s.model ?? null, s.effort ?? null, s.workspace, s.cwd ?? null, s.runtimeSessionId ?? null, s.token, s.createdAt, s.lastActiveAt,
         // A new session begins with today's instructions: no note is news to it.
-        latestNote(), optFlag(s.fast),
+        latestNote(), optFlag(s.fast), s.ws ?? null,
       );
       changes.push({ type: "session", key: s.key });
     });
@@ -262,6 +280,166 @@ export class Store {
     return this.#one("SELECT profile FROM runtime_sessions WHERE session_key = ? AND id = ?", key, id)?.profile ?? null;
   }
 
+  // ── chats shared with other workspaces (chat_shares; xshare/) ──
+
+  /// What a chat (by the session key its link names) is shared with now, if anything: the workspaces whose share did
+  /// not lapse (XSHARE_IDLE_MS unused).
+  chatShare(session: string): ChatShare | null {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    return r ? liveShare(toChatShare(r), this.now()) : null;
+  }
+
+  /// Every chat shared with another workspace now, by its session key.
+  chatShares(): Map<string, ChatShare> {
+    const now = this.now();
+    return new Map(this.#all("SELECT * FROM chat_shares").flatMap((r) => {
+      const share = liveShare(toChatShare(r), now);
+      return share === null ? [] : [[r.session, share] as const];
+    }));
+  }
+
+  /// Whether a chat's share with one of `workspaces` (null: any) lapsed (unused too long), so is not on.
+  chatShareLapsed(session: string, workspaces: string[] | null): boolean {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    const now = this.now();
+    return r !== undefined && toChatShare(r).to.some((t) => (workspaces === null || workspaces.includes(t.workspace)) && !shareLive(t, now));
+  }
+
+  /// The workspaces some chat's share with lapsed: their stations are still answered why they read it no more.
+  lapsedShareWorkspaces(): Set<string> {
+    const now = this.now();
+    return new Set(this.#all("SELECT * FROM chat_shares").flatMap((r) => toChatShare(r).to.filter((t) => !shareLive(t, now)).map((t) => t.workspace)));
+  }
+
+  /// The agents of `workspaces` read a chat or wrote to it: its share with them goes on from now (one lapsed stays
+  /// so). Noted at most once a minute, no change to anything shown.
+  usedChatShare(session: string, workspaces: string[]): void {
+    const r = this.#one("SELECT * FROM chat_shares WHERE session = ?", session);
+    if (!r) return;
+    const now = this.now();
+    const share = toChatShare(r);
+    if (!share.to.some((t) => workspaces.includes(t.workspace) && shareLive(t, now) && now - t.used >= USED_NOTE_MS)) return;
+    const to = share.to.map((t) => (workspaces.includes(t.workspace) && shareLive(t, now) ? { ...t, used: now } : t));
+    this.#run("UPDATE chat_shares SET shared = ? WHERE session = ?", JSON.stringify(to), session);
+  }
+
+  /// The chats whose share with a workspace lapsed after `since` and by now: their views change (they are shared with
+  /// it no longer). Answers when the next one lapses, null when none will.
+  lapseChatShares(since: number): number | null {
+    const now = this.now();
+    let next: number | null = null;
+    this.#with((changes) => {
+      for (const r of this.#all("SELECT * FROM chat_shares")) {
+        const ends = toChatShare(r).to.map((t) => t.used + XSHARE_IDLE_MS);
+        if (ends.some((end) => end > since && end <= now)) {
+          for (const t of this.sessionThreads(r.session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
+          changes.push({ type: "session", key: r.session });
+        }
+        for (const end of ends) if (end > now && (next === null || end < next)) next = end;
+      }
+    });
+    return next;
+  }
+
+  /// Shares a chat with other workspaces (`to`), or (none) no longer, each from now; its chat's views change.
+  setChatShare(session: string, to: { workspace: string; name: string }[], write: boolean, by: string): void {
+    this.#with((changes) => {
+      if (to.length === 0) this.#run("DELETE FROM chat_shares WHERE session = ?", session);
+      else {
+        const now = this.now();
+        this.#run(
+          "INSERT INTO chat_shares (session, shared, write, by, at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (session) DO UPDATE SET shared = ?2, write = ?3, by = ?4, at = ?5",
+          session, JSON.stringify(to.map((t) => ({ workspace: t.workspace, name: t.name, used: now }))), write ? 1 : 0, by, now,
+        );
+      }
+      for (const t of this.sessionThreads(session)) changes.push({ type: "thread", id: t.thread.id, entries: [] });
+      changes.push({ type: "session", key: session });
+    });
+  }
+
+  // ── chats published as snapshots (published; publish/) ──
+
+  /// A chat's published snapshots, the latest first.
+  publishedOf(thread: number): Published[] {
+    return this.#all("SELECT * FROM published WHERE thread = ? ORDER BY created_at DESC, id", thread).map(toPublished);
+  }
+
+  /// A published snapshot by its id.
+  published(id: string): Published | null {
+    const r = this.#one("SELECT * FROM published WHERE id = ?", id);
+    return r ? toPublished(r) : null;
+  }
+
+  /// Records a snapshot written out to `publishedDir/<id>`; its chat's views change.
+  addPublished(p: Published): void {
+    this.#with((changes) => {
+      this.#run(
+        "INSERT INTO published (id, thread, key, title, created_by, by_name, created_at, upto, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        p.id, p.thread, p.key, p.title, p.by, p.byName, p.at, p.upto, p.size,
+      );
+      changes.push({ type: "thread", id: p.thread, entries: [] });
+    });
+  }
+
+  /// Takes a snapshot down: its row and its files; its chat's views change. Whether there was one.
+  removePublished(id: string): boolean {
+    const p = this.published(id);
+    if (p === null) return false;
+    this.#with((changes) => {
+      this.#run("DELETE FROM published WHERE id = ?", id);
+      changes.push({ type: "thread", id: p.thread, entries: [] });
+    });
+    this.#removeSnapshot(id);
+    return true;
+  }
+
+  #removeSnapshot(id: string): void {
+    // An id is the station's own (base64url); anything else never names a directory here.
+    if (/^[A-Za-z0-9_-]+$/.test(id)) rmSync(join(this.publishedDir, id), { recursive: true, force: true });
+  }
+
+  // ── chats agents opened (opened_chats; sessions/opened.ts) ──
+
+  /// Records a chat opened for a session: by its station and key, and its parent's ('' for this station).
+  insertOpened(o: Omit<Opened, "state" | "createdAt">): void {
+    this.#run(
+      `INSERT INTO opened_chats (child_station, child, parent_station, parent, key, title, link, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      o.childStation, o.child, o.parentStation, o.parent, o.key, o.title, o.link, this.now(),
+    );
+  }
+
+  /// The chat a parent opened with `key` on `childStation`, if it has.
+  openedWith(parentStation: string, parent: string, key: string, childStation: string): Opened | null {
+    const r = this.#one("SELECT * FROM opened_chats WHERE parent_station = ? AND parent = ? AND key = ? AND child_station = ?", parentStation, parent, key, childStation);
+    return r ? toOpened(r) : null;
+  }
+
+  /// Who opened session `child` of this station, if another agent did.
+  openerOf(child: string): Opened | null {
+    const r = this.#one("SELECT * FROM opened_chats WHERE child_station = '' AND child = ?", child);
+    return r ? toOpened(r) : null;
+  }
+
+  /// How many chats `createdBy` started here since `since`, by runtime and model (what chat_create runs when it is told
+  /// no model: sessions/model-choice.ts).
+  modelsUsedBy(createdBy: string, since: number): { runtime: string; model: string | null; n: number }[] {
+    return this.#all("SELECT runtime, model, COUNT(*) AS n FROM sessions WHERE created_by = ? AND created_at >= ? GROUP BY runtime, model", createdBy, since).map((r) => ({
+      runtime: r.runtime as string,
+      model: typeof r.model === "string" ? r.model : null,
+      n: Number(r.n),
+    }));
+  }
+
+  /// The chats this station's session `parent` opened, the first first.
+  openedBy(parent: string): Opened[] {
+    return this.#all("SELECT * FROM opened_chats WHERE parent_station = '' AND parent = ? ORDER BY created_at, rowid", parent).map(toOpened);
+  }
+
+  /// How a chat opened from here last ended a turn, as its station told.
+  setOpenedState(childStation: string, child: string, state: string): void {
+    this.#run("UPDATE opened_chats SET state = ? WHERE child_station = ? AND child = ?", state, childStation, child);
+  }
+
   /// The runtime sessions the session has run in, the first first, ending with the one it runs in now.
   runtimeSessions(key: string): string[] {
     const current = this.getSession(key)?.runtimeSessionId ?? null;
@@ -288,6 +466,15 @@ export class Store {
   /// out of lists goes out to its archive file; showing it again brings it back.
   setArchived(key: string, archived: boolean, by: string): void {
     this.#with((changes) => this.#setArchived(key, archived, by, changes));
+  }
+
+  /// Out of lists by hand: the chat archived itself, or its sessions archived with one of them by hand. It takes no
+  /// messages until shown again by hand; one archived by the station comes back with anything new said.
+  manuallyArchived(thread: number): boolean {
+    const r = this.#one("SELECT hidden_by FROM threads WHERE id = ?", thread);
+    if (r === undefined || !this.#outOfLists(thread)) return false;
+    if (r.hidden_by === MANUAL) return true;
+    return this.#one("SELECT 1 FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_by = ? LIMIT 1", thread, MANUAL) !== undefined;
   }
 
   /// Hides a chat of its own from lists, or shows it again; its sessions stay as they are.
@@ -346,8 +533,11 @@ export class Store {
   /// with their entries (or archive files) and reads.
   deleteSession(key: string): void {
     this.#with((changes) => {
+      // Which workspace's it was, for those its going is told to.
+      const ws: string | null = this.#one("SELECT ws FROM sessions WHERE key = ?", key)?.ws ?? null;
       const kept: number[] = [];
       const removed: number[] = [];
+      const unpublished: string[] = [];
       this.#tx(() => {
         const threads: number[] = this.#all("SELECT thread FROM thread_sessions WHERE session = ?", key).map((r) => r.thread);
         this.#run("DELETE FROM thread_sessions WHERE session = ?", key);
@@ -373,6 +563,9 @@ export class Store {
           this.#run("DELETE FROM dismissed WHERE thread = ?", thread);
           this.#run("DELETE FROM closed_cards WHERE thread = ?", thread);
           this.#run("DELETE FROM kept_chats WHERE thread = ?", thread);
+          // Its published snapshots go with it.
+          for (const r of this.#all("SELECT id FROM published WHERE thread = ?", thread)) unpublished.push(r.id);
+          this.#run("DELETE FROM published WHERE thread = ?", thread);
           this.#run("DELETE FROM threads WHERE id = ?", thread);
         }
       });
@@ -380,9 +573,10 @@ export class Store {
         this.#archived = this.#archived.filter(([id]) => id !== thread);
         rmSync(this.#threadFile(thread), { force: true });
       }
-      changes.push({ type: "sessionRemoved", key });
+      for (const id of unpublished) this.#removeSnapshot(id);
+      changes.push({ type: "sessionRemoved", key, ws });
       // Clients drop what they keep of the threads that went with it.
-      for (const id of removed) changes.push({ type: "threadRemoved", id });
+      for (const id of removed) changes.push({ type: "threadRemoved", id, ws });
       for (const id of kept) changes.push({ type: "thread", id, entries: [] });
     });
   }
@@ -555,7 +749,7 @@ export class Store {
         {
           agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
-          client: m.client ?? null, profile: m.profile ?? null,
+          client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
           options: options ?? (card !== undefined && card !== null && typeof card === "object" && card.type === "options" ? card.options : undefined),
           card: card ?? (options === undefined ? undefined : optionsCard(options)),
@@ -579,7 +773,7 @@ export class Store {
         {
           agentIdentity: undefined, thread: message.thread, n: 0, kind: "edit", target: message.n, ts: null,
           authorKind: message.authorKind, author: message.author, text, attachments: message.attachments, quotes: message.quotes,
-          declared: null, client: null, profile: null, options: undefined, card: undefined, at: this.now(),
+          declared: null, client: null, profile: null, runtime: null, options: undefined, card: undefined, at: this.now(),
         },
         changes,
       );
@@ -614,19 +808,20 @@ export class Store {
     }));
   }
 
-  /// The archive policy as last saved, and who saved it; null until anyone has (the default then).
-  archivePolicy(): { policy: Json; change: Json } | null {
-    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy ORDER BY id DESC LIMIT 1");
+  /// A workspace's archive policy as last saved, and who saved it (`ws` null, or absent: the station's home workspace's);
+  /// null until anyone has (the default then).
+  archivePolicy(ws: string | null = null): { policy: Json; change: Json } | null {
+    const r = this.#one("SELECT id, at, policy, author, summary FROM archive_policy WHERE ws IS ? ORDER BY id DESC LIMIT 1", ws);
     if (!r) return null;
     const policy = parsed(r.policy);
     if (!policy) return null;
     return { policy, change: { id: r.id, at: r.at, by: parsed(r.author) ?? null, summary: r.summary } };
   }
 
-  /// A new archive policy, by whom, and what it changed.
-  setArchivePolicy(policy: Json, author: Json, summary: string): void {
+  /// A new archive policy of a workspace (null, or absent: the home one's), by whom, and what it changed.
+  setArchivePolicy(policy: Json, author: Json, summary: string, ws: string | null = null): void {
     this.#with((changes) => {
-      this.#run("INSERT INTO archive_policy(at, policy, author, summary) VALUES (?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary);
+      this.#run("INSERT INTO archive_policy(at, policy, author, summary, ws) VALUES (?, ?, ?, ?, ?)", this.now(), JSON.stringify(policy), JSON.stringify(author), summary, ws);
       changes.push({ type: "decisionChecks" });
     });
   }
@@ -854,6 +1049,15 @@ export class Store {
     });
   }
 
+  /// A chat kept by the viewer let go: offered for archiving again, and archived on its own once idle (unless someone
+  /// else keeps it).
+  unkeepChat(viewer: string, thread: number): void {
+    this.#with((changes) => {
+      this.#run("DELETE FROM kept_chats WHERE viewer = ? AND thread = ?", viewer, thread);
+      changes.push({ type: "dismissed", viewer });
+    });
+  }
+
   // ── cards ──
 
   /// The thread's card still pending, if any: its latest post with a card (a newer one replaces an older one), as long
@@ -961,6 +1165,23 @@ export class Store {
       this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", thread, r.n, agent, this.now());
       changes.push({ type: "thread", id: thread, entries: [] });
       return true;
+    });
+  }
+
+  /// The login cards of a login (docs/remote-login.md: `{"type": "login", "login": <id>}`) still waiting: closed for
+  /// everyone as the login ends, as their agent would withdraw them (nobody answered, nobody is woken: the station tells
+  /// the agent itself). The sessions whose cards they were.
+  closeLoginCards(login: string): string[] {
+    return this.#with((changes) => {
+      const rows = this.#all(
+        "SELECT thread, n, author FROM entries WHERE kind = 'message' AND author_kind = 'agent' AND card LIKE '%\"login\"%' AND card LIKE ? AND NOT EXISTS (SELECT 1 FROM closed_cards c WHERE c.thread = entries.thread AND c.n = entries.n)",
+        `%"login":${JSON.stringify(login)}%`,
+      );
+      for (const r of rows) {
+        this.#run("INSERT OR IGNORE INTO closed_cards (thread, n, viewer, at) VALUES (?, ?, ?, ?)", r.thread, r.n, r.author, this.now());
+        changes.push({ type: "thread", id: r.thread, entries: [] });
+      }
+      return [...new Set(rows.map((r) => r.author as string))];
     });
   }
 
@@ -1226,6 +1447,17 @@ export class Store {
     return this.#all("SELECT * FROM jobs WHERE ?1 IS NULL OR session_key = ?1 ORDER BY started_at DESC", session).map(toJob);
   }
 
+  /// How many jobs are running now: other stations' tasks here (`remote_…`, jobs/remote.ts), web services (a port) and
+  /// the other jobs, for what other stations are told of this one's load (jobs/load.ts).
+  runningJobs(): { remote: number; jobs: number; services: number } {
+    const r = this.#one(
+      "SELECT COALESCE(SUM(substr(id, 1, 7) = 'remote_'), 0) AS remote, COALESCE(SUM(substr(id, 1, 7) <> 'remote_' AND port IS NOT NULL), 0) AS services, COUNT(*) AS n FROM jobs WHERE state = 'running'",
+    );
+    const remote = Number(r?.remote ?? 0);
+    const services = Number(r?.services ?? 0);
+    return { remote, services, jobs: Number(r?.n ?? 0) - remote - services };
+  }
+
   /// What a job said (`stillfail-job notify`), kept for the pages: a job's latest words are how people see what it is up to.
   addJobNotice(id: string, text: string): void {
     this.#with((changes) => {
@@ -1327,6 +1559,16 @@ export class Store {
     return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls));
   }
 
+  /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).
+  lastContexts(session: string, limit: number): usage.ContextCall[] {
+    return usage.lastContexts(this.db, session, limit);
+  }
+
+  /// Where each model's context was compacted on this station since `since` (store/usage.ts).
+  compactionPoints(since: number, least: number): Map<string, number> {
+    return usage.compactionPoints(this.db, since, least);
+  }
+
   /// Tells whoever follows the store that calls were recorded.
   usageChanged(): void {
     this.#send([{ type: "usage" }]);
@@ -1346,6 +1588,11 @@ export class Store {
   /// model.
   usageGroups(from: number, to: number, utcOffsetMin: number): usage.UsageGroup[] {
     return usage.usageGroups(this.db, from, to, utcOffsetMin);
+  }
+
+  /// A session's calls, added up by model.
+  usageOfSession(session: string): usage.UsageGroup[] {
+    return usage.usageOfSession(this.db, session);
   }
 
   /// The threads usage names, each with the first thing a person said in it (for its title; none where its archive
@@ -1434,7 +1681,7 @@ export class Store {
     if (this.#isArchived(entry.thread)) this.#restoreThread(entry.thread);
     this.#tx(() => {
       const n: number | null = this.#one("SELECT MAX(n) AS n FROM entries WHERE thread = ?", entry.thread).n;
-      entry.n = (n ?? 0) + 1;
+      entry.n = (n ?? this.#lastKnown(entry.thread)) + 1;
       this.#insertEntry(entry);
     });
     changes.push({ type: "thread", id: entry.thread, entries: [{ ...entry }] });
@@ -1490,21 +1737,41 @@ export class Store {
     else if (!out && filed) this.#restoreThread(thread);
   }
 
-  /// Something new said in a thread brings what it is about back into lists: the chat, if it was archived alone, and
-  /// the archived sessions that hear it (a person's message goes to every session of the thread) or said it.
+  /// Something new said in a thread brings what it is about back into lists: the chat, if the station archived it
+  /// alone, and the sessions the station archived that hear it (every session of the thread) or said it. What was
+  /// archived by hand stays archived: it takes no messages (manuallyArchived).
   #bringBack(entry: EntryRow, changes: Changes): void {
     if (entry.kind !== "message" || entry.authorKind === "ember") return;
     const thread = this.getThread(entry.thread);
-    if (thread === null) return;
-    const archived: string[] =
-      entry.authorKind === "agent"
-        ? this.#all("SELECT key FROM sessions WHERE key = ? AND archived_at IS NOT NULL", entry.author).map((r) => r.key)
-        : this.#all("SELECT s.key FROM thread_sessions ts JOIN sessions s ON s.key = ts.session WHERE ts.thread = ? AND s.archived_at IS NOT NULL", entry.thread).map((r) => r.key);
+    if (thread === null || this.manuallyArchived(thread.id)) return;
+    const archived: string[] = this.#all(
+      "SELECT key FROM sessions WHERE archived_at IS NOT NULL AND archived_by IS NOT ?1 AND (key IN (SELECT session FROM thread_sessions WHERE thread = ?2) OR key = ?3)",
+      MANUAL,
+      entry.thread,
+      entry.authorKind === "agent" ? entry.author : null,
+    ).map((r) => r.key);
     for (const key of archived) this.#setArchived(key, false, AUTO, changes);
     if (thread.hiddenAt !== null && thread.home === null) this.#setThreadHidden(thread.id, false, AUTO, changes);
   }
 
+  /// The last entry number known of a thread with no entries: 0 for a new one. One whose archive file was lost is
+  /// counted on from what was read and delivered of it, so that what clients keep of it is not numbered again.
+  #lastKnown(thread: number): number {
+    const r = this.#one(
+      "SELECT MAX(n) AS n FROM (SELECT MAX(n) AS n FROM reads WHERE thread = ?1 UNION ALL SELECT MAX(n) FROM deliveries WHERE thread = ?1)",
+      thread,
+    );
+    return r.n ?? 0;
+  }
+
   // ── archive ──
+
+  /// The archived threads whose file is not there (lost with the disk it was on): each reads as one with no entries.
+  lostArchives(): number[] {
+    return this.#all("SELECT id FROM threads WHERE archived_at IS NOT NULL ORDER BY id")
+      .map((r) => r.id as number)
+      .filter((id) => !existsSync(this.#threadFile(id)));
+  }
 
   #isArchived(thread: number): boolean {
     const r = this.#one("SELECT archived_at FROM threads WHERE id = ?", thread);
@@ -1559,10 +1826,10 @@ export class Store {
 
   #insertEntry(e: EntryRow): void {
     this.#run(
-      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO entries (thread, n, kind, target, ts, author_kind, author, text, attachments, quotes, declared, client, profile, runtime, options, card, at, agent_identity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       e.thread, e.n, e.kind, e.target, e.ts, e.authorKind, e.author, e.text,
       jsonList<Attachment>(e.attachments, attachment), jsonList<Quote>(e.quotes, quote),
-      e.declared, e.client, e.profile,
+      e.declared, e.client, e.profile, e.runtime,
       e.options === undefined ? null : JSON.stringify(e.options),
       e.card === undefined ? null : JSON.stringify(e.card),
       e.at,

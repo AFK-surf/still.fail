@@ -2,6 +2,7 @@
 // (admin/mod.rs: GET /usage, /machine-sessions, /machine-sessions/:runtime/:id, /memory, /host, /footprint).
 import { type Request, type Answer, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
+import { memory } from "../../read/memory.ts";
 
 const I64_MIN = -9223372036854775808n;
 const I64_MAX = 9223372036854775807n;
@@ -32,33 +33,35 @@ const RETIRED = JSON.stringify({
   processes: [],
 });
 
-export const routes = ({ read, host, agents }: Tools): Route[] => {
+export const routes = (tools: Tools): Route[] => {
+  const { read, host } = tools;
   return [
-    // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
-    // UTC), with whom, where and on what.
-    {
-      method: "GET",
-      pattern: /^\/usage$/,
-      handle: (r: Request) => {
-        const to = number(r, "to") ?? I64_MAX;
-        const from = number(r, "from") ?? 0n;
-        const tz = number(r, "tz") ?? 0n;
-        const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
-        return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: agents?.usage.readingAll() ?? true });
-      },
-    },
     // Sessions this machine's own Claude Code and Codex kept (in a terminal), to go on with one in a chat.
-    { method: "GET", pattern: /^\/machine-sessions$/, handle: (r: Request) => read(r, "machineSessions", {}) },
+    { method: "GET", pattern: /^\/machine-sessions$/, handle: async (r: Request) => read(r, "machineSessions", {}) },
     // One of them, to look at before going on with it: what was said, the latest `limit`. As the Rust matches its
     // segments (empty ones dropped, any after the third ignored).
     {
       method: "GET",
       pattern: /^\/+machine-sessions\/+([^/]+)\/+([^/]+)(?:\/.*)?$/,
-      handle: (r: Request, [runtime, id]: string[]) =>
+      handle: async (r: Request, [runtime, id]: string[]) =>
         read(r, "machineSession", { lang: r.lang, runtime: segment(runtime!), id: segment(id!), limit: param(r, "limit") }),
     },
     // The agents' memory, for the pages to show: the global one, and the shared skills (projects' memories among them).
-    { method: "GET", pattern: /^\/memory$/, handle: (r: Request) => read(r, "memory", {}) },
+    // A member of a workspace the station joined sees that workspace's (docs/multi-workspace.md).
+    {
+      method: "GET",
+      pattern: /^\/memory$/,
+      handle: async (r: Request): Promise<Answer> => {
+        if (r.viewer.home !== false) return read(r, "memory", {});
+        const agents = tools.agents;
+        if (!agents) return error(503, "station starting");
+        try {
+          return json(200, JSON.stringify(memory(agents.config.data, r.viewer.workspace)));
+        } catch (e) {
+          return error(400, (e as Error).message);
+        }
+      },
+    },
     // The machine's state, at most ten seconds old.
     {
       method: "GET",
@@ -75,3 +78,20 @@ export const routes = ({ read, host, agents }: Tools): Route[] => {
     { method: "GET", pattern: /^\/footprint$/, handle: async () => json(200, RETIRED) },
   ];
 };
+
+/// GET /usage, the usage part's (usage/module.ts): `reading`, whether the counter is still reading what was spent.
+export const usageRoutes = ({ read }: Tools, reading: () => boolean): Route[] => [
+  // What the agents spent from `from` until `to` (ms), by day as the asker's clock has them (`tz`: minutes east of
+  // UTC), with whom, where and on what.
+  {
+    method: "GET",
+    pattern: /^\/usage$/,
+    handle: (r: Request) => {
+      const to = number(r, "to") ?? I64_MAX;
+      const from = number(r, "from") ?? 0n;
+      const tz = number(r, "tz") ?? 0n;
+      const clamped = tz < -1440n ? -1440n : tz > 1440n ? 1440n : tz;
+      return read(r, "usage", { lang: r.lang, from: String(from), to: String(to), tz: String(clamped), reading: reading(), viewer: r.viewer });
+    },
+  },
+];

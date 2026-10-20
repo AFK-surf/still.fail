@@ -1,5 +1,5 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 /** An inline visualization: the frame on the message's own ground, a small link to the file below it. */
 export const viz = style({ width: "100%", minWidth: 0, margin: "0 0 4px", selectors: { "&:last-child": { marginBottom: 0 } } });
@@ -9,7 +9,7 @@ export const vizBar = style({ display: "flex", justifyContent: "flex-end", gap: 
 export const vizOpen = style({
   display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px",
   width: "22px", height: "22px", padding: "0", border: "0", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
-  background: "none", color: vars.subtle, fontSize: "11px", cursor: "pointer",
+  background: "none", color: vars.subtle, fontSize: vars.textCaption, cursor: "pointer",
   selectors: { "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const vizFrame = style({ display: "block", width: "100%", border: "0", background: "transparent" });
@@ -19,5 +19,5 @@ export const vizPage = style({
   borderRadius: vars.rCard, cornerShape: vars.cornerShape, background: vars.paper,
 });
 /** Where a visualization's frame comes while its file is fetched, as tall as the frame will be (Viz.tsx sets it), quietly. */
-export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, background: vars.paper });
-export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textSm });
+export const vizWait = style({ borderRadius: `calc(12px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.paper });
+export const vizNote = style({ padding: "24px", color: vars.muted, fontSize: vars.textUi });

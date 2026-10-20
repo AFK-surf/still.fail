@@ -1,0 +1,7 @@
+# The screens' pixel references (scripts/screens.sh render): made on GitHub's macos-15 runner, this machine. Checked
+# before they are compared: system and fonts (another: the references are out of date, made again in one PR from
+# the render workflow's artifact, said there); image and cpu said.
+image macos15 20260907.0337.1
+system 15.7.9 24G830
+fonts 1040d885500f5308b3cfbfe1c02ead30
+cpu Apple M1 (Virtual)

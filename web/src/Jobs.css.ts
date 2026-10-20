@@ -1,12 +1,14 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashKeyframes, msgWaitingInKeyframes } from "./styles/keyframes.css.ts";
-import { msg } from "./styles/conversation.css.ts";
-import { segmented, segmentedOption } from "./ui.css.ts";
-import { detailsList } from "./pages/ChatPage.css.ts";
-import { activityLine, agentActivity, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { emitOutKeyframes, enterUpKeyframes, jobBreatheKeyframes, jobLiveKeyframes, msgFlashHeldKeyframes, msgFlashKeyframes, msgWaitingInKeyframes, bubbleFlashHeldKeyframes, bubbleFlashKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { msg, msgBubble } from "./styles/conversation.css.ts";
+import { msgMine } from "./styles/chat.css.ts";
+import { detailsList, jobsPanel } from "./pages/ChatPage.css.ts";
+import { activityLine, agentActivity, chatMessages, composerThumb, msgFlash, msgWaitingLate } from "./Chat.css.ts";
 import { tokenGuide } from "./pages/SlackApp.css.ts";
+import { TEXT_IN, outsetStart } from "@stillfail/ui/styles/align.ts";
+import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
+import { STILL, stillFlash, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 export const jobDot = style({
   position: "relative", flex: "none", width: "8px", height: "8px", borderRadius: "50%", background: vars.lineStrong,
@@ -20,14 +22,9 @@ export const jobDot = style({
       content: "\"\"", position: "absolute", inset: "-4px", borderRadius: "50%", background: vars.online,
       animation: `${jobLiveKeyframes} 2.4s ease-in-out infinite`,
     },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important",
-      selectors: {
-        "&::after": { animation: "none !important" },
-      },
-    },
+    [`${STILL} &`]: stillLoop(),
+    // Its breath out: small and faint (unanimated, a disc as big as its ring, solid).
+    [`${STILL} &[data-tone="live"]::after`]: stillLoop({ opacity: ".35", transform: "scale(.6)" }),
   },
 });
 export const jobRow = style({
@@ -44,11 +41,11 @@ export const jobRow = style({
 export const jobFold = style({});
 export const jobText = style({ flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "1px" });
 export const jobName = style({
-  fontSize: vars.textSm, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
+  fontSize: vars.textUi, fontWeight: "500", lineHeight: "20px", overflow: "hidden", textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 });
 export const jobMeta = style({
-  fontSize: vars.textXs, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
   fontVariantNumeric: "tabular-nums",
 });
 export const jobWord = style({
@@ -69,30 +66,28 @@ export const jobEnd = style({
   },
 });
 export const jobNotices = style({
-  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "6px", fontSize: vars.textXs,
+  listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "6px", fontSize: vars.textMeta,
   selectors: {
-    "&[data-clock]": { gap: "12px", fontSize: vars.textSm },
+    "&[data-clock]": { gap: "12px", fontSize: vars.textUi },
   },
 });
-export const jobNoticesNone = style({ margin: "0", fontSize: vars.textXs, color: vars.muted });
+export const jobNoticesNone = style({ margin: "0", fontSize: vars.textMeta, color: vars.muted });
 export const jobLast = style({
-  display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: "11px", color: vars.subtle,
+  display: "flex", flexDirection: "column", gap: "2px", marginTop: "10px", fontSize: vars.textCaption, color: vars.subtle,
   minWidth: "0",
 });
-export const jobActions = style({ display: "flex", gap: "2px", margin: "6px 0 0 -8px" });
+export const jobActions = style({ display: "flex", gap: "2px", marginTop: "6px", ...outsetStart(8) });
 export const jobAction = style({
   display: "inline-flex", alignItems: "center", gap: "5px", height: "26px", padding: "0 8px", border: "0",
   borderRadius: `calc(8px * ${vars.cornerScale})`, background: "none", color: vars.muted, font: "inherit",
-  fontSize: vars.textXs, cursor: "pointer", cornerShape: vars.cornerShape,
+  fontSize: vars.textMeta, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.selected, color: vars.text },
     "&:disabled": { cursor: "progress" },
   },
 });
-/** A stop or a clear under way: a small ring in place of its icon. */
-export const jobSpinner = style({});
 export const jobsHead = style({
-  display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textXs,
+  display: "flex", alignItems: "baseline", gap: "6px", padding: "8px 12px 4px", fontSize: vars.textMeta,
   fontWeight: "500", color: vars.muted,
 });
 export const jobFoldBody = style({
@@ -101,18 +96,20 @@ export const jobFoldBody = style({
 });
 /** A group's rows, a little apart. */
 export const jobsGroup = style({ display: "flex", flexDirection: "column", gap: "4px" });
-export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px", marginTop: "6px" });
+/** The title bar popover's groups: what scrolls when they are more than the window is tall (its foot does not). */
+export const jobsList = style({ flex: "0 1 auto", minHeight: "0", overflowY: "auto", overscrollBehavior: "contain" });
+export const jobsFoot = style({ display: "flex", alignItems: "center", gap: "4px", flex: "none", marginTop: "6px" });
 export const jobsAll = style({
   display: "flex", alignItems: "center", gap: "10px", flex: "1", minWidth: "0", height: "38px",
   padding: "0 12px 0 32px", border: "0", borderRadius: vars.rOption, background: "none", color: vars.muted,
-  font: "inherit", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  font: "inherit", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
   },
 });
 export const jobsClear = style({
   flex: "none", alignSelf: "flex-start", height: "38px", padding: "0 12px", border: "0", borderRadius: vars.rOption,
-  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textSm, whiteSpace: "nowrap", cursor: "pointer",
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textUi, whiteSpace: "nowrap", cursor: "pointer",
   cornerShape: vars.cornerShape,
   display: "inline-flex", alignItems: "center", gap: "6px",
   selectors: {
@@ -120,10 +117,10 @@ export const jobsClear = style({
     "&:disabled": { cursor: "progress" },
   },
 });
-export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textSm, color: vars.muted });
+export const jobsQuiet = style({ margin: "8px 12px 0 32px", fontSize: vars.textUi, color: vars.muted });
 export const jobsEmpty = style({
   display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "26px 20px",
-  textAlign: "center", color: vars.muted, fontSize: vars.textXs,
+  textAlign: "center", color: vars.muted, fontSize: vars.textMeta,
 });
 /** The 任务 tab: everything listed, a job picked shows what it said or its output. */
 export const jobsTab = style({ flex: "1", minHeight: "0", display: "flex", flexDirection: "column" });
@@ -135,9 +132,9 @@ export const jobDetail = style({
   borderRadius: vars.rField, background: vars.paper, cornerShape: vars.cornerShape,
 });
 export const jobDetailHead = style({
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textSm,
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textUi,
 });
-export const jobDetailState = style({ fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap" });
+export const jobDetailState = style({ fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
 export const jobDetailGrow = style({ flex: "1" });
 export const jobDetailStop = style({ width: "28px", height: "28px" });
 export const jobDetailCommand = style({
@@ -157,7 +154,7 @@ globalStyle(`${jobRow} > ${jobDot}`, { marginTop: "5.5px" });
 globalStyle(`${jobNotices} li`, { display: "grid", gridTemplateColumns: "5.6em 1fr", gap: "8px" });
 globalStyle(`${jobNotices} time`, { color: vars.subtle, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
 globalStyle(`${jobNotices}[data-clock] li`, { gridTemplateColumns: "3.4em 1fr" });
-globalStyle(`${jobNotices}[data-clock] time`, { fontSize: vars.textSm });
+globalStyle(`${jobNotices}[data-clock] time`, { fontSize: vars.textUi });
 globalStyle(`${jobNoticesNone} code`, { font: `11.5px ${vars.fontMono}` });
 globalStyle(`${jobLast} code`, {
   font: `11.5px/1.5 ${vars.fontMono}`, color: vars.muted, whiteSpace: "nowrap", overflow: "hidden",
@@ -165,15 +162,15 @@ globalStyle(`${jobLast} code`, {
 });
 globalStyle(`${jobsHead} span`, { fontWeight: "400", color: vars.subtle });
 globalStyle(`${jobFold}[data-open] > ${jobRow}`, { borderEndStartRadius: "0", borderEndEndRadius: "0" });
-globalStyle(`${jobsAll} span`, { marginLeft: "auto", fontSize: vars.textXs, color: vars.subtle });
-globalStyle(`${jobsEmpty} b`, { color: vars.text, fontSize: vars.textSm, fontWeight: "500" });
+globalStyle(`${jobsAll} span`, { marginLeft: "auto", fontSize: vars.textMeta, color: vars.subtle });
+globalStyle(`${jobsEmpty} b`, { color: vars.text, fontSize: vars.textUi, fontWeight: "500" });
 globalStyle(`${jobsTabList} section + section`, { marginTop: "6px" });
 globalStyle(`${jobDetailHead} b`, { fontWeight: "600", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
 globalStyle(`${jobDetailHead} ${segmented}`, {
   width: "120px", flex: "none",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", fontSize: vars.textXs });
+globalStyle(`${jobDetailHead} ${segmentedOption}`, { height: "24px", padding: "0", fontSize: vars.textMeta });
 globalStyle(`${jobDetail} > ${jobLast}`, { margin: "8px 0 12px" });
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${detailsList} li`, { display: "grid", gap: "2px" });
@@ -195,27 +192,22 @@ globalStyle(`${msg}[data-emitting] > *`, {
   transformOrigin: "12px 12px", willChange: "transform, clip-path",
   animation: `${emitOutKeyframes} 380ms ${vars.easeOut} both`,
 });
-/** Here rather than with its class: it comes after .agent-activity, and wins over it. */
-globalStyle(`${msg}[data-emitting] > *`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
-});
-/** Here rather than with its class: it comes after [data-enter], and wins over it. */
-globalStyle(msgFlash, {
-  animation: `${msgFlashKeyframes} 1400ms ${vars.easeOut}`, borderRadius: `calc(12px * ${vars.cornerScale})`,
+/** Here rather than with its class: it comes after [data-enter], and wins over it; over a row that faded in with
+ *  the history (Chat.css.ts [data-history-fade], which stays on it) too, or a jump to it would not show. */
+const flashing = `${msgFlash}, ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`;
+globalStyle(flashing, {
+  animation: `${msgFlashKeyframes} 1700ms`,
+  borderRadius: `calc(6px * ${vars.cornerScale})`, // own corner: 14 outside with its ground's 8px (as Android's flash)
   cornerShape: vars.cornerShape,
 });
+/** Your words: their bubble is the message, and takes the tint; the row round it does not. */
+globalStyle(`${msgMine}${msgFlash}:has(${msgBubble}), ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none" });
+globalStyle(`${msgMine}${msgFlash} ${msgBubble}`, { animation: `${bubbleFlashKeyframes} 1700ms` });
 /** Here rather than with its class: it comes after .msg-flash, and wins over it. */
-globalStyle(msgFlash, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none", outline: `2px solid ${vars.accent}`,
-    },
-  },
-});
+globalStyle(`${STILL} ${msgFlash}, ${STILL} ${chatMessages} > ${msg}${msgFlash}[data-history-fade]`, stillFlash(msgFlashHeldKeyframes, "1700ms"));
+// Your words: still their bubble, not the row (the held tint above is over every rule without it).
+globalStyle(`${STILL} ${msgMine}${msgFlash}:has(${msgBubble}), ${STILL} ${chatMessages} > ${msgMine}${msgFlash}[data-history-fade]:has(${msgBubble})`, { animation: "none !important" });
+globalStyle(`${STILL} ${msgMine}${msgFlash} ${msgBubble}`, stillFlash(bubbleFlashHeldKeyframes, "1700ms"));
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(composerThumb, {
   position: "relative", display: "block", width: "64px", height: "64px",
@@ -225,9 +217,14 @@ globalStyle(composerThumb, {
 /** Here rather than with its class: it comes after .job-notices li, and wins over it. */
 globalStyle(`${tokenGuide} li`, {
   counterIncrement: "guide", display: "grid", gap: "4px", paddingLeft: "36px", position: "relative",
-  fontSize: vars.textSm,
+  fontSize: vars.textUi,
 });
 /** A message its agents have not taken yet says so only after a second (most are taken before). */
 /** Here rather than with its class: it comes after [data-enter], and wins over it. */
 globalStyle(msgWaitingLate, { animation: `${msgWaitingInKeyframes} 0s linear 1s both` });
-globalStyle(`${jobSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });
+/** In the title bar's popover (a small panel's list, docs/ui-panels.md): its rows' words in by a row's padding, its rows
+ * at the panel's, rounded as it less that; "all of them" a row with its words in the jobs' names' column; clearing a
+ * small pill. */
+globalStyle(`${jobsPanel} :is(${jobRow}, ${jobsAll})`, { borderRadius: "var(--panel-in)", paddingInline: `${TEXT_IN}px` });
+globalStyle(`${jobsPanel} ${jobsAll}`, { paddingLeft: `${TEXT_IN + 20}px` });
+globalStyle(`${jobsPanel} ${jobsClear}`, { height: "24px", padding: `0 ${TEXT_IN}px`, borderRadius: "999px", alignSelf: "center", fontSize: vars.textMeta });

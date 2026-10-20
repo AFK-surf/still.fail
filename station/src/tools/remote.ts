@@ -1,6 +1,6 @@
 // The agents' tools for other stations of the workspace (the Rust station's remote.rs `Remote::tools`): station_list,
-// station_task, station_file. Names, descriptions and input schemas as the Rust's, word for word
-// (test/remote-tools.test.ts reads them from it); what they do is Remote.tool.
+// station_task, station_file (once the Rust's, word for word; station_task has since taken `dir` and `back`); what they
+// do is Remote.tool.
 import type { Remote } from "../jobs/remote.ts";
 import type { Tool } from "./mcp.ts";
 
@@ -8,13 +8,13 @@ export const STATION_TOOLS: { name: string; description: string; inputSchema: un
   {
     name: "station_list",
     description:
-      "List stations in this workspace. With station, ask its OS, architecture and whether it accepts tasks from here. Old stations may not support peer calls.",
+      "List stations in this workspace with how busy each is and what it has, to pick where station_task runs: cores, arch/OS, GPU, CPU busy over about the last minute, load average, free memory, free disk where tasks run, running remote tasks/jobs/services/agent turns, relay ping. All are asked at once; one not answering within 2 s is listed offline, an older station's load is unknown. With station, the same for that one in detail, with whether it accepts tasks and file limits. Choose by the numbers: prefer an idle station with enough free memory and disk and the right OS/architecture; keep heavy builds and tests off small VMs. There are no locks between agents: never wait for, ask for or announce one; look at the load and go.",
     inputSchema: { type: "object", properties: { station: { type: "string" } }, additionalProperties: false },
   },
   {
     name: "station_task",
     description:
-      "Run a shell task on a trusted workspace station. All tasks of this session run in one persistent directory there (shared, so a later task can build in what an earlier one cloned); keep checkouts and build output inside it, not elsewhere on that machine. It is removed, with anything still running, when this chat is archived or deleted, or after 14 days unused. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.",
+      "Run a shell task on another station of this workspace. All tasks of this session run in one persistent directory there (shared, so a later task can build in what an earlier one cloned); keep checkouts and build output inside it, not elsewhere on that machine. It is removed, with anything still running, when this chat is archived or deleted, or after 14 days unused. action prepare records command/name with a caller-chosen stable key; upload inputs with station_file; action start executes it once. With dir (an absolute path of a directory here), each start first syncs it to a mirror there (its name is in prepare's answer, inside this session's directory): Git's tracked and untracked-not-ignored files (elsewhere all but node_modules/target/dist and the like), sending only what changed; the mirror's build output stays, unchanged files keep their mtime. A sync that takes longer than about 40 s answers syncing: true and goes on: call start again with the same key, which waits on that sync instead of beginning another. The command runs in the mirror, one task at a time per mirror; synced files it changed come back as a patch to review (never applied here). back: paths relative to where the command runs, downloaded when it ends into station-back/<key> of this workspace. Reuse the same key after uncertain replies; use a new key for new work. get/log/stop address the same task. Completion and job notices return here, including after reconnect/restart. Commands run as the remote station OS user, not in a sandbox. A lost process is marked failed with unknown exit, never automatically re-executed.",
     inputSchema: {
       type: "object",
       properties: {
@@ -24,6 +24,8 @@ export const STATION_TOOLS: { name: string; description: string; inputSchema: un
         command: { type: "string" },
         name: { type: "string" },
         lines: { type: "integer" },
+        dir: { type: "string" },
+        back: { type: "array", items: { type: "string" } },
       },
       required: ["station", "action"],
       additionalProperties: false,

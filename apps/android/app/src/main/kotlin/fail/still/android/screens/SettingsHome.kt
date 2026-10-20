@@ -1,9 +1,10 @@
 // Settings, one page from the gear on Home, as the narrow web has it (web/src/mobile/Settings.tsx): who is signed in, then
 // the workspace's (its people, stations, connects, profiles, memory), then this device's (how it looks, whether it
-// notifies, this build). Each row says how things stand at its end, what is wrong in red, so the page is worth a look
-// before anything is opened. And how this device shows still.fail (外观).
+// notifies, whether it reports, this build, the terms). Each row says how things stand at its end, what is wrong in
+// red, so the page is worth a look before anything is opened. And how this device shows still.fail (外观).
 package fail.still.android.screens
 
+import fail.still.android.ui.Spinner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,11 +35,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
 import fail.still.android.BuildConfig
+import fail.still.android.Crashes
 import fail.still.android.LocalApp
 import fail.still.android.Push
 import fail.still.android.Screen
 import fail.still.android.data.ConnectsView
+import fail.still.android.data.I18n
 import fail.still.android.data.ROLE_LABEL
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
@@ -62,29 +67,19 @@ import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.fileSize
+import fail.still.android.ui.LocalWide
 
 private fun themes() = listOf("system" to t("android-settings.theme.system"), "light" to t("android-settings.theme.light"), "dark" to t("android-settings.theme.dark"))
 
+/** When a done chat is offered to archive: null once done (the default), as the web's (the core's `archiveHint`). */
+private fun archiveHints() = listOf("off" to t("web-pages.appearance.archive.off"), null to t("web-pages.appearance.archive.done"), "reviewed" to t("web-pages.appearance.archive.reviewed"))
+
+/** The motions to choose: null follows the system's (ui/Motion.kt; the core's `motion`, client/core-ts/src/prefs.ts). */
+private fun motions() = listOf(null to t("web-pages.appearance.motion.system"), "reduce" to t("web-pages.appearance.motion.reduce"), "full" to t("web-pages.appearance.motion.full"))
+
 /** The languages to choose: null follows the phone (the core's `language`, client/core-ts/src/prefs.ts). */
 private fun languages() = listOf(null to t("common.language.system"), "zh" to t("common.language.zh"), "en" to t("common.language.en"))
-
-/** A row that opens a page: its name, how things stand (`bad` in red; `dot`, a red dot before it), a chevron. */
-@Composable
-fun GoRow(title: String, value: String? = null, bad: Boolean = false, dot: Boolean = false, lead: (@Composable RowScope.() -> Unit)? = null, onClick: () -> Unit) {
-    ListRow(onClick = onClick) {
-        lead?.invoke(this)
-        Text(title, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (value != null) Row(Modifier.widthIn(max = 220.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (dot) PresenceDot("error")
-            Text(value, fontSize = 14.sp, color = if (bad) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-    }
-}
-
-/** A page's note under its title, in a line or two. */
-@Composable
-fun PageNote(text: String) = Text(text, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 10.dp))
 
 @Composable
 fun SettingsScreen(current: WorkspaceEntry) {
@@ -93,6 +88,7 @@ fun SettingsScreen(current: WorkspaceEntry) {
     val workspace by rememberTopic<WorkspaceView>(app.core, Topics.workspace(current.workspace.id))
     val stationsTopic by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
     val connectsTopic by rememberTopic<ConnectsView>(app.core, Topics.connects(current.workspace.id, false))
+    val lock by rememberTopic<fail.still.android.data.LockView>(app.core, Topics.lock(current.workspace.id))
     val view = workspace.value
     val stations = stationsTopic.value
     val connects = connectsTopic.value
@@ -118,6 +114,10 @@ fun SettingsScreen(current: WorkspaceEntry) {
         SectionHeader(view?.let { t("android-settings.home.workspace", "name" to it.name, "role" to (ROLE_LABEL[it.role] ?: it.role)) } ?: current.workspace.name, start = 24.dp)
         ListCard {
             GoRow("Workspace", view?.let { if (it.manager && waiting > 0) t("android-settings.members.waiting", "n" to it.members.size, "waiting" to waiting) else t("android-settings.members.count", "n" to it.members.size) }) { app.push(Screen.Workspace) }
+            lock.value?.takeIf { it.available }?.let { l ->
+                GoRow(t("web-pages.security.title"), if (!l.locked) t("web-mobile.settings.securityOff") else if (l.attention > 0u) t("web-mobile.settings.securityWaiting", "n" to l.attention.toInt()) else t("web-mobile.settings.securityOn"), bad = l.attention > 0u) { app.push(Screen.Security) }
+            }
+            VaultSettingsRow(current.workspace.id)
             GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
             GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
             GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }
@@ -128,10 +128,14 @@ fun SettingsScreen(current: WorkspaceEntry) {
         SectionHeader(t("android-settings.home.device"), start = 24.dp)
         ListCard {
             GoRow(t("android-settings.appearance.title"), themes().firstOrNull { it.first == app.theme }?.second) { app.push(Screen.Appearance) }
+            // The bottom bar's places (BarSettings.kt): a phone's only, a wide screen has none.
+            if (!LocalWide.current) GoRow(t("android-misc.bar.title"), barsValue(app)) { app.push(Screen.BarSettings) }
             KeptFilesRow()
             Notify()
+            Reporting()
             Version()
             GoRow(t("android-settings.changelog.title")) { app.push(Screen.Changelog) }
+            Legal()
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -164,9 +168,39 @@ private fun Notify() {
             Text(t("android-settings.notify.title"), fontSize = 15.sp, color = C.ink)
             Text(if (app.notify) t("android-settings.notify.on") else t("android-settings.notify.off"), fontSize = 13.sp, color = C.muted)
         }
-        if (pending) Spinner(14.dp)
+        if (pending) Spinner()
         Switch(app.notify)
     }
+}
+
+/**
+ * Whether usage statistics and error reports go to still.fail (docs/telemetry.md → 安卓), on this device (Crashes.kt
+ * keeps it and sends by it): not shown in a build without PostHog's key, which sends nothing anyway.
+ */
+@Composable
+private fun Reporting() {
+    if (BuildConfig.POSTHOG_KEY.isEmpty()) return
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(Crashes.reporting(context)) }
+    ListRow(onClick = { on = !on; Crashes.setReporting(context, on) }) {
+        Column(Modifier.weight(1f)) {
+            Text(t("android-settings.telemetry.title"), fontSize = 15.sp, color = C.ink)
+            Text(t("android-settings.telemetry.note", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
+        }
+        Switch(on)
+    }
+}
+
+/** still.fail's terms and privacy policy, on the web in a Custom Tab, in English when the app speaks it (data/I18n.kt). */
+@Composable
+private fun Legal() {
+    val context = LocalContext.current
+    val open = { page: String ->
+        val url = "https://still.fail${if (I18n.lang == "en") "/en" else ""}/$page"
+        CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
+    }
+    GoRow(t("android-settings.legal.terms")) { open("terms") }
+    GoRow(t("android-settings.legal.privacy")) { open("privacy") }
 }
 
 /**
@@ -184,11 +218,11 @@ private fun Version() {
     ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
         // The beta app goes by its own name (app/build.gradle.kts).
         Text("${BuildConfig.APP_NAME} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
+        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.link else C.muted)
     }
 }
 
-/** How this device shows still.fail: its theme, and the language it speaks. */
+/** How this device shows still.fail: its theme, its motion, and the language it speaks (the web's 外观 the same). */
 @Composable
 fun AppearanceScreen() {
     val app = LocalApp.current
@@ -199,9 +233,40 @@ fun AppearanceScreen() {
         val themes = themes()
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        Motions()
         Language()
+        ArchiveHints()
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/** Whether motion is reduced on this device, as the web's (prefs `motion`): the system's say, reduced, or in full. */
+@Composable
+private fun Motions() {
+    val app = LocalApp.current
+    val motions = motions()
+    SectionHeader(t("web-pages.appearance.motion.title"), start = 24.dp)
+    Seg(motions.map { it.second }, motions.indexOfFirst { it.first == app.motion }.coerceAtLeast(0), { i ->
+        val value = motions[i].first
+        if (value != app.motion) app.setMotion(value)
+    }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+    // As the web's note under it (mobile/Settings.css.ts mSegNote).
+    Text(t("web-pages.appearance.motion.description"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
+}
+
+/** 提示归档, as the web's (prefs `archiveHint`): never, once done, or once the station's archive review recommended it;
+ *  what the one chosen does, under it. */
+@Composable
+private fun ArchiveHints() {
+    val app = LocalApp.current
+    val hints = archiveHints()
+    val at = hints.indexOfFirst { it.first == app.archiveHint }.let { if (it < 0) 1 else it }
+    SectionHeader(t("web-pages.appearance.archive.title"), start = 24.dp)
+    Seg(hints.map { it.second }, at, { i ->
+        val value = hints[i].first
+        if (value != app.archiveHint) app.setArchiveHint(value)
+    }, Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+    Text(t("web-pages.appearance.archive.${hints[at].first ?: "done"}Hint"), fontSize = 13.sp, lineHeight = 19.5.sp, color = C.muted, modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp))
 }
 
 /**

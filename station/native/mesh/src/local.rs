@@ -3,7 +3,7 @@
 //!   station and a TS one, or two Node processes during a handover, never pack the same room at once);
 //! - local Markdown links (mesh/app/src/local_links.rs `prepare`), read with pulldown-cmark as the Rust reads them.
 use std::fs::{File, OpenOptions};
-use std::os::fd::AsRawFd;
+#[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -26,20 +26,29 @@ impl FileLock {
     }
 }
 
-/// archive.rs `file_lock`: the lock file made (0600, never truncated) and an exclusive flock taken on it, waited for
-/// off the JS thread.
+/// archive.rs `file_lock`: the lock file made (0600, never truncated) and an exclusive lock taken on it (flock on Unix,
+/// LockFileEx on Windows: std's `File::lock`), waited for off the JS thread.
 #[napi]
 pub async fn file_lock(path: String) -> napi::Result<FileLock> {
     tokio::task::spawn_blocking(move || -> std::io::Result<FileLock> {
-        let file = OpenOptions::new().create(true).append(true).mode(0o600).open(&path)?;
-        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
+        let mut options = OpenOptions::new();
+        // Read too: LockFileEx wants a handle that may read or write, and one opened to append only may do neither.
+        options.create(true).read(true).append(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let file = options.open(&path)?;
+        file.lock()?;
         Ok(FileLock { file: Mutex::new(Some(file)) })
     })
     .await
     .map_err(|e| napi::Error::from_reason(e.to_string()))?
     .map_err(|e| napi::Error::from_reason(e.to_string()))
+}
+
+/// `C:\…` or `C:/…`: a path on a Windows drive.
+fn is_drive_path(text: &str) -> bool {
+    let b = text.as_bytes();
+    b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/')
 }
 
 /// Resolve only file URLs, familiar machine roots, or paths that actually name a local file.
@@ -50,6 +59,9 @@ fn local_path(destination: &str) -> std::result::Result<Option<PathBuf>, String>
             .ok()
             .and_then(|u| u.to_file_path().ok())
             .ok_or_else(|| format!("invalid local file link: {destination}; use an absolute path in files"))?
+    } else if cfg!(windows) && is_drive_path(&decoded) {
+        // On Windows a drive's path (`C:\…`, `C:/…`) is a local one, as a familiar root's is on Unix.
+        PathBuf::from(decoded.as_ref())
     } else {
         if !decoded.starts_with('/') || decoded.starts_with("//") {
             return Ok(None);

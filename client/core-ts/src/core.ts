@@ -16,7 +16,7 @@ import { CoreError, asCoreError } from "./error.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import * as prefs from "./prefs.ts";
-import { parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
+import { Beside, parseClientMessage, type ClientId, type ClientMessage, type CoreMessage, type RequestId } from "./protocol.ts";
 import { Runner } from "./runtime.ts";
 import { stationId } from "./station/addr.ts";
 import { Status } from "./status.ts";
@@ -27,6 +27,8 @@ import { Kind, SAMPLE, Tracer } from "./trace.ts";
 import { Wakes, WakingHost } from "./wake.ts";
 import { Workspaces } from "./workspace.ts";
 import { install as installStationCalls } from "./station/calls.ts";
+import { install as installScreens } from "./screens.ts";
+import { Composers, install as installComposer } from "./composer.ts";
 import { StationsSync } from "./station/sync.ts";
 import { StationTopics } from "./station/topics.ts";
 import type { StationWire } from "./station/wire.ts";
@@ -36,15 +38,24 @@ import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
 import { Attention } from "./attention.ts";
 import { Pills } from "./pill.ts";
+import { AdminRelays } from "./sync/admin-relays.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
+import { install as installShareIn } from "./share-in.ts";
 import { Changelog } from "./changelog.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
 import { Adb } from "./adb.ts";
 import { envOf, Views } from "./views/views.ts";
+import * as xshare from "./views/xshare.ts";
+import * as memberships from "./views/memberships.ts";
+import * as publish from "./views/publish.ts";
+import * as lockCalls from "./views/lock.ts";
+import * as pairing from "./views/pair.ts";
+import * as vaultCalls from "./views/vault.ts";
 import { isObject } from "./util.ts";
+import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
 export const CREDENTIAL_KEY = "credential";
@@ -54,8 +65,8 @@ export const CREDENTIAL_OTHERS_KEPT = 8;
 /// Where this device's push registration is kept.
 export const PUSH_KEY = "push";
 
-/// How far a call has got, for a UI that asked to hear it.
-export type Progress = (value: unknown) => void;
+/// How far a call has got, for a UI that asked to hear it; `bytes` go beside the value, not in it (protocol.ts).
+export type Progress = (value: unknown, bytes?: Uint8Array) => void;
 
 export type Options = {
   /// How the core reaches stations: the mesh by default; tests' stations answer over the host's fetch.
@@ -69,6 +80,8 @@ export type Options = {
   /// Who the accounts are with (account-provider.ts): still.fail cloud unless the embedding app gives another
   /// (`commaAccountProvider`, comma.ts).
   account?: AccountProviderFactory;
+  /// What the app adds besides the platform (module.ts, docs/core-modules.md): installed once the rest is.
+  modules?: readonly CoreModule[];
 };
 
 /// What the core holds: every module.
@@ -104,9 +117,14 @@ export class Inner {
   adb!: Adb;
   viewCalls!: ViewCalls;
   router!: Router;
+  /// The calls of the app's modules, by full name (module.ts), and the modules' names (their topics are `<name>.…`).
+  moduleCalls = new Map<string, ModuleCall<any>>();
+  moduleNames: string[] = [];
   /// The calls under way that a UI can stop, by `client/id`.
   calls = new Map<string, Fiber.Fiber<unknown, unknown>>();
   doing = new Doing();
+  /// What is being written in each chat (composer.ts).
+  composers!: Composers;
   /// The accounts as last shown, so a change UIs cannot see (a refreshed token) is not one.
   shownAccounts: AccountView[] = [];
 }
@@ -157,7 +175,9 @@ export class Core {
       prefs.followLang(inner.data);
       // What goes out is what the clients' types say (client/core-ts/src/shapes/schema.ts).
       store.setShaped();
-      store.setHeld((topic) => inner.data.shared(topic), (topic) => inner.data.release(topic));
+      store.setHeld((topic) => topic.topic === "draft"
+        ? inner.composers.readDraft(String(topic.station), String(topic.chat))
+        : inner.data.shared(topic), (topic) => inner.data.release(topic));
       inner.data.onChange((topic) => {
         if (topic.topic === "*") {
           for (const t of store.liveTopics()) if (holds(t)) store.changed(t);
@@ -181,23 +201,34 @@ export class Core {
       inner.stationTopics = new StationTopics(inner, inner.stations);
       inner.router.owners.push(inner.stationTopics);
       installStationCalls();
+      installScreens();
+      inner.composers = new Composers(inner);
+      installComposer();
       inner.views = new Views(envOf(inner));
+      inner.views.local.onMade = (station, key) => inner.composers.made(station, key);
       inner.router.owners.push(inner.views);
       inner.viewCalls = new ViewCalls(inner, inner.views);
       inner.viewCalls.install();
+      xshare.install(inner);
+      memberships.install(inner);
+      publish.install(inner);
+      lockCalls.install(inner);
+      pairing.install(inner);
+      vaultCalls.install(inner);
       inner.attention = new Attention(inner, yield* Attend.load(inner.host));
       inner.router.owners.push(inner.attention);
       inner.router.after = (topic, value) => inner.attention.attended(topic, value);
       inner.attention.install();
       inner.choose = installChoose(inner);
+      installShareIn(inner);
       inner.forms = installForms(inner);
-      const asks = new Asks(inner.host);
+      const asks = new Asks(inner.host, (app, from, to) => inner.changelog.brings(app, from, to));
       inner.adb = new Adb({
         host: inner.host,
         runner: inner.runner,
         store: inner.store,
         mesh: () => inner.mesh(),
-        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null),
+        credentials: (workspace) => (device, fresh) => inner.cloudSync.credential(workspace, device, fresh, inner.meshNow()?.deviceId() ?? null, inner.meshNow()?.lockClaim(workspace, device) ?? null),
         relays: (workspace) => inner.cloudSync.workspaceRelays(workspace),
       });
       handlers.adb = (_i, call) => inner.adb.run((call as Extract<Call, { kind: "adb" }>).call);
@@ -206,7 +237,10 @@ export class Core {
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
+      inner.router.owners.push(new AdminRelays(inner));
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
+      inner.moduleCalls = installModules(inner, options.modules ?? []);
+      inner.moduleNames = (options.modules ?? []).map((m) => m.name);
       // The stations every account reaches are linked, as the workspaces say (once a burst of changes settles).
       let reconciling = false;
       inner.cloudSync.onReach = () => {
@@ -265,19 +299,19 @@ export class Core {
   }
 
   /// A message from a UI as JSON (what the native hosts are given): one that is none answers `bad_message`.
-  receiveJson(client: ClientId, json: string): void {
+  receiveJson(client: ClientId, json: string, bytes?: Uint8Array): void {
     let raw: unknown;
     try {
       raw = JSON.parse(json);
     } catch {
       return;
     }
-    this.receiveRaw(client, raw);
+    this.receiveRaw(client, raw, bytes);
   }
 
-  /// A message from a UI as an object.
-  receiveRaw(client: ClientId, raw: unknown): void {
-    const message = parseClientMessage(raw);
+  /// A message from a UI as an object; `bytes`, those a native host handed over beside it.
+  receiveRaw(client: ClientId, raw: unknown, bytes?: Uint8Array): void {
+    const message = parseClientMessage(raw, bytes, (name) => this.inner.moduleNames.some((m) => name.startsWith(`${m}.`)));
     if ("invalid" in message) {
       const id = isObject(raw) && typeof raw.id === "number" && Number.isInteger(raw.id) && raw.id >= 0 ? raw.id : null;
       if (id !== null) this.inner.host.emit(client, { id, error: new CoreError("bad_message", t("core-misc.host.bad_message", { error: message.invalid })) });
@@ -304,16 +338,16 @@ export class Core {
         return;
       }
       case "call":
-        return this.#call(client, message.id, message.call, message.params);
+        return this.#call(client, message.id, message.call, message.params, message.bytes);
     }
   }
 
-  #call(client: ClientId, id: RequestId, name: string, params: unknown): void {
+  #call(client: ClientId, id: RequestId, name: string, params: unknown, bytes: Uint8Array | undefined): void {
     const inner = this.inner;
     const asked = heavy(name) ? null : params;
     let call: Call;
     try {
-      call = parseCall(name, params);
+      call = parseCall(name, params, bytes, inner.moduleCalls);
     } catch (e) {
       inner.host.emit(client, answer(id, { err: asCoreError(e) }));
       return;
@@ -324,15 +358,17 @@ export class Core {
       doing = inner.doing.start(name, asked, inner.host.nowMs());
       inner.store.invalidate({ topic: "doing" });
     }
-    // Each call is a trace: what it asks of stations and still.fail cloud are its spans.
+    // Each call is a trace: what it asks of stations and still.fail cloud are its spans. One that asks nothing and
+    // answers at once is not sent (trace.ts QUIET_MS).
     const span = inner.tracer.root(name, Kind.Internal);
+    span.quiet();
     const station = callStation(call);
     if (station !== null) span.set("stillfail.station", stationId(station));
     // A preview's resource: its page's progress counts it (preview-load.ts).
     const loads = call.kind === "stationPreview" ? inner.workspaces.ofStation(call.station).part("previewLoad", () => new Loads()) : null;
     const resource = loads !== null && call.kind === "stationPreview" ? loads.start(call.station, call.port, call.method, call.path, call.headers, inner.host.nowMs()) : null;
     if (resource) inner.store.invalidate(resource[0]);
-    const progress: Progress = (value) => {
+    const progress: Progress = (value, bytes) => {
       const head = isObject(value) && isObject(value.head) ? value.head : null;
       if (loads && resource && head && typeof head.status === "number") {
         loads.head(resource, head.status);
@@ -341,7 +377,7 @@ export class Core {
         if (stream) loads.end(resource, inner.host.nowMs(), null);
         inner.store.invalidate(resource[0]);
       }
-      inner.host.emit(client, { id, value });
+      inner.host.emit(client, bytes === undefined ? { id, value } : { id, value, bytes });
     };
     const key = `${client}/${id}`;
     const stoppable = cancellable(call);
@@ -371,7 +407,8 @@ export class Core {
           if (stoppable) inner.calls.delete(key);
           const result: { ok: unknown } | { err: CoreError } = exit._tag === "Success" ? { ok: exit.value } : { err: failureOf(exit.cause) };
           if (loads && resource) {
-            const status = "ok" in result && isObject(result.ok) ? result.ok.status : undefined;
+            const said = "ok" in result ? (result.ok instanceof Beside ? result.ok.value : result.ok) : undefined;
+            const status = isObject(said) ? said.status : undefined;
             if (typeof status === "number") loads.head(resource, status);
             loads.end(resource, inner.host.nowMs(), "err" in result ? result.err.message : null);
             inner.store.invalidate(resource[0]);
@@ -415,7 +452,8 @@ function failureOf(cause: Cause.Cause<unknown>): CoreError {
 }
 
 export function answer(id: RequestId, result: { ok: unknown } | { err: CoreError }): CoreMessage {
-  return "ok" in result ? { id, ok: result.ok } : { id, error: result.err };
+  if (!("ok" in result)) return { id, error: result.err };
+  return result.ok instanceof Beside ? { id, ok: result.ok.value, bytes: result.ok.bytes } : { id, ok: result.ok };
 }
 
 /// The relays a `/v1/me` names: `relay_urls`, still.fail's own first, or `relay_url` alone from a cloud from before.
@@ -424,6 +462,13 @@ export function relaysOf(me: unknown): string[] | null {
   const all = Array.isArray(me.relay_urls) ? me.relay_urls.filter((v): v is string => typeof v === "string") : [];
   if (all.length > 0) return all;
   return typeof me.relay_url === "string" ? [me.relay_url] : null;
+}
+
+/// The relay entries a `/v1/me` names (`relay_entries`, cloud relays.ts): each dialled on an endpoint of its own, never
+/// among the relays (mesh.ts `entries`).
+export function entriesOf(me: unknown): string[] {
+  if (!isObject(me) || !Array.isArray(me.relay_entries)) return [];
+  return me.relay_entries.filter((v): v is string => typeof v === "string");
 }
 
 export function gone(): CoreError {

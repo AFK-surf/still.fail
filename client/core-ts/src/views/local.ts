@@ -8,6 +8,7 @@ import type { Data } from "../data.ts";
 import { join, SEP } from "../data.ts";
 import type { AccountDb } from "../db/account.ts";
 import { t } from "../i18n.ts";
+import { localId } from "../ids.ts";
 import { arr as arrU, equal, get as getU, isObject } from "../util.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -62,6 +63,8 @@ export type LocalChange =
   | { kind: "changing"; station: string }
   | { kind: "archiving" };
 
+/// The name a station keeps an upload under: the last part of its path, wherever it is moved.
+const keptName = (path: string) => path.split("/").at(-1)!;
 const OUTBOX = "outbox";
 const PENDING = "pending";
 const FIRST = "first";
@@ -70,19 +73,26 @@ const CHANGING = "changing";
 export class Local {
   readonly #data: Data;
   readonly #now: () => number;
-  #sent = 0;
   #changes = 0;
   readonly #outbox = new Map<string, J[]>();
   readonly #pending = new Map<string, Pending>();
+  readonly #pendingDb = new Map<string, AccountDb>();
+  /// The station's session back to the key this device created it with, kept across restarts.
+  readonly #made = new Map<string, string>();
   readonly #firsts = new Map<string, First>();
   readonly #changing: Change[] = [];
   /// Chats on their way into the archive from here: station, thread (none: an agent with no chat), session.
   readonly #archiving: [string, number | null, string][] = [];
   /// Recent outbox-to-message identities (the UI may skip the acknowledgement frame), by `station␁thread␁seq`.
   readonly delivered = new Map<string, string>();
+  /// Files that went up after their message was sent, by the name the station keeps each under (unique; it keeps it as
+  /// it moves the file into the chat's uploads): the upload each was here (`composer.add`'s id), whose picture this
+  /// device still has (the latest few).
+  readonly #uploadedFrom = new Map<string, string>();
   /// Messages sent from here that their station has taken: station, thread, seq.
   readonly #sentIn: [string, number, number][] = [];
   onChange: (change: LocalChange) => void = () => {};
+  onMade: (station: string, key: string) => void = () => {};
 
   constructor(data: Data, now: () => number) {
     this.#data = data;
@@ -99,20 +109,19 @@ export class Local {
     for (const [station, thread, list] of db.locals(OUTBOX)) {
       if (Array.isArray(list) && list.length > 0) this.#outbox.set(join([station, thread]), list);
     }
-    for (const [, key, chat] of db.locals(PENDING)) if (isObject(chat)) this.#pending.set(key, chat as unknown as Pending);
+    for (const [, key, chat] of db.locals(PENDING)) if (isObject(chat)) {
+      const pending = chat as unknown as Pending;
+      this.#pending.set(key, pending);
+      this.#pendingDb.set(key, db);
+      if (pending.made) this.#made.set(join([pending.station, pending.made[0]]), key);
+    }
     for (const [station, key, first] of db.locals(FIRST)) if (isObject(first)) this.#firsts.set(join([station, key]), first as unknown as First);
     for (const [, , change] of db.locals(CHANGING)) if (isObject(change) && !this.#changing.some((c) => c.station === change.station && c.id === change.id)) this.#changing.push(change as unknown as Change);
-    const ids = [...this.#outbox.values(), ...[...this.#pending.values()].map((p) => p.queue), ...[...this.#firsts.values()].map((f) => f.queue)].flat();
-    for (const m of ids) {
-      const n = Number(String(get(m, "id") ?? "").slice(4));
-      if (Number.isInteger(n)) this.#sent = Math.max(this.#sent, n);
-    }
     for (const c of this.#changing) this.#changes = Math.max(this.#changes, c.id);
   }
 
   #nextId(): string {
-    this.#sent++;
-    return `out-${this.#sent}`;
+    return localId("out");
   }
 
   // ── chats asked for here ──
@@ -124,8 +133,12 @@ export class Local {
 
   pendingNew(station: string, ask: J): string {
     const now = this.#now();
-    const key = `${PENDING_PREFIX}${Math.round(now)}-${++this.#sent}`;
+    // named as the core names what it makes here (localId), not by the clock: a recorded new chat's key comes again
+    // in its replay
+    const key = `${PENDING_PREFIX}${localId("chat")}`;
     this.#pending.set(key, { station, ask, createdAt: now, queue: [], failed: null, made: null, listed: false, making: false });
+    const db = this.#data.of(station);
+    if (db) this.#pendingDb.set(key, db);
     this.#savePending(key);
     this.onChange({ kind: "pending", key });
     return key;
@@ -140,6 +153,14 @@ export class Local {
 
   pending(key: string): Pending | undefined {
     return this.#pending.get(key);
+  }
+
+  /// A made chat's original key, from either name, only in the account that keeps this station now.
+  pendingKey(station: string, session: string): string | undefined {
+    const key = this.#made.get(join([station, session])) ?? session;
+    const pending = this.#pending.get(key);
+    const db = this.#data.of(station);
+    return db && this.#pendingDb.get(key) === db && pending?.station === station && pending.made ? key : undefined;
   }
 
   /// The chats asked for and not answered: what a restart asks for again.
@@ -183,6 +204,7 @@ export class Local {
     const gone = chat.queue.length === 0 && chat.failed !== null;
     if (gone) {
       this.#pending.delete(key);
+      this.#pendingDb.delete(key);
       this.#data.putLocal(PENDING, chat.station, key, undefined);
     } else this.#savePending(key);
     this.onChange({ kind: "pending", key });
@@ -213,10 +235,12 @@ export class Local {
     const chat = this.#pending.get(key);
     if (!chat || chat.made) return [];
     chat.made = [session, thread];
+    this.#made.set(join([chat.station, session]), key);
     chat.making = false;
     const queue = chat.queue;
     chat.queue = [];
     this.#savePending(key);
+    this.onMade(chat.station, key);
     const sends = queue.map((m) => [String(m.id ?? ""), sentAs(m)] as [string, J]);
     if (queue.length > 0) this.#outboxPut(chat.station, thread, [...this.outbox(chat.station, thread), ...queue]);
     this.onChange({ kind: "pending", key });
@@ -231,9 +255,8 @@ export class Local {
     const titled = new Map<string, J>();
     for (const [key, chat] of this.#pending) {
       if (chat.station !== station) continue;
-      const first = chat.queue[0] ?? (chat.made ? this.outbox(station, chat.made[1])[0] : undefined);
-      const text = String(get(first, "text") ?? "").trim();
-      const title = text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
+      const first = this.#firstOf(chat);
+      const title = firstLine(first);
       const theirs: J = chat.made ? this.#data.chat(station, chat.made[0]) : this.#data.chatOfClientKey(station, key);
       if (theirs !== undefined) {
         if (chat.made && !chat.listed) {
@@ -265,6 +288,21 @@ export class Local {
       out.push(row);
     }
     return { rows: out, titled };
+  }
+
+  /// What a chat asked for here is titled while its station has no message in it yet (as its row is: pendingRows):
+  /// the first line of its first message here, by its key or, once made, its thread or its agent's key.
+  firstTitle(station: string, at: { key?: string; thread?: number; session?: string }): string | null {
+    for (const [key, chat] of this.#pending) {
+      if (chat.station !== station) continue;
+      if (key !== at.key && (chat.made === null || (chat.made[1] !== at.thread && chat.made[0] !== at.session))) continue;
+      return firstLine(this.#firstOf(chat));
+    }
+    return null;
+  }
+
+  #firstOf(chat: Pending): J {
+    return chat.queue[0] ?? (chat.made ? this.outbox(chat.station, chat.made[1])[0] : undefined);
   }
 
   // ── an agent's first messages ──
@@ -404,13 +442,38 @@ export class Local {
     return id;
   }
 
+  /// A queued message cannot be acknowledged by equal text until its own POST has started.
+  outboxDelivering(station: string, thread: number, id: string): void {
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, queued: false } : m));
+  }
+
+  /// Persist resolved attachments before delivery, so a retry/restart never needs their source Blobs again.
+  outboxUploaded(station: string, thread: number, id: string, files: J[]): void {
+    const uploads = this.outboxGet(station, thread, id)?.uploads;
+    files.forEach((f, i) => {
+      const from = get(arr(uploads)[i], "id");
+      const path = get(f, "path");
+      if (typeof from !== "string" || typeof path !== "string") return;
+      this.#uploadedFrom.set(`${station}\n${keptName(path)}`, from);
+      while (this.#uploadedFrom.size > 64) this.#uploadedFrom.delete(this.#uploadedFrom.keys().next().value!);
+    });
+    this.#outboxPut(station, thread, this.outbox(station, thread).map((m) => m.id === id ? { ...m, attachments: [...(m.attachments ?? []), ...files], uploads: [] } : m));
+    this.onChange({ kind: "outbox", station, thread });
+  }
+
+  /// The upload (`composer.add`'s id) a file of `station` kept at `path` was here, sent before it was up.
+  uploadOf(station: string, path: unknown): string | undefined {
+    return typeof path === "string" ? this.#uploadedFrom.get(`${station}\n${keptName(path)}`) : undefined;
+  }
+
   outboxGet(station: string, thread: number, id: string): J | undefined {
     return this.outbox(station, thread).find((m) => m.id === id);
   }
 
-  /// Marks an outgoing message `sending` again, or `failed` with the error's message.
-  outboxState(station: string, thread: number, id: string, failed: string | null): void {
-    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed } : m));
+  /// Marks an outgoing message `sending` again, or `failed` with the error's message (`final`: refused as it is, not to
+  /// be sent again).
+  outboxState(station: string, thread: number, id: string, failed: string | null, final = false): void {
+    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined } : m));
     this.#outboxPut(station, thread, list);
     this.onChange({ kind: "outbox", station, thread });
   }
@@ -429,6 +492,42 @@ export class Local {
   outboxRemove(station: string, thread: number, id: string): void {
     this.#outboxPut(station, thread, this.outbox(station, thread).filter((m) => m.id !== id));
     this.onChange({ kind: "outbox", station, thread });
+  }
+
+  /// What an upload has come to after the message it goes with was sent: an image's size (a big one takes a while to
+  /// read), so its row holds the image's own shape before it is up, not a fixed box that changes once it is; how much of
+  /// it the station has, so its card says how far it has gone. That message's upload takes it wherever it waits.
+  uploadChanged(upload: string, patch: { width?: number; height?: number; sent?: number }): void {
+    const changes = (u: J) => get(u, "id") === upload && Object.entries(patch).some(([k, v]) => get(u, k) !== v);
+    const changed = (list: J[]): J[] | null => {
+      if (!list.some((m) => arr(get(m, "uploads")).some(changes))) return null;
+      return list.map((m) => arr(get(m, "uploads")).some((u) => get(u, "id") === upload)
+        ? { ...m, uploads: arr(get(m, "uploads")).map((u) => get(u, "id") === upload ? { ...u, ...patch } : u) }
+        : m);
+    };
+    for (const [k, list] of this.#outbox) {
+      const next = changed(list);
+      if (!next) continue;
+      const at = k.indexOf(SEP);
+      const [station, thread] = [k.slice(0, at), Number(k.slice(at + 1))];
+      this.#outboxPut(station, thread, next);
+      this.onChange({ kind: "outbox", station, thread });
+    }
+    for (const [key, chat] of this.#pending) {
+      const next = changed(chat.queue);
+      if (!next) continue;
+      chat.queue = next;
+      this.#savePending(key);
+      this.onChange({ kind: "pending", key });
+    }
+    for (const [k, first] of this.#firsts) {
+      const next = changed(first.queue);
+      if (!next) continue;
+      first.queue = next;
+      this.#saveFirst(k);
+      const at = k.indexOf(SEP);
+      this.onChange({ kind: "first", station: k.slice(0, at), key: k.slice(at + 1) });
+    }
   }
 
   /// Whether the card at `seq` in a chat is answered from here: something sent is on its way into it (not failed), or
@@ -554,4 +653,10 @@ export function sentAs(entry: J): J {
   const message: J = { text: entry.text ?? null, attachments: entry.attachments ?? null, quotes: entry.quotes ?? null };
   if (typeof entry.client === "string") message.client = entry.client;
   return message;
+}
+
+/// A message's first line with words, as a chat made by it is titled until its station has it.
+function firstLine(message: J): string | null {
+  const text = String(get(message, "text") ?? "").trim();
+  return text.split("\n").map((l) => l.trim()).find((l) => l !== "") ?? null;
 }

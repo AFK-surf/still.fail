@@ -11,11 +11,19 @@
 //   stream.open {url, method, headers} + body → {status, headers, id}; stream.read {id} → bytes, or {end}; stream.close {id}
 //   ws.open {url, protocols} → {id}; ws.next {id} → {text} or {end}; ws.send {id, text}; ws.close {id}
 //   storage.get {key} → bytes or {none}; storage.set {key} + value; storage.delete {key}
+//   secure.get {key, user, reason?} → bytes or {none}; secure.set {key, user} + value; secure.delete {key};
+//     secure.ask {reason} — answered by the app (Kotlin: the Keystore, and the prompt when `user` or asked), not the
+//     shell (docs/vault.md, "设备上的钥匙")
 //   db.read {table, from, to} → {keys, sizes} + the values one after another (the former records store, read once)
 //   tcp.open {port} → {id}; tcp.read {id} → bytes or {end}; tcp.write {id} + bytes; tcp.end {id}; tcp.close {id}
+//   listen.open {port, host} → {id} (fails when the port is taken there); listen.next {id} → {request, method, path,
+//     headers: [[name, value]]} + the body, or {end}; listen.respond {id, request, status, headers} + body;
+//     listen.close {id} — a login's loopback listener (docs/remote-login.md), answered by the app (Kotlin:
+//     Loopback.kt, where the app keeps itself running while it listens), not the shell
 //   reset {} — the connections kept for requests are taken for gone
-//   iroh.bind {relayUrls, lookup, relayOnly} + key → {id}; iroh.connect {id, addr, additional: [hex]} + alpn → {id};
-//     iroh.networkChange {id}; iroh.close {id}
+//   iroh.bind {relayUrls, lookup, relayOnly, alpns: [hex]} + key → {id}; iroh.connect {id, addr, additional: [hex]} +
+//     alpn → {id}; iroh.accept {id} → {id, alpn: hex} (the next connection coming, its handshake done; {end} once the
+//     endpoint is gone); iroh.networkChange {id}; iroh.close {id}
 //   conn.openBi / conn.acceptBi / conn.openUni {id} → {id} (acceptBi: {end} once gone); conn.closed {id} → reason;
 //     conn.close {id, code, reason}
 //   istream.read {id} → bytes or {end}; istream.write {id} + bytes; istream.finish {id}; istream.stopped {id} → {code};
@@ -27,9 +35,10 @@
 //   conn.closeReason {id}; conn.paths {id}; conn.stats {id}; release {id} (a handle let go).
 import { Effect, type Scope } from "effect";
 import { Core } from "../core.ts";
+import type { CoreModule } from "../module.ts";
 import { HostError } from "../error.ts";
-import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohStream } from "../iroh.ts";
-import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
+import type { CloseReason, Iroh, IrohAddr, IrohConnection, IrohEndpoint, IrohPath, IrohStream } from "../iroh.ts";
+import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest, type HttpResponse, type LoopbackRequest, type Pull, type Sql, type SqlRow, type SqlValue, type StreamResponse, type TcpConnection, type SqlError, sqlError } from "../host.ts";
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
 import { service } from "../trace.ts";
@@ -42,6 +51,8 @@ export interface Native {
   callSync(op: string, json: string): string;
   /// What the core says to one UI.
   emit(client: number, json: string): void;
+  /// What the core says to one UI with bytes beside it (a screen view's frame, protocol.ts): the JSON without them.
+  emitBytes(client: number, json: string, bytes: Uint8Array): void;
   now(): number;
   monotonic(): number;
   utcOffset(atMs: number): number;
@@ -102,6 +113,7 @@ function concat(parts: Uint8Array[]): Uint8Array {
 }
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (x) => parseInt(x, 16));
 
 /// A pull over a shell operation that answers bytes, or `{end}`.
 function pullBytes(bridge: Bridge, op: string, id: number): Pull<Uint8Array> {
@@ -176,6 +188,34 @@ export class BridgeHost implements Host {
     });
   }
 
+  /// A loopback listener (a login's browser coming back, docs/remote-login.md), the app's: a request at a time, each
+  /// answered once (the app closes its connection then).
+  listen(port: number, host: string): Effect.Effect<Pull<LoopbackRequest>, HostError, Scope.Scope> {
+    const bridge = this.#bridge;
+    return Effect.gen(function* () {
+      if (host !== "127.0.0.1" && host !== "::1") return yield* Effect.fail(new HostError(`not a loopback address: ${host}`));
+      const opened = yield* Effect.acquireRelease(bridge.call("listen.open", { port, host }), (a) => Effect.ignore(bridge.call("listen.close", { id: (a.json as J).id })));
+      const id = (opened.json as J).id as number;
+      const request = (a: { json: unknown; bytes: Uint8Array | null }): LoopbackRequest | null => {
+        const r = a.json as J;
+        if (r?.end === true) return null;
+        let answered = false;
+        return {
+          method: String(r.method),
+          path: String(r.path),
+          headers: Array.isArray(r.headers) ? (r.headers as unknown[]).filter((h): h is [string, string] => Array.isArray(h) && typeof h[0] === "string" && typeof h[1] === "string") : [],
+          body: a.bytes ?? new Uint8Array(0),
+          respond: (status, headers, body) => {
+            if (answered) return;
+            answered = true;
+            Effect.runFork(Effect.ignore(bridge.call("listen.respond", { id, request: r.request, status, headers }, body)));
+          },
+        };
+      };
+      return { take: Effect.map(bridge.call("listen.next", { id }), request) };
+    });
+  }
+
   storageGet(key: string): Effect.Effect<Uint8Array | null, HostError> {
     return Effect.map(this.#bridge.call("storage.get", { key }), (a) => ((a.json as J)?.none === true ? null : (a.bytes ?? new Uint8Array(0))));
   }
@@ -184,6 +224,19 @@ export class BridgeHost implements Host {
   }
   storageDelete(key: string): Effect.Effect<void, HostError> {
     return Effect.asVoid(this.#bridge.call("storage.delete", { key }));
+  }
+
+  secureGet(key: string, opts: { user: boolean; reason?: string }): Effect.Effect<Uint8Array | null, HostError> {
+    return Effect.map(this.#bridge.call("secure.get", { key, user: opts.user, reason: opts.reason ?? "" }), (a) => ((a.json as J)?.none === true ? null : (a.bytes ?? new Uint8Array(0))));
+  }
+  secureSet(key: string, value: Uint8Array, opts: { user: boolean }): Effect.Effect<void, HostError> {
+    return Effect.asVoid(this.#bridge.call("secure.set", { key, user: opts.user }, value));
+  }
+  secureDelete(key: string): Effect.Effect<void, HostError> {
+    return Effect.asVoid(this.#bridge.call("secure.delete", { key }));
+  }
+  secureAsk(reason: string): Effect.Effect<void, HostError> {
+    return Effect.asVoid(this.#bridge.call("secure.ask", { reason }));
   }
 
   legacyRead(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError> {
@@ -220,11 +273,17 @@ export class BridgeHost implements Host {
   utcOffsetMin(atMs: number): number {
     return this.#bridge.native.utcOffset(atMs);
   }
+  /// An app's: what it keeps is the device's, not code still.fail cloud serves (lock.ts).
+  readonly appKeys = true;
+
   randomBytes(buf: Uint8Array): void {
     this.#bridge.native.random(buf);
   }
   emit(client: ClientId, message: CoreMessage): void {
-    this.#bridge.native.emit(client, JSON.stringify(message));
+    if ("bytes" in message && message.bytes !== undefined) {
+      const { bytes, ...rest } = message;
+      this.#bridge.native.emitBytes(client, JSON.stringify(rest), bytes);
+    } else this.#bridge.native.emit(client, JSON.stringify(message));
   }
 }
 
@@ -284,23 +343,31 @@ export function bridgeIroh(bridge: Bridge): Iroh {
     close: (code, reason) => void Effect.runFork(Effect.ignore(bridge.call("conn.close", { id, code, reason }))),
     closeReason: () => (bridge.sync("conn.closeReason", { id }) as CloseReason | null) ?? null,
     closed: () => Effect.orElseSucceed(Effect.map(bridge.call("conn.closed", { id }), (a) => a.json as CloseReason), () => ({ kind: "other", reason: "" }) as CloseReason),
-    paths: () => (bridge.sync("conn.paths", { id }) as { selected: boolean; relay: string | null; rttMs: number }[]) ?? [],
+    paths: () => (bridge.sync("conn.paths", { id }) as IrohPath[]) ?? [],
     stats: () => bridge.sync("conn.stats", { id }) as ReturnType<IrohConnection["stats"]>,
   });
   const endpoint = (id: number): IrohEndpoint => ({
     id: () => String(bridge.sync("iroh.endpointId", { id })),
     connect: (addr: IrohAddr, alpn, additional) => Effect.map(bridge.call("iroh.connect", { id, addr, additional: additional.map(hex) }, alpn), (a) => connection(handle(a))),
+    accept: () =>
+      Effect.orElseSucceed(
+        Effect.map(bridge.call("iroh.accept", { id }), (a) => ((a.json as J)?.end === true ? null : { connection: connection(handle(a)), alpn: unhex(String((a.json as J).alpn)) })),
+        () => null,
+      ),
     addAddr: (addr) => void bridge.sync("iroh.addAddr", { id, addr }),
     networkChange: () => Effect.ignore(bridge.call("iroh.networkChange", { id })),
     relayStatus: () => (bridge.sync("iroh.relayStatus", { id }) as { url: string; connected: boolean }[]) ?? [],
     close: () => Effect.ignore(bridge.call("iroh.close", { id })),
   });
-  return { bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly }, o.secretKey), (a) => endpoint(handle(a))) };
+  return {
+    bind: (o) => Effect.map(bridge.call("iroh.bind", { relayUrls: o.relayUrls, lookup: o.lookup, relayOnly: o.relayOnly, alpns: (o.alpns ?? []).map(hex) }, o.secretKey), (a) => endpoint(handle(a))),
+  };
 }
 
 /// A core on a shell: the API the Rust core's Node addon had (connect / receive(json) / disconnect). A bug that ends a fiber ends it as a
-/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another).
-export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void) {
+/// panic ended the Rust core: `onFatal` (each UI is told `{"fatal": …}` by the shell, which starts another). `modules`:
+/// what the app adds to the core (module.ts).
+export function startBridged(native: Native, cloudOrigin: string, beta: boolean, os: string, onFatal: (reason: string) => void, extra: { modules?: readonly CoreModule[] } = {}) {
   service.name = "stillfail-native";
   service.os = os;
   const bridge = new Bridge(native);
@@ -311,7 +378,7 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     dead = true;
     onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
   };
-  const ready = Core.create(host, { iroh: bridgeIroh(bridge) }).then((core) => {
+  const ready = Core.create(host, { iroh: bridgeIroh(bridge), modules: extra.modules }).then((core) => {
     core.inner.runner.onDefect = fatal;
     core.keepTime();
     return core;
@@ -329,8 +396,8 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
       later((core) => core.connect());
       return id;
     },
-    receive(client: number, json: string): void {
-      later((core) => core.receiveJson(client, json));
+    receive(client: number, json: string, bytes?: Uint8Array): void {
+      later((core) => core.receiveJson(client, json, bytes));
     },
     disconnect(client: number): void {
       later((core) => core.disconnect(client));

@@ -1,0 +1,12 @@
+#env MBUI_OPEN_PAGE=decisions
+# The 奏 page (the bottom bar's 奏, opened at the start here): the cards waiting for alice one at a time, the chat's
+# title over the post and its options; one tapped answers it and the page says none are left.
+timeout 60000
+log do: peer send 还有一个问题 {T} card:发布到哪里 {T}|测试版 {T}*|正式版 {T}
+timeout 120000
+until =测试版 {T}
+wait 1500
+shot 1-deck
+tap =测试版 {T}
+until 奏折已全部批完
+shot 2-idle

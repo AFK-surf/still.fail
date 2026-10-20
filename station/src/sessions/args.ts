@@ -31,7 +31,7 @@ export const MAX_WAIT_SECONDS = 3600;
 /// How many answers a decision may offer.
 export const MAX_OPTIONS = 6;
 /// The kinds of card a post can carry.
-const CARDS = ["options", "text"];
+const CARDS = ["options", "text", "login"];
 /// How long a text card's placeholder may be, in characters.
 const MAX_PLACEHOLDER = 80;
 /// How many letters (or characters) all_done's `done` has at least.
@@ -165,7 +165,7 @@ export const optionsCard = (options: Json[]): Json => ({ type: "options", option
 /// refused, naming those that are. A runtime whose tool list is from before the parameter sends it as JSON text: read
 /// too.
 export function cardArg(card: Json, options: Json): Json | null {
-  const shape = 'card must be an object: {"type": "options", "options": [{label, detail?, recommended?}]} or {"type": "text", "placeholder"?}';
+  const shape = 'card must be an object: {"type": "options", "options": [{label, detail?, recommended?}]}, {"type": "text", "placeholder"?} or {"type": "login", "login": "<id>"}';
   let given: Json = null;
   if (card === undefined || card === null) given = null;
   else if (typeof card === "string") {
@@ -193,6 +193,16 @@ export function cardArg(card: Json, options: Json): Json | null {
     if (chars(placeholder) > MAX_PLACEHOLDER) throw new Error(`a text card's placeholder is at most ${MAX_PLACEHOLDER} characters: a hint of what to write`);
     kept = { type: "text" };
     if (placeholder !== "") kept.placeholder = placeholder;
+  } else if (kind === "login") {
+    // A login a person finishes from the card (docs/remote-login.md): its id only; the page and code are the client's to
+    // ask the station for, so they never travel with the message.
+    const login = typeof given.login === "string" ? given.login.trim() : "";
+    if (!/^[0-9a-z]{1,40}$/.test(login)) throw new Error('a login card names the login: {"type": "login", "login": "<the id login start answered>"}');
+    kept = { type: "login", login };
+    if (given.station !== undefined && given.station !== null && given.station !== "") {
+      if (typeof given.station !== "string" || !/^[0-9a-f]{64}$/.test(given.station)) throw new Error("card.station: the key of the station the login runs on, when it is another station");
+      kept.station = given.station;
+    }
   } else if (kind === "") throw new Error(`a card says its type: one of ${CARDS.join(", ")}`);
   else throw new Error(`unknown card type ${JSON.stringify(kind)}: the types known are ${CARDS.join(", ")}`);
   if (given.assignee !== undefined) {
@@ -205,20 +215,25 @@ export function cardArg(card: Json, options: Json): Json | null {
   return kept;
 }
 
-/// What chat_post says of the answers it offered.
+/// What chat_post says of the answers it offered, in the order and with the numbers the card shows them (the recommended
+/// one last, as the clients' optionsShown puts it).
 export function optionsSaid(options: Json): string {
-  const labels = (Array.isArray(options) ? options : []).map((o: Json) => {
-    const label = typeof o?.label === "string" ? o.label : "";
+  const all: Json[] = Array.isArray(options) ? options : [];
+  const shown = [...all.filter((o) => o?.recommended === undefined), ...all.filter((o) => o?.recommended !== undefined)];
+  const labels = shown.map((o: Json, i) => {
+    const label = `${i + 1}. ${typeof o?.label === "string" ? o.label : ""}`;
     return o?.recommended !== undefined ? `${label} (recommended)` : label;
   });
-  return ` People can pick: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
+  return ` People can pick, numbered as the card shows them: ${labels.join("; ")}; a reply option reaches you as their message quoting this one with the option's label (action=close ends the wait silently), and anything they write instead is their answer too.`;
 }
 
 /// What chat_post says of the card it posted.
 export const cardSaid = (card: Json): string =>
   card?.type === "options"
     ? optionsSaid(card.options)
-    : " People can write their answer in the card's field; it reaches you as their message quoting this one, and anything they write in the chat instead is their answer too.";
+    : card?.type === "login"
+      ? " People finish the login from the card (or its link) in their own browser; when it ends you get a station notice and the card closes."
+      : " People can write their answer in the card's field; it reaches you as their message quoting this one, and anything they write in the chat instead is their answer too.";
 
 const isHtml = (f: Attachment) => {
   const name = f.name.toLowerCase();

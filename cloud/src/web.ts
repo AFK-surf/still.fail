@@ -43,11 +43,24 @@ export function betaNamed(text: string): string {
   return text.replace(/(?<![\w./-])still\.fail(?![\w-]|\.\w)/g, BETA_NAME);
 }
 
+/**
+ * The app's pages (index.html, at whichever of its routes) are not kept: not by the browser's cache, and not in its
+ * back/forward cache, where a page keeps its core worker too, frozen holding the lock the core runs under
+ * (web/src/core/worker.ts) while the next page waits on it (an iOS home-screen app coming back from Google's sign-in
+ * stuck at 正在登录…, 2026-10-09). WebKit never keeps a page sent as no-store there.
+ */
+function unkept(file: Response): Response {
+  if (!(file.headers.get("content-type") ?? "").startsWith("text/html")) return file;
+  const answer = new Response(file.body, file);
+  answer.headers.set("cache-control", "no-store");
+  return answer;
+}
+
 /** The web app's answer to `request`, its files got by `files`: as above, on the test channel's host or the others. */
 export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, files: (request: Request) => Promise<Response> | Response): Promise<Response> {
   const redirect = moved(request, env);
   if (redirect) return redirect;
-  if (new URL(request.url).origin !== betaOrigin(env)) return files(request);
+  if (new URL(request.url).origin !== betaOrigin(env)) return unkept(await files(request));
   if (new URL(request.url).pathname === "/robots.txt") {
     return new Response("User-agent: *\nDisallow: /\n", { headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": NOINDEX } });
   }
@@ -59,7 +72,7 @@ export async function serveWeb(request: Request, env: Omit<WebEnv, "ASSETS">, fi
     answer.headers.set("x-robots-tag", NOINDEX);
     return answer;
   }
-  const answer = new Response(file.body, file);
+  const answer = unkept(new Response(file.body, file));
   answer.headers.set("x-robots-tag", NOINDEX);
   if (!(answer.headers.get("content-type") ?? "").startsWith("text/html")) return answer;
   const meta = `<meta name="stillfail-beta" content="${env.PUBLIC_ORIGIN.replace(/[&"<>]/g, "")}">`;

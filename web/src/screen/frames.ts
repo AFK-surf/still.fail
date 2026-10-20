@@ -1,0 +1,165 @@
+// A screen view's pictures (docs/remote-screens.md; the core's `screen.view`): its `config` and `frame` values, with
+// their bytes, drawn onto a canvas outside React. H.264 through WebCodecs' VideoDecoder (the avcC the config carries
+// configures it), JPEG through createImageBitmap; each frame acknowledged once drawn (the station sends at most two
+// ahead of the last acknowledged), and a key frame asked for when the decoder lost its state.
+
+export type Codec = "h264" | "jpeg";
+
+/** What the page decodes: H.264 where WebCodecs plays it (Baseline, as the station encodes it), JPEG anywhere. */
+export async function decodable(): Promise<Codec[]> {
+  if (typeof VideoDecoder === "undefined") return ["jpeg"];
+  try {
+    const { supported } = await VideoDecoder.isConfigSupported({ codec: "avc1.42E01F", optimizeForLatency: true });
+    return supported ? ["h264", "jpeg"] : ["jpeg"];
+  } catch {
+    return ["jpeg"];
+  }
+}
+
+/** The codec string of an avcC (its profile, compatibility and level bytes): `avc1.PPCCLL`. */
+export function avcCodec(avcc: Uint8Array | undefined): string {
+  if (!avcc || avcc.length < 4) return "avc1.42E01F";
+  const hex = (b: number) => b.toString(16).padStart(2, "0").toUpperCase();
+  return `avc1.${hex(avcc[1]!)}${hex(avcc[2]!)}${hex(avcc[3]!)}`;
+}
+
+/**
+ * How large a picture to ask for: the window in device pixels, no larger than 1920×1080 (2560×1440 on a screen that
+ * has more), so a phone is not sent a desktop's every pixel.
+ */
+export function viewSize(): { maxWidth: number; maxHeight: number } {
+  const ratio = window.devicePixelRatio || 1;
+  const big = screen.width * ratio >= 2560 && screen.height * ratio >= 1440;
+  const [w, h] = big ? [2560, 1440] : [1920, 1080];
+  return { maxWidth: Math.min(w, Math.round(window.innerWidth * ratio)), maxHeight: Math.min(h, Math.round(window.innerHeight * ratio)) };
+}
+
+export interface FrameConfig { codec: string; width: number; height: number }
+export interface FrameHead { key: boolean; ts: number }
+
+export interface FramesHooks {
+  /** The frame of `ts` is drawn (or dropped): the station may send the next. */
+  ack(ts: number): void;
+  /** The decoder lost its state: the next frame must be a key frame. */
+  keyframe(): void;
+  /** A frame was drawn, `width`×`height` (the first one, and each time the size changes). */
+  drawn(width: number, height: number): void;
+}
+
+/** Draws a view's frames on `canvas` as they come, in the order they come. `close` when the view is gone. */
+export class ScreenFrames {
+  readonly #canvas: HTMLCanvasElement;
+  readonly #ctx: CanvasRenderingContext2D | null;
+  readonly #hooks: FramesHooks;
+  #config: FrameConfig | null = null;
+  #description: Uint8Array | undefined;
+  #decoder: VideoDecoder | null = null;
+  /** Nothing to decode from until a key frame comes (the first, after a config, after the decoder failed). */
+  #needKey = true;
+  /** The latest frame heard: acknowledged when the decoder fails, so the station does not wait on frames it lost. */
+  #lastTs: number | null = null;
+  /** JPEGs are decoded off the page's thread but drawn in the order they came. */
+  #jpegs: Promise<void> = Promise.resolve();
+  #closed = false;
+  #size = { width: 0, height: 0 };
+
+  constructor(canvas: HTMLCanvasElement, hooks: FramesHooks) {
+    this.#canvas = canvas;
+    this.#ctx = canvas.getContext("2d", { alpha: false });
+    this.#hooks = hooks;
+  }
+
+  /** A `config` value: what the frames after it are. The next video frame is a key frame. */
+  config(config: FrameConfig, bytes: Uint8Array | undefined): void {
+    if (this.#closed) return;
+    this.#config = config;
+    this.#description = bytes;
+    this.#needKey = true;
+    this.#dropDecoder();
+    if (config.codec === "h264") this.#makeDecoder();
+  }
+
+  /** A `frame` value and its bytes. */
+  frame(head: FrameHead, bytes: Uint8Array | undefined): void {
+    if (this.#closed) return;
+    this.#lastTs = head.ts;
+    const config = this.#config;
+    if (!config || !bytes) { this.#hooks.ack(head.ts); return; }
+    if (config.codec === "jpeg") { this.#jpeg(head.ts, bytes); return; }
+    if (config.codec !== "h264") { this.#hooks.ack(head.ts); return; }
+    if (this.#needKey && !head.key) { this.#hooks.ack(head.ts); return; }
+    if (!this.#decoder && !this.#makeDecoder()) { this.#hooks.ack(head.ts); return; }
+    try {
+      this.#decoder!.decode(new EncodedVideoChunk({ type: head.key ? "key" : "delta", timestamp: head.ts, data: bytes }));
+      this.#needKey = false;
+    } catch {
+      this.#lost();
+    }
+  }
+
+  close(): void {
+    this.#closed = true;
+    this.#dropDecoder();
+  }
+
+  #makeDecoder(): boolean {
+    if (typeof VideoDecoder === "undefined" || !this.#config) return false;
+    const decoder = new VideoDecoder({
+      output: (frame) => {
+        if (this.#closed || decoder !== this.#decoder) { frame.close(); return; }
+        const ts = frame.timestamp;
+        this.#draw(frame, frame.displayWidth, frame.displayHeight);
+        frame.close();
+        this.#hooks.ack(ts);
+      },
+      error: () => { if (decoder === this.#decoder) this.#lost(); },
+    });
+    try {
+      decoder.configure({
+        codec: avcCodec(this.#description), optimizeForLatency: true, codedWidth: this.#config.width, codedHeight: this.#config.height,
+        ...(this.#description ? { description: this.#description } : {}),
+      });
+    } catch {
+      decoder.close();
+      return false;
+    }
+    this.#decoder = decoder;
+    return true;
+  }
+
+  #dropDecoder(): void {
+    const d = this.#decoder;
+    this.#decoder = null;
+    if (d && d.state !== "closed") d.close();
+  }
+
+  /** The decoder failed: a new one from the same config, from the next key frame, which the station is asked for. */
+  #lost(): void {
+    this.#dropDecoder();
+    this.#needKey = true;
+    if (this.#lastTs !== null) this.#hooks.ack(this.#lastTs);
+    this.#hooks.keyframe();
+  }
+
+  #jpeg(ts: number, bytes: Uint8Array): void {
+    const decoded = createImageBitmap(new Blob([bytes as BlobPart], { type: "image/jpeg" })).catch(() => null);
+    this.#jpegs = this.#jpegs.then(async () => {
+      const bitmap = await decoded;
+      if (bitmap && !this.#closed) this.#draw(bitmap, bitmap.width, bitmap.height);
+      bitmap?.close();
+      if (!this.#closed) this.#hooks.ack(ts);
+    });
+  }
+
+  #draw(picture: CanvasImageSource, width: number, height: number): void {
+    const c = this.#canvas;
+    // Sized as the picture, its pixels its own: the page scales the canvas, not what is drawn on it. Resized only as a
+    // frame of the new size is drawn, so the last one stays until then.
+    if (c.width !== width || c.height !== height) { c.width = width; c.height = height; }
+    this.#ctx?.drawImage(picture, 0, 0, width, height);
+    if (this.#size.width !== width || this.#size.height !== height) {
+      this.#size = { width, height };
+      this.#hooks.drawn(width, height);
+    }
+  }
+}

@@ -6,10 +6,11 @@ import { useState } from "react";
 import type { Job } from "../core/shapes.ts";
 import { chatPath, SHOWN, useLongJobs } from "../OpenJobs.tsx";
 import { JobDot } from "../Jobs.tsx";
-import { Stop } from "../icons.tsx";
+import { Stop } from "@stillfail/ui/icons.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { useApp } from "./app.tsx";
-import { FailedMark, failedIn, Spinner } from "./parts.tsx";
+import { FailedMark, failedIn } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as css from "./OpenJobs.css.ts";
 import { t } from "../i18n.ts";
 
@@ -46,7 +47,7 @@ export function OpenJobs({ scope }: { scope: string }) {
                 {!stopping(job) && stopFailed(job) !== undefined && <FailedMark error={stopFailed(job)!} />}
                 <button type="button" className={css.mOpenStop} aria-label={t("web-mobile.openJobs.stop", { name: job.name })} disabled={stopping(job)} aria-busy={stopping(job) || undefined}
                   onClick={(e) => { e.stopPropagation(); stop(job); }}>
-                  {stopping(job) ? <Spinner size={15} /> : <Stop size={15} />}
+                  {stopping(job) ? <Spinner /> : <Stop size={15} />}
                 </button>
               </div>
             ))}

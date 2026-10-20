@@ -1,4 +1,5 @@
 import { UNTRACKED_OPERATIONS } from "./operations.ts";
+import { PageFiles } from "../../../client/core-ts/src/hosts/file-port.ts";
 // The UI's side of the core (docs/client-core.md): one channel to the worker
 // that runs it, calls with request ids, and subscriptions that survive the
 // worker being replaced. Each tab has a dedicated Worker; one of them runs the
@@ -15,6 +16,7 @@ import { t } from "../i18n.ts";
 export type Topic =
   | { topic: "decisionForm"; station: string; form: string }
   | { topic: "policyForm"; station: string; form: string }
+  | { topic: "agentEnvForm"; station: string; form: string }
   | { topic: "profileFlow"; station: string; form: string }
   | { topic: "connectFlow"; station: string; form: string }
   | { topic: "slackTokens"; station: string; form: string }
@@ -34,15 +36,25 @@ export type Topic =
   | { topic: "jobs"; station: string }
   // A job's last `lines` lines of output and when it last grew, current as it grows.
   | { topic: "jobLog"; station: string; job: string; lines: number }
+  // A station's logins to its command-line tools (docs/remote-login.md): the services it knows and its logins, one
+  // login as it stands, and that login's terminal (only while it is looked at).
+  | { topic: "machineLogins"; station: string }
+  | { topic: "machineLogin"; station: string; id: string }
+  | { topic: "machineLoginScreen"; station: string; id: string }
   | { topic: "loginSessions"; account: string }
   // `feedback`: bug reports about still.fail (a cloud from before has none: an error).
   | { topic: "admin"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback" }
   | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number; messages?: number }
   | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
+  // still.fail's relays and the load on each over the last day or week (a cloud from before has none: a 404).
+  | { topic: "adminRelays"; account: string; range?: "day" | "week" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
   | { topic: "stations"; scope: string }
+  // This device's connection to a station with every figure: sampled while subscribed, so only where they are drawn
+  // (the list says only how it is reached, `way`).
+  | { topic: "stationNet"; station: string }
   | { topic: "connects"; scope: string; mine: boolean }
   // An item's page: its chat, or its agent before it has one.
   | { topic: "chat"; station: string; thread: number }
@@ -64,15 +76,26 @@ export type Topic =
   // The chats of a scope a few words find, titles first (only `station`'s, not `exclude`, `limit` at most): the
   // composer's `@` menu and the switcher. A core from before it answers an error.
   | { topic: "chatSearch"; scope: string; query: string; station?: string; exclude?: string; limit?: number; messages?: number }
+  // What a few words find in a workspace, on the device and on every station (docs/search.md, views/search.ts): ⌘K and
+  // the phone's search. With `kind`, that kind alone, more of it.
+  | { topic: "search"; scope: string; query: string; kind?: string; limit?: number }
   // The archived chats of a scope's stations online, newest first by day (client/core-ts/src/views/archive.ts).
-  | { topic: "archive"; scope: string }
+  | { topic: "archive"; scope: string; q?: string; limit?: number }
   // A new chat's page in a scope: its stations, the one it starts on and what it runs there, as last picked here.
   | { topic: "newChat"; scope: string }
+  // Where something another app shares goes (`source` what is shared, `query` narrowing the chats): docs/share-in.md.
+  | { topic: "shareIn"; scope: string; source: string; query?: string }
   // A model control: what it runs on now and what its panel picked (`of`: new, session:<key>, connect:<id>, connect-new).
   | { topic: "pick"; station: string; of: string }
   // A chat's services and background jobs as its pages show them (the same thread or session as its `chat`).
+  // A chat's agent in brief, for its card over its avatar: what it did, cost and used, its account and quota, its jobs.
+  | { topic: "agentCard"; station: string; key: string }
   | { topic: "chatJobs"; station: string; thread: number }
   | { topic: "chatJobs"; station: string; session: string }
+  // An image of a chat open in the preview: the ones beside it, as the chat's page shows them (the same thread or
+  // session as its `chat`; `path` the image's).
+  | { topic: "imageNear"; station: string; thread: number; path: string }
+  | { topic: "imageNear"; station: string; session: string; path: string }
   // The services and jobs left up a long while on the scope's stations that are up.
   | { topic: "longJobs"; scope: string }
   | { topic: "profiles"; scope: string }
@@ -81,11 +104,17 @@ export type Topic =
   | { topic: "usage"; scope: string; days?: number }
   // A job as it is now (kept current by its events).
   | { topic: "job"; station: string; id: string }
+  // A folder of a station's drive (docs/drive.md): `root` one of its roots' paths, `path` under it ("" the root itself).
+  // Read again each time it is shown; what is held shows meanwhile, a refusal is the topic's error.
+  | { topic: "drive"; station: string; root: string; path: string }
+  // Where a file of a drive was left on this device (a text's offset, a video's time in ms): null before.
+  | { topic: "drivePlace"; station: string; root: string; path: string }
   // How its person likes it on this device, and what the device is (prefs.ts).
   | { topic: "prefs" }
   // What people set going on this device and the core has not finished: each call that changes something, until it
   // answers (client/core-ts/src/doing.ts; doing.ts).
   | { topic: "doing" }
+  | { topic: "composer"; key: string }
   | { topic: "previewLoad"; station: string; port: number }
   // What changed in still.fail, as this app shows it, and what an update brought until `changelog.seen`
   // (client/core-ts/src/changelog.ts).
@@ -95,7 +124,26 @@ export type Topic =
   | { topic: "workspaceMarks"; workspace?: string }
   // The decisions waiting for the viewer in a workspace's chats, those set aside last, and how many
   // (client/core-ts/src/decisions.ts). A core from before it answers an error.
-  | { topic: "decisions"; workspace: string };
+  | { topic: "decisions"; workspace: string }
+  // The workspace's security mode (its lock), and what turning it on would sign (client/core-ts/src/views/lock.ts).
+  // A core from before it has neither.
+  | { topic: "lock"; workspace: string }
+  | { topic: "lockDraft"; workspace: string }
+  | { topic: "lockPrompts" }
+  // A station in several workspaces (client/core-ts/src/views/memberships.ts): the stations of the viewer's other
+  // workspaces that could be added to this one, and the workspaces a station is in. A core from before has neither.
+  | { topic: "joinable"; workspace: string }
+  | { topic: "memberships"; station: string }
+  // A station's screens a person can see and drive (docs/remote-screens.md): a core from before it answers an error.
+  | { topic: "screens"; station: string }
+  | { topic: "screenCard"; station: string; screen: string }
+  // A link to a station's 共享调试 as a message shows it (AdbLink.tsx).
+  | { topic: "adbCard"; station: string }
+  // The vault (docs/vault.md, client/core-ts/src/views/vault.ts): the viewer's vaults in a workspace and what waits on
+  // them; a vault's items. A core from before has neither.
+  | { topic: "vaults"; workspace: string }
+  | { topic: "vaultItems"; workspace: string; vault: string }
+  | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */
 export interface ChatShown { station: string; thread: number | null; session: string | null; end?: boolean }
@@ -146,10 +194,11 @@ export interface Channel {
 export type Opener = (onMessage: (data: unknown) => void, onFail: (reason: string) => void) => Channel;
 
 interface Pending {
-  resolve: (value: unknown) => void;
+  /** Its answer, with the bytes beside it when it carries some (a file read). */
+  resolve: (value: unknown, bytes?: Uint8Array) => void;
   reject: (error: Error) => void;
-  /** How far the call has got, for one that says so (a file asked for with `progress`). */
-  onProgress?: ((value: unknown) => void) | undefined;
+  /** How far the call has got, for one that says so (a file asked for with `progress`); `bytes` beside a value that carries some (a screen view's frame). */
+  onProgress?: ((value: unknown, bytes?: Uint8Array) => void) | undefined;
 }
 
 interface Subscription {
@@ -167,6 +216,13 @@ export interface ClientOptions {
   schedule?: (ms: number, run: () => void) => void;
   /** Errors in the worker (it reports them; the page cannot see them) and the worker failing, for error tracking. */
   onFault?: (error: Error) => void;
+  /**
+   * The channel is to a worker of the page's own (workerOpener): it ends as the page leaves, and a new one starts if the
+   * page comes back. Kept in the back/forward cache with the page, it would be frozen there with the lock the core runs
+   * under (worker.ts), and the pages after it would wait on that core for good (an iOS home-screen app coming back from
+   * Google's sign-in, 2026-10-09).
+   */
+  endWithPage?: boolean;
 }
 
 // A worker that keeps failing (a broken build, a panic on start) is retried
@@ -207,22 +263,38 @@ export class CoreClient {
   #heard = 0;
   /** Where this page's attention is, as told last: told again to a worker started anew. */
   #focus: Focus = {};
+  readonly #endWithPage: boolean;
+  /** The page left and its worker ended with it (`endWithPage`): a new one starts once it is back. */
+  #left = false;
 
   constructor(open: Opener, options: ClientOptions = {}) {
     this.#open = open;
     this.#schedule = options.schedule ?? ((ms, run) => void setTimeout(run, ms));
     this.#onFault = options.onFault ?? (() => undefined);
+    this.#endWithPage = options.endWithPage ?? false;
     this.#connect();
   }
 
   /** `signal` stops the call while it is under way; it then fails with `cancelled`. */
-  call(name: string, params: unknown = {}, onProgress?: (value: unknown) => void, signal?: AbortSignal): Promise<unknown> {
+  call(name: string, params: unknown = {}, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<unknown> {
+    return this.#ask(name, params, undefined, onProgress, signal, (resolve) => (value) => resolve(value));
+  }
+
+  /**
+   * A call with bytes: `bytes` go beside its params (a file's part going up), and it answers with the bytes beside its
+   * answer, if any (a file read), never as base64 in either. Otherwise as [call].
+   */
+  callBytes(name: string, params: unknown, bytes?: Uint8Array, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal): Promise<{ value: unknown; bytes?: Uint8Array }> {
+    return this.#ask(name, params, bytes, onProgress, signal, (resolve) => (value, got) => resolve(got === undefined ? { value } : { value, bytes: got }));
+  }
+
+  #ask<T>(name: string, params: unknown, bytes: Uint8Array | undefined, onProgress: Pending["onProgress"], signal: AbortSignal | undefined, answered: (resolve: (v: T) => void) => Pending["resolve"]): Promise<T> {
     if (this.#closed) return Promise.reject(new CoreError({ code: "closed", message: t("web-main.core.closed") }));
     if (signal?.aborted) return Promise.reject(new CoreError({ code: "cancelled", message: t("web-main.core.cancelled") }));
     const id = this.#nextId++;
-    const promise = new Promise<unknown>((resolve, reject) => {
-      this.#calls.set(id, { resolve, reject, onProgress });
-      this.#send({ id, call: name, params });
+    const promise = new Promise<T>((resolve, reject) => {
+      this.#calls.set(id, { resolve: answered(resolve), reject, onProgress });
+      this.#send(bytes === undefined ? { id, call: name, params } : { id, call: name, params, bytes });
       signal?.addEventListener("abort", () => {
         if (!this.#calls.has(id)) return;
         // The core answers `cancelled`; with no worker to tell, it is so here and now.
@@ -263,19 +335,35 @@ export class CoreClient {
     return this.call("client.focus", part);
   }
 
-  /** The page is going away (or into the back/forward cache): the worker drops this client. */
+  /** The page is going away (or into the back/forward cache): the worker drops this client, or ends (`endWithPage`). */
   suspend(): void {
-    if (this.#channel) this.#post({ bye: true });
+    if (!this.#channel) return;
+    this.#post({ bye: true });
+    if (!this.#endWithPage) return;
+    this.#channel.close();
+    this.#channel = null;
+    this.#left = true;
   }
 
   /**
-   * The page is back from the back/forward cache: the worker forgot us, so
+   * The page is back from the back/forward cache: the worker forgot us (or ended as the page left: a new one), so
    * subscribe again. Calls in flight were lost with the old client.
    */
   resume(): void {
+    if (this.#left) return this.#back();
     this.#rejectCalls(t("web-main.core.resumed"));
     if (this.#channel) for (const [id, sub] of this.#subs) this.#post({ id, subscribe: sub.topic, keyed: true });
     this.#refocus();
+  }
+
+  /**
+   * Back after its worker ended with the page leaving: what was asked of that one is lost, and a new one is told every
+   * subscription and where the page is.
+   */
+  #back(): void {
+    this.#rejectCalls(t("web-main.core.resumed"));
+    this.#left = false;
+    this.#connect();
   }
 
   /**
@@ -285,6 +373,8 @@ export class CoreClient {
    */
   wake(away: number): void {
     if (this.#closed) return;
+    // Shown again after leaving without the cache bringing it back (no pageshow said so): its worker is started anew.
+    if (this.#left) this.#back();
     const channel = this.#channel;
     const heard = this.#heard;
     // With the worker being replaced it waits in the queue: a worker joined again (a shared one) is the same core.
@@ -403,7 +493,7 @@ export class CoreClient {
   #receive(data: unknown): void {
     if (typeof data !== "object" || data === null) return;
     this.#heard++;
-    const message = data as { id?: number; ok?: unknown; value?: unknown; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
+    const message = data as { id?: number; ok?: unknown; value?: unknown; bytes?: Uint8Array; delta?: DeltaOp[]; error?: ErrorBody; fatal?: string; fault?: WorkerFault; retired?: boolean; rejoin?: boolean };
     // A newer build's core took over: this page is of the older build, so it loads the newer one.
     if (message.retired) {
       location.reload();
@@ -431,12 +521,12 @@ export class CoreClient {
     if (call) {
       // Values under a call's id tell how far it has got; its answer comes after them.
       if ("value" in message && !message.error) {
-        call.onProgress?.(message.value);
+        call.onProgress?.(message.value, message.bytes);
         return;
       }
       this.#calls.delete(message.id);
       if (message.error) call.reject(new CoreError(message.error));
-      else call.resolve(message.ok);
+      else call.resolve(message.ok, message.bytes);
       return;
     }
     const sub = this.#subs.get(message.id);
@@ -479,11 +569,20 @@ export function workerOpener(): Opener {
 }
 
 /** What the desktop app's preload (apps/desktop/src/preload.ts) gives the page. */
+/** The desktop dock's settings (docs/desktop-dock.md): shown at all, new ones peeking out, plain unread ones in it. */
+/** Which chats the desktop dock holds (apps/desktop/src/dock.mts `DockKinds`). */
+export interface DockKinds { wait: boolean; failed: boolean; done: boolean; message: boolean }
+/** `kinds`: none from an app before them (`unread` then says both kinds of unread). */
+export interface DockSettings { on: boolean; peek: boolean; unread: boolean; kinds?: DockKinds }
+
 export interface StillFailDesktop {
   /** Asks for a port to the core; it arrives as a window message `{ stillfailCore: "port", id }`. */
   openCore(id: number): void;
   /** The host a station's web service is shown at, stillfail-preview://<host>/ (apps/desktop/src/main.ts, previews). */
   previewHost(station: string, port: number): Promise<string | null>;
+  /** A drive's file played as it comes from stillfail-drive:// (apps/desktop/src/main.ts, drive); an app from before this has none. */
+  driveOpen?(file: { station: string; root: string; path: string; size: number; type: string }): Promise<string | null>;
+  driveClose?(url: string): void;
   /** The page is in a workspace, reached as `account`: the app's station joins it when it is in none yet. */
   inWorkspace(account: string, workspace: string): void;
   /** The station the app carries, and joining it to a workspace when asked to; an app from before this has none. */
@@ -492,6 +591,34 @@ export interface StillFailDesktop {
     /** Joins it to `workspace` as `account`, even if it joined one before (not over one it is in): its state after, or why not. */
     join(account: string, workspace: string): Promise<{ station: CarriedStation } | { error: string } | null>;
   };
+  /**
+   * This machine's station whoever runs it, for the settings' 本机 Station page (apps/desktop/src/main.ts, station:local):
+   * where it stands, and starting, stopping, restarting or updating it, its log or data directory opened. An app from
+   * before it has none.
+   */
+  local?: {
+    state(): Promise<LocalStationState | null>;
+    act(action: LocalStationAction): Promise<{ station: LocalStationState } | { error: string } | { opened: boolean } | null>;
+  };
+  /** Shows a file of this machine in Finder (a directory opened): false when it is not there; an app from before it has none. */
+  reveal?(path: string): Promise<boolean>;
+  /** Where a file dropped or picked is on this machine (Electron's webUtils.getPathForFile): "" for one that is not on its
+   * disk; an app from before this has none. */
+  pathOf?(file: File): string;
+  /**
+   * The window's frame: `inset` (macOS) and `overlay` (Windows) have no title bar, the page's top row is it with the
+   * window's buttons at its left or right; `system` has the system's. None from apps before it, all inset; apps before
+   * `overlay` said `system` on Windows.
+   */
+  frame?: "inset" | "overlay" | "custom" | "system";
+  windowControls?: {
+    state(): Promise<unknown>;
+    action(action: "minimize" | "maximize" | "close"): void;
+    bounds(rect: number[] | null): void;
+    watch(listener: (state: unknown) => void): () => void;
+  };
+  /** The colours of the window's buttons on Windows (`overlay`), as #rrggbb: the top row's under them, their symbols'. */
+  windowColors?(color: string, symbolColor: string): void;
   /** The cloud's origin (https://app.still.fail): its links are the app's own, though the app is at app://ember. */
   cloudOrigin?: string;
   /** The app's version (0.1.<commits>); an app from before it has none. */
@@ -510,10 +637,30 @@ export interface StillFailDesktop {
     /** Asks for a newer build now, not waiting for the next check; an app from before it has none. */
     check?(): Promise<UpdateCheck | null>;
   };
+  /** The dock on the screen's edge (apps/desktop/src/dock.mts): its settings, null where it cannot run; an app from before it has none. */
+  dock?: {
+    get(): Promise<DockSettings | null>;
+    set(settings: Partial<DockSettings>): Promise<DockSettings | null>;
+  };
   /** Whether the app tells about the chats (it shows them from its main process); an app from before them has none. */
+  /** macOS's Local Network for the app; an app from before it has none. */
+  localNetwork?: {
+    /** Whether it may reach the LAN it is on: granted | denied | unknown (no LAN, not a Mac). */
+    check(): Promise<string>;
+    /** Whether macOS keeps it from a station at these LAN addresses (`ip:port`). */
+    kept(addrs: string[]): Promise<boolean>;
+    /** Opens System Settings' Local Network list. */
+    settings(): Promise<void>;
+  };
   notify?: {
     get(): Promise<boolean | null>;
     set(on: boolean): Promise<void>;
+    /** Opens the system's notification settings for the app; an app from before it has none. */
+    settings?(): Promise<void>;
+    /** What the system allows now, told to the core too; an app from before it has none. */
+    check?(): Promise<string | null>;
+    /** Has the system ask the person (macOS: the first notification shown asks); an app from before it has none. */
+    request?(): Promise<void>;
   };
   /**
    * The computer woke from sleep after `away` ms (the window may have stayed visible all along, so the page is not
@@ -530,6 +677,14 @@ export interface StillFailDesktop {
   onImageWanted?(answer: (src: string) => Promise<Uint8Array | null>): () => void;
   /** Says which language the page speaks, for the app's menus and dialogs. An app from before languages has none. */
   language?(lang: "zh" | "en"): void;
+  /**
+   * The menu bar's items for the page's actions (web/src/keymap.ts): told the first key each is bound to and which can
+   * be done now; `onAction` hears one chosen (the returned function stops listening). An app from before it has none.
+   */
+  menu?: {
+    state(state: { keys: Record<string, string | null>; on: string[] }): void;
+    onAction(listener: (action: string) => void): () => void;
+  };
 }
 
 /**
@@ -540,16 +695,43 @@ export interface CarriedStation {
   carried: boolean;
   state: "off" | "running" | "removed";
   workspace?: string;
+  /** Its key in that workspace (an app from before it says none). */
+  station?: string;
+}
+
+export type LocalStationAction = "start" | "stop" | "restart" | "update" | "log" | "folder";
+
+/**
+ * This machine's station (apps/desktop/src/main.ts, localStation): run by the app, by a service installed on its own
+ * (`service`: launchd, systemd or a scheduled task), by hand (`other`), or not running (`none`); the release it runs or
+ * has (`version`), `outdated` when an installed one is behind the app's (`carriedVersion`); the workspace its data is
+ * in, if any; what is being done to it (`doing`).
+ */
+export interface LocalStationState {
+  carried: boolean;
+  carriedVersion?: string;
+  data: string;
+  runner: "app" | "service" | "other" | "none";
+  version?: string;
+  service?: { kind: "launchd" | "systemd" | "task"; name: string };
+  outdated: boolean;
+  workspace?: { id: string; name?: string | undefined; station?: string | undefined; stationName?: string | undefined; removed: boolean };
+  doing?: LocalStationAction;
 }
 
 /** What a check asked for now found: the newer build (`latest`), none (neither), or why it could not tell. */
 export type UpdateCheck = { current: string; latest?: string; error?: string };
 
-export type AppUpdate =
+/**
+ * `kind: "web"`: a newer build of the web app alone (apps/desktop/src/web-update.mts, the beta app's), downloaded already:
+ * taking it reloads the pages, the app does not restart. Without it, the app's own update, which restarts it.
+ */
+export type AppUpdate = (
   | { phase: "available"; version: string }
   | { phase: "downloading"; version: string; percent: number }
   | { phase: "installing"; version: string }
-  | { phase: "failed"; version: string; message: string };
+  | { phase: "failed"; version: string; message: string }
+) & { kind?: "web" };
 
 declare global {
   interface Window {
@@ -568,6 +750,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
   return (onMessage, onFail) => {
     const id = nextPort++;
     let port: MessagePort | null = null;
+    const files = new PageFiles((message) => port?.postMessage(message));
     // What the client posts before the port is here, in order.
     const early: unknown[] = [];
     const arrive = (event: MessageEvent) => {
@@ -577,7 +760,12 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
         onFail(data.reason ?? t("web-main.core.exited"));
       } else if (data?.stillfailCore === "port" && data.id === id && !port && event.ports[0]) {
         port = event.ports[0];
-        port.onmessage = (message) => onMessage(JSON.parse(message.data as string));
+        port.onmessage = (message) => {
+          if (files.receive(message.data)) return;
+          // JSON, or JSON with bytes beside it (a screen view's frame: apps/desktop/src/core.ts).
+          const data = message.data as string | { json: string; bytes: Uint8Array };
+          onMessage(typeof data === "string" ? JSON.parse(data) : { ...JSON.parse(data.json), bytes: data.bytes });
+        };
         for (const message of early.splice(0)) port.postMessage(message);
       }
     };
@@ -585,6 +773,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
     desktop.openCore(id);
     return {
       post: (message) => {
+        message = files.prepare(message);
         if (port) {
           port.postMessage(message);
         } else {
@@ -594,6 +783,7 @@ export function desktopOpener(desktop: StillFailDesktop): Opener {
         }
       },
       close: () => {
+        files.close();
         removeEventListener("message", arrive);
         port?.close();
       },
@@ -608,7 +798,8 @@ function same(a: ChatShown, b: ChatShown): boolean {
 /** Starts (or joins) the core and keeps the page's client in step with the page's lifecycle. */
 export function connectCore(): CoreClient {
   const open = window.stillfailDesktop ? desktopOpener(window.stillfailDesktop) : workerOpener();
-  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }) });
+  // The desktop app's core is its own process's, not the page's: kept as the page goes.
+  const client = new CoreClient(open, { onFault: (error) => captureException(error, { source: "core" }), endWithPage: !window.stillfailDesktop });
   addEventListener("pagehide", () => client.suspend());
   // Hidden since when (wall clock: a frozen page's monotonic clock may stand still).
   let hidden = document.visibilityState === "hidden" ? Date.now() : null;

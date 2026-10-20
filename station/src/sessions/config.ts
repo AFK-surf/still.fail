@@ -3,7 +3,7 @@
 // edits apply to the next decision. A profile stays config.json's object (the drivers read its access, env, model…),
 // its home made absolute and what parse_config derives added: name, runtimes, models, backgroundOnMessage.
 import { isAbsolute, join } from "node:path";
-import type { Profile as RuntimeProfile } from "../agents/runtime.ts";
+import { runtimeKind, runtimeLabel, type Profile as RuntimeProfile } from "../agents/runtime.ts";
 import { profileRuntimes, type Runtime } from "../agents/profiles.ts";
 import { modelKey } from "../read/usage.ts";
 
@@ -19,18 +19,26 @@ export type Profile = RuntimeProfile & {
   model?: string;
   /// A message that reaches a running Claude Code turn first moves what it waits on to the background (absent: on).
   backgroundOnMessage: boolean;
+  /// The joined workspaces kept from it (docs/multi-workspace.md): every workspace the station is in runs on it but these.
+  withheld?: string[];
 };
 
 export type ConnectMode = "multi-session" | "single-session";
 
+/// What a connect's bot is on: Slack, or Feishu (src/feishu; Lark too).
+export type ConnectKind = "slack" | "feishu";
+
 export type Connect = {
   id: string;
+  kind: ConnectKind;
   enabled: boolean;
   mode: ConnectMode;
   /// single-session only: whether starting on a new thread needs an @mention (multi-session: always).
   requireMention: boolean;
   slack: { botName?: string; [key: string]: unknown };
   bind: { runtime: Runtime; profile?: string; model?: string; effort?: string };
+  /// The workspace it was added in, whose chats its sessions are (docs/multi-workspace.md); absent: the home one.
+  workspace?: string;
 };
 
 /// decision.rs `DecisionRule`: the completion review after all_done, and the model it asks.
@@ -51,11 +59,24 @@ export type HubConfig = {
   maxWarmClaude: number;
   /// Chats idle this long, and done (auto archive), are archived by the station; 0: never.
   autoArchiveMs: number;
+  /// Sessions heard only in Slack idle this long are archived even when stopped at a block for someone (nobody sees
+  /// those in the station's lists); 0: never.
+  slackArchiveMs: number;
+  /// Only chats the archive review recommended are archived on their own (none while the review is off); Slack sessions
+  /// stopped at a block go after slackArchiveMs all the same.
+  autoArchiveReviewed: boolean;
+  /// Sessions archived this long keep only the files sent in their chat, their history and transcripts: the rest of
+  /// their workspace is removed (cold.ts `expire`); 0: never.
+  archivedWorkspaceMs: number;
 };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const nonEmpty = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
 const under = (dataDir: string, path: string) => (isAbsolute(path) ? path : join(dataDir, path));
+
+/// A profile on the machine's login as it was named before (「b@x.com（本机）」, "Local Codex"), without the "this machine"
+/// it was said with: read from another machine, that was the other machine.
+const machineName = (name: string | undefined) => name?.replace(/（本机）$| \(local\)$/, "").replace(/^本机 |^Local /, "");
 
 /// config.json (parsed) as the hub reads it: parse_config's defaults and derivations, without its checks (the config
 /// module refuses a config that does not pass them before anything reads it).
@@ -70,13 +91,14 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     return {
       ...base,
       id: p.id,
-      name: str(p.name)?.trim() || p.id,
+      name: (p.machine === true ? machineName(str(p.name)) : str(p.name))?.trim() || p.id,
       // One that runs neither runtime (a provider of chat completions only) is Claude's in name.
       runtime: runtimes[0] ?? "claude",
       runtimes,
       models,
       model: nonEmpty(p.model),
       backgroundOnMessage: p.backgroundOnMessage !== false,
+      ...(Array.isArray(p.withheld) ? { withheld: p.withheld.filter((w: unknown): w is string => typeof w === "string" && w !== "") } : {}),
     };
   });
   const connects: Connect[] = (Array.isArray(raw?.connects) ? raw.connects : []).map((c: any): Connect => {
@@ -84,11 +106,13 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     const bind = c.bind ?? {};
     return {
       id: c.id,
+      kind: c.kind === "feishu" ? "feishu" : "slack",
       enabled: c.enabled !== false,
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,
       slack: { ...(c.slack ?? {}), botName: nonEmpty(c.slack?.botName) },
-      bind: { runtime: bind.runtime === "codex" ? "codex" : "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
+      bind: { runtime: runtimeKind(bind.runtime) ?? "claude", profile: nonEmpty(bind.profile), model: nonEmpty(bind.model), effort: nonEmpty(bind.effort) },
+      ...(nonEmpty(c.workspace) !== undefined ? { workspace: nonEmpty(c.workspace) } : {}),
     };
   });
   const completion = raw?.automaticDecisions?.completion ?? {};
@@ -102,6 +126,9 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     warmMs: Math.trunc((typeof raw?.warmMinutes === "number" ? raw.warmMinutes : 30) * 60_000),
     maxWarmClaude: typeof raw?.maxWarmClaude === "number" ? raw.maxWarmClaude : 4,
     autoArchiveMs: Math.trunc(Math.max(0, typeof raw?.autoArchiveDays === "number" ? raw.autoArchiveDays : 1) * 86_400_000),
+    slackArchiveMs: Math.trunc(Math.max(0, typeof raw?.slackArchiveDays === "number" ? raw.slackArchiveDays : 3) * 86_400_000),
+    autoArchiveReviewed: raw?.autoArchiveReviewed === true,
+    archivedWorkspaceMs: Math.trunc(Math.max(0, typeof raw?.archivedWorkspaceDays === "number" ? raw.archivedWorkspaceDays : 7) * 86_400_000),
   };
 }
 
@@ -117,10 +144,16 @@ export const runs = (profile: Profile, model: string): boolean => spelling(profi
 /// shapes model.rs `same`: two spellings are one model.
 export const sameModel = (a: string, b: string): boolean => a === b || modelKey(a) === modelKey(b);
 
-/// The profiles a connect's sessions can run on: every profile of its runtime.
-export const profilesFor = (config: HubConfig, connect: Connect): Profile[] => config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime));
+/// Whether sessions of workspace `ws` may run on a profile (docs/multi-workspace.md): those of the home workspace
+/// (`home`; null outside any, when there is no telling) on every profile, those of a joined one on every profile not
+/// withheld from it.
+export const allowedIn = (profile: Profile, ws: string | null, home: string | null): boolean => ws === null || home === null || ws === home || !(profile.withheld ?? []).includes(ws);
+
+/// The profiles a connect's sessions can run on: every profile of its runtime allowed in its workspace.
+export const profilesFor = (config: HubConfig, connect: Connect, home: string | null = null): Profile[] =>
+  config.profiles.filter((p) => p.runtimes.includes(connect.bind.runtime) && allowedIn(p, connect.workspace ?? null, home));
 
 export const runtimeName = (r: Runtime) => r;
-export const runtimeNamed = (name: string): Runtime | null => (name === "claude" || name === "codex" ? name : null);
+export const runtimeNamed = (name: string): Runtime | null => runtimeKind(name) ?? null;
 /// How people call a runtime.
-export const runtimeTitle = (r: Runtime) => (r === "claude" ? "Claude Code" : "Codex");
+export const runtimeTitle = (r: Runtime) => runtimeLabel(r);

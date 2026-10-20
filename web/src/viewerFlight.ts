@@ -4,7 +4,7 @@
 // thumbnail (its box, its corners, the picture cropped to it as the chat shows it), 1 the picture where the viewer puts
 // it (zoomed and panned, or not); the viewer's ground and its bars come in with it. With no thumbnail on the screen, the
 // viewer fades, as it always has.
-import { LOCAL_MS, reducedMotion } from "./motion.ts";
+import { LOCAL_MS, play } from "@stillfail/ui/motion.ts";
 
 /** How long it takes to open out of the thumbnail, and to close back into it; both slowing into place. */
 const OPEN = 320;
@@ -132,7 +132,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
     hidden = thumb;
     thumb.style.visibility = "hidden";
     // The one timeline all of it follows (what moves is read anew each frame): paused and stepped, so is it.
-    const run = el.animate([{ opacity: 1 }, { opacity: 1 }], { duration: ms, easing: EASE });
+    const run = play(el, [{ opacity: 1 }, { opacity: 1 }], { duration: ms, easing: EASE });
     clock = run;
     const place = () => {
       const e = run.effect?.getComputedTiming().progress ?? 1;
@@ -159,7 +159,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
     restore = [keep(el, ["opacity"])];
     el.style.animation = "none";
     phase = "rest";
-    const run = el.animate([{ opacity: goal ? 0 : from }, { opacity: goal }], { duration: FADE, easing: FADE_EASE, fill: "forwards" });
+    const run = play(el, [{ opacity: goal ? 0 : from }, { opacity: goal }], { duration: FADE, easing: FADE_EASE, fill: "forwards" });
     clock = run;
     void run.finished.then(() => { if (clock === run) landed(); }, () => {});
   };
@@ -169,7 +169,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
       closing = false;
       const el = root();
       const thumb = thumbOf(id);
-      if (!el || !thumb || reducedMotion()) return;
+      if (!el || !thumb) return;
       // Nothing shows until the picture can go from the thumbnail (its size known, placed), or what is here is shown.
       p = 0;
       phase = "wait";
@@ -196,7 +196,7 @@ export function viewerFlight(root: () => HTMLElement | null, { stage: stageClass
       closing = true;
       const el = root();
       // Not shown yet: nothing to take back.
-      if (!el || reducedMotion() || phase === "wait") { settle(); done(); return; }
+      if (!el || phase === "wait") { settle(); done(); return; }
       const thumb = thumbOf(id) ?? (hidden?.dataset.viewerThumb === id ? hidden : null);
       const picture = el.querySelector<HTMLElement>("[data-viewer-picture]");
       if (thumb && picture && picture.getBoundingClientRect().width > 0) {

@@ -11,7 +11,11 @@ import { Kind, route, type SpanContext, type Tracer } from "./trace.ts";
 import { isObject, parseJson, toJsonBytes } from "./util.ts";
 
 /// A member credential for this device (POST /v1/workspaces/:ws/credential {device}): valid until `expires_at` (s).
-export type Credential = { credential: string; issued_at: number; expires_at: number; relay_url: string };
+/// `lock`: what the device says of itself with it, to a station with a workspace lock (lock.ts); never kept.
+export type Credential = { credential: string; issued_at: number; expires_at: number; relay_url: string; lock?: import("./lock.ts").LockClaim };
+/// What a newer client tells the cloud of the device it asks for: its base key and the proof the endpoint is its own,
+/// whether it is an app or a web page, its name (listed for a workspace lock's owner to check).
+export type DeviceSaid = { base: string; proof: string; kind: string; label: string };
 
 /// still.fail cloud's answer to a beta app used by an account not let into the beta.
 export const NOT_BETA = "not_beta";
@@ -98,8 +102,8 @@ export class Cloud {
     return this.request(sub, "GET", "/v1/me", null, ctx);
   }
 
-  credential(sub: string, workspace: string, device: string): Effect.Effect<Credential, CoreError> {
-    return Effect.flatMap(this.request(sub, "POST", `/v1/workspaces/${encodeComponent(workspace)}/credential`, { device }), (answer) => {
+  credential(sub: string, workspace: string, device: string, said?: DeviceSaid): Effect.Effect<Credential, CoreError> {
+    return Effect.flatMap(this.request(sub, "POST", `/v1/workspaces/${encodeComponent(workspace)}/credential`, { device, ...said }), (answer) => {
       const c = readCredential(answer);
       return typeof c === "string" ? Effect.fail(new CoreError("bad_response", t("core-misc.cloud.bad_response", { brand: brand.name(), error: c }))) : Effect.succeed(c);
     });
@@ -142,15 +146,19 @@ function message(code: string): string | null {
     invitation_for_other_email: "core-misc.cloud.invitation_for_other_email",
     forbidden: "core-misc.cloud.forbidden",
     invalid_name: "core-misc.cloud.invalid_name",
+    invalid_emoji: "core-misc.cloud.invalid_emoji",
+    invalid_icon: "core-misc.cloud.invalid_icon",
     invalid_relay: "core-misc.cloud.invalid_relay",
     invalid_relays: "core-misc.cloud.invalid_relays",
     already_member: "core-misc.cloud.already_member",
     last_owner: "core-misc.cloud.last_owner",
+    sole_owner: "core-misc.cloud.sole_owner",
     too_many_workspaces: "core-misc.cloud.too_many_workspaces",
     too_many_invitations: "core-misc.cloud.too_many_invitations",
     too_many_members: "core-misc.cloud.too_many_members",
     too_many_stations: "core-misc.cloud.too_many_stations",
     invalid_session: "core-misc.cloud.invalid_session",
+    rate_limited: "core-misc.cloud.rate_limited",
     [NOT_BETA]: "core-misc.cloud.not_beta",
   };
   return Object.prototype.hasOwnProperty.call(known, code) ? known[code] : null;

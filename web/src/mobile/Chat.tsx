@@ -2,50 +2,62 @@ import { StationUpdate } from "../StationUpdate.tsx";
 // An item's page on a narrow screen: its chat's messages (none before its agent has a chat), the composer, and each
 // agent's execution history as a page opened from its mark or name. The messages are the wide screen's own (../Chat.tsx:
 // the same rows, avatars, names, quotes, files, activity and list behaviour), with the avatar and name in line with the
-// words rather than out in a margin. Long-press opens a message on its own page (Annotate.tsx); ＋ adds files.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+// words rather than out in a margin. A long press on a message's words picks a passage of them where it is, to quote or
+// copy (pick.tsx); ＋ adds files.
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { useReady } from "../core/react.ts";
-import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, type ChatMessage, type ChatThread, type ChatView, type Quote } from "../api.ts";
+import { topicNow, useReady, useTopicSelect } from "../core/react.ts";
+import { stationApi, useApi, useChat, useChatJobs, useLives, useStationCall, useStationLook, useStations, type ChatAgent, type ChatThread, type ChatView, type Quote } from "../api.ts";
 import { draftKeyOf, useHost, type HostComposer } from "./ChatHost.tsx";
 import { DraftKey } from "../draft.ts";
 import { OpenFile } from "../Viz.tsx";
 import { fileService } from "../Preview.tsx";
 import type { Draft as SharedDraft } from "../draft.ts";
-import { chatImages, Gallery } from "../FilePreview.tsx";
-import { ChatRows, historyLinkClicked, ownerIn, ownersOf, sendDraft, useAskedFile, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
-import { Archive, ArrowDown, ArrowUp, Camera, ChevronRight, ChevronLeft, File, More, Photo, Pin, Plus, Stop, Web } from "../icons.tsx";
-import { stationBase, useStation } from "../station.tsx";
-import { LoadingPill, PlaceholderMessages } from "./Loading.tsx";
+import { Gallery } from "../FilePreview.tsx";
+import { chatPage, useChatPageActions } from "../chatPage.ts";
+import { useChatFind } from "../ChatFind.tsx";
+import { ChatRows, historyLinkClicked, sendDraft, useAskedFile, useAsksShown, useComposerText, useMessageList, useSelectionQuote } from "../Chat.tsx";
+import { jumpTo } from "../jumpTo.ts";
+import { Archive, ArrowDown, ArrowUp, Bell, Camera, ChevronRight, ChevronLeft, Copy, Edit, External, File, More, Photo, Pin, Plus, Search, Server, Stop, Users, Web } from "@stillfail/ui/icons.tsx";
+import { scopeOf, stationBase, useStation } from "../station.tsx";
+import { StationMark } from "../StationMark.tsx";
+import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
+import * as linkCss from "../StationLink.css.ts";
+import { StationPeek } from "../cloud/StationCards.tsx";
+import { GoRow } from "./Settings.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { PENDING } from "../lastChat.ts";
-import { LOCAL_MS } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
 import { ask, confirm } from "./sheets.tsx";
 import { openHistory } from "./History.tsx";
-import { annotatePath } from "./Annotate.tsx";
-import { GroupLabel, InfoList, InfoRow, ModelMark, NavButton, QuotaRings, Seg, SlackMark, Spinner, stateOf } from "./parts.tsx";
+import { AgentSince, openAgent } from "./AgentSheet.tsx";
+import { HOLD, usePick } from "./pick.tsx";
+import { Button, Gone, GroupLabel, InfoList, InfoRow, LinkButton, ModelMark, NavButton, PickRow, QuotaRings, Seg, SlackMark, stateOf } from "./parts.tsx";
 import { AgentMark } from "../ui.tsx";
+import { OutsideList, outsideOf, shareOutside, type Outside } from "../OutsideShare.tsx";
+import { useAction } from "../action.ts";
 import { PeopleStack } from "../components.tsx";
 import { JobDot, metaOf, NO_JOBS, useClearEnded, useJobLog, useStopJob } from "../Jobs.tsx";
-import { stillfailLinkClicked } from "../stillfailLink.ts";
+import { screenLinkClicked, stillfailLinkClicked } from "../stillfailLink.ts";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
-import type { ChatJobsView, Job } from "../core/shapes.ts";
+import type { ChatJobsView, ChatPublish, ChatPublished, ChatShare, Job } from "../core/shapes.ts";
+import { PublishMessages, tickedOf, usePublishPreview, useTicking } from "../Publish.tsx";
+import * as publishCss from "../Publish.css.ts";
 import * as chatCss from "./styles/chat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
-import { sendingHere } from "../madeChat.ts";
+import { sendingHere, sentAfter } from "../madeChat.ts";
 import * as css from "./Chat.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import * as sharedCss from "../Chat.css.ts";
-import * as conversationCss from "../styles/conversation.css.ts";
-import * as chatCss2 from "../styles/chat.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
+import * as connectsCss from "./Connects.css.ts";
 
-import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 export function ChatScreen() {
   const { chat: address = "" } = useParams();
@@ -74,14 +86,9 @@ export function ChatScreen() {
   const lives = useLives(station.address, (view?.agents ?? []).map((a) => a.session.key));
   // Until the core has the chat, the page is already a chat's page (its bar, empty): what comes fills it in place.
   if (!view) {
-    return (
-      <div className={chatCss.mChat}>
-        <BarFrame title="" more={false} />
-        {/* Read from its station meanwhile, over the messages to come (./Loading.tsx); what is wrong in red, over faded ones. */}
-        <LoadingPill text={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")} error={!!chat.error} />
-        <PlaceholderMessages still={!!chat.error} />
-      </div>
-    );
+    // Read from its station meanwhile, over the messages to come; what is wrong in red, over faded ones.
+    return <ChatWaiting text={station.name ? t("web-mobile.chat.readingFrom", { station: station.name }) : t("web-mobile.chat.reading")}
+      error={chat.error ? t("web-mobile.chat.failed", { error: chat.error.message }) : undefined} />;
   }
   return <Chat view={view} sessionKey={key} lives={lives} />;
 }
@@ -103,39 +110,136 @@ function Chat({ view, sessionKey, lives }: { view: ChatView; sessionKey: string;
   const station = useStation();
   const app = useApp();
   const list = useRef<HTMLDivElement>(null);
-  const floor = useRef<HTMLDivElement>(null);
   // The page's composer is its host's (ChatHost.tsx): kept as a new chat becomes this chat.
-  const { draft, use } = useHost();
+  const { now: draft, use } = useHost();
   const here: Here = { station: station.address, key: sessionKey, view };
-  useComposer(view, here, draft, use, list);
+  useComposer(view, here, use, list);
   return (
     <div className={chatCss.mChat}>
-      <Messages view={view} lives={lives} list={list} floor={floor} draft={draft} here={here} stationName={station.name} />
-      <ChatBar view={view} here={here} />
+      <Messages view={view} lives={lives} list={list} draft={draft} here={here} stationName={station.name} />
+      <ChatBar station={station.address} session={sessionKey} />
     </div>
   );
 }
 
-/** The chat's bar: back, its title, then its people, then its agents' marks (each opens its history), as the wide screen's title has them; "…" is the chat's own sheet. */
-function ChatBar({ view, here }: { view: ChatView; here: Here }) {
+/** What the chat's bar shows of it: the same while that is, whatever else of the chat changes (a message, its times). */
+interface Bar {
+  title: string; thread: ChatThread | null; archivable: boolean; people: ChatView["people"]; stationUpdate: ChatView["stationUpdate"];
+  agents: { key: string; maker: ChatAgent["session"]["maker"]; runtime: ChatAgent["session"]["runtime"]; badge: ChatAgent["badge"]; badgeText: ChatAgent["session"]["badgeText"]; agentText: string }[];
+}
+const barOf = (view: ChatView): Bar => ({
+  title: view.title, thread: view.thread ?? null, archivable: !!view.archivable, people: view.people, stationUpdate: view.stationUpdate,
+  agents: view.agents.map((a) => ({ key: a.session.key, maker: a.session.maker, runtime: a.session.runtime, badge: a.badge, badgeText: a.session.badgeText, agentText: a.session.agentText })),
+});
+// Its thread compared by what the bar does with it (its id): the thread's own times change with every message.
+const sameBar = (a: Bar | undefined, b: Bar | undefined) => a === b || (!!a && !!b && a.thread?.id === b.thread?.id
+  && JSON.stringify({ ...a, thread: null }) === JSON.stringify({ ...b, thread: null }));
+
+/**
+ * The chat's bar: back, its title, then its people, then its agents' marks (each opens its card), as the wide screen's
+ * title has them; "…" is the chat's own sheet. Given the chat's keys, it reads only what it shows; what a tap opens reads
+ * the chat as it is then.
+ */
+const ChatBar = memo(function ChatBar({ station: address, session }: { station: string; session: string }) {
   const app = useApp();
-  const thread = view.thread;
-  const jobs = useChatJobs(here.station, { session: here.key }).value;
+  const topic = { topic: "chat", station: address, session } as const;
+  const bar = useTopicSelect<ChatView, Bar | undefined>(topic, (s) => (s.value ? barOf(s.value) : undefined), sameBar);
+  const jobs = useChatJobs(address, { session }).value;
+  const station = useChatStation(address);
+  const link = useStationLink(address);
+  const here = (): Here | null => {
+    const view = topicNow<ChatView>(topic);
+    return view ? { station: address, key: session, view } : null;
+  };
+  if (!bar) return null;
+  const thread = bar.thread;
   return (
-    <BarFrame title={view.title} more={!!thread} onMore={() => thread && openChatInfo(app, here, thread)}
+    <BarFrame title={bar.title} more={!!thread} onMore={() => { const h = here(); if (h && thread) openChatInfo(app, h, thread); }}
       trailing={<>
         {/* Nothing left in it (the core's `archivable`): archived with one tap. */}
-        {view.archivable && thread && <ArchiveButton here={here} view={view} thread={thread} />}
-        {jobs && jobs.jobs.length > 0 && <JobsButton here={here} alarm={jobs.alarm} />}
+        {bar.archivable && thread && <ArchiveButton station={address} session={session} />}
+        {jobs && jobs.jobs.length > 0 && <JobsButton station={address} session={session} alarm={jobs.alarm} />}
       </>}>
-      <StationUpdate station={here.station} notice={view.stationUpdate} />
-      <PeopleStack people={view.people} max={5} />
-      {view.agents.map((a) => (
-        <button key={a.session.key} type="button" className={css.mBarAgent} onClick={() => openHistory(app, here.station, here.key, a.session.key)} aria-label={t("web-mobile.chat.agentHistory", { agent: a.session.agentText })}>
-          <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={22} />
-        </button>
-      ))}
+      {bar.agents.length === 0 && <StationChip station={address} />}
+      <StationUpdate station={address} notice={bar.stationUpdate} />
+      <PeopleStack people={bar.people} max={5} />
+      {bar.agents.map((a, i) => {
+        const card = () => { const h = here(); if (h) agentCard(app, h, a.key); };
+        const label = t("web-mobile.agent.card", { agent: a.agentText });
+        // The first shares its tile with the station it runs on: its icon, or its name where it has none. One tap for
+        // the whole tile (two halves are too small to tell apart under a finger): the agent's card, which leads on to
+        // the station's.
+        return (
+          <button key={a.key} type="button" className={`${css.mBarAgent} ${linkCss.corner}`} onClick={card} aria-label={label}>
+            {i === 0 && station ? (
+              <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22}
+                wrap={(logo) => <span className={css.mBarJoinedAgent}>{logo}</span>}>
+                <span className={css.mBarJoinedStation} data-name={station.emoji || station.icon ? undefined : true}>
+                  {station.emoji || station.icon ? <StationMark emoji={station.emoji} icon={station.icon} size={13} /> : station.name}
+                </span>
+              </AgentMark>
+            ) : <AgentMark maker={a.maker} runtime={a.runtime} badge={a.badge} badgeText={a.badgeText} size={22} />}
+            {i === 0 && station && <StationCornerDot link={link} />}
+          </button>
+        );
+      })}
     </BarFrame>
+  );
+});
+
+/**
+ * The station the chat runs on, after its title: its icon and name; a tap opens its
+ * card in a sheet (the wide screen's is a hover card over the same tag, ../cloud/StationCards.tsx StationPeek).
+ */
+function StationChip({ station }: { station: string }) {
+  const app = useApp();
+  const s = useChatStation(station);
+  const link = useStationLink(station);
+  if (!s) return null;
+  return (
+    <button type="button" className={css.mBarStation} aria-label={s.name} onClick={() => openStationSheet(app, station)}>
+      {link && <StationDot link={link} />}{(s.emoji || s.icon) && <StationMark emoji={s.emoji} icon={s.icon} size={12} />}<span>{s.name}</span>
+    </button>
+  );
+}
+
+/** How the station the chat runs on looks: followed alone, not each change of the stations' views. */
+function useChatStation(station: string) {
+  return useStationLook(station);
+}
+
+/** The card of the station a chat runs on, in a sheet (in place of any open: the agent's card leads to it). */
+function openStationSheet(app: MobileApp, station: string) {
+  app.sheet({ height: 0.55, content: () => <StationSheet station={station} /> });
+}
+
+function StationSheet({ station }: { station: string }) {
+  const app = useApp();
+  const s = useStations(scopeOf(station)).value?.find((x) => x.station === station);
+  return (
+    <>
+      <SheetGrab />
+      <div className={`${sheetsCss.mSheetScroll} ${css.mStationSheet}`}>
+        {s && <StationPeek s={s} footer={<>
+          {/* Its files (docs/drive.md), where it has a drive: a way there from where it is named, as the wide screen's card has. */}
+          {s.overview?.drive && <GoRow title={t("web-pages.drive.title")} value={s.overview.drive.roots.length ? t("web-pages.drive.rootsCount", { n: s.overview.drive.roots.length }) : t("web-pages.drive.notShared")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/files`)); }} />}
+          <GoRow title={t("web-mobile.chat.stationDetails")} onClick={() => { app.sheet(null); app.push(app.at(`/s/${s.id}/overview`)); }} />
+        </>} />}
+      </div>
+    </>
+  );
+}
+
+/**
+ * A chat's page before its chat is there: its bar (empty) and under it the messages to come, with what it waits on
+ * (@stillfail/ui waiting.tsx) or in red what is wrong; `gone`: there is nothing to wait for (no such station), said instead.
+ */
+export function ChatWaiting({ text, error, gone }: { text?: string; error?: string | undefined; gone?: string }) {
+  return (
+    <div className={chatCss.mChat}>
+      <BarFrame title="" more={false} />
+      <div className={css.mChatWaiting}>{gone !== undefined ? <Gone text={gone} /> : <Waiting shape="messages" text={text} error={error} />}</div>
+    </div>
   );
 }
 
@@ -143,7 +247,7 @@ function ChatBar({ view, here }: { view: ChatView; here: Here }) {
 export function BarFrame({ title, more, onMore, trailing, children }: { title: string; more: boolean; onMore?: () => void; trailing?: ReactNode; children?: ReactNode }) {
   const app = useApp();
   return (
-    <header className={`${css.mChatBar} ${pagesCss.mGlass}`}>
+    <header className={`${css.mChatBar} ${pagesCss.mGlass}`} data-find-slot="">
       <button type="button" className={css.mChatBack} onClick={app.pop} aria-label={t("common.back")}><ChevronLeft size={22} /></button>
       <span className={css.mChatBarTitle}><b>{title}</b>{children}</span>
       {trailing}
@@ -154,121 +258,152 @@ export function BarFrame({ title, more, onMore, trailing, children }: { title: s
 
 // ── the list ───────────────────────────────────────────────────────────
 
+/** What the bar covers of the list's top: its padding (`lead`) less the room it leaves under the bar (styles/chat.css.ts). */
+const belowBar = (lead: number) => Math.max(0, lead - 8);
+
 /** The wide screen's list (../Chat.tsx's ChatRows), in the page: over it, the bar; under it, the composer. */
-function Messages({ view, lives, list, floor, draft, here, stationName }: {
-  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; floor: RefObject<HTMLDivElement | null>; draft: Draft; here: Here;
+function Messages({ view, lives, list, draft, here, stationName }: {
+  view: ChatView; lives: ReturnType<typeof useLives>; list: RefObject<HTMLDivElement | null>; draft: RefObject<Draft>; here: Here;
   stationName?: string | undefined;
 }) {
   const app = useApp();
-  const rows = useMessageList(list, floor, view, `${here.station}:${view.thread?.id ?? here.key}`, lives);
+  // The phone's bar floats over the list's top: its messages show from a little above where the list's padding ends.
+  const rows = useMessageList(list, view, `${here.station}:${view.thread?.id ?? here.key}`, lives, 20, belowBar);
+  // Its own find ("…" → 在对话中查找): its bar takes the page's bar's place; what is found is put clear of what the
+  // list's padding leaves for the bar and the composer.
+  const find = useChatFind(list, rows.virtual, view.thread?.id ?? null, rows.messages, null, null);
+  const asks = useAsksShown(rows.virtual, view);
+  const asking = asks.length > 0 && !!view.thread;
+  const [turn, setTurn] = useState(0);
   // Sent to by the page's key until its thread is known (a chat made here, or the agent's: useComposer).
   const to = view.thread?.id ?? here.key;
-  const images = () => chatImages([...rows.messages, ...view.outbox.map((o) => ({ authorKind: "person", ...o }))], (f) => ownerIn(view, f));
   // The messages are kept as they are while nothing they show changes: what they are handed stays the same function,
   // the latest one behind it.
-  const archive = useArchiveChat(here, view, view.thread ?? null);
-  const latest = useRef({ here, draft, images, app, archive });
-  latest.current = { here, draft, images, app, archive };
+  const archive = useArchiveChat(here.station, here.key);
+  // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
+  const gallery = useMemo(() => ({ chat: { session: here.key } }), [here.key]);
+  const latest = useRef({ here, draft, app });
+  latest.current = { here, draft, app };
+  // What is in the list (an agent's name, its activity, 归档) does these by the chat's key (../chatPage.ts).
+  const chatKey = draftKeyOf(here.station, here.key);
+  useChatPageActions(chatKey, {
+    history: (key, entry) => openHistory(app, here.station, here.key, key, entry),
+    agent: (key) => agentCard(app, here, key),
+    tab: (key) => { if (key.startsWith("service:")) app.push(servicePath(here.station, here.key, key.slice("service:".length))); },
+    archive,
+    find: find.show,
+  });
   const [stable] = useState(() => ({
-    owner: (file: Parameters<typeof ownerIn>[1]) => ownerIn(latest.current.here.view, file),
-    open: (key: string) => { const { app, here } = latest.current; openHistory(app, here.station, here.key, key); },
-    quote: (q: Omit<Quote, "comment">) => latest.current.draft.quote(q),
-    images: () => latest.current.images(),
-    hold: (ts: string) => { const { app, here } = latest.current; app.push(annotatePath(here.station, here.key, ts)); },
-    archive: () => latest.current.archive(),
+    quote: (q: Omit<Quote, "comment">) => latest.current.draft.current.quote(q),
+    file: (session: string, file: { path: string; name: string }) => {
+      const { app, here } = latest.current;
+      app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })));
+    },
   }));
-  // Words selected with a mouse inside one message offer to quote them; a finger holds a message for its menu.
+  // Words selected with a mouse inside one message offer to quote them; a finger held on them picks them in place.
   const quoting = useSelectionQuote(list, stable.quote);
-  const hold = useHold(list, rows.messages, stable.hold);
-  const askedFile = useAskedFile(list, rows.messages, (f) => ownerIn(view, f));
-  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them) open here, as pages over this one (the
-  // chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
+  const picking = usePick(list, stable.quote);
+  const hold = useLinkHold(list);
+  const askedFile = useAskedFile(list, rows.messages);
+  // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them; a chat's page, as a reference is
+  // written), on any of its cloud's hosts, open here, as pages over this one (the chat and what is being written stay under them): one of this chat's agents' web services, or another session. A
   // link to an agent's execution history opens it.
   const onClick = (event: React.MouseEvent) => {
+    // One of this chat's agents' (another's goes to its chat, below).
     const history = historyLinkClicked(event);
-    if (history) {
+    if (history && view.agents.some((a) => a.session.key === history.key)) {
       event.preventDefault();
-      openHistory(app, here.station, here.key, history.key);
+      openHistory(app, here.station, here.key, history.key, history.entry);
+      return;
+    }
+    // One of a station's screens (an agent asking a person to take over): its viewer, over this chat.
+    const screen = screenLinkClicked(event);
+    if (screen?.own) {
+      event.preventDefault();
+      app.push(screen.path);
       return;
     }
     const link = stillfailLinkClicked(event);
     if (!link) return;
-    if (link.service && view.agents.some((a) => a.session.key === link.session)) {
+    const elsewhere = link.own && history ? history : null;
+    if (elsewhere) {
+      // Another chat's agent's execution history, at the entry it names: over this chat, as its page would open it.
+      event.preventDefault();
+      app.push(`/w/${link.workspace}/s/${link.station}/chats/${encodeURIComponent(link.session)}/history/${encodeURIComponent(elsewhere.key)}?entry=${elsewhere.entry}`);
+    } else if (link.service && view.agents.some((a) => a.session.key === link.session)) {
       event.preventDefault();
       app.push(servicePath(here.station, here.key, link.service));
-    } else if (link.sameOrigin) {
+    } else if (link.own) {
       event.preventDefault();
       const path = `/w/${link.workspace}/s/${link.station}/chats/${encodeURIComponent(link.session)}`;
       if (`${path}${link.search}` !== `${stationBase(here.station)}/chats/${encodeURIComponent(here.key)}`) app.push(`${path}${link.search}`);
     }
   };
   return (
-    <OpenFile.Provider value={(session, file) => app.push(servicePath(here.station, here.key, fileService({ session, path: file.path, name: file.name })))}>
+    <OpenFile.Provider value={stable.file}>
       {quoting.pop}
       {askedFile}
-      <Gallery.Provider value={stable.images}>
-      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold}>
-        <DraftKey.Provider value={draftKeyOf(here.station, here.key)}>
-          <ChatRows chat={view} rows={rows} to={to} owners={ownersOf(view)} owner={stable.owner} onOpenHistory={stable.open} onArchive={view.thread ? stable.archive : undefined} />
+      {find.bar}
+      <Gallery.Provider value={gallery}>
+      <div className={`${chatCss.mMessages} ${sharedCss.chatMessages} ${sharedCss.inlineHeads} ${rootCss.wide}`} ref={list} onClick={onClick} {...quoting.listProps} {...hold} {...sentAfter(view)}>
+        <DraftKey.Provider value={chatKey}>
+          <ChatRows chat={view} rows={rows} to={to} />
         </DraftKey.Provider>
-        <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
+      {picking}
       {/* Over the send button, in line with it; it comes up growing and goes the way it came. */}
       {/* Short of the chat's end (a window of it), with how many new messages wait there. */}
       <button type="button" className={`${css.mJump} ${pagesCss.mFloating}`} data-shown={rows.away || undefined} data-count={rows.waiting > 0 || undefined}
         aria-label={t("web-mobile.chat.toLatest")} onClick={rows.toEnd}><ArrowDown size={18} />{rows.waiting > 0 && <span>{t("web-mobile.chat.newMessages", { n: rows.waiting })}</span>}</button>
+      {/* What waits to be decided and does not show: a bell there (over the way to the end when both show), leading to its post, then the next one's. */}
+      <button type="button" className={`${css.mJump} ${css.mJumpAsk} ${pagesCss.mFloating}`} data-shown={asking || undefined} data-above={rows.away || undefined}
+        aria-label={t("web-main.chat.asks.go")} onClick={() => { const next = asks[turn % asks.length]; if (next && view.thread) { jumpTo({ station: here.station, thread: view.thread.id, seq: next.seq }); setTurn((n) => n + 1); } }}><Bell size={18} /></button>
     </OpenFile.Provider>
   );
 }
 
-/** A message's words as read, without markdown's marks: what a quote carries. */
-function plain(text: string): string {
-  return text.replace(/[`*#>]/g, "").replace(/\s+/g, " ").trim();
-}
-
 /**
- * Long-press on a message in the list (a right click with a mouse): its page, to pick passages of it to say something
- * about or to copy (Annotate.tsx). Not on what does its own thing in it (a name, a quote, a file).
+ * Long-press on a web link in a message of the list: the link's menu (open it, copy it), as the Android app has it; a
+ * right click there is the browser's own menu, with its link items. A long press elsewhere on a message's words picks
+ * them (pick.tsx); the system's own menu for it never comes.
  */
-function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], onHold: (ts: string) => void) {
+function useLinkHold(list: RefObject<HTMLElement | null>) {
+  const app = useApp();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const touched = useRef(false);
-  const shown = useRef(messages);
-  shown.current = messages;
-  const held = (event: React.SyntheticEvent) => {
-    const at = event.target as Element;
-    const row = at.closest?.<HTMLElement>("[data-author][data-ts]");
-    if (!row || !list.current?.contains(row) || at.closest("button, input, textarea")) return null;
-    const m = shown.current.find((x) => x.ts === row.dataset.ts);
-    if (!m || m.system || !m.text.trim()) return null;
-    const words = row.querySelector<HTMLElement>(`.${conversationCss.msgBubble}, .${conversationCss.markdown}, .${chatCss2.msgPlain}`) ?? row;
-    return { m, words };
+  /** The web link pressed in one of the messages (a reference to a chat too), or null. */
+  const linkAt = (event: React.SyntheticEvent) => {
+    const a = (event.target as Element).closest?.<HTMLAnchorElement>("a[href]");
+    return a && /^https?:\/\//i.test(a.getAttribute("href") ?? "") && a.closest("[data-author][data-ts]") && list.current?.contains(a) ? a : null;
   };
-  const open = ({ m, words }: NonNullable<ReturnType<typeof held>>) => {
-    // Marked for a moment as the page comes over it.
-    words.dataset.pressed = "";
-    setTimeout(() => { delete words.dataset.pressed; }, 600);
+  const linkMenu = (a: HTMLAnchorElement, x: number, y: number) => {
     navigator.vibrate?.(10);
-    onHold(m.ts);
+    // Under the line held (over it when there is no room below), centred on the finger: the menu is 180 wide (app.tsx MenuHost).
+    const line = [...a.getClientRects()].find((r) => y >= r.top && y <= r.bottom) ?? a.getBoundingClientRect();
+    const failed = (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) }));
+    app.menu({ anchor: new DOMRect(x - 90, line.top, 0, line.height), items: [
+      // As a tap on it: still.fail's own open here (the list's onClick), any other in a tab of its own.
+      { label: t("common.link.open"), icon: <External size={16} />, action: () => a.click() },
+      { label: t("common.link.copy"), icon: <Copy size={16} />, action: () => { navigator.clipboard.writeText(a.href).then(() => app.toast(t("common.link.copied")), failed); } },
+    ] });
   };
   const cancel = () => clearTimeout(timer.current);
-  // A finger holds for the menu; a mouse right-clicks for it (and selects words to quote a passage of them).
   return {
     onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       touched.current = e.pointerType !== "mouse";
       cancel();
-      const at = touched.current ? held(e) : null;
-      if (at) timer.current = setTimeout(() => open(at), 480);
+      if (!touched.current) return;
+      const link = linkAt(e);
+      const { clientX: x, clientY: y } = e;
+      if (link) timer.current = setTimeout(() => linkMenu(link, x, y), HOLD);
     },
     onPointerUp: cancel, onPointerCancel: cancel,
     onPointerMove: (e: React.PointerEvent) => { if (Math.abs(e.movementY) > 4 || Math.abs(e.movementX) > 4) cancel(); },
-    // A right click opens it; a long press, where the browser asks for its own menu too, already has.
+    // Where a long press asks for the browser's own menu too: not over a message.
     onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
-      const at = held(e);
-      if (!at) return;
-      e.preventDefault();
-      if (!touched.current) open(at);
+      const row = (e.target as Element).closest?.("[data-author][data-ts]");
+      if (touched.current && row && list.current?.contains(row)) e.preventDefault();
     },
   };
 }
@@ -278,8 +413,12 @@ function useHold(list: RefObject<HTMLElement | null>, messages: ChatMessage[], o
 /** What is being written (../draft.ts), and asking for the field's focus (a quote's comment done, a tap on the capsule). */
 export type Draft = SharedDraft & { focus: number; bumpFocus(): void };
 
-/** ＋: take a photo, pick photos, pick files. */
-export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) {
+/**
+ * ＋: take a photo, pick photos, pick files; or (`onStation`) a station's files, named by their path (StationFiles.tsx).
+ * A menu over the composer's capsule (`plus` its ＋), as a long-pressed message's: the phone app's sheet of recent
+ * photos needs the gallery, which a page cannot read.
+ */
+export function openAttach(app: MobileApp, plus: HTMLElement, onPicked: (files: FileList) => void, onStation?: () => void) {
   const pick = (accept: string, capture: boolean) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -289,19 +428,16 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) 
     input.onchange = () => { if (input.files?.length) onPicked(input.files); };
     input.click();
   };
-  app.sheet({
-    height: 0.32,
-    content: () => (
-      <>
-        <SheetGrab />
-        <SheetHead title={t("web-mobile.chat.attach")} />
-        <div className={css.mAttach}>
-          {([[t("web-mobile.chat.camera"), <Camera key="c" size={24} />, () => pick("image/*", true)], [t("web-mobile.chat.photos"), <Photo key="p" size={24} />, () => pick("image/*", false)], [t("web-mobile.chat.files"), <File key="f" size={24} />, () => pick("*/*", false)]] as const).map(([label, icon, go]) => (
-            <button key={label} type="button" onClick={() => { app.sheet(null); go(); }}>{icon}<span>{label}</span></button>
-          ))}
-        </div>
-      </>
-    ),
+  // From ＋'s left, over all of the capsule (its files and quotes too), as it is once ＋ has taken the focus.
+  requestAnimationFrame(() => {
+    const capsule = (plus.closest("[data-made-composer]") ?? plus.parentElement!).getBoundingClientRect();
+    const anchor = new DOMRect(plus.getBoundingClientRect().left, capsule.top, 0, capsule.height);
+    app.menu({ anchor, items: [
+      { label: t("web-mobile.chat.camera"), icon: <Camera size={18} />, action: () => pick("image/*", true) },
+      { label: t("web-mobile.chat.photos"), icon: <Photo size={18} />, action: () => pick("image/*", false) },
+      { label: t("web-mobile.chat.files"), icon: <File size={18} />, action: () => pick("*/*", false) },
+      ...(onStation ? [{ label: t("web-pages.chat.files"), icon: <Server size={18} />, action: onStation }] : []),
+    ] });
   });
 }
 
@@ -313,7 +449,7 @@ export function openAttach(app: MobileApp, onPicked: (files: FileList) => void) 
  */
 export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locked = false, onPlus, onType, onSend }: {
   draft: Draft; draftKey: string | undefined; sessionKey: string | null; placeholder: string; locked?: boolean;
-  onPlus: () => void; onType: () => void; onSend: () => void;
+  onPlus: (plus: HTMLElement) => void; onType: () => void; onSend: () => void;
 }): { menu: ReactNode; bar: ReactNode; expanded: boolean } {
   const input = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
@@ -327,10 +463,10 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
   const bar = (
     <div className={css.mComposerBar} data-expanded={expanded || undefined}
       onFocus={() => setFocused(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}>
-      <button type="button" className={css.mPlus} onClick={onPlus} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
+      <button type="button" className={css.mPlus} onClick={(e) => onPlus(e.currentTarget)} disabled={locked} aria-label={t("web-mobile.chat.addFiles")}><Plus size={18} /></button>
       {field}
       <button type="button" className={css.mSend} data-ready={ready || undefined} disabled={!ready} onClick={onSend} aria-label={t("web-mobile.chat.send")}>
-        {draft.starting ? <Spinner size={16} color="var(--m-surface)" /> : <ArrowUp size={18} />}
+        {draft.starting ? <Spinner className={partsCss.mSpinOnColor} /> : <ArrowUp size={18} />}
       </button>
     </div>
   );
@@ -343,12 +479,11 @@ export function useComposerBar({ draft, draftKey, sessionKey, placeholder, locke
  * it (a failure shows there too). Before the agent has a chat, what is sent waits in its outbox while the core has the
  * station make one, bound to the agent, and the page stays (the core shows the chat at the same address).
  */
-function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
+function useComposer(view: ChatView, here: Here, use: (spec: HostComposer) => void, list: RefObject<HTMLDivElement | null>) {
   const api = useApi();
   const keeper = view.agents[0]?.session.key ?? null;
   const warmed = useRef(0);
   const send = (draft: Draft) => {
-    if (view.offline || view.archived) return;
     // Sent to by the page's key until its thread is known: a chat made here, or the agent whose page it is (what is sent
     // waits in the outbox at once while the core has the station make its chat).
     const to = view.thread?.id ?? here.key;
@@ -376,14 +511,29 @@ function useComposer(view: ChatView, here: Here, draft: Draft, use: (spec: HostC
 // As the core puts them (the `chatJobs` view): those that matter now first, what is over faded and last.
 
 /** The bar's button for the chat's services and jobs, with a dot when one died lately (red) or a service restarts (amber). */
-function JobsButton({ here, alarm }: { here: Here; alarm: string | undefined }) {
+function JobsButton({ station, session, alarm }: { station: string; session: string; alarm: string | undefined }) {
   const app = useApp();
+  const open = () => {
+    const view = topicNow<ChatView>({ topic: "chat", station, session });
+    if (view) openJobs(app, { station, key: session, view });
+  };
   return (
-    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label={t("web-mobile.chat.jobs")} onClick={() => openJobs(app, here)}>
+    <button type="button" className={`${barsCss.mNavButton} ${css.mJobsTrigger}`} aria-label={t("web-mobile.chat.jobs")} onClick={open}>
       <Web size={18} />
       {alarm && <span className={css.mJobsAlarm} data-alarm={alarm} aria-hidden="true" />}
     </button>
   );
+}
+
+/** One of the chat's agents in brief, in a sheet (AgentSheet.tsx): from its name, its mark in the bar, its row in the chat's sheet. */
+function agentCard(app: MobileApp, here: Here, key: string) {
+  const agent = here.view.agents.find((a) => a.session.key === key);
+  if (!agent) return;
+  openAgent(app, { station: here.station, chat: here.key, key }, agent, {
+    history: () => openHistory(app, here.station, here.key, key),
+    jobs: () => openJobs(app, here),
+    station: () => openStationSheet(app, here.station),
+  });
 }
 
 /** What matters now of the chat's services and jobs, as the desktop's title bar popover has it; the rest a tap away. */
@@ -414,7 +564,7 @@ function JobsNow({ here }: { here: Here }) {
         )}
         {view.ended > 0 && (
           <button type="button" className={css.mJobsAll} data-busy={clearing || undefined} disabled={clearing} onClick={() => clear(view.clear)}>
-            <span className={css.mJobsAllLine}>{clearing && <Spinner size={13} />}{view.clearText}</span>
+            <span className={css.mJobsAllLine}>{clearing && <Spinner inline />}{view.clearText}</span>
           </button>
         )}
       </div>
@@ -507,7 +657,7 @@ function JobSheet({ station, sessionKey, jobId }: { station: string; sessionKey:
           )
           : <JobOutput station={station} job={job} />}
         {tab === 0 && said && <div className={css.mJobLast}><span>{said}</span>{last?.last && <code>{last.last}</code>}</div>}
-        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner size={16} color="var(--m-red)" /> : <Stop size={16} />}{stopping ? t("web-mobile.chat.stopping") : t("web-mobile.history.stop")}</button>}
+        {running && <button type="button" className={css.mJobStop} disabled={stopping} onClick={() => stop(job)}>{stopping ? <Spinner className={partsCss.mSpinOnColor} /> : <Stop size={16} />}{stopping ? t("web-mobile.chat.stopping") : t("web-mobile.history.stop")}</button>}
         {running && !stopping && stopFailed !== undefined && <p className={partsCss.mError}>{t("web-mobile.chat.stopFailed", { error: stopFailed })}</p>}
       </div>
     </>
@@ -523,88 +673,279 @@ function JobOutput({ station, job }: { station: string; job: Job }) {
     const el = box.current;
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [log?.text]);
+  if (log === null) return <WaitLine />;
   return (
     <pre ref={box} className={css.mJobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log === null ? t("web-mobile.reading") : log.text || t("web-mobile.chat.noOutput")}
+      {log.text || t("web-mobile.chat.noOutput")}
     </pre>
   );
 }
 
 // ── the chat's own sheet ───────────────────────────────────────────────
 
-/** The chat itself: where it came from, who started it and takes part, its agents (each leads to its history). */
+/**
+ * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
+ * last written in, in a line; its agents, each where it stands (a tap opens its card); then what can be done with it,
+ * within reach: pin it, open it in Slack, archive it.
+ */
 function openChatInfo(app: MobileApp, here: Here, thread: ChatThread) {
-  app.sheet({ height: 0.72, draggable: true, content: () => <ChatInfo here={here} thread={thread} /> });
+  const publish = shownPublish(here.view);
+  const rows = here.view.agents.length * 56 + ((here.view.pinned != null ? 1 : 0) + (here.view.slackUrl ? 1 : 0) + (here.view.feishuUrl ? 1 : 0) + (here.view.xshare ? 1 : 0) + 2) * 41
+    + (publish ? ((publish.may ? 1 : 0) + publish.links.length) * 41 + 10 : 0);
+  // As tall as what it shows: its name and line, its agents, its rows.
+  app.sheet({ height: Math.min(0.9, (25 + 84 + rows + 10 + 34) / window.innerHeight), content: () => <ChatInfo here={here} thread={thread} /> });
 }
 
 function ChatInfo({ here, thread: first }: { here: Here; thread: ChatThread }) {
   const app = useApp();
   const view = useChat(here.station, { session: here.key }).value ?? here.view;
-  const jobs = useChatJobs(here.station, { session: here.key }).value ?? NO_JOBS;
   const thread = view.thread ?? first;
   const call = useStationCall(here.station);
   const pinning = useDoing("chat.pin", { station: here.station, session: here.key });
   const pinFailed = useDoingFailed("chat.pin", { station: here.station, session: here.key });
+  const open = !view.archived && !view.offline;
+  const publish = shownPublish(view);
+  const rename = () => ask(app, {
+    title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
+    run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
+  });
+  // Who started it and when, how many take part, when it was last written in: what there is of them, in a line.
+  const creator = thread.creator?.shown?.display;
+  const created = thread.time?.createdAt?.ago;
+  const facts = [
+    view.place ? `Slack · ${view.place}` : null,
+    creator && created ? t("web-mobile.chat.startedByAt", { name: creator, ago: created }) : creator ?? created ?? null,
+    view.people.length > 1 ? t("web-mobile.chat.peopleCount", { n: view.people.length }) : null,
+    thread.lastMessage?.time?.createdAt?.ago ? t("web-mobile.chat.latestAt", { ago: thread.lastMessage.time.createdAt.ago }) : null,
+  ].filter(Boolean).join(" · ");
   return (
     <>
       <SheetGrab />
-      <SheetHead title={t("web-mobile.chat.info")} />
       <div className={`${sheetsCss.mSheetScroll} ${partsCss.mPad18}`}>
-        {!view.archived && !view.offline && (
+        <div className={css.mInfoHead}>
+          <b>{view.title}</b>
+          {open && <button type="button" className={css.mInfoEdit} aria-label={t("web-mobile.home.renameTitle")} onClick={rename}><Edit size={16} /></button>}
+        </div>
+        <div className={css.mInfoFacts}><PeopleStack people={view.people} max={5} /><span>{facts}</span></div>
+        {view.agents.length > 0 && (
           <InfoList>
-            <InfoRow onClick={() => ask(app, {
-              title: t("web-mobile.home.renameTitle"), value: view.title, placeholder: t("web-mobile.home.renamePlaceholder"), action: t("common.save"), empty: true, hint: t("web-mobile.home.renameHint"), atOnce: "web-main.rename.failed",
-              run: (title) => stationApi(call).rename({ thread: thread.id, session: here.key }, title),
-            })}>
-              <span className={css.mInfoLabel}>{t("web-mobile.chat.name")}</span><span className={`${partsCss.mGrow} ${css.mInfoName}`}>{view.title}</span><ChevronRight size={14} className={partsCss.mSubtle} />
-            </InfoRow>
+            {view.agents.map((a) => {
+              const s = a.session;
+              // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
+              const account = a.account ?? a.profile;
+              return (
+                <InfoRow key={s.key} onClick={() => agentCard(app, { ...here, view }, s.key)}>
+                  <ModelMark maker={s.maker} runtime={s.runtime} size={36} state={stateOf(a.badge)} around="var(--m-surface2)" />
+                  <span className={`${partsCss.mGrow} ${css.mInfoAgent}`}>
+                    <b>{s.agentText}</b>
+                    <span className={css.mInfoStatus}>{s.statusText}<AgentSince agent={a} /></span>
+                  </span>
+                  <QuotaRings quota={account?.quota} />
+                  <ChevronRight size={14} className={partsCss.mSubtle} />
+                </InfoRow>
+              );
+            })}
+          </InfoList>
+        )}
+        {(
+          <InfoList>
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
-            {view.pinned != null && (
+            {open && view.pinned != null && (
               <InfoRow busy={pinning} failed={pinFailed} onClick={() => { stationApi(call).pin({ session: here.key }, !view.pinned)
                 .catch((error) => app.toast(t(view.pinned ? "web-mobile.home.unpinFailed" : "web-mobile.home.pinFailed", { error: error instanceof Error ? error.message : String(error) }))); }}>
                 <Pin size={16} /><span className={partsCss.mGrow}>{view.pinned ? t("web-mobile.home.unpin") : t("web-mobile.chat.pinTop")}</span>
               </InfoRow>
             )}
+            <InfoRow onClick={() => { app.sheet(null); chatPage.find(draftKeyOf(here.station, here.key)); }}>
+              <Search size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.find")}</span>
+            </InfoRow>
+            {view.xshare && <ShareRow here={here} thread={thread} share={view.xshare} />}
+            {view.slackUrl && <a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
+            {view.feishuUrl && <a className={listsCss.mInfoRow} href={view.feishuUrl} target="_blank" rel="noopener"><SlackMark kind="feishu" size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openFeishu")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a>}
+            {open && <ArchiveRow here={here} view={view} thread={thread} />}
           </InfoList>
         )}
-        <InfoList>
-          <InfoDetail label={t("web-mobile.chat.from")} value={view.place ? `Slack · ${view.place}` : t("web-mobile.chat.fromApp", { name: NAME })} />
-          <InfoDetail label={t("web-mobile.chat.startedBy")} value={thread.creator?.shown?.display ?? t("web-mobile.chat.unknown")} />
-          <InfoDetail label={t("web-mobile.chat.people")} value={t("web-mobile.chat.peopleCount", { n: view.people.length })} extra={<PeopleStack people={view.people} max={8} />} />
-          <InfoDetail label={t("web-mobile.chat.created")} value={thread.time?.createdAt?.ago ?? ""} />
-          {thread.lastMessage && <InfoDetail label={t("web-mobile.chat.lastMessage")} value={thread.lastMessage.time?.createdAt?.ago ?? ""} />}
-        </InfoList>
-        <JobGroups here={here} view={jobs} jobs={jobs.jobs} />
-        {view.slackUrl && (
+        {publish && <PublishList here={here} thread={thread} publish={publish} />}
+      </div>
+    </>
+  );
+}
+
+/** A chat's public links as its sheet shows them: to those who may publish it, or when it has some (a read-only member sees them). */
+function shownPublish(view: ChatView): ChatPublish | undefined {
+  return view.publish && (view.publish.may || view.publish.links.length > 0) ? view.publish : undefined;
+}
+
+/**
+ * Making the chat public (docs/public-share.md), a card of its own: 「公开分享」 opens the sheet that publishes it, for
+ * those who may (not a read-only member); each of its links under it, when and by whom, 复制, and 撤销 for who
+ * published it or an owner or admin (asked first; gone from here at once).
+ */
+function PublishList({ here, thread, publish }: { here: Here; thread: ChatThread; publish: ChatPublish }) {
+  const app = useApp();
+  return (
+    <InfoList>
+      {publish.may && (
+        <InfoRow onClick={() => app.sheet({ height: 0.9, content: () => <PublishSheet here={here} thread={thread.id} /> })}>
+          <Web size={16} /><span className={partsCss.mGrow}>{t("web-pages.chat.publish")}</span><ChevronRight size={14} className={partsCss.mSubtle} />
+        </InfoRow>
+      )}
+      {publish.links.map((l) => <PublishedRow key={l.id} here={here} thread={thread.id} link={l} />)}
+    </InfoList>
+  );
+}
+
+function PublishedRow({ here, thread, link }: { here: Here; thread: number; link: ChatPublished }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const copy = () => void navigator.clipboard.writeText(link.link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
+  const revoke = () => confirm(app, {
+    title: t("web-pages.chat.publish.revokeAsk"), text: t("web-pages.chat.publish.revokeNote"), action: t("web-pages.chat.publish.revoke"), danger: true,
+    atOnce: "web-pages.chat.publish.revokeFailed", run: () => stationApi(call).unpublish(thread, link.id),
+  });
+  return (
+    <div className={`${listsCss.mInfoRow} ${css.mPublished}`}>
+      <span className={`${partsCss.mGrow} ${css.mPublishedText}`}>{link.time?.createdAt?.ago} · {link.byName}</span>
+      <LinkButton label={t("common.copy")} onClick={copy} />
+      {link.mayRevoke && <LinkButton label={t("web-pages.chat.publish.revoke")} onClick={revoke} />}
+    </div>
+  );
+}
+
+/**
+ * Publishes the chat (the phone's; the wide screen's is Publish.tsx PublishDialog): what it would hold, the attachments
+ * to tick (all at first; one too big is shown, never ticked), who can read it, 「发布」. Published, its link with a
+ * way to copy it; the chat's sheet lists it from then on.
+ */
+function PublishSheet({ here, thread }: { here: Here; thread: number }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const preview = usePublishPreview(here.station, thread);
+  const ticking = useTicking();
+  const [made, setMade] = useState<ChatPublished | null>(null);
+  const publishing = useDoing("chat.publish", { station: here.station, thread });
+  const p = "ok" in preview ? preview.ok : null;
+  const ticked = p ? tickedOf(p, ticking.off) : null;
+  const go = () => {
+    if (!p || !ticked) return;
+    stationApi(call).publish(thread, p.upto, ticked)
+      .then(setMade, (e: unknown) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.publish.verb"), error: e instanceof Error ? e.message : String(e) })));
+  };
+  const copy = (link: string) => void navigator.clipboard.writeText(link).then(() => app.toast(t("common.link.copied")), (e: unknown) => app.toast(t("common.link.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={made ? t("web-pages.chat.publish.made") : t("web-pages.chat.publish")} />
+      <div className={`${sheetsCss.mSheetScroll} ${css.mPublishBody}`}>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-pages.chat.publish.lead")}</p>
+        {made ? (
           <>
-            <GroupLabel>{t("web-mobile.chat.inSlack")}</GroupLabel>
-            <InfoList><a className={listsCss.mInfoRow} href={view.slackUrl} target="_blank" rel="noopener"><SlackMark size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.openSlack")}</span><ChevronRight size={14} className={partsCss.mSubtle} /></a></InfoList>
+            <div className={publishCss.madeLink}>{made.link}</div>
+            <Button primary label={t("common.link.copy")} onClick={() => copy(made.link)} />
+            <Button primary={false} label={t("common.done")} onClick={() => app.sheet(null)} />
+          </>
+        ) : "reading" in preview ? (
+          <WaitLine text={t("web-pages.chat.publish.reading")} />
+        ) : "error" in preview ? (
+          <p className={partsCss.mError}>{preview.error}</p>
+        ) : p!.messages.length === 0 ? (
+          <p className={partsCss.mMuted}>{t("web-pages.chat.publish.empty")}</p>
+        ) : (
+          <>
+            <PublishMessages messages={p!.messages} ticking={ticking} whole />
+            {p!.hiddenText && <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{p!.hiddenText}</p>}
+            <Button primary label={t("web-pages.chat.publish.go")} busy={publishing} onClick={go} />
           </>
         )}
-        {view.agents.length > 0 && (
-          <>
-            <GroupLabel>{t("web-mobile.chat.agents")}</GroupLabel>
-            <InfoList>
-              {view.agents.map((a) => {
-                const s = a.session;
-                // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
-                const account = a.account ?? a.profile;
-                return (
-                  <InfoRow key={s.key} onClick={() => openHistory(app, here.station, here.key, s.key)}>
-                    <ModelMark maker={s.maker} runtime={s.runtime} size={36} state={stateOf(a.badge)} around="var(--m-surface2)" />
-                    <span className={`${partsCss.mGrow} ${css.mInfoAgent}`}>
-                      <b>{s.agentText}</b>
-                      <span>{a.connect && <SlackMark size={11} />}{[a.connect?.name, account?.name, s.processText, s.time?.lastActiveAt?.ago].filter(Boolean).join(" · ")}</span>
-                    </span>
-                    <QuotaRings quota={account?.quota} />
-                    <ChevronRight size={14} className={partsCss.mSubtle} />
-                  </InfoRow>
-                );
-              })}
-            </InfoList>
-          </>
-        )}
-        {!view.archived && !view.offline && <ArchiveRow here={here} view={view} thread={thread} />}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The chat's sharing with the viewer's other workspaces (docs/chat-share.md): where it is shared at the row's end, under
+ * way a spinner there; a tap opens the sheet that changes it, for those who may (its starter, an owner or admin).
+ */
+function ShareRow({ here, thread, share }: { here: Here; thread: ChatThread; share: ChatShare }) {
+  const app = useApp();
+  const session = share.session;
+  const busy = useDoing("chat.xshare", { station: here.station, session });
+  const failed = useDoingFailed("chat.xshare", { station: here.station, session });
+  const body = <><Users size={16} /><span className={css.mShareLabel}>{t("web-pages.chat.xshare")}</span><span className={css.mShareText}>{share.text}</span></>;
+  if (!share.may) return <InfoRow>{body}</InfoRow>;
+  // As tall as what it shows: its head and line, a row a workspace, the switch, the button.
+  const open = () => app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + share.places.length * 52 + 12 + 66 + 48) / window.innerHeight), content: () => <ShareSheet here={here} thread={thread} share={share} /> });
+  return <InfoRow busy={busy} failed={failed} onClick={open}>{body}{!busy && failed === undefined && <ChevronRight size={14} className={partsCss.mSubtle} />}</InfoRow>;
+}
+
+/** Which of the viewer's other workspaces it is shared with, ticked, and whether their agents may send: done, the sheet goes at once. */
+function ShareSheet({ here, thread, share }: { here: Here; thread: ChatThread; share: ChatShare }) {
+  const app = useApp();
+  const call = useStationCall(here.station);
+  const api = useMemo(() => stationApi(call), [call]);
+  const [ticked, setTicked] = useState(() => new Set(share.places.filter((p) => p.on).map((p) => p.workspace)));
+  const [write, setWrite] = useState(share.write);
+  const save = () => {
+    app.sheet(null);
+    api.xshare({ thread: thread.id, session: share.session }, share.places.filter((p) => ticked.has(p.workspace)).map((p) => p.workspace), write)
+      .catch((error) => app.toast(t("web-main.act.failed", { what: t("web-pages.chat.xshare.verb"), error: error instanceof Error ? error.message : String(error) })));
+  };
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.chat.xshare")} />
+      <div className={sheetsCss.mSheetScroll}>
+        <p className={`${partsCss.mMuted} ${partsCss.mPad} ${partsCss.mSmall}`}>{t("web-pages.chat.xshare.lead")}</p>
+        {share.places.map((p) => <PickRow key={p.workspace} label={p.name} checked={ticked.has(p.workspace)}
+          onClick={() => setTicked((was) => { const next = new Set(was); if (next.has(p.workspace)) next.delete(p.workspace); else next.add(p.workspace); return next; })} />)}
+        <div className={css.mShareWrite}>
+          <button type="button" className={connectsCss.mSwitchRow} disabled={ticked.size === 0} onClick={() => setWrite(!write)}>
+            <span className={partsCss.mGrow}><b>{t("web-pages.chat.xshare.write")}</b><span>{t("web-pages.chat.xshare.writeNote")}</span></span>
+            <span className={connectsCss.mSwitch} data-on={(write && ticked.size > 0) || undefined} />
+          </button>
+        </div>
+        <div className={partsCss.mPad}>
+          <Button primary label={t("common.done")} onClick={save} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Sends what `text` says by `go`, written on `station`, once this workspace's agents can read what it refers to: the
+ * chats of the viewer's other workspaces not shared with it yet are asked about first (../OutsideShare.tsx), as every
+ * composer of the phone's does (ChatHost.tsx).
+ */
+export function sendSharing(app: MobileApp, station: string, text: string, go: () => void) {
+  void outsideOf(station, text).catch((): Outside[] => []).then((chats) => {
+    if (chats.length === 0) go();
+    else openOutside(app, chats, station, go);
+  });
+}
+
+/** Asks to share the chats of other workspaces a message refers to with this one; shared (or sent anyway), `go` sends it. */
+function openOutside(app: MobileApp, chats: Outside[], station: string, go: () => void) {
+  app.sheet({ height: Math.min(0.9, (25 + 48 + 44 + chats.length * 52 + 12 + 66 + 24) / window.innerHeight), content: () => <OutsideSheet chats={chats} station={station} go={go} /> });
+}
+
+function OutsideSheet({ chats, station, go }: { chats: Outside[]; station: string; go: () => void }) {
+  const app = useApp();
+  const sharable = chats.some((c) => c.may);
+  const operation = useAction(() => (sharable ? shareOutside(chats, station) : Promise.resolve()), () => { app.sheet(null); go(); });
+  const error = operation.error ? t("web-main.outside.failed", { error: operation.error.message }) : null;
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-main.outside.title")} />
+      <div className={`${sheetsCss.mSheetScroll} ${sheetsCss.mForm}`}>
+        <p className={partsCss.mMuted}>{t("web-main.outside.lead")}</p>
+        <OutsideList chats={chats} />
+        {error && <p className={partsCss.mError}>{error}</p>}
+        <div className={sheetsCss.mFormActions}>
+          <Button label={t("common.cancel")} primary={false} onClick={() => app.sheet(null)} />
+          <Button label={sharable ? t("web-main.outside.share") : t("web-main.outside.anyway")} primary busy={operation.busy} onClick={() => void operation.run()} />
+        </div>
       </div>
     </>
   );
@@ -625,30 +966,26 @@ function ArchiveRow({ here, view, thread }: { here: Here; view: ChatView; thread
   };
   // Asked first, then as at once.
   const asked = () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); };
-  return (
-    <>
-      <GroupLabel>{t("web-mobile.home.archive")}</GroupLabel>
-      <InfoList>
-        {/* A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words). */}
-        <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>
-      </InfoList>
-    </>
-  );
+  // A chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words).
+  return <InfoRow onClick={() => view.watch ? confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed", run: asked }) : archive()}><Archive size={16} /><span className={partsCss.mGrow}>{t("web-mobile.chat.archive")}</span></InfoRow>;
 }
 
 /** In the bar while nothing is left in the chat: archives it with one tap, back to the list at once (as ArchiveRow). */
-function ArchiveButton({ here, view, thread }: { here: Here; view: ChatView; thread: ChatThread }) {
-  const archive = useArchiveChat(here, view, thread);
+function ArchiveButton({ station, session }: { station: string; session: string }) {
+  const archive = useArchiveChat(station, session);
   return <NavButton icon={Archive} label={t("web-mobile.home.archive")} onClick={archive} />;
 }
 
 /** Archives the chat and leaves its page (a chat keeping watch once asked): the bar's 归档, and the one in the list. */
-function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
+function useArchiveChat(station: string, session: string) {
   const app = useApp();
-  const call = useStationCall(here.station);
+  const call = useStationCall(station);
   const api = useMemo(() => stationApi(call), [call]);
-  const of = { thread: thread?.id ?? null, session: view.agents[0]?.session.key ?? here.key };
+  // The chat as it is when tapped.
   return () => {
+    const view = topicNow<ChatView>({ topic: "chat", station, session });
+    if (!view) return;
+    const of = { thread: view.thread?.id ?? null, session: view.agents[0]?.session.key ?? session };
     if (view.watch) {
       confirm(app, { title: t("web-mobile.home.archiveAsk", { title: view.title }), text: view.watch.ask, action: t("web-mobile.home.archive"), atOnce: "web-mobile.home.archiveFailed",
         run: () => { app.pop(); return api.archive(of, true).then(() => app.toast(t("web-mobile.home.archived"))); } });
@@ -659,6 +996,3 @@ function useArchiveChat(here: Here, view: ChatView, thread: ChatThread | null) {
   };
 }
 
-function InfoDetail({ label, value, extra }: { label: string; value: string; extra?: ReactNode }) {
-  return <InfoRow><span className={css.mInfoLabel}>{label}</span>{extra}<span className={partsCss.mGrow}>{value}</span></InfoRow>;
-}

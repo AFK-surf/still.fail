@@ -7,6 +7,7 @@ import { t } from "../i18n.ts";
 import type { Topic } from "../protocol.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, compareKeys, get as getU, toJson } from "../util.ts";
+import { relays } from "./admin-relays.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -28,6 +29,8 @@ export function sources(view: Topic): Topic[] {
       return [of(view.account, "workspaces"), of(view.account, "users")];
     case "adminOverview":
       return [of(view.account, "users"), of(view.account, "workspaces"), of(view.account, "invite-codes"), of(view.account, "feedback")];
+    case "adminRelays":
+      return [of(view.account, "relays")];
   }
   return [];
 }
@@ -133,25 +136,28 @@ type Kind = { filters: [string, string, (v: J) => boolean][]; sorts: [string, st
 
 function userKind(now: number): Kind {
   const seen = (u: J) => num(u, "last_seen");
+  // What an account did says nothing of an email nobody signed in with yet.
+  const account = (keep: (u: J) => boolean) => (u: J) => !isPending(u) && keep(u);
   return {
     filters: [
       ["all", t("core-views.admin.filter.all"), () => true],
-      ["active", t("core-views.admin.filter.active"), (u) => {
+      ["active", t("core-views.admin.filter.active"), account((u) => {
         const at = seen(u);
         return at !== null && now - at < 7 * DAY;
-      }],
-      ["new", t("core-views.admin.filter.new_users"), (u) => {
+      })],
+      ["new", t("core-views.admin.filter.new_users"), account((u) => {
         const at = num(u, "created_at");
         return at !== null && now - at < 7 * DAY;
-      }],
-      ["stuck", t("core-views.admin.not_in"), (u) => get(u, "admission") === undefined || u.admission === null],
-      ["dormant", t("core-views.admin.filter.dormant"), (u) => {
+      })],
+      ["stuck", t("core-views.admin.not_in"), account((u) => get(u, "admission") === undefined || u.admission === null)],
+      ["dormant", t("core-views.admin.filter.dormant"), account((u) => {
         const at = seen(u);
         return at === null || now - at > 30 * DAY;
-      }],
+      })],
       ["creators", t("core-views.admin.filter.creators"), (u) => get(u, "may_create") === true],
       ["beta", channelLabel("beta"), (u) => get(u, "beta") === true],
       ["blocked", t("core-views.admin.blocked"), (u) => get(u, "blocked") === true],
+      ["pending", t("core-views.admin.pending"), isPending],
     ],
     sorts: [["seen", t("core-views.admin.sort.seen")], ["created", t("core-views.admin.sort.first_sign_in")], ["workspaces", t("core-views.admin.sort.workspaces")], ["name", t("core-views.admin.sort.name")]],
   };
@@ -248,6 +254,20 @@ function feedbackRef(v: J): string {
 }
 
 function row(list: string, v: J, now: number): J {
+  if (list === "users" && isPending(v)) {
+    const email = strOf(v, "email");
+    const marks = [mark(t("core-views.admin.pending"), "neutral")];
+    if (get(v, "beta") === true) marks.push(mark(channelLabel("beta"), "accent"));
+    return {
+      id: pendingId(email),
+      title: email,
+      line: t("core-views.admin.pending.line", { rights: pendingRights(v).join(t("core-views.list_separator")) }),
+      person: { name: "", email, picture: "" },
+      marks,
+      last_seen: null,
+      created_at: orNull(get(v, "created_at")),
+    };
+  }
   if (list === "users") {
     const marks: J[] = [];
     if (get(v, "blocked") === true) marks.push(mark(t("core-views.admin.blocked"), "red"));
@@ -274,6 +294,7 @@ function row(list: string, v: J, now: number): J {
     const c = get(v, "created_by");
     const creator = isObj(c) ? strOf(c, "name") || strOf(c, "email") : t("core-views.admin.someone_gone");
     const marks: J[] = [];
+    if (strOf(v, "plan") === "enterprise") marks.push(mark(t("core-views.admin.enterprise"), "accent"));
     if (stations.length === 0) marks.push(mark(t("core-views.admin.no_station"), "amber"));
     const latest = latestStation(v);
     return {
@@ -317,7 +338,7 @@ function row(list: string, v: J, now: number): J {
     note: strOf(v, "note"),
     line,
     state,
-    marks: [mark(codeLabel(state), tone)],
+    marks: get(v, "beta") === true ? [mark(codeLabel(state), tone), mark(channelLabel("beta"), "accent")] : [mark(codeLabel(state), tone)],
     url: orNull(get(v, "url")),
     user: user !== null ? strOf(user, "sub") : null,
     created_at: orNull(get(v, "created_at")),
@@ -332,9 +353,28 @@ function rowsOf(list: string, value: J): J[] {
   return items(value, key);
 }
 
+// Emails the admin gave rights to before anyone signed in with them (`pending` beside `users`; none from a cloud from
+// before it): listed with the users, each as `email:<address>` (no account's id has a colon), added when first seen.
+const PENDING = "email:";
+const pendingId = (email: string) => `${PENDING}${email}`;
+const isPending = (v: J) => get(v, "pending") === true;
+
+function pendingOf(users: J): J[] {
+  return items(users, "pending").filter((p) => strOf(p, "email") !== "").map((p) => ({
+    pending: true, email: strOf(p, "email"), beta: get(p, "beta") === true, may_create: get(p, "may_create") === true, created_at: orNull(get(p, "added_at")),
+  }));
+}
+
+function pendingRights(v: J): string[] {
+  const rights: string[] = [];
+  if (get(v, "beta") === true) rights.push(channelLabel("beta"));
+  if (get(v, "may_create") === true) rights.push(t("core-views.admin.pending.standard"));
+  return rights.length > 0 ? rights : [t("core-views.admin.pending.nothing")];
+}
+
 /// One list found by `query`, in `filter`, by `sort`: its first `limit` rows, and how many each filter holds.
 export function list(name: string, value: J, query: string, filter: string | null, sort: string | null, limit: number | null, now: number): J {
-  const all = rowsOf(name, value);
+  const all = name === "users" ? [...rowsOf(name, value), ...pendingOf(value)] : rowsOf(name, value);
   let kind: Kind;
   if (name === "users") kind = userKind(now);
   else if (name === "workspaces") kind = workspaceKind(now, newestVersion(all));
@@ -361,6 +401,7 @@ export function list(name: string, value: J, query: string, filter: string | nul
 
 /// A user's page.
 export function user(id: string, users: J, workspaces: J, codes: J, now: number): J {
+  if (id.startsWith(PENDING)) return pending(id, users);
   const u = rowsOf("users", users).find((x) => strOf(x, "sub") === id);
   if (u === undefined) throw new CoreError("http_404", t("core-views.admin.error.no_user"), 404);
   const byId = new Map(rowsOf("workspaces", workspaces).map((w) => [strOf(w, "id"), w] as [string, J]));
@@ -408,6 +449,31 @@ export function user(id: string, users: J, workspaces: J, codes: J, now: number)
   };
 }
 
+/// An email's page, given rights before anyone signed in with it: what it has, as an account's page says it.
+function pending(id: string, users: J): J {
+  const p = pendingOf(users).find((x) => pendingId(x.email) === id);
+  if (p === undefined) throw new CoreError("http_404", t("core-views.admin.error.no_user"), 404);
+  return {
+    id,
+    pending: true,
+    title: p.email,
+    person: { name: "", email: p.email, picture: "" },
+    email: p.email,
+    admin: false,
+    admission: t("core-views.admin.pending"),
+    code: null,
+    created_at: p.created_at,
+    last_seen: null,
+    mayCreate: p.may_create,
+    mayCreateHint: p.may_create ? t("core-views.admin.may_create.yes") : t("core-views.admin.may_create.no"),
+    mayCreateFixed: false,
+    beta: p.beta,
+    blocked: null,
+    workspaces: [],
+    seen: null,
+  };
+}
+
 /// A workspace's page.
 export function workspace(id: string, workspaces: J, users: J, now: number): J {
   const all = rowsOf("workspaces", workspaces);
@@ -447,15 +513,33 @@ export function workspace(id: string, workspaces: J, users: J, now: number): J {
       expires_at: orNull(get(i, "expires_at")),
     };
   });
+  // Emails added that have not signed in yet: a company's owners, before they first do.
+  const added = items(w, "added").map((a) => ({
+    id: strOf(a, "email"),
+    email: strOf(a, "email"),
+    line: t("core-views.admin.added.line", { role: roleLabel(strOf(a, "role")) }),
+    added_at: orNull(get(a, "added_at")),
+  }));
   const c = isObj(get(w, "created_by")) ? w.created_by : null;
+  const whole = (v: J): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
   const seats = get(w, "seats");
+  const stationSeats = get(w, "station_seats");
+  const enterprise = strOf(w, "plan") === "enterprise";
   return {
     id,
     title: strOf(w, "name"),
     creator: c !== null ? { id: strOf(c, "sub"), title: strOf(c, "name") || strOf(c, "email") } : null,
     created_at: orNull(get(w, "created_at")),
-    people: typeof seats === "number" && Number.isInteger(seats) && seats >= 0 ? `${members.length} / ${seats}` : String(members.length),
+    // Those added count as the cloud counts them: each holds a seat.
+    people: whole(seats) ? `${members.length + added.length} / ${seats}` : String(members.length),
+    stationCount: whole(stationSeats) ? `${stations.length} / ${stationSeats}` : String(stations.length),
+    plan: enterprise ? t("core-views.admin.enterprise") : null,
+    // What the limits form starts from: a cloud from before gives neither.
+    limits: whole(seats) && whole(stationSeats) ? { members: seats, stations: stationSeats } : null,
+    // The admin puts a station in only before the company's owners are in (directory.ts adminEnrollment).
+    enrollable: get(w, "enrollable") === true,
     members,
+    added,
     stations,
     invitations,
   };
@@ -629,6 +713,11 @@ export function admin(view: Topic, read: (account: string, list: string) => Valu
       if (w === undefined || "err" in w) return w;
       const users = okOr(read(account, "users"));
       return attempt(() => workspace(id, w.ok, users, now));
+    }
+    case "adminRelays": {
+      const v = read(account, "relays");
+      if (v === undefined || "err" in v) return v;
+      return attempt(() => relays(v.ok, (view.range as string) ?? null, now, offsetMin));
     }
     case "adminOverview": {
       const users = read(account, "users");

@@ -8,8 +8,13 @@ import { t } from "./i18n.ts";
 
 export type Action =
   | "chat.switch" | "chat.new" | "chat.prev" | "chat.next" | "sidebar.toggle" | "nav.back" | "nav.forward" | "settings"
-  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.archive" | "chat.rename"
+  | "composer.focus" | "composer.file" | "chat.stop" | "chat.history" | "chat.jobs" | "chat.latest" | "chat.find" | "chat.archive"
   | "panel.close" | "shortcuts";
+
+// The actions a tip of @stillfail/ui names the keys of (its Tip's `shortcut`): these (ui.tsx says their keys).
+declare module "@stillfail/ui/shortcuts.ts" {
+  interface Shortcuts extends Record<Action, true> {}
+}
 
 /**
  * A binding: modifiers, then a key, joined by "+" ("Mod+Shift+H"). Mod is ⌘ on a Mac and Ctrl elsewhere. The key is
@@ -47,8 +52,8 @@ export const ACTIONS: Record<Action, Spec> = {
   "chat.history": { group: "chat", keys: ["Mod+Shift+H"], typing: "yes" },
   "chat.jobs": { group: "chat", keys: ["Mod+Shift+J"], typing: "yes" },
   "chat.latest": { group: "chat", keys: ["Mod+Down"], typing: "empty" },
+  "chat.find": { group: "chat", keys: ["Mod+F"], typing: "yes" },
   "chat.archive": { group: "chat", keys: ["Mod+Shift+E"], typing: "yes" },
-  "chat.rename": { group: "chat", keys: ["F2"], typing: "yes" },
   "panel.close": { group: "chat", keys: ["Escape"], typing: "yes" },
 };
 
@@ -89,8 +94,8 @@ export function changed(action: Action): boolean {
   return overrides()[action] !== undefined;
 }
 
-/** The keys changed as last read: another object whenever they change. */
-const changedKeys = () => (CHANGEABLE ? prefs().keys : null);
+/** The keys changed as last read, as words: other words only when they change (not on each change of the other prefs). */
+const changedKeys = () => (CHANGEABLE ? JSON.stringify(prefs().keys) : null);
 
 /** Redrawn when any action's keys change: what shows them reads them anew. */
 export function useKeymap(): unknown {
@@ -147,6 +152,21 @@ export function keyLabel(binding: Binding): string {
     return (["Ctrl", "Alt", "Shift", "Mod"] as const).filter((m) => parts.includes(m)).map((m) => marks[m]).join("") + shown;
   }
   return [...parts.map((m) => (m === "Mod" ? "Ctrl" : m)), shown].join("+");
+}
+
+/**
+ * Switching workspace by its place in the sidebar's menu: ⌃1…⌃9 on a Mac, Alt+1…9 elsewhere (Ctrl+digit is the
+ * browser's own tabs). Not changeable: nine actions would be nine rows of one thing.
+ */
+export function workspaceIndexOf(e: KeyboardEvent): number | null {
+  if (e.isComposing || e.shiftKey || e.metaKey || (MAC ? !e.ctrlKey || e.altKey : !e.altKey || e.ctrlKey)) return null;
+  const digit = /^Digit([1-9])$/.exec(e.code);
+  return digit ? Number(digit[1]) - 1 : null;
+}
+
+/** The key that switches to the workspace at this place (from 0) in the menu. */
+export function workspaceKeyLabel(index: number): string {
+  return MAC ? `⌃${index + 1}` : `Alt+${index + 1}`;
 }
 
 /** An action's first key as shown, or null when it has none here. */
@@ -233,6 +253,47 @@ export function useShortcut(action: Action, handler: Handler | null): void {
     const entry: Handler = (e) => latest.current?.(e);
     const stack = handlers.get(action) ?? [];
     handlers.set(action, [...stack, entry]);
-    return () => { handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry)); };
+    tellMenu();
+    return () => {
+      handlers.set(action, (handlers.get(action) ?? []).filter((h) => h !== entry));
+      tellMenu();
+    };
   }, [action, on]);
+}
+
+/** The actions that can be done now (some mounted component does each), in the order ACTIONS lists them. */
+export function availableActions(): Action[] {
+  return (Object.keys(ACTIONS) as Action[]).filter((a) => handlers.get(a)?.length);
+}
+
+/** Does an action as its key would (⌘K's list, the menu bar). */
+export function runAction(action: Action): void {
+  void handlers.get(action)?.at(-1)?.(new KeyboardEvent("keydown"));
+}
+
+// The desktop app's menu bar offers the actions too (apps/desktop/src/main.ts, setMenu): it is told the keys each is
+// bound to and which can be done now, and a menu item chosen does the action as its key would.
+const menu = window.stillfailDesktop?.menu;
+let telling = false;
+
+/** Tells the menu bar the actions as they are now, once for the changes made together. */
+function tellMenu(): void {
+  if (!menu || telling) return;
+  telling = true;
+  setTimeout(() => {
+    telling = false;
+    const actions = Object.keys(ACTIONS) as Action[];
+    menu.state({
+      keys: Object.fromEntries(actions.map((a) => [a, keysOf(a)[0] ?? null])),
+      on: actions.filter((a) => handlers.get(a)?.length),
+    });
+  }, 50);
+}
+
+if (menu) {
+  onPrefs(tellMenu);
+  tellMenu();
+  menu.onAction((action) => {
+    if (action in ACTIONS) runAction(action as Action);
+  });
 }

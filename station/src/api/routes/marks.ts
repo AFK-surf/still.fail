@@ -124,6 +124,17 @@ export const routes = ({ read, store }: Tools): Route[] => {
           }),
       }),
     ),
+    // A chat the viewer kept (PUT …/keep, below) let go.
+    {
+      method: "DELETE",
+      pattern: /^\/*threads\/+([^/]+)\/+keep(?:\/.*)?$/,
+      handle: (r, [rawId]) =>
+        write((s) => {
+          const t = thread(s, segment(rawId!));
+          s.unkeepChat(r.viewer.email, t.id);
+          return ok({ kept: false });
+        }),
+    },
     {
       method: "PUT",
       pattern: /^\/*threads\/+([^/]+)\/+(read|title|keep|dismissed|closed-card)(?:\/.*)?$/,

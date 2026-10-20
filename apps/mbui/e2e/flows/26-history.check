@@ -1,0 +1,2 @@
+check "the station has the agent's post" '[ "$(sql "select count(*) from entries where author_kind=\"agent\" and text=\"文档目录看过了 $TAG\"")" = 1 ]'
+check "the agent's transcript (what the history is read from) has its steps" 'grep -l "看看文档 $TAG" $STATION/data/homes/cc/projects/*/*.jsonl | xargs grep -q "toolu_e2e_1"'

@@ -7,6 +7,7 @@
 import * as decisions from "./decisions.ts";
 import * as format from "./format.ts";
 import { t } from "./i18n.ts";
+import { localId } from "./ids.ts";
 import { encode } from "./ops.ts";
 import * as present from "./present.ts";
 import { arr as arrU, get as getU } from "./util.ts";
@@ -42,7 +43,6 @@ export type NoticesEnv = {
 
 export class Notices {
   readonly #env: NoticesEnv;
-  #next = 1;
 
   constructor(env: NoticesEnv) {
     this.#env = env;
@@ -103,28 +103,29 @@ export class Notices {
       seenHere.set(change.id, next);
       if (first) continue;
       const found = noticed(row, old, me, slackUsers, members);
-      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1]));
+      if (found !== null) added.push(this.#add(its, station, row, found[0], found[1], found[0] === "wait" ? next.decision : next.seq));
     }
     return added;
   }
 
-  #add(into: Workspace, station: string, row: J, kind: string, body: string): J {
+  /// `seq`: the message it is about (the card for `wait`, else the chat's last), which a notification opens the chat at.
+  #add(into: Workspace, station: string, row: J, kind: string, body: string, seq: number | null): J {
     const at = station.indexOf("/");
     const [workspace, id] = at >= 0 ? [station.slice(0, at), station.slice(at + 1)] : ["", station];
     const session = typeof get(row, "id") === "string" ? row.id : "";
-    const n = this.#next++;
     const notice = {
-      id: `n${n}`,
+      id: localId("n"),
       kind,
       station,
       workspace,
       stationId: id,
       session,
       thread: get(row, "thread") ?? null,
+      seq: seq !== null && seq > 0 ? seq : null,
       title: title(row),
       body,
       tag: `${workspace}/${id}/${session}`,
-      url: `/o/${workspace}/${id}/${encode(session)}`,
+      url: `/o/${workspace}/${id}/${encode(session)}${seq !== null && seq > 0 ? `?message=${seq}` : ""}`,
       at: Math.trunc(this.#env.now()),
     };
     const items = this.#heard(into).items;
@@ -162,7 +163,7 @@ function noticed(row: J, thenSeen: Seen | undefined, me: J, slackUsers: string[]
   }
   const last = get(row, "last");
   const hasLast = last !== null && typeof last === "object" && !Array.isArray(last);
-  let text = hasLast ? format.cleanText(typeof last.text === "string" ? last.text : "") : "";
+  let text = hasLast ? format.cleanText(format.plainText(typeof last.text === "string" ? last.text : "")) : "";
   if (text === "" && hasLast) text = t("core-misc.notice.file");
   const byName = typeof get(by, "name") === "string" ? by.name : "";
   if (now.state === "block" && then.state !== "block" && card === null) {

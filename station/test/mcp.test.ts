@@ -38,7 +38,7 @@ test("initialize, list and call run on behalf of the token's session", async () 
 });
 
 test("while the station is in no workspace, outward tools are refused and the rest run", async () => {
-  const names = ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file", "chat_state", "chat_history", "chat_list", "chat_read", "session_history", "job_list", "job_log", "job_stop"];
+  const names = ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file", "peer_forward", "chat_state", "chat_history", "chat_list", "chat_read", "session_history", "job_list", "job_log", "job_stop"];
   let out = true;
   const e = new McpEndpoint(() => "s", tools(names), () => (out ? UNBOUND_REFUSAL : undefined));
   const call = async (name: string) => ((await rpc(e, "t", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } })).body as any).result;
@@ -47,7 +47,7 @@ test("while the station is in no workspace, outward tools are refused and the re
     if (OUTWARD.includes(name)) assert.deepEqual([result.isError, result.content[0].text], [true, UNBOUND_REFUSAL], name);
     else assert.deepEqual(result, { content: [{ type: "text", text: `${name} ran` }] }, name);
   }
-  assert.deepEqual(OUTWARD, ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file"]);
+  assert.deepEqual(OUTWARD, ["chat_post", "slack_api", "job_start", "station_list", "station_task", "station_file", "peer_forward"]);
   // Listed all the same: an agent that read the list before keeps the same tools.
   const list: any = (await rpc(e, "t", { jsonrpc: "2.0", id: 2, method: "tools/list" })).body;
   assert.equal(list.result.tools.length, names.length);

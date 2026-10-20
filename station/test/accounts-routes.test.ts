@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { Accounts, type AccountsDeps } from "../src/accounts/index.ts";
 import { checkConfig } from "../src/accounts/check.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
+import { OUTDATED } from "../src/accounts/models.ts";
 import { routes } from "../src/api/routes/accounts.ts";
 import type { Request } from "../src/api/request.ts";
 import { ConfigFile } from "../src/ops/config.ts";
@@ -16,7 +17,7 @@ import { profileEnv } from "../src/agents/profiles.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
 import { Store } from "../src/store/store.ts";
-import { approval, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeLogin, machine as fakeMachine, script, temp, until, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
 const viewer = (email: string, role: string) => ({ sub: `sub-${email}`, email, name: "", role, workspace: "ws", device: "d" });
@@ -25,7 +26,7 @@ const member = viewer("dev@example.com", "member");
 
 type Rig = Awaited<ReturnType<typeof rig>>;
 
-async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; discover?: AccountsDeps["discover"]; clock?: Clock.Clock } = {}) {
+async function rig(o: { approval?: string; data?: string; store?: Store; quota?: { n: number }; resetQuota?: AccountsDeps["resetQuota"]; machine?: MachineLogins; check?: AccountsDeps["check"]; discover?: AccountsDeps["discover"]; clock?: Clock.Clock; workspaces?: string[] } = {}) {
   const data = o.data ?? temp("routes");
   const path = join(data, "config.json");
   if (!existsSync(path)) {
@@ -50,10 +51,10 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     data,
     store,
     config,
-    loginCommands: { claude: fake, codex: fake },
+    loginCommands: { claude: exe(fake), codex: exe(fake) },
     machine: o.machine ?? null,
     checkOnStart: false,
-    check: async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() }),
+    check: o.check ?? (async () => ({ state: "ok", detail: "fake", models: [], checkedAt: Date.now() })),
     quota: quota
       ? async () => {
           quota.n++;
@@ -63,6 +64,7 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
     resetQuota: o.resetQuota ?? null,
     discover: o.discover ?? (async (profile) => ({ state: "unsupported", detail: "", model: null, provider: null, models: [], fingerprint: fingerprint(profile) })),
     clock: o.clock,
+    workspaces: () => o.workspaces ?? [],
   });
   accounts.start();
   const table = routes({
@@ -86,14 +88,48 @@ async function rig(o: { approval?: string; data?: string; store?: Store; quota?:
 }
 
 describe("the accounts routes", { concurrency: true }, () => {
+  test("a profile serves every workspace the station joined but those withheld from it; a joined workspace's members do all its own do", async () => {
+    const t = await rig({ workspaces: ["W1", "W2", "W3"] });
+    const joined = { ...viewer("guest@example.com", "admin"), workspace: "W2", home: false };
+    // By default, all of them.
+    assert.deepEqual(t.view("cc")?.workspaces, ["W2", "W3"]);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3"] }, member))[0], 403);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["../x"] }))[0], 400);
+    // A joined workspace's admin sets it as the home one's do.
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W3", "W3"] }, joined))[0], 200);
+    assert.deepEqual(t.profile("cc")?.withheld, ["W2"]);
+    // Kept through other edits, theirs too; all given back takes it back.
+    assert.equal((await t.call("PUT", "/profiles/cc", { name: "Claude" }, { ...joined, role: "member" }))[0], 200);
+    assert.deepEqual(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, ["W2"]);
+    assert.deepEqual(t.view("cc")?.workspaces, ["W3"]);
+    // They see every profile, as the home one's do, with what each serves.
+    const seen = t.accounts.profilesView(joined);
+    assert.deepEqual(seen.map((p) => [p.id, p.workspaces]), [["cc", ["W3"]], ["cx", ["W2", "W3"]]]);
+    assert.equal(seen[0].access.key, t.accounts.profilesView(owner)[0].access.key);
+    assert.notEqual(seen[0].home, "");
+    assert.equal((await t.call("POST", "/profiles/cc/check", {}, joined))[0], 200);
+    assert.equal((await t.call("POST", "/profiles/cx/quota", {}, joined))[0], 200);
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: ["W2", "W3"] }))[0], 200);
+    assert.equal(JSON.parse(readFileSync(t.path, "utf8")).profiles[0].withheld, undefined);
+    // null: the home workspace's only.
+    assert.equal((await t.call("PUT", "/profiles/cc", { workspaces: null }))[0], 200);
+    assert.deepEqual(t.profile("cc")?.withheld, ["W2", "W3"]);
+    assert.equal((await t.call("DELETE", "/profiles/cx", undefined, joined))[0], 200);
+    await t.close();
+  });
+
   test("invalid edits are refused and leave the config unchanged", async () => {
     const t = await rig();
     const before = readFileSync(t.path, "utf8");
-    const last = await t.call("DELETE", "/profiles/cc");
-    assert.equal(last[0], 400);
-    assert.ok(last[1].error.includes("最后一个 claude 的 Profile，ember 还要用它运行"), last[1].error);
     assert.deepEqual(await t.call("DELETE", "/profiles/nope"), [400, { error: "unknown profile nope" }]);
     assert.equal(readFileSync(t.path, "utf8"), before);
+    await t.close();
+  });
+
+  test("a profile in use is deleted all the same, even the last of its runtime a connect runs", async () => {
+    const t = await rig();
+    assert.equal((await t.call("DELETE", "/profiles/cc"))[0], 200);
+    assert.equal(t.profile("cc"), undefined);
     await t.close();
   });
 
@@ -127,17 +163,18 @@ describe("the accounts routes", { concurrency: true }, () => {
 
   test("a key on a listed provider makes a profile that runs what its endpoints speak", async () => {
     const t = await rig();
-    // Chat completions only: no runtime, but a profile all the same (it serves the automatic decisions).
+    // Chat completions only: DeepSeek Harness alone runs it.
     const [status, body] = await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq", key: "gsk-123456" } });
     assert.equal(status, 200, JSON.stringify(body));
     assert.equal(body.id, "groq");
     const groq = t.profile("groq")!;
-    assert.deepEqual([(groq.access as any).kind, (groq.access as any).provider, groq.runtimes, groq.name], ["api-provider", "groq", [], "Groq"]);
+    assert.deepEqual([(groq.access as any).kind, (groq.access as any).provider, groq.runtimes, groq.name], ["api-provider", "groq", ["dsh"], "Groq"]);
+    assert.equal(profileEnv(groq, "dsh").STILLFAIL_DSH_KEY, "gsk-123456");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "jev", key: "jev-key-1" } }))[0], 200);
     assert.deepEqual(t.profile("jev")!.runtimes, []);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "opencode", key: "oc-key-1" } }))[0], 200);
     const zen = t.profile("opencode")!;
-    assert.deepEqual(zen.runtimes, ["claude", "codex"]);
+    assert.deepEqual(zen.runtimes, ["claude", "codex", "dsh"]);
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_BASE_URL, "https://opencode.ai/zen");
     assert.equal(profileEnv(zen, "claude").ANTHROPIC_CUSTOM_HEADERS, "x-opencode-session: {route}");
     assert.equal(profileEnv(zen, "codex").EMBER_API_KEY, "oc-key-1");
@@ -148,18 +185,18 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "azure-openai", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "custom", endpoint: "http://127.0.0.1:4000/v1", protocol: "anthropic" } }))[0], 200);
     const custom = t.profile("custom")!;
-    assert.deepEqual([(custom.access as any).key, (custom.access as any).endpoint, custom.runtimes], [undefined, "http://127.0.0.1:4000/v1", ["claude"]]);
+    assert.deepEqual([(custom.access as any).key, (custom.access as any).endpoint, custom.runtimes], [undefined, "http://127.0.0.1:4000/v1", ["claude", "dsh"]]);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "groq" } }))[0], 400, "a key is needed");
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "nope", key: "k" } }))[0], 400);
     assert.equal((await t.call("POST", "/profiles", { access: { kind: "api-provider", provider: "anthropic", key: "k" } }))[0], 400, "Anthropic is its own kind");
-    assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "subscription" } }), [400, { error: "订阅账号用登录来添加" }]);
+    assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "subscription" } }), [400, { error: "订阅账号需通过登录添加" }]);
     assert.deepEqual(await t.call("POST", "/profiles", { access: { kind: "nope" } }), [400, { error: 'unknown access "nope"' }]);
     // What an older core is shown: `env`, with the provider beside it; the list leaves out the two kinds from before.
     const view = t.view("groq")!;
     assert.deepEqual([view.access.kind, view.access.provider, view.access.key.includes("123456")], ["env", "groq", false]);
     const listed = t.accounts.apiProviders().map((p) => p.id);
     assert.ok(listed.includes("deepseek") && listed.includes("opencode") && !listed.includes("anthropic") && !listed.includes("opencode-go"));
-    // Its address can be changed, its key kept; it can be deleted although it runs no runtime.
+    // Its address can be changed, its key kept; it can be deleted.
     assert.equal((await t.call("PUT", "/profiles/custom", { access: { kind: "api-provider", endpoint: "http://127.0.0.1:5000/v1" } }))[0], 200);
     assert.equal((t.profile("custom")!.access as any).endpoint, "http://127.0.0.1:5000/v1");
     assert.equal((await t.call("DELETE", "/profiles/groq"))[0], 200);
@@ -249,6 +286,67 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("a profile just signed in takes the models the others of its runtime have, none outdated, unless some were chosen first", async () => {
+    const data = temp("adopt");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({
+        profiles: [
+          { id: "cc", runtime: "claude", home: "homes/cc", models: ["claude-opus-5-5"] },
+          // gpt-6-sol checked again by hand after it was unchecked: outdated all the same, not passed on.
+          { id: "cx", runtime: "codex", home: "homes/cx", models: ["gpt-6-astra", "gpt-6-sol"] },
+          { id: "routed", runtime: "codex", home: "homes/routed", models: ["openai/gpt-6.1-sol"] },
+        ],
+        outdatedUnchecked: [...OUTDATED.keys()],
+      }),
+    );
+    let gate: Promise<void> | null = null;
+    const offered = ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"];
+    const t = await rig({
+      data,
+      check: async (request) => {
+        if (gate) await gate;
+        return { state: "ok", detail: "fake", models: request.kind === "subscription" ? offered : [], checkedAt: Date.now() };
+      },
+    });
+    const signedIn = async () => {
+      const [status, body] = await t.call("POST", "/logins", { runtime: "codex" });
+      assert.equal(status, 200, JSON.stringify(body));
+      return upon((wake) => t.accounts.onChange(wake), () => t.accounts.loginsView().find((l) => l.id === body.id)?.created as string | undefined, `the sign-in ${body.id} made a profile`);
+    };
+    const first = await signedIn();
+    const models = await upon((wake) => t.config.listen(wake), () => (t.profile(first)?.models.length ? t.profile(first)!.models : undefined), `${first} took models`);
+    assert.deepEqual(models, ["gpt-6-astra", "gpt-6.1-sol"]);
+    // Models chosen on its page before its check answered stay as chosen.
+    let open = () => {};
+    gate = new Promise((resolve) => (open = resolve));
+    const second = await signedIn();
+    assert.equal((await t.call("PUT", `/profiles/${second}`, { models: ["gpt-6-luna"] }))[0], 200);
+    open();
+    await settle();
+    assert.deepEqual(t.profile(second)!.models, ["gpt-6-luna"]);
+    await t.close();
+  });
+
+  test("known outdated models are unchecked once when the station starts; one checked again by hand stays", async () => {
+    const data = temp("outdated");
+    writeFileSync(
+      join(data, "config.json"),
+      JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", access: { kind: "subscription" }, home: "homes/cc", models: ["claude-opus-4-6", "claude-sonnet-5-5"] }] }),
+    );
+    const db = join(data, "stillfail.db");
+    const store = Store.open(db, null);
+    store.setProfileCheck("cc", { state: "ok", detail: "", models: ["claude-opus-4-6", "claude-opus-5-5", "claude-sonnet-5-5"], checkedAt: 1 });
+    const first = await rig({ data, store });
+    assert.deepEqual(first.profile("cc")!.models, ["claude-sonnet-5-5", "claude-opus-5-5"]);
+    assert.deepEqual(JSON.parse(readFileSync(first.path, "utf8")).outdatedUnchecked, [...OUTDATED.keys()].sort());
+    assert.equal((await first.call("PUT", "/profiles/cc", { models: ["claude-opus-4-6", "claude-opus-5-5"] }))[0], 200);
+    await first.close();
+    const again = await rig({ data, store: Store.open(db, null) });
+    assert.deepEqual(again.profile("cc")!.models, ["claude-opus-4-6", "claude-opus-5-5"]);
+    await again.close();
+  });
+
   test("profile checks and quotas are kept so a restart shows them at once", async () => {
     const data = temp("restart");
     const db = join(data, "stillfail.db");
@@ -278,13 +376,15 @@ describe("the accounts routes", { concurrency: true }, () => {
     assert.equal(made[1].id, "machine-claude");
     const profile = () => s.profile("machine-claude")!;
     assert.equal(profile().machine, true);
-    assert.equal(profile().name, "b@x.com（本机）");
+    assert.equal(profile().name, "b@x.com");
     assert.equal((profile().access as any).kind, "subscription");
     assert.equal((await s.call("POST", "/profiles/machine", { runtime: "claude" }))[0], 409);
     // Only its models are chosen here.
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { name: "renamed", models: ["claude-x"], access: { kind: "opencode-go", key: "k" } }))[0], 200);
-    assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com（本机）", ["claude-x"], "subscription", true]);
+    assert.deepEqual([profile().name, profile().models, (profile().access as any).kind, profile().machine], ["b@x.com", ["claude-x"], "subscription", true]);
     assert.equal(s.view("machine-claude")!.machine, true);
+    // Its account, as the same one signed in on another station is: the workspace's list makes them one row.
+    assert.equal(s.view("machine-claude")!.email, "b@x.com");
     // And how it runs: on by default, turned off and on here; other edits keep it.
     assert.equal(profile().backgroundOnMessage, true);
     assert.equal((await s.call("PUT", "/profiles/machine-claude", { backgroundOnMessage: false }))[0], 200);
@@ -383,6 +483,16 @@ describe("the accounts routes", { concurrency: true }, () => {
     await t.close();
   });
 
+  test("automatic archiving is for a workspace manager to change", async () => {
+    const t = await rig();
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: 2, slackDays: 3, reviewed: true }, member), [403, { error: "只有 workspace 管理员能修改自动归档" }]);
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: -1, slackDays: 3, reviewed: true }), [400, { error: "自动归档的设置不正确：天数要在 0 到 365 之间" }]);
+    assert.deepEqual(await t.call("PUT", "/archiving", { days: 2, slackDays: 3 }), [400, { error: "自动归档的设置不正确：天数要在 0 到 365 之间" }]);
+    assert.equal((await t.call("PUT", "/archiving", { days: 2, slackDays: 5, reviewed: true }))[0], 200);
+    assert.deepEqual([t.config.raw().autoArchiveDays, t.config.raw().slackArchiveDays, t.config.raw().autoArchiveReviewed], [2, 5, true]);
+    await t.close();
+  });
+
   test("the archive policy page: its options with the chats last put there, who changed it, and edits by managers", async () => {
     const store = Store.open(":memory:", null);
     store.insertSession({ key: "titled", connect: "ds", runtime: "claude", profile: "cc", workspace: "/w/a", token: "t", createdAt: 1, lastActiveAt: 1 });
@@ -400,7 +510,7 @@ describe("the accounts routes", { concurrency: true }, () => {
     const t = await rig({ store });
     const view = t.accounts.automaticDecisionsView(owner);
     // Pages from before the policy list the checks one by one.
-    assert.deepEqual(view.recent.map((r: any) => [r.title, r.label]), [["old", "已做完 · 推荐归档"], ["loose", "没检查成"], ["修登录页", "已落地 · 推荐归档"], ["修登录页", "等人看结果 · 不推荐"]]);
+    assert.deepEqual(view.recent.map((r: any) => [r.title, r.label]), [["old", "已做完 · 推荐归档"], ["loose", "检查失败"], ["修登录页", "已落地 · 推荐归档"], ["修登录页", "等人看结果 · 不推荐"]]);
     const policy = view.policy;
     assert.equal(policy.text, DEFAULT_POLICY.policy);
     assert.equal(policy.edited, false);

@@ -7,10 +7,16 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable } from "./pool.ts";
+import { availableEfforts, COMPACTED_FROM, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
+/// Where models are compacted is learnt from the calls of this long, and learnt again this often.
+const COMPACTIONS_OVER_MS = 7 * 24 * 60 * 60 * 1000;
+const COMPACTIONS_EVERY_MS = 60 * 60 * 1000;
+/// How many of a session's last calls say whether it compacted lately.
+const CALLS_LOOKED_AT = 200;
 
 /// How a session runs from its next turn on. A field left out: unchanged; null: back to the default.
 export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null };
@@ -25,6 +31,8 @@ export type AccountsDeps = {
   running(): string[];
   /// Its time.
   clock: Clock.Clock;
+  /// Whether session `key` may run on a profile: one allowed in its workspace (docs/multi-workspace.md); absent: any.
+  allows?(key: string, profile: Profile): boolean;
 };
 
 export class Accounts {
@@ -34,6 +42,8 @@ export class Accounts {
   /// Profiles a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
   /// SPENT_FOR_MS when it is not.
   private spent = new Map<string, number>();
+  /// Where each model's context is compacted on this station, and when that was learnt.
+  private compactions: [number, Map<string, number>] | null = null;
 
   constructor(deps: AccountsDeps) {
     this.deps = deps;
@@ -64,27 +74,53 @@ export class Accounts {
     return profile;
   }
 
-  /// The profile a session's runtime starts on: its own while usable (the account's cache is warm there), else the one
-  /// the pool picks among those of its runtime (transcripts are shared, so it resumes with all it had there).
+  /// Whether session `key` may run on `profile` (its workspace's, docs/multi-workspace.md).
+  allows(key: string, profile: Profile): boolean {
+    return this.deps.allows?.(key, profile) ?? true;
+  }
+
+  /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
+  /// on afresh, afresh.ts), else the one the pool picks among those of its runtime allowed in its workspace. One whose
+  /// short window is nearly full it leaves for one that is not, when that loses little (pool.ts `cheapToLeave`): its
+  /// context was just compacted, or is about to be.
   runOn(key: string): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const runtime = runtimeNamed(row.runtime);
     if (!runtime) throw new Error(`session ${key} runs an unknown runtime ${row.runtime}`);
-    const candidates = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime));
+    const all = this.deps.config().profiles.filter((p) => p.runtimes.includes(runtime));
+    const candidates = all.filter((p) => this.allows(key, p));
+    // Profiles there are, none of them for its workspace: said so, for people to allow one.
+    if (candidates.length === 0 && all.length > 0) throw new Error(tr(stationLang(), "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
     const withSpelling = (p: Profile): RunOn => ({ ...p, spelling: (model: string) => spelling(p, model) });
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
     const current = candidates.find((p) => p.id === row.profile);
-    if (current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)))) return withSpelling(current);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
+    const keeps = current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)));
+    if (current && keeps) {
+      if (row.profilePinned || !crowded(current)) return withSpelling(current);
+      // Nearly full: it moves only to one that is not (the pool puts those last), and only when that loses little.
+      const room = candidates.some((p) => p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && !crowded(p));
+      if (!room || !this.cheapToLeave(key)) return withSpelling(current);
+    }
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
-    const next = this.pick(candidates, row.model, false);
+    const next = this.pick(keeps ? candidates.filter((p) => p.id !== current!.id) : candidates, row.model, false);
     if (next.id !== row.profile) {
       store.setSessionProfile(key, next.id, false);
       log.info("hub", "session taken on by another profile", { session: key, from: row.profile, to: next.id });
     }
     return withSpelling(next);
+  }
+
+  /// Whether session `key` loses little by going on afresh on another account (pool.ts `cheapToLeave`).
+  private cheapToLeave(key: string): boolean {
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const { store } = this.deps;
+    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS, COMPACTED_FROM)];
+    return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
 
   /// A turn of the session ran into its profile's allowance: that profile is passed over for now, and a session left to
@@ -101,7 +137,7 @@ export class Accounts {
     const config = this.deps.config();
     // As the pool: those with its model enabled, or, when none has (a connect's binding from before models were
     // enabled), all of its runtime's.
-    const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
+    const all = config.profiles.filter((p) => p.runtimes.includes(runtime) && this.allows(key, p));
     const strict = all.some((p) => serves(p, row.model));
     const candidates = all.filter((p) => p.id !== row.profile && (!strict || serves(p, row.model)) && usable(this.healthOf(p.id)));
     if (candidates.length === 0) return null;
@@ -112,12 +148,23 @@ export class Accounts {
     return [from, next.name];
   }
 
+  /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
+  /// used-up windows, or, none known, when it stops being passed over.
+  refillsAt(key: string): number {
+    const row = this.deps.store.getSession(key);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    if (!row) return now + SPENT_FOR_MS;
+    const full = windowsOf(this.health(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
+    return (this.spent.get(row.profile) ?? now) + SPENT_FOR_MS;
+  }
+
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic
-  /// selection must work on every one, quota failover included.
-  modelEfforts(runtime: "claude" | "codex", model: string | null, pinned: string | null): string[] {
+  /// selection must work on every one, quota failover included. `allowed`: the profiles of the workspace asked for.
+  modelEfforts(runtime: RuntimeKind, model: string | null, pinned: string | null, allowed: (p: Profile) => boolean = () => true): string[] {
     const profiles = this.deps
       .config()
-      .profiles.filter((p) => p.runtimes.includes(runtime))
+      .profiles.filter((p) => p.runtimes.includes(runtime) && allowed(p))
       .filter((p) => pinned === null || p.id === pinned)
       .filter((p) => model === null || runs(p, model));
     return commonEfforts(
@@ -143,10 +190,12 @@ export class Accounts {
     const newModel = nonEmpty(change.model);
     const newEffort = nonEmpty(change.effort);
     if (change.fast !== undefined && change.fast !== null && runtime !== "codex") throw new Error(t("station.session.fastOpenAiOnly"));
+    const allowed = (p: Profile) => this.allows(key, p);
     if (typeof wantedProfile === "string") {
       const next = config.profiles.find((p) => p.id === wantedProfile);
       if (!next) throw new Error(`unknown profile ${wantedProfile}`);
       if (!next.runtimes.includes(runtime)) throw new Error(t("station.profile.cannotRun", { profile: next.name, runtime: name }));
+      if (!allowed(next)) throw new Error(t("station.profile.notHere", { profile: next.name }));
       const model = newModel !== undefined ? newModel : row.model;
       if (model !== null && !runs(next, model)) throw new Error(t("station.session.modelOff", { profile: next.name, model }));
     }
@@ -156,13 +205,13 @@ export class Accounts {
     if (!remodel) model = row.model;
     const effort = newEffort !== undefined ? newEffort : remodel ? null : row.effort;
     // What changes is checked; what stays is as it was.
-    if (typeof newModel === "string" && model !== null && !config.profiles.some((p) => p.runtimes.includes(runtime) && runs(p, model!))) {
+    if (typeof newModel === "string" && model !== null && !config.profiles.some((p) => p.runtimes.includes(runtime) && allowed(p) && runs(p, model!))) {
       throw new Error(t("station.session.noProfileForModel", { model, runtime: name }));
     }
     if (effort !== null && (newEffort !== undefined || wantedProfile !== undefined || remodel)) {
       const pinned = wantedProfile !== undefined ? wantedProfile : !remodel && row.profilePinned ? row.profile : null;
-      const allowed = this.modelEfforts(runtime, model, pinned);
-      if (!allowed.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: allowed.join(t("station.list.separator")) }));
+      const efforts = this.modelEfforts(runtime, model, pinned, allowed);
+      if (!efforts.includes(effort)) throw new Error(t("station.profile.efforts", { runtime: name, efforts: efforts.join(t("station.list.separator")) }));
     }
     const profile = wantedProfile !== undefined ? wantedProfile : remodel ? null : undefined;
     return { row, model, effort, profile };

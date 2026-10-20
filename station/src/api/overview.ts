@@ -1,25 +1,36 @@
 // GET /overview (admin/views.rs `overview`): the station as its settings pages show it — still.fail cloud, connects,
 // profiles, the agents' processes, counts, the disk, logins, updates — as the viewer sees it. Answered on the main
 // thread from what is in memory and the config; told again on /events when it changes (`overview`).
-import { execFile } from "node:child_process";
 import { statfsSync } from "node:fs";
-import { promisify } from "node:util";
+import { homedir } from "node:os";
 import type { Accounts } from "../accounts/index.ts";
 import { mask } from "../accounts/index.ts";
 import type { Cloud } from "../cloud/state.ts";
-import type { Viewer } from "../mesh/credential.ts";
+import { type Viewer, managesStation, readOnly } from "../mesh/credential.ts";
+import { platform } from "../platform/index.ts";
 import type { Lang } from "../ops/i18n.ts";
 import type { Hub } from "../sessions/hub.ts";
 import type { Store } from "../store/store.ts";
 import type { Updates } from "../updates/updates.ts";
+import { type RootView, rootView, rootsOf } from "../drive/drive.ts";
+import { sees } from "../store/rows.ts";
+import { titleOf } from "../read/views.ts";
+import { policyView } from "../sessions/archive-policy.ts";
+import { agentEnvView } from "./routes/agent-env.ts";
 
-const run = promisify(execFile);
 
 /// What the Slack side adds (src/slack): a connect's connection, the viewer's Slack workspaces and apps.
 export type SlackView = {
   connection(connect: any): unknown;
   teams(viewer: Viewer): unknown[];
   apps(viewer: Viewer): unknown[];
+};
+
+/// How a connect of another kind than Slack shows (src/feishu): its connection, and what it is known by (`name`,
+/// `team`, `botImage`, and its kind's own fields, its secrets masked).
+export type ConnectView = {
+  connection(connect: any): unknown;
+  shown(connect: any): Record<string, unknown>;
 };
 
 export type OverviewDeps = {
@@ -30,36 +41,39 @@ export type OverviewDeps = {
   accounts?: Accounts;
   updates?: Updates;
   slack?: SlackView;
+  /// The other kinds' connects, by kind.
+  connectViews?: Map<string, ConnectView>;
+  /// What macOS lets still.fail Helper do here, as the viewer is told it (routes/permissions.ts); none where there is no
+  /// helper (not a Mac), or before the first look.
+  permissions?: (viewer: Viewer) => unknown;
+  /// A pinned root as the drive shows it (drive.ts `rootViewThrough`: one in a folder macOS protects by what still.fail
+  /// Helper's grant is known to be, never listed by the station); default `rootView`.
+  rootView?: (path: string) => RootView;
+  /// The modules beside the station (modules/modules.ts), each named and whether it runs now.
+  modules?: () => { id: string; running: boolean }[];
 };
 
-/// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status).
-export function meshStatus(cloud: Cloud): Record<string, unknown> {
+/// This station's link to still.fail cloud, as the pages show it (server.rs MeshFile::status): in the viewer's workspace
+/// (docs/multi-workspace.md), its home one for no one in particular.
+export function meshStatus(cloud: Cloud, viewer?: Viewer): Record<string, unknown> {
   const s = cloud.state;
   if (s === null) return { state: "off", origin: null, station: null, workspace: null, workspaceId: null, name: null };
+  const m = viewer === undefined ? null : cloud.membership(viewer.workspace);
   const v: Record<string, unknown> = {
     state: s.removed_at !== undefined ? "removed" : "running",
     origin: s.origin ?? null,
     station: s.station ?? null,
-    workspace: s.workspace_name ?? null,
-    workspaceId: s.workspace ?? null,
-    name: s.name ?? null,
+    workspace: m?.workspace_name ?? s.workspace_name ?? null,
+    workspaceId: m?.workspace ?? s.workspace ?? null,
+    name: m?.name ?? s.name ?? null,
   };
   if (s.removed_at !== undefined) v.removedAt = s.removed_at;
   return v;
 }
 
-/// Memory of each recorded runtime process group, from ps (kB).
+/// Memory of each recorded runtime process group (kB).
 async function processMemory(pgids: number[]): Promise<Map<number, number>> {
-  const rss = new Map<number, number>();
-  if (pgids.length === 0) return rss;
-  try {
-    const { stdout } = await run("ps", ["-axo", "pgid=,rss="]);
-    for (const line of stdout.split("\n")) {
-      const [pgid, kb] = line.trim().split(/\s+/).map(Number);
-      if (pgid !== undefined && kb !== undefined && pgids.includes(pgid)) rss.set(pgid, (rss.get(pgid) ?? 0) + kb);
-    }
-  } catch {}
-  return rss;
+  return pgids.length === 0 ? new Map() : platform.groupMemory(pgids);
 }
 
 /// The data disk's room: what clients warn of when it runs low.
@@ -74,16 +88,17 @@ function diskRoom(path: string): unknown {
 
 export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Promise<unknown> {
   const raw = d.config() ?? {};
-  const sessions = d.store.listSessions();
+  // What is of the viewer's workspace (docs/multi-workspace.md): its chats, and the connects added in it.
+  const sessions = d.store.listSessions().filter((s) => sees(viewer, s.ws));
   // The agents' runtime processes; background jobs' groups are recorded too (to be reaped), but they are jobs.
   const processes = d.store.listProcesses().filter((p) => p.runtime !== "job");
   const memory = await processMemory(processes.map((p) => p.pgid));
-  const connects = (Array.isArray(raw.connects) ? raw.connects : []).map((c: any) => {
+  const connects = (Array.isArray(raw.connects) ? raw.connects : []).filter((c: any) => sees(viewer, typeof c?.workspace === "string" && c.workspace !== "" ? c.workspace : null)).map((c: any) => {
     const mode = c.mode ?? "multi-session";
     const slack = c.slack ?? {};
     const runtime = c.bind?.runtime;
     const nonEmpty = (v: unknown) => (typeof v === "string" && v !== "" ? v : null);
-    return {
+    const shown = {
       // What it is known by: its bot's name in its Slack workspace, and that workspace.
       id: c.id,
       name: nonEmpty(slack.botName) ?? c.id,
@@ -100,14 +115,19 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
       sessions: sessions.filter((s) => s.connect === c.id).length,
       session: mode === "single-session" ? d.store.binding(c.id) : null,
     };
+    // Another kind's: its own connection and names (a station without that part says it is starting).
+    const other = typeof c.kind === "string" && c.kind !== "slack" ? d.connectViews?.get(c.kind) : undefined;
+    if (other !== undefined) return { ...shown, ...other.shown(c), connection: other.connection(c) ?? (c.enabled === false ? { state: "disabled" } : { state: "starting" }) };
+    return shown;
   });
   const states = sessions.map((s) => d.hub.processState(s.key));
   return {
-    automaticDecisions: d.accounts?.automaticDecisionsView(viewer) ?? null,
+    automaticDecisions: d.accounts ? decisionsView(d, viewer) : null,
+    archiving: archivingView(raw, viewer),
     viewer: { via: "mesh", ...viewer },
-    mesh: meshStatus(d.cloud),
+    mesh: meshStatus(d.cloud, viewer),
     connects,
-    profiles: d.accounts?.profilesView() ?? [],
+    profiles: d.accounts?.profilesView(viewer) ?? [],
     footprint: null,
     processes: processes.map((p) => {
       const kb = memory.get(p.pgid);
@@ -118,12 +138,67 @@ export async function overview(d: OverviewDeps, viewer: Viewer, lang: Lang): Pro
     // The Slack workspaces the station can make and edit apps in itself (an app configuration token each).
     slackTeams: d.slack?.teams(viewer) ?? [],
     disk: diskRoom(d.hub.config().dataDir),
-    logins: d.accounts?.loginsView() ?? [],
+    logins: d.accounts?.loginsView(viewer) ?? [],
     apiProviders: d.accounts?.apiProviders() ?? [],
     machineLogins: d.accounts?.machineLogins() ?? [],
+    // An OpenCode Go profile can be signed in to the OpenCode Console (accounts/console.ts) rather than given a key.
+    consoleSignIn: d.accounts !== undefined,
     // It shares profiles and skills with its workspace's other stations (share/index.ts).
     sharing: d.accounts !== undefined,
     updates: d.updates?.get(lang) ?? [],
     slackApps: d.slack?.apps(viewer) ?? [],
+    // The folders pinned in its drive (drive/drive.ts), each with whether it can be browsed now; a member who may write
+    // browses every folder from the home (`anywhere`).
+    // Those of a joined workspace browse only its pinned folders, never the whole machine.
+    // The variables everything it starts for its agents runs with (ops/agent-env.ts): a proxy, mostly.
+    agentEnv: agentEnvView(raw),
+    drive: { roots: rootsOf(raw, viewer.home === false ? viewer.workspace : null).map((p) => (d.rootView ?? rootView)(p)), ...(readOnly(viewer) ? {} : { anywhere: true, home: homedir() }) },
+    // What its search finds of the machine (docs/search.md): its files through Spotlight (macOS) or walked as asked, and
+    // whether the person's own mail, messages and the like too.
+    search: { files: platform.hasSpotlight ? "spotlight" : "walk", personal: raw?.search?.personal === true },
+    // macOS's grants to still.fail Helper (a Mac's station only; a station from before them says none: not shown).
+    ...withPermissions(d, viewer),
+    // The modules beside it (docs/station-modules.md), for clients to show theirs: said only where there is one.
+    ...withModules(d),
   };
+}
+
+function withModules(d: OverviewDeps): { modules?: { id: string; running: boolean }[] } {
+  const modules = d.modules?.() ?? [];
+  return modules.length === 0 ? {} : { modules };
+}
+
+/// How its chats go to the archive on their own (sessions/lifecycle.ts autoArchive): after so many days idle (0: never),
+/// Slack's sessions stopped at a block after theirs, and whether only those the archive review recommended. Everyone
+/// sees it (why their chats went); its managers change it (PUT /archiving).
+function archivingView(raw: any, viewer: Viewer) {
+  const days = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : fallback);
+  return { days: days(raw?.autoArchiveDays, 1), slackDays: days(raw?.slackArchiveDays, 3), reviewed: raw?.autoArchiveReviewed === true, canEdit: managesStation(viewer) };
+}
+
+function withPermissions(d: OverviewDeps, viewer: Viewer): { permissions?: unknown } {
+  const permissions = d.permissions?.(viewer);
+  return permissions === null || permissions === undefined ? {} : { permissions };
+}
+
+/// The automatic decisions as the viewer sees them: the checks of their workspace's chats only, and the archive policy of
+/// their workspace (docs/multi-workspace.md: one each), which its owners and admins edit (`canEditPolicy`). The rest
+/// (the rule, its model) is the station's, its workspaces' managers' alike.
+function decisionsView(d: OverviewDeps, viewer: Viewer): unknown {
+  const view = d.accounts!.automaticDecisionsView(viewer);
+  const mine = (session: unknown) => typeof session === "string" && sees(viewer, d.store.getSession(session)?.ws ?? null);
+  const manages = viewer.role === "owner" || viewer.role === "admin";
+  if (Array.isArray(view?.recent)) view.recent = view.recent.filter((row: any) => mine(row?.session));
+  if (view?.policy !== undefined || (manages && viewer.home === false)) {
+    view.policy = policyView(d.store, viewer.home === false ? viewer.workspace : null, mine, (session) => chatTitleOf(d.store, session));
+    view.canEditPolicy = manages;
+  }
+  return view;
+}
+
+/// What a session's chat is called in the chat list; its key only where it has no chat.
+function chatTitleOf(store: Store, session: string): string {
+  const summary = store.listThreads("", session, null)[0];
+  if (summary) return titleOf(summary.thread, summary.firstText, null);
+  return store.getSession(session)?.title ?? session;
 }

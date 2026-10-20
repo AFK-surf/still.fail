@@ -8,13 +8,84 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "resume", "invite"];
-const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "resume"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy"];
+const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "resume", "lockNotice", "rails", "barsBy"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
 const PREFS = { topic: "prefs" };
 
 type Map_ = Record<string, unknown>;
+
+/// How the drive's reader lays text out on this device (docs/drive.md): each number within its bounds, its default
+/// where none is kept; the papers and faces there are.
+const READER_NUMBERS = { size: [12, 32, 18], line: [1.2, 2.4, 1.7], margin: [8, 44, 22] } as const;
+const PAPERS = ["follow", "white", "green", "grey", "night"];
+const FACES = ["serif", "sans"];
+
+export function readerOf(v: unknown): Map_ {
+  const r = isObject(v) ? v : {};
+  const num = (k: keyof typeof READER_NUMBERS, step: number) => {
+    const [min, max, fallback] = READER_NUMBERS[k];
+    const n = r[k];
+    return typeof n === "number" && Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n / step) * step)) : fallback;
+  };
+  return {
+    size: num("size", 1),
+    line: Math.round(num("line", 0.1) * 10) / 10,
+    margin: num("margin", 1),
+    face: FACES.includes(r.face as string) ? r.face : "sans",
+    indent: typeof r.indent === "boolean" ? r.indent : true,
+    paper: PAPERS.includes(r.paper as string) ? r.paper : "follow",
+  };
+}
+
+export type BadgeKinds = { on: boolean; wait: boolean; failed: boolean; done: boolean; message: boolean };
+
+/// What the badge counts, kind by kind: as kept (`badgeKinds`, what it does not say as before), or as the older
+/// `badge` says (decisions: the cards; attention, the default: and what went wrong; all: and the unread).
+export function badgeKindsOf(prefs: unknown): BadgeKinds {
+  const by = isObject(prefs) ? prefs.badge : null;
+  const base = { on: true, wait: true, failed: by !== "decisions", done: by === "all", message: by === "all" };
+  const k = isObject(prefs) && isObject(prefs.badgeKinds) ? prefs.badgeKinds : {};
+  const flag = (name: keyof BadgeKinds) => (typeof k[name] === "boolean" ? k[name] as boolean : base[name]);
+  return { on: flag("on"), wait: flag("wait"), failed: flag("failed"), done: flag("done"), message: flag("message") };
+}
+
+export type ArchiveHint = "off" | "done" | "reviewed";
+
+/// When a done chat is offered to archive (`archiveHint`, the appearance page): off, never; reviewed, only once its
+/// station's archive review recommended it (never where the review is off); done, the default (none kept), whenever
+/// nothing is left in it, going by the review where its station has one on.
+export function archiveHintOf(prefs: unknown): ArchiveHint {
+  const v = isObject(prefs) ? prefs.archiveHint : null;
+  return v === "off" || v === "reviewed" ? v : "done";
+}
+
+/// The places a phone's bottom bar can hold (web/src/mobile/Bar.tsx, the Android app's ui/Bar.kt), in no order.
+export const BAR_PLACES = ["chats", "decisions", "files", "stations", "profiles", "connects", "usage", "archive"];
+/// At most this many places in one bar.
+export const BAR_SIZE = 4;
+const BARS_DEFAULT = { sets: [["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], current: 0 };
+
+/// A phone's bottom bars as kept, whole: each bar one to four known places, none twice in a bar; at least one bar; the
+/// one in view one of them. What is not that (nothing kept, a place this build does not know) reads as the default or
+/// is left out.
+export function barsOf(v: unknown): { sets: string[][]; current: number } {
+  if (!isObject(v) || !Array.isArray(v.sets)) return { sets: BARS_DEFAULT.sets.map((s) => [...s]), current: BARS_DEFAULT.current };
+  const sets = v.sets
+    .map((set) => (Array.isArray(set) ? [...new Set(set.filter((k): k is string => typeof k === "string" && BAR_PLACES.includes(k)))].slice(0, BAR_SIZE) : []))
+    .filter((set) => set.length > 0);
+  if (!sets.length) return { sets: BARS_DEFAULT.sets.map((s) => [...s]), current: BARS_DEFAULT.current };
+  const n = typeof v.current === "number" && Number.isFinite(v.current) ? Math.round(v.current) : 0;
+  return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
+}
+
+/// The prefs as they go out: the reader's settings whole, and the bottom bars (each workspace's too).
+export function shown(v: unknown): unknown {
+  if (!isObject(v)) return v;
+  const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by };
+}
 
 /// What is kept, as kept (no defaults filled in).
 function kept(data: Data): Map_ {
@@ -31,7 +102,16 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
   for (const field of Object.keys(patch).sort()) {
     const value = patch[field];
     if (!FIELDS.includes(field)) throw CoreError.invalid(t("core-misc.params.unknown_field", { field }));
-    if (isObject(value) && MAPS.includes(field)) {
+    if (field === "bars" && value !== null) {
+      // Kept as it reads: what this build does not know is not kept.
+      prefs.bars = barsOf(value);
+    } else if (field === "reader" && isObject(value)) {
+      // Only what is said changes: one setting of the 排版 sheet at a time.
+      prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
+    } else if (field === "badgeKinds" && isObject(value)) {
+      // Kept whole: what is not said stays as the badge counts now (as the older `badge` says, first).
+      prefs.badgeKinds = badgeKindsOf({ ...prefs, badgeKinds: { ...(isObject(prefs.badgeKinds) ? prefs.badgeKinds : {}), ...value } });
+    } else if (isObject(value) && MAPS.includes(field)) {
       if (!(field in prefs)) prefs[field] = {};
       const map = prefs[field];
       if (!isObject(map)) continue;
@@ -42,6 +122,8 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
           delete map[key];
           continue;
         }
+        // A workspace's bottom bars, kept as they read (as `bars`).
+        if (field === "barsBy") entry = barsOf(entry);
         if (field === "chatTabs" && isObject(entry)) {
           const last = Object.values(map).reduce<number>((m, v) => (isObject(v) && typeof v.at === "number" ? Math.max(m, v.at) : m), 0);
           entry = { ...entry, at: Math.max(now, last + 1) };
@@ -64,6 +146,12 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     byUse.sort((a, b) => a[0] - b[0]);
     for (const [, key] of byUse.slice(0, byUse.length - TABS_KEPT)) delete tabs[key];
   }
+  if ("badge" in prefs && !["decisions", "attention", "all"].includes(prefs.badge as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badge" }));
+  if ("motion" in prefs && prefs.motion !== "reduce" && prefs.motion !== "full") throw CoreError.invalid(t("core-misc.params.invalid", { error: "motion" }));
+  if ("dropAs" in prefs && prefs.dropAs !== "file" && prefs.dropAs !== "path") throw CoreError.invalid(t("core-misc.params.invalid", { error: "dropAs" }));
+  if ("archiveHint" in prefs && !["off", "done", "reviewed"].includes(prefs.archiveHint as string)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "archiveHint" }));
+  if ("screenTouch" in prefs && prefs.screenTouch !== "direct" && prefs.screenTouch !== "pad") throw CoreError.invalid(t("core-misc.params.invalid", { error: "screenTouch" }));
+  if ("badgeKinds" in prefs && prefs.badgeKinds !== null && !isObject(prefs.badgeKinds)) throw CoreError.invalid(t("core-misc.params.invalid", { error: "badgeKinds" }));
   if ("language" in prefs && !(prefs.language === "zh" || prefs.language === "en")) throw CoreError.invalid(t("core-misc.params.language"));
   withLang(prefs);
   const shaped = conform("PrefsView", prefs);
@@ -123,7 +211,8 @@ export function inviteUsed(data: Data): void {
   }
 }
 
-/// What the device is, from what its host says (`client.device`).
+/// What the device is, from what its host says (`client.device`: app, build, userAgent, model, locale, and `client`, the
+/// name of an app other than still.fail's own that runs this core).
 export function device(data: Data, facts: unknown): void {
   const said = (k: string) => {
     const v = isObject(facts) ? facts[k] : undefined;
@@ -147,7 +236,10 @@ export function device(data: Data, facts: unknown): void {
   if (locale !== "") told.locale = locale;
   prefs.device = told;
   const lang = withLang(prefs);
-  const name = brand.name();
+  // `client`: an app of its own that runs this core, named so (still.fail mbui), told apart from still.fail's own
+  // where devices are listed and approved; else the brand's
+  const client = said("client").slice(0, 40);
+  const name = client !== "" ? client : brand.name();
   let deviceName: string;
   if (app === "android") deviceName = tr(lang, "core-misc.device.android", { brand: name, more: withMore(model) });
   else if (app === "desktop") deviceName = tr(lang, "core-misc.device.desktop", { brand: name, more: withMore(os) });

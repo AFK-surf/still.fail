@@ -12,20 +12,18 @@
 import { PreviewCache } from "./previewCache.ts";
 import { t } from "./i18n.ts";
 
-type Call = (name: string, params?: unknown, onProgress?: (value: unknown) => void, signal?: AbortSignal) => Promise<unknown>;
+/// The core's call with bytes (CoreClient.callBytes): a request's body beside it, a response's beside its answer and
+/// each piece beside its value, never base64.
+type Call = (name: string, params: unknown, bytes?: Uint8Array, onProgress?: (value: unknown, bytes?: Uint8Array) => void, signal?: AbortSignal) => Promise<{ value: unknown; bytes?: Uint8Array }>;
 
 export interface Asked { cache?: RequestCache; id: number; method: string; path: string; headers: [string, string][]; body: Uint8Array | null }
 
 /** One request of the frame's, answered whole. */
 export interface Answer { status: number; headers: [string, string][]; body: Uint8Array }
 
-function toBase64(bytes: Uint8Array): string {
-  let text = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(text);
-}
-
-const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+/// Bytes the core gave as a buffer of their own, to hand on (transferred) to the frame.
+const owned = (bytes: Uint8Array | undefined): Uint8Array<ArrayBuffer> =>
+  bytes === undefined ? new Uint8Array() : bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength ? bytes as Uint8Array<ArrayBuffer> : bytes.slice();
 
 const failure = (error: unknown) => t("web-main.preview.fetchFailed", { error: error instanceof Error ? error.message : String(error) });
 
@@ -46,10 +44,9 @@ export function bridge(port: MessagePort, { call, station, service, serve, strea
     try {
       const own = serve?.();
       const answer: Answer = own ? await own(asked) : await (async () => {
-        const got = await call("station.preview", {
-          station, port: service, method: asked.method, path: asked.path, headers: asked.headers, body: asked.body ? toBase64(asked.body) : "",
-        }) as { status: number; headers: [string, string][]; body: string };
-        return { status: got.status, headers: got.headers, body: fromBase64(got.body) };
+        const got = await call("station.preview", { station, port: service, method: asked.method, path: asked.path, headers: asked.headers }, asked.body ?? undefined);
+        const head = got.value as { status: number; headers: [string, string][] };
+        return { status: head.status, headers: head.headers, body: owned(got.bytes) };
       })();
       if (streams) {
         post({ id: asked.id, head: { status: answer.status, headers: answer.headers } });
@@ -78,25 +75,23 @@ export function bridge(port: MessagePort, { call, station, service, serve, strea
     let chunks: Uint8Array[] = [];
     let length = 0;
     let collect = false;
-    const onProgress = (value: unknown) => {
+    const onProgress = (value: unknown, bytes?: Uint8Array) => {
       if (stop.signal.aborted) return;
-      const v = value as { head?: Pick<Answer, "status" | "headers">; chunk?: string };
+      const v = value as { head?: Pick<Answer, "status" | "headers">; chunk?: boolean };
       if (v.head) {
         head = v.head;
         collect = cached.collect(head);
         revalidated = cached.revalidated(head);
         if (!revalidated) { cached.discard(); post({ id: asked.id, head }); }
-      } else if (typeof v.chunk === "string" && !revalidated) {
-        const chunk = fromBase64(v.chunk);
+      } else if (v.chunk === true && !revalidated) {
+        const chunk = owned(bytes);
         length += chunk.length;
         if (collect && length <= cached.maxBody) chunks.push(chunk.slice());
         else chunks = [];
         post({ id: asked.id, chunk }, [chunk.buffer]);
       }
     };
-    call("station.preview", {
-      station, port: service, method: asked.method, path: asked.path, headers: cached.headers, body: asked.body ? toBase64(asked.body) : "", stream: true,
-    }, onProgress, stop.signal).then(
+    call("station.preview", { station, port: service, method: asked.method, path: asked.path, headers: cached.headers, stream: true }, asked.body ?? undefined, onProgress, stop.signal).then(
       () => {
         if (stop.signal.aborted) return;
         if (revalidated) { cached.save(revalidated); complete(revalidated); return; }
@@ -116,18 +111,18 @@ export function bridge(port: MessagePort, { call, station, service, serve, strea
     const key = `s${sid}`;
     running.set(key, stop);
     const headers: [string, string][] = protocols.length ? [["sec-websocket-protocol", protocols.join(", ")]] : [];
-    const onProgress = (value: unknown) => {
-      const v = value as { open?: { protocol: string }; text?: string; binary?: string };
+    const onProgress = (value: unknown, bytes?: Uint8Array) => {
+      const v = value as { open?: { protocol: string }; text?: string; binary?: boolean };
       if (v.open) post({ type: "socket-open", sid, protocol: v.open.protocol });
       else if (typeof v.text === "string") post({ type: "socket-message", sid, text: v.text });
-      else if (typeof v.binary === "string") {
-        const binary = fromBase64(v.binary);
+      else if (v.binary === true) {
+        const binary = owned(bytes);
         post({ type: "socket-message", sid, binary }, [binary.buffer]);
       }
     };
-    call("preview.socket", { station, port: service, path, headers, socket: sid }, onProgress, stop.signal).then(
+    call("preview.socket", { station, port: service, path, headers, socket: sid }, undefined, onProgress, stop.signal).then(
       (closed) => {
-        const { code, reason } = closed as { code: number; reason: string };
+        const { code, reason } = closed.value as { code: number; reason: string };
         post({ type: "socket-close", sid, code, reason, failed: code === 1006 });
       },
       () => post({ type: "socket-close", sid, code: 1006, reason: "", failed: true }),
@@ -145,14 +140,16 @@ export function bridge(port: MessagePort, { call, station, service, serve, strea
     if (data?.type === "socket-send") {
       const sid = String(data.sid);
       if (!running.has(`s${sid}`)) return;
+      // A binary frame's bytes beside the call (`binary: true`).
+      const binary = data.binary instanceof Uint8Array ? data.binary as Uint8Array : undefined;
       const message = typeof data.text === "string" ? { text: data.text }
-        : data.binary instanceof Uint8Array ? { binary: toBase64(data.binary) }
+        : binary ? { binary: true }
         : Array.isArray(data.close) ? { close: [Number(data.close[0]) || 1000, String(data.close[1] ?? "")] }
         : null;
       if (!message) return;
       // A socket whose station is gone: its close follows from the socket's own call. A close that did not get there
       // stops the socket's call instead, so nothing is left open for a page that let it go.
-      call("preview.socket.send", { socket: sid, ...message }).catch(() => {
+      call("preview.socket.send", { socket: sid, ...message }, binary).catch(() => {
         if ("close" in message) running.get(`s${sid}`)?.abort();
       });
       return;

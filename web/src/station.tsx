@@ -1,7 +1,7 @@
 // Which station a piece of the client talks to. A workspace has several, and
 // one page shows them together. Components read the station from context: its
 // address (how the client core names it) and its base path (which prefixes links).
-import { createContext, useContext } from "react";
+import { createContext, useContext, useRef } from "react";
 import { useParams } from "react-router";
 import { setPrefs, usePrefs } from "./prefs.ts";
 
@@ -22,6 +22,24 @@ export interface Station {
 /** Where a station's profiles are listed: the workspace's one Profile page (every station's, each with its own add button). */
 export function profilesPage(station: Station): string {
   return `${station.settings}/profiles`;
+}
+
+/**
+ * A workspace's stations as pages take them (`views`: the core's `stations`), the same objects (and list) while what they
+ * hold is: the core's view changes much more often than that (its overview, its agents starting and stopping), and a
+ * new station each time would draw every page under it again, every message of a chat.
+ */
+export function useStationList(views: readonly { id: string; name: string; online: boolean; station: string }[] | undefined, workspace: string): Station[] | undefined {
+  const kept = useRef<Station[] | undefined>(undefined);
+  const settings = `/w/${workspace}/settings`;
+  const was = kept.current;
+  const next = views?.map((v) => {
+    const old = was?.find((s) => s.id === v.id);
+    return old && old.name === v.name && old.online === v.online && old.address === v.station && old.settings === settings ? old
+      : { id: v.id, name: v.name, online: v.online, address: v.station, base: stationBase(v.station), settings };
+  });
+  if (!(next && was && next.length === was.length && next.every((s, i) => s === was[i]))) kept.current = next;
+  return kept.current;
 }
 
 /** Path prefix of a station's pages, from its address. */
@@ -68,21 +86,25 @@ export type ChatFilter = "all" | "mine" | "watching";
 
 export function useChatFilter(): [ChatFilter, (value: ChatFilter) => void] {
   const [mode, setMode] = useSidebarMode();
-  return [mode === "decisions" ? "all" : mode, setMode];
+  return [mode === "decisions" || mode === "archive" ? "all" : mode, setMode];
 }
 
-/** What the wide screen's sidebar shows: one of the chat lists, or the decisions waiting for the viewer (奏). */
-export type SidebarMode = ChatFilter | "decisions";
+/** What the wide screen's sidebar shows: one of the chat lists, the decisions waiting for the viewer (奏), or the archive. */
+export type SidebarMode = ChatFilter | "decisions" | "archive";
 
 /**
  * The sidebar's mode in the workspace in view: each workspace keeps its own (`listFilter`); one never chosen in goes by
  * the one filter devices kept for all before.
  */
 export function useSidebarMode(): [SidebarMode, (value: SidebarMode) => void] {
-  const prefs = usePrefs();
   const workspace = useWorkspaceId();
-  const mode: SidebarMode = prefs.listFilter[workspace] ?? (prefs.onlyDecisions ? "decisions" : prefs.onlyWatching ? "watching" : prefs.onlyMine ? "mine" : "all");
-  return [mode, (value) => setPrefs({ listFilter: { [workspace]: value } })];
+  const mode: SidebarMode = usePrefs((p) => p.listFilter[workspace] ?? (p.onlyDecisions ? "decisions" : p.onlyWatching ? "watching" : p.onlyMine ? "mine" : "all"));
+  return [mode, (value) => setSidebarMode(workspace, value)];
+}
+
+/** Sets what the sidebar (the phone's list) shows in `workspace`, kept on this device. */
+export function setSidebarMode(workspace: string, value: SidebarMode): void {
+  setPrefs({ listFilter: { [workspace]: value } });
 }
 
 /** People by email, from still.fail cloud's member list. */

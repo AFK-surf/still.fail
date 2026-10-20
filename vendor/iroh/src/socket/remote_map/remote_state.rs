@@ -159,6 +159,8 @@ struct State {
     /// Paths which we still need to open.
     ///
     /// They failed to open because we did not have enough CIDs issued by the remote.
+    ///
+    /// ember: each address at most once (n0-computer/iroh#4390, upstream's fix #4551 is in no release yet).
     pending_open_paths: VecDeque<transports::FourTuple>,
 
     // Internal state - address lookup
@@ -1115,7 +1117,13 @@ impl State {
                     | Some(Err(PathError::MaxPathIdReached)) => {
                         self.scheduled_open_path =
                             Some(Instant::now() + Duration::from_millis(333));
-                        self.pending_open_paths.push_back(open_addr.clone());
+                        // ember: once. A retry tries the address on every connection to the remote, and each one still
+                        // out of path ids queued it again: with two or more connections at the limit the queue grew
+                        // that many times over every 333 ms, to gigabytes (24 GB in one allocation upstream), the
+                        // actor's task busy draining and refilling it.
+                        if !self.pending_open_paths.contains(open_addr) {
+                            self.pending_open_paths.push_back(open_addr.clone());
+                        }
                         trace!(?open_addr, ?ret, "scheduling open_path");
                     }
                     _ => warn!(?ret, "Opening path failed"),

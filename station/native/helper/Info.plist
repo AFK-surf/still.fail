@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleExecutable</key>
+  <string>stillfail-helper</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundleIdentifier</key>
+  <string>fail.still.helper</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>still.fail Helper</string>
+  <key>CFBundleDisplayName</key>
+  <string>still.fail Helper</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>So the people of your still.fail workspace can browse this folder in still.fail's Files.</string>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>So the people of your still.fail workspace can browse this folder in still.fail's Files.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>So the people of your still.fail workspace can browse this folder in still.fail's Files.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>So the people of your still.fail workspace can browse this disk in still.fail's Files.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>So the people of your still.fail workspace can browse this disk in still.fail's Files.</string>
+</dict>
+</plist>

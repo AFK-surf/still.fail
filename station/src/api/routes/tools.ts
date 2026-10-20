@@ -3,12 +3,13 @@
 // (`tools.access`).
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
+import { managesStation } from "../../mesh/credential.ts";
 import type { ConfigFile } from "../../ops/config.ts";
 import { ACCESS, type Access, READ_OPS, accessOf } from "../../device/tools.ts";
 
 export type ToolsDeps = { config: ConfigFile; changed?: () => void };
 
-const manages = (r: Request) => r.viewer.role === "owner" || r.viewer.role === "admin";
+const manages = (r: Request) => managesStation(r.viewer);
 
 /// What each level means, for the pages that set it.
 export const ABOUT: Record<Access, string> = {

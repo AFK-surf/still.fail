@@ -1,4 +1,4 @@
-// Thumbnails and ThumbHashes (src/sessions/thumbs.ts, the addon's native/mesh/src/thumbs.rs): thumbs.rs's tests, and
+// Thumbnails and ThumbHashes (src/drive/thumbs.ts, the addon's native/mesh/src/thumbs.rs): thumbs.rs's tests, and
 // the same answers as the Rust station: GET /sessions/:key/files?thumb=1 gives the very bytes the Rust gives, and a
 // message keeps the same ThumbHashes. What the Rust gives is test/fixtures/thumbs/golden.json, written by the Rust
 // station's own code (the Rust station's thumbs_golden.rs, which also wrote the JPEG and WebP fixtures; the PNGs are made
@@ -19,12 +19,13 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { Hub } from "../src/sessions/hub.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { InternalChat } from "../src/sessions/internal.ts";
-import { SMALL, dir, idOf, keep, kept, thumbnail, wanted } from "../src/sessions/thumbs.ts";
+import { SMALL, dir, idOf, keep, kept, thumbnail, wanted } from "../src/drive/thumbs.ts";
 import { Store } from "../src/store/store.ts";
 import type { Attachment } from "../src/store/rows.ts";
 import { FakeDriver } from "./hub-fakes.ts";
+import { fileURLToPath } from "node:url";
 
-const fixtures = new URL("./fixtures/thumbs/", import.meta.url).pathname;
+const fixtures = fileURLToPath(new URL("./fixtures/thumbs/", import.meta.url));
 const golden = JSON.parse(readFileSync(join(fixtures, "golden.json"), "utf8")) as Record<
   string,
   { thumbnail: { type: string; sha256: string; bytes: number; width: number; height: number } | null; thumbhash: string | null }
@@ -94,7 +95,7 @@ async function until(_what: string, f: () => boolean) {
 
 test("which files: png, jpg, jpeg and webp, by name", () => {
   assert.deepEqual(["a.PNG", "b.jpg", "c.Jpeg", "d.webp", "e.gif", "f.svg", "png"].map(wanted), [true, true, true, true, false, false, false]);
-  assert.equal(dir("/d"), "/d/thumbs");
+  assert.equal(dir("/d"), join("/d", "thumbs"));
   assert.equal(SMALL, 24 * 1024);
   // The first 16 bytes of the SHA-256 of the path.
   assert.equal(idOf("/w/uploads/a.png"), sha256(Buffer.from("/w/uploads/a.png")).slice(0, 32));

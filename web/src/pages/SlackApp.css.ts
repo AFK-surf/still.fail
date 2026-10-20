@@ -1,5 +1,5 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { inputRow } from "../styles/additions.css.ts";
 import { sidebarBuddy } from "../brand.css.ts";
 
@@ -34,13 +34,13 @@ export const appAvatar = style({
   },
 });
 export const appAvatarEmpty = style({
-  display: "grid", placeItems: "center", gap: "4px", height: "100%", fontSize: vars.textXs, color: vars.muted,
+  display: "grid", placeItems: "center", gap: "4px", height: "100%", fontSize: vars.textMeta, color: vars.muted,
   alignContent: "center",
 });
 export const appLookMain = style({ flex: "1", minWidth: "0", display: "grid", gap: "8px" });
-export const appNameInput = style({ height: "44px", fontSize: vars.textMd, fontWeight: "600" });
-export const appColour = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textXs });
-export const appColourHex = style({ width: "96px", height: "28px", fontSize: vars.textXs });
+export const appNameInput = style({ height: "44px", fontSize: vars.textTitle, fontWeight: "600" });
+export const appColour = style({ display: "flex", alignItems: "center", gap: "8px", fontSize: vars.textMeta });
+export const appColourHex = style({ width: "96px", height: "28px", fontSize: vars.textMeta });
 export const avatarPicker = style({
   display: "grid", gridTemplateColumns: "repeat(15, minmax(0, 1fr))", gap: "6px", margin: "16px 0 10px",
   "@media": {
@@ -58,8 +58,8 @@ export const avatarTile = style({
     "&[data-picked]": { outline: `2px solid ${vars.text}`, outlineOffset: "1px" },
   },
 });
-export const appDesc = style({ height: "34px", fontSize: vars.textSm });
-export const appPerms = style({ fontSize: vars.textSm });
+export const appDesc = style({ height: "34px", fontSize: vars.textUi });
+export const appPerms = style({ fontSize: vars.textUi });
 export const permSections = style({ display: "grid", gap: "4px", marginTop: "8px" });
 export const permAll = style({ marginLeft: "8px" });
 /** Names only, three to a line; what each allows shows on hover. */
@@ -67,14 +67,17 @@ export const permGrid = style({
   display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "0 8px", margin: "0", padding: "0", listStyle: "none",
   "@media": { "(max-width: 720px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } },
 });
+export const permLabel = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** Beside a permission only admins can give: the word, quiet. */
+export const permAdmin = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted });
 export const appFold = style({ marginTop: "28px", marginBottom: "28px" });
 export const appFoldTitle = style({ fontWeight: "600" });
 export const appFoldBody = style({ display: "grid", gap: "10px", marginTop: "8px" });
-export const appFoldLink = style({ justifySelf: "start", fontSize: vars.textXs, color: vars.muted });
+export const appFoldLink = style({ justifySelf: "start", fontSize: vars.textMeta, color: vars.muted });
 globalStyle(`${tokenGuide} li::before`, {
   content: "counter(guide)", position: "absolute", left: "0", top: "-1px", width: "24px", height: "24px",
   borderRadius: "50%", display: "grid", placeItems: "center", background: vars.neutralBg, color: vars.muted,
-  fontSize: vars.textXs, fontWeight: "600", fontVariantNumeric: "tabular-nums",
+  fontSize: vars.textMeta, fontWeight: "600", fontVariantNumeric: "tabular-nums",
 });
 globalStyle(`${tokenGuide} li > ${inputRow}`, { marginTop: "6px" });
 globalStyle(`${appAvatar} img`, { width: "100%", height: "100%", display: "block" });

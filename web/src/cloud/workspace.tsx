@@ -2,123 +2,186 @@
 // place. The core reaches each station and puts the workspace's views
 // together (docs/client-core.md); a page opened from the sidebar talks to the
 // station the item belongs to (StationContext).
-import { ChevronRight, ChevronsUpDown, Plus, Settings, UserPlus } from "../icons.tsx";
+import { stationLoginPage, StationSettings, StationsFirst, StationsNav, useStationsSide } from "./StationPage.tsx";
+import { ShareInPanel } from "../ShareIn.tsx";
+import { Check, ChevronsUpDown, Plus, Settings, UserPlus } from "@stillfail/ui/icons.tsx";
 import { NewChat } from "../NewChat.tsx";
-import { useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
+import { lastChatOf, useLastChat, useRememberChat, useWorkspaceMarks } from "../lastChat.ts";
 import { DropdownMenu } from "radix-ui";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
-import { useChats, useStations } from "../api.ts";
+import { useChats, useStationViews, useStations } from "../api.ts";
+import { useGo } from "../go.ts";
 import type { Topic } from "../core/client.ts";
-import { useTopics } from "../core/react.ts";
+import { useReady, useTopics } from "../core/react.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { AccountPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
+import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
-import { ChatList, DecisionsEntry, StationTrouble, useGlassBands } from "../Sidebar.tsx";
+import { ScreenPage } from "../screen/ScreenPage.tsx";
+import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
+import { Rail, SidebarEdge, placeOf, useRailItems, type RailItem } from "../Rail.tsx";
+import { SystemBubbles } from "../SystemBubbles.tsx";
+import * as railCss from "../Rail.css.ts";
+import { drivePath } from "../drive/useDrive.ts";
+import { Folder, Server } from "@stillfail/ui/icons.tsx";
+import { AttentionEntry } from "../Attention.tsx";
 import { DecisionDeskProvider, DecisionPage } from "../DecisionDesk.tsx";
 import { MarkCounts } from "../ChatMark.tsx";
-import { OpenJobs } from "../OpenJobs.tsx";
+import { marked, WorkspaceMark } from "../WorkspaceMark.tsx";
+import { OpenJobsChip } from "../OpenJobs.tsx";
 import { GlobalShortcuts } from "../Switcher.tsx";
 import { ShortcutsPage } from "../Shortcuts.tsx";
-import { CHANGEABLE } from "../keymap.ts";
+import { CHANGEABLE, workspaceIndexOf, workspaceKeyLabel } from "../keymap.ts";
 import { ArchivePage } from "../pages/Archive.tsx";
 import { AppearancePage } from "../pages/Appearance.tsx";
 import { NotificationsPage } from "../pages/Notifications.tsx";
+import { ArchivingPage } from "../pages/Archiving.tsx";
+import { PermissionsPage } from "../pages/Permissions.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
+import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
+import { AboutPage } from "../pages/About.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
-import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, MemorySettings, ProfileAccountSettings, ROLE_LABEL, RuntimeSettings, SettingsNav, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
-import { PeopleContext, profilesPage, StationContext, stationBase, useSidebarMode, type Station } from "../station.tsx";
-import { useToast } from "../toast.tsx";
-import { Button, Dialog, Empty, Field, ICON, Loading, ResizeHandle, Select, Tip } from "../ui.tsx";
+import { ProfilesNav } from "../ProfilesNav.tsx";
+import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.tsx";
+import { SecurityOpen, SecurityPrompt, SecuritySettings, SecurityWaiting, useLock } from "./Security.tsx";
+import { VaultSettings } from "./Vault.tsx";
+import { VaultItemPage } from "./VaultItem.tsx";
+import { AutomaticDecisionCompletionSettings, AutomaticDecisionPolicySettings, StationArchivingSettings, AutomaticDecisionsSettings, AccountSettings, ConnectsSettings, FirstStation, JoinExistingLink, MemoryDocSettings, MemorySettings, ProfileAccountSettings, RuntimeSettings, SettingsNav, useSettingsCommands, StationsSettings, UsageSettings, UsagePricesSettings, WorkspaceSettings } from "./settings.tsx";
+import { PeopleContext, profilesPage, scopeOf, StationContext, stationBase, useSidebarMode, useStationList, type Station } from "../station.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
+import { Button, Dialog, Empty, Field, ICON, Select, Tip, Spinner, Waiting } from "../ui.tsx";
 import { toMadeChat } from "../Chat.tsx";
 import { ComposerDock } from "../dock.tsx";
 import { Previews } from "../Previews.tsx";
 import { useAccounts, useSignIn, type Account } from "./accounts.ts";
 import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspace, useWorkspaces, type PendingInvitation } from "./api.ts";
-import { Illustration, PageBrand, SidebarBrand } from "../brand.tsx";
+import { Illustration, PageBrand, SidebarBrand, useSidebarClosed } from "../brand.tsx";
 import { identify, track } from "../telemetry.ts";
 import { useInWorkspace } from "../notify.ts";
 import * as nav from "../Sidebar.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./workspace.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
-import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as chatMarkCss from "../ChatMark.css.ts";
 
 import { WebUpdate } from "../WebUpdate.tsx";
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "./words.tsx";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /** The workspace in view and the signed-in account that reaches it. */
 export interface WorkspaceEntry { id: string; name: string; account: Account }
 
+const NO_STATIONS: Station[] = [];
+
 interface InvitationEntry extends PendingInvitation { account: Account }
 
-export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
-  const view = useWorkspace(entry.id).value;
-  const found = useStations(entry.id);
-  const stations = useMemo<Station[]>(() => (found.value ?? []).map((s) => ({
-    id: s.id, name: s.name, online: s.online,
-    address: s.station, base: stationBase(s.station), settings: `/w/${entry.id}/settings`,
-  })), [found.value, entry.id]);
+/**
+ * Drawn again only as the page changes (its path) or its stations do: what changes more often (the workspace's members,
+ * the views kept read, what the core marks) is read below it, where it is used, so a message coming in or the side panel
+ * opening does not draw the sidebar and the page again from here.
+ */
+export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
+  // Come from another workspace (a navigation, so a transition), the one left stays until this one's stations are
+  // known, as a chat's page waits for its chat: not a page of nothing first.
+  useReady({ topic: "stations", scope: entry.id }, LOCAL_MS);
+  const known = useStationViews(entry.id);
+  const stations = useStationList(known, entry.id) ?? NO_STATIONS;
   const path = useLocation().pathname;
-  const navigate = useNavigate();
-  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
-  const detail = /\/(s\/[^/]+\/.+|settings|new$|archive$|decisions$)/.test(path);
+  const navigate = useGo();
+  const detail = /\/(s\/[^/]+\/.+|settings|new$|decisions$|files$)/.test(path);
   // Settings, a connect or a station's runtime accounts: the sidebar becomes the settings menu.
-  const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path);
+  // A place in the rail (Station, Profile, 连接, 用量) is a page of its own beside the chats, not one of the settings: those
+  // left out of it are reached in the settings, and are among them there.
+  const railed = useRailItems();
+  const wide = useWide();
+  const place = placeOf(path);
+  const settings = /^\/w\/[^/]+\/(settings|s\/[^/]+\/(connects|settings))(\/|$)/.test(path)
+    && !(place !== "settings" && place !== "files" && railed.includes(place as RailItem) && wide);
+  // Which sidebar is drawn. A page in the rail with none of its own (连接, 用量) closes it (Rail.tsx): the one
+  // it had stays while it goes, not the chats' list first; opened again there, it is the chats'.
+  const own = settings ? "settings" : place === "files" || place === "profiles" || place === "stations" ? place : "chats";
+  const bare = !settings && (place === "connects" || place === "usage") && railed.includes(place as RailItem) && wide;
+  const closed = useSidebarClosed();
+  const kept = useRef({ side: own, closed, reopened: false });
+  if (!bare) kept.current = { side: own, closed, reopened: false };
+  else { if (kept.current.closed && !closed) kept.current.reopened = true; kept.current.closed = closed; }
+  const side = bare && !kept.current.reopened ? kept.current.side : own;
   // 奏: the page of the decision picked in the sidebar's 奏 (DecisionDesk.tsx); come to it any way, the sidebar shows 奏.
   const decisions = /^\/w\/[^/]+\/decisions$/.test(path);
   const [mode, setMode] = useSidebarMode();
+  const lock = useLock(entry.id);
+  const waiting = lock?.me?.waiting === true;
   useEffect(() => { if (decisions && mode !== "decisions") setMode("decisions"); }, [decisions]); // eslint-disable-line react-hooks/exhaustive-deps
-  const people = useMemo(() => new Map((view?.members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [view]);
-  useEffect(() => identify(entry.account), [entry.account]);
-  useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
-  useInWorkspace(entry.id);
-  // The views the workspace's pages and settings show, subscribed from the start: a page opened the first time draws at
-  // once, with no frame waiting for the core's first answer. What the core keeps in sync is its own call (sync/scheduler.ts);
-  // these only read it.
-  useTopics<unknown>([
-    { topic: "connects", scope: entry.id, mine: false },
-    { topic: "connects", scope: entry.id, mine: true },
-    { topic: "chats", scope: entry.id, mine: false },
-    { topic: "chats", scope: entry.id, mine: true },
-    { topic: "loginSessions", account: entry.account.sub },
-    ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
-  ]);
+  // The archive's page, come to any way (a link, the phone's way): the sidebar shows the archive.
+  const archive = /^\/w\/[^/]+\/archive$/.test(path);
+  useEffect(() => { if (archive && mode !== "archive") setMode("archive"); }, [archive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // No station yet: nothing of the workspace's pages works, so none is shown; adding the first station is the page.
-  if (found.value && found.value.length === 0 && !settings) return <Onboarding entry={entry} />;
+  // The devices waiting on this one (in any workspace of the person's) are put up on each of its pages.
+  if (known && known.length === 0 && !settings) return <><WorkspaceKept entry={entry} /><SecurityPrompt /><Onboarding entry={entry} /></>;
+  // A device waiting to be confirmed into the workspace's lock: nothing of it is reached until it is (its settings are).
+  if (waiting && !settings) {
+    return (
+      <><WorkspaceKept entry={entry} /><SecurityPrompt />
+        <Bare entry={entry}><main>{lock && <SecurityWaiting entry={entry} lock={lock} />}</main></Bare>
+      </>
+    );
+  }
 
   return (
-    <PeopleContext.Provider value={people}>
+    <WorkspacePeople id={entry.id}>
       <DecisionDeskProvider workspace={entry.id}>
-      <div className={shellCss.shell} data-detail={detail}>
+      <WorkspaceKept entry={entry} />
+      <div className={shellCss.shell} data-detail={detail} data-rail="">
 
         <GlobalShortcuts scope={entry.id} newChat={`/w/${entry.id}/new`} settings={`/w/${entry.id}/settings`} />
-        {settings
-          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} /><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></nav>
+        {/* The rail and the sidebar in one block, which closes to the rail as a bar (shell.css.ts dock). */}
+        <div className={shellCss.dock}>
+        <Rail scope={entry.id} workspace={<WorkspaceSwitcher current={entry} adder />} />
+        {side === "settings"
+          ? <nav className={nav.sidebar} aria-label={t("web-pages.settings.title")}><div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div><SettingsNav entry={entry} /><div className={nav.navFoot}><div className={railCss.narrowOnly}><WebUpdate /><WorkspaceSwitcher current={entry} /></div></div></nav>
+          : side === "files" ? <FilesSidebar entry={entry} />
+          : side === "profiles" ? <ProfilesSidebar entry={entry} />
+          : side === "stations" ? <StationsSidebar entry={entry} />
           : <WorkspaceSidebar entry={entry} />}
+        </div>
+        <SidebarEdge />
+        <SystemBubbles scope={entry.id} />
+        <SecurityPrompt />
+        {/* What another app shares (shareIn.ts), over whichever page is open. */}
+        <ShareInPanel scope={entry.id} />
         <main className={shellCss.main}>
           <ComposerDock>
           <Routes>
-            <Route index element={<WorkspaceHome id={entry.id} stations={found.value && stations} />} />
-            <Route path="settings" element={<Navigate to="stations" replace />} />
+            <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
+            <Route path="settings" element={<Navigate to="appearance" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
-            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} />} />
+            <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
+            <Route path="settings/permissions" element={<PermissionsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
+            {HAS_LOCAL_STATION && <Route path="settings/local-station" element={<LocalStationPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
+            <Route path="settings/about" element={<AboutPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
+            <Route path="settings/security" element={<SecuritySettings entry={entry} />} />
+            <Route path="settings/security/open" element={<SecurityOpen entry={entry} />} />
+            <Route path="settings/vault" element={<VaultSettings entry={entry} />} />
+            <Route path="settings/vault/:vault/:item" element={<VaultItemPage entry={entry} />} />
             {/* Pages the workspace page took in: links to them still land there. */}
             <Route path="settings/general" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
             <Route path="settings/members" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="settings/stations" element={<StationsSettings entry={entry} />} />
+            <Route path="settings/stations" element={<StationsIndex entry={entry} />} />
+            <Route path="settings/stations/:station" element={<StationSettings entry={entry} />} />
             <Route path="settings/connects" element={<ConnectsSettings entry={entry} />} />
+            <Route path="settings/archive" element={<ArchivingPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
+            <Route path="settings/archive/:station" element={<StationArchivingSettings entry={entry} />} />
             <Route path="settings/automatic-decisions" element={<AutomaticDecisionsSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion" element={<AutomaticDecisionCompletionSettings entry={entry} />} />
             <Route path="settings/automatic-decisions/completion/:station" element={<AutomaticDecisionPolicySettings entry={entry} />} />
@@ -126,12 +189,15 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
             <Route path="settings/profiles" element={<RuntimeSettings entry={entry} />} />
             <Route path="settings/profiles/account/:key" element={<ProfileAccountSettings entry={entry} />} />
             <Route path="settings/memory" element={<MemorySettings entry={entry} />} />
+            <Route path="settings/memory/:station/global" element={<MemoryDocSettings entry={entry} />} />
+            <Route path="settings/memory/:station/skill/:name" element={<MemoryDocSettings entry={entry} />} />
             <Route path="settings/usage/prices" element={<UsagePricesSettings entry={entry} />} />
             <Route path="settings/usage" element={<UsageSettings entry={entry} />} />
             <Route path="settings/stations/:station/footprint" element={<Navigate to={`/w/${entry.id}/settings/stations`} replace />} />
             <Route path="settings/leave" element={<Navigate to={`/w/${entry.id}/settings/workspace`} replace />} />
-            <Route path="s/:station/*" element={<StationPages stations={found.value && stations} />} />
-            <Route path="archive" element={<ArchivePage scope={entry.id} back={`/w/${entry.id}`} />} />
+            <Route path="s/:station/*" element={<StationPages stations={known && stations} />} />
+            <Route path="files" element={<DriveHome scope={entry.id} />} />
+            <Route path="archive" element={<ArchivePage scope={entry.id} wide={wide} />} />
             <Route path="decisions" element={<DecisionPage onOpen={(to) => navigate(to)} />} />
             <Route path="new" element={<NewChat scope={entry.id} onCreated={(station, session) => toMadeChat(() => navigate(`${stationBase(station)}/chats/${encodeURIComponent(session)}`))} />} />
             <Route path="*" element={<Navigate to={`/w/${entry.id}`} replace />} />
@@ -141,8 +207,45 @@ export function WorkspaceShell({ entry }: { entry: WorkspaceEntry }) {
         <Previews />
       </div>
       </DecisionDeskProvider>
-    </PeopleContext.Provider>
+    </WorkspacePeople>
   );
+});
+
+/** The workspace's members, by email, for what shows people (PeopleContext): read here, not by the shell. */
+function WorkspacePeople({ id, children }: { id: string; children: ReactNode }) {
+  const members = useWorkspace(id).value?.members;
+  const people = useMemo(() => new Map((members ?? []).map((m) => [m.email.toLowerCase(), { name: m.name, email: m.email, picture: m.picture }])), [members]);
+  return <PeopleContext.Provider value={people}>{children}</PeopleContext.Provider>;
+}
+
+/**
+ * What the workspace's page keeps going while it is open, drawing nothing: its commands, the chat last open (a core from
+ * before it keeps that itself), who is signed in, and the views its pages and settings show, subscribed from the start:
+ * a page opened the first time draws at once, with no frame waiting for the core's first answer. What the core keeps in
+ * sync is its own call (sync/scheduler.ts); these only read it.
+ */
+const WorkspaceKept = memo(function WorkspaceKept({ entry }: { entry: WorkspaceEntry }) {
+  const found = useStations(entry.id);
+  useSettingsCommands(entry);
+  useRememberChat(entry.id, (p) => /^\/w\/[^/]+\/(new|s\/[^/]+\/chats\/.+)$/.test(p));
+  useEffect(() => identify(entry.account), [entry.account]);
+  useEffect(() => window.stillfailDesktop?.inWorkspace(entry.account.sub, entry.id), [entry.account.sub, entry.id]);
+  useInWorkspace(entry.id);
+  useTopics<unknown>([
+    { topic: "connects", scope: entry.id, mine: false },
+    { topic: "connects", scope: entry.id, mine: true },
+    { topic: "chats", scope: entry.id, mine: false },
+    { topic: "chats", scope: entry.id, mine: true },
+    { topic: "loginSessions", account: entry.account.sub },
+    ...(found.value ?? []).map((s): Topic => ({ topic: "overview", station: s.station })),
+  ]);
+  return null;
+});
+
+/** Whether the rail is there (Rail.css.ts): a wide screen, followed as the window is resized. */
+function useWide(): boolean {
+  const query = typeof window === "undefined" ? null : window.matchMedia("(min-width: 701px)");
+  return useSyncExternalStore((f) => { query?.addEventListener("change", f); return () => query?.removeEventListener("change", f); }, () => query?.matches ?? true, () => true);
 }
 
 /** `stations` is undefined until the core has listed them: until then nothing is said (least of all "no such station"). */
@@ -157,8 +260,16 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
       <Routes>
         <Route path="chats/:chat?" element={<ChatPage />} />
         <Route path="connects/:id" element={<ConnectPage />} />
+        {/* Its drive (docs/drive.md): a folder (?root=&path=), a file read or played on a page of its own. */}
+        <Route path="files" element={<DrivePage />} />
+        <Route path="files/read" element={<DriveReadPage />} />
+        <Route path="files/play" element={<DrivePlayPage />} />
+        {/* One of its screens, seen and driven (docs/remote-screens.md): its row on the station's page, an agent's link. */}
+        <Route path="screen/:id" element={<ScreenPage />} />
         {/* A station's 共享调试 is the Android app's (its agent links here: the Rust station's adb.rs). */}
         <Route path="adb" element={<Empty><p>{t("web-pages.workspace.adbOnPhone")}</p></Empty>} />
+        {/* A login's link, as its agent posts it (docs/remote-login.md): the station's page with its panel open. */}
+        <Route path="login/:login" element={<LoginLink station={station} />} />
         {/* One Profile page for the workspace: a station's own list is it. */}
         <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />
@@ -168,6 +279,26 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
   );
 }
 
+/** A workspace with none of its pages yet (no station, or this device not yet approved): the brand and the workspace
+ * switcher over the one page there is. */
+function Bare({ entry, children }: { entry: WorkspaceEntry; children: ReactNode }) {
+  return (
+    <div className={css.onboarding}>
+      <header className={css.onboardingBar}>
+        <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
+        <div className={css.onboardingAccount}><WorkspaceSwitcher current={entry} /></div>
+      </header>
+      {children}
+    </div>
+  );
+}
+
+/** `login/<id>` of a station: its page, the login's panel open over it. */
+function LoginLink({ station }: { station: Station }) {
+  const { login = "" } = useParams();
+  return <Navigate to={stationLoginPage(scopeOf(station.address), station.id, login)} replace />;
+}
+
 /**
  * A workspace with no station: what a station is and adding the first one, in the page; the workspace switcher (the
  * account, other workspaces) and the workspace's settings (inviting people) stay at hand. Its pages come once a station
@@ -175,11 +306,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
  */
 function Onboarding({ entry }: { entry: WorkspaceEntry }) {
   return (
-    <div className={css.onboarding}>
-      <header className={css.onboardingBar}>
-        <div className={`${nav.brand} ${nav.brandCompact}`}><PageBrand /></div>
-        <div className={css.onboardingAccount}><WorkspaceSwitcher current={entry} /></div>
-      </header>
+    <Bare entry={entry}>
       <main className={css.onboardingMain}>
         <Illustration name="no-station" />
         <h1 className={css.onboardingTitle}>{t("web-pages.workspace.onboarding.title")}</h1>
@@ -189,18 +316,19 @@ function Onboarding({ entry }: { entry: WorkspaceEntry }) {
           <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.invite")}</Link>
           <span aria-hidden="true"> · </span>
           <Link className={chatCss.inlineLink} to={`/w/${entry.id}/settings/workspace`}>{t("web-pages.workspace.onboarding.settings")}</Link>
+          <JoinExistingLink entry={entry} className={`${chatCss.inlineLink} ${css.onboardingLinkButton}`} />
         </p>
       </main>
-    </div>
+    </Bare>
   );
 }
 
 /** `stations` is undefined until the core has listed them. */
 function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | undefined }) {
   const last = useLastChat(id, `/w/${id}/new`);
-  if (!stations) return <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (!stations) return <Waiting shape="messages" fill text={t("common.readingStations")} />;
   // With stations there is always a chat in view: the one last open (the core keeps it), or a new one.
-  if (stations.length) return last ? <Navigate to={last} replace /> : <Loading label={t("web-pages.settings.workspace.loading")} />;
+  if (stations.length) return last ? <Navigate to={last} replace /> : <Waiting shape="messages" fill />;
   return (
     <Empty>
       <Illustration name="no-station" />
@@ -212,42 +340,120 @@ function WorkspaceHome({ id, stations }: { id: string; stations: Station[] | und
 
 // ── sidebar ─────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
+/** Drawn again only for another workspace: its lists and foot follow what they show themselves. */
+const WorkspaceSidebar = memo(function WorkspaceSidebar({ entry }: { entry: WorkspaceEntry }) {
   return (
     <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.workspace.navigation")}>
-      <ResizeHandle variable="--sidebar-w" edge="right" min={180} max={480} label={t("web-pages.workspace.resizeSidebar")} />
-      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`} />
+      <ChatList top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} scope={entry.id} newChat={`/w/${entry.id}/new`} stationsPage={`/w/${entry.id}/settings/stations`} archive={`/w/${entry.id}/archive`} decisions={`/w/${entry.id}/decisions`}
+        below={<SidebarTodo scope={entry.id} />} />
       <WorkspaceSidebarFooter entry={entry} />
     </nav>
   );
+});
+
+/** 待处理 under 新建对话; with it in the rail (Rail.tsx), only on a narrow screen (no rail there). */
+function SidebarTodo({ scope }: { scope: string }) {
+  const railed = useRailItems().includes("attention");
+  return <div className={railed ? `${nav.navTodo} ${railCss.narrowOnly}` : nav.navTodo}><AttentionEntry scope={scope} /></div>;
 }
 
-/** Under the sidebar's lists: workspace controls, and 奏 to go to while the sidebar shows another list. */
+/** Under the sidebar's lists: workspace controls, and what wants the viewer (奏 among it). */
 function WorkspaceSidebarFooter({ entry }: { entry: WorkspaceEntry }) {
-  const [mode] = useSidebarMode();
-  const decisions = mode === "decisions";
+  const railed = useRailItems().includes("attention");
   return (
       <div className={nav.navFoot}>
-        <WebUpdate />
-        <ChangelogNews to={`/w/${entry.id}/settings/changelog`} />
-        <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
-        {!decisions && <DecisionsEntry scope={entry.id} to={`/w/${entry.id}/decisions`} />}
-        <WorkspaceOpenJobs scope={entry.id} />
-        <div className={nav.navFootRow}>
+        {/* Beside the rail the app's own news is its bubbles (SystemBubbles.tsx); on a narrow screen, here. */}
+        <div className={railCss.narrowOnly}><WebUpdate /><ChangelogNews to={`/w/${entry.id}/settings/changelog`} /></div>
+        {/* How the stations are, and the services left up long, in one line; what wants the viewer is at the top. With
+            the rail's bell (Attention.tsx), they are in it. */}
+        <div className={railed ? `${nav.navFootStatus} ${railCss.narrowOnly}` : nav.navFootStatus}>
+          <StationTrouble scope={entry.id} to={`/w/${entry.id}/settings/stations`} />
+          <OpenJobsChip scope={entry.id} />
+        </div>
+        <div className={`${nav.navFootRow} ${railCss.narrowOnly}`}>
           <WorkspaceSwitcher current={entry} />
-          <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pagesCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
+          <Tip label={t("web-pages.settings.title")} side="top"><NavLink className={pageCss.iconBtn} to={`/w/${entry.id}/settings`} aria-label={t("web-pages.settings.title")}><Settings {...ICON} /></NavLink></Tip>
         </div>
       </div>
   );
 }
 
-/** The services and jobs left up a long while on the workspace's stations that are up, each marked with its station's name when there are several. */
-function WorkspaceOpenJobs({ scope }: { scope: string }) {
-  return <OpenJobs scope={scope} />;
+/** The sidebar while in the files (Rail.tsx): the folders each station lends, under its name. */
+function FilesSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label={t("web-pages.drive.title")}>
+      <FilesNav scope={entry.id} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** The sidebar while in the profiles, with Profile in the rail (Rail.tsx): every profile of the workspace. */
+function ProfilesSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Profile">
+      <ProfilesNav scope={entry.id} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** The sidebar while in Station (Rail.tsx): the stations, each opening its page (StationPage.tsx). */
+function StationsSidebar({ entry }: { entry: WorkspaceEntry }) {
+  return (
+    <nav ref={useGlassBands()} className={nav.sidebar} aria-label="Station">
+      <StationsNav entry={entry} top={<div className={`${nav.brand} ${nav.brandCompact}`}><SidebarBrand rail /></div>} />
+      <WorkspaceSidebarFooter entry={entry} />
+    </nav>
+  );
+}
+
+/** Station's page: with the sidebar of their own, the first of them; else the settings' list of them. */
+function StationsIndex({ entry }: { entry: WorkspaceEntry }) {
+  return useStationsSide() ? <StationsFirst entry={entry} /> : <StationsSettings entry={entry} />;
+}
+
+/** Every folder the stations lend (docs/drive.md), under a heading for each station (its name; 离线 beside it while away,
+ * its rows faint). */
+function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
+  const stations = useStations(scope).value ?? [];
+  const where = useLocation();
+  const root = new URLSearchParams(where.search).get("root");
+  const add = useAddFolder(scope);
+  const lending = stations.filter((s) => (s.overview?.drive?.roots ?? []).length > 0 || (s.overview?.drive?.anywhere && s.overview.drive.home));
+  return (
+    <>
+      <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
+      <NavList>
+        {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
+        {lending.map((s) => {
+          const base = stationBase(s.station);
+          const drive = s.overview?.drive;
+          const roots = drive?.roots ?? [];
+          // A station whose every folder the viewer browses: its home first (the way to all the rest).
+          const home = drive?.anywhere && drive.home ? drive.home : null;
+          const lit = (path: string) => where.pathname.startsWith(`${base}/files`) && (root === path || (!root && (path === home ? roots.length !== 1 : roots.length === 1)));
+          return (
+            <NavSection key={s.station} title={s.online ? s.name : t("web-pages.drive.stationAway", { name: s.name })}>
+              {home && <NavItem to={drivePath(base, home)} current={lit(home)} tip={home} mark={<Server {...ICON} />} title={t("web-pages.drive.home")} away={!s.online} />}
+              {roots.map((r) => (
+                <NavItem key={r.path} to={drivePath(base, r.path)} current={lit(r.path)} tip={r.path} mark={<Folder {...ICON} />} title={r.name} away={!s.online} />
+              ))}
+            </NavSection>
+          );
+        })}
+        {add.dialogs}
+      </NavList>
+    </>
+  );
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */
-function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
+/**
+ * `adder`: in the rail (Rail.tsx), under the workspaces it lists: a dashed ＋ whose menu is making a workspace, signing in
+ * another account and the invitations, no list of the workspaces (the rail has them); a dot on it while one waits.
+ */
+function WorkspaceSwitcher({ current, adder }: { current: WorkspaceEntry; adder?: boolean }) {
   const byAccount = useWorkspaces().value ?? [];
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
@@ -263,15 +469,37 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
   );
   const pending = byAccount.flatMap((a) => a.invitations.map((i): InvitationEntry => ({ ...i, account: a.account })));
   const isCurrent = (sub: string, id: string) => id === current.id && sub === current.account.sub;
-  const shown = byAccount.find((a) => a.account.sub === current.account.sub)?.workspaces.find((w) => w.id === current.id);
-  const others = byAccount.flatMap(({ account, workspaces: items }) => items.filter((w) => !isCurrent(account.sub, w.id)).map((w) => ({ account, w })));
+  const all = byAccount.flatMap(({ account, workspaces: items }) => items.map((w) => ({ account, w })));
   // What the others have waiting, as the core counts it: one dot on the trigger, one by each in the menu.
   const marks = useWorkspaceMarks(current.id);
   const othersTone = marks?.others;
+  // Straight to the chat last open there (WorkspaceHome would go on to it after drawing a page of its own first).
+  const to = (id: string) => lastChatOf(marks, id) ?? `/w/${id}`;
+  const allRef = useRef(all);
+  allRef.current = all;
+  const toRef = useRef(to);
+  toRef.current = to;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const i = workspaceIndexOf(e);
+      const to = i === null ? undefined : allRef.current[i];
+      if (!to) return;
+      e.preventDefault();
+      if (!isCurrent(to.account.sub, to.w.id)) navigate(toRef.current(to.w.id));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
   return (
     <>
       <DropdownMenu.Root modal={false}>
         <DropdownMenu.Trigger asChild>
+          {adder ? (
+            <button type="button" className={railCss.workspaceAdd} aria-label={t("web-main.rail.addWorkspace")} title={t("web-main.rail.addWorkspace")}>
+              {respond.busy || signIn.busy ? <Spinner /> : <Plus size={16} />}
+              {pending.length > 0 && <span className={railCss.mark}><span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} /></span>}
+            </button>
+          ) : (
           <button type="button" className={css.accountTrigger}>
             <span className={css.accountText}>
               <span className={css.accountName}>{current.name}</span>
@@ -280,22 +508,26 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
               ? <span className={chatMarkCss.chatMarkInline} data-tone={othersTone} role="img" aria-label={marks?.othersLabel ?? ""} title={marks?.othersLabel ?? undefined} />
               : pending.length > 0 && <span className={css.inviteDot} role="img" aria-label={t("web-pages.workspace.invitationsCount", { n: pending.length })} />}
             {respond.busy || signIn.busy
-              ? <span className={`${waitingCss.spinner} ${controlsCss.iconSpinner} ${css.accountSpinner}`} role="status" aria-label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
+              ? <Spinner className={css.accountSpinner} label={signIn.busy ? t("web-pages.workspace.openingSignIn") : t("web-pages.workspace.answering")} />
               : <ChevronsUpDown {...ICON} size={14} />}
           </button>
+          )}
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side="top" align="start" sideOffset={6}>
-            {/* The workspace in use first, as what the menu is about (as on the phone): its settings open from it. */}
-            {shown && (
-              <DropdownMenu.Item className={`${controlsCss.menuItem} ${css.menuCurrent}`} onSelect={() => navigate(`/w/${current.id}/settings/workspace`)}>
-                <span className={css.menuCurrentText}>
-                  <b>{shown.name}</b>
-                  <span className={shellCss.muted}>{t("web-pages.workspace.youAre", { role: ROLE_LABEL[shown.role] })} · {t("web-pages.workspace.stations", { n: shown.stations })} · {t("web-pages.workspace.people", { n: shown.members })}</span>
-                  {byAccount.length > 1 && <span className={shellCss.muted}>{current.account.email}</span>}
-                </span>
-                <span className={css.menuCurrentGo}>{t("web-pages.settings.title")}<ChevronRight {...ICON} size={14} /></span>
-              </DropdownMenu.Item>
+          <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${css.accountMenu}`} side={adder ? "right" : "top"} align={adder ? "end" : "start"} sideOffset={adder ? 10 : 6}>
+            {/* Seldom done: a line of small words atop, the list nearest the trigger it opens from; not rows to land on when reaching for a workspace. */}
+            {/* The rail's ＋ is for them alone: they are its rows. */}
+            {adder ? (
+              <>
+                <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
+                <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+                {pending.length > 0 && <DropdownMenu.Separator className={controlsCss.menuSep} />}
+              </>
+            ) : (
+            <div className={css.menuRare}>
+              <DropdownMenu.Item className={css.menuRareItem} onSelect={() => setCreating(true)}><span className={css.menuRareIcon}><Plus {...ICON} size={13} /></span>{t("web-pages.workspace.create")}</DropdownMenu.Item>
+              <DropdownMenu.Item className={css.menuRareItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><span className={css.menuRareIcon}><UserPlus {...ICON} size={13} /></span>{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
+            </div>
             )}
             {pending.length > 0 && (
               <>
@@ -311,41 +543,40 @@ function WorkspaceSwitcher({ current }: { current: WorkspaceEntry }) {
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: true }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.cloud.join")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && respond.arg.accept && <Spinner />}{t("web-pages.cloud.join")}
                       </DropdownMenu.Item>
                       <DropdownMenu.Item className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css.menuInviteBtn}`} disabled={respond.busy}
                         aria-busy={(respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept) || undefined}
                         onSelect={(e) => { e.preventDefault(); respond.run({ invite, accept: false }); }}>
-                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <span className={waitingCss.spinner} aria-hidden="true" />}{t("web-pages.workspace.ignore")}
+                        {respond.busy && respond.arg?.invite.id === invite.id && !respond.arg.accept && <Spinner />}{t("web-pages.workspace.ignore")}
                       </DropdownMenu.Item>
                     </span>
                     {respond.error && respond.arg?.invite.id === invite.id && <p className={`${controlsCss.fieldError} ${css.menuInviteError}`} role="alert">{respond.arg.accept ? t("web-pages.cloud.joinFailed", { error: errorText(respond.error) }) : t("web-pages.workspace.ignoreFailed", { error: errorText(respond.error) })}</p>}
                   </div>
                 ))}
-                <DropdownMenu.Separator className={controlsCss.menuSep} />
+                {!adder && <DropdownMenu.Separator className={controlsCss.menuSep} />}
               </>
             )}
-            {others.length > 0 && <DropdownMenu.Label className={controlsCss.menuLabel}>{t("web-pages.workspace.switchTo")}</DropdownMenu.Label>}
-            {/* Each workspace says whose it is under its name (a heading per account read as something to pick), what it holds at its end. */}
+            {/* Every workspace, the one in use among them, in an order of their own: switching often, each stays where the hand knows it. */}
+            {/* Each says whose it is under its name when there are accounts to tell apart, and the key that switches to it at its end. */}
             {/* Its page goes back to the chat last open there (WorkspaceHome). */}
-            {others.map(({ account, w }) => {
-              const mark = marks?.workspaces[w.id];
+            {!adder && all.map(({ account, w }, i) => {
+              const here = isCurrent(account.sub, w.id);
               return (
-              <DropdownMenu.Item key={w.id} className={controlsCss.menuItem} onSelect={() => navigate(`/w/${w.id}`)}>
+              <DropdownMenu.Item key={`${account.sub}/${w.id}`} className={controlsCss.menuItem} aria-current={here || undefined} onSelect={() => { if (!here) navigate(to(w.id)); }}>
+                <span className={css.menuCheck}>{here && <Check {...ICON} size={14} />}</span>
                 <span className={css.menuWorkspace}>
                   <span className={css.menuWorkspaceName}>
+                    {marked(w) && <WorkspaceMark w={w} size={14} />}
                     <span className={css.menuWorkspaceText}>{w.name}</span>
-                    <MarkCounts mark={mark} />
+                    {!here && <MarkCounts mark={marks?.workspaces[w.id]} />}
                   </span>
-                  <span className={css.menuStat}>{t("web-pages.workspace.stations", { n: w.stations })}</span>
-                  {byAccount.length > 1 ? <span className={shellCss.muted}>{account.email}</span> : <span />}<span className={css.menuStat}>{t("web-pages.workspace.people", { n: w.members })}</span>
+                  {byAccount.length > 1 && <span className={shellCss.muted}>{account.email}</span>}
                 </span>
+                {i < 9 && <span className={css.menuKey}>{workspaceKeyLabel(i)}</span>}
               </DropdownMenu.Item>
               );
             })}
-            <DropdownMenu.Separator className={controlsCss.menuSep} />
-            <DropdownMenu.Item className={controlsCss.menuItem} onSelect={() => setCreating(true)}><Plus {...ICON} />{t("web-pages.workspace.create")}</DropdownMenu.Item>
-            <DropdownMenu.Item className={controlsCss.menuItem} disabled={signIn.busy} onSelect={() => void signIn.signIn()}><UserPlus {...ICON} />{t("web-pages.workspace.addAccount")}</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

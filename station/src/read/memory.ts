@@ -1,16 +1,18 @@
 // The agents' memory, for the pages to show (GET /memory; the agents write it): the global one, and the shared skills
-// (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`.
+// (projects' memories among them). admin/mod.rs's route over agent_home.rs `agent_home_paths` and `list_skills`. A
+// workspace the station joined has its own (docs/multi-workspace.md): <agent home>/workspaces/<ws>.
 import { lstatSync, readFileSync, readdirSync, readlinkSync } from "node:fs";
+import { joinPath } from "../ops/paths.ts";
 import type { Json } from "./store.ts";
 
 /// The skills the station brings (agent_home.rs BUILTIN_SKILLS, and FEEDBACK_SKILL): rewritten at every start, so not
 /// edited on the pages.
-const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-feedback"];
+const BUILTIN = ["stillfail-jobs", "stillfail-show", "stillfail-viz", "stillfail-browser", "stillfail-login", "stillfail-cron", "stillfail-feedback"];
 /// What a project memory's description starts with.
 const PROJECT_PREFIX = "项目记忆：";
 
 /// Path::join as Rust has it: an absolute path replaces, nothing is normalised.
-const joined = (dir: string, name: string) => (name.startsWith("/") ? name : dir.endsWith("/") ? `${dir}${name}` : `${dir}/${name}`);
+const joined = joinPath;
 
 /// std::fs::read_to_string: the file as UTF-8, none when it does not read or is not UTF-8.
 const STRICT = new TextDecoder("utf-8", { fatal: true });
@@ -33,6 +35,11 @@ function readJson(path: string): Json {
 /// config.rs: the agents' home, `agentHome` in config.json under the data directory (default `agent`).
 function agentHome(raw: Json, dataDir: string): string {
   return joined(dataDir, typeof raw?.agentHome === "string" ? raw.agentHome : "agent");
+}
+
+/// The agents' home of the station whose data is in `dataDir`: their shared memory and skills.
+export function agentHomeOf(dataDir: string): string {
+  return agentHome(readJson(joined(dataDir, "config.json")), dataDir);
 }
 
 /// What a skill's sharing is (share/index.ts): shared from here (config.json `sharedSkills`), a copy of another
@@ -74,7 +81,26 @@ function sharing(dataDir: string, raw: Json, dir: string, name: string): Json {
   }
 }
 
-function listSkills(home: string, dataDir: string, raw: Json): Json[] {
+/// A skill's other files, the topics its SKILL.md points to (`design.md`…): each Markdown file beside it but the edits
+/// kept from an older copy (SKILL.conflict-*.md), by name.
+function skillFiles(dir: string): Json[] {
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((n) => n.endsWith(".md") && n !== "SKILL.md" && !/^SKILL\.conflict-/.test(n))
+    .sort(byBytes)
+    .flatMap((name) => {
+      const text = readText(joined(dir, name));
+      return text === null ? [] : [{ name, text }];
+    });
+}
+
+/// `shares`: whether its skills may be shared with other stations (the home workspace's only).
+function listSkills(home: string, dataDir: string, raw: Json, shares = true): Json[] {
   const dir = joined(home, "skills");
   let names: string[];
   try {
@@ -87,15 +113,16 @@ function listSkills(home: string, dataDir: string, raw: Json): Json[] {
     if (text === null) return [];
     const description = front(text, "description") ?? "";
     const builtin = BUILTIN.includes(name);
-    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin, text, share: builtin ? null : sharing(dataDir, raw, dir, name) }];
+    return [{ name, description, project: description.startsWith(PROJECT_PREFIX), builtin, text, files: skillFiles(joined(dir, name)), share: builtin || !shares ? null : sharing(dataDir, raw, dir, name) }];
   });
   return skills.sort((a, b) => Number(a.builtin) - Number(b.builtin) || Number(!a.project) - Number(!b.project) || byBytes(a.name, b.name));
 }
 
-/// GET /memory.
-export function memory(dataDir: string): Json {
+/// GET /memory: the home workspace's, or with `ws` the one of that joined workspace (none yet: empty).
+export function memory(dataDir: string, ws?: string): Json {
   const raw = readJson(joined(dataDir, "config.json"));
-  const home = agentHome(raw, dataDir);
+  if (ws !== undefined && !/^[0-9A-Za-z_-]{1,128}$/.test(ws)) throw new Error("not a workspace id");
+  const home = ws === undefined ? agentHome(raw, dataDir) : joined(joined(agentHome(raw, dataDir), "workspaces"), ws);
   const path = joined(home, "MEMORY.md");
-  return { global: { path, text: readText(path) ?? "" }, skills: listSkills(home, dataDir, raw) };
+  return { global: { path, text: readText(path) ?? "" }, skills: listSkills(home, dataDir, raw, ws === undefined) };
 }

@@ -12,7 +12,7 @@ export default {
     const dir = env.DIRECTORY.getByName("primary");
     if (path === "/test/login") {
       const sub = body.apple ? await dir.appleSubject(body.sub) : body.sub;
-      return env.ACCOUNTS.getByName(sub).create({ sub, email: body.email ?? "", name: body.name ?? "", picture: "", ...(body.apple ? { provider: "apple" as const } : {}) }, ulid(), "Test device", body.apple ? await encryptAppleGrant(env, "synthetic-grant") : undefined);
+      return env.ACCOUNTS.getByName(sub).create({ sub, email: body.email ?? "", name: body.name ?? "", picture: "", ...(body.apple ? { provider: "apple" as const } : {}) }, ulid(), "Test device", false, body.apple ? await encryptAppleGrant(env, "synthetic-grant") : undefined);
     }
     if (path === "/test/workspace") return reply(await dir.createWorkspace(body.sub, "Shared test workspace", true, null));
     if (path === "/test/add") return reply(await dir.addMembers(body.sub, body.workspace, "member", [body.email]));

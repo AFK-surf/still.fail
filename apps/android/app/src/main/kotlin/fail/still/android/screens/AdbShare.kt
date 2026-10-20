@@ -33,7 +33,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -46,6 +45,7 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.rememberTopic
 import fail.still.android.ui.C
+import fail.still.android.ui.CodeFont
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
 import fail.still.android.ui.NavBar
@@ -54,6 +54,8 @@ import fail.still.android.data.t
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import fail.still.android.ui.DoingMark
+import fail.still.android.ui.stationName
 
 /** What the phone has for Wireless debugging, read again as the page comes back and as the setting changes. */
 private data class Phone(val developer: Boolean, val wireless: Boolean, val wifi: Boolean, val canSwitch: Boolean)
@@ -115,22 +117,25 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                 ListRow(onClick = { if (here) app.act(t("android-misc.adb.stopWhat")) { app.core.call("adb.stop") } else start() }) {
                     Column(Modifier.weight(1f)) {
                         Text(t("android-misc.adb.title"), fontSize = 15.sp, color = C.ink)
+                        val stopped = view?.message?.takeIf { view.sharing == false }
                         val sub = when {
                             here -> state(view!!, now)
                             elsewhere -> t("android-misc.adb.elsewhere")
                             // Why it stopped by itself (its hour up, the station too old).
-                            view?.sharing == false && view.message != null -> view.message
+                            stopped != null -> stopped
                             else -> t("android-misc.adb.hour")
                         }
                         Text(sub, fontSize = 13.sp, color = if (here && view!!.adb in setOf("missing", "failed")) C.red else C.muted)
                     }
+                    // Until the station's adb has the phone (or says why not): what comes below waits on it.
+                    DoingMark(here && (view!!.phase != "offered" || view.adb == null || view.adb == "connecting"), null)
                     Switch(here)
                 }
                 if (here) {
                     view!!.serial?.takeIf { view.adb == "connected" }?.let { serial ->
                         ListRow {
                             Text(t("android-misc.adb.agentsUse"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                            SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = C.muted) }
+                            SelectionContainer { Text("adb -s $serial", fontSize = 13.sp, fontFamily = CodeFont, color = C.muted) }
                         }
                     }
                     // What the station said, when it says more than the line above.
@@ -147,7 +152,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                     if (!phone.wireless && AdbShare.switchOn(context)) phone = phone.copy(wireless = true) else AdbShare.openWireless(context)
                 }) {
                     Text(t("android-misc.adb.wireless"), fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-                    Text(if (phone.wireless) t("android-misc.adb.on") else if (phone.canSwitch) t("android-misc.adb.wireless.turnOn") else t("android-misc.adb.wireless.settings"), fontSize = 14.sp, color = if (phone.wireless) C.muted else C.accent)
+                    Text(if (phone.wireless) t("android-misc.adb.on") else if (phone.canSwitch) t("android-misc.adb.wireless.turnOn") else t("android-misc.adb.wireless.settings"), fontSize = 14.sp, color = if (phone.wireless) C.muted else C.link)
                 }
             }
             if (here && view!!.adb == "unpaired") Pairing(view)
@@ -165,7 +170,7 @@ fun AdbShareScreen(current: WorkspaceEntry, address: String) {
                             Text(t("android-misc.adb.grant.title"), fontSize = 15.sp, color = C.ink)
                             Text(t("android-misc.adb.grant.note"), fontSize = 13.sp, color = C.muted)
                         }
-                        DoingMark(busy, app.failedOf("adb.grant"), 14.dp)
+                        DoingMark(busy, app.failedOf("adb.grant"))
                         Switch(false)
                     }
                 }
@@ -188,20 +193,36 @@ private fun Need(title: String, ok: Boolean, value: String) {
     }
 }
 
-/** The first time with a station: its adb pairs with the phone through the pairing dialog's code. */
+/**
+ * The first time with a station: its adb pairs with the phone through the pairing dialog's code, read off the dialog
+ * where the person turned that on (AdbCodeReader, asked for here), else typed into the notification or, split, here.
+ */
 @Composable
 private fun Pairing(view: AdbShareView) {
     val app = LocalApp.current
     val context = LocalContext.current
     val busy = app.isDoing("adb.pair")
+    // Back from Accessibility's settings.
+    var reads by remember { mutableStateOf(AdbShare.reads(context)) }
+    LifecycleResumeEffect(Unit) {
+        reads = AdbShare.reads(context)
+        onPauseOrDispose {}
+    }
     SectionHeader(t("android-misc.adb.pair.title"), start = 24.dp)
     ListCard {
+        ListRow(onClick = { AdbShare.openReader(context) }) {
+            Column(Modifier.weight(1f)) {
+                Text(t("android-misc.adb.reader.title"), fontSize = 15.sp, color = C.ink)
+                Text(t("android-misc.adb.reader.note"), fontSize = 13.sp, color = C.muted)
+            }
+            Text(if (reads) t("android-misc.adb.on") else t("android-misc.adb.reader.turnOn"), fontSize = 14.sp, color = if (reads) C.muted else C.link)
+        }
         ListRow(onClick = { AdbShare.openWireless(context, beside = true) }) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-misc.adb.pair.open"), fontSize = 15.sp, color = C.ink)
-                Text(t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
+                Text(if (reads) t("android-misc.adb.pair.open.auto") else t("android-misc.adb.pair.open.note"), fontSize = 13.sp, color = C.muted)
             }
-            Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.accent)
+            Text(t("android-misc.adb.pair.go"), fontSize = 14.sp, color = C.link)
         }
         // Split screen: the code typed here instead (in full screen, coming back here closes the dialog).
         ListRow(onClick = if (view.pairPort == null || busy) null else ({
@@ -214,7 +235,7 @@ private fun Pairing(view: AdbShareView) {
                 Text(t("android-misc.adb.pair.here"), fontSize = 15.sp, color = if (view.pairPort == null) C.subtle else C.ink)
                 Text(if (view.pairPort == null) t("android-misc.adb.pair.here.wait") else t("android-misc.adb.pair.here.split"), fontSize = 13.sp, color = C.muted)
             }
-            DoingMark(busy, app.failedOf("adb.pair"), 14.dp)
+            DoingMark(busy, app.failedOf("adb.pair"))
         }
     }
 }

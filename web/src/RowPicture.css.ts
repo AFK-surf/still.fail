@@ -1,7 +1,8 @@
 // RowPicture.tsx: who stands beside a chat row's title. The row sets `--mark-around`, its ground: the
 // gaps between overlapping pictures are cut in it.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { overlap } from "@stillfail/ui/styles/align.ts";
 
 /** A person, round; who started the chat ringed in ink, a gap of the row's ground between. */
 export const face = style({
@@ -18,10 +19,10 @@ globalStyle(`${face}[data-starter]::after`, {
 globalStyle(`${face}[data-starter] > *`, { boxShadow: `0 0 0 1px var(--mark-around)` });
 /** Small at the title's end: a row of pictures overlapping a little. */
 export const aside = style({ display: "inline-flex", alignItems: "center", flex: "none", paddingLeft: 2 });
-globalStyle(`${aside} > * + *`, { marginLeft: -3 });
+globalStyle(`${aside} > * + *`, overlap(3));
 globalStyle(`${aside} > ${face}:not([data-starter])`, { boxShadow: `0 0 0 1px var(--mark-around)` });
 // Who started it on top of the others: its ring whole.
 globalStyle(`${aside} > ${face}[data-starter]`, { zIndex: 1, marginRight: 1 });
 export const asideAgent = style({ display: "inline-flex", alignItems: "center", gap: 1, minWidth: 16, height: 16, justifyContent: "center", color: vars.muted });
 globalStyle(`${asideAgent} + ${asideAgent}`, { marginLeft: 4 });
-export const asideMore = style({ marginLeft: "3px !important", fontSize: vars.textXs, color: vars.muted, fontVariantNumeric: "tabular-nums" });
+export const asideMore = style({ marginLeft: "3px !important", fontSize: vars.textMeta, color: vars.muted, fontVariantNumeric: "tabular-nums" });

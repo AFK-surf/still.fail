@@ -19,6 +19,14 @@ test("paths under home directories lose the home; quoted text in messages is cut
   assert.equal(scrubMessage("session task failed", HOME), "session task failed");
 });
 
+test("Windows' home directories lose the home too, as written, as a URL and as JSON escapes them", () => {
+  const home = "C:\\Users\\pengx";
+  assert.equal(scrubPaths("at C:\\Users\\pengx\\still\\hub.ts:12:3", home), "at ~\\still\\hub.ts:12:3");
+  assert.equal(scrubPaths("ENOENT: open 'C:\\Users\\bob\\.ember\\x.json'", home), "ENOENT: open '~\\.ember\\x.json'");
+  assert.equal(scrubPaths("file:///C:/Users/carol/a.ts", home), "file:///~/a.ts");
+  assert.equal(scrubPaths('{"path":"D:\\\\Users\\\\dan\\\\x"}', home), '{"path":"~\\\\x"}');
+});
+
 test("without a key in the build, or turned off, nothing is reported", async () => {
   assert.equal(builtKey(mkdtempSync(join(tmpdir(), "ui-"))), null);
   const none = new ErrorReports({ key: null, enabled: () => true, station: () => "st1", home: HOME });

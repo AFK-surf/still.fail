@@ -5,9 +5,10 @@
 //   the machine's current access token (CLAUDE_CODE_OAUTH_TOKEN) and never refresh. It is read where claude reads it:
 //   on macOS the keychain first, then the file (a claude run by hand saves to the keychain and deletes the file).
 import { execFile } from "node:child_process";
-import { lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync, unlinkSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { wall } from "../ops/fibers.ts";
+import { platform } from "../platform/index.ts";
 
 export type Env = Record<string, string | undefined>;
 
@@ -17,13 +18,28 @@ export const CLAUDE_TOKEN_MARGIN_MS = 5 * 60_000;
 
 export type MachineToken = { token: string; expiresAt: number };
 
-const homeOf = (env: Env) => env.HOME ?? ".";
+const homeOf = (env: Env) => platform.home(env) ?? ".";
 export const claudeCredentialsFile = (env: Env) => join(homeOf(env), ".claude", ".credentials.json");
 export const codexHome = (env: Env) => (env.CODEX_HOME ? env.CODEX_HOME : join(homeOf(env), ".codex"));
 export const codexAuthFile = (env: Env) => join(codexHome(env), "auth.json");
 
 /// The keychain item Claude Code keeps the machine's login in on macOS (no CLAUDE_CONFIG_DIR, so no suffix).
 const CLAUDE_KEYCHAIN_ITEM = "Claude Code-credentials";
+
+type KeychainRead = { kind: "found"; text: string } | { kind: "missing" } | { kind: "unreadable" };
+
+/// Only errSecItemNotFound (security's exit 44) permits a file fallback. A locked keychain, denied access,
+/// timeout or missing executable says nothing about whether its login exists; using a stale file can replay a
+/// refresh token already rotated by the CLI. Shared by discovery and the refresh path so they choose the same store.
+export function readClaudeKeychain(env: Env): Promise<KeychainRead> {
+  return new Promise((resolve) => {
+    execFile("security", ["find-generic-password", "-w", "-s", CLAUDE_KEYCHAIN_ITEM], { env, timeout: 10_000, killSignal: "SIGKILL" }, (error, stdout) => {
+      if (!error) resolve({ kind: "found", text: String(stdout) });
+      else if (error.code === 44 && !error.killed && !error.signal) resolve({ kind: "missing" });
+      else resolve({ kind: "unreadable" });
+    });
+  });
+}
 
 export function parseClaudeCredentials(text: string): MachineToken | undefined {
   try {
@@ -38,14 +54,10 @@ export function parseClaudeCredentials(text: string): MachineToken | undefined {
 
 /// The machine's Claude Code login where claude reads it: on macOS the keychain first, then the file.
 export async function readClaudeCredentials(env: Env): Promise<MachineToken | undefined> {
-  if (process.platform === "darwin") {
-    const found = await new Promise<string | undefined>((resolve) =>
-      execFile("security", ["find-generic-password", "-w", "-s", CLAUDE_KEYCHAIN_ITEM], { env, timeout: 10_000 }, (error, stdout) =>
-        resolve(error ? undefined : String(stdout).trim()),
-      ),
-    );
-    const parsed = found === undefined ? undefined : parseClaudeCredentials(found);
-    if (parsed) return parsed;
+  if (platform.hasKeychain) {
+    const found = await readClaudeKeychain(env);
+    if (found.kind === "found") return parseClaudeCredentials(found.text);
+    if (found.kind === "unreadable") return undefined;
   }
   try {
     return parseClaudeCredentials(readFileSync(claudeCredentialsFile(env), "utf8"));
@@ -66,18 +78,9 @@ export async function machineClaudeToken(env: Env): Promise<MachineToken> {
   return found;
 }
 
-/// A machine profile's Codex home, sharing the machine's login: its auth.json a link to the machine's. Made again when
-/// something replaced it (a sign-in in the home, say).
+/// A machine profile's Codex home, sharing the machine's login: its auth.json the machine's file (platform.shareFile:
+/// a link, or where one is refused a hard link). Made again when something replaced it (a sign-in in the home, say).
 export function linkCodexAuth(home: string, env: Env) {
-  const target = codexAuthFile(env);
-  const link = join(home, "auth.json");
   mkdirSync(home, { recursive: true });
-  try {
-    const meta = lstatSync(link);
-    if (meta.isSymbolicLink() && readlinkSync(link) === target) return;
-    unlinkSync(link);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  symlinkSync(target, link);
+  platform.shareFile(codexAuthFile(env), join(home, "auth.json"));
 }

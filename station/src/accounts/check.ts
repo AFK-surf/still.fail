@@ -4,9 +4,11 @@
 import { accessKinds, needsKey, runtimesFor } from "./profiles.ts";
 import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
+import { RUNTIME_KINDS } from "../agents/runtime.ts";
+import { checkAgentEnv } from "../ops/agent-env.ts";
 
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
-const RUNTIMES = ["claude", "codex"];
+const RUNTIMES: string[] = RUNTIME_KINDS;
 const MODES = ["multi-session", "single-session"];
 
 /// config.rs `id_ok`: a lowercase letter or digit, then those and dashes.
@@ -44,6 +46,17 @@ export function checkConfig(raw: any, _data: string): void {
     if (!isObject(raw.tools)) throw new Error(`invalid type: ${describe(raw.tools)}, expected struct RawTools`);
     if (raw.tools.access !== undefined && !["off", "read", "full"].includes(raw.tools.access)) throw new Error("tools.access: one of off, read, full");
   }
+  // The variables for what it starts for its agents (src/ops/agent-env.ts).
+  checkAgentEnv(raw.agentEnv);
+  // The drive's folders (src/drive/drive.ts).
+  if (raw.drive !== undefined && raw.drive !== null) {
+    if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);
+    const roots = raw.drive.roots;
+    if (roots !== undefined && roots !== null && (!Array.isArray(roots) || roots.some((r: unknown) => typeof r !== "string"))) throw new Error("drive.roots: a list of paths");
+    // Those of the workspaces the station joined (docs/multi-workspace.md), by workspace id.
+    const joined = raw.drive.workspaces;
+    if (joined !== undefined && joined !== null && (!isObject(joined) || Object.values(joined).some((l) => !Array.isArray(l) || l.some((r: unknown) => typeof r !== "string")))) throw new Error("drive.workspaces: a list of paths for each workspace");
+  }
   const profiles = raw.profiles ?? [];
   if (!Array.isArray(profiles)) throw new Error(`invalid type: ${describe(profiles)}, expected a sequence`);
   const profileIds: string[] = [];
@@ -67,6 +80,10 @@ export function checkConfig(raw: any, _data: string): void {
     if (p.env !== undefined && p.env !== null && (!isObject(p.env) || Object.values(p.env).some((v) => typeof v !== "string"))) {
       throw new Error("invalid type: expected a map of strings");
     }
+    // The joined workspaces kept from it (docs/multi-workspace.md).
+    if (p.withheld !== undefined && p.withheld !== null && (!Array.isArray(p.withheld) || p.withheld.some((w: unknown) => typeof w !== "string"))) {
+      throw new Error("invalid type: expected a sequence of strings");
+    }
 
     if (!idOk(p.id)) throw new Error(`profile id ${JSON.stringify(p.id)}: use lowercase letters, digits and dashes`);
     if (p.home === "") throw new Error(`profile ${p.id}: home is required`);
@@ -82,7 +99,7 @@ export function checkConfig(raw: any, _data: string): void {
       if (!source) throw new Error(`profile ${p.id}: api-provider needs a known provider`);
       if (endpoints(source, endpoint, protocol) === undefined) throw new Error(`profile ${p.id}: ${source.name} needs an endpoint address`);
     } else if (runtimes.length === 0) {
-      throw new Error(`profile ${p.id}: ${kind} needs a runtime (claude or codex)`);
+      throw new Error(`profile ${p.id}: ${kind} needs a runtime (claude, codex or dsh)`);
     }
     if (!runtimes.every((r) => accessKinds(r).includes(kind as any))) throw new Error(`profile ${p.id}: ${runtimes.join("/")} cannot use access ${kind}`);
     const key = String(access?.key ?? "").trim();

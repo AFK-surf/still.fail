@@ -78,14 +78,14 @@ export class Attention implements Owner {
   attended(topic: Topic, value: Value | undefined): Value | undefined {
     if (topic.topic !== "chat" || value === undefined || !("ok" in value)) return value;
     const station = topic.station as string;
-    const due = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, value.ok);
+    const { due, value: attended } = this.attend.chat(station, typeof topic.session === "string" ? topic.session : null, value.ok);
     const core = this.#core;
     for (const d of due) {
       core.runner.fork(
         Effect.catch(core.stations.read(station, d.read.thread, d.read.seq, null), () => Effect.sync(() => this.attend.failed(station, d))),
       );
     }
-    return value;
+    return { ok: attended };
   }
 
   /// This device's push registration, given to the accounts that do not have it yet.
@@ -121,10 +121,15 @@ export class Attention implements Owner {
           });
         case "set":
           return Effect.gen(function* () {
-            yield* attend.set(c.on, c.asked);
+            yield* attend.set(c.on, c.asked, c.kinds, c.preview);
             store.invalidateAll((t) => t.topic === "notify");
             if (c.on === false && handlers.pushUnregister) yield* handlers.pushUnregister(core, { kind: "pushUnregister" }, progress, at, ctx);
             return attend.value(null);
+          });
+        case "permission":
+          return Effect.sync(() => {
+            if (attend.permit(c.state)) store.invalidateAll((t) => t.topic === "notify");
+            return null;
           });
         case "claim":
           return Effect.sync(() => {
@@ -133,7 +138,9 @@ export class Attention implements Owner {
             return { show };
           });
         case "pushed":
-          return Effect.succeed({ show: attend.pushed(c.workspace) });
+          return Effect.succeed({ show: attend.pushed(c.workspace, c.notice) });
+        case "bring":
+          return Effect.as(core.stations.bringPushed(c.station, c.session, c.seq), null);
       }
     };
     handlers.pushRegister = (_inner, call) => {

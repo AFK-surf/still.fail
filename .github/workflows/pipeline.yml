@@ -2,14 +2,16 @@
 #   a branch: the full check (scripts/check.sh) of what it changes from main, and every part it touches built and
 #             bundled (deploy.py --dry-run): evidence for its merge; nothing deployed, no secrets.
 #   main:     the full check of what changed since the last deploy (the tag deployed/beta), then what changed of it goes
-#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview and youdid.wtf,
+#             out, the API first: api, then the test channel's web app (app.youdid.wtf), admin, preview, share and youdid.wtf,
 #             its station release (then studio's station updates to it), its Android app and its desktop app (built
 #             and signed on the organization Mac runner with the existing certificate).
 #             Nothing goes out after a step that fails; the tag moves to the commit once all of it is out.
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
-# and engine) are prebuilt: the natives job builds those whose key the release
+# and engine, the desktop's dock, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
 # native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
-# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust.
+# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust. The mbui
+# app's Windows shell and engine are prebuilt on a development Mac instead (node scripts/native.ts prebuild: cross-built,
+# put in the releases bucket by their keys) and never built here: windows-natives fetches them and runs the shell's tests.
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
@@ -26,16 +28,20 @@ permissions:
   contents: read
 env:
   # The native parts a branch's checks and builds use (the Linux station parts are built and published from main; the
-  # Linux check's mesh addon is built on a branch that changed it).
-  BRANCH_NATIVES: mesh:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64
+  # Linux check's mesh addon is built on a branch that changed it). ffmpeg, all three, on a branch that changed
+  # scripts/ffmpeg.ts: nothing on a branch runs it, but its build there is the evidence for the merge.
+  BRANCH_NATIVES: mesh:darwin-arm64 dock:darwin-arm64 launcher:darwin-arm64 runner:darwin-arm64 archive-rs:darwin-arm64 iroh-wasm shell engine mesh:linux-x64 mesh:win32-x64 launcher:win32-x64 runner:win32-x64 window-controls:win32-x64 notify-permission:darwin-arm64 notify-permission:win32-x64 helper:darwin-arm64 ffmpeg:darwin-arm64 ffmpeg:linux-x64 ffmpeg:linux-arm64
 jobs:
-  # Every job runs on Blacksmith's machines or mini1, not on GitHub's own: when GitHub's runners were short (Actions
-  # degraded, 2026-10-05), a job waiting for one held each run 15 minutes and was cancelled, nothing released.
+  # What can runs on mini1; what needs Linux (the Linux check) and the small jobs (plan, the API's deploy, put, the
+  # changelog, timing) on GitHub's own runners, free for a public repository, not on Blacksmith's (2026-10-15, as asked).
+  # GitHub's runners were short once (Actions degraded, 2026-10-05): a job waiting for one held each run 15 minutes and
+  # was cancelled, nothing released.
   plan:
     # Trusted repository pushes only. Never add pull_request or pull_request_target here:
     # deployment jobs use production secrets; local signing stays isolated.
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       range: ${{ steps.plan.outputs.range }}
       parts: ${{ steps.plan.outputs.parts }}
@@ -43,9 +49,16 @@ jobs:
       static: ${{ steps.plan.outputs.static }}
       relay: ${{ steps.plan.outputs.relay }}
       station: ${{ steps.plan.outputs.station }}
+      modules: ${{ steps.plan.outputs.modules }}
       android: ${{ steps.plan.outputs.android }}
+      android_lint: ${{ steps.plan.outputs.android_lint }}
       desktop: ${{ steps.plan.outputs.desktop }}
+      desktop_web: ${{ steps.plan.outputs.desktop_web }}
+      windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
+      windows_natives: ${{ steps.plan.outputs.windows_natives }}
+      mbui: ${{ steps.plan.outputs.mbui }}
+      mbui_native: ${{ steps.plan.outputs.mbui_native }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -75,19 +88,53 @@ jobs:
           if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.web-beta\.jsonc)$)' && [ ${#static[@]} = 0 ]; then static+=(web-beta); fi
           if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(deploy\.py|build-static\.ts|wrangler\.admin\.jsonc)$)'; then static+=(admin); fi
           if has '^cloud/(src/preview\.ts|build-static\.ts|wrangler\.preview\.jsonc)$'; then static+=(preview); fi
+          # The share host's page is the web's Markdown and visualizations, its words, the iroh it binds (client/), and its headers.
+          if has '^(web/|client/|package\.json$|pnpm-lock\.yaml$|cloud/(src/share\.ts|share-hosts\.ts|build-static\.ts|wrangler\.share\.jsonc|wrangler\.jsonc|deploy\.py)$)'; then static+=(share); fi
           if has '^(web/src/site/|cloud/wrangler\.site-beta\.jsonc$)'; then static+=(site-beta); fi
           api=false
-          if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview)\.ts$'; then api=true; fi
+          if printf '%s\n' "$changed" | grep -E '^cloud/(src/|wrangler\.jsonc$|package\.json$|deploy\.py$)' | grep -qvE '^cloud/src/(relay|relay-worker|limits|preview|share)\.ts$'; then api=true; fi
           relay=false
           if has '^cloud/(src/(relay|relay-worker|limits|auth)\.ts|Dockerfile|relay-entrypoint\.sh|wrangler\.relay\.jsonc)$'; then relay=true; fi
           station=false
-          # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says.
-          if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then station=true; fi
+          # The station in TypeScript, its native parts (vendor/: the mesh addon's iroh), the words it says, the installer
+          # it carries (cloud/src/install*.ts: scripts/installers.ts).
+          if has '^(station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|client/i18n/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native|installers|release-sign)\.ts$|cloud/src/(install|install-windows|i18n)\.ts$)'; then station=true; fi
+          # The modules' packages (scripts/module-bundle.ts): what one packs (its module.json says), or how they are packed
+          # and signed: modules=….
+          eval "$(printf '%s\n' "$changed" | node scripts/module-bundle.ts plan)"
           android=false
           if printf '%s\n' "$changed" | sh apps/android/carries.sh; then android=true; fi
-          # The desktop app carries the core, the web app and a station: any of them changed is a new app.
-          desktop=false
-          if has '^(apps/desktop/|client/|web/|station/(src|native)/|station/(package\.json|pnpm-lock\.yaml)$|vendor/|bin/|scripts/(release|station-bundle)\.sh$|scripts/(posthog-key|native)\.ts$)'; then desktop=true; fi
+          # check-android-lint: only for a change lint can find anything in (apps/android/lints.sh), or a branch's to
+          # .github/ (its check then runs as if all changed).
+          android_lint=false
+          if printf '%s\n' "$changed" | sh apps/android/lints.sh || { [ "$GITHUB_REF" != refs/heads/main ] && has '^\.github/'; }; then
+            android_lint=true
+          fi
+          # The desktop app carries the core, a station and the web app. A change to the first two (its shell) is a new
+          # app; to the web app alone, a web release the beta app takes without one (scripts/desktop-web.ts,
+          # docs/desktop-web-updates.md): desktop=… and desktop_web=….
+          eval "$(printf '%s\n' "$changed" | node scripts/desktop-web.ts plan)"
+          # A branch's Windows app and its smoke run (windows-build, windows-smoke): only for what is Windows' own in it,
+          # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
+          windows=false
+          if has '^(apps/desktop/|station/native/mesh/|vendor/|scripts/native\.ts$|\.github/windows-smoke\.ps1$)'; then windows=true; fi
+          # The mbui app's Windows shell and engine, prebuilt: fetched and the shell's tests run (windows-natives), for a
+          # change to what they are made of.
+          windows_natives=false
+          if has '^(client/shell/|client/Cargo\.(toml|lock)$|vendor/|apps/mbui/engine/|scripts/native\.ts$)'; then windows_natives=true; fi
+          # The mbui app's own tests (check-mbui, mbui-check.yml; main's run there on their own): for a change to it, or
+          # to the mbui it pins (apps/mbui/mbui.rev).
+          mbui=false
+          if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
+          # The same tests on native (check-mbui's native): only where native can differ from js, a change to the hosts,
+          # the FFI (*_native.mbt, C and Objective-C), the packages' link options (moon.pkg) or the mbui it pins, or to
+          # how they are run (on main, mbui-check.yml's own run has them for any change to the app).
+          mbui_native=false
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            mbui_native=$mbui
+          elif has '^apps/mbui/(mbui\.rev$|src/host/|scripts/test\.sh$|(.*/)?moon\.pkg$|.*_native\.mbt$|.*\.(c|h|m|mm|cpp)$)' || has '^\.github/workflows/(pipeline|mbui-check)\.yml$'; then
+            mbui_native=true
+          fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -95,10 +142,17 @@ jobs:
             echo "api=$api"
             echo "relay=$relay"
             echo "station=$station"
+            echo "modules=$modules"
             echo "android=$android"
+            echo "android_lint=$android_lint"
             echo "desktop=$desktop"
+            echo "desktop_web=$desktop_web"
+            echo "windows=$windows"
+            echo "windows_natives=$windows_natives"
+            echo "mbui=$mbui"
+            echo "mbui_native=$mbui_native"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station android=$android desktop=$desktop relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui mbui_native=$mbui_native"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -107,8 +161,8 @@ jobs:
   natives:
     needs: plan
     if: needs.plan.outputs.natives == 'needed'
-    runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    runs-on: [self-hosted, quick]
+    timeout-minutes: 10
     permissions:
       contents: write # the release native-artifacts' assets, on main only
     steps:
@@ -139,6 +193,54 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
 
+  # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt on a development Mac, cross-built
+  # (node scripts/native.ts prebuild), and put in the releases bucket by their keys; CI never builds them. Here, on
+  # GitHub's Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails,
+  # saying how to prebuild it), and the shell's tests, built with it, run where it runs.
+  windows-natives:
+    needs: plan
+    if: needs.plan.outputs.windows_natives == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # the keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - name: The Windows engine and shell, prebuilt; the shell's tests
+        run: |
+          node scripts/native.ts fetch engine win32-x64
+          shell=$(node scripts/native.ts fetch shell win32-x64)
+          for t in "$shell"/tests/*.exe; do echo "== $(basename "$t")"; "$t" --test-threads=2 || exit 1; done
+
+  # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
+  # native-artifacts from a development Mac, copied over: nothing is built here), once the API (which serves natives/)
+  # is out. Seconds when the store has them.
+  natives-store:
+    needs: [plan, api]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Copy what the store lacks from the release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/native.ts store-sync
+
+  # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
+  # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
+  # 4-5 minutes, and with it every job of the run, GitHub's too (2026-10-16).
+  # No job may take over 10 minutes (2026-10-16, as asked: none should; the longest, a stable Android release, ~7):
+  # one that does is stuck, and on mini1 it holds one of four runners every run waits on.
   # The full check (scripts/check.sh) in two jobs: the parts that need a Mac (the station with its native parts' own
   # tests, client/'s Rust) here on mini1, the rest beside it on Linux (check-linux). In each, the steps run side by
   # side, so a part the range leaves alone costs nothing. Rust builds in targets under the job's own (setup-mac,
@@ -147,7 +249,10 @@ jobs:
   check:
     needs: plan
     runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    # Usually under 2 minutes, all of it with Rust built anew a few: a test that hangs (one waiting on what never comes,
+    # up to its 10 minutes each) held one of mini1's four runners for most of an hour, and every run behind it waited
+    # (2026-10-16, station/test/mesh-handover.test.ts on branches whose mesh needed a service it did not give).
+    timeout-minutes: 10
     env:
       STILLFAIL_CHECK_PART: station core
     steps:
@@ -159,7 +264,7 @@ jobs:
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           # Its guards beside it: the stable release's selection, and (a branch) nothing merged into main taken back by
-          # a squash onto a main that moved (scripts/undone.sh).
+          # a squash onto a main that moved (scripts/undone.sh), and no `Changelog: none` (scripts/changelog.ts).
           python3 -m unittest discover -s .github -p 'test_stable_plan.py' > "$RUNNER_TEMP/stable.log" 2>&1 &
           stable=$!
           undone=""
@@ -170,21 +275,24 @@ jobs:
           status=0
           if [ "$range" = all ]; then sh scripts/check.sh all || status=1; else sh scripts/check.sh full "$range" || status=1; fi
           if wait $stable; then echo "· stable release selection guards … ok"; else echo "· stable release selection guards … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/stable.log"; status=1; fi
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            if node scripts/changelog.ts --refuse "$(git merge-base HEAD origin/main)..HEAD"; then echo "· no Changelog: none … ok"; else echo "· no Changelog: none … FAILED"; status=1; fi
+          fi
           if [ -n "$undone" ]; then
             if wait $undone; then echo "· undoes nothing on main … ok"; else echo "· undoes nothing on main … FAILED"; sed 's/^/    /' "$RUNNER_TEMP/undone.log"; status=1; fi
           fi
           exit $status
 
-  # The parts of the full check that need no Mac, each on a Linux runner of its own (ts; android, with a branch's debug
-  # app), so they never wait for one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
+  # The part of the full check that needs no Mac (ts) on a Linux runner of its own (android is mini1's, check-android),
+  # so it never waits for one of mini1's (2026-10-04: a run's jobs there queued up to 4 minutes behind one
   # another) nor for each other (in one job, Gradle waited for the real-time tests before it). The native parts they
   # use come from the release or this run's natives job (mesh and iroh's relay for linux-x64, Android's shell and
   # engine); what passed before at the same inputs is kept in the Actions cache (scripts/check.sh, `remembered`).
   check-linux:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       STILLFAIL_CHECK_PART: ts
     steps:
@@ -203,13 +311,53 @@ jobs:
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
 
+  # The mbui app's check and tests on js and, where native can differ (plan's mbui_native), on native: mbui-check.yml,
+  # main's there on its own.
+  check-mbui:
+    needs: plan
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.mbui == 'true' }}
+    uses: ./.github/workflows/mbui-check.yml
+    with:
+      native: ${{ needs.plan.outputs.mbui_native == 'true' }}
+
+  # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
+  # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
+  # the motion in two since its cases grew to over two minutes (2026-10-17).
+  check-browser:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        share: ["stories 1/3", "stories 2/3", "stories 3/3", "motion 1/2", "motion 2/2"]
+    env:
+      STILLFAIL_CHECK_PART: browser
+      STILLFAIL_BROWSER: ${{ matrix.share }}
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: Full check (browser, ${{ matrix.share }})
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  # The Android app's check on GitHub's runners (2026-10-17, as asked): on mini1, two or three of them side by side with
+  # the builds took 200-230 s each (100-150 alone), 23% of its runs over budget. Here Gradle's caches are restored each
+  # run (on Blacksmith's 8 cores 80-130 s, 2026-10-08).
   check-android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Its Kotlin, unit tests and debug app; its lint beside it (check-android-lint), which nothing released waits for.
     env:
       STILLFAIL_CHECK_PART: android
+      STILLFAIL_ANDROID: build
       # A branch: the debug app made in the check's Gradle run (main releases its own: android).
       STILLFAIL_CHECK_APK: ${{ github.ref != 'refs/heads/main' && '1' || '' }}
     steps:
@@ -224,7 +372,73 @@ jobs:
           path: ~/.cache/stillfail-check
           key: check-android-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: check-android-${{ runner.os }}-
-      - name: Full check (android)
+      # The app's build directories and Gradle's state of the project, as the last run of this branch (else main's) left
+      # them: what did not change is up to date, and Kotlin compiles and lint looks at what did (a fresh checkout built
+      # it all: Gradle 3-6 minutes on these four cores; kept, a change to code 2 minutes, most of it lint, 2026-10-17).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/android/.gradle
+            apps/android/build
+            apps/android/app/build
+            apps/android/core/build
+            apps/android/shared/build
+            apps/android/settings/build
+            apps/android/chat/build
+            apps/android/drive/build
+          key: android-build-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            android-build-${{ github.ref_name }}-
+            android-build-main-
+      - name: Full check (android, build)
+        run: |
+          range='${{ needs.plan.outputs.range }}'
+          if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
+          if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  check-android-lint:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.android == 'true' && needs.plan.outputs.android_lint == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Its lint (apps/android/lint.xml: only checks that are errors), for a change lint reads (plan: android_lint). Not
+    # waited for by what releases (put, changelog): the longest part of a run (4 of its 5 minutes, 2026-10-18), and an
+    # error it finds fails the run and holds deployed/beta (done), so the next run lints it again until it is fixed.
+    env:
+      STILLFAIL_CHECK_PART: android
+      STILLFAIL_ANDROID: lint
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+        with:
+          android: 'true'
+          ndk: 'false'
+      - uses: ./.github/actions/natives
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/stillfail-check
+          key: check-android-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: check-android-${{ runner.os }}-
+      # The app's build directories and Gradle's state of the project, as the last run of this branch (else main's) left
+      # them: what did not change is up to date, and Kotlin compiles and lint looks at what did (a fresh checkout built
+      # it all: Gradle 3-6 minutes on these four cores; kept, a change to code 2 minutes, most of it lint, 2026-10-17).
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/android/.gradle
+            apps/android/build
+            apps/android/app/build
+            apps/android/core/build
+            apps/android/shared/build
+            apps/android/settings/build
+            apps/android/chat/build
+            apps/android/drive/build
+          key: android-lint-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            android-lint-${{ github.ref_name }}-
+            android-lint-main-
+      - name: Full check (android, lint)
         run: |
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
@@ -235,8 +449,9 @@ jobs:
   bundle:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.api == 'true' || needs.plan.outputs.static == 'true') }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
+    # On GitHub's runners, not mini1: a dry run of half a minute that queued there behind the builds (2026-10-16).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -244,17 +459,18 @@ jobs:
       - name: deploy.py --dry-run
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
-  # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): Android on
-  # Linux, the desktop app and the TypeScript station's bundle on mini1.
+  # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): the desktop
+  # app and the TypeScript station's bundle (a branch's Android app is check-android's). On GitHub's macos-15 (free for
+  # a public repository): unsigned, it needs nothing of Mini1's (main's signed builds stay there, with its keychain).
   mac-build:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
-    runs-on: [self-hosted, mini1]
-    timeout-minutes: 60
+    runs-on: macos-15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: The TypeScript station's bundle (darwin-arm64)
         run: |
@@ -269,14 +485,75 @@ jobs:
           UNSIGNED=1 sh apps/desktop/build.sh --beta
           ls -la apps/desktop/out/*.zip
 
+  # The Windows app (beta, unsigned), built on mini1 beside mac-build, for windows-smoke: a branch's, when it changes
+  # what is Windows' own in it (plan: windows).
+  windows-build:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.windows == 'true' }}
+    runs-on: [self-hosted, mini1]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/natives
+      - name: The desktop app for Windows (beta, unsigned)
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline > /dev/null
+          (cd apps/desktop && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh apps/desktop/build.sh --beta --win
+          mkdir -p "$RUNNER_TEMP/win" && cp apps/desktop/out/*-win.exe "$RUNNER_TEMP/win/"
+      - uses: actions/upload-artifact@v4
+        with: { name: "desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/win", retention-days: 3 }
+
+  # The Windows app on a Windows machine (GitHub's: neither Blacksmith nor mini1 has one), a branch's only: installed,
+  # its iroh addon loaded by its Electron, started and its window photographed (.github/windows-smoke.ps1).
+  windows-smoke:
+    needs: [plan, windows-build]
+    if: ${{ !cancelled() && needs.windows-build.result == 'success' }}
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { sparse-checkout: .github }
+      - uses: actions/download-artifact@v4
+        with: { name: "desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/win" }
+      - name: Install, load, start
+        shell: pwsh
+        run: ./.github/windows-smoke.ps1 -Dir "$env:RUNNER_TEMP/win"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
+
+  # A branch: the one check main's protection requires (2026-10-20, as asked: what is red goes into main by nobody, an
+  # admin's merge too): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
+  # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
+  gate:
+    needs: [plan, natives, windows-natives, check, check-linux, check-mbui, check-browser, check-android, check-android-lint, bundle, mac-build, windows-build, windows-smoke]
+    if: always() && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "::error::a branch job failed or was cancelled: main's protection keeps this branch out"
+            exit 1
+          fi
+
+  # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
+  # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
   api:
-    needs: [plan, check, check-linux, check-android]
+    needs: [plan, check, check-linux, check-browser]
     # Not on the implicit success(): a skipped job before it (natives, when nothing native changed; check-android) would
     # skip it too (2026-10-04 to 05: the API was not deployed for a day). The checks it needs passed or were not needed.
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.plan.outputs.api == 'true' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' }}
+    runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -289,20 +566,21 @@ jobs:
           VAPID_JSON: ${{ secrets.VAPID_JSON }}
           FCM_SERVICE_ACCOUNT_JSON: ${{ secrets.FCM_SERVICE_ACCOUNT_JSON }}
           APPLE_JSON: ${{ secrets.APPLE_JSON }}
+          REVIEW_ACCOUNTS_JSON: ${{ secrets.REVIEW_ACCOUNTS_JSON }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: sh .github/deploy.sh api
 
   static:
-    needs: [plan, natives, check, check-linux, check-android, api]
+    needs: [plan, natives, check, check-linux, check-browser, api]
     # After the API (a page may need what it adds), or without it when it did not change.
-    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    if: always() && github.ref == 'refs/heads/main' && needs.plan.outputs.static == 'true' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the web app's build number (__BUILD__, build.json) is the commits in the history
-      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
       - name: Deploy ${{ needs.plan.outputs.parts }}
         env:
@@ -318,22 +596,24 @@ jobs:
   # at them yet); the station's (named the same each time: what installs get) and every feed are kept as this run's
   # artifact and put by `put` once the check passed and the API is out (scripts/release-put.sh).
 
-  # The station's (darwin-arm64, linux-x64, linux-arm64): what a station on the test channel updates to.
+  # The station's (darwin-arm64, linux-x64, linux-arm64, win32-x64): what a station on the test channel updates to.
   station:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.station == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the release's number is the commits in the history
       - uses: ./.github/actions/setup-mac
-      - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64)
+      - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64, win32-x64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+          # The key the release is signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
         run: sh .github/release.sh station
       - uses: actions/upload-artifact@v4
@@ -343,15 +623,13 @@ jobs:
   android:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.android == 'true' }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # versionCode is the commits in the history
-      - uses: ./.github/actions/setup
-        with:
-          android: 'true'
+      - uses: ./.github/actions/setup-mac
       - uses: ./.github/actions/natives
       - name: Build and sign the beta Android app
         env:
@@ -369,12 +647,13 @@ jobs:
         with: { name: "release-android-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
   # The desktop app (fail.still.desktop.beta), on desktop/stillfail-beta-mac.yml: built and signed on the organization Mac.
+  # Its Windows app is desktop-win's, beside it: one after the other they took ~140 s, then their 268 MB went up.
   desktop:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
     runs-on: [self-hosted, mini1]
     environment: production
-    timeout-minutes: 90
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
@@ -385,7 +664,7 @@ jobs:
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
-        run: python3 .github/release-desktop.py --out "$RUNNER_TEMP/release"
+        run: python3 .github/release-desktop.py --only mac --out "$RUNNER_TEMP/release"
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -393,16 +672,107 @@ jobs:
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
-        with: { name: "release-desktop-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+        with: { name: "release-desktop-mac-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
+  # The Windows desktop app (beta), on desktop/stillfail-beta.yml: built on the organization Mac too (build.sh --win),
+  # in a runner of its own beside desktop's Mac app. Not code-signed; its installer's .sig is (docs/release-signing.md).
+  desktop-win:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop == 'true' }}
+    runs-on: [self-hosted, mini1]
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup-mac
+      - name: Build the beta Windows desktop app and sign its installer's .sig
+        env:
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # The installer's signature (its .sig): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: python3 .github/release-desktop.py --only win --out "$RUNNER_TEMP/release"
+      - name: Put its files (named by its version, nothing points at them until put writes the feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-win-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
+  # The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): when the web app changed and
+  # its shell did not (a change to the shell is a new app, desktop above, carrying it). The same build as the app
+  # carries (build:cloud's dist/cloud-web, PostHog's key in it), packed and its feed signed (scripts/desktop-web.ts); the
+  # archive, named by its version, is put at once, the feed by `put` once the check passed. On GitHub's runner: a few
+  # MB, nothing to sign with Apple's keys.
+  desktop-web:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.desktop_web == 'true' && needs.plan.outputs.desktop != 'true' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # its build number, and the oldest app it works in (the last commit changing the shell)
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: Build, pack and sign the beta desktop app's web app
+        env:
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline > /dev/null
+          if [ -n "$POSTHOG_JSON" ]; then printf '%s' "$POSTHOG_JSON" > "$RUNNER_TEMP/posthog.json"; export STILLFAIL_POSTHOG="$RUNNER_TEMP/posthog.json"; fi
+          node scripts/native.ts iroh-pkg > /dev/null
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          pnpm exec vp build --config web/vite.config.ts --mode cloud
+          node scripts/desktop-web.ts pack "$RUNNER_TEMP/release" --build "$(git rev-list --count HEAD)"
+      - name: Put its archive (named by its version, nothing points at it until put writes the feed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-desktop-web-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
+
+  # The modules' packages stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): when what one
+  # packs changed. Each one's archive, named by its version, is put at once (one already out is checked to be the same
+  # bytes: scripts/release.sh), its beta feed signed and put by `put` once the check passed. On GitHub's runner: plain
+  # files, nothing of a machine's in them. After natives: a module carrying a native part (the media service's ffmpeg,
+  # one archive a platform) takes the build the release native-artifacts has, which natives publishes first.
+  modules:
+    needs: [plan, natives]
+    if: ${{ !cancelled() && !failure() && github.ref == 'refs/heads/main' && needs.plan.outputs.modules == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # its version is the build of the last commit that changed what it packs
+      - uses: ./.github/actions/setup
+      - name: Pack and sign the modules' packages
+        env:
+          # The key the feeds are signed with (docs/release-signing.md): none is an error.
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+          RELEASE_DIR: ${{ runner.temp }}/release
+        run: sh .github/release.sh modules
+      - name: Put their archives (named by their version, nothing points at them until put writes the feeds)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: sh scripts/release-put.sh --files "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@v4
+        with: { name: "release-modules-${{ github.sha }}", path: "${{ runner.temp }}/release", retention-days: 7 }
 
   # What was built put in the bucket, once the check passed and the API and the web are out; nothing when a build
   # failed. Then the changelog that says so (scripts/changelog-put.sh): in this job, not one more after it.
   put:
-    needs: [plan, check, check-linux, check-android, api, static, station, android, desktop]
-    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && (needs.station.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success')
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: [plan, check, check-linux, check-browser, check-android, api, static, station, modules, android, desktop, desktop-win, desktop-web]
+    if: always() && github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result) && (needs.station.result == 'success' || needs.modules.result == 'success' || needs.android.result == 'success' || needs.desktop.result == 'success' || needs.desktop-web.result == 'success')
+    runs-on: ubuntu-24.04
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # the changelog's entries are numbered by the commits up to them
@@ -419,22 +789,26 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: sh scripts/changelog-put.sh
+      - name: Delete old installers and beta blockmaps (scripts/release-prune.ts says which stay)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/release-prune.ts
 
   station-update:
     needs: [station, put]
     if: always() && !cancelled() && github.ref == 'refs/heads/main' && needs.station.result == 'success' && needs.put.result == 'success'
-    runs-on: [self-hosted, mini1]
+    runs-on: [self-hosted, quick]
     timeout-minutes: 10
     steps:
       - name: studio's station takes the published release
-        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
+        run: ssh -o BatchMode=yes studio 'env -u EMBER_DATA -u STILLFAIL_DATA STILLFAIL_CHANNEL=beta ~/.local/bin/stillfail update --beta > /tmp/ember-station-update.log 2>&1 && tail -2 /tmp/ember-station-update.log'
 
   # The changelog, when nothing was released (put, which puts it after the releases, did not run): a fix in still.fail
   # cloud counts as out as soon as it is listed, not before the API carrying it is deployed.
   changelog:
-    needs: [plan, check, check-linux, check-android, api, static, put]
-    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    needs: [plan, check, check-linux, check-browser, check-android, api, static, put]
+    if: always() && github.ref == 'refs/heads/main' && needs.put.result == 'skipped' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result)
+    runs-on: ubuntu-24.04
     environment: production
     timeout-minutes: 10
     steps:
@@ -448,9 +822,10 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-android, api, static, station, android, desktop, put]
-    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result)
-    runs-on: [self-hosted, mini1]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
+    runs-on: [self-hosted, quick]
+    timeout-minutes: 10
     permissions:
       contents: write # only this job updates the tag deployed/beta
     steps:
@@ -468,9 +843,9 @@ jobs:
   # How long this run took against its budget (scripts/ci-time.ts): in the run's summary, and a warning when over. A
   # station's watch reads the same of every run and has an agent find why one went over.
   timing:
-    needs: [plan, natives, check, check-linux, check-android, bundle, mac-build, api, static, station, station-update, android, desktop, put, changelog, done]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, bundle, mac-build, api, static, station, station-update, modules, android, desktop, desktop-win, desktop-web, put, changelog, done]
     if: always()
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -491,14 +866,17 @@ jobs:
       # main: every part the plan said changed went out, or this run fails (a job skipped where it should have run went
       # unnoticed for a day: the API, 2026-10-04 to 05). Skipped is right only for a part the plan left alone, or when a
       # check before it failed (the run has failed then anyway).
-      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success'
+      - if: github.ref == 'refs/heads/main' && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success'
         run: |
           missed=""
           planned() { [ "$1" = true ] && [ "$2" = skipped ] && missed="$missed $3"; return 0; }
           planned '${{ needs.plan.outputs.api }}' '${{ needs.api.result }}' api
           planned '${{ needs.plan.outputs.static }}' '${{ needs.static.result }}' static
           planned '${{ needs.plan.outputs.station }}' '${{ needs.station.result }}' station
+          planned '${{ needs.plan.outputs.modules }}' '${{ needs.modules.result }}' modules
           planned '${{ needs.plan.outputs.android }}' '${{ needs.android.result }}' android
           planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop.result }}' desktop
+          planned '${{ needs.plan.outputs.desktop }}' '${{ needs.desktop-win.result }}' desktop-win
+          [ '${{ needs.plan.outputs.desktop }}' = true ] || planned '${{ needs.plan.outputs.desktop_web }}' '${{ needs.desktop-web.result }}' desktop-web
           if [ -n "$missed" ]; then echo "::error::changed, planned, and not released:$missed"; exit 1; fi
           echo "every planned part went out"

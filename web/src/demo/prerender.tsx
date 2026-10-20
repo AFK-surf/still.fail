@@ -3,7 +3,10 @@
 // takes its box over (mount.tsx).
 import { renderToString } from "react-dom/server";
 import { DemoApp } from "./mount.tsx";
+import { withoutDownloads } from "../downloads.ts";
 
 export function renderDemo(): { wide: string; phone: string } {
+  // As mountDemo: the site has its own 下载 over the demo, which has none in its rail.
+  withoutDownloads();
   return { wide: renderToString(<DemoApp phone={false} />), phone: renderToString(<DemoApp phone />) };
 }

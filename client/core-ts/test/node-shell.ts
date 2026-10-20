@@ -3,7 +3,7 @@
 import { Effect, Exit, Scope } from "effect";
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { NodeHost } from "../src/hosts/node.ts";
-import type { Pull, Sql, TcpConnection } from "../src/host.ts";
+import type { LoopbackRequest, Pull, Sql, TcpConnection } from "../src/host.ts";
 import type { Bridge, Native } from "../src/hosts/bridge.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -16,6 +16,8 @@ export class NodeShell implements Native {
   readonly #handles = new Map<number, J>();
   #next = 1;
   readonly calls: string[] = [];
+  /// The addon's endpoints bound, in order (a test reads where one listens).
+  readonly bound: J[] = [];
 
   constructor(dataDir: string) {
     this.host = new NodeHost(dataDir, "http://unused", false, () => {});
@@ -62,7 +64,8 @@ export class NodeShell implements Native {
         return take(this.#handles.get(a.id).pull);
       case "stream.close":
       case "ws.close":
-      case "tcp.close": {
+      case "tcp.close":
+      case "listen.close": {
         const it = this.#handles.get(a.id);
         this.#handles.delete(a.id);
         if (it) await Effect.runPromise(Scope.close(it.scope, Exit.void));
@@ -108,12 +111,39 @@ export class NodeShell implements Native {
       case "tcp.end":
         (this.#handles.get(a.id).conn as TcpConnection).end();
         return done({});
+      // A login's loopback listener (in the app, Kotlin's Loopback.kt): its requests numbered as they come, each
+      // answered by its number.
+      case "listen.open": {
+        const { value, scope } = await this.#scoped(h.listen(a.port, a.host));
+        return done({ id: this.#keep({ pull: value, scope, asked: new Map(), next: 1 }) });
+      }
+      case "listen.next": {
+        const it = this.#handles.get(a.id);
+        const r = await run((it.pull as Pull<LoopbackRequest>).take);
+        if (r === null) return done({ end: true });
+        const request = it.next++;
+        it.asked.set(request, r);
+        return done({ request, method: r.method, path: r.path, headers: r.headers }, r.body);
+      }
+      case "listen.respond": {
+        const it = this.#handles.get(a.id);
+        const r = it?.asked.get(a.request) as LoopbackRequest | undefined;
+        it?.asked.delete(a.request);
+        r?.respond(a.status, a.headers, bytes ?? new Uint8Array(0));
+        return done({});
+      }
       case "reset":
         return done({});
       case "iroh.bind": {
         const addon = loadAddon() as J;
-        const e = await addon.bind({ secretKey: Buffer.from(bytes!), alpns: [], relayUrls: a.relayUrls, discovery: false, lookup: a.lookup, relayOnly: a.relayOnly });
+        const alpns = ((a.alpns ?? []) as string[]).map((x) => Buffer.from(x, "hex"));
+        const e = await addon.bind({ secretKey: Buffer.from(bytes!), alpns, relayUrls: a.relayUrls, discovery: false, lookup: a.lookup, relayOnly: a.relayOnly });
+        this.bound.push(e);
         return done({ id: this.#keep(e) });
+      }
+      case "iroh.accept": {
+        const c = await this.#handles.get(a.id).accept();
+        return done(c === null ? { end: true } : { id: this.#keep(c), alpn: Buffer.from(c.alpn()).toString("hex") });
       }
       case "iroh.connect": {
         const additional = (a.additional as string[]).map((x) => Buffer.from(x, "hex"));
@@ -218,7 +248,7 @@ export class NodeShell implements Native {
         case "conn.closeReason":
           return it.closeReason() ?? null;
         case "conn.paths":
-          return it.paths().map((p: J) => ({ selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs }));
+          return it.paths().map((p: J) => ({ id: p.id, selected: p.selected, relay: p.relay ?? null, rttMs: p.rttMs, txPackets: p.txPackets, lostPackets: p.lostPackets }));
         case "conn.stats":
           return it.stats();
         default:
@@ -233,6 +263,10 @@ export class NodeShell implements Native {
   emit(client: number, json: string): void {
     this.emitted.push([client, json]);
     for (const wake of this.#hearing.splice(0)) wake();
+  }
+  /// With bytes beside the JSON: what the test reads is the JSON, the bytes as `bytes` (base64 for a look at them).
+  emitBytes(client: number, json: string, bytes: Uint8Array): void {
+    this.emit(client, JSON.stringify({ ...JSON.parse(json), bytes: Buffer.from(bytes).toString("base64") }));
   }
   /// Once the core emits again.
   heard(): Promise<void> {

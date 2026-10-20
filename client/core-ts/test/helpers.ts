@@ -60,7 +60,18 @@ export function stationAnswers(host: FakeHost, station: (req: HttpRequest) => Re
 }
 
 export function count(host: FakeHost, path: string): number {
-  return host.requests.filter((r) => r.url.endsWith(path) && r.method === "GET").length;
+  return host.requests.flatMap(readsOf).filter((url) => url.endsWith(path)).length;
+}
+
+/// What a request reads, as URLs: a GET's own, the list a POST /changed/<list> asks what changed of, each read of a
+/// POST /batch; none for a write.
+export function readsOf(r: { method: string; url: string; body?: Uint8Array | null }): string[] {
+  if (r.method === "GET") return [r.url];
+  if (r.method !== "POST") return [];
+  if (r.url.includes("/admin/api/changed/")) return [r.url.replace("/admin/api/changed/", "/admin/api/")];
+  if (!r.url.endsWith("/admin/api/batch") || !r.body) return [];
+  const base = r.url.slice(0, -"/batch".length);
+  return ((JSON.parse(new TextDecoder().decode(r.body)) as { gets?: string[] }).gets ?? []).map((g) => base + g);
 }
 
 /// The value subscription `id` has now, deltas applied.
@@ -79,8 +90,9 @@ export function subscribe(core: Core, ui: number, id: number, topic: Topic): voi
   core.receive(ui, { kind: "subscribe", id, subscribe: topic });
 }
 
-export function call(core: Core, ui: number, id: number, name: string, params: unknown): void {
-  core.receive(ui, { kind: "call", id, call: name, params });
+/// `bytes`: what the call carries beside its params (a file's part going up).
+export function call(core: Core, ui: number, id: number, name: string, params: unknown, bytes?: Uint8Array): void {
+  core.receive(ui, bytes === undefined ? { kind: "call", id, call: name, params } : { kind: "call", id, call: name, params, bytes });
 }
 
 export function answers(emitted: [number, CoreMessage][], id: number): Record<string, unknown> | undefined {

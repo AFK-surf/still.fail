@@ -5,15 +5,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router";
 import { useAction, useApi, useOverview, useStations } from "../api.ts";
-import { Plus } from "../icons.tsx";
+import { Plus } from "@stillfail/ui/icons.tsx";
 import { StationContext, stationBase } from "../station.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
-import { useToast } from "../toast.tsx";
-import { BackLink, Button, Field, Loading, ProviderLogo, Segmented, Select } from "../ui.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
+import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
 import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
-import { MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
+import { InstallStep, MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./AddProfile.css.ts";
 import { t } from "../i18n.ts";
@@ -28,7 +28,7 @@ export function AddProfile({ workspace }: { workspace: string }) {
   const stations = useStations(workspace).value;
   const [params, setParams] = useSearchParams();
   const online = (stations ?? []).filter((s) => s.online);
-  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!stations) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("common.readingStations")} /></div>;
   const chosen = online.find((s) => s.station === params.get("station")) ?? online[0];
   if (!chosen) return <Navigate to={`/w/${workspace}/settings/profiles`} replace />;
   const station = { id: chosen.id, name: chosen.name, online: chosen.online, address: chosen.station, base: stationBase(chosen.station), settings: `/w/${workspace}/settings` };
@@ -70,12 +70,15 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
   const overview = useOverview(address);
   const [login, setLogin] = useState<string | null>(null);
   const [code, setCode] = useState("");
-  const runtime = d?.tile?.runtime === "codex" ? "codex" : "claude";
+  // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" ? d.tile.runtime : "claude");
+  const signInTo = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : "ChatGPT");
   const pending = login ? overview.value?.logins.find((l) => l.id === login) : undefined;
-  const start = useAction(() => api.newLogin(runtime), ({ id }) => setLogin(id));
+  const start = useAction(() => api.newLogin(runtime, d?.signIn?.access), ({ id }) => setLogin(id));
   const send = useAction(() => api.newLoginCode(login!, code), () => setCode(""));
   const started = useRef(false);
-  const planning = d?.step === "connect" && d.method === "plan";
+  // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
+  const planning = d?.step === "connect" && d.method === "plan" && !d.install;
   useEffect(() => {
     if (planning && !started.current) { started.current = true; void start.run(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) void api.dropLogin(login).catch(() => undefined); setLogin(null); setCode(""); }
@@ -84,7 +87,7 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
 
   const added = () => { toast(t("web-pages.profiles.verifiedAdded")); navigate(list); };
 
-  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Loading label={t("web-pages.settings.reading")} /></div>;
+  if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" /></div>;
   const picking = d.step === "pick";
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
@@ -129,20 +132,21 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
           ))}
         </div>
       ) : d.method === "plan" ? (
-        pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
+        d.install ? <InstallStep install={d.install} />
+        : pending?.error || pending?.job?.state === "failed" || pending?.job?.state === "cancelled"
           ? <div className={css.form}><p className={controlsCss.fieldError}>{pending?.error ?? pending?.job?.error ?? t("web-pages.profiles.signInUnfinished")}</p><Button onClick={() => { if (login) void api.dropLogin(login).catch(() => undefined); setLogin(null); void start.run(); }}>{t("web-pages.profiles.restart")}</Button></div>
-          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={runtime === "claude" ? "Claude" : "ChatGPT"} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
+          : <div className={css.form}><LoginSteps job={pending?.job ?? null} provider={signInTo} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} /></div>
       ) : (
         <ConnectForm key={d.tile?.id} d={d} edit={edit} submitting={submitting} onSubmit={() => void submit().then(added, () => undefined)} />
       )}
-      {d.method === "plan" && d.usesLine && <p className={css.uses}>{d.usesLine}</p>}
+      {d.method === "plan" && d.usesLine && <p className={`${css.uses} ${css.usesBelow}`}>{d.usesLine}</p>}
     </div>
   );
 }
 
 /** A provider's mark: its maker's, or the generic plug (the variables by hand have their own). */
 function Mark({ p }: { p: ApiProvider }) {
-  return <ProviderLogo runtime={p.runtime === "codex" ? "codex" : "claude"} kind={p.kind === "env" ? "env" : p.kind || "api-provider"} mark={p.mark} size={16} />;
+  return <ProviderLogo runtime={p.runtime === "codex" || p.runtime === "dsh" || p.runtime === "grok" ? p.runtime : "claude"} kind={p.kind === "env" ? "env" : p.kind || "api-provider"} mark={p.mark} size={16} />;
 }
 
 /** The form of a key: what is typed is kept here as it is typed (the core has it as it is named, and judges it). */

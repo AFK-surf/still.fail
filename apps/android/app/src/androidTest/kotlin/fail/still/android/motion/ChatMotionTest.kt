@@ -7,6 +7,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import org.junit.Assert.assertTrue
 import kotlin.math.abs
 import androidx.compose.ui.test.hasContentDescription
@@ -447,6 +448,41 @@ class ChatMotionTest {
     /** Words and a picture: the picture from its square tile in the composer to its place under the bubble, opening out. */
     @Test
     fun sentWithAPicture() = sentWithFiles("sent-with-picture", "Safari 上是这样的，帮我看一下", listOf(photo to true))
+
+    /**
+     * A picture sent into a new chat the station is still making (no agent keeps its files yet) shows the picture it had
+     * in the composer, not a file card, and stays a picture once the agent comes.
+     */
+    @Test
+    fun pictureSentBeforeTheChatIsMade() {
+        val h = Harness(rule)
+        val big = picture()
+        val preview = android.graphics.Bitmap.createScaledBitmap(big, 240, 160, true).asImageBitmap()
+        val png = java.io.ByteArrayOutputStream().also { big.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        fail.still.android.screens.FileData.keepSent(Fixtures.STATION, photo.path, preview)
+        h.fake.answer = { call, _ ->
+            if (call == "station.file") buildJsonObject { put("type", "image/png"); put("bytes", android.util.Base64.encodeToString(png, android.util.Base64.NO_WRAP)) }
+            else JsonNull
+        }
+        val said = Fixtures.chat(talk + Fixtures.mine(5, "Safari 上是这样的", said = true).copy(attachments = listOf(photo)))
+        h.fake.put(topic, said.copy(pending = true))
+        h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, ChatOf.Thread(Fixtures.THREAD))))
+        shot("picture-before-the-chat")
+        val picture = { rule.onAllNodes(hasContentDescription(photo.name)).fetchSemanticsNodes().size }
+        val card = { rule.onAllNodes(hasText(photo.name)).fetchSemanticsNodes().size }
+        assertEquals("a picture before the chat is made", 1, picture())
+        assertEquals("no card before the chat is made", 0, card())
+        h.fake.put(topic, withAgent(said))
+        h.settle()
+        shot("picture-once-the-chat-is-made")
+        assertEquals("a picture once the chat is made", 1, picture())
+        assertEquals("no card once the chat is made", 0, card())
+    }
+
+    private fun shot(name: String) {
+        val file = java.io.File(rule.activity.filesDir, "$name.png")
+        java.io.FileOutputStream(file).use { rule.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
 
     /** A picture with no words: it flies on its own; the row comes in where it is. */
     @Test

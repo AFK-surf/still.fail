@@ -238,7 +238,7 @@ test("a Slack app made on a station in still.fail cloud is installed through Sla
       raw.slackApps.push({ appId: "A0BOB", name: "Bob's", teamId: "T3", by: "bob@example.com", created: 1 });
     });
     assert.deepEqual(s.overview().slackApps.map((a: Json) => a.appId), ["A0NEW"]);
-    assert.deepEqual(await s.ask("DELETE", "/slack/apps/A0BOB"), [404, { error: "没有这个 app" }]);
+    assert.deepEqual(await s.ask("DELETE", "/slack/apps/A0BOB"), [404, { error: "app 不存在" }]);
     assert.equal((await s.ask("DELETE", "/slack/apps/A0NEW"))[0], 200);
     assert.deepEqual(s.overview().slackApps, []);
   } finally {
@@ -251,8 +251,8 @@ test("a new connect from tokens is named as its bot is in Slack; bad tokens are 
   try {
     const [bad, said] = await s.ask("POST", "/connects", { bind: { runtime: "claude" }, slack: { appToken: "xoxb-1", botToken: "xapp-1" } });
     assert.equal(bad, 400);
-    assert.equal(said.error, "Bot Token 应该以 xoxb- 开头；App-Level Token 应该以 xapp- 开头");
-    assert.deepEqual(await s.ask("POST", "/connects", { slack: { appToken: "xapp-1", install: "nope" } }), [400, { error: "app 还没装好：先在 Slack 里安装" }]);
+    assert.equal(said.error, "Bot Token 应以 xoxb- 开头；App-Level Token 应以 xapp- 开头");
+    assert.deepEqual(await s.ask("POST", "/connects", { slack: { appToken: "xapp-1", install: "nope" } }), [400, { error: "app 尚未安装：请先在 Slack 中安装" }]);
     bot(s.fake, { name: "ember" });
     // Its name is taken: the next is ember-2. An app id given is kept with it.
     const [ok, made] = await s.ask("POST", "/connects", { bind: { runtime: "codex" }, slack: { appToken: " xapp-2-x ", botToken: "xoxb-2-y", appId: "A0GIVEN" } });
@@ -283,7 +283,7 @@ test("editing a connect keeps tokens that were left blank and writes config.json
     assert.equal(saved.connects[0].slack.botToken, "xoxb-bbbbbbbbbbbb");
     assert.equal(saved.connects[0].slack.appId, "A0DS");
     assert.equal(saved.connects[0].bind.model, "deepseek-flash");
-    assert.equal(statSync(t.path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(statSync(t.path).mode & 0o777, 0o600);
     // Connected, and shown masked.
     assert.equal(view.connection.state, "connected");
     assert.deepEqual(view.connection.workspace, { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember", botImage: "https://avatars.slack-edge.com/ember_72.png" });
@@ -344,8 +344,8 @@ test("invalid edits are refused and leave the config unchanged", async () => {
     assert.equal(bad[0], 400);
     assert.match(bad[1].error, /unknown runtime/);
     assert.deepEqual(await t.ask("PUT", "/connects/y", {}), [400, { error: "runtime is required" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cx" } }), [400, { error: "「cx」不能跑 claude" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cc", model: "opus" } }), [400, { error: "「cc」没有启用 opus" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cx" } }), [400, { error: "「cx」无法运行 claude" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { bind: { profile: "cc", model: "opus" } }), [400, { error: "「cc」未启用 opus" }]);
     assert.equal((await t.ask("PUT", "/connects/ds", { bind: { effort: "ultra" } }))[0], 400);
     assert.deepEqual(await t.ask("PUT", "/connects/ds", "{" as unknown as Json).then(([s]) => s), 200, "a body that is a string is no object: {}");
     assert.equal(readFileSync(t.path, "utf8").includes("nope"), false);
@@ -394,10 +394,10 @@ test("a connect's Slack app is edited through its manifest; new permissions need
     assert.equal(fewer.permissionsUpdated, true);
     assert.ok(fewer.iconError.includes("API 创建"), fewer.iconError);
     assert.equal(t.fake.calls("apps.icon.set")[0]!.params.app_id, "A0DS");
-    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { backgroundColor: "red" }), [400, { error: "背景色要写成 #RRGGBB" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { name: "  " }), [400, { error: "名字不能为空" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { backgroundColor: "red" }), [400, { error: "背景色格式应为 #RRGGBB" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { name: "  " }), [400, { error: "名称不能为空" }]);
     t.fake.answer("apps.manifest.validate", { ok: false, error: "invalid_manifest", errors: [{ pointer: "/x", message: "bad" }] });
-    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { description: "x" }), [400, { error: "Slack 没接受这次修改：manifest 不合法：/x bad" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds/slack-app", { description: "x" }), [400, { error: "Slack 拒绝了此次修改：manifest 无效：/x bad" }]);
     // Token edits keep the app id the station learned.
     await t.ask("PUT", "/connects/ds", { slack: { botToken: "xoxb-new-token-123" } });
     assert.equal(t.saved().connects[0].slack.appId, "A0DS");
@@ -413,7 +413,7 @@ test("a connect's app is looked up by its bot token, made for it when it has non
   try {
     t.fake.answer("bots.info", (s) => (s.auth === "xoxb-gone" ? { ok: false, error: "invalid_auth" } : { ok: true, bot: { app_id: "A0LEARNED" } }));
     await t.ask("PUT", "/connects/lookup", { bind: { runtime: "claude" }, slack: { appToken: "xapp-5", botToken: "xoxb-5" } });
-    assert.deepEqual(await t.ask("POST", "/connects/lookup/slack-app", {}), [400, { error: "这个连接已经有 Slack app 了" }]);
+    assert.deepEqual(await t.ask("POST", "/connects/lookup/slack-app", {}), [400, { error: "此连接已有 Slack app" }]);
     assert.equal(t.fake.calls("bots.info").length, 1);
     await t.ask("PUT", "/connects/gone", { bind: { runtime: "claude" }, slack: { appToken: "xapp-6", botToken: "xoxb-gone" } });
     const gone = await t.get("/connects/gone/slack-app");
@@ -428,9 +428,9 @@ test("a connect's app is looked up by its bot token, made for it when it has non
     assert.equal(JSON.parse(t.fake.calls("apps.manifest.create")[0]!.params.manifest!).display_information.name, "Fresh");
     assert.equal(t.saved().connects.find((c: Json) => c.id === "fresh").slack.appId, "A0FRESH");
     assert.deepEqual(await t.ask("PUT", "/connects/fresh/slack-app", { name: "x" }, dev).then(([s]) => s), 400, "with no token of their own, Slack is not asked");
-    assert.deepEqual(await t.ask("POST", "/connects/fresh/slack-app", {}, dev), [400, { error: "这个连接已经有 Slack app 了" }]);
+    assert.deepEqual(await t.ask("POST", "/connects/fresh/slack-app", {}, dev), [400, { error: "此连接已有 Slack app" }]);
     await t.ask("PUT", "/connects/other", { bind: { runtime: "claude" } });
-    assert.deepEqual(await t.ask("POST", "/connects/other/slack-app", {}, dev), [400, { error: "你还没有加 Slack 的 App 配置 token" }]);
+    assert.deepEqual(await t.ask("POST", "/connects/other/slack-app", {}, dev), [400, { error: "尚未添加 Slack App 配置 token" }]);
   } finally {
     await t.close();
   }
@@ -447,8 +447,8 @@ test("connects remember who created them; only a manager or its owner hands one 
     assert.equal(t.overview().connects.find((c: Json) => c.id === "ds").createdBy, null, "older connects have none");
     await t.ask("PUT", "/connects/ds", { owner: { id: "Bob@Example.test", name: "Bob" } });
     assert.deepEqual(created("ds"), { id: "bob@example.test", name: "Bob" });
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { owner: { id: "not an email" } }), [400, { error: "所属用户要写成邮箱" }]);
-    assert.deepEqual(await t.ask("PUT", "/connects/ds", { owner: { id: "dev@example.com" } }, dev), [400, { error: "只有 workspace 的 owner、管理员或者当前所属用户能改所属用户" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { owner: { id: "not an email" } }), [400, { error: "所属用户必须是邮箱地址" }]);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { owner: { id: "dev@example.com" } }, dev), [400, { error: "只有 workspace 的 owner、管理员或当前所属用户可以更改所属用户" }]);
     await t.ask("PUT", "/connects/mine", { bind: { runtime: "claude" } }, dev);
     assert.deepEqual(created("mine"), { id: "dev@example.com", name: "dev@example.com" });
     assert.equal((await t.ask("PUT", "/connects/mine", { owner: { id: "local" } }, dev))[0], 200, "its owner hands it on");
@@ -522,7 +522,7 @@ test("tokens are checked as given, blank ones as stored; the create-app link; re
     assert.deepEqual(checked, { identity: { team: "Acme", teamId: "T1", url: "https://acme.slack.com/", botUserId: "UBOT", botName: "ember", botImage: "https://avatars.slack-edge.com/ember_72.png" }, errors: [] });
     const opened = t.fake.calls("apps.connections.open").at(-1)!;
     assert.equal(opened.auth, "xapp-1-aaaaaaaaaaaa");
-    assert.deepEqual((await t.ask("POST", "/slack/verify", { appToken: "nope", botToken: "nope" }))[1], { identity: null, errors: ["Bot Token 应该以 xoxb- 开头", "App-Level Token 应该以 xapp- 开头"] });
+    assert.deepEqual((await t.ask("POST", "/slack/verify", { appToken: "nope", botToken: "nope" }))[1], { identity: null, errors: ["Bot Token 应以 xoxb- 开头", "App-Level Token 应以 xapp- 开头"] });
 
     const [made, url] = await t.ask("GET", "/slack/create-app-url?name=%20ember%20");
     assert.equal(made, 200);
@@ -542,12 +542,12 @@ test("tokens are checked as given, blank ones as stored; the create-app link; re
 test("configuration tokens are added by their refresh token, with whose they are, and removed", async () => {
   const t = await rig();
   try {
-    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe.xoxp-1-abc" }), [400, { error: "Refresh token 应该以 xoxe- 开头（不是 xoxe.xoxp- 开头的那个）" }]);
+    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe.xoxp-1-abc" }), [400, { error: "Refresh token 应以 xoxe- 开头（而非 xoxe.xoxp-）" }]);
     t.fake.answer("tooling.tokens.rotate", (s) =>
       s.params.refresh_token === "xoxe-1-good" ? { ok: true, token: "xoxe.xoxp-1-access", refresh_token: "xoxe-1-next", exp: 2_000_000_000, team_id: "T5" } : { ok: false, error: "invalid_refresh_token" },
     );
     t.fake.answer("team.info", { ok: true, team: { name: "Five", domain: "five", icon: { image_68: "https://img/five" } } });
-    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe-1-bad" }), [400, { error: "Slack 没接受这个 token：tooling.tokens.rotate: invalid_refresh_token" }]);
+    assert.deepEqual(await t.ask("POST", "/slack/config-tokens", { refreshToken: "xoxe-1-bad" }), [400, { error: "Slack 拒绝了此 token：tooling.tokens.rotate: invalid_refresh_token" }]);
     const [status, added] = await t.ask("POST", "/slack/config-tokens", { refreshToken: " xoxe-1-good " });
     assert.equal(status, 200, JSON.stringify(added));
     assert.equal(added.teamId, "T5");
@@ -578,6 +578,30 @@ test("a message a connect hears in Slack reaches the hub and its session", async
     assert.ok(thread, "its thread under its Slack workspace");
     await until("a turn", () => t.claude.count() === 1 && t.claude.last().prompts.length === 1);
     assert.match(t.claude.last().prompts[0]!, /hi/);
+  } finally {
+    await t.close();
+  }
+});
+
+test("a station in several workspaces: a connect is the workspace's it was added in, and nobody else's", async () => {
+  const t = await rig({ cloud: "http://cloud" });
+  try {
+    // Of a workspace the station joined: an owner there, not of the station's home workspace.
+    const joined: Viewer = { ...viewer("cy@example.com", "Cy", "owner"), workspace: "w2", home: false };
+    const [status, answer] = await t.ask("PUT", "/connects/theirs", { bind: { runtime: "claude" } }, joined);
+    assert.equal(status, 200, JSON.stringify(answer));
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "theirs").workspace, "w2");
+    // The home workspace's connect says no workspace, as before; each is unknown to the other workspace.
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "ds").workspace, undefined);
+    assert.deepEqual(await t.ask("PUT", "/connects/ds", { enabled: false }, joined), [404, { error: "unknown connect ds" }]);
+    assert.deepEqual(await t.ask("DELETE", "/connects/ds", undefined, joined), [404, { error: "unknown connect ds" }]);
+    assert.deepEqual(await t.ask("DELETE", "/connects/theirs"), [404, { error: "unknown connect theirs" }]);
+    assert.deepEqual(await t.ask("POST", "/connects/theirs/reconnect"), [404, { error: "unknown connect theirs" }]);
+    // Its own people change it.
+    assert.equal((await t.ask("PUT", "/connects/theirs", { enabled: false }, joined))[0], 200);
+    assert.equal(t.saved().connects.find((c: Json) => c.id === "theirs").workspace, "w2");
+    assert.equal((await t.ask("DELETE", "/connects/theirs", undefined, joined))[0], 200);
+    assert.deepEqual(t.saved().connects.map((c: Json) => c.id), ["ds"]);
   } finally {
     await t.close();
   }

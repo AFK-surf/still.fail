@@ -1,0 +1,9 @@
+import {
+  "mbui/host",
+  "moonbitlang/core/json",
+}
+
+options(
+  targets: { "native.mbt": [ "native" ], "js.mbt": [ "js" ], "core_js_test.mbt": [ "js" ] },
+  "native-stub": [ "core_native.c" ],
+)

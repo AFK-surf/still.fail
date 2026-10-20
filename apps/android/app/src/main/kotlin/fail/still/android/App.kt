@@ -3,6 +3,7 @@
 // bar), or a sheet from the bottom.
 package fail.still.android
 
+
 import fail.still.android.data.t
 import fail.still.android.ui.Splash
 import androidx.compose.ui.unit.IntOffset
@@ -33,7 +34,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -48,10 +48,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clipToBounds
 import fail.still.android.screens.WideCorners
+import fail.still.android.screens.openInvite
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -96,7 +97,6 @@ import fail.still.android.screens.SignInScreen
 import fail.still.android.screens.StationScreen
 import fail.still.android.screens.StationsScreen
 import fail.still.android.ui.C
-import fail.still.android.ui.Loading
 import fail.still.android.ui.UiHost
 import fail.still.android.ui.MenuHost
 import fail.still.android.ui.ReaderHost
@@ -108,425 +108,36 @@ import fail.still.android.ui.ToastHost
 import fail.still.core.StillFailCore
 import fail.still.android.data.NotifyView
 import kotlinx.coroutines.MainScope
+import fail.still.android.screens.Elsewhere
+import fail.still.android.screens.openStationPeek
+import fail.still.android.screens.openWorkspaces
+import fail.still.android.screens.invitationsWaiting
+import fail.still.android.screens.FirstStation
+import fail.still.android.screens.MachineLoginOffers
+import fail.still.android.screens.VaultApproval
+import fail.still.android.screens.FilePreview
+import fail.still.android.screens.Gallery
 
-sealed interface Screen {
-    val id: String
-    data object Home : Screen { override val id = "home" }
-    /** An item's page: its chat, or its agent before it has one. */
-    /** `at`: a message (seq) to show once it opens, flashing (a row's state line: what it is about). */
-    data class Chat(val station: String, val of: ChatOf, val at: Long? = null, val words: List<String>? = null) : Screen {
-        override val id = "chat/$station/" + when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }
-    }
-    /** One message of a chat on a page of its own, to pick passages of and say something about (a long press on it). */
-    data class Annotate(val station: String, val of: ChatOf, val ts: String) : Screen {
-        override val id = "annotate/$station/" + (when (of) { is ChatOf.Thread -> of.id.toString(); is ChatOf.Session -> of.key }) + "/$ts"
-    }
-    /** Rises from the bottom rather than coming in from the side. */
-    data object NewChat : Screen { override val id = "new" }
-    data object Stations : Screen { override val id = "stations" }
-    data class Station(val address: String) : Screen { override val id = "station/$address" }
-    /** This phone's adb lent to a station's agents (screens/AdbShare.kt). */
-    data class AdbShare(val address: String) : Screen { override val id = "adb/$address" }
-    /** An agent’s execution history, opened as a page over its chat. */
-    data class History(val station: String, val of: ChatOf, val key: String, val entry: Long? = null) : Screen { override val id = "history/${Chat(station, of).id}/$key/$entry" }
-    /** How an agent runs, changed: its model, how hard it thinks, who runs it. */
-    data class RunSettings(val station: String, val of: ChatOf, val key: String) : Screen { override val id = "run/$station/$key" }
-    /** A profile's models, to pick which may be used. */
-    data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
-    /** Settings, one page from the gear on Home (screens/SettingsHome.kt); it comes from the left. */
-    data object Settings : Screen { override val id = "settings" }
-    /** The account: who is signed in, where, and the other accounts on this device. */
-    data object Me : Screen { override val id = "me" }
-    /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
-    data object Appearance : Screen { override val id = "appearance" }
-    /** Files opened in the app and kept on this device, to delete (screens/KeptFiles.kt). */
-    data object KeptFiles : Screen { override val id = "kept-files" }
-    /** What is kept of a chat (null: files of no chat known), from KeptFiles. */
-    data class KeptChat(val station: String?, val thread: Long?) : Screen { override val id = "kept-files/${station ?: ""}/${thread ?: ""}" }
-    /** What changed in still.fail (screens/Changelog.kt). */
-    data object Changelog : Screen { override val id = "changelog" }
-    /** Every station's connects, profiles and memory, from settings. */
-    /** Every station's connects, or (from a station's page) that station's only. */
-    data class Connects(val station: String? = null) : Screen { override val id = "connects" + (station?.let { "/$it" } ?: "") }
-    /** Every station's profiles, or (from a station's page) that station's only. */
-    data class Profiles(val station: String? = null) : Screen { override val id = "profiles" + (station?.let { "/$it" } ?: "") }
-    /** An account on several stations: what they have in common, and each station's part. */
-    data class ProfileAccount(val key: String) : Screen { override val id = "profile-account/$key" }
-    data object AutomaticDecisions : Screen { override val id = "automatic-decisions" }
-    data object AutomaticDecisionCompletion : Screen { override val id = "automatic-decisions/completion" }
-    /** A station's archive policy, from its row under the completion rule. */
-    data class AutomaticDecisionPolicy(val station: String) : Screen { override val id = "automatic-decisions/completion/$station" }
-    data object Memories : Screen { override val id = "memories" }
-    /** What the agents spent (screens/Usage.kt). */
-    data object Usage : Screen { override val id = "usage" }
-    data class UsagePrices(val days: Int) : Screen { override val id = "usage-prices-$days" }
-    /** A web service an agent started, full screen: by its job (people know it by its name, never its port). */
-    data class Preview(val station: String, val job: String) : Screen { override val id = "preview/$station/$job" }
-    /** A visualization an agent posted, as a page of its own in the preview (web mobile's 在侧边打开 on a phone). */
-    data class PreviewFile(val station: String, val session: String, val path: String, val name: String) : Screen { override val id = "preview-file/$station/$session/$path" }
-    /** The workspace itself: its name, its people, leaving it. */
-    data object Workspace : Screen { override val id = "workspace" }
-    /** A connect of a station; how it runs; a new one on a station. */
-    data class Connect(val station: String, val connect: String) : Screen { override val id = "connect/$station/$connect" }
-    data class ConnectRun(val station: String, val connect: String) : Screen { override val id = "connect-run/$station/$connect" }
-    data class NewConnect(val station: String) : Screen { override val id = "new-connect/$station" }
-    data class NewProfile(val station: String) : Screen { override val id = "new-profile/$station" }
-    /** Chats archived, of every station online: put back in the list, or deleted for good. */
-    data object Archive : Screen { override val id = "archive" }
-    /** The decisions waiting for the viewer in the workspace's chats, one at a time (奏 N on the home page). */
-    data object Decisions : Screen { override val id = "decisions" }
-
-    /** The agents' memory on a station. */
-    data class Memory(val station: String) : Screen { override val id = "memory/$station" }
-    /** How much a station takes of its machine, and cleaning it up; its chats' directories on a page of their own. */
-    /** A connect's Slack app: its name, icon, colour and permissions. */
-    data class SlackApp(val station: String, val connect: String) : Screen { override val id = "slack-app/$station/$connect" }
-}
-
-class AppState(override val core: StillFailCore, private val prefs: SharedPreferences, val cloudOrigin: String, val updates: Updates, kept: PrefsView = PrefsView()) : UiHost {
-    override fun follow(url: String, orElse: () -> Unit) = openLink(url, orElse = orElse)
-    override fun note(text: String) { toast = text }
-
-    var stack by mutableStateOf(listOf<Screen>(Screen.Home)); private set
-    /** Whether the last move went deeper, for the direction of the transition. */
-    var forward by mutableStateOf(true); private set
-    var sheet by mutableStateOf<SheetSpec?>(null)
-    var menu by mutableStateOf<MenuSpec?>(null)
-    var toast by mutableStateOf<String?>(null)
-    /** One entry of an execution history in full, over everything (the sheet stays under it). */
-    var reader by mutableStateOf<ReaderSpec?>(null)
-
-    /** How its person likes it on this device, as the core keeps it (data/Prefs.kt). */
-    var kept by mutableStateOf(kept); private set
-    /** Changes sent and not answered yet; the core's values meanwhile wait, the latest shown once all are. */
-    private var sending = 0
-    private var waiting: PrefsView? = null
-    /** The core's own, last heard: what a change it refused goes back to. */
-    private var known: PrefsView = kept
-    private var refused = false
-
-    /** Changes them: shown at once (`shown`), then as the core has them (`patch`); refused, back as they were, and said. */
-    private fun setPrefs(shown: PrefsView, patch: JsonObject) {
-        kept = shown
-        sending++
-        scope.launch {
-            try { core.call("prefs.set", patch) } catch (e: CoreException) { refused = true; toast = t("android-misc.prefs.saveFailed", "error" to errorText(e)) }
-            if (--sending == 0) {
-                kept = waiting ?: if (refused) known else kept
-                waiting = null; refused = false
-            }
-        }
-    }
-
-    /** Follows the core's prefs for the app's life. */
-    suspend fun followPrefs() {
-        core.topic(Topics.prefs).collect { state ->
-            val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(PrefsView.serializer(), it) }.getOrNull() } ?: return@collect
-            known = value
-            if (sending > 0) waiting = value else kept = value
-            fail.still.android.data.I18n.follow(value.lang)
-            Notifier.keepLang(prefs, value.lang)
-        }
-    }
-
-    /** What people set going here and the core has not finished (the `doing` topic, client/core-ts/src/doing.ts). */
-    var doing by mutableStateOf(emptyList<DoingItem>()); private set
-
-    /** Follows what is under way for the app's life. */
-    suspend fun followDoing() {
-        core.topic(Topics.doing).collect { state ->
-            val value = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(DoingView.serializer(), it) }.getOrNull() } ?: return@collect
-            doing = value.doing
-        }
-    }
-
-    /**
-     * Whether one of `calls` is under way about what `on` names (its params, as words; null is any), wherever it was
-     * asked: the row or button it is about shows it at once (a spinner, not pressed again), the menu that asked gone.
-     */
-    fun isDoing(calls: Set<String>, vararg on: Pair<String, Any?>): Boolean =
-        doing.any { item -> item.stage != "failed" && item.matches(calls, on) }
-    fun isDoing(call: String, vararg on: Pair<String, Any?>): Boolean = isDoing(setOf(call), *on)
-
-    /** Why one of `calls` about what `on` names failed a moment ago (the core shows it a few seconds); null when none did. */
-    fun failedOf(calls: Set<String>, vararg on: Pair<String, Any?>): String? =
-        doing.lastOrNull { item -> item.stage == "failed" && item.matches(calls, on) }?.let { it.error ?: t("android-misc.failed") }
-    fun failedOf(call: String, vararg on: Pair<String, Any?>): String? = failedOf(setOf(call), *on)
-
-    private fun DoingItem.matches(calls: Set<String>, on: Array<out Pair<String, Any?>>): Boolean =
-        call in calls && on.all { (k, v) -> v == null || params[k] == v.toString() }
-
-    /**
-     * Lets what a person did go on by itself (past the page or menu that asked it), and says how it ended:
-     * `没能<what>：<why>` when it failed (and `failed`, if any, is run), `done` (if any) when it went through.
-     */
-    fun act(what: String, done: String? = null, failed: (() -> Unit)? = null, run: suspend () -> Unit) {
-        scope.launch {
-            try {
-                run()
-                done?.let { toast = it }
-            } catch (e: CoreException) {
-                toast = t(if (e.code == "unconfirmed") "android-misc.act.unconfirmed" else "android-misc.act.failed", "what" to what, "error" to errorText(e))
-                failed?.invoke()
-            }
-        }
-    }
-
-    /** The workspace chosen last; the first one when it is gone. */
-    val workspace: String? get() = kept.workspace
-    fun pickWorkspace(id: String) { if (id != kept.workspace) setPrefs(kept.copy(workspace = id), buildJsonObject { put("workspace", id) }) }
-
-    /** 外观: "system" (the default), "light" or "dark". */
-    val theme: String get() = kept.appearance ?: "system"
-    fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
-
-    /** 语言: "zh" or "en" as chosen; null follows the phone. The words change at once, then as the core says (its `lang`). */
-    val language: String? get() = kept.language
-    fun setLanguage(value: String?) {
-        val shown = kept.copy(language = value, lang = value ?: fail.still.android.data.I18n.langOf(java.util.Locale.getDefault().toLanguageTag()))
-        fail.still.android.data.I18n.follow(shown.lang)
-        setPrefs(shown, buildJsonObject { put("language", value) })
-    }
-
-    /**
-     * What `workspace`'s chat list shows: "all", "mine" (我参与的) or "watching" (监控中). Each workspace keeps its own;
-     * one never chosen in goes by the one filter kept for all before (奏 in the wide screen's sidebar: all here).
-     */
-    fun chatFilter(workspace: String): String {
-        val mode = kept.listFilter?.get(workspace)
-            ?: if (kept.onlyDecisions == true) "decisions" else if (kept.onlyWatching == true) "watching" else if (kept.onlyMine == true) "mine" else "all"
-        return if (mode == "mine" || mode == "watching") mode else "all"
-    }
-    fun showChats(workspace: String, filter: String) = setPrefs(
-        kept.copy(listFilter = kept.listFilter.orEmpty() + (workspace to filter)),
-        buildJsonObject { put("listFilter", buildJsonObject { put(workspace, filter) }) },
-    )
-
-    /** A Slack app made for a new connect on `station`, to go on with (screens/Connects.kt); null lets it go. */
-    fun resume(station: String): String? = kept.resume?.get(station)
-    fun setResume(station: String, app: String?) {
-        if (resume(station) == app) return
-        val shown = kept.resume.orEmpty() - station + listOfNotNull(app?.let { station to it })
-        setPrefs(kept.copy(resume = shown), buildJsonObject { put("resume", buildJsonObject { put(station, app) }) })
-    }
-
-    /** 我 → 通知: local notices and pushes, on by default (Notices.kt, Push.kt), as the core keeps it (its `notify`). */
-    var notify by mutableStateOf(true); private set
-    /** Whether the system was asked to allow notifications; null until the core says. */
-    var notifyAsked by mutableStateOf<Boolean?>(null); private set
-    /** The MainActivity is started (on screen, maybe under another app's window). */
-    var inFront by mutableStateOf(false)
-
-    /**
-     * Turns notifications on or off (the core takes this device's pushes off the accounts when off); answers whether the
-     * core wants this device to hold pushes now.
-     */
-    suspend fun useNotify(on: Boolean): Boolean {
-        val was = notify
-        notify = on
-        return try {
-            val view = decode(NotifyView.serializer(), core.call("notify.set", buildJsonObject { put("on", on) }))
-            notify = view.on
-            view.push
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Refused (or not understood): as it was, and said.
-            notify = was
-            toast = t(if (on) "android-misc.notify.onFailed" else "android-misc.notify.offFailed", "error" to ((e as? CoreException)?.let(::errorText) ?: e.message.orEmpty()))
-            was
-        }
-    }
-
-    /** The system was asked to allow notifications (once). */
-    suspend fun askedNotify() {
-        notifyAsked = true
-        try { core.call("notify.set", buildJsonObject { put("asked", true) }) } catch (_: CoreException) {}
-    }
-
-    /** The settings as the app kept them before the core did, into the core once. */
-    suspend fun moveNotify() {
-        if (!prefs.contains(Notifier.FLAG) && !prefs.contains("notifyAsked")) return
-        try {
-            core.call("notify.set", buildJsonObject { put("on", prefs.getBoolean(Notifier.FLAG, true)); put("asked", prefs.getBoolean("notifyAsked", false)) })
-            prefs.edit().remove(Notifier.FLAG).remove("notifyAsked").apply()
-        } catch (_: CoreException) {
-            // Tried again on the next start; the old values stay where they are.
-        }
-    }
-
-    /** Follows the core's `notify` (the settings shown in 我). */
-    suspend fun followNotify() {
-        core.topic(Topics.notify()).collect { state ->
-            val view = state.value?.takeIf { it !is JsonNull }?.let { runCatching { decode(NotifyView.serializer(), it) }.getOrNull() } ?: return@collect
-            notify = view.on
-            notifyAsked = view.asked
-        }
-    }
-
-    /** Looks for a newer build of the app: one found shows 更新 in the home page's top bar (and in 我). */
-    suspend fun checkUpdates() { updates.check() }
-
-    fun flag(name: String, default: Boolean) = prefs.getBoolean(name, default)
-    fun setFlag(name: String, on: Boolean) = prefs.edit().putBoolean(name, on).apply()
-    fun strings(name: String): List<String> = prefs.getString(name, null)?.split('\u0000')?.filter { it.isNotEmpty() } ?: emptyList()
-    fun setStrings(name: String, values: List<String>) = prefs.edit().putString(name, values.joinToString("\u0000")).apply()
-
-    /**
-     * Starts the core reading a chat ahead of its page (its row pressed), kept a moment for it: the page then has it as
-     * it comes in, instead of a frame of its loading look first (web core/react.ts prime).
-     */
-    fun prime(station: String, of: ChatOf) {
-        val topic = Topics.chat(station, of)
-        scope.launch { withTimeoutOrNull(PRIME_MS) { core.topic(topic).first { it.value != null || it.error != null } } }
-    }
-
-    fun push(screen: Screen) { sheet = null; menu = null; forward = true; if (screen == Screen.NewChat || screen == madeChat) madeChat = null; stack = stack + screen }
-    fun pop() { if (stack.size > 1) { sheet = null; menu = null; forward = false; stack = stack.dropLast(1) } }
-    /** The top page gives way to another (a new chat becomes the chat it made). */
-    /** From the latest chats on a wide screen (screens/Wide.kt): in place of the page open, or over the list. */
-    fun open(screen: Screen) {
-        sheet = null; menu = null; forward = true
-        // A chat a new chat made, opened again from the list, is a page of its own (it slides, not rises).
-        if (screen == Screen.NewChat || screen == madeChat) madeChat = null
-        stack = (if (stack.size > 1) stack.dropLast(1) else stack) + screen
-    }
-    fun replace(screen: Screen) { sheet = null; forward = true; stack = stack.dropLast(1) + screen }
-    /**
-     * The chat a new chat became (`made`): it is the same page as the new chat was (screens/ChatHost.kt), not another
-     * pushed in over it; the page is the host's until the next new chat.
-     */
-    var madeChat by mutableStateOf<Screen.Chat?>(null); private set
-    fun made(screen: Screen.Chat) { madeChat = screen; replace(screen) }
-    /** The page a screen is drawn in: a new chat and the chat it became are one. */
-    fun pageOf(screen: Screen): String = if (screen == Screen.NewChat || screen == madeChat) "new-chat" else screen.id
-    fun home() { sheet = null; forward = false; stack = listOf(Screen.Home) }
-    /**
-     * An item's link from outside: its workspace, and its page over the list (back goes to the list); a service's link
-     * (`?service=<job>`) has the service over its chat.
-     */
-    fun openItem(workspace: String, station: String, session: String, service: String? = null) {
-        pickWorkspace(workspace)
-        sheet = null; menu = null; forward = true
-        val address = "$workspace/$station"
-        stack = listOf(Screen.Home, Screen.Chat(address, ChatOf.Session(session))) + listOfNotNull(service?.let { Screen.Preview(address, it) })
-    }
-
-    /** The agents of each chat page (by its id) as last shown: whether a link names one of them. */
-    val chatAgents = HashMap<String, Set<String>>()
-
-    /**
-     * still.fail's own links in a chat open here, as pages over the one they are on: the core says what a link opens
-     * (`link.parse`: an invitation, a chat's page, an item and its web service); a web service of one of this chat's
-     * agents (`?service=<job>`) over the chat, another session as its chat (and its service over that). Any other link
-     * goes to `orElse` (the system opens it). `outside`: a link from outside the app (a notification, the browser),
-     * whose item opens over the list.
-     */
-    fun openLink(url: String, outside: Boolean = false, notification: Boolean = false, orElse: () -> Unit = {}) {
-        scope.launch {
-            val target = try {
-                core.call("link.parse", buildJsonObject { put("url", url) }).takeIf { it !is JsonNull }
-                    ?.let { StillFailJson.decodeFromJsonElement(LinkTarget.serializer(), it) }
-            } catch (_: CoreException) { null }
-            if (notification && target?.opens == "item" && !target.workspace.isNullOrEmpty()) {
-                pickWorkspace(target.workspace)
-                sheet = null; menu = null; forward = true
-                stack = listOf(Screen.Home, Screen.Decisions)
-            } else if (target == null || !open(target, outside)) orElse()
-        }
-    }
-
-    private fun open(t: LinkTarget, outside: Boolean): Boolean {
-        val ws = t.workspace.orEmpty()
-        val station = t.station.orEmpty()
-        when (t.opens) {
-            // An invitation's link: what it leads to, in a sheet, before it is accepted.
-            "invite" -> fail.still.android.screens.openInvite(this, t.token ?: return false)
-            // A reference to another chat (web/src/chatRefs.ts), opened over this one.
-            "chat" -> {
-                val chat = t.chat ?: return false
-                val top = stack.last()
-                if (top is Screen.Chat && top.station == "$ws/$station" && (top.of as? ChatOf.Session)?.key == chat) return true
-                if (ws != workspace) openItem(ws, station, chat)
-                else { sheet = null; menu = null; forward = true; stack = stack + Screen.Chat("$ws/$station", ChatOf.Session(chat)) }
-            }
-            "item" -> {
-                val session = t.session ?: return false
-                val service = t.service
-                val address = "$ws/$station"
-                val top = stack.last()
-                val here = top is Screen.Chat && top.station == address && ((top.of as? ChatOf.Session)?.key == session || chatAgents[top.id]?.contains(session) == true)
-                when {
-                    outside -> openItem(ws, station, session, service)
-                    here -> if (service != null) push(Screen.Preview(address, service))
-                    ws != workspace -> openItem(ws, station, session, service)
-                    else -> {
-                        sheet = null; menu = null; forward = true
-                        stack = stack + Screen.Chat(address, ChatOf.Session(session)) + listOfNotNull(service?.let { Screen.Preview(address, it) })
-                    }
-                }
-            }
-            // A station's 共享调试, as its agent asks for it (adb_devices): the page, sharing only once its person taps.
-            "adbShare" -> {
-                if (station.isEmpty()) return false
-                val address = "$ws/$station"
-                if (stack.last() == Screen.AdbShare(address)) return true
-                if (ws != workspace) pickWorkspace(ws)
-                sheet = null; menu = null; forward = true
-                stack = (if (outside || ws != workspace) listOf(Screen.Home) else stack) + Screen.AdbShare(address)
-            }
-            else -> return false
-        }
-        return true
-    }
-
-    fun api(station: String) = StationApi(core, station)
-    /** For what outlives the page that started it (a message sent as the page moves to its new chat). */
-    val scope = MainScope()
-
-    /**
-     * Where each chat was left: the message at the top of the list and how far below the top it sat; and, if it was
-     * left at its end, the newest message then (`bottom`).
-     */
-    val places = HashMap<String, Place>()
-    data class Place(val id: String, val offset: Int, val bottom: String?)
-    /** The pages, as what a sheet over them frosts. */
-    val haze = HazeState()
-
-    init {
-        // What a new chat ran on, kept here before the core kept it (newChat/<station's address>, newChat.lastIn/<scope>,
-        // newChat.last): into the core once (newChat.migrate, by the stations' ids as the web keeps them), then gone.
-        val kept = prefs.all.keys.filter { it.startsWith("newChat/") || it.startsWith("newChat.lastIn/") || it == "newChat.last" }
-        if (kept.isNotEmpty()) scope.launch {
-            val id = { address: String -> address.substringAfterLast('/') }
-            val params = buildJsonObject {
-                putJsonObject("choices") {
-                    for (k in kept.filter { it.startsWith("newChat/") }) {
-                        val v = strings(k)
-                        if (v.size >= 3) putJsonObject(id(k.removePrefix("newChat/"))) {
-                            put("runtime", v[0]); put("model", v[1])
-                            put("effort", v[2].takeIf { it != "-" } ?: ""); put("profile", v.getOrNull(3)?.takeIf { it != "-" } ?: "")
-                        }
-                    }
-                }
-                putJsonObject("lastIn") {
-                    for (k in kept.filter { it.startsWith("newChat.lastIn/") }) strings(k).firstOrNull()?.let { put(k.removePrefix("newChat.lastIn/"), id(it)) }
-                }
-                strings("newChat.last").firstOrNull()?.let { put("last", id(it)) }
-            }
-            // A core that refuses it: kept here, tried again next time.
-            try { core.call("newChat.migrate", params); prefs.edit().apply { kept.forEach { remove(it) } }.apply() } catch (_: fail.still.core.CoreException) {}
-        }
-    }
-}
-
-
-val LocalApp = staticCompositionLocalOf<AppState> { error("no app") }
 
 private val Ease = CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f)
 
 @Composable
 fun StillFailApp(app: AppState) {
+    // An invitation's link opens its sheet, a page of the app's (AppState.openLink).
+    AppHooks.invite = ::openInvite
+    // A login's browser on this phone: the app held up while it listens for it (LoginRelay.kt).
+    val context = LocalContext.current
+    AppHooks.relaying = { title -> LoginRelay.start(context.applicationContext, title) }
+    // What a page of one module shows or opens of another's (screens/Elsewhere.kt).
+    Elsewhere.stationPeek = ::openStationPeek
+    Elsewhere.workspaces = ::openWorkspaces
+    Elsewhere.invitationsWaiting = { invitationsWaiting(it) }
+    Elsewhere.firstStation = { FirstStation(it) }
+    Elsewhere.machineLoginOffers = { station, overview, inset -> MachineLoginOffers(station, overview, inset) }
+    Elsewhere.vaultApproval = { workspace, request, mine, modifier -> VaultApproval(workspace, request, mine, modifier) }
+    Elsewhere.preview = { station, shown, folder, onClose -> FilePreview(station, shown.key, shown.file, gallery = folder?.let { Gallery.Folder(it) }, canDraft = false, onClose = onClose) }
+    // Where files of a drive are kept once read (the reader, the viewer and the player find it there).
+    fail.still.android.data.DriveCache.start(LocalContext.current)
     fail.still.android.ui.KeyboardInsets { AppContent(app) }
 }
 
@@ -585,20 +196,22 @@ private fun AppContent(app: AppState) {
                     // The core hears which workspace the app is in: what it tells the viewer is of it (attend.ts).
                     LaunchedEffect(current.workspace.id) { app.core.focus(buildJsonObject { put("workspace", current.workspace.id) }) }
                     Pages(app, current)
+                    // A device waiting on this one, in any workspace of the person's, over whichever page is open.
+                    fail.still.android.screens.LockPrompts()
                 }
             }
         } }
         val top = app.stack.lastOrNull()
         // A chat opened: its notification is read (its tag, as Notices.kt shows it).
         val context = LocalContext.current
-        LaunchedEffect(top) { if (top is Screen.Chat && top.of is ChatOf.Session) Notifier.cancel(context, "${top.station}/${top.of.key}") }
+        LaunchedEffect(top) { if (top is Screen.Chat) (top.of as? ChatOf.Session)?.let { Notifier.cancel(context, "${top.station}/${it.key}") } }
         // Looked at while in front with a chat on top (the chat itself says which, screens/Chat.kt): its notices are
         // not shown then (client/core-ts/src/attend.ts).
         val lookedAt = app.inFront && top is Screen.Chat
         LaunchedEffect(app.inFront, lookedAt) { app.core.focus(buildJsonObject { put("visible", app.inFront); put("focused", lookedAt) }) }
         // An image or a video opened, over the pages (it grows out of its thumbnail in the chat); sheets and notes over it.
         fail.still.android.screens.ViewerHost()
-        SheetHost(app.sheet, app.haze) { app.sheet = null }
+        SheetHost(app.sheet, app.haze) { app.sheet?.onClose?.invoke(); app.sheet = null }
         ReaderHost(app.reader) { app.reader = null }
         MenuHost(app.menu) { app.menu = null }
         ToastHost(app.toast) { app.toast = null }
@@ -607,8 +220,6 @@ private fun AppContent(app: AppState) {
 
 /** How long an opening page waits for what the core has on the device (web motion.ts LOCAL_MS): never for a station. */
 private const val LOCAL_MS = 100L
-/** How long a chat read ahead of its page (`AppState.prime`) is kept for it. */
-private const val PRIME_MS = 3_000L
 
 /** A workspace's lists (screens/Home.kt), as it follows them: read ahead of switching to it. */
 private fun homeLists(workspace: String): List<Pair<JsonObject, kotlinx.serialization.KSerializer<*>>> = listOf(
@@ -633,8 +244,13 @@ private fun opening(screen: Screen, workspace: String): List<Pair<JsonObject, ko
     )
     is Screen.Preview -> listOf(Topics.job(screen.station, screen.job) to fail.still.android.data.Job.serializer())
     is Screen.Station -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
+    // A folder as it was last read (held on the device): the page slides in with its rows.
+    is Screen.Drive -> listOfNotNull(screen.root?.let { Topics.drive(screen.station, it, screen.path) to fail.still.android.data.DriveFolder.serializer() })
+    // A secret's page: what it is (its row), its uses after.
+    is Screen.VaultItem -> listOf(Topics.vaultItems(workspace, screen.vault) to fail.still.android.data.VaultItemsView.serializer())
     Screen.Archive -> listOf(Topics.archive(workspace) to fail.still.android.data.ArchiveView.serializer())
     Screen.Decisions -> listOf(Topics.decisions(workspace) to fail.still.android.data.DecisionsView.serializer())
+    Screen.Files, Screen.Stations -> listOf(Topics.stations(workspace) to kotlinx.serialization.builtins.ListSerializer(fail.still.android.data.StationView.serializer()))
     else -> emptyList()
 }
 
@@ -647,13 +263,8 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     // a little behind (web mobile/app.tsx's own edge swipe); let go, it goes on from there, or back if the system says so.
     var swiped by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    // The page's own width: a wide screen's column (screens/Wide.kt), so the page follows the finger there too.
-    val window = LocalWindowInfo.current.containerSize.width
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val width = with(density) {
-        val dp = window.toDp()
-        if (dp >= fail.still.android.screens.WideAt) fail.still.android.screens.columnWidth(dp).toPx() else window.toFloat()
-    }
+    // The page's own width: the screen's.
+    val width = LocalWindowInfo.current.containerSize.width.toFloat()
     // What is over the pages takes back first: its own handlers were added before this one (they are there from the
     // splash; the pages only once the workspaces are read), and the last added is asked first, so this one steps aside.
     PredictiveBackHandler(enabled = app.stack.size > 1 && app.sheet == null && app.menu == null && app.reader == null && !fail.still.android.screens.FileViewers.open) { progress ->
@@ -690,13 +301,30 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             throw e
         }
     }
+    // A place's top page other than the chats, with nothing over it: back goes to the chats (the app's first place),
+    // in place as the bar switches, rather than out of the app.
+    val root = app.stack.singleOrNull()
+    androidx.activity.compose.BackHandler(enabled = root != null && root != Screen.Home && placeOf(root) != null && app.sheet == null && app.menu == null && app.reader == null && !fail.still.android.screens.FileViewers.open) {
+        app.place(Screen.Home)
+    }
     val saved = rememberSaveableStateHolder()
+    val density = androidx.compose.ui.platform.LocalDensity.current
     // Each page's topics, followed while it is in the stack (data/Topics.kt: PageTopics); those of the pages gone from it
     // let go, once they are not drawn either (a page going away is drawn until it has).
     val followed = remember { HashMap<String, fail.still.android.data.PageTopics>() }
     val workspace = current.workspace.id
     fun keyOf(screen: Screen) = "$workspace|${app.pageOf(screen)}"
-    fun letGo(keep: (String) -> Boolean) = followed.keys.filterNot(keep).forEach { followed.remove(it)?.close() }
+    // A place's top page of this workspace, switched away from on the bar, keeps its state (PLACE_PAGES, below), and
+    // its topics: still followed while its place is in one of the bars (coming back, what it shows is there and up to
+    // date at once); paused otherwise, what they showed kept, so it comes back drawn as it was left and followed again
+    // from there. Any other page's are let go.
+    fun letGo(keep: (String) -> Boolean) = followed.keys.filterNot(keep).forEach { key ->
+        val place = if (key.startsWith("$workspace|")) PLACE_OF_PAGE[key.removePrefix("$workspace|")] else null
+        when {
+            place == null -> followed.remove(key)?.close()
+            app.bars.sets.none { place in it } -> followed[key]?.pause()
+        }
+    }
     // A page's own state (its scroll place, what is open on it) is kept while it is in the stack, and forgotten once it
     // leaves: a chat closed and opened again starts afresh.
     val kept = remember { HashSet<String>() }
@@ -704,10 +332,24 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         val stacked = app.stack.mapTo(HashSet(), ::keyOf) + keyOf(pages.currentState)
         letGo { it in stacked }
         val pagesIn = app.stack.mapTo(HashSet(), app::pageOf)
-        kept.filterNot { it in pagesIn }.forEach { kept.remove(it); saved.removeState(it) }
+        // The places' top pages keep theirs (where the list was scrolled to), switched away from and back on the bar.
+        kept.filterNot { it in pagesIn || it in PLACE_PAGES }.forEach { kept.remove(it); saved.removeState(it) }
     }
     LaunchedEffect(top) {
         if (pages.currentState == top && pages.targetState == top) return@LaunchedEffect
+        // A place switched to on the bar: in place, no slide, at once (the frame after the tap): what it shows is there
+        // if it was shown before (its topics kept, above), else it comes in on the page; not waited for (up to LOCAL_MS,
+        // which could hold the page back while the ball was on its way).
+        if (app.switched) {
+            BarTiming.effect()
+            val topics = followed.getOrPut(keyOf(top)) { fail.still.android.data.PageTopics() }
+            @Suppress("UNCHECKED_CAST") opening(top, workspace).forEach { (topic, serializer) -> topics.of(app.core, topic, serializer as kotlinx.serialization.KSerializer<Any?>) }
+            BarTiming.snapped(waited = false, timedOut = false)
+            swiped = false
+            // In at once, with the switch's own short motion (placeSwitch, below), not a push's.
+            pages.animateTo(top)
+            return@LaunchedEffect
+        }
         // A page opened slides in once the core has given what it shows, from what is on the device (LOCAL_MS at most,
         // as web mobile/Chat.tsx useReady): not first as its loading look swapped for it a frame or two later. What has
         // to come from a station is not waited for: the page slides in, showing it coming.
@@ -720,30 +362,28 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         pages.animateTo(top, if (swiped) tween(300, easing = FastOutSlowInEasing) else null)
         swiped = false
     }
-    // Wider than a phone (screens/Wide.kt): the pages in a column, the latest chats and the new-chat button at the screen's corners.
+    // Wider than a phone (screens/Wide.kt): the pages the screen's whole width, the latest chats and the new-chat button at its corners.
+    // What the bottom bar frosts: the pages (and, for the ball and 令, the bar's own glass: ui/Bar.kt).
+    val barHaze = remember { dev.chrisbanes.haze.HazeState() }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
     val wide = maxWidth >= fail.still.android.screens.WideAt
-    Box(Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxHeight()
-        .then(if (wide) Modifier.width(fail.still.android.screens.columnWidth(maxWidth)).clipToBounds() else Modifier.fillMaxWidth())) {
-    CompositionLocalProvider(fail.still.android.screens.LocalWide provides wide) {
+    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().hazeSource(barHaze)) {
+    CompositionLocalProvider(fail.still.android.ui.LocalWide provides wide) {
     transition.AnimatedContent(
         transitionSpec = {
-            // A message's page and its chat are one place (Annotate.kt): no slide either way, the page's own parts move.
+            // Switched on the bar: in place, nothing slides.
+            if (app.switched) return@AnimatedContent placeSwitch(initialState, targetState, app.bars, with(density) { 30.dp.roundToPx() })
             // Layered by depth in the stack, the deeper page over: a page's zIndex is fixed when it comes in (AnimatedContent
             // keeps the first spec's), so by the way it came it was wrong later (one come back to, then swiped away, went under).
             val z = app.stack.indexOfLast { app.pageOf(it) == app.pageOf(targetState) }.coerceAtLeast(0).toFloat()
-            if (targetState is Screen.Annotate || initialState is Screen.Annotate) (EnterTransition.None togetherWith ExitTransition.KeepUntilTransitionsFinished)
-                .apply { targetContentZIndex = z }
-            else {
-                // Sharing the host keeps the composer in place, but only an unsent new chat exits down.
-                val rose = initialState == Screen.NewChat
-                if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
-            }
+            // Sharing the host keeps the composer in place, but only an unsent new chat exits down.
+            val rose = initialState == Screen.NewChat
+            if (swiped) swipe(toLeft = initialState == Screen.Settings, z, rose) else transition(initialState, targetState, app.forward, z, rose)
         },
         // A new chat and the chat it becomes are one page (ChatHost.kt): it stays, rather than slide in again.
         contentKey = { app.pageOf(it) },
     ) { screen ->
-        val pageScope = this
         val page = keyOf(screen)
         val topics = followed.getOrPut(page) { fail.still.android.data.PageTopics() }
         DisposableEffect(page) {
@@ -751,14 +391,29 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             onDispose { topics.drawn = false; if (app.stack.none { keyOf(it) == page }) letGo { it != page } }
         }
         kept += app.pageOf(screen)
-        saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(fail.still.android.data.LocalPageTopics provides topics) {
-            // A message's page draws its own ground, coming in over its chat (Annotate.kt).
-            Box(Modifier.fillMaxSize().then(if (screen is Screen.Annotate) Modifier else Modifier.background(C.bg))) {
+        // A place's top page: no back with the bar under it (room kept for the bar at its foot); on a wide screen, which
+        // has no bar, back to the chats.
+        // A page going (switched away from on the bar, still drawn until the one coming has what it shows) stays as it
+        // was: not a pushed page all at once, its back showing and its foot's room gone for a moment.
+        val now = when {
+            app.stack.firstOrNull() != screen || placeOf(screen) == null -> PlaceRoot.None
+            wide -> PlaceRoot.Wide
+            else -> PlaceRoot.Bar
+        }
+        val held = remember { arrayOf(now) }
+        if (app.stack.contains(screen)) held[0] = now
+        val placeRoot = held[0]
+        saved.SaveableStateProvider(app.pageOf(screen)) { CompositionLocalProvider(
+            fail.still.android.data.LocalPageTopics provides topics,
+            LocalPlaceRoot provides placeRoot,
+            LocalBarRoom provides if (placeRoot != PlaceRoot.Bar) 0.dp else BAR_ROOM,
+        ) {
+            Box(Modifier.fillMaxSize().background(C.bg).then(BarTiming.page(screen))) {
                 when (screen) {
-                    Screen.Home -> HomeScreen(current)
+                    Screen.Home -> fail.still.android.screens.LockGate(current) { HomeScreen(current) }
                     is Screen.Chat, Screen.NewChat -> fail.still.android.screens.ChatHost(current, screen)
                     Screen.Stations -> StationsScreen(current)
-                    is Screen.Station -> StationScreen(current, screen.address)
+                    is Screen.Station -> StationScreen(current, screen.address, screen.login)
                     is Screen.AdbShare -> fail.still.android.screens.AdbShareScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
                     is Screen.History -> fail.still.android.screens.HistoryScreen(screen.station, screen.of, screen.key, screen.entry)
@@ -779,6 +434,10 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Usage -> fail.still.android.screens.UsageScreen(current)
                     is Screen.UsagePrices -> fail.still.android.screens.UsagePricesScreen(current, screen.days)
                     Screen.Workspace -> fail.still.android.screens.WorkspaceScreen(current)
+                    Screen.Security -> fail.still.android.screens.SecurityScreen(current)
+                    Screen.SecurityOpen -> fail.still.android.screens.SecurityOpenScreen(current)
+                    Screen.Vault -> fail.still.android.screens.VaultScreen(current)
+                    is Screen.VaultItem -> fail.still.android.screens.VaultItemScreen(current, screen.vault, screen.item)
                     is Screen.Preview -> fail.still.android.screens.PreviewScreen(screen.station, screen.job)
                     is Screen.PreviewFile -> fail.still.android.screens.PreviewFileScreen(screen.station, screen.session, screen.path, screen.name)
                     is Screen.Connect -> fail.still.android.screens.ConnectScreen(screen.station, screen.connect)
@@ -787,23 +446,59 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.NewProfile -> fail.still.android.screens.NewProfileScreen(current, screen.station)
                     Screen.Archive -> fail.still.android.screens.ArchiveScreen(current)
                     Screen.Decisions -> fail.still.android.screens.DecisionsScreen(current)
+                    Screen.Files -> fail.still.android.drive.FilesScreen(current)
+                    Screen.BarSettings -> fail.still.android.screens.BarSettingsScreen()
                     is Screen.Memory -> fail.still.android.screens.MemoryScreen(current, screen.station)
+                    is Screen.MemoryDoc -> fail.still.android.screens.MemoryDocScreen(current, screen.station, screen.skill, screen.at)
                     is Screen.SlackApp -> fail.still.android.screens.SlackAppScreen(screen.station, screen.connect)
-                    is Screen.Annotate -> CompositionLocalProvider(fail.still.android.screens.LocalPageTransition provides pageScope.transition) {
-                        fail.still.android.screens.AnnotateScreen(screen.station, screen.of, screen.ts)
-                    }
+                    is Screen.Drive -> fail.still.android.drive.DriveScreen(current, screen.station, screen.root, screen.path)
+                    is Screen.DriveRead -> fail.still.android.drive.ReaderScreen(screen.station, screen.root, screen.path)
+                    is Screen.DrivePlay -> fail.still.android.drive.PlayerScreen(screen.station, screen.root, screen.path)
                 }
                 // The page scrolls under the status bar; it keeps the paper behind its icons, moving with its page (the
-                // list and a chat have frosted bars there instead, which show what runs under them).
-                if (screen !is Screen.Home && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.Annotate)
+                // list, a place's top page with the bar and a chat have frosted bars there instead, which show what runs
+                // under them). A book and a film draw their own paper (or black) there.
+                if (screen !is Screen.Home && placeRoot != PlaceRoot.Bar && screen !is Screen.Chat && screen != Screen.NewChat && screen !is Screen.DriveRead && screen !is Screen.DrivePlay)
                     Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(C.bg))
             }
         } }
     }
     }
     }
+    // The bottom bar (Places.kt): a phone's, on a place's top page with nothing over it.
+    if (!wide) {
+        // The keyboard up (a field on the page): out of its way.
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val ime = androidx.compose.foundation.layout.WindowInsets.ime
+        val keyboardUp by remember(density) { androidx.compose.runtime.derivedStateOf { ime.getBottom(density) > 0 } }
+        val root = app.stack.singleOrNull()
+        PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway)
+    }
+    }
     if (wide) WideCorners(current, top)
     }
+}
+
+/** The places' top pages (Places.kt): their state is kept while they are not in the stack, as the bar switches between them. */
+private val PLACE_PAGES = PLACES.map { screenOf(it).id }.toSet()
+/** Each place's top page's id, to its place. */
+private val PLACE_OF_PAGE = PLACES.associateBy { screenOf(it).id }
+
+/**
+ * Switched on the bar from one place's page to another's (not a push: nothing to go back to): a shared axis along the
+ * bar. The page coming in moves 30dp in from the side the ball goes to, fading in (220 ms); the one going fades out in
+ * the first 90 ms, moving 30dp the other way. To a place not in the bar in view (chosen through the panel of the other
+ * bars), no side to come from: it only fades in over the page going (180 ms).
+ */
+private fun placeSwitch(from: Screen, to: Screen, bars: fail.still.android.data.BarPrefs, shift: Int): ContentTransform {
+    val bar = bars.sets.getOrNull(bars.current.toInt()).orEmpty()
+    val a = bar.indexOf(placeOf(from))
+    val b = bar.indexOf(placeOf(to))
+    if (a < 0 || b < 0 || a == b) return (fadeIn(tween(180, easing = fail.still.android.ui.Ease.Arrive)) togetherWith fadeOut(tween(180), 0.99f)).apply { targetContentZIndex = 0f }
+    val way = if (b > a) 1 else -1
+    val move = tween<IntOffset>(220, easing = fail.still.android.ui.Ease.Arrive)
+    return ((slideInHorizontally(move) { way * shift } + fadeIn(tween(220, easing = fail.still.android.ui.Ease.Arrive))) togetherWith
+        (slideOutHorizontally(move) { -way * shift } + fadeOut(tween(90, easing = LinearEasing)))).apply { targetContentZIndex = 0f }
 }
 
 /** Out of a swipe let go: starts moving, no ease in (easeOutQuad). */

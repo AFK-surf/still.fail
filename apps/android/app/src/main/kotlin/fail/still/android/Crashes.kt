@@ -2,7 +2,8 @@
 // Android). A crash in Kotlin is written down as it happens (its exception, which the system does not keep); at the next
 // start the system's record of how the app's processes ended (ApplicationExitInfo) is read from where the last start
 // left off, and each crash, native abort (Hermes, the core's JNI) or ANR goes out, with what the system kept of it: a
-// native crash's tombstone, an ANR's thread dump. A build without PostHog's key (a local or dev one) sends nothing.
+// native crash's tombstone, an ANR's thread dump. A build without PostHog's key (a local or dev one) sends nothing, nor
+// one whose person turned it off in settings (`reporting`): everything the app sends to PostHog goes by [send].
 package fail.still.android
 
 import android.app.ActivityManager
@@ -44,6 +45,9 @@ object Crashes {
     const val LOGS = 60 * 1024
     /** A tombstone read at most this far (they carry memory dumps). */
     private const val TOMBSTONE = 4 * 1024 * 1024
+    /** What goes up of the log a native crash left, as the `logcat` property. */
+    private const val LOGGED = 80
+    private const val LOGGED_BYTES = 16 * 1024
 
     /** Keeps a Kotlin crash's exception in the app's files before the system's handler ends the process. */
     fun install(context: Context) {
@@ -108,23 +112,55 @@ object Crashes {
     /** The core died and is started again (StillFailCore.onFailed): not a crash of the app, but what leads to one (its
      *  old engine's answers after it closed crashed the app, 2026-10), and the reason is the only trace of the core's
      *  own bug. Sent at once, as the web's CoreFailed is. */
-    fun coreFailed(context: Context, reason: String) {
+    fun coreFailed(context: Context, reason: String) = handled(context, "CoreFailed", reason.take(1000), "core_failed")
+
+    /** The native heap past MemoryWatch's limit, with what was under way then (MemoryWatch.kt). */
+    fun memoryRunaway(context: Context, found: Pair<String, JsonObject>) = handled(context, "MemoryRunaway", found.first, "memory_runaway", found.second)
+
+    /** An error the app got past, sent at once as `type` with `value`, and `reason` and `facts` as its properties. */
+    private fun handled(context: Context, type: String, value: String, reason: String, facts: JsonObject? = null) {
         if (BuildConfig.POSTHOG_KEY.isEmpty()) return
-        val account = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null) ?: "android-anonymous"
+        val account = account(context) ?: "android-anonymous"
         val at = System.currentTimeMillis()
         Thread {
             val r = Report(at, android.os.Process.myPid(), buildJsonArray {
                 addJsonObject {
-                    put("type", "CoreFailed")
-                    put("value", reason.take(1000))
+                    put("type", type)
+                    put("value", value)
                     putJsonObject("mechanism") { put("handled", true); put("synthetic", false); put("type", "generic") }
                 }
-            }, null, null, buildJsonObject { put("reason", "core_failed") }, null)
+            }, null, null, buildJsonObject { put("reason", reason); facts?.forEach { (k, v) -> put(k, v) } }, null)
             try {
-                send(listOf(event(r, account, "error")))
+                send(context, listOf(event(r, account, "error")))
             } catch (_: Exception) {
             }
         }.start()
+    }
+
+    /** A lazy list given the same key twice (ListKeys.kt keys it apart): no crash, but the data behind the list holds
+     *  what should be one (an id given again), and this is what says so. */
+    fun duplicateKey(context: Context, list: String, key: String) = handled(context, "DuplicateListKey", "$list: ${key.take(200)}", "duplicate_list_key")
+
+    /** Whether usage statistics and error reports go out from this device (settings, SettingsHome.kt): yes until turned
+     *  off; kept in the app's prefs, this device's only. */
+    private const val REPORTING = "telemetry"
+    fun reporting(context: Context): Boolean = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getBoolean(REPORTING, true)
+    fun setReporting(context: Context, on: Boolean) = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).edit().putBoolean(REPORTING, on).apply()
+
+    /** The account the last report went as (the signed-in one's id): what the app's other events go as (BarTiming.kt). */
+    fun account(context: Context): String? = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null)
+
+    /** What every event of the app carries: its build, and the device. */
+    fun device() = buildJsonObject {
+        put("release", BuildConfig.VERSION_NAME)
+        put("app", "android")
+        put("beta", BuildConfig.BETA)
+        put("\$app_version", BuildConfig.VERSION_NAME)
+        put("\$os", "Android")
+        put("\$os_version", Build.VERSION.RELEASE)
+        put("\$device_manufacturer", Build.MANUFACTURER)
+        put("\$device_model", Build.MODEL)
+        put("\$lib", "stillfail-android")
     }
 
     /** Sends what crashed since the last start, as `account` (the signed-in account's id, the web's distinct id); what
@@ -137,7 +173,7 @@ object Crashes {
             val reports = gather(context, prefs.getLong(SINCE, System.currentTimeMillis() - LOOK_BACK))
             if (reports.isEmpty()) return@withContext
             try {
-                send(reports.map { event(it, account) })
+                send(context, reports.map { event(it, account) })
             } catch (_: Exception) {
                 return@withContext
             }
@@ -157,20 +193,15 @@ object Crashes {
             put("\$exception_level", level)
             r.fingerprint?.let { put("\$exception_fingerprint", it) }
             r.trace?.let { put("trace", it) }
-            put("release", BuildConfig.VERSION_NAME)
-            put("app", "android")
-            put("beta", BuildConfig.BETA)
-            put("\$app_version", BuildConfig.VERSION_NAME)
-            put("\$os", "Android")
-            put("\$os_version", Build.VERSION.RELEASE)
-            put("\$device_manufacturer", Build.MANUFACTURER)
-            put("\$device_model", Build.MODEL)
-            put("\$lib", "stillfail-android")
+            for ((k, v) in device()) put(k, v)
             for ((k, v) in r.facts) put(k, v)
         }
     }
 
-    private fun send(batch: List<JsonObject>) {
+    /** Everything the app sends to PostHog. Turned off, nothing goes, and what was to go is not kept for later (report
+     *  moves on past the crashes as if they had gone). */
+    fun send(context: Context, batch: List<JsonObject>) {
+        if (BuildConfig.POSTHOG_KEY.isEmpty() || !reporting(context)) return
         val body = buildJsonObject { put("api_key", BuildConfig.POSTHOG_KEY); put("batch", JsonArray(batch)) }.toString().toByteArray()
         val c = URL("${BuildConfig.POSTHOG_HOST.trimEnd('/')}/batch/").openConnection() as HttpURLConnection
         try {
@@ -206,13 +237,31 @@ object Crashes {
             emptyList()
         }
         val wanted = setOf(ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE, ApplicationExitInfo.REASON_ANR)
-        return exits.filter { it.timestamp > since && it.reason in wanted }.map { exit ->
+        return exits.filter { it.timestamp > since && (it.reason in wanted || killedInSight(it)) }.map { exit ->
             // The exception written down as it crashed: the file made just before the system recorded the end.
             val file = if (exit.reason == ApplicationExitInfo.REASON_CRASH) kept.filter { it.first in exit.timestamp - 10_000..exit.timestamp + 1_000 }.maxByOrNull { it.first } else null
             if (file != null) kept.remove(file)
             of(exit, file?.second)
         }.toMutableList()
     }
+
+    /** The reasons the system ends a process for that the person sees as a crash when the app is in front of them
+     *  (it vanishes to the home screen) and the app itself never gets to tell: out of memory, an OEM's resource manager. */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun killed(reason: Int): String? = when (reason) {
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "low_memory"
+        ApplicationExitInfo.REASON_SIGNALED -> "signaled"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "excessive_resource_usage"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "initialization_failure"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "dependency_died"
+        ApplicationExitInfo.REASON_OTHER -> "other"
+        else -> null
+    }
+
+    /** Killed for one of [killed]'s reasons while on screen (killed in the background is how Android works, not a crash). */
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun killedInSight(exit: ApplicationExitInfo) =
+        killed(exit.reason) != null && exit.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
 
     @RequiresApi(Build.VERSION_CODES.R)
     private fun of(exit: ApplicationExitInfo, kept: File?): Report {
@@ -225,7 +274,8 @@ object Crashes {
             put("reason", when (exit.reason) {
                 ApplicationExitInfo.REASON_CRASH -> "crash"
                 ApplicationExitInfo.REASON_CRASH_NATIVE -> "crash_native"
-                else -> "anr"
+                ApplicationExitInfo.REASON_ANR -> "anr"
+                else -> "killed_" + killed(exit.reason)
             })
             put("exit_status", exit.status)
             put("exit_description", exit.description)
@@ -233,6 +283,12 @@ object Crashes {
             put("importance", exit.importance)
             put("pss_kb", exit.pss)
             put("rss_kb", exit.rss)
+            if (exit.reason != ApplicationExitInfo.REASON_CRASH) {
+                // The system's WebView draws in the app's own render thread, and a crash in it has no symbols to read:
+                // its version says which Chromium it was, and what it logged before it ended says why.
+                if (exit.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) webView()?.let { put("webview", it) }
+                if (exit.reason != ApplicationExitInfo.REASON_ANR) logged(exit.pid)?.let { put("logcat", it) }
+            }
         }
         val description = exit.description ?: ""
         return when (exit.reason) {
@@ -245,8 +301,36 @@ object Crashes {
                 val frames = trace?.let(Tombstone::frames).orEmpty()
                 Report(exit.timestamp, exit.pid, one(signal, trace?.let(Tombstone::headline) ?: description, "signalhandler"), fingerprint(signal, frames), trace, facts, null)
             }
-            else -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
+            ApplicationExitInfo.REASON_ANR -> Report(exit.timestamp, exit.pid, one("ANR", description, "anr"), fingerprint("ANR", trace?.let(::mainFrames).orEmpty()), trace, facts, null)
+            else -> {
+                val why = killed(exit.reason)
+                val memory = "pss ${exit.pss / 1024} MB, rss ${exit.rss / 1024} MB"
+                Report(exit.timestamp, exit.pid, one("Killed", listOf(why, description, memory).filter { !it.isNullOrEmpty() }.joinToString(": "), "generic"), "android:killed:$why", trace, facts, null)
+            }
         }
+    }
+
+    /** The system WebView's package and version now (as it was at the crash, unless it was updated since). */
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun webView(): String? = try {
+        android.webkit.WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" }
+    } catch (_: Exception) {
+        null
+    }
+
+    /**
+     * What an ended process logged last, warnings and up, while the log still has it (an app reads its own lines; a
+     * tombstone carries none of them on some phones): the process's last [LOGGED] lines, at most [LOGGED_BYTES].
+     */
+    private fun logged(pid: Int): String? = try {
+        val p = ProcessBuilder("logcat", "-d", "-v", "threadtime", "--pid=$pid", "*:W").redirectErrorStream(true).start()
+        val lines = ArrayDeque<String>()
+        p.inputStream.bufferedReader().useLines { all -> all.forEach { lines.addLast(it); if (lines.size > LOGGED) lines.removeFirst() } }
+        p.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)
+        p.destroy()
+        lines.filter { !it.startsWith("--------- beginning of") }.joinToString("\n").takeLast(LOGGED_BYTES).ifEmpty { null }
+    } catch (_: Exception) {
+        null
     }
 
     private fun javaOnly(at: Long, file: File): Report {
@@ -280,7 +364,7 @@ object Crashes {
         dump.lineSequence().dropWhile { !it.startsWith("\"main\"") }.drop(1).takeWhile { it.isNotBlank() }
             .map { it.trim() }.filter { it.startsWith("at ") }.map { it.removePrefix("at ").substringBefore('(') }.toList()
 
-    private fun iso(ms: Long): String =
+    fun iso(ms: Long): String =
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
 
     private fun readAtMost(input: InputStream, most: Int): ByteArray {

@@ -3,15 +3,16 @@
 // stations. (The admin's console is an app of its own, src/admin/.) Everything goes through the
 // client core: accounts, still.fail cloud and the links to stations live there,
 // not on the page.
+import { GoKeeper } from "../go.ts";
 import { Tooltip } from "radix-ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ServicePage } from "../Preview.tsx";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router";
 import { WebUpdate } from "../WebUpdate.tsx";
-import { ToastProvider } from "../toast.tsx";
+import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { Button, Select, Splash, useNarrow } from "../ui.tsx";
 import { StatusLine } from "../Status.tsx";
-import { useAccounts, useSignIn, useSignOut } from "./accounts.ts";
+import { useAccounts, useSignIn, useSignOut, type Account } from "./accounts.ts";
 import { Callback, SignInPage } from "./gate.tsx";
 import { BetaGate } from "./beta.tsx";
 import { WorkspaceShell } from "./workspace.tsx";
@@ -25,13 +26,14 @@ import { useNotices } from "../notify.ts";
 import { useDoingFailed } from "../doing.ts";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
 import { stationApi, useStationCall } from "../api.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 import * as css from "./CloudApp.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as additionsCss from "../styles/additions.css.ts";
 
 import { NAME } from "../channel.ts";
+import { offerShare, sharedOf } from "../shareIn.ts";
 import { t } from "../i18n.ts";
 export function CloudApp() {
   const narrow = useNarrow();
@@ -40,6 +42,7 @@ export function CloudApp() {
       {narrow && <WebUpdate floating />}
       <Tooltip.Provider delayDuration={400}>
         <BrowserRouter>
+          <GoKeeper />
           <PageViews />
           <Routes>
             <Route path="/auth/callback" element={<Callback />} />
@@ -94,6 +97,8 @@ function Home() {
   if (!list) return <Splash />;
   if (list.length > 0) return <SignedIn />;
   if (narrow) return <MobileSignIn />;
+  // Signed in, it comes back here (accounts.ts signIn): to what was being shared, still in the address.
+  if (location.pathname === "/share") return <SignInPage lead={t("web-main.shareIn.signIn", { name: NAME })} />;
   return <SignInPage lead={inviteCode() ? t("web-pages.cloud.signInWithCode", { name: NAME }) : undefined} />;
 }
 
@@ -106,6 +111,7 @@ function SignedIn() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/o/:ws/:station/:session" element={<OpenItem />} />
+        <Route path="/share" element={<ShareLanding />} />
         <Route path="/w/:ws/s/:station/services/:service" element={<CloudServicePage />} />
         <Route path="/w/:ws/*" element={<WorkspaceRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -131,7 +137,7 @@ function Landing() {
   // The accounts staying; all of them when none is (the sign-in page comes once the last is out: Home).
   const staying = signedIn?.filter((a) => a.account.sub !== going?.signingOut);
   const workspaces = staying?.length ? staying : signedIn;
-  const last = usePrefs().workspace;
+  const last = usePrefs((p) => p.workspace);
   const list = useAccounts() ?? [];
   const navigate = useNavigate();
   const signIn = useSignIn();
@@ -218,6 +224,24 @@ function Landing() {
   return <Splash label={failed ? t("web-pages.cloud.workspacesFailed", { error: failed.message }) : t("web-pages.cloud.workspacesLoading")} now={Boolean(failed)}>{!failed && <StatusLine />}</Splash>;
 }
 
+/**
+ * /share?url=&title=&text= (the installed page's share target; the browser extension opens it with `popup=1`, in a
+ * window of its own): what was shared waits to be sent (../shareIn.ts) and the page goes to the workspace last open on
+ * this device (else the first), whose page shows where it goes. With no workspace, the landing says why, as it would.
+ */
+function ShareLanding() {
+  const shared = useMemo(() => sharedOf(location.search), []);
+  const signedIn = useWorkspaces().value;
+  const last = usePrefs((p) => p.workspace);
+  const all = signedIn?.flatMap((a) => a.workspaces) ?? [];
+  const settled = signedIn !== undefined && signedIn.every((a) => a.loaded || a.error);
+  const open = all.find((w) => w.id === last) ?? (settled ? all[0] : undefined);
+  useEffect(() => { if (open && shared) offerShare(shared); }, [open, shared]);
+  if (!shared || (settled && !open)) return <Navigate to="/" replace />;
+  if (open) return <Navigate to={`/w/${open.id}`} replace />;
+  return <Splash label={t("web-pages.cloud.workspacesLoading")}><StatusLine /></Splash>;
+}
+
 /** Asks for the invite code a new workspace needs; what the last try said stands under it. */
 function InviteCodeForm({ create }: { create: { run(code: string): void; busy: boolean; error: Error | null; arg: string | undefined } }) {
   const [code, setCode] = useState(() => create.arg ?? inviteCode());
@@ -250,11 +274,16 @@ function WorkspaceRoute() {
   // it is waited for, not said to be out of reach.
   if ((!owner || !found) && !workspaces.every((a) => a.loaded || a.error)) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
   if (!owner || !found) return <div className={shellCss.gate}><h1>{t("web-pages.cloud.cantOpen")}</h1><p>{t("web-pages.cloud.cantOpenBody")}</p><a className={`${controlsCss.btn} btn-secondary`} href="/">{t("web-pages.cloud.backTo", { name: NAME })}</a></div>;
-  const entry = { id: ws, name: found.name, account: owner.account };
   // A narrow screen is the Android app's (../mobile).
+  return <Workspace id={ws} name={found.name} account={owner.account} narrow={narrow} />;
+}
+
+/** The workspace's pages, handed the same entry while what it says is the same (the core's lists change more often). */
+function Workspace({ id, name, account, narrow }: { id: string; name: string; account: Account; narrow: boolean }) {
+  const entry = useMemo(() => ({ id, name, account }), [id, name, account]);
   return narrow
-    ? <MobileWorkspace key={`${owner.account.sub}/${ws}`} entry={entry} />
-    : <WorkspaceShell key={`${owner.account.sub}/${ws}`} entry={entry} />;
+    ? <MobileWorkspace key={`${account.sub}/${id}`} entry={entry} />
+    : <WorkspaceShell key={`${account.sub}/${id}`} entry={entry} />;
 }
 
 type Preview = Awaited<ReturnType<typeof cloud.previewInvitation>>;
@@ -320,7 +349,7 @@ function OpenItem() {
   const { search } = useLocation();
   const target = `/w/${ws}/s/${station}/chats/${encodeURIComponent(session)}${search}`;
   // Offered to the desktop app first only from a computer's browser, as the core says (prefs.ts `device`).
-  const [here, setHere] = useState(!usePrefs().device.handoff);
+  const [here, setHere] = useState(!usePrefs((p) => p.device.handoff));
   useEffect(() => {
     if (here) return;
     const timer = setTimeout(() => setHere(true), 1200);

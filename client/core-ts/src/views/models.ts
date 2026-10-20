@@ -16,7 +16,7 @@ const get = (v: unknown, k: string): J => getU(v, k);
 const str = (v: J): string | null => (typeof v === "string" ? v : null);
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex"];
+export const RUNTIMES = format.RUNTIMES;
 
 const profilesOf = (overview: J): J[] => arr(get(overview, "profiles"));
 const runs = (p: J, runtime: string) => arr(get(p, "runtimes")).some((r) => r === runtime);
@@ -57,7 +57,7 @@ export function attention(overview: J, session: J, now: number): J[] {
         const used = typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0;
         const left0 = 100 - used;
         if (left0 > LOW_LEFT) continue;
-        const label = str(get(w, "label")) ?? "";
+        const label = format.windowName(str(get(w, "label")) ?? "");
         const left = format.round(Math.max(left0, 0));
         const resets = get(w, "resetsAt");
         const until = typeof resets === "number" && Number.isInteger(resets) ? resets : null;
@@ -156,6 +156,14 @@ function profilesRunning(overview: J, runtime: string, m: string | null, current
     });
 }
 
+/// The overview as the chats of `workspace`, one the station joined, run on it (docs/multi-workspace.md): with the
+/// profiles whose `workspaces` name it only.
+export function servingIn(overview: J, workspace: string): J {
+  const profiles = get(overview, "profiles");
+  if (!Array.isArray(profiles)) return overview;
+  return { ...overview, profiles: profiles.filter((p) => arr(get(p, "workspaces")).includes(workspace)) };
+}
+
 /// The models the station can run, each with the runtimes it runs on.
 export function models(overview: J, now: number): J[] {
   const on = new Map<string, { runtimes: Set<string>; backs: (number | null)[]; ids: Set<string> }>();
@@ -227,7 +235,7 @@ export function quotaLine(quota: J): J {
   }
   const shown = windows
     .map((w) => {
-      const label = str(get(w, "label")) ?? "";
+      const label = format.windowName(str(get(w, "label")) ?? "");
       const [left, level] = present.leftLevel(typeof get(w, "usedPercent") === "number" ? w.usedPercent : 0);
       return { label, left, level, order: format.windowMark(label)[1] };
     })
@@ -239,8 +247,8 @@ export function quotaLine(quota: J): J {
 }
 
 /// A session the station's machine kept, in a line: its runtime, where it ran (the home directory as ~), how long ago.
-export function machineMeta(session: J, now: number): void {
-  if (session === null || typeof session !== "object" || Array.isArray(session)) return;
+export function machineMeta(session: J, now: number): J {
+  if (session === null || typeof session !== "object" || Array.isArray(session)) return session;
   const runtime = format.runtimeLabel(str(session.runtime) ?? "");
   const cwd = str(session.cwd) ?? "";
   const rest = cwd.startsWith("/Users/") ? cwd.slice(7) : cwd.startsWith("/home/") ? cwd.slice(6) : null;
@@ -255,5 +263,92 @@ export function machineMeta(session: J, now: number): void {
     const secs = Math.max(format.round((now - session.updatedAt) / 1000), 0);
     ago = secs < 5 ? t("core-logic.jobs.ago.now") : secs >= 86_400 && secs < 2 * 86_400 ? t("core-logic.jobs.ago.yesterday") : t("core-logic.jobs.ago", { span: jobs.span(secs * 1000) });
   }
-  session.meta = [runtime, short, ago].filter((x) => x !== null).join(" · ");
+  return { ...session, meta: [runtime, short, ago].filter((x) => x !== null).join(" · ") };
 }
+
+// ── the workspace's models on a station (docs/station-share.md 借用) ──
+
+/// A station of the workspace as `stations` lists it: its address, id, name, whether it is up, and its overview.
+type StationOf = { station: string; id: string; name: string; online: boolean; joined: boolean; overview: J; emoji: string | null; icon: string | null };
+
+/// A station as an option names it: its name, and its mark where the workspace gave it one.
+const markOf = (s: StationOf | undefined, name: string): J => ({ name: s?.name ?? name, ...(s?.emoji ? { emoji: s.emoji } : {}), ...(s?.icon ? { icon: s.icon } : {}) });
+
+const stationsOf = (stations: J): StationOf[] =>
+  arr(stations).flatMap((s) =>
+    typeof get(s, "station") === "string" && typeof get(s, "id") === "string"
+      ? [{ station: s.station, id: s.id, name: str(get(s, "name")) ?? s.id.slice(0, 8), online: get(s, "online") === true, joined: get(s, "joined") === true, overview: get(s, "overview"), emoji: str(get(s, "emoji")), icon: str(get(s, "icon")) }]
+      : [],
+  );
+
+/// Each option said where its accounts are: `here` when one of them is the station's own, else `borrowed` from the
+/// station that shares them with it (`from`: its name, as `stations` names it).
+export function sourced(options: J[], overview: J, stations: J): J[] {
+  const byStation = new Map(stationsOf(stations).map((s) => [s.id, s]));
+  const byId = new Map(profilesOf(overview).map((p) => [str(get(p, "id")) ?? "", p]));
+  return options.map((o) => {
+    const ids = Object.values(get(o, "accounts") ?? {}).flatMap((list) => arr(list).map((a) => str(get(a, "id")) ?? ""));
+    const hosts = ids.map((id) => {
+      const share = get(byId.get(id), "share");
+      return get(share, "role") === "user" ? (str(get(share, "host")) ?? "") : null;
+    });
+    if (hosts.length === 0 || hosts.some((h) => h === null)) return { ...o, availability: "here" };
+    const host = hosts[0] as string;
+    const station = markOf(byStation.get(host), host.slice(0, 8));
+    return { ...o, availability: "borrowed", from: station.name, fromStation: station, fromText: t("core-views.models.borrowed_from", { station: station.name }) };
+  });
+}
+
+/// The models the workspace's other stations up now offer that `here` does not, each with the profile it would borrow
+/// (`borrow`): one of their own (not a copy they borrow themselves), of `runtime` where only it can run. Stations of
+/// other workspaces this one joined lend nothing, and one joined lends to none (sharing is within a workspace).
+export function borrowable(stations: J, here: string, have: J[], runtime: string | null, now: number): J[] {
+  const all = stationsOf(stations);
+  const self = all.find((s) => s.station === here);
+  if (self === undefined || self.joined) return [];
+  const taken = new Set(have.map((o) => model.key(str(get(o, "model")) ?? "")));
+  const ownHere = new Set(profilesOf(self.overview).flatMap((p) => (typeof get(get(p, "share"), "id") === "string" ? [p.share.id] : [])));
+  const out: J[] = [];
+  for (const s of all) {
+    if (s.station === here || !s.online || s.joined || get(s.overview, "sharing") !== true) continue;
+    for (const p of profilesOf(s.overview)) {
+      const share = get(p, "share");
+      if (get(share, "role") === "user") continue;
+      // Shared with this station already: its copy is on its way (or here, and its models with it).
+      if (typeof get(share, "id") === "string" && ownHere.has(share.id)) continue;
+      const lone = { ...s.overview, profiles: [p] };
+      for (const o of models(lone, now)) {
+        if (runtime !== null && !arr(o.runtimes).includes(runtime)) continue;
+        const key = model.key(o.model);
+        if (taken.has(key)) continue;
+        taken.add(key);
+        const allow = get(share, "allow");
+        const shared = isShared(share);
+        const rts: string[] = runtime !== null ? [runtime] : o.runtimes;
+        out.push({
+          ...o,
+          runtimes: rts,
+          // Not run here till borrowed: no account of this station's to keep to.
+          accounts: Object.fromEntries(rts.map((r) => [r, []])),
+          availability: "borrowable",
+          from: s.name,
+          fromStation: markOf(s, s.name),
+          fromText: t("core-views.models.on_station", { station: s.name }),
+          borrow: {
+            station: s.station,
+            stationName: s.name,
+            profile: str(get(p, "id")) ?? "",
+            profileName: str(get(p, "name")) ?? "",
+            subscription: get(get(p, "access"), "kind") === "subscription",
+            // Every station may use it already (its copy not here yet): nothing to ask.
+            pending: shared && allow === null,
+            allow: shared && Array.isArray(allow) ? allow.filter((x: unknown) => typeof x === "string") : [],
+          },
+        });
+      }
+    }
+  }
+  return out.sort((a, b) => model.compareOrder(model.key(a.model), model.key(b.model)));
+}
+
+const isShared = (share: J) => typeof get(share, "id") === "string" && get(share, "role") === "host";

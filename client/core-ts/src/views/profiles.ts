@@ -1,9 +1,11 @@
-// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), one row an account: the same
+// The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
+// (Claude's subscriptions, ChatGPT's, SuperGrok's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it
 // is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
 // overviews say as they come in: a station not read yet adds its own later.
 import { t } from "../i18n.ts";
+import { waitNote } from "../looks.ts";
 
 type J = any;
 
@@ -25,16 +27,30 @@ function account(p: J): string | null {
   return null;
 }
 
+/// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's, SuperGrok's),
+/// then keys and the rest.
+export const GROUPS = ["claude", "chatgpt", "grok", "key"] as const;
+
+export function group(p: J): (typeof GROUPS)[number] {
+  if (p.access?.kind !== "subscription") return "key";
+  return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : "claude";
+}
+
+/// A kind of account in words: Claude 订阅.
+export const groupTitle = (kind: (typeof GROUPS)[number]) => t(`core-views.profiles.group.${kind}`);
+
 /// `stations`: the `stations` view's items (each with its decorated overview).
 export function workspaceProfiles(stations: J[]): J {
   const byId = new Map(stations.map((s) => [String(s.id), s]));
   const name = (id: string) => String(byId.get(id)?.name ?? id.slice(0, 8));
   const groups = new Map<string, [J, J][]>();
-  let loading = false;
+  const waiting: string[] = [];
   for (const s of stations) {
     const overview = s.overview;
     if (!isObject(overview)) {
-      if (s.online) loading = true;
+      if (s.online) {
+        waiting.push(name(String(s.id)));
+      }
       continue;
     }
     for (const p of Array.isArray(overview.profiles) ? overview.profiles : []) {
@@ -58,12 +74,15 @@ export function workspaceProfiles(stations: J[]): J {
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
     if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
-    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join("、") }));
-    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join("、") }));
-    if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join("、") }));
+    else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join(t("core-views.list_separator")) }));
+    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join(t("core-views.list_separator")) }));
+    if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
     const host = share ? String(share.host) : String(s.id);
+    const kind = group(p);
     items.push({
       key,
+      group: kind,
+      groupTitle: groupTitle(kind),
       station: String(s.station),
       stationId: String(s.id),
       stationName: String(s.name),
@@ -84,12 +103,12 @@ export function workspaceProfiles(stations: J[]): J {
       members,
     });
   }
-  // What needs a look first (one nobody can use now, one whose check failed), then by name.
+  // By kind of account; in each, what needs a look first (one nobody can use now, one whose check failed), then by name.
   const look = (e: J) => !e.usable || e.profile.checkTone === "red";
   // Not localeCompare: Hermes on Android asks Java for it, which the app does not carry (it aborts the app).
   const byName = (a: J, b: J) => (String(a.profile.name) < String(b.profile.name) ? -1 : String(a.profile.name) > String(b.profile.name) ? 1 : 0);
-  items.sort((a, b) => Number(look(b)) - Number(look(a)) || byName(a, b));
-  return { items, loading };
+  items.sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || Number(look(b)) - Number(look(a)) || byName(a, b));
+  return { items, wait: waitNote(waiting, [], items.length === 0) };
 }
 
 /// One station's copy of an account: what it is there and how it is doing.
@@ -104,7 +123,7 @@ function member(s: J, p: J, name: (id: string) => string, byId: Map<string, J>):
   const users: string[] = role === "host" && Array.isArray(share.users) ? share.users.map((u: string) => name(u)) : [];
   let about: string;
   if (role === "user") about = t(subscription ? "core-views.profiles.borrows" : "core-views.profiles.copyOf", { station: name(String(share.host)) });
-  else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join("、") }) : t("core-views.profiles.sharedNone");
+  else if (role === "host") about = users.length > 0 ? t(subscription ? "core-views.profiles.lends" : "core-views.profiles.sharedWith", { stations: users.join(t("core-views.list_separator")) }) : t("core-views.profiles.sharedNone");
   else about = t(subscription ? "core-views.profiles.ownLogin" : "core-views.profiles.ownKey");
   return {
     station: String(s.station),

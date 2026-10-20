@@ -4,7 +4,8 @@
 // the post goes out as chat.postMessage into the Slack thread, the event is acknowledged, and the turn ends all_done.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Effect, Exit, Scope } from "effect";
@@ -24,11 +25,11 @@ import { settle } from "./hub-fakes.ts";
 import { FakeSlack, bot } from "./slack-fake.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 
 test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands in the Slack thread as chat.postMessage", async () => {
   // Short: the runners' sockets live under it (104 bytes at most on macOS).
-  const data = mkdtempSync("/tmp/se-");
+  const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "se-") : "/tmp/se-");
   const home = join(data, "homes", "cc");
   mkdirSync(home, { recursive: true });
   // A login in its file: nothing is looked for in the keychain.

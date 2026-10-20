@@ -2,21 +2,22 @@
 // station's in one list, a profile's
 // page (whether it works, signing a subscription in, its allowance, which of its models may be used, who uses it, its
 // key or variables; renaming, checking and deleting under "…"), and a new one.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { stationApi, useAction, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
-import type { MachineLogin, ProfileFlowView, WorkspaceProfile } from "../core/shapes.ts";
-import { hosts } from "../cloud/settings.tsx";
-import { ACCESS, KEYED } from "../format.ts";
-import { Check, ChevronRight, More, Plus } from "../icons.tsx";
+import { stationApi, useAction, useMemberships, useOverview, useProfiles, useStationCall, useStations, type LoginJob, type Profile, type Quota, type StationView, type Tone } from "../api.ts";
+import type { MachineLogin, ProfileFlowView, RuntimeInstall, WorkspaceProfile } from "../core/shapes.ts";
+import { hosts, profileGroups } from "../cloud/settings.tsx";
+import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
+import { Check, ChevronRight, Key, More } from "@stillfail/ui/icons.tsx";
 import type { Choice } from "../pages/Accounts.tsx";
 import { useProfileFlow } from "../profileFlow.ts";
 import { QuotaBars } from "../components.tsx";
 import { StationContext, stationBase, useStation } from "../station.tsx";
-import { SheetGrab, SheetHead, useApp } from "./app.tsx";
+import { SheetGrab, SheetHead, useApp, type SheetSpec } from "./app.tsx";
 import { Presence } from "./Connects.tsx";
-import { Button, FailedMark, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavBar, NavButton, PickRow, ProviderMark, QuotaRings, SectionHeader, SlackMark, Spinner, TopBack, tNodes } from "./parts.tsx";
-import { useAct } from "../toast.tsx";
+import { Button, failedIn, FailedMark, Field, Gone, LinkButton, ListCard, ListRow, NavBar, NavButton, PickRow, PlaceHead, PlaceNote, ProviderMark, QuotaRings, SectionHeader, SlackMark, tNodes } from "./parts.tsx";
+import { Progress, Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { doingMatches, failed, useDoing, useDoingFailed, useDoingList } from "../doing.ts";
 import { ask, CommandBox, confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
@@ -38,6 +39,13 @@ function useApi() {
   return useMemo(() => stationApi(call), [call]);
 }
 
+/** Opens a sheet under this page's station: the app shows sheets outside the page, where no station is in context. */
+function useStationSheet(): (spec: SheetSpec) => void {
+  const app = useApp();
+  const station = useStation();
+  return (spec) => app.sheet({ ...spec, content: () => <StationContext.Provider value={station}>{spec.content()}</StationContext.Provider> });
+}
+
 /**
  * Every station's profiles on one page, from settings (./Settings.tsx), as the desktop's settings have them: each
  * station under its name, what can be added there (a profile, the machine's own logins) with it; one offline says so.
@@ -56,19 +64,26 @@ export function ProfilesScreen() {
     : app.sheet({ height: 0.5, content: () => <PickStation title={t("web-mobile.newChat.addProfile")} stations={online} to={(s) => `/s/${s.id}/profiles/new`} /> });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
-      <TopBack label={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop} trailing={online.length > 0 ? <NavButton icon={Plus} iconSize={20} label={t("web-mobile.newChat.addProfile")} onClick={add} /> : undefined} />
-      <LargeTitle small={one ? t("web-mobile.connects.on", { station: one.name }) : ""} big="Profile" />
-      <p className={settingsCss.mPageNote}>{t("web-mobile.profiles.note")}</p>
+      <PlaceHead title="Profile" back={one?.name ?? t("web-mobile.settings.title")} onBack={app.pop}
+        primary={online.length > 0 ? { key: "profile", label: t("web-mobile.newChat.addProfile"), run: add } : null} />
       {/* The workspace's: one list, each shared profile once (the core's `profiles`); a station's own: as before. */}
       {!one && <WorkspaceList scope={app.entry.id} />}
-      {!stations ? <Loading text={t("web-mobile.memory.readingStations")} /> : stations.filter(() => !!one).map((s) => (
+      {/* A station's own (?station=): its stations read first; the workspace's list waits on its own (WorkspaceList). */}
+      {!stations ? (only ? <Waiting shape="cards" count={2} text={t("common.readingStations")} /> : null) : stations.filter(() => !!one).map((s) => (
         <StationContext.Provider key={s.id} value={{ id: s.id, name: s.name, online: s.online, address: s.station, base: stationBase(s.station), settings: `/w/${app.entry.id}/settings` }}>
           {!one && <SectionHeader title={s.online ? s.name : t("web-mobile.connects.stationOfflineTitle", { station: s.name })} start={24} />}
-          <ListCard>
-            {!s.overview ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.online ? t("web-mobile.reading") : t("web-mobile.profiles.offline")}</span></ListRow>
-              : s.overview.profiles.length === 0 ? <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>
-              : s.overview.profiles.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}
-          </ListCard>
+          {!s.overview || s.overview.profiles.length === 0 ? (
+            <ListCard>
+              <ListRow>{!s.overview && s.online ? <WaitLine />
+                : <span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{s.overview ? t("web-mobile.profiles.none") : t("web-mobile.profiles.offline")}</span>}</ListRow>
+            </ListCard>
+          ) : profileGroups(s.overview.profiles).map((g) => (
+            // A section each kind of account, as the workspace's list (the core's order).
+            <Fragment key={g[0]!.group}>
+              <SectionHeader title={g[0]!.groupTitle ?? ""} start={24} mark={<GroupMark group={g[0]!.group} />} />
+              <ListCard>{g.map((p) => <ProfileRow key={p.id} station={s} p={p} />)}</ListCard>
+            </Fragment>
+          ))}
           {/* The machine's own logins not used yet, each offered as a profile. */}
           {s.online && s.overview && <MachineLoginOffers logins={s.overview.machineLogins} onSignIn={(kind) => app.push(app.at(`/s/${s.id}/profiles/new?kind=${kind}`))} />}
         </StationContext.Provider>
@@ -83,27 +98,52 @@ export function ProfilesScreen() {
   );
 }
 
+/** A kind of account's mark, before its section's title: its vendor's for a subscription, a key for keys. */
+function GroupMark({ group }: { group?: string | undefined }) {
+  return group === "key" ? <Key size={16} /> : <ProviderMark runtime={group === "chatgpt" ? "codex" : group ?? "claude"} kind="subscription" size={16} />;
+}
+
 /** The workspace's profiles in one list: a shared one once, where it is (登录在 / 只给 …) under it; one whose
  * subscription's station is away dimmed, said why. */
 function WorkspaceList({ scope }: { scope: string }) {
   const app = useApp();
-  const view = useProfiles(scope).value;
-  if (!view) return <Loading text={t("web-mobile.reading")} />;
+  const profiles = useProfiles(scope);
+  const view = profiles.value;
+  if (!view) return <Waiting shape="cards" count={2} error={profiles.error?.message} />;
+  // What it still waits on (the core's `wait`): with none to show, the cards to come under it; with some, a line after them.
+  const wait = view.wait;
+  if (view.items.length === 0 && (wait.reading || wait.failing.length > 0)) return <Waiting shape="cards" count={2} note={wait} />;
+  const groups = profileGroups(view.items);
   return (
-    <ListCard>
-      {view.items.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow>}
-      {view.items.map((e: WorkspaceProfile) => (
-        <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
-          <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
-            <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
-            <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
-          </span>
-          {e.usable && <QuotaRings quota={e.profile.quota} />}
-          <ChevronRight size={14} className={partsCss.mSubtle} />
-        </ListRow>
+    <>
+      {wait.empty && <ListCard><ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.none")}</span></ListRow></ListCard>}
+      {/* What Profile is, said while there is none (the page says it nowhere else). */}
+      {wait.empty && <PlaceNote>{t("web-mobile.profiles.note")}</PlaceNote>}
+      {/* A section each kind of account (the core's order). */}
+      {groups.map((g) => (
+        <Fragment key={g[0]!.group}>
+          <SectionHeader title={g[0]!.groupTitle} start={24} mark={<GroupMark group={g[0]!.group} />} />
+          <ListCard>
+            {g.map((e: WorkspaceProfile) => (
+              <ListRow key={e.key} onClick={() => app.push(app.at(hosts(e).length > 1 ? `/settings/profiles/account/${encodeURIComponent(e.key)}` : `/s/${e.stationId}/settings/accounts/${encodeURIComponent(e.profile.id)}`))}>
+                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
+                  <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
+                  <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
+                </span>
+                {e.usable && <QuotaRings quota={e.profile.quota} />}
+                <ChevronRight size={14} className={partsCss.mSubtle} />
+              </ListRow>
+            ))}
+          </ListCard>
+        </Fragment>
       ))}
-      {view.loading && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.reading")}</span></ListRow>}
-    </ListCard>
+      {(wait.reading || wait.failing.length > 0) && (
+        <ListCard>
+          {wait.reading && <ListRow><WaitLine text={wait.text ?? t("common.reading")} /></ListRow>}
+          {wait.failing.map((f) => <ListRow key={f.station}><WaitLine text={f.text} error /></ListRow>)}
+        </ListCard>
+      )}
+    </>
   );
 }
 
@@ -112,9 +152,17 @@ function WorkspaceList({ scope }: { scope: string }) {
 export function ProfileAccountScreen() {
   const app = useApp();
   const { key = "" } = useParams();
-  const view = useProfiles(app.entry.id).value;
+  const profiles = useProfiles(app.entry.id);
+  const view = profiles.value;
   const e = view?.items.find((x) => x.key === key);
-  if (!e) return <div className={pagesCss.mScreen}><NavBar back="Profile" onBack={app.pop} title="Profile" /><Loading text={view ? t("web-mobile.profiles.notFound") : t("web-mobile.reading")} /></div>;
+  if (!e) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back="Profile" onBack={app.pop} title="Profile" />
+        {!view || view.wait.reading ? <Waiting fill shape="cards" error={profiles.error?.message} /> : <Gone text={t("web-mobile.profiles.notFound")} />}
+      </div>
+    );
+  }
   const p = e.profile;
   return (
     <div className={pagesCss.mScreen}>
@@ -152,6 +200,7 @@ export function ProfileAccountScreen() {
  * subscription is signed in (moved from here) and which stations may use it. A copy of another station's says whose. */
 function ShareRows({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const api = useApi();
   const act = useAct();
   const station = useStation();
@@ -183,9 +232,9 @@ function ShareRows({ p }: { p: Profile }) {
   }
   const shared = p.share !== undefined;
   const allowed = p.share?.allow ?? null;
-  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join("、");
+  const names = allowed === null ? t("web-pages.profiles.share.everyStation") : stations.filter((x) => allowed.includes(x.id) || x.id === station.id).map((x) => x.name).join(t("web-main.list.separator"));
   const targets = stations.filter((x) => x.id !== station.id);
-  const pick = () => app.sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
+  const pick = () => sheet({ height: 0.6, content: () => <PickShareStations p={p} stations={stations} self={station.id} allowed={allowed} /> });
   const move = () => app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab />
@@ -206,13 +255,13 @@ function ShareRows({ p }: { p: Profile }) {
             <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.switch")}</span>
             <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{!shared ? t("web-pages.profiles.share.onlyHere", { station: station.name }) : subscription ? t("web-pages.profiles.share.lent") : t("web-pages.profiles.share.copied")}</span>
           </span>
-          {sharing && <Spinner size={14} />}
+          {sharing && <Spinner inline />}
           <span className={connectsCss.mSwitch} data-on={shared || undefined} />
         </ListRow>
         {shared && subscription && !p.machine && (
           <ListRow onClick={moving || targets.length === 0 ? undefined : move}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-pages.profiles.share.signedIn")}</span>
-            {moving && <Spinner size={14} />}
+            {moving && <Spinner inline />}
             <span className={listsCss.mRowNote}>{station.name}</span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
           </ListRow>
@@ -221,7 +270,7 @@ function ShareRows({ p }: { p: Profile }) {
           <ListRow onClick={pick}>
             <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
               <span className={listsCss.mRowTitle}>{t("web-pages.profiles.share.stations")}</span>
-              {(p.share?.users?.length ?? 0) > 0 && <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.users", { stations: p.share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join("、") })}</span>}
+              {(p.share?.users?.length ?? 0) > 0 && <span className={listsCss.mRowNote}>{t("web-pages.profiles.share.users", { stations: p.share!.users!.map((u) => stations.find((x) => x.id === u)?.name ?? u.slice(0, 8)).join(t("web-main.list.separator")) })}</span>}
             </span>
             <span className={listsCss.mRowNote}>{names}</span>
             <ChevronRight size={14} className={partsCss.mSubtle} />
@@ -315,12 +364,20 @@ export function ProfileScreen() {
   const { id = "" } = useParams();
   const overview = useOverview(station.address);
   const p = overview.value?.profiles.find((x) => x.id === id);
-  if (!p) return <div className={pagesCss.mScreen}><NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" /><Loading text={overview.error?.message ?? (overview.value ? t("web-mobile.profiles.notFound") : t("web-mobile.reading"))} /></div>;
+  if (!p) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back={station.name || "Station"} onBack={app.pop} title="Profile" />
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+      </div>
+    );
+  }
   return <ProfilePage p={p} />;
 }
 
 function ProfilePage({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const api = useApi();
   const station = useStation();
   const overview = useOverview(station.address).value;
@@ -331,28 +388,44 @@ function ProfilePage({ p }: { p: Profile }) {
   const checkFailed = useDoingFailed("profile.check", { station: station.address, id: p.id });
   const quotaFailed = useDoingFailed("profile.quota", { station: station.address, id: p.id });
   const signingIn = !!p.login && ["starting", "needs_code", "needs_approval", "verifying"].includes(p.login.state);
-  const keyed = KEYED.has(p.access.kind);
+  const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
+  const signs = !copy && (p.access.kind === "subscription" || (p.access.kind === "opencode-go" && !!p.access.login)) && !p.machine;
+  const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
+  const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
+  const line = detail !== p.checkText ? detail + checked : checked.replace(/^ · /, "");
+  const head = (
+    <>
+      <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
+      <span className={partsCss.mGrow}>
+        <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
+        {/* What the check said beyond its pill (需要登录 under 需要登录 says nothing more), and when. */}
+        {line && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{line}</span>}
+        {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner inline />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
+        {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
+        {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
+      </span>
+    </>
+  );
   return (
     <div className={pagesCss.mScreen}>
       <NavBar back={station.name || "Station"} onBack={app.pop} title={p.name} sub={<span className={barsCss.mNavbarNote}>{accessLabel(p)}</span>}
-        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => app.sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
+        trailing={copy ? undefined : <NavButton icon={More} label={t("common.more")} onClick={() => sheet({ height: 0.5, content: () => <ProfileMenu p={p} /> })} />} />
       <div className={`${pagesCss.mScroll} ${settingsCss.mStationPage}`}>
-        <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>
-          <ProviderMark runtime={p.runtime} kind={p.access.kind} mark={p.providerMark} size={26} />
-          <span className={partsCss.mGrow}>
-            <span className={`${historyCss.mPill} ${css.mCheckPill}`} data-tone={p.checkTone}>{p.checkText}</span>
-            <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked")}{p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : ""}</span>
-            {(checking || refreshing) && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting}`}><Spinner size={12} />{checking ? t("web-mobile.versions.checking") : t("web-mobile.profiles.refreshingQuota")}</span>}
-            {!checking && checkFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={checkFailed} size={12} />{t("web-mobile.profiles.checkFailed", { error: checkFailed })}</span>}
-            {!refreshing && quotaFailed !== undefined && <span className={`${listsCss.mRowNote} ${chatCss.mWaiting} ${partsCss.mRed}`}><FailedMark error={quotaFailed} size={12} />{t("web-mobile.profiles.quotaFailed", { error: quotaFailed })}</span>}
-          </span>
-        </div>
+        {/* Where it stands, on the account's one card: a subscription's heads its sign-in, a key's its key. */}
+        {signs ? <SignIn p={p} needed={p.check?.state === "login" || signingIn} head={head} />
+          : keyed && !copy ? (
+            <ListCard>
+              <div className={`${settingsCss.mProfileHead} ${css.mHeadRow}`}>{head}</div>
+              <KeyRows p={p} />
+            </ListCard>
+          )
+          : <div className={`${listsCss.mCard} ${settingsCss.mProfileHead}`}>{head}</div>}
         {p.trouble && <ProfileRecovery p={p} />}
-        {!copy && p.access.kind === "subscription" && !p.machine && <SignIn p={p} needed={p.check?.state === "login" || signingIn} />}
         {p.trouble?.action !== "quota" && <Quota p={p} />}
         {overview?.sharing && <ShareRows p={p} />}
+        {!copy && <WorkspaceRows p={p} />}
         {!copy && p.fast != null && <><SectionHeader title={t("web-mobile.profiles.run")} start={24} /><ListCard><FastRow p={p} /></ListCard></>}
         {!copy && <Models p={p} put={(models) => api.putProfile(p.id, { models })} />}
         {/* A station older than the setting says nothing of it. */}
@@ -369,35 +442,16 @@ function ProfilePage({ p }: { p: Profile }) {
           {users.length === 0 && <ListRow><span className={`${partsCss.mMuted} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.unused")}</span></ListRow>}
           {users.map((c) => (
             <ListRow key={c.id} onClick={() => app.push(`${stationBase(station.address)}/connects/${encodeURIComponent(c.id)}`)}>
-              <SlackMark size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
+              <SlackMark kind={c.kind} size={15} /><span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{c.name}</span><span className={listsCss.mRowNote}>{c.modelName ?? (p.model ? p.names[p.model] ?? p.model : t("web-mobile.profiles.defaultModel"))}</span>
             </ListRow>
           ))}
         </ListCard>
-        {keyed && !copy && (
-          <>
-            <SectionHeader title={t("web-mobile.history.account")} start={24} />
-            <ListCard>
-              <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
-                hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
-                <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : p.providerName ? `${p.providerName} key` : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
-                <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
-              </ListRow>
-              {p.access.endpoint !== undefined && (
-                <ListRow onClick={() => ask(app, { title: t("common.provider.endpoint"), value: p.access.endpoint ?? "", placeholder: "https://", action: t("common.save"),
-                  run: (endpoint) => api.putProfile(p.id, { access: { kind: p.access.kind, endpoint: endpoint.trim() } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
-                  <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("common.provider.endpoint")}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.endpoint}</span></span>
-                  <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
-                </ListRow>
-              )}
-            </ListCard>
-          </>
-        )}
         {p.access.kind === "env" && !copy && (
           <>
             <SectionHeader title={t("web-mobile.profiles.env")} start={24} />
             <ListCard>
               {p.env.map((e) => <ListRow key={e.key}><span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={`${listsCss.mRowTitle} ${css.mMono}`}>{e.key}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{e.value}</span></span></ListRow>)}
-              <ListRow onClick={() => app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
+              <ListRow onClick={() => sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> })}><span className={`${partsCss.mAccent} ${listsCss.mRowTitle}`}>{t("web-mobile.profiles.editEnv")}</span></ListRow>
             </ListCard>
           </>
         )}
@@ -407,9 +461,32 @@ function ProfilePage({ p }: { p: Profile }) {
   );
 }
 
+/** A key's profile: its key, and its address where it has one of the person's own, each changed from its row. */
+function KeyRows({ p }: { p: Profile }) {
+  const app = useApp();
+  const api = useApi();
+  return (
+    <>
+    <ListRow onClick={() => ask(app, { title: p.access.kind === "opencode-go" ? t("web-mobile.profiles.newOpencodeKey") : t("web-mobile.profiles.newApiKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
+      hint: t("web-mobile.profiles.recheckHintFull"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+      <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{p.access.kind === "opencode-go" ? "OpenCode Go key" : p.providerName ? `${p.providerName} key` : "API key"}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.key || t("web-mobile.profiles.notSaved")}</span></span>
+      <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
+    </ListRow>
+    {p.access.endpoint !== undefined && (
+      <ListRow onClick={() => ask(app, { title: t("common.provider.endpoint"), value: p.access.endpoint ?? "", placeholder: "https://", action: t("common.save"),
+        run: (endpoint) => api.putProfile(p.id, { access: { kind: p.access.kind, endpoint: endpoint.trim() } }).then(() => app.toast(t("web-mobile.profiles.savedChecking"))) })}>
+        <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("common.provider.endpoint")}</span><span className={`${listsCss.mRowNote} ${css.mMono}`}>{p.access.endpoint}</span></span>
+        <span className={partsCss.mLink}>{t("web-mobile.profiles.change")}</span>
+      </ListRow>
+    )}
+    </>
+  );
+}
+
 /** The core supplies the diagnosis and next step; the view opens the existing operation or editor. */
 function ProfileRecovery({ p }: { p: Profile }) {
   const app = useApp();
+  const sheet = useStationSheet();
   const station = useStation();
   const api = useApi();
   const act = useAct();
@@ -421,7 +498,7 @@ function ProfileRecovery({ p }: { p: Profile }) {
   const run = () => {
     if (issue.action === "key") ask(app, { title: t("web-mobile.profiles.newKey"), value: "", placeholder: t("web-mobile.profiles.pasteKey"), action: t("common.save"), secret: true, atOnce: "web-mobile.profiles.saveFailed",
       hint: t("web-mobile.profiles.recheckHint"), run: (key) => api.putProfile(p.id, { access: { kind: p.access.kind, key } }) });
-    else if (issue.action === "env") app.sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
+    else if (issue.action === "env") sheet({ height: 0.8, draggable: true, content: () => <EnvSheet p={p} /> });
     else if (issue.action === "quota") act(api.refreshQuota(p.id), t("web-mobile.profiles.what.quota"), t("web-mobile.profiles.quotaUpdated"));
     else act(api.checkProfile(p.id), t("web-mobile.profiles.what.check"), t("web-mobile.profiles.checked"));
   };
@@ -459,7 +536,7 @@ function ProfileMenu({ p }: { p: Profile }) {
         {!p.machine && <PickRow label={t("web-mobile.stations.rename")} onClick={() => ask(app, { title: t("web-mobile.profiles.renameTitle"), value: p.name, placeholder: t("web-mobile.workspaces.name"), action: t("common.save"), atOnce: "web-main.rename.failed", run: (name) => api.putProfile(p.id, { name }).then(() => app.toast(t("web-mobile.workspace.renamed"))) })} />}
         <PickRow label={t("web-mobile.profiles.recheck")} busy={checking} failed={checkFailed} onClick={() => { app.sheet(null); api.checkProfile(p.id).then(() => app.toast(t("web-mobile.profiles.checked")), failed("web-mobile.profiles.checkFailed")); }} />
         <PickRow label={t("web-mobile.profiles.refreshQuota")} busy={refreshing} failed={quotaFailed} onClick={() => { app.sheet(null); api.refreshQuota(p.id).then(() => app.toast(t("web-mobile.profiles.quotaRefreshed")), failed("web-mobile.profiles.quotaFailed")); }} />
-        <PickRow label={p.usedBy.length ? t("web-mobile.profiles.inUse", { action: p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete") }) : p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent enabled={p.usedBy.length === 0} onClick={() => confirm(app, p.machine ? {
+        <PickRow label={p.machine ? t("web-mobile.connects.disable") : t("web-mobile.profiles.delete")} accent onClick={() => confirm(app, p.machine ? {
           title: t("web-mobile.profiles.disableAsk", { name: p.name }), text: t("web-mobile.profiles.disableText", { name: NAME }), action: t("web-mobile.connects.disable"), danger: true, atOnce: "web-mobile.connects.disableFailed",
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.disabled"))); },
         } : {
@@ -467,6 +544,42 @@ function ProfileMenu({ p }: { p: Profile }) {
           run: () => { app.pop(); return api.deleteProfile(p.id).then(() => app.toast(t("web-mobile.profiles.deleted"))); },
         })} />
       </div>
+    </>
+  );
+}
+
+/**
+ * Which of the workspaces the station joined may run their chats on it (as the desktop's WorkspacesSection), a
+ * switch each: for its home workspace's owners and admins, once the station is in more than one.
+ */
+function WorkspaceRows({ p }: { p: Profile }) {
+  const api = useApi();
+  const station = useStation();
+  const act = useAct();
+  const m = useMemberships(station.address).value;
+  const busy = useDoing("profile.put", { station: station.address, id: p.id });
+  const joined = m?.manages ? m.workspaces.filter((w) => !w.home) : [];
+  const now = p.workspaces ?? [];
+  if (joined.length === 0) return null;
+  return (
+    <>
+      <SectionHeader title={t("web-pages.profiles.workspaces.title")} start={24} />
+      <ListCard>
+        {joined.map((w) => {
+          const on = now.includes(w.workspace);
+          return (
+            <ListRow key={w.workspace} onClick={busy ? undefined : () => act(api.putProfile(p.id, { workspaces: on ? now.filter((x) => x !== w.workspace) : [...now, w.workspace] }),
+              t("web-pages.profiles.workspaces.what"), t(on ? "web-pages.profiles.workspaces.turnedOff" : "web-pages.profiles.workspaces.turnedOn", { name: w.name }))}>
+              <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
+                <span className={listsCss.mRowTitle}>{t("web-pages.profiles.workspaces.for", { name: w.name })}</span>
+                <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t(on ? "web-pages.profiles.workspaces.on" : "web-pages.profiles.workspaces.off", { name: w.name })}</span>
+              </span>
+              {busy && <Spinner inline />}
+              <span className={connectsCss.mSwitch} data-on={on || undefined} />
+            </ListRow>
+          );
+        })}
+      </ListCard>
     </>
   );
 }
@@ -481,7 +594,7 @@ function FastRow({ p }: { p: Profile }) {
   return <ListRow onClick={busy ? undefined : () => act(api.putProfile(p.id, { fast: !p.fast }), t("web-mobile.profiles.what.fast"), p.fast ? t("web-mobile.profiles.fastOff") : t("web-mobile.profiles.fastOn"))}>
     <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.fast")}</span>
       <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{t("web-mobile.profiles.fastNote")}</span></span>
-    {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+    {busy && <Spinner inline />}{error && <FailedMark error={error} size={14} />}
     <span className={connectsCss.mSwitch} data-on={p.fast || undefined} />
   </ListRow>;
 }
@@ -521,7 +634,7 @@ function Quota({ p }: { p: Profile }) {
           run: () => api.resetQuota(p.id).then(() => app.toast(t("web-mobile.profiles.resetDone"))),
         }) : undefined}>
           <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}><span className={listsCss.mRowTitle}>{t("web-mobile.profiles.resets")}</span><span className={listsCss.mRowNote}>{p.quota.resetText}</span></span>
-          {busy && <Spinner size={14} />}{error && <FailedMark error={error} size={14} />}
+          {busy && <Spinner inline />}{error && <FailedMark error={error} size={14} />}
           <span className={p.quota.resetCount > 0 ? partsCss.mLink : partsCss.mMuted}>{t("web-mobile.profiles.reset")}</span>
         </ListRow>}
       </ListCard>
@@ -573,7 +686,7 @@ function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<u
         <span className={listsCss.mRowTitle}>{t("web-mobile.profiles.background")}</span>
         <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{on ? t("web-mobile.profiles.backgroundOn") : t("web-mobile.profiles.backgroundOff")}</span>
       </span>
-      {busy && <Spinner size={14} />}
+      {busy && <Spinner inline />}
       <span className={connectsCss.mSwitch} data-on={on || undefined} />
     </ListRow>
   );
@@ -614,7 +727,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
       <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>
       <div className={settingsCss.mProfileTools}>
         <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.refreshModels"), t("web-mobile.profiles.checkDone"))}>
-          {checking ? <Spinner size={12} /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
+          {checking ? <Spinner inline /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
         </button>
         <span className={partsCss.mGrow} />
         {all.length > 0 && <>
@@ -623,7 +736,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
         </>}
       </div>
       {/* A provider that does not list its models: one is named by hand. */}
-      {p.canAddModel && <div className={settingsCss.mProfileTools}><Field value={typed} onChange={setTyped} placeholder={t("web-mobile.profiles.addModelPlaceholder")} /><button type="button" className={partsCss.mLink} disabled={!typed.trim() || adding} onClick={addTyped}>{adding ? <Spinner size={12} /> : t("web-mobile.profiles.addModel")}</button></div>}
+      {p.canAddModel && <div className={settingsCss.mProfileTools}><Field value={typed} onChange={setTyped} placeholder={t("web-mobile.profiles.addModelPlaceholder")} /><button type="button" className={partsCss.mLink} disabled={!typed.trim() || adding} onClick={addTyped}>{adding ? <Spinner inline /> : t("web-mobile.profiles.addModel")}</button></div>}
       {all.length > 10 && <div className={settingsCss.mProfileTools}><Field value={filter} onChange={setFilter} placeholder={t("web-mobile.profiles.filterModels")} /></div>}
       {/* By series, newest first (the core's). */}
       {p.series.map((s) => {
@@ -640,7 +753,7 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
                 <button key={m} type="button" className={settingsCss.mModelRow} disabled={busy} onClick={() => save(on ? models.filter((x) => x !== m) : [...models, m])}>
                   <span className={settingsCss.mCheck} data-on={on || undefined}>{on && <Check size={14} />}</span>
                   <span className={partsCss.mGrow}>{p.names[m] ?? m}</span>
-                  {saving && <Spinner size={13} />}
+                  {saving && <Spinner inline />}
                 </button>
               );
             })}
@@ -652,39 +765,67 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
 }
 
 /** A subscription's sign-in: run on the station's machine, the browser steps relayed here. */
-function SignIn({ p, needed }: { p: Profile; needed: boolean }) {
+function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactNode }) {
   const app = useApp();
   const api = useApi();
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = p.runtime === "claude" ? "Claude" : "ChatGPT";
+  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
+  const [manual, setManual] = useState(false);
   const previous = useRef(job?.state);
   useEffect(() => {
     if (job?.state === "done" && previous.current && previous.current !== "done") app.toast(t("web-mobile.profiles.signedIn"));
     previous.current = job?.state;
   }, [job?.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // One card for the account: where it stands at its top (no title over it saying it again), while signing in a way out
+  // at that line's end, then what to do.
   return (
-    <>
-      <SectionHeader title={active ? t("web-mobile.profiles.loginActive", { provider }) : needed ? t("web-mobile.profiles.loginNeeded", { provider }) : t("web-mobile.profiles.subscription", { provider })} start={24} />
-      <div className={`${listsCss.mCard} ${settingsCss.mFormGroup}`}>
-        {active ? (
-          <>
-            <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} />
-            <Button label={t("web-mobile.profiles.cancelLogin")} primary={false} busy={cancelling}
-              onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }} />
-          </>
-        ) : (
-          <>
-            <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{job?.state === "failed" ? t("web-mobile.profiles.loginFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-mobile.profiles.loginDone") : t("web-mobile.profiles.loginWhere", { name: NAME })}</p>
-            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed} busy={busy}
-              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
-            <details className={css.mDetails}><summary>{t("web-mobile.profiles.manualLogin")}</summary><CommandBox text={p.loginCommand} /></details>
-          </>
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn}`}>
+      <div className={css.mSignInHead}>
+        <div className={settingsCss.mProfileHead}>{head}</div>
+        {active && (
+          <button type="button" className={css.mSignInCancel} disabled={cancelling} aria-busy={cancelling || undefined}
+            onClick={() => { api.cancelLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.cancelLoginFailed", { error: e.message }))); }}>
+            {cancelling && <Spinner inline />}{t("web-mobile.profiles.cancelLogin")}
+          </button>
         )}
       </div>
-    </>
+      {active ? <LoginSteps job={job} provider={provider} send={(code) => api.loginCode(p.id, code)} /> : (
+        <>
+          {/* Signed in: the pill above says so; only what was off, or how it is done, in words. */}
+          {job?.state === "failed" ? <p className={`${partsCss.mError} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginFailed", { error: job.error ?? "" })}</p>
+            : needed ? <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.loginWhere", { name: NAME })}</p> : null}
+          <div className={css.mSignInActions}>
+            <Button label={job?.state === "done" || !needed ? t("web-mobile.profiles.relogin") : t("web-mobile.workspaces.signIn")} primary={needed && job?.state !== "done"} busy={busy}
+              onClick={() => { api.startLogin(p.id).catch((e: Error) => app.toast(t("web-mobile.profiles.startLoginFailed", { error: e.message }))); }} />
+            {/* OpenCode's has no command to run by hand. */}
+            {p.loginCommand && <LinkButton label={t("web-mobile.profiles.manualShort")} onClick={() => setManual(!manual)} />}
+          </div>
+          {manual && p.loginCommand && <CommandBox text={p.loginCommand} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`): installing it first, how that
+ * stands, and its button when the viewer may (`software.update`). The sign-in starts once it is installed.
+ */
+function InstallStep({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  return (
+    <div className={`${listsCss.mCard} ${settingsCss.mFormGroup} ${css.mSignIn} ${css.mFlowCard}`}>
+      <b className={listsCss.mRowTitle}>{install.title}</b>
+      {install.detail ? <p className={partsCss.mError}>{install.detail}</p> : <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</p>}
+      {install.state === "installing" && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
+      {install.action && <Button label={install.action} primary busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)} />}
+    </div>
   );
 }
 
@@ -696,28 +837,33 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const busy = operation.busy;
   const error = operation.error?.message;
   const [copied, setCopied] = useState(false);
-  if (!job || job.state === "starting") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.loginLink", { provider })}</p>;
-  if (job.state === "verifying") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.finishing")}</p>;
-  if (job.state === "done") return <p className={`${partsCss.mMuted} ${chatCss.mWaiting}`}><Spinner size={13} />{t("web-mobile.profiles.adding")}</p>;
+  if (!job || job.state === "starting") return <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} />;
+  if (job.state === "verifying") return <WaitLine text={t("web-mobile.profiles.finishing")} />;
+  if (job.state === "done") return <WaitLine text={t("web-mobile.profiles.adding")} />;
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
-        <Button label={copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
-          onClick={() => { void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.codexNote", { name: NAME })}</p>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
+        {/* OpenCode's page has the code in its address: only compared there, not copied. */}
+        <Button label={provider === "OpenCode" ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+          onClick={() => { if (provider === "OpenCode") return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
       </>
     );
   }
+  // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
+  // what sends it.
   if (job.state === "needs_code" && job.url) {
     return (
       <>
-        <p className={partsCss.mSmall}>{tNodes("web-mobile.profiles.claudeStep1", { link: <a href={job.url} target="_blank" rel="noopener">{t("web-mobile.profiles.openAuth")}</a> }, { name: NAME })}</p>
-        <p className={partsCss.mSmall}>{t("web-mobile.profiles.claudeStep2")}</p>
-        <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
+        <p className={css.mStep}><span className={css.mStepN}>1</span>{t("web-mobile.profiles.step1Short", { name: NAME })}</p>
+        <span className={css.mStepBody}><Button label={t("web-mobile.profiles.openAuth")} primary={!code.trim()} onClick={() => void window.open(job.url!, "_blank", "noopener")} /></span>
+        <p className={css.mStep}><span className={css.mStepN}>2</span>{t("web-mobile.profiles.step2Short")}</p>
         {error && <p className={partsCss.mError}>{error}</p>}
-        <Button label={t("web-mobile.profiles.finishLogin")} primary busy={busy} enabled={!!code.trim()}
-          onClick={() => { void operation.run(code.trim()); }} />
+        <div className={css.mCodeRow}>
+          <input className={listsCss.mField} data-mono autoComplete="off" spellCheck={false} value={code} placeholder={t("web-mobile.profiles.pasteCode")} onChange={(e) => setCode(e.target.value)} />
+          <Button label={t("web-mobile.profiles.finishShort")} primary busy={busy} enabled={!!code.trim()} onClick={() => { void operation.run(code.trim()); }} />
+        </div>
       </>
     );
   }
@@ -792,16 +938,20 @@ export function NewProfileScreen() {
   const [login, setLogin] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
-  const runtime = d?.tile?.runtime === "codex" ? "codex" : "claude";
+  // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" ? d.tile.runtime : "claude");
+  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : "ChatGPT");
+  const begin = () => api.newLogin(runtime, d?.signIn?.access).then(({ id }) => setLogin(id), (e: Error) => setError(e.message));
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
-  const planning = d?.step === "connect" && d.method === "plan";
+  // A station without the runtime it signs in with installs it first (core `install`): the sign-in starts after.
+  const planning = d?.step === "connect" && d.method === "plan" && !d.install;
   const started = useRef(false);
   const dropped = (e: Error) => app.toast(t("web-mobile.profiles.dropFailed", { error: e.message }));
   useEffect(() => {
-    if (planning && !started.current) { started.current = true; setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }
+    if (planning && !started.current) { started.current = true; setError(null); void begin(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) api.dropLogin(login).catch(dropped); setLogin(null); }
   }, [planning]); // eslint-disable-line react-hooks/exhaustive-deps
   // Back goes a step back, from the picker out.
@@ -811,7 +961,7 @@ export function NewProfileScreen() {
     <div className={pagesCss.mScreen}>
       <NavBar back={d && d.step !== "pick" ? t("common.back") : t("common.cancel")} onBack={leave} title={d?.title ?? t("web-mobile.newChat.addProfile")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
       <div className={`${pagesCss.mScroll} ${partsCss.mPadX18} ${settingsCss.mSteps}`}>
-        {!d ? <Loading text={t("web-mobile.profiles.loading")} /> : d.step === "pick" ? (
+        {!d ? <Waiting shape="cards" count={2} text={t("web-pages.profiles.loading")} /> : d.step === "pick" ? (
           <>
             <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{d.hint}</p>
             {overview && <div><MachineLoginOffers inForm logins={overview.machineLogins} onSignIn={(c) => edit({ provider: c === "claude-sub" ? "anthropic" : "openai", method: "plan" })} /></div>}
@@ -832,15 +982,16 @@ export function NewProfileScreen() {
           </>
         ) : d.step === "method" ? (
           <ListCard>
-            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
+            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
           </ListCard>
         ) : d.method === "plan" ? (
-          error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
+          d.install ? <InstallStep install={d.install} />
+          : error || pending?.error || job?.state === "failed" || job?.state === "cancelled" ? (
             <>
               <p className={partsCss.mError}>{error ?? pending?.error ?? job?.error ?? t("web-mobile.profiles.loginIncomplete")}</p>
-              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); api.newLogin(runtime).then(({ id }) => setLogin(id), (e: Error) => setError(e.message)); }} />
+              <Button label={t("web-mobile.profiles.restart")} primary={false} onClick={() => { if (login) api.dropLogin(login).catch(dropped); setLogin(null); setError(null); void begin(); }} />
             </>
-          ) : <LoginSteps job={job} provider={runtime === "claude" ? "Claude" : "ChatGPT"} send={(code) => api.newLoginCode(login!, code)} />
+          ) : <LoginSteps job={job} provider={provider} send={(code) => api.newLoginCode(login!, code)} />
         ) : (
           <ConnectForm key={d.tile?.id} d={d} edit={edit} busy={submitting}
             onSubmit={() => { submit().then(({ id }) => go(id, t("web-mobile.profiles.verifiedAdded")), () => undefined); }} />
@@ -900,7 +1051,6 @@ function machineOffers(logins: MachineLogin[] | undefined): MachineLogin[] {
   return (logins ?? []).filter((l) => l.offered);
 }
 
-const MACHINE_RUNTIME: Record<MachineLogin["runtime"], string> = { claude: "Claude Code", codex: "Codex" };
 
 /**
  * The accounts the station machine's own Claude Code and Codex are signed in with, not used by a profile yet (as the
@@ -925,7 +1075,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   };
   return (
     <>
-      <SectionHeader title={t("web-mobile.profiles.machineLogins")} start={inForm ? 6 : 24} />
+      <SectionHeader title={t("web-mobile.profiles.machineLogins", { station: station.name || t("web-main.machine.this") })} start={inForm ? 6 : 24} />
       <ListCard>
         {offers.map((l) => {
           const blocked = l.quota?.state === "blocked";
@@ -935,7 +1085,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
             <ListRow key={l.runtime}>
               <ProviderMark runtime={l.runtime} kind="subscription" size={18} />
               <span className={`${partsCss.mGrow} ${listsCss.mRowText}`}>
-                <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {MACHINE_RUNTIME[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
+                <span className={listsCss.mRowTitle}><Presence state={blocked ? "error" : "online"} /> {RUNTIME_LABEL[l.runtime]}{plan && <span className={settingsCss.mRowAside}> · {plan}</span>}</span>
                 <span className={listsCss.mRowNote}>{blocked ? t("web-mobile.history.blocked") : t("web-mobile.profiles.machineSignedIn")}{l.email ? ` · ${l.email}` : ""}</span>
                 {trouble && <span className={`${listsCss.mRowNote} ${settingsCss.mWrap}`}>{trouble}</span>}
               </span>

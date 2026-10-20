@@ -4,14 +4,21 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { test } from "node:test";
 import { cardArg, optionsArg } from "../src/sessions/args.ts";
 import { fingerprint } from "../src/sessions/decision.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
 import { fromPeer } from "../src/sessions/messages.ts";
-import { newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
+import { CREATE, MAX_OPEN, NOTICE, createForPeer, noticeForPeer } from "../src/sessions/opened.ts";
+import { stationLang, tr } from "../src/ops/i18n.ts";
+import { forPeer } from "../src/sessions/others.ts";
+import { FETCHED, fileForPeer, putForPeer } from "../src/sessions/peer-files.ts";
+import { packWorkspaceIf } from "../src/sessions/archive.ts";
+import { roomOf } from "../src/sessions/footprint.ts";
+import { Refused } from "../src/sessions/neighbours.ts";
+import { archive, newSession, say as sayIn } from "../src/sessions/lifecycle.ts";
 import { review, reviewUndecided } from "../src/sessions/review.ts";
 import { cleanTitle } from "../src/sessions/titles.ts";
 import { adbTools } from "../src/tools/adb.ts";
@@ -20,6 +27,7 @@ import { chatTools } from "../src/tools/chat.ts";
 import { feedbackTools } from "../src/tools/feedback.ts";
 import { stationTools } from "../src/tools/stations.ts";
 import { DEFAULT_POLICY } from "../src/sessions/archive-policy.ts";
+import { hubConfig } from "../src/sessions/config.ts";
 import { Rig, matches, message, reply, say, settle } from "./hub-fakes.ts";
 
 type Json = any;
@@ -31,7 +39,7 @@ test("every tool has a name, a description and an object's input schema; the cha
   const ours = [...chatTools(r.hub), ...archiveTools(r.hub), ...stationTools(() => null), ...adbTools(() => [], () => null), ...feedbackTools(r.store, () => null, () => null)];
   assert.deepEqual(
     chatTools(r.hub).map((t) => t.name),
-    ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "session_history"],
+    ["chat_post", "slack_api", "chat_state", "chat_history", "chat_list", "chat_read", "session_send", "chat_create", "session_history"],
   );
   assert.equal(new Set(ours.map((t) => t.name)).size, ours.length, "no name twice");
   for (const tool of ours) {
@@ -162,7 +170,7 @@ test("a post carries a card, kept with it and checked", async () => {
   const shown = [{ label: "按今天累计", detail: "重连不清零，零点归零", recommended: true }, { label: "先不改" }];
   // An options card, with the turn ending need_help: the card is the message's, the state the turn's.
   let said = await r.call(key, "chat_post", { to, text: "「共」改成按今天累计吗？", kind: "need_help", need: "选统计口径", card: { type: "options", options } });
-  assert.ok(said.startsWith(`Posted to ${to}, and recorded state need_human. People can pick: 按今天累计 (recommended); 先不改;`), said);
+  assert.ok(said.startsWith(`Posted to ${to}, and recorded state need_human. People can pick, numbered as the card shows them: 1. 先不改; 2. 按今天累计 (recommended);`), said);
   let entry = kept();
   assert.deepEqual(entry.card, { type: "options", options: shown });
   assert.deepEqual(entry.options, shown, "kept as options too: what stations and clients from before cards read");
@@ -193,8 +201,8 @@ test("a post carries a card, kept with it and checked", async () => {
   assert.deepEqual([kept().card, kept().options], [undefined, undefined]);
   const refused = (args: Json) => r.refused(key, "chat_post", args);
   const one = [{ label: "A" }];
-  assert.ok((await refused({ to, text: "x", card: { type: "poll" } })).includes('unknown card type "poll": the types known are options, text'));
-  assert.ok((await refused({ to, text: "x", card: {} })).includes("one of options, text"));
+  assert.ok((await refused({ to, text: "x", card: { type: "poll" } })).includes('unknown card type "poll": the types known are options, text, login'));
+  assert.ok((await refused({ to, text: "x", card: {} })).includes("one of options, text, login"));
   assert.ok((await refused({ to, text: "x", card: ["A"] })).includes("card must be an object"));
   assert.ok((await refused({ to, text: "x", card: { type: "options" } })).includes("an options card has options"));
   assert.ok((await refused({ to, text: "x", card: { type: "options", options: one }, options: one })).includes("not also as options"));
@@ -287,8 +295,8 @@ test("options are refused in a Slack thread", async () => {
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail chats"));
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail and Feishu chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail and Feishu chats"));
   await r.close();
 });
 
@@ -352,7 +360,7 @@ test("a turn ends all_done, needing a decision or help, or waiting, and the word
   assert.ok((await r.refused(key, "chat_state", { kind: "all_done", need: "x", done: "y" })).includes('only with kind "need_human"'));
   assert.ok((await r.refused(key, "chat_state", { kind: "all_done" })).includes("done is required"));
   // done is a reason people can trust, not the word done.
-  for (const empty of ["做完了", " 完成。", "已完成", "Done!", "ok", "好了", "全部搞定"]) {
+  for (const empty of ["已完成", " 完成。", "已完成", "Done!", "ok", "好了", "全部搞定"]) {
     assert.ok((await r.refused(key, "chat_state", { kind: "all_done", done: empty })).includes("done must say why nothing in the chat is left"), empty);
   }
   assert.ok((await r.refused(key, "chat_state", { kind: "need_help", need: "x", done: "y" })).includes('only with kind "all_done"'));
@@ -391,6 +399,31 @@ test("a turn ends all_done, needing a decision or help, or waiting, and the word
     ["need_help"],
     "posts keep today's words",
   );
+  await r.close();
+});
+
+test("a login card names its login, and closes for everyone as the login ends", async () => {
+  const r = new Rig();
+  const [key, thread] = newSession(r.hub, web("local"));
+  const to = `EMBER/${thread.threadTs}`;
+  const kept = () => {
+    const n = r.said(thread.id).at(-1)!.n;
+    return r.store.entriesBetween(thread.id, n, n)[0]!;
+  };
+  const said = await r.call(key, "chat_post", { to, text: "要在 studio 上登录 GitHub", kind: "need_human", need: "登录 GitHub", card: { type: "login", login: "abc123", assignee: "a@x.com" } });
+  assert.ok(said.includes("People finish the login from the card"), said);
+  assert.deepEqual(kept().card, { type: "login", login: "abc123", assignee: "a@x.com" });
+  assert.ok(r.store.pendingCard(thread.id) !== null);
+  const refused = (args: Json) => r.refused(key, "chat_post", args);
+  assert.ok((await refused({ to, text: "x", card: { type: "login" } })).includes("a login card names the login"));
+  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "a b" } })).includes("a login card names the login"));
+  assert.ok((await refused({ to, text: "x", card: { type: "login", login: "abc", station: "studio" } })).includes("card.station"));
+  // Another login's end leaves it; its own closes it (nobody answered: withdrawn, as by its agent).
+  assert.deepEqual(r.store.closeLoginCards("abc12"), []);
+  assert.ok(r.store.pendingCard(thread.id) !== null);
+  assert.deepEqual(r.store.closeLoginCards("abc123"), [key], "its agent: told the login ended");
+  assert.equal(r.store.pendingCard(thread.id), null);
+  assert.deepEqual(r.store.closeLoginCards("abc123"), [], "once");
   await r.close();
 });
 
@@ -470,7 +503,7 @@ test("files posted to Slack go into the thread; apps without files:write link to
   assert.deepEqual([last.text, last.attachments.length], ["图表\n\n[weather.html](weather.html)", 2], "still.fail keeps both, the figure placed");
   r.chat.noFiles = true;
   await r.call(key, "chat_post", { to, text: "再看", files: ["shot.png"] });
-  assert.equal(r.chat.lastText(), `再看\n\n<${link}?file=shot.png|在 still.fail 里查看附件>`, "no files:write: linked as before");
+  assert.equal(r.chat.lastText(), `再看\n\n<${link}?file=shot.png|在 still.fail 中查看附件>`, "no files:write: linked as before");
   assert.deepEqual(r.chat.files.at(-1), []);
   await r.close();
 });
@@ -642,6 +675,26 @@ test("an agent writes to another session's chat, which sees whom it is from", as
   await r.close();
 });
 
+test("a chat archived by hand takes no messages: session_send and chat_post are refused, and it is not brought back", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> build it"), say("<@UBOT> test it")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  archive(r.hub, keyB, true);
+  await settle();
+  assert.ok((await r.refused(keyA, "session_send", { to: keyB, text: "tests pass?" })).includes("archived by hand"));
+  assert.ok((await r.refused(keyB, "chat_post", { to: `C1/${b.threadTs}`, text: "late words" })).includes("archived by hand"));
+  assert.ok(r.store.getSession(keyB)!.archivedAt !== null);
+  assert.deepEqual(r.store.pendingMessages(keyB), []);
+  // Shown again, it takes them.
+  archive(r.hub, keyB, false);
+  const sent = await r.call(keyA, "session_send", { to: keyB, text: "tests pass?" });
+  assert.ok(sent.includes(keyB), sent);
+  await r.close();
+});
+
 test("a message to another station's session goes through the station transport, and arrives there", async () => {
   const r = new Rig({ link: true });
   const [a, b] = [say("<@UBOT> build it"), say("<@UBOT> test it")];
@@ -670,6 +723,341 @@ test("a message to another station's session goes through the station transport,
   assert.equal(r.store.pendingMessages(keyB).length, 1);
   await assert.rejects(fromPeer(r.hub, "far", { session: "s:1", to: "nobody", text: "yes" }));
   await r.close();
+});
+
+test("a chat on another station of the workspace is read there, by its link", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> build it"), say("<@UBOT> what did it find?")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  await r.call(keyA, "chat_post", { to: `C1/${a.threadTs}`, text: "the build is green" });
+  const asked: [string, Json][] = [];
+  r.hub.onPeer(async (station, request) => {
+    asked.push([station, request]);
+    return { text: "Conversation EMBER/2.000001; its agents: s:1.\nit works" };
+  });
+  // A still.fail link and a chat's page (as a reference is written) both name the station.
+  for (const chat of ["https://ember.test/o/ws/far/s%3A1", "/w/ws/s/far/chats/s%3A1?history=s%3A1&entry=3"]) {
+    const read = await r.call(keyB, "chat_read", { chat, limit: 5 });
+    assert.ok(matches(read, ["station far", "it works"]), read);
+    const [station, request] = asked.pop()!;
+    assert.equal(station, "far");
+    assert.deepEqual([request.method, request.tool, request.session, request.args], ["session.read", "chat_read", keyB, { chat, limit: 5 }]);
+  }
+  await r.call(keyB, "session_history", { chat: "https://ember.test/o/ws/far/s%3A1" });
+  assert.equal(asked.pop()![1].tool, "session_history");
+  // This station's own link is read here.
+  const here = await r.call(keyB, "chat_read", { chat: `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}` });
+  assert.ok(here.includes("the build is green") && !here.includes("station far"), here);
+  assert.equal(asked.length, 0);
+  // A station from before reads: it says so.
+  r.hub.onPeer(async () => {
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  assert.ok((await r.refused(keyB, "chat_read", { chat: "https://ember.test/o/ws/far/s%3A1" })).includes("not updated yet"));
+  // The other way: what a session there reads here.
+  const got = await forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_read", args: { chat: keyA } });
+  assert.ok(matches(got.text, [`Conversation C1/${a.threadTs}`, "the build is green"]), got.text);
+  const steps = await forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "session_history", args: { chat: keyA } });
+  assert.equal(steps.text, `Session ${keyA} has no execution history yet.`);
+  await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_post", args: { chat: keyA } }));
+  await assert.rejects(forPeer(r.hub, "far", { method: "session.read", session: "s:1", tool: "chat_read", args: {} }));
+  await r.close();
+});
+
+test("files go between stations: a chat's attachments come with reading it, and a message takes its files along", async () => {
+  const r = new Rig({ link: true });
+  const [a, b] = [say("<@UBOT> draw it"), say("<@UBOT> what did it draw?")];
+  await r.accept(a);
+  await r.accept(b);
+  await settle();
+  const [keyA, keyB] = [sessionKey("cl", "C1", a.threadTs), sessionKey("cl", "C1", b.threadTs)];
+  // Station "far" is this one again, answering as it would over the transport.
+  const asked: string[] = [];
+  r.hub.onPeer(async (_station, request) => {
+    asked.push(request.method);
+    if (request.method === "session.read") return forPeer(r.hub, "near", request);
+    if (request.method === "session.file") return fileForPeer(r.hub, request);
+    if (request.method === "session.put") return putForPeer(r.hub, "near", request);
+    return fromPeer(r.hub, "near", request);
+  });
+  const workspaceA = r.session(keyA).workspace;
+  writeFileSync(join(workspaceA, "pose.png"), "pixels");
+  const big = Buffer.alloc(FETCHED + 1, 7);
+  writeFileSync(join(workspaceA, "take.mp4"), big);
+  await r.call(keyA, "chat_post", { to: `C1/${a.threadTs}`, text: "drawn", files: ["pose.png", "take.mp4"] });
+  const [pose, take] = r.said(r.thread("C1", a.threadTs).id).at(-1)!.attachments;
+  const chat = `https://ember.test/o/ws/far/${keyA.replaceAll(":", "%3A")}`;
+  const read = await r.call(keyB, "chat_read", { chat });
+  const here = join(r.session(keyB).workspace, "uploads", "far");
+  assert.ok(read.includes(`- ${join(here, basename(pose!.path))} (pose.png`), read);
+  assert.equal(readFileSync(join(here, basename(pose!.path)), "utf8"), "pixels");
+  assert.ok(read.includes(`- ${take!.path} (take.mp4`) && read.includes("fetch one with chat_read fetch=") && read.includes(`${take!.path} (${big.length} bytes)`), "a large one is left there");
+  const fetched = await r.call(keyB, "chat_read", { chat, fetch: [take!.path] });
+  assert.ok(fetched.includes(`- ${join(here, basename(take!.path))} (take.mp4`) && !fetched.includes("fetch one"), fetched);
+  assert.ok(readFileSync(join(here, basename(take!.path))).equals(big));
+  // Only a chat's own files: not another path, not out of its uploads.
+  await assert.rejects(fileForPeer(r.hub, { chat, path: join(workspaceA, "pose.png") }), /not a file of that chat/);
+  await assert.rejects(fileForPeer(r.hub, { chat, path: join(workspaceA, "uploads", "..", "pose.png") }), /not a file of that chat/);
+  await assert.rejects(fileForPeer(r.hub, { chat: keyB, path: pose!.path }), /not a file of that chat/);
+  // A station from before files: the read still comes, its files are said to be left.
+  r.hub.onPeer(async (_station, request) => {
+    if (request.method === "session.read") return forPeer(r.hub, "near", request);
+    throw new Refused("session and task key are required (at most 256 / 128 bytes)");
+  });
+  rmSync(here, { recursive: true });
+  const old = await r.call(keyB, "chat_read", { chat });
+  assert.ok(old.includes("not updated yet to give files") && old.includes("drawn"), old);
+  // A message takes its files along: sent ahead, then kept with it in the chat there.
+  r.hub.onPeer(async (_station, request) => {
+    asked.push(request.method);
+    if (request.method === "session.put") return putForPeer(r.hub, "near", request);
+    return fromPeer(r.hub, "near", request);
+  });
+  asked.length = 0;
+  writeFileSync(join(r.session(keyB).workspace, "answer.txt"), "seen it");
+  await r.call(keyB, "session_send", { to: chat, text: "here is mine", files: ["answer.txt"] });
+  assert.deepEqual(asked, ["session.put", "session.message"]);
+  const got = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.deepEqual([got.author, got.attachments.map((f) => f.name)], [`near/${keyB}`, ["answer.txt"]]);
+  assert.ok(got.attachments[0]!.path.startsWith(join(workspaceA, "uploads")));
+  assert.equal(readFileSync(got.attachments[0]!.path, "utf8"), "seen it");
+  assert.deepEqual(r.chat.files.at(-1), ["answer.txt"]);
+  // A file that did not all arrive is not posted.
+  await assert.rejects(fromPeer(r.hub, "near", { session: keyB, to: keyA, text: "again", files: [{ id: "nope", name: "x.txt" }] }), /did not all arrive/);
+  // On this station too: copied into the uploads of the chat it goes to.
+  await r.call(keyB, "session_send", { to: keyA, text: "and again", files: ["answer.txt"] });
+  const local = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.ok(local.attachments[0]!.path.startsWith(join(workspaceA, "uploads")) && local.text.endsWith("and again"));
+  assert.ok((await r.refused(keyB, "session_send", { to: chat, text: "x", files: ["missing.txt"] })).includes("no such file"));
+  // Packed with its archived workspace: read out once, every chunk after from what was read out.
+  const room = roomOf(r.config.dataDir, workspaceA)!;
+  await packWorkspaceIf(room, () => true);
+  assert.ok(!existsSync(take!.path));
+  const chunks: Buffer[] = [];
+  for (let offset = 0, eof = false; !eof; ) {
+    const got = await fileForPeer(r.hub, { chat, path: take!.path, offset });
+    chunks.push(Buffer.from(got.data, "base64"));
+    offset += chunks.at(-1)!.length;
+    eof = got.eof;
+  }
+  assert.ok(Buffer.concat(chunks).equals(big));
+  await r.close();
+});
+
+// ── chat_create ──
+
+/// The fake runtime session of session `key`.
+const runtimeOf = (r: Rig, key: string) => {
+  const found = [...r.claude.sessions, ...r.codex.sessions].filter((s) => s.options.key === key).at(-1);
+  if (!found) throw new Error(`no runtime session of ${key}`);
+  return found;
+};
+
+test("an agent opens a chat here: it begins with its message, goes to its starter, and tells it how each turn ends", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> ship it");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const linkA = `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}`;
+  writeFileSync(join(r.session(keyA).workspace, "notes.txt"), "the plan");
+  const sessions = r.store.listSessions().length;
+  const said = await r.call(keyA, "chat_create", { key: "android", text: "build the android app", title: "安卓构建", files: ["notes.txt"] });
+  assert.equal(r.store.listSessions().length, sessions + 1);
+  const opened = r.store.openedBy(keyA);
+  assert.equal(opened.length, 1);
+  const child = opened[0]!.child;
+  assert.ok(said.includes(`https://ember.test/o/ws/st/${child.replaceAll(":", "%3A")}`) && said.includes("this station"), said);
+  // A chat of its own, started by whoever started the opener's, with the opener's runtime.
+  const row = r.session(child);
+  assert.equal(row.runtime, "claude");
+  const thread = r.store.homeChat(child)!;
+  assert.equal(thread.title, "安卓构建");
+  assert.equal(thread.createdBy, r.thread("C1", a.threadTs).createdBy);
+  // Its first message: the opener's, headed as its opening, with the file; handed to its agent.
+  const [first] = r.said(thread.id);
+  const [before, after] = tr(stationLang(), "station.session.openedBy", { from: "\u0000" }).split("\u0000");
+  assert.deepEqual([first!.authorKind, first!.author], ["agent", keyA]);
+  assert.ok(first!.text.startsWith(`${before}[`) && first!.text.endsWith(`](${linkA})${after}\n\nbuild the android app`), first!.text);
+  assert.deepEqual(first!.attachments.map((f) => f.name), ["notes.txt"]);
+  assert.ok(first!.attachments[0]!.path.startsWith(join(row.workspace, "uploads")));
+  await settle();
+  assert.ok(runtimeOf(r, child).prompts[0]!.includes("build the android app"));
+  // Said in the opener's chat, for people.
+  const notice = r.said(r.thread("C1", a.threadTs).id).at(-1)!;
+  assert.equal(notice.authorKind, "ember");
+  assert.ok(notice.text.includes(`<https://ember.test/o/ws/st/${child.replaceAll(":", "%3A")}|安卓构建>`), notice.text);
+  // The same key again: that chat, nothing new.
+  const again = await r.call(keyA, "chat_create", { key: "android", text: "build the android app" });
+  assert.ok(again.includes("already opened"), again);
+  assert.equal(r.store.listSessions().length, sessions + 1);
+  assert.equal(r.said(thread.id).length, 1);
+  // It opens none itself.
+  assert.ok((await r.refused(child, "chat_create", { key: "more", text: "and more" })).includes("opens none"));
+  // Its turn ends all_done: the opener is told, with its done.
+  await r.call(child, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "built", kind: "all_done", done: "安卓包已经构建好，apk 在 uploads 里" });
+  runtimeOf(r, child).complete();
+  await settle();
+  const told = [...runtimeOf(r, keyA).steers, ...runtimeOf(r, keyA).prompts.slice(1)].join("\n");
+  assert.ok(matches(told, ["安卓构建", "all_done", "安卓包已经构建好"]), told);
+  assert.equal(r.store.openedBy(keyA)[0]!.state, "all_done");
+  await r.close();
+});
+
+test("an agent keeps at most a few chats it opened going at once", async () => {
+  const r = new Rig({ link: true });
+  const a = say("<@UBOT> split it up");
+  await r.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  for (let i = 0; i < MAX_OPEN; i++) await r.call(keyA, "chat_create", { key: `part-${i}`, text: `part ${i}` });
+  assert.ok((await r.refused(keyA, "chat_create", { key: "one-more", text: "one more" })).includes("have not ended all_done"));
+  // One that ended all_done leaves room.
+  r.store.setOpenedState("", r.store.openedBy(keyA)[0]!.child, "all_done");
+  await r.call(keyA, "chat_create", { key: "one-more", text: "one more" });
+  // So does one archived.
+  assert.ok((await r.refused(keyA, "chat_create", { key: "two-more", text: "two more" })).includes("have not ended all_done"));
+  r.store.setArchived(r.store.openedBy(keyA)[1]!.child, true, "manual");
+  await r.call(keyA, "chat_create", { key: "two-more", text: "two more" });
+  assert.ok((await r.refused(keyA, "chat_create", { text: "no key" })).includes("key is required"));
+  await r.close();
+});
+
+test("an agent opens a chat on another station: made there once per key, its first message and files sent once, its turns told back", async () => {
+  // "near" opens a chat on "far" (named studio); each answers the other as the transport would.
+  const near = new Rig({ link: true });
+  const far = new Rig({ link: true });
+  const a = say("<@UBOT> test on the mac");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  const asked: string[] = [];
+  let farDown = false;
+  near.hub.onPeer(async (station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    assert.equal(station, "far");
+    asked.push(request.method);
+    if (farDown) throw new Error("peer unavailable");
+    if (request.method === CREATE) return createForPeer(far.hub, "near", request);
+    if (request.method === "session.put") return putForPeer(far.hub, "near", request);
+    return fromPeer(far.hub, "near", request);
+  });
+  far.hub.onPeer(async (station, request) => {
+    assert.equal(station, "near");
+    assert.equal(request.method, NOTICE);
+    return noticeForPeer(near.hub, "far", request);
+  });
+  writeFileSync(join(near.session(keyA).workspace, "plan.txt"), "run them all");
+  // Nothing used there yet, and two runtimes to choose from: not opened, the agent is told which to ask about.
+  const which = await near.refused(keyA, "chat_create", { key: "tests", station: "studio", text: "run the tests" });
+  assert.ok(which.includes("no one model is clearly the most used") && which.includes("claude's default") && which.includes("codex's default"), which);
+  assert.equal(far.store.listSessions().length, 0);
+  asked.length = 0;
+  const said = await near.call(keyA, "chat_create", { key: "tests", station: "studio", runtime: "claude", text: "run the tests", title: "跑测试", files: ["plan.txt"] });
+  assert.deepEqual(asked, [CREATE, "session.put", "session.message"]);
+  assert.ok(said.includes("station far"), said);
+  const [child] = far.store.listSessions().map((s) => s.key);
+  assert.ok(child !== undefined && far.store.openerOf(child)!.parent === keyA);
+  assert.deepEqual(near.store.openedBy(keyA).map((o) => [o.childStation, o.child]), [["far", child]]);
+  const thread = far.store.homeChat(child!)!;
+  assert.equal(thread.title, "跑测试");
+  assert.equal(thread.createdBy, near.thread("C1", a.threadTs).createdBy);
+  const [first] = far.said(thread.id);
+  assert.equal(first!.author, `near/${keyA}`);
+  const opening = tr(stationLang(), "station.session.openedBy", { from: "\u0000" }).split("\u0000")[0]!;
+  assert.ok(first!.text.startsWith(`${opening}[`) && first!.text.includes(`](https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")})`) && first!.text.endsWith("run the tests"), first!.text);
+  assert.deepEqual(first!.attachments.map((f) => f.name), ["plan.txt"]);
+  // Again with the key: the same chat, and its first message is not sent twice.
+  asked.length = 0;
+  near.store.db.prepare("DELETE FROM opened_chats").run();
+  await near.call(keyA, "chat_create", { key: "tests", station: "far", text: "run the tests" });
+  assert.deepEqual(asked, [CREATE]);
+  assert.equal(far.store.listSessions().length, 1);
+  assert.equal(far.said(thread.id).length, 1);
+  // Its turn ends needing a person: the opener there is told.
+  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "which device?", kind: "need_human", need: "选一台测试机" });
+  await settle();
+  runtimeOf(far, child!).complete();
+  await settle();
+  const told = [...runtimeOf(near, keyA).steers, ...runtimeOf(near, keyA).prompts.slice(1)].join("\n");
+  assert.ok(matches(told, ["跑测试", "needs a person", "选一台测试机"]), told);
+  assert.equal(near.store.openedBy(keyA)[0]!.state, "need_human");
+  // Only the station a chat was opened on tells of it.
+  assert.throws(() => noticeForPeer(near.hub, "elsewhere", { session: child, to: keyA, state: "all_done" }), /opened no chat/);
+  // When the opener cannot be told, its chat says so; nothing is sent again.
+  far.hub.onPeer(async () => {
+    throw new Error("peer unavailable");
+  });
+  sayIn(far.hub, thread.id, "lee@example.com", "the pixel one");
+  await settle();
+  await far.call(child!, "chat_post", { to: `EMBER/${thread.threadTs}`, text: "done", kind: "all_done", done: "测试全部通过，结果贴在上面" });
+  runtimeOf(far, child!).complete();
+  await settle();
+  const last = far.said(thread.id).at(-1)!;
+  assert.ok(last.authorKind === "ember" && last.text.includes("peer unavailable"), last.text);
+  // A station that cannot be reached: not opened, and it says how to go on.
+  farDown = true;
+  const down = await near.refused(keyA, "chat_create", { key: "again", station: "far", text: "x" });
+  assert.ok(down.includes("same key"), down);
+  // One from before chats can be opened there says so.
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { stations: [{ id: "far", name: "Studio" }] };
+    throw new Refused("remote tasks are not enabled for this source station");
+  });
+  assert.ok((await near.refused(keyA, "chat_create", { key: "old", station: "far", text: "x" })).includes("not updated yet"));
+  assert.ok((await near.refused(keyA, "chat_create", { key: "nowhere", station: "mars", text: "x" })).includes("Studio"));
+  await near.close();
+  await far.close();
+});
+
+test("a chat opened on another station without a model runs what its starter uses most there, not its opener's", async () => {
+  // As on 2026-10-19: the opener runs Claude's Opus here; Studio runs gpt-6-astra on codex and DeepSeek, no Opus.
+  const near = new Rig({ link: true });
+  const far = new Rig({ link: true });
+  far.raw.profiles = [
+    { id: "cx", runtime: "codex", home: "homes/cx", models: ["gpt-6-astra"] },
+    { id: "ds", runtime: "claude", home: "homes/ds", models: ["deepseek-v4.1-flash"] },
+  ];
+  far.config = hubConfig(far.raw, far.dir);
+  const a = say("<@UBOT> sign the app in on the mac");
+  await near.accept(a);
+  await settle();
+  const keyA = sessionKey("cl", "C1", a.threadTs);
+  assert.equal(near.session(keyA).model, "opus");
+  near.hub.onPeer(async (_station, request) => {
+    if (request.method === "peers") return { workspace: "ws", stations: [{ id: "st", name: "ccvm" }, { id: "far", name: "Studio" }], current: true };
+    if (request.method === CREATE) return createForPeer(far.hub, "near", request);
+    return fromPeer(far.hub, "near", request);
+  });
+  far.hub.onPeer(async (_station, request) => noticeForPeer(near.hub, "far", request));
+  const starter = near.thread("C1", a.threadTs).createdBy!;
+  const used = (key: string, runtime: string, model: string, at: number) =>
+    far.store.insertSession({ key, connect: "ds", runtime, profile: "cx", model, createdBy: starter, workspace: `/w/${key}`, token: `t-${key}`, createdAt: at, lastActiveAt: at });
+  const now = far.hub.now();
+  used("u1", "codex", "gpt-6-astra", now - 86_400_000);
+  used("u2", "codex", "gpt-6-astra", now - 2 * 86_400_000);
+  used("u3", "claude", "deepseek-v4.1-flash", now - 86_400_000);
+  // Long ago, and someone else's: not counted.
+  used("u4", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  used("u5", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  used("u6", "claude", "deepseek-v4.1-flash", now - 90 * 86_400_000);
+  far.store.db.prepare("UPDATE sessions SET created_by = 'someone else', created_at = ? WHERE key IN ('u4', 'u5')").run(now);
+  await near.call(keyA, "chat_create", { key: "login", station: "Studio", text: "run the login" });
+  const child = far.store.openedWith("near", keyA, "login", "")!.child;
+  assert.deepEqual([far.session(child).runtime, far.session(child).model], ["codex", "gpt-6-astra"]);
+  // Close to it (3 to 2, the chat just opened counting too): asked.
+  used("u7", "claude", "deepseek-v4.1-flash", now - 3600_000);
+  const which = await near.refused(keyA, "chat_create", { key: "login-2", station: "Studio", text: "run the login" });
+  assert.ok(which.includes("gpt-6-astra (runtime codex, 3 chats") && which.includes("deepseek-v4.1-flash (runtime claude, 2 chats"), which);
+  // A runtime named: its model there.
+  await near.call(keyA, "chat_create", { key: "login-3", station: "Studio", runtime: "claude", text: "run the login" });
+  const third = far.store.openedWith("near", keyA, "login-3", "")!.child;
+  assert.deepEqual([far.session(third).runtime, far.session(third).model], ["claude", "deepseek-v4.1-flash"]);
+  await near.close();
+  await far.close();
 });
 
 // ── the archive suggestion after all_done ──

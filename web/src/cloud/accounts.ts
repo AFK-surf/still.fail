@@ -1,12 +1,13 @@
 // The Google accounts signed in on this browser. The core keeps them, with
 // their still.fail cloud sessions (docs/client-core.md): the page sees who is
-// signed in, starts and finishes a sign-in, and signs out; tokens never reach it.
+// signed in, starts and finishes a sign-in, signs out, and deletes an account;
+// tokens never reach it.
 import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
-import { failure, useToast } from "../toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { t } from "../i18n.ts";
-import { signedOut, telemetrySettled, track } from "../telemetry.ts";
+import { signedOut, telemetrySettled, track, trackNow } from "../telemetry.ts";
 
 /** A signed-in account, as the `accounts` topic lists it. */
 export interface Account {
@@ -36,14 +37,29 @@ export async function signIn(returnTo = location.pathname + location.search + lo
 /** Finishes a sign-in on /auth/callback. Returns where to go next. */
 export async function completeSignIn(): Promise<string> {
   const { return_to } = await core().call("auth.complete", { query: location.search }) as { return_to: string };
-  track("sign_in");
+  trackNow("sign_in");
   // The page goes on to return_to at once: the event must be with posthog-js by then.
   await telemetrySettled();
   return return_to;
 }
 
+/** Signs in with an email and a password: only the accounts still.fail cloud set up for it (App Store review's). */
+export async function passwordSignIn(email: string, password: string): Promise<void> {
+  await core().call("auth.password", { email, password });
+  track("sign_in");
+}
+
 export async function signOut(sub: string): Promise<void> {
   await core().call("auth.signOut", { account: sub });
+  signedOut(sub);
+}
+
+/**
+ * Deletes the account in still.fail cloud, then forgets it here as signing out does (`auth.deleteAccount`). Refused,
+ * with words to show, while it is the only owner of a workspace others are in.
+ */
+export async function deleteAccount(sub: string): Promise<void> {
+  await core().call("auth.deleteAccount", { account: sub });
   signedOut(sub);
 }
 
@@ -66,4 +82,13 @@ export function useSignOut(): { signOut(sub: string): Promise<boolean>; busy(sub
   const go = useCallback((sub: string) => signOut(sub)
     .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.signOutFailed", { error: failure(e) })); return false; }), [toast]);
   return { signOut: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.signOut", { account: sub })) };
+}
+
+/** Deleting an account from a button: `busy(sub)` while that account is deleted (`auth.deleteAccount`), what went wrong said in a toast. */
+export function useDeleteAccount(): { deleteAccount(sub: string): Promise<boolean>; busy(sub?: string): boolean } {
+  const toast = useToast();
+  const doing = useDoingList();
+  const go = useCallback((sub: string) => deleteAccount(sub)
+    .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.deleteFailed", { error: failure(e) })); return false; }), [toast]);
+  return { deleteAccount: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.deleteAccount", { account: sub })) };
 }

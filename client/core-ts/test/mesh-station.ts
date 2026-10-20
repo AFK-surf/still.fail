@@ -2,6 +2,7 @@
 // On localhost over the native addon (station/native/mesh), or on a simulated network (sim-iroh.ts: its `world`).
 import { loadAddon } from "../src/hosts/node-iroh.ts";
 import { ALPN, FORMER_ALPN } from "../src/mesh.ts";
+import { configFrame, readClientFrames, stateFrame, videoFrame } from "../src/screen-frames.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -15,23 +16,36 @@ export const REAL: World = { bind: (o) => addon.bind(o), sleep: (ms) => new Prom
 export class Station {
   endpoint: J;
   grants: string[] = [];
+  /// Each connection's first credential, in the order they came.
+  firsts: string[] = [];
   conns: J[] = [];
   /// Connections before this one answer nothing more.
   deadBelow = 0;
   idempotent = false;
   /// Each request it carried out (read whole, on a way not dead): its head.
   served: J[] = [];
+  /// Screen views (docs/remote-screens.md) as it served them: the head, what the client sent, the most frames it ever
+  /// had sent and not acknowledged. A view sends `screenFrames` (a config first), each once fewer than 2 are
+  /// unacknowledged, then ends.
+  views: { head: J; got: J[]; mostUnacked: number }[] = [];
+  screenFrames: { key: boolean; ts: number; data: Uint8Array }[] = [];
   world: World = REAL;
+  /// Its LAN addresses, said with the answer to a credential (station/src/mesh/lan.ts).
+  lan: string[] = [];
+  /// The phone's adb offers (station/src/mesh/adb.ts), each on the connection it came on, answered 200 and held open:
+  /// the latest one's connection is where the station opens its tunnels.
+  offers: { conn: J; head: J }[] = [];
 
   static async start(alpns: Uint8Array[] = [ALPN, FORMER_ALPN], world: World = REAL): Promise<Station> {
     return Station.bound({ alpns: alpns.map((a) => Buffer.from(a)), relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" }, world);
   }
 
-  /// One at home on the relay `home`, held on `other` too by a keeper there (station/native/mesh keep.rs).
-  static async on(home: string, other: string, world: World = REAL): Promise<Station> {
+  /// One at home on the relay `home`, held on `other` (one relay or several) too by a keeper there (station/native/mesh
+  /// keep.rs).
+  static async on(home: string, other: string | string[], world: World = REAL): Promise<Station> {
     const s = await Station.bound({ alpns: [Buffer.from(ALPN), Buffer.from(FORMER_ALPN)], relayUrls: [home], discovery: false, relayOnly: true }, world);
     await s.endpoint.online();
-    s.endpoint.keep([other]);
+    s.endpoint.keep(Array.isArray(other) ? other : [other]);
     return s;
   }
 
@@ -88,7 +102,7 @@ export class Station {
   #answer(line: string): J {
     const grant = JSON.parse(line).credential as string;
     this.grants.push(grant);
-    return grant.startsWith("ok") ? { ok: true, station: "测试" } : { error: "grant signature invalid" };
+    return grant.startsWith("ok") ? { ok: true, station: "测试", ...(this.lan.length > 0 ? { lan: this.lan } : {}) } : { error: "grant signature invalid" };
   }
 
   async #serve(conn: J, dead: () => boolean): Promise<void> {
@@ -97,6 +111,7 @@ export class Station {
     const carry = { bytes: Buffer.alloc(0) };
     const first = await Station.readLine(control, carry);
     if (first === null) return;
+    this.firsts.push(JSON.parse(first).credential);
     const reply = this.#answer(first);
     await control.write(Buffer.from(`${JSON.stringify(reply)}\n`));
     if (reply.error) {
@@ -120,6 +135,13 @@ export class Station {
       void (async () => {
         const c = { bytes: Buffer.alloc(0) };
         const head = await Station.readLine(stream, c);
+        if (head !== null && JSON.parse(head).screen !== undefined) return this.#view(stream, JSON.parse(head), c.bytes);
+        if (head !== null && JSON.parse(head).adb?.op === "share") {
+          this.offers.push({ conn, head: JSON.parse(head) });
+          await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-ndjson" } })}\n`));
+          await stream.write(Buffer.from(`${JSON.stringify({ serial: "127.0.0.1:37001", adb: "connected", message: "" })}\n`));
+          return;
+        }
         let body = c.bytes;
         for (;;) {
           const chunk = await stream.read();
@@ -150,6 +172,40 @@ export class Station {
         await stream.finish().catch(() => {});
       })().catch(() => {});
     }
+  }
+
+  /// A screen view: answered 200, then frames as the client acknowledges them (pull-driven, as the station's views are).
+  async #view(stream: J, head: J, carry: Buffer): Promise<void> {
+    const view = { head, got: [] as J[], mostUnacked: 0 };
+    this.views.push(view);
+    const frames = [...this.screenFrames];
+    const unacked = new Set<number>();
+    const waiting: { wake: (() => void) | null } = { wake: null };
+    void (async () => {
+      let buf: Uint8Array = new Uint8Array(carry);
+      for (;;) {
+        const chunk = await stream.read().catch(() => null);
+        if (chunk === null) return;
+        const [got, rest] = readClientFrames(new Uint8Array(Buffer.concat([buf, chunk])));
+        buf = rest;
+        for (const f of got) {
+          view.got.push(f);
+          if ("ack" in f) for (const ts of [...unacked]) if (ts <= f.ack) unacked.delete(ts);
+        }
+        waiting.wake?.();
+      }
+    })().catch(() => {});
+    await stream.write(Buffer.from(`${JSON.stringify({ status: 200, headers: { "content-type": "application/x-stillfail-screen" } })}\n`));
+    await stream.write(Buffer.from(configFrame({ codec: "jpeg", width: 640, height: 480 })));
+    for (const frame of frames) {
+      while (unacked.size >= 2) await new Promise<void>((r) => (waiting.wake = r));
+      unacked.add(frame.ts);
+      view.mostUnacked = Math.max(view.mostUnacked, unacked.size);
+      await stream.write(Buffer.from(videoFrame(frame.key, frame.ts, frame.data)));
+    }
+    while (unacked.size > 0) await new Promise<void>((r) => (waiting.wake = r));
+    await stream.write(Buffer.from(stateFrame({ ended: "done" })));
+    await stream.finish().catch(() => {});
   }
 
   async close() {

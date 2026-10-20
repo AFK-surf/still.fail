@@ -3,6 +3,8 @@
 // out of it and woven back in from the station's record of them (hub.rs `post_entries`).
 // - claude: <home>/projects/<cwd>/<id>.jsonl, lines of {type: user|assistant, message: {content: string | blocks}}
 // - codex: <home>/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning | …}
+// - dsh: <home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl, lines of {type: user/message | assistant/message |
+//   tool/result | …, time, data}
 //
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
@@ -11,9 +13,11 @@ import { join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import { tr } from "./spoken.ts";
 import type { Json } from "./store.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
-/// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none.
-export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean };
+/// TimelineEntry as serde writes it: `tool`, `ok`, `callId`, `subagent` left out when none; `brief` when what it says is
+/// cut to what a history shows before it is opened (`brief`).
+export type TimelineEntry = { at: string | null; kind: string; text: string; tool?: string; ok?: boolean; callId?: string; subagent?: boolean; brief?: boolean };
 
 const MAX_TEXT = 4000;
 
@@ -30,6 +34,72 @@ const isObj = (v: Json) => v !== null && typeof v === "object" && !Array.isArray
 /// serde_json's `value.get(key)`: an object's field, else none.
 const get = (v: Json, key: string): Json | undefined => (isObj(v) && Object.hasOwn(v, key) ? v[key] : undefined);
 const stringOf = (v: Json | undefined): string | undefined => (isStr(v) ? v : undefined);
+
+// ---- an entry in brief ----
+
+/// What is whole in brief too: up to this many characters.
+const SMALL = 600;
+/// How much of each field that says what a call does its brief keeps, and of a thought its first line.
+const BRIEF_CHARS = 300;
+/// The fields of a call's input that say what it does: what an execution history names a call by before it is opened,
+/// and a chat's activity says it does (client/core-ts/src/activity.ts doing, history.ts describe, hint, fileOf).
+const SAYING = ["description", "command", "cmd", "file_path", "path", "notebook_path", "pattern", "url", "query", "prompt"];
+/// Calls whole in brief too: what they hold is what a history shows of them (a post, a state, what went to Slack).
+const WHOLE = new Set(["chat_post", "chat_state", "slack_api"]);
+/// Each call's brief, as it was read (from its whole input, not one cut to MAX_TEXT).
+const briefs = new WeakMap<TimelineEntry, string>();
+
+const toolName = (tool: string) => tool.replace(/^(mcp__stillfail__|stillfail__|stillfail\.|mcp__ember__|ember__|ember\.)/, "");
+const firstChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
+
+/// A call's input in brief: of an object, only the fields that say what it does, each cut short; anything else cut short.
+function briefOf(input: Json | undefined): string {
+  if (isObj(input)) {
+    const kept: Record<string, string | string[]> = {};
+    for (const name of SAYING) {
+      const v = get(input, name);
+      if (isStr(v)) kept[name] = firstChars(v, BRIEF_CHARS);
+      else if (Array.isArray(v)) kept[name] = v.filter(isStr).map((p) => firstChars(p, BRIEF_CHARS));
+    }
+    return JSON.stringify(kept);
+  }
+  return firstChars(isStr(input) ? input : JSON.stringify(input ?? null), BRIEF_CHARS);
+}
+
+/// A call entry, its brief kept beside it.
+function withBrief(e: TimelineEntry, input: Json | undefined): TimelineEntry {
+  briefs.set(e, briefOf(input));
+  return e;
+}
+
+/**
+ * An entry as an execution history shows it before it is opened (`brief: true` when anything was left out; the whole of
+ * it is read again by its index when it is): a call by what says what it does, a result without what it gave (Slack's
+ * answer kept to whether it went and its ts), a thought by its first line. What it said or was given, posts, states and
+ * what went to Slack, and anything short, whole.
+ */
+export function brief(e: TimelineEntry): TimelineEntry {
+  if (Array.from(e.text).length <= SMALL) return e;
+  if (e.kind === "tool_call") {
+    if (WHOLE.has(toolName(e.tool ?? ""))) return e;
+    return { ...e, text: briefs.get(e) ?? firstChars(e.text, BRIEF_CHARS), brief: true };
+  }
+  if (e.kind === "tool_result") {
+    let text = "";
+    try {
+      const v = JSON.parse(e.text);
+      if (isObj(v) && typeof v.ok === "boolean") text = JSON.stringify(isStr(v.ts) ? { ok: v.ok, ts: v.ts } : { ok: v.ok });
+    } catch {
+      // Not Slack's answer: nothing of it.
+    }
+    return { ...e, text, brief: true };
+  }
+  if (e.kind === "thinking") {
+    const first = e.text.split("\n").find((l) => trim(l) !== "") ?? "";
+    return { ...e, text: firstChars(trim(first), BRIEF_CHARS), brief: true };
+  }
+  return e;
+}
 
 /// archive.rs `storage`: the file, or its `.zst` once put away.
 const storage = (path: string) => (existsSync(path) ? path : `${path}.zst`);
@@ -56,7 +126,9 @@ const entriesOf = (dir: string): string[] | null => {
 };
 
 /// transcript_path: where a runtime keeps a session's transcript, if it is there.
-export function transcriptPath(runtime: "claude" | "codex", home: string, id: string): string | null {
+export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
+  if (runtime === "dsh") return dshTranscript(home, id);
+  if (runtime === "grok") return grokTranscript(home, id);
   if (runtime === "claude") {
     for (const dir of entriesOf(join(home, "projects")) ?? []) {
       const path = join(home, "projects", dir, `${id}.jsonl`);
@@ -81,6 +153,45 @@ export function transcriptPath(runtime: "claude" | "codex", home: string, id: st
   return find(join(home, "sessions"));
 }
 
+/// dsh's: the session's directory holds one file per format it was written in (session.v<N>.jsonl); the current is the
+/// highest N. Its directory is under one named for its working directory (any).
+function dshTranscript(home: string, id: string): string | null {
+  const root = join(home, "dsh-sessions");
+  for (const dir of entriesOf(root) ?? []) {
+    const files = (entriesOf(join(root, dir, id)) ?? [])
+      .map((name) => [name, /^session\.v(\d+)\.jsonl$/.exec(name)?.[1]] as const)
+      .filter((f): f is readonly [string, string] => f[1] !== undefined)
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+    if (files.length > 0) return join(root, dir, id, files[0]![0]);
+  }
+  return null;
+}
+
+/// Grok Build's: its home's sessions/<working directory, escaped>/<id>/chat_history.jsonl (agents/grok.ts).
+function grokTranscript(home: string, id: string): string | null {
+  const root = join(home, "grok", "sessions");
+  for (const dir of entriesOf(root) ?? []) {
+    const path = join(root, dir, id, "chat_history.jsonl");
+    if (isFile(storage(path))) return path;
+  }
+  return null;
+}
+
+/// The transcripts of a session's runtime sessions (`ids`, the first first, ending with its current one), each looked
+/// for in the homes given (its profile's first): a runtime session that ran on another account may have written into
+/// that account's home (one whose transcript directory is not the shared one, agent-home.ts `linkTranscripts`).
+/// `current` is whether the current one's is there: a runtime writes it only once its conversation has begun.
+export function transcriptPaths(runtime: RuntimeKind, homes: string[], ids: string[]): { paths: string[]; current: boolean } {
+  const found = ids.map((id) => {
+    for (const home of homes) {
+      const path = transcriptPath(runtime, home, id);
+      if (path !== null) return path;
+    }
+    return null;
+  });
+  return { paths: found.filter((p) => p !== null), current: found.at(-1) != null };
+}
+
 function clip(text: string): string {
   const chars = Array.from(text);
   return chars.length > MAX_TEXT ? `${chars.slice(0, MAX_TEXT).join("")}\n… (${chars.length - MAX_TEXT} more characters)` : text;
@@ -94,6 +205,8 @@ function toText(v: Json): string {
   if (Array.isArray(v)) {
     return v
       .map((item) => {
+        // A screenshot a tool gave (the computer tool's): named, not its base64.
+        if (get(item, "type") === "image") return "[image]";
         const text = get(item, "text");
         return text !== undefined ? (isStr(text) ? text : JSON.stringify(text)) : toText(item);
       })
@@ -110,9 +223,106 @@ export type ReadState = { inner: Map<string, number> };
 
 /// A record's timeline entries, read on from `state` (what TranscriptTail keeps between reads): for a reader that takes
 /// a transcript a piece at a time as it grows (src/sessions/live.ts).
-export function timelineOf(runtime: "claude" | "codex", record: Json, state: ReadState, out: TimelineEntry[]): void {
+export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState, out: TimelineEntry[]): void {
   if (runtime === "claude") claudeTimeline(record, state, out);
+  else if (runtime === "dsh") dshTimeline(record, out);
+  else if (runtime === "grok") grokTimeline(record, out);
   else codexTimeline(record, state, out);
+}
+
+/// What a dsh content part says: its text, an image named.
+const dshText = (content: Json): string =>
+  (Array.isArray(content) ? content : [])
+    .map((c) => (get(c, "type") === "image" ? "[image]" : (stringOf(get(c, "text")) ?? "")))
+    .filter((t) => t !== "")
+    .join("\n");
+
+function dshTimeline(r: Json, out: TimelineEntry[]) {
+  const kind = stringOf(get(r, "type")) ?? "";
+  const time = get(r, "time");
+  const at = typeof time === "number" && Number.isFinite(time) ? new Date(time).toISOString() : null;
+  const data = get(r, "data");
+  const message = get(data, "message") ?? data;
+  if (kind === "user/message") {
+    // What a person (the station) said, not the context dsh adds as a user's message.
+    if (get(get(data, "source"), "kind") !== "user") return;
+    const text = dshText(get(data, "content"));
+    if (trim(text) !== "") out.push({ at, kind: "user", text: clip(text) });
+  } else if (kind === "assistant/message") {
+    for (const block of Array.isArray(get(message, "content")) ? get(message, "content") : []) {
+      const type = stringOf(get(block, "type"));
+      const text = stringOf(get(block, "text")) ?? "";
+      if (type === "text" && trim(text) !== "") out.push({ at, kind: "assistant", text: clip(text) });
+      else if (type === "reasoning" && trim(text) !== "") out.push({ at, kind: "thinking", text: clip(text) });
+      else if (type === "tool-call") {
+        const name = stringOf(get(block, "name")) ?? "";
+        const raw = stringOf(get(block, "arguments")) ?? "";
+        let input: Json = raw;
+        let args = raw;
+        try {
+          input = JSON.parse(raw);
+          args = pretty(input);
+        } catch {}
+        const e: TimelineEntry = { at, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+        const id = stringOf(get(block, "id"));
+        if (id !== undefined) e.callId = id;
+        out.push(withBrief(e, input));
+      }
+    }
+  } else if (kind === "tool/result") {
+    const e: TimelineEntry = { at, kind: "tool_result", text: clip(dshText(get(message, "content"))), ok: get(message, "isError") !== true };
+    const id = stringOf(get(message, "toolCallId"));
+    if (id !== undefined) e.callId = id;
+    out.push(e);
+  }
+}
+
+/// What a person said as Grok Build keeps it: in a <user_query> it wraps it in.
+const grokQuery = (text: string): string => {
+  const m = /^\s*<user_query>\n?([\s\S]*?)\n?<\/user_query>\s*$/.exec(text);
+  return m ? m[1]! : text;
+};
+
+/// Grok Build's chat_history.jsonl: a line a message (system, user, reasoning, assistant with its tool calls,
+/// tool_result), with no time of its own.
+function grokTimeline(r: Json, out: TimelineEntry[]) {
+  const kind = stringOf(get(r, "type")) ?? "";
+  const content = get(r, "content");
+  if (kind === "user") {
+    // What the station said (a prompt), not the context Grok Build adds as a user's message.
+    if (get(r, "synthetic_reason") !== undefined || get(r, "prompt_index") === undefined) return;
+    const text = grokQuery(isStr(content) ? content : dshText(content));
+    if (trim(text) !== "") out.push({ at: null, kind: "user", text: clip(text) });
+  } else if (kind === "reasoning") {
+    const text = (Array.isArray(get(r, "summary")) ? get(r, "summary") : []).map((s: Json) => stringOf(get(s, "text")) ?? "").filter((t: string) => t !== "").join("\n\n");
+    if (trim(text) !== "") out.push({ at: null, kind: "thinking", text: clip(text) });
+  } else if (kind === "assistant") {
+    const text = isStr(content) ? content : dshText(content);
+    if (trim(text) !== "") out.push({ at: null, kind: "assistant", text: clip(text) });
+    for (const call of Array.isArray(get(r, "tool_calls")) ? get(r, "tool_calls") : []) {
+      let name = stringOf(get(call, "name")) ?? "";
+      const raw = stringOf(get(call, "arguments")) ?? "";
+      let input: Json = raw;
+      let args = raw;
+      try {
+        input = JSON.parse(raw);
+        // An MCP server's tool, reached through its use_tool: named as the tool itself, as Claude Code names one
+        // (mcp__server__tool; agents/live.ts acpCall).
+        if (name === "use_tool" && isStr(get(input, "tool_name"))) [name, input] = [`mcp__${get(input, "tool_name")}`, get(input, "tool_input") ?? {}];
+        args = pretty(input);
+      } catch {}
+      const e: TimelineEntry = { at: null, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+      const id = stringOf(get(call, "id"));
+      if (id !== undefined) e.callId = id;
+      out.push(withBrief(e, input));
+    }
+  } else if (kind === "tool_result") {
+    const text = isStr(content) ? content : toText(content ?? null);
+    const e: TimelineEntry = { at: null, kind: "tool_result", text: clip(text), ok: get(r, "is_error") !== true };
+    const id = stringOf(get(r, "tool_call_id"));
+    if (id !== undefined) e.callId = id;
+    out.push(e);
+  }
 }
 
 function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
@@ -159,7 +369,7 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
         const name = stringOf(get(block, "name")) ?? "";
         const id = stringOf(get(block, "id"));
         const input = pretty(get(block, "input") ?? null);
-        out.push(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }));
+        out.push(withBrief(withFields(entry("tool_call", isPosting(name) ? input : clip(input)), { tool: name, callId: id }), get(block, "input")));
         break;
       }
       case "tool_result": {
@@ -257,11 +467,11 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     // call them.
     const script = stringOf(get(p, "input")) ?? "";
     const [calls, only] = scriptCalls(script);
-    if (!only) out.push(call("exec", callId, clip(script)));
+    if (!only) out.push(withBrief(call("exec", callId, clip(script)), script));
     calls.forEach(([tool, args], i) => {
       // The script's output answers its first call when the script is nothing but calls.
       const id = callId === undefined ? undefined : only && i === 0 ? callId : `${callId}#${i}`;
-      out.push(call(tool, id, isPosting(tool) ? pretty(args) : clip(pretty(args))));
+      out.push(withBrief(call(tool, id, isPosting(tool) ? pretty(args) : clip(pretty(args))), args));
     });
     // Calls taken out of a script that does more: they are done when the script is.
     if (!only && callId !== undefined && calls.length > 0) state.inner.set(callId, calls.length);
@@ -272,12 +482,14 @@ function codexTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     const raw = given === undefined ? "" : isStr(given) ? given : JSON.stringify(given);
     // Not JSON (custom tools take free text): shown as is.
     let args: string;
+    let input: Json = raw;
     try {
-      args = pretty(JSON.parse(raw));
+      input = JSON.parse(raw);
+      args = pretty(input);
     } catch {
       args = raw;
     }
-    out.push(call(name, callId, isPosting(name) ? args : clip(args)));
+    out.push(withBrief(call(name, callId, isPosting(name) ? args : clip(args)), input));
     return;
   }
   if (kind === "function_call_output" || kind === "custom_tool_call_output") {
@@ -590,7 +802,7 @@ function readFileOf(path: string): Buffer {
 
 /// TranscriptTail::read from the start: the timeline entries of every whole line (one still being written waits). Read
 /// a piece at a time, so a long transcript is never one string.
-export function readTimeline(runtime: "claude" | "codex", path: string): TimelineEntry[] {
+export function readTimeline(runtime: RuntimeKind, path: string): TimelineEntry[] {
   const source = transcriptBytes(path);
   if (source === null) return [];
   const out: TimelineEntry[] = [];
@@ -605,8 +817,7 @@ export function readTimeline(runtime: "claude" | "codex", path: string): Timelin
     } catch {
       return;
     }
-    if (runtime === "claude") claudeTimeline(record, state, out);
-    else codexTimeline(record, state, out);
+    timelineOf(runtime, record, state, out);
   };
   const lines = (chunk: Buffer, carry: Buffer): Buffer => {
     let data: Buffer = carry.length > 0 ? Buffer.concat([carry, chunk]) : chunk;

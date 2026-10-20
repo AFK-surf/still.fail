@@ -1,12 +1,15 @@
 // The page's way to the core's utility process (web/src/core/client.ts,
 // desktopOpener). A MessagePort cannot cross the context bridge, so it comes
 // to the page as a window message, tagged with the id the page asked with.
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 const desktop = {
   openCore: (id: number) => ipcRenderer.send("core:open", id),
   /** The host a station's web service is shown at (stillfail-preview://<host>/): see main.ts, previews. */
   previewHost: (station: string, port: number): Promise<string | null> => ipcRenderer.invoke("preview:host", station, port),
+  /** A drive's file to play as it comes, at the URL given (stillfail-drive://), and letting it go: see main.ts, drive. */
+  driveOpen: (file: { station: string; root: string; path: string; size: number; type: string }): Promise<string | null> => ipcRenderer.invoke("drive:open", file),
+  driveClose: (url: string) => ipcRenderer.send("drive:close", url),
   /** The page is in a workspace, reached as `account`: this machine's station may join it (see main.ts). */
   inWorkspace: (account: string, workspace: string) => ipcRenderer.send("station:workspace", account, workspace),
   /** The station the app carries: where it stands, and joining it to a workspace when asked to (main.ts, station:join). */
@@ -14,8 +17,36 @@ const desktop = {
     state: (): Promise<unknown> => ipcRenderer.invoke("station:state"),
     join: (account: string, workspace: string): Promise<unknown> => ipcRenderer.invoke("station:join", account, workspace),
   },
+  /** This machine's station whoever runs it: where it stands, and starting, stopping, updating it (main.ts, station:local). */
+  local: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("station:local"),
+    act: (action: string): Promise<unknown> => ipcRenderer.invoke("station:act", action),
+  },
+  /** A file or directory of this machine (its station's) shown in Finder: a directory opened, a file selected in its own (main.ts). */
+  reveal: (path: string): Promise<boolean> => ipcRenderer.invoke("file:reveal", path),
+  /** Where a file dropped from Finder is on this machine: named by its path in a chat (web/src/Chat.tsx). */
+  pathOf: (file: File): string => { try { return webUtils.getPathForFile(file); } catch { return ""; } },
   /** The cloud's origin: its links (https://…/o/…) are the app's own. */
   cloudOrigin: ipcRenderer.sendSync("app:cloud-origin") as string,
+  /**
+   * The window's frame (main.ts open): `inset` (macOS) and `custom` (Windows; `overlay` as a native fallback) have no
+   * title bar, the buttons in the page's top row, which drags it (web/index.html data-desktop); `system` (a page
+   * in a window of its own, Linux) has the system's title bar over the page.
+   */
+  frame: ipcRenderer.sendSync("app:frame") as "inset" | "overlay" | "custom" | "system",
+  /** Self-drawn Windows controls; only their maximize hit target is native (Snap Layouts). */
+  windowControls: {
+    state: (): Promise<unknown> => ipcRenderer.invoke("window:state"),
+    action: (action: string) => ipcRenderer.send("window:action", action),
+    bounds: (rect: number[] | null) => ipcRenderer.send("window:bounds", rect),
+    watch: (listener: (state: unknown) => void): (() => void) => {
+      const on = (_event: unknown, state: unknown) => listener(state);
+      ipcRenderer.on("window:state", on);
+      return () => ipcRenderer.off("window:state", on);
+    },
+  },
+  /** The colours of the window's buttons (`overlay`): the page's top row under them, and their symbols (main.ts). */
+  windowColors: (color: string, symbolColor: string) => ipcRenderer.send("window:colors", color, symbolColor),
   /** This build's version (0.1.<commits>). */
   version: ipcRenderer.sendSync("app:version") as string,
   /** The beta app (「youdid.wtf」, beside the released one: main.ts BETA). */
@@ -36,10 +67,39 @@ const desktop = {
     /** Asks for a newer build now: what it found (main.ts, UpdateCheck). */
     check: (): Promise<unknown> => ipcRenderer.invoke("update:check"),
   },
+  /** The dock on the screen's edge (main.ts, dock.mts): its settings, null where it cannot run. */
+  dock: {
+    get: (): Promise<unknown> => ipcRenderer.invoke("dock:get"),
+    set: (settings: unknown): Promise<unknown> => ipcRenderer.invoke("dock:set", settings),
+  },
   /** Whether the app tells about the chats (its main process shows the notices: main.ts). */
   notify: {
     get: (): Promise<boolean | null> => ipcRenderer.invoke("notify:get"),
     set: (on: boolean): Promise<void> => ipcRenderer.invoke("notify:set", on),
+    /** Opens the system's notification settings for the app. */
+    settings: (): Promise<void> => ipcRenderer.invoke("notify:settings"),
+    /** What the system allows now (said to the core too). */
+    check: (): Promise<string | null> => ipcRenderer.invoke("notify:check"),
+    /** Has the system ask the person, when it has not yet. */
+    request: (): Promise<void> => ipcRenderer.invoke("notify:request"),
+  },
+  /** macOS's Local Network for the app (main.ts, local-network.ts). */
+  localNetwork: {
+    /** Whether it may reach the LAN it is on: granted, denied, or unknown (no LAN, not a Mac). */
+    check: (): Promise<string> => ipcRenderer.invoke("lan:check"),
+    /** Whether it is kept from a station at these LAN addresses (`ip:port`). */
+    kept: (addrs: string[]): Promise<boolean> => ipcRenderer.invoke("lan:kept", addrs),
+    /** Opens System Settings' Local Network list. */
+    settings: (): Promise<void> => ipcRenderer.invoke("lan:settings"),
+  },
+  /** The menu bar's items for the page's actions (main.ts setMenu, web/src/keymap.ts): their keys and which can be done now, and one chosen. */
+  menu: {
+    state: (state: unknown) => ipcRenderer.send("menu:state", state),
+    onAction: (listener: (action: string) => void): (() => void) => {
+      const on = (_event: unknown, action: string) => listener(action);
+      ipcRenderer.on("menu:action", on);
+      return () => ipcRenderer.off("menu:action", on);
+    },
   },
   /** The computer woke from sleep after `away` ms (main.ts): the page's core gives up what is under way (client.ts). */
   onResume: (listener: (away: number) => void): (() => void) => {

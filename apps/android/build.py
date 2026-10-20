@@ -90,10 +90,16 @@ def main():
     if engine:
         for name in ENGINE:
             shutil.copy2(engine / name, jni / name)
-    # The core: bundled for Hermes and compiled to its bytecode (client/core-ts/scripts/hermes-bundle.ts).
-    core = CLIENT / "core-ts"
-    run(["pnpm", "install", "--frozen-lockfile", "--silent"], env, cwd=core)
-    run(["node", "scripts/hermes-bundle.ts", str(generated / "core.js"), str(assets / "core.hbc")], dict(env, HERMESC=str(hermesc(env))), cwd=core)
+    # The core: bundled for Hermes and compiled to its bytecode (client/core-ts/scripts/hermes-bundle.ts). Lint alone (CI's
+    # check-android-lint) gets an empty stand-in, the same every run: lint cannot read the bytecode, but :core's assets are
+    # in every module's lint inputs, and the core's next bytecode linted all six anew (~3 minutes on CI, 2026-10-18).
+    lint_only = bool(args.tasks) and all(task.rsplit(":", 1)[-1].startswith("lint") for task in args.tasks)
+    if lint_only:
+        (assets / "core.hbc").write_bytes(b"")
+    else:
+        core = CLIENT / "core-ts"
+        run(["pnpm", "install", "--frozen-lockfile", "--silent"], env, cwd=core)
+        run(["node", "scripts/hermes-bundle.ts", str(generated / "core.js"), str(assets / "core.hbc")], dict(env, HERMESC=str(hermesc(env))), cwd=core)
 
     if args.tasks:
         run([str(APP / "gradlew"), "-p", str(APP), *(["-PstillfailBeta"] if args.beta else []), *([] if cmake else ["-PstillfailPrebuiltEngine"]), *args.tasks], env)

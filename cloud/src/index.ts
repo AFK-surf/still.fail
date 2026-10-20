@@ -5,11 +5,13 @@
 // connection and serves no page. Each host has an old name too (ember.3720.org, admin.ember.3720.org: the
 // *_ORIGIN_ALIASES, compat.ts), answered the same; links, and signing in with Google, use the new ones.
 import { installScript, releaseType } from "./install.ts";
+import { windowsInstallScript } from "./install-windows.ts";
 import { requestLang, tr } from "./i18n.ts";
 import { latestDownload, serveRelease } from "./releases.ts";
 import { appleConfigured } from "./apple";
 import { authConfigured, sessionConfigured, randomSecret, bearerToken, denied, digest, readJson, reply, validId, validSecret, verifyToken } from "./auth";
 import { devicePage, googleStart, consumeLoginRate } from "./login";
+import { passwordSignIn } from "./password";
 import { adminOrigins, betaOrigin, header, publicOrigins } from "./compat";
 import type { Env } from "./env";
 import { adminApi, api, blockAccount, socketToken } from "./api";
@@ -18,6 +20,8 @@ export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
+export { RelayLoad } from "./relay-load";
+import { sampleOwnRelay } from "./relay-load";
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -57,6 +61,10 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts).
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sampleOwnRelay(env));
+  },
 } satisfies ExportedHandler<Env>;
 
 async function handle(request: Request, env: Env): Promise<Response> {
@@ -74,13 +82,14 @@ async function handle(request: Request, env: Env): Promise<Response> {
   if ((onPublic || onBeta) && request.method === "GET") {
     const channel = url.searchParams.get("channel") === "beta" || (onBeta && url.searchParams.get("channel") !== "stable") ? "beta" : "stable";
     if (path === "/install.sh") return new Response(installScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/x-shellscript; charset=utf-8", "cache-control": "no-store" } });
+    if (path === "/install.ps1") return new Response(windowsInstallScript(env.PUBLIC_ORIGIN, channel, requestLang(request)), { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     const release = /^\/releases\/(.+)$/.exec(path)?.[1];
     const type = release ? releaseType(release) : null;
     if (release && type) {
       return serveRelease(request, env.RELEASES, release, type);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
-    const app = /^\/releases\/latest\/(mac|android|mac-beta|android-beta)$/.exec(path)?.[1];
+    const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui)$/.exec(path)?.[1];
     if (app) {
       const file = await latestDownload(env.RELEASES, app);
       if (!file || !releaseType(file)) return notFound();
@@ -126,6 +135,9 @@ async function handle(request: Request, env: Env): Promise<Response> {
     const lang = requestLang(request);
     return devicePage(lang, tr(lang, "cloud.login.complete.title"), `<p>${tr(lang, "cloud.login.complete.body")}</p>`);
   }
+  // The sign-in page's forms (Google, or a code sent to an email: login.ts `choose`).
+  const choice = /^\/v1\/auth\/login\/([A-Za-z0-9_-]{43})$/.exec(path);
+  if (choice && request.method === "POST") return env.LOGINS.getByName(choice[1]!).choose(choice[1]!, request);
   const device = /^\/v1\/auth\/device\/([A-Za-z0-9_-]{43})$/.exec(path);
   if (device && (request.method === "GET" || request.method === "POST")) {
     return env.LOGINS.getByName(device[1]).authorizeDevice(device[1], request);
@@ -161,6 +173,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return reply({ error: "invalid_request" }, 400);
     }
   }
+  if (path === "/v1/auth/password" && request.method === "POST") return passwordSignIn(env, request);
   if ((path === "/v1/auth/refresh" || path === "/v1/auth/logout") && request.method === "POST") {
     try {
       const token = bearerToken(request);

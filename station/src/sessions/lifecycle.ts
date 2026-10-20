@@ -2,10 +2,10 @@
 // add_to_thread, say, bind_single, configure, archive, archive_chat, auto_archive, delete_session,
 // continue_machine_session). Archiving here is the record (archived, hidden) and what goes with it (the process ends,
 // other stations are told); packing an archived session's files is the hub's ColdStorage.
-import { copyFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
-import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
+import { PlaceRefused } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import { type MachineSession, type Roots, rolloutOf, rolloutsIn } from "../read/machine.ts";
@@ -29,6 +29,8 @@ export type NewChat = {
   createdBy: string;
   /// The key the asking client knows it by until it is made (`clientKey`): the sidebar's rows say it for a while.
   clientKey?: string | null;
+  /// The workspace its chat is in (the asker's, or the opening session's); absent: the station's home one.
+  ws?: string | null;
 };
 
 const trimmed = (v: string | null | undefined) => {
@@ -51,6 +53,9 @@ export function bindSingle(hub: Hub, connectId: string, target: string | null, t
   const row = hub.store.getSession(target);
   if (!row) throw new Error(`unknown session ${target}`);
   if (row.runtime !== connect.bind.runtime) throw new Error(`session ${target} runs ${row.runtime}, the connect runs ${connect.bind.runtime}`);
+  // A connect's sessions are its workspace's chats (docs/multi-workspace.md): none of another workspace.
+  const home = hub.workspaces()[0] ?? null;
+  if (home !== null && hub.wsOf(row) !== (connect.workspace ?? home)) throw new Error(`session ${target} is in another workspace than the connect`);
   hub.store.setBinding(connect.id, target);
   log.info("hub", "single-session connect rebound", { connect: connect.id, session: target });
   return target;
@@ -79,7 +84,12 @@ function stillfailChat(hub: Hub, thread: number): ThreadRow {
 /// Brings another session into a chat on the station's pages; it hears what is said from then on.
 export function addToThread(hub: Hub, thread: number, session: string) {
   stillfailChat(hub, thread);
-  if (hub.store.getSession(session) === null) throw new Error(`unknown session ${session}`);
+  const row = hub.store.getSession(session);
+  if (row === null) throw new Error(`unknown session ${session}`);
+  // A chat is one workspace's (docs/multi-workspace.md): no session of another joins it. Outside any workspace, all are
+  // the same one's.
+  const there = hub.store.threadSessions(thread)[0];
+  if (hub.workspaces().length > 0 && there !== undefined && hub.wsOf(there.session) !== hub.wsOf(row)) throw new Error(`session ${session} is in another workspace than the chat`);
   hub.store.joinThread(thread, session, INTERNAL_CONNECT);
 }
 
@@ -87,6 +97,7 @@ export function addToThread(hub: Hub, thread: number, session: string) {
 /// session in the chat, like a Slack message. `client`: the app it was sent from, as it said. Its entry number.
 export function say(hub: Hub, thread: number, user: string, text: string, attachments: Attachment[] = [], quotes: Quote[] = [], client: string | null = null): number {
   stillfailChat(hub, thread);
+  if (hub.store.manuallyArchived(thread)) throw new Error(tr(stationLang(), "station.chat.archived"));
   const [n] = hub.store.insertMessage({ thread, ts: hub.nextTs(), authorKind: "person", author: user, text, attachments, quotes, client });
   const sessions = hub.store.threadSessions(thread).map((m) => m.session);
   hub.deliver(thread, n, sessions, text);
@@ -94,23 +105,30 @@ export function say(hub: Hub, thread: number, user: string, text: string, attach
 }
 
 /// A session of its own, talked to in the station's chat: the runtime, model and effort chosen by whoever starts it
-/// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on.
+/// rather than a connect's, and the profile: one given keeps it there; else the pool picks one with the model on. Only
+/// the profiles allowed in its workspace (docs/multi-workspace.md).
 export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang()): [string, ThreadRow] {
   const config = hub.config();
   const runtime = options.runtime;
-  const profiles = config.profiles.filter((p) => p.runtimes.includes(runtime));
-  if (profiles.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const all = config.profiles.filter((p) => p.runtimes.includes(runtime));
+  if (all.length === 0) throw new Error(`no ${runtime} profile configured`);
+  const here = new Set(hub.profilesIn(options.ws ?? null).map((p) => p.id));
+  const profiles = all.filter((p) => here.has(p.id));
+  if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfileHere", { runtime: runtimeTitle(runtime) }));
   const model = trimmed(options.model);
   const pinned = options.profile ?? null;
   let profile;
   if (pinned !== null) {
     profile = profiles.find((p) => p.id === pinned);
-    if (!profile) throw new Error(`no ${runtime} profile ${pinned}`);
+    if (!profile) {
+      const there = all.find((p) => p.id === pinned);
+      throw new Error(there ? tr(lang, "station.profile.notHere", { profile: there.name }) : `no ${runtime} profile ${pinned}`);
+    }
     if (model !== null && !runs(profile, model)) throw new Error(tr(lang, "station.profile.modelOff", { profile: profile.name, model }));
   } else profile = hub.accounts.pick(profiles, model, true);
   const effort = options.effort ? options.effort : null;
   if (effort !== null) {
-    const allowed = hub.accounts.modelEfforts(runtime, model, pinned);
+    const allowed = hub.accounts.modelEfforts(runtime, model, pinned, (p) => here.has(p.id));
     if (!allowed.includes(effort)) throw new Error(`effort must be one of ${allowed.join(", ")}`);
   }
   const key = newChatKey();
@@ -143,6 +161,7 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
     token: newToken(),
     createdAt: now,
     lastActiveAt: now,
+    ws: options.ws ?? null,
   });
   log.info("hub", "session created", { session: key, connect: INTERNAL_CONNECT, runtime, profile: profile.id, model });
   return [key, openChat(hub, key, options.createdBy, title)];
@@ -150,17 +169,17 @@ export function newSession(hub: Hub, options: NewChat, lang: Lang = stationLang(
 
 /// Changes how a session runs from its next turn on: another profile of its runtime (another account, say), another
 /// model it can run, another effort. Its transcript is shared by the runtime's profiles, so the next message resumes it
-/// with all it had; its idle process ends first so the change takes. Not while a turn runs. Another model starts over
+/// with all it had; its process ends so the change takes: at once when idle, else when the running turn is over, before
+/// the next one starts (nobody waits for the turn to end to change it). Another model starts over
 /// what went with the old one: its effort back to the runtime's default, its profile back to the station's choice
 /// (picked here, among those with the model enabled), unless given with it.
 export async function configure(hub: Hub, key: string, change: SessionChange, lang: Lang = stationLang()) {
   const { row, model, effort, profile } = hub.accounts.change(key, change, lang);
-  if (hub.processState(key) === "running") throw new Error(tr(lang, "station.session.busy"));
-  await hub.evict(key);
   if (profile !== undefined) hub.store.setSessionProfile(key, profile ?? row.profile, profile !== null);
   if (model !== row.model || effort !== row.effort) hub.store.setSessionModel(key, model, effort);
   if (change.fast !== undefined) hub.store.setSessionFast(key, change.fast);
   if (profile === null) hub.accounts.runOn(key);
+  await hub.changed(key);
   log.info("hub", "session changed", { session: key, profile: hub.store.getSession(key)?.profile ?? "", model, effort });
   // Its last turn stopped at the allowance: changed, it goes on by itself.
   const last = hub.store.lastTurn(key);
@@ -187,7 +206,10 @@ export function archiveBy(hub: Hub, key: string, archived: boolean, by: string):
   hub.store.setArchived(key, archived, by);
   hub.closed(key);
   const actor = hub.actor(row);
-  void actor.evict().then(() => actor.cleanArchive());
+  void actor
+    .putAway()
+    .then(() => actor.evict())
+    .then(() => actor.cleanArchive());
 }
 
 /// Hides a session from lists, or shows it again, by hand.
@@ -201,42 +223,85 @@ export function archiveChat(hub: Hub, thread: number, archived: boolean): void |
   hub.store.setThreadHidden(thread, archived, MANUAL);
 }
 
+/// Empties the workspaces of sessions archived past archivedWorkspaceMs, one after another: each keeps the files sent in
+/// its chat, its history and its transcripts (cold.ts `expire`). Returns when the next one archived comes due (null:
+/// none, or off).
+export async function expireArchived(hub: Hub, now: number): Promise<number | null> {
+  const after = hub.config().archivedWorkspaceMs;
+  const { cold } = hub;
+  if (after <= 0 || !cold.expire || !cold.holdsMore) return null;
+  let next: number | null = null;
+  for (const s of hub.store.listSessions()) {
+    if (s.archivedAt === null) continue;
+    const due = s.archivedAt + after;
+    if (due > now) {
+      if (next === null || due < next) next = due;
+      continue;
+    }
+    try {
+      if (await cold.holdsMore(s.key)) await cold.expire(s.key, now - after);
+    } catch (error) {
+      log.warn("hub", "the workspace of a long-archived session was not emptied", { session: s.key, error: (error as Error).message });
+    }
+  }
+  return next;
+}
+
 /// Archives what has idled past autoArchiveMs (counted from its last activity, or from being shown again by hand) and is
 /// done: nothing running or waiting to be heard, no background job or service of its own still up (a watch above all),
 /// not stopped at a block for someone, nothing its chat's starter has not read, and no single-session connect feeding
-/// it. Anything new said brings it back.
-export function autoArchive(hub: Hub, now: number) {
+/// it. Anything new said brings it back. Returns when the next one not idle long enough yet will have (null: none, or
+/// auto-archiving off): what is idle but not done by now is not on a clock, so it is looked at again after a while.
+/// A session heard only in Slack goes after slackArchiveMs even when stopped at a block: nobody answers it from here.
+/// With autoArchiveReviewed, the rest goes only once the archive review recommended each of its chats.
+export function autoArchive(hub: Hub, now: number): number | null {
   const { store } = hub;
-  const after = hub.config().autoArchiveMs;
-  if (after <= 0) return;
-  const idle = (at: (number | null | undefined)[]) => now - Math.max(0, ...at.filter((x): x is number => typeof x === "number")) >= after;
+  const { autoArchiveMs: after, slackArchiveMs, autoArchiveReviewed, automaticDecisions } = hub.config();
+  if (after <= 0 && slackArchiveMs <= 0) return null;
+  let next: number | null = null;
+  const idle = (at: (number | null | undefined)[], wait = after) => {
+    if (wait <= 0) return false;
+    const due = Math.max(0, ...at.filter((x): x is number => typeof x === "number")) + wait;
+    if (due > now && (next === null || due < next)) next = due;
+    return due <= now;
+  };
   const unread = (t: ThreadRow) => t.createdBy !== null && t.surface === STILLFAIL_SURFACE && store.unreadCount(t.createdBy, t.id) > 0;
   const bound = store.listBindings();
   const stats = store.sessionStats(null);
   const jobs = new Set(store.listJobs(null).filter((j) => j.state === "running" || (j.port !== null && j.state === "exited")).map((j) => j.sessionKey));
-  const busy = (key: string) => {
+  const working = (key: string) => {
     const row = store.getSession(key);
     if (!row) return true;
     const stat = stats.get(key);
     const last = stat?.lastTurn ?? null;
-    return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && (last.declared === "block" || last.endedAt === null));
+    return row.running || jobs.has(key) || hub.processState(key) === "running" || (stat?.pending ?? 0) > 0 || (last !== null && last.endedAt === null);
   };
+  const busy = (key: string) => working(key) || stats.get(key)?.lastTurn?.declared === "block";
   // A chat someone pinned stays in the lists until put away by hand.
   const pinned = store.pinnedSessions();
   const kept = store.keptChats(null);
+  // Where only what the archive review recommended goes (`autoArchiveReviewed`): none while the review is off.
+  const recommended = (thread: number) => !autoArchiveReviewed || (automaticDecisions.completion.enabled && store.archiveSuggested(thread));
   for (const s of store.listSessions()) {
-    if (s.archivedAt !== null || !idle([s.lastActiveAt, s.shownAt]) || bound.has(s.key) || pinned.has(s.key) || busy(s.key)) continue;
-    if (store.sessionThreads(s.key).some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
+    if (s.archivedAt !== null || bound.has(s.key) || pinned.has(s.key)) continue;
+    const threads = store.sessionThreads(s.key);
+    const slack = threads.length > 0 && threads.every((t) => t.thread.surface !== STILLFAIL_SURFACE);
+    const done = idle([s.lastActiveAt, s.shownAt]) && !busy(s.key);
+    const lingering = slack && idle([s.lastActiveAt, s.shownAt], slackArchiveMs) && !working(s.key);
+    if (!done && !lingering) continue;
+    if (!lingering && !threads.every((t) => recommended(t.thread.id))) continue;
+    if (threads.some((t) => kept.has(t.thread.id) || unread(t.thread))) continue;
     log.info("hub", "archiving an idle session", { session: s.key });
     archiveBy(hub, s.key, true, AUTO);
   }
   for (const t of store.chatsOfTheirOwn()) {
     const said = store.lastMessage(t.id)?.createdAt ?? null;
-    if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t)) continue;
+    if (kept.has(t.id) || !idle([t.createdAt, said, t.shownAt]) || unread(t) || !recommended(t.id)) continue;
     if (store.threadSessions(t.id).some((m) => pinned.has(m.session) || busy(m.session))) continue;
     log.info("hub", "archiving an idle chat", { thread: t.id });
     store.setThreadHidden(t.id, true, AUTO);
   }
+  return next;
 }
 
 /// Deletes a session: its process ends, its rows go (with the threads only it was in) and its workspace directory and
@@ -295,8 +360,9 @@ function copyTranscript(roots: Roots, session: MachineSession, shared: string): 
 /// copied into the shared transcripts (the original is left as it was, and can go on in the terminal on its own); the
 /// new session resumes it, running in the directory it ran in. The chat starts with a note of where it came from,
 /// linking to the session's execution history, which shows what was said before (it is not copied into the chat). A
-/// session already going on with it is that one's chat, brought back if archived.
-export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang()): [string, ThreadRow] {
+/// session already going on with it is that one's chat, brought back if archived. `ws`: the workspace the new chat is in
+/// (null: the home one's).
+export async function continueMachineSession(hub: Hub, roots: Roots, found: MachineSession, createdBy: string, lang: Lang = stationLang(), ws: string | null = null): Promise<[string, ThreadRow]> {
   const { store } = hub;
   const runtime = found.runtime;
   // One it went on in (a runtime session left for a new one included).
@@ -313,10 +379,22 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
       return [going.key, thread];
     }
   }
-  if (!(statSync(found.cwd, { throwIfNoEntry: false })?.isDirectory() ?? false)) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
-  if (unreadableDir(found.cwd)) throw new Error(unreadableDirMessage(lang, found.cwd));
+  // Looked at as ops/places.ts does: never on this thread in a folder macOS protects (still.fail Helper asked instead).
+  try {
+    await hub.places.directory(found.cwd, { lang });
+  } catch (e) {
+    if (e instanceof PlaceRefused && (e.code === "gone" || e.code === "not_a_directory")) throw new Error(tr(lang, "station.session.cwdGone", { cwd: found.cwd }));
+    throw e;
+  }
+  // Looked at again, in case it was continued meanwhile.
+  const already = store.listSessions().find((r) => r.runtime === runtime && store.runtimeSessions(r.key).includes(found.id));
+  if (already) {
+    const thread = store.homeChat(already.key);
+    if (thread) return [already.key, thread];
+  }
   const config = hub.config();
-  const profiles = config.profiles.filter((p) => p.runtimes.includes(runtime));
+  // On the profiles the chat's workspace runs on.
+  const profiles = hub.profilesIn(ws).filter((p) => p.runtimes.includes(runtime));
   if (profiles.length === 0) throw new Error(tr(lang, "station.session.noProfile", { runtime: runtimeTitle(runtime) }));
   // The model it ran, where a profile has it enabled; else the one picked runs its own.
   const keptModel = found.model !== null && profiles.some((p) => p.models.includes(found.model!)) ? found.model : null;
@@ -353,6 +431,7 @@ export function continueMachineSession(hub: Hub, roots: Roots, found: MachineSes
     token: newToken(),
     createdAt: now,
     lastActiveAt: now,
+    ...(ws !== null ? { ws } : {}),
   });
   log.info("hub", "session continued from the machine's own", { session: key, runtime, profile: profile.id, from: found.id, cwd: found.cwd });
   const thread = openChat(hub, key, createdBy, title);

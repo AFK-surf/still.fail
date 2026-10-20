@@ -5,7 +5,7 @@ import { useEffect, useId } from "react";
 import { useCall, useTopic } from "./core/react.ts";
 import type { ProfileFlowView } from "./core/shapes.ts";
 import { useDoing } from "./doing.ts";
-import { useAct } from "./toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { t } from "./i18n.ts";
 
 export function useProfileFlow(station: string) {

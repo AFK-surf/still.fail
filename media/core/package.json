@@ -1,0 +1,11 @@
+{
+  "name": "@stillfail/media-core",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node ../../scripts/native.ts run mesh -- node --test --test-force-exit test/*.test.ts"
+  },
+  "dependencies": {
+    "effect": "link:../../client/core-ts/node_modules/effect"
+  }
+}

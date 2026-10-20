@@ -57,10 +57,19 @@ export function ofMessage(m: J): J | null {
 export function cardShown(card: J): J {
   const v: J = { type: kind(card) };
   for (const field of ["assignee", "assigneeText"]) if (get(card, field) !== undefined) v[field] = card[field];
+  // An agent's request for a vault item: its id, for an app to approve it (docs/vault.md).
+  const request = trimmed(get(get(card, "vault"), "request"));
+  if (request !== null) v.vault = request;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
     if (p !== null) v.placeholder = p;
+  } else if (kind(card) === "login") {
+    // A login a person finishes from the card (docs/remote-login.md): its id, and its station when another's.
+    const login = trimmed(get(card, "login"));
+    const station = trimmed(get(card, "station"));
+    if (login !== null) v.login = login;
+    if (station !== null) v.station = station;
   }
   return v;
 }
@@ -77,6 +86,25 @@ export function forViewer(row: J, me: J): J | null {
   return who !== null && present.isViewer(me, who, []) ? d : null;
 }
 
+/// What a chat asks that no one has decided and the viewer has not let go, the oldest first: its card still waiting,
+/// else the message one of its agents needs a person with. A station gives one at most.
+export function undecided(row: J): J[] {
+  const d = asked(row);
+  return d === null || dismissed(d) ? [] : [d];
+}
+
+/// One of them for the bar above the chat's composer (`ChatView.asks`): the post it is about, whether it is a card
+/// (its options are on that post), whether the viewer is the one to decide it, and in a line what is wanted: the
+/// agent's need as it said it, else the post's first line.
+export function askOf(row: J, d: J, me: J): J {
+  const need = arr(get(row, "agents"))
+    .map((a) => get(get(a, "lastTurn"), "need"))
+    .find((n) => typeof n === "string" && n.trim() !== "");
+  const text = typeof need === "string" ? need.trim() : question(str(get(d.message, "text")) ?? "");
+  const who = decider(d.card, get(row, "creator"));
+  return { seq: d.seq, card: ofRow(row) !== null, mine: who !== null && present.isViewer(me, who, []), text };
+}
+
 export function asked(row: J): J | null {
   const card = ofRow(row);
   if (card !== null) return card;
@@ -87,7 +115,7 @@ export function asked(row: J): J | null {
   return v;
 }
 
-export function labelAssignee(card: J, me: J, members: J[], creator: J): void {
+export function labelAssignee(card: J, me: J, members: J[], creator: J): J {
   const who = decider(card, creator);
   let text: string;
   if (who !== null) {
@@ -97,7 +125,7 @@ export function labelAssignee(card: J, me: J, members: J[], creator: J): void {
       text = t("core-logic.decisions.assignee", { name: present.memberName(members, who) ?? started ?? who });
     }
   } else text = t("core-logic.decisions.assignee.none");
-  card.assigneeText = text;
+  return { ...card, assigneeText: text };
 }
 
 export function line(text: string): string {
@@ -147,18 +175,18 @@ export function answerText(a: J): string {
 }
 
 /// The 奏 page's day.
-export function today(view: J, c: present.Clock): void {
-  if (!isObject(view)) return;
+export function today(view: J, c: present.Clock): J {
+  if (!isObject(view)) return view;
   const day = format.localDay(c.now, c.offsetMin);
   const at = (v: J, k: string): number => (typeof get(v, k) === "number" ? v[k] : 0);
-  const answered = arr(get(view, "answered")).filter((a) => format.localDay(at(a, "answeredAt"), c.offsetMin) === day);
-  for (const a of answered) a.clock = format.clock(at(a, "answeredAt"), c.offsetMin);
+  const answered = arr(get(view, "answered"))
+    .filter((a) => format.localDay(at(a, "answeredAt"), c.offsetMin) === day)
+    .map((a) => ({ ...a, clock: format.clock(at(a, "answeredAt"), c.offsetMin) }));
   const waits = answered.map((a) => Math.max(at(a, "answeredAt") - at(a, "askedAt"), 0));
   const working = get(view, "working");
   const todayV: J = { count: answered.length, working: Array.isArray(working) ? working.length : 0 };
   if (waits.length > 0) todayV.waited = waitedText(waits.reduce((x, y) => x + y, 0) / waits.length);
-  (view as J).answered = answered;
-  (view as J).today = todayV;
+  return { ...view, answered, today: todayV };
 }
 
 export function waitedText(ms: number): string {
@@ -194,11 +222,18 @@ export function waits(row: J): boolean {
   return pending(row) !== null;
 }
 
+/// The viewer let go of what the chat asks (its card, or what its agent needs a person for): nothing in it waits for
+/// them, though its agent still stands asking.
+export function letGo(row: J): boolean {
+  const d = asked(row);
+  return d !== null && dismissed(d);
+}
+
 /// A row's mark, the most urgent first.
 export function tone(row: J): string | null {
   const state = str(get(row, "state"));
   if (state === "failed") return "alert";
-  if (waits(row) || state === "block") return "wait";
+  if (waits(row) || (state === "block" && !letGo(row))) return "wait";
   if (state === "run") return "busy";
   return get(row, "unread") === true ? "done" : null;
 }
@@ -212,21 +247,23 @@ export function shown(card: J): J {
   return v;
 }
 
-export function presentRow(row: J): void {
+export function presentRow(row: J): J {
+  if (!isObject(row)) return row;
   const card = ofRow(row);
-  if (isObject(row)) {
-    delete (row as J).card;
-    delete (row as J).decision;
-  }
-  if (card !== null) row.decision = shown(card);
-  const t0 = tone(row);
-  if (t0 !== null) row.tone = t0;
+  const { card: _card, decision: _decision, ...out } = row as J;
+  // Let go by the viewer: its agent asking is not its state for them (no mark, no 要你帮忙).
+  if (out.state === "block" && letGo(row)) delete out.state;
+  if (card !== null) out.decision = shown(card);
+  const t0 = tone(out);
+  if (t0 !== null) out.tone = t0;
+  return out;
 }
 
 /// Where each card in a chat's messages stands. `pending`: undefined when the row is not known; null when none waits.
 /// `sending`: what the viewer sent into the chat that has not come back as its entries yet (the outbox, not failed): it
 /// answers the last card at once, as the chat shows it sent, rather than when the station has it.
-export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined, sending: J[] = []): void {
+export function inMessages(messages: J[], pendingOf: [number, boolean] | null | undefined, sending: J[] = []): J[] {
+  const out = [...messages];
   const cards: [number, J][] = [];
   for (let i = 0; i < messages.length; i++) {
     const c = ofMessage(messages[i]);
@@ -272,11 +309,10 @@ export function inMessages(messages: J[], pendingOf: [number, boolean] | null | 
     }
     const m = messages[i];
     if (!isObject(m)) return;
-    if (kind(card) === "options") (m as J).options = options;
-    else delete (m as J).options;
-    (m as J).card = s;
-    (m as J).decision = decision;
+    const { options: _options, ...rest } = m as J;
+    out[i] = { ...rest, ...(kind(card) === "options" ? { options } : {}), card: s, decision };
   });
+  return out;
 }
 
 function quoteOf(card: J): J[] | null {
@@ -312,8 +348,8 @@ export function reply(card: J, text: string, hasExtras: boolean): [string, J[]] 
 }
 
 /// The order of the 奏 page: not set aside first (oldest asked first), then set aside (latest last).
-export function order<T>(items: [T, number, number | null][]): void {
-  items.sort((a, b) => {
+export function order<T>(items: [T, number, number | null][]): [T, number, number | null][] {
+  return [...items].sort((a, b) => {
     const sa = a[2] !== null ? 1 : 0;
     const sb = b[2] !== null ? 1 : 0;
     if (sa !== sb) return sa - sb;

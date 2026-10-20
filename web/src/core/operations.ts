@@ -3,20 +3,28 @@ export interface OperationParams {
   "session.stop": { key: string };
   "tools.access": {  };
   "tools.setAccess": { access: string };
+  "station.modules": {  };
+  "station.module.set": { id: string; enabled: boolean };
+  "agentEnv.set": { env?: unknown; text?: string | null | undefined };
+  "search.setPersonal": { personal: boolean };
   "session.warm": { key: string };
   "session.evict": { key: string };
   "session.delete": { key: string };
   "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
-  "chat.keep": { thread: number };
+  "chat.keep": { kept?: boolean | null | undefined; thread: number };
   "chat.rename": { session?: string | null | undefined; title?: string | null | undefined; thread?: number | null | undefined };
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "decision.dismiss": { thread: number; seq: number };
   "decision.close": { thread: number; seq: number; option: string };
+  "chat.report": { thread: number; seq: number };
   "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
+  "session.transcript": { key: string };
+  "file.peek": { key: string; path: string; line?: number | null | undefined };
+  "link.preview": { url: string };
   "widget.setState": { key: string; path?: string | null | undefined; state?: unknown };
   "machineSessions.list": {  };
   "machineSessions.read": { runtime: string; id: string; limit?: number | null | undefined };
@@ -25,12 +33,18 @@ export interface OperationParams {
   "automaticDecisions.refresh": {  };
   "automaticDecisions.review": {  };
   "automaticDecisions.policy": { input: unknown };
+  "archiving.save": { days: number; reviewed: boolean; slackDays: number };
   "connect.create": { input?: unknown; id?: string | null | undefined };
   "connect.put": { id: string; input?: unknown };
   "connect.delete": { id: string };
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown };
+  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
+  "feishu.cancelRegistration": { id: string };
+  "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
+  "feishu.createConnect": { feishu: unknown; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; owner?: unknown };
+  "feishu.putSecret": { id: string; appSecret: string };
   "slack.verify": { connect?: string | null | undefined; install?: string | null | undefined; appToken?: string | null | undefined; botToken?: string | null | undefined };
   "slack.makeApp": { team?: string | null | undefined; settings?: unknown; icon?: string | null | undefined };
   "slack.dropApp": { appId: string };
@@ -54,7 +68,7 @@ export interface OperationParams {
   "profile.login": { id: string };
   "profile.cancelLogin": { id: string };
   "profile.loginCode": { id: string; code?: string | null | undefined };
-  "login.new": { runtime?: string | null | undefined };
+  "login.new": { runtime?: string | null | undefined; access?: string | null | undefined };
   "login.code": { id: string; code?: string | null | undefined };
   "login.drop": { id: string };
   "job.get": { id: string };
@@ -70,9 +84,19 @@ export interface OperationParams {
   "software.updateAll": {  };
   "software.check": {  };
   "software.channel": { channel?: string | null | undefined };
+  "drive.setRoots": { roots: string[] };
+  "permissions.request": { grant: string };
+  "drive.folders": { path?: string | null | undefined };
+  "drive.mkdir": { root: string; path: string };
+  "drive.rename": { root: string; from: string; to: string };
+  "drive.remove": { root: string; path: string; permanent?: boolean | null | undefined };
+  "drive.zip": { root: string; path: string };
+  "drive.stage": { root: string; path: string; zip?: boolean | null | undefined };
   "software.auto": { on?: boolean | null | undefined };
+  "machineLogin.cancel": { id: string };
+  "machineLogin.answer": { id: string; text: string };
   "workspace.create": { name?: string | null | undefined; invite_code?: string | null | undefined };
-  "workspace.rename": { workspace: string; name?: string | null | undefined };
+  "workspace.rename": { workspace: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.setRelays": { workspace: string; relays?: string[] | null | undefined };
   "workspace.delete": { workspace: string };
   "workspace.invite": { workspace: string; role?: string | null | undefined; email?: string | null | undefined };
@@ -82,23 +106,28 @@ export interface OperationParams {
   "workspace.setRole": { workspace: string; member: string; role?: string | null | undefined };
   "workspace.removeMember": { workspace: string; member: string };
   "workspace.enroll": { workspace: string; name?: string | null | undefined };
-  "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined };
+  "workspace.renameStation": { workspace: string; station: string; name?: string | null | undefined; emoji?: string | null | undefined; icon?: string | null | undefined };
   "workspace.removeStation": { workspace: string; station: string };
   "invitation.preview": { token?: string | null | undefined };
   "invitation.accept": { id?: string | null | undefined; token?: string | null | undefined };
   "invitation.decline": { id: string };
   "loginSession.revoke": { id: string };
   "admin.me": {  };
-  "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined };
+  "admin.createCode": { note?: string | null | undefined; days?: number | null | undefined; beta?: boolean | null | undefined };
   "admin.revokeCode": { code: string };
   "admin.setBeta": { user: string; on?: boolean | null | undefined };
   "admin.setMayCreate": { user: string; on?: boolean | null | undefined };
   "admin.block": { user: string; on?: boolean | null | undefined };
+  "admin.setPending": { email: string; beta?: boolean | null | undefined; may_create?: boolean | null | undefined };
+  "admin.removePending": { email: string };
   "admin.deleteWorkspace": { workspace: string };
+  "admin.createWorkspace": { name: string; owners: string[]; members: number; stations: number };
+  "admin.setLimits": { workspace: string; members: number; stations: number };
+  "admin.enroll": { workspace: string; name: string };
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "job.get", "job.log", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -107,6 +136,10 @@ export function bindStationOperations(call: Call) {
     sessionStop: <T = unknown>(params: OperationParams["session.stop"]) => call("session.stop", params) as Promise<T>,
     toolsAccess: <T = unknown>(params: OperationParams["tools.access"] = {}) => call("tools.access", params) as Promise<T>,
     toolsSetAccess: <T = unknown>(params: OperationParams["tools.setAccess"]) => call("tools.setAccess", params) as Promise<T>,
+    stationModules: <T = unknown>(params: OperationParams["station.modules"] = {}) => call("station.modules", params) as Promise<T>,
+    stationModule: <T = unknown>(params: OperationParams["station.module.set"]) => call("station.module.set", params) as Promise<T>,
+    agentEnvSet: <T = unknown>(params: OperationParams["agentEnv.set"] = {}) => call("agentEnv.set", params) as Promise<T>,
+    searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,
     sessionEvict: <T = unknown>(params: OperationParams["session.evict"]) => call("session.evict", params) as Promise<T>,
     sessionDelete: <T = unknown>(params: OperationParams["session.delete"]) => call("session.delete", params) as Promise<T>,
@@ -117,10 +150,14 @@ export function bindStationOperations(call: Call) {
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,
     decisionDismiss: <T = unknown>(params: OperationParams["decision.dismiss"]) => call("decision.dismiss", params) as Promise<T>,
     decisionClose: <T = unknown>(params: OperationParams["decision.close"]) => call("decision.close", params) as Promise<T>,
+    chatReport: <T = unknown>(params: OperationParams["chat.report"]) => call("chat.report", params) as Promise<T>,
     sessionNew: <T = unknown>(params: OperationParams["session.new"] = {}) => call("session.new", params) as Promise<T>,
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,
+    sessionTranscript: <T = unknown>(params: OperationParams["session.transcript"]) => call("session.transcript", params) as Promise<T>,
+    filePeek: <T = unknown>(params: OperationParams["file.peek"]) => call("file.peek", params) as Promise<T>,
+    linkPreview: <T = unknown>(params: OperationParams["link.preview"]) => call("link.preview", params) as Promise<T>,
     widgetSetState: <T = unknown>(params: OperationParams["widget.setState"]) => call("widget.setState", params) as Promise<T>,
     machineSessionsList: <T = unknown>(params: OperationParams["machineSessions.list"] = {}) => call("machineSessions.list", params) as Promise<T>,
     machineSessionsRead: <T = unknown>(params: OperationParams["machineSessions.read"]) => call("machineSessions.read", params) as Promise<T>,
@@ -129,12 +166,18 @@ export function bindStationOperations(call: Call) {
     automaticDecisionsRefresh: <T = unknown>(params: OperationParams["automaticDecisions.refresh"] = {}) => call("automaticDecisions.refresh", params) as Promise<T>,
     automaticDecisionsReview: <T = unknown>(params: OperationParams["automaticDecisions.review"] = {}) => call("automaticDecisions.review", params) as Promise<T>,
     automaticDecisionsPolicy: <T = unknown>(params: OperationParams["automaticDecisions.policy"]) => call("automaticDecisions.policy", params) as Promise<T>,
+    archivingSave: <T = unknown>(params: OperationParams["archiving.save"]) => call("archiving.save", params) as Promise<T>,
     connectCreate: <T = unknown>(params: OperationParams["connect.create"] = {}) => call("connect.create", params) as Promise<T>,
     connectPut: <T = unknown>(params: OperationParams["connect.put"]) => call("connect.put", params) as Promise<T>,
     connectDelete: <T = unknown>(params: OperationParams["connect.delete"]) => call("connect.delete", params) as Promise<T>,
     connectReconnect: <T = unknown>(params: OperationParams["connect.reconnect"]) => call("connect.reconnect", params) as Promise<T>,
     connectBindSession: <T = unknown>(params: OperationParams["connect.bindSession"]) => call("connect.bindSession", params) as Promise<T>,
     connectPutSlackApp: <T = unknown>(params: OperationParams["connect.putSlackApp"]) => call("connect.putSlackApp", params) as Promise<T>,
+    feishuRegister: <T = unknown>(params: OperationParams["feishu.register"] = {}) => call("feishu.register", params) as Promise<T>,
+    feishuCancelRegistration: <T = unknown>(params: OperationParams["feishu.cancelRegistration"]) => call("feishu.cancelRegistration", params) as Promise<T>,
+    feishuVerify: <T = unknown>(params: OperationParams["feishu.verify"]) => call("feishu.verify", params) as Promise<T>,
+    feishuCreateConnect: <T = unknown>(params: OperationParams["feishu.createConnect"]) => call("feishu.createConnect", params) as Promise<T>,
+    feishuPutSecret: <T = unknown>(params: OperationParams["feishu.putSecret"]) => call("feishu.putSecret", params) as Promise<T>,
     slackVerify: <T = unknown>(params: OperationParams["slack.verify"] = {}) => call("slack.verify", params) as Promise<T>,
     slackMakeApp: <T = unknown>(params: OperationParams["slack.makeApp"] = {}) => call("slack.makeApp", params) as Promise<T>,
     slackDropApp: <T = unknown>(params: OperationParams["slack.dropApp"]) => call("slack.dropApp", params) as Promise<T>,
@@ -174,7 +217,17 @@ export function bindStationOperations(call: Call) {
     softwareUpdateAll: <T = unknown>(params: OperationParams["software.updateAll"] = {}) => call("software.updateAll", params) as Promise<T>,
     softwareCheck: <T = unknown>(params: OperationParams["software.check"] = {}) => call("software.check", params) as Promise<T>,
     softwareChannel: <T = unknown>(params: OperationParams["software.channel"] = {}) => call("software.channel", params) as Promise<T>,
+    driveSetRoots: <T = unknown>(params: OperationParams["drive.setRoots"]) => call("drive.setRoots", params) as Promise<T>,
+    permissionsRequest: <T = unknown>(params: OperationParams["permissions.request"]) => call("permissions.request", params) as Promise<T>,
+    driveFolders: <T = unknown>(params: OperationParams["drive.folders"] = {}) => call("drive.folders", params) as Promise<T>,
+    driveMkdir: <T = unknown>(params: OperationParams["drive.mkdir"]) => call("drive.mkdir", params) as Promise<T>,
+    driveRename: <T = unknown>(params: OperationParams["drive.rename"]) => call("drive.rename", params) as Promise<T>,
+    driveRemove: <T = unknown>(params: OperationParams["drive.remove"]) => call("drive.remove", params) as Promise<T>,
+    driveZip: <T = unknown>(params: OperationParams["drive.zip"]) => call("drive.zip", params) as Promise<T>,
+    driveStage: <T = unknown>(params: OperationParams["drive.stage"]) => call("drive.stage", params) as Promise<T>,
     softwareAuto: <T = unknown>(params: OperationParams["software.auto"] = {}) => call("software.auto", params) as Promise<T>,
+    machineLoginCancel: <T = unknown>(params: OperationParams["machineLogin.cancel"]) => call("machineLogin.cancel", params) as Promise<T>,
+    machineLoginAnswer: <T = unknown>(params: OperationParams["machineLogin.answer"]) => call("machineLogin.answer", params) as Promise<T>,
   };
 }
 
@@ -203,7 +256,12 @@ export function bindCloudOperations(call: Call) {
     adminSetBeta: <T = unknown>(params: OperationParams["admin.setBeta"]) => call("admin.setBeta", params) as Promise<T>,
     adminSetMayCreate: <T = unknown>(params: OperationParams["admin.setMayCreate"]) => call("admin.setMayCreate", params) as Promise<T>,
     adminBlock: <T = unknown>(params: OperationParams["admin.block"]) => call("admin.block", params) as Promise<T>,
+    adminSetPending: <T = unknown>(params: OperationParams["admin.setPending"]) => call("admin.setPending", params) as Promise<T>,
+    adminRemovePending: <T = unknown>(params: OperationParams["admin.removePending"]) => call("admin.removePending", params) as Promise<T>,
     adminDeleteWorkspace: <T = unknown>(params: OperationParams["admin.deleteWorkspace"]) => call("admin.deleteWorkspace", params) as Promise<T>,
+    adminCreateWorkspace: <T = unknown>(params: OperationParams["admin.createWorkspace"]) => call("admin.createWorkspace", params) as Promise<T>,
+    adminSetLimits: <T = unknown>(params: OperationParams["admin.setLimits"]) => call("admin.setLimits", params) as Promise<T>,
+    adminEnroll: <T = unknown>(params: OperationParams["admin.enroll"]) => call("admin.enroll", params) as Promise<T>,
     adminFeedbackStatus: <T = unknown>(params: OperationParams["admin.feedbackStatus"]) => call("admin.feedbackStatus", params) as Promise<T>,
   };
 }

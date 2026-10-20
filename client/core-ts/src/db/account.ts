@@ -17,7 +17,7 @@ import { SqlError, sqlError } from "../host.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
-import { ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
+import { ensureFilesKept, ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
 import { readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
@@ -202,6 +202,13 @@ class Cache {
 }
 
 const K = (...parts: (string | number)[]) => parts.join("\u0001");
+/// What chats show small, kept (`file_kept`, in characters of base64): at most this much, let go to FILES_KEPT_TO of it
+/// past that; one larger than FILE_KEPT_MOST is not kept (a thumbnail is a few dozen KB). When one was shown is noted
+/// at most once in FILE_SHOWN_EVERY: a note writes its row again, the image with it.
+const FILES_KEPT = 64 * 1024 * 1024;
+const FILES_KEPT_TO = 0.8;
+const FILE_KEPT_MOST = 1024 * 1024;
+const FILE_SHOWN_EVERY = 86_400_000;
 
 /// The tables of what this device did itself: written again on their own when a burst could not be (a full disk).
 const PRECIOUS = /^(INSERT|DELETE|UPDATE)[^(]*\b(outbox|pending|first|changing|draft|workspace_pref)\b/i;
@@ -271,6 +278,8 @@ export class AccountDb {
       } catch {
         // No room to make it: nothing is let go this time.
       }
+      // Made as the first file is kept: a database that keeps none has no room taken for it.
+      this.#filesKept = sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'file_kept'").length > 0;
     } else if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'said'").length > 0) {
       this.#said = "scan";
     }
@@ -446,6 +455,10 @@ export class AccountDb {
 
   putStationDoc(station: string, kind: string, value: J, confirmed: number | null, topic: Topic): void {
     this.#putDoc(K("st", station, kind), value, "SELECT json FROM station WHERE address = ? AND kind = ?", [station, kind], "INSERT INTO station (address, kind, json, confirmed) VALUES (?, ?, ?, ?) ON CONFLICT (address, kind) DO UPDATE SET json = excluded.json, confirmed = coalesce(excluded.confirmed, confirmed)", (json) => [station, kind, json, confirmed], topic);
+  }
+
+  dropStationDoc(station: string, kind: string, topic: Topic): void {
+    this.#dropDoc(K("st", station, kind), "DELETE FROM station WHERE address = ? AND kind = ?", [station, kind], topic);
   }
 
   slackApp(station: string, connect: string): J {
@@ -878,8 +891,11 @@ export class AccountDb {
       const json = JSON.stringify(summary);
       const detail = r && r[3] !== null ? parse(r[3]) : undefined;
       again = detail === undefined || !sameTurns(get(detail, "turns"), summary);
+      // One more turn, or the last one gone on, as the summary says it: put in place, not all its turns read again.
+      const placed = again && detail !== undefined && placeTurn(detail, summary);
+      if (placed) again = false;
       // Its detail shows it as it is now too.
-      if (detail !== undefined && JSON.stringify(detail.session) !== json) {
+      if (detail !== undefined && (placed || JSON.stringify(detail.session) !== json)) {
         detail.session = summary;
         this.#run("UPDATE session SET detail = ? WHERE station = ? AND key = ?", [JSON.stringify(detail), station, key]);
         this.#tellSession(station, key);
@@ -1295,6 +1311,23 @@ export class AccountDb {
       .map((r) => ({ station: String(r[0]), thread: Number(r[1]), seq: Number(r[2]), at: typeof r[3] === "number" ? r[3] : null, text: String(r[4]) }));
   }
 
+  /// The messages of one thread whose latest text has every one of `terms` (case aside), oldest first, with their
+  /// words (a chat's own find: all of them, as `findSaid` looks).
+  findInThread(station: string, thread: number, terms: string[]): { seq: number; text: string }[] {
+    if (this.#said === null || terms.length === 0) return [];
+    const indexed = this.#said === "index" ? terms.filter((t) => [...t].length >= 3) : [];
+    const scanned = terms.filter((t) => !indexed.includes(t));
+    const where = ["s.station = ?", "s.thread = ?", ...scanned.map(() => "s.text LIKE ? ESCAPE '\\'")];
+    const params: SqlValue[] = [station, thread, ...scanned.map((t) => `%${t.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)];
+    let from = "said s";
+    if (indexed.length > 0) {
+      from = "said_index JOIN said s ON s.id = said_index.rowid";
+      where.unshift("said_index MATCH ?");
+      params.unshift(indexed.map((t) => `"${t.replace(/"/g, '""')}"`).join(" "));
+    }
+    return this.sql.all(`SELECT s.seq, s.text FROM ${from} WHERE ${where.join(" AND ")} ORDER BY s.seq`, params).map((r) => ({ seq: Number(r[0]), text: String(r[1]) }));
+  }
+
   // ── what is kept within the device's room ──
 
   /// How much of the database is in use (its pages less the free ones), in bytes.
@@ -1519,9 +1552,50 @@ export class AccountDb {
     });
   }
 
-  /// What this database keeps of each chat (a thread): its entries and its sessions' transcripts, in characters of
-  /// their JSON (near enough their bytes), with its title and sessions; a session's transcript counted with its first
-  /// thread. For the device's page of what it keeps (`cache.usage`).
+  // ── what chats show small (thumbnails, posters) ──
+
+  /// Whether `file_kept` is there (made as the first file is kept).
+  #filesKept = false;
+
+  /// What a chat shows small, as kept here (`kind`: thumb, poster): its type and bytes (base64), noted as shown `at`;
+  /// null when it is not kept.
+  keptFile(station: string, session: string, name: string, kind: string, at: number): { type: string; bytes: string } | null {
+    if (!this.#filesKept) return null;
+    let r: SqlRow | undefined;
+    try {
+      r = this.sql.all("SELECT type, used, bytes FROM file_kept WHERE station = ? AND session = ? AND name = ? AND kind = ?", [station, session, name, kind])[0];
+    } catch {
+      // Not made after all (the write that made it could not be kept): made again with the next one kept.
+      this.#filesKept = false;
+      return null;
+    }
+    if (r === undefined) return null;
+    if (at - Number(r[1]) >= FILE_SHOWN_EVERY) this.#write(() => this.sql.run("UPDATE file_kept SET used = ? WHERE station = ? AND session = ? AND name = ? AND kind = ?", [at, station, session, name, kind]));
+    return { type: String(r[0]), bytes: String(r[2]) };
+  }
+
+  /// Keeps what a chat shows small as its station sent it; past FILES_KEPT, the least lately shown go.
+  keepFile(station: string, session: string, name: string, kind: string, type: string, bytes: string, at: number): void {
+    if (this.readOnly || bytes.length > FILE_KEPT_MOST) return;
+    this.#write(() => {
+      if (!this.#filesKept) {
+        ensureFilesKept(this.sql);
+        this.#filesKept = true;
+      }
+      this.sql.run("INSERT OR REPLACE INTO file_kept (station, session, name, kind, type, size, used, bytes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [station, session, name, kind, type, bytes.length, at, bytes]);
+      let total = Number(this.sql.all("SELECT coalesce(sum(size), 0) FROM file_kept")[0]?.[0] ?? 0);
+      if (total <= FILES_KEPT) return;
+      for (const r of this.sql.all("SELECT station, session, name, kind, size FROM file_kept ORDER BY used")) {
+        if (total <= FILES_KEPT * FILES_KEPT_TO) break;
+        this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ? AND name = ? AND kind = ?", [r[0], r[1], r[2], r[3]]);
+        total -= Number(r[4] ?? 0);
+      }
+    });
+  }
+
+  /// What this database keeps of each chat (a thread): its entries, its sessions' transcripts and what it shows small, in
+  /// characters of their JSON (near enough their bytes), with its title and sessions; what a session has counted with
+  /// its first thread. For the device's page of what it keeps (`cache.usage`).
   cacheUsage(): { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }[] {
     const out = new Map<string, { station: string; thread: number; title: string | null; sessions: string[]; bytes: number }>();
     const of = (station: string, thread: number) => {
@@ -1541,6 +1615,12 @@ export class AccountDb {
       const thread = firstThread.get(`${r[0] as string}\0${r[1] as string}`);
       if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
     }
+    if (this.#filesKept) {
+      for (const r of this.sql.all("SELECT station, session, sum(size) FROM file_kept GROUP BY station, session")) {
+        const thread = firstThread.get(`${r[0] as string}\0${r[1] as string}`);
+        if (thread !== undefined) of(r[0] as string, thread).bytes += Number(r[2] ?? 0);
+      }
+    }
     for (const row of out.values()) {
       const json = this.sql.all("SELECT json FROM thread WHERE station = ? AND id = ?", [row.station, row.thread])[0]?.[0];
       const title = json === undefined ? undefined : (parse(json) as { title?: unknown })?.title;
@@ -1549,14 +1629,15 @@ export class AccountDb {
     return [...out.values()].filter((r) => r.bytes > 0);
   }
 
-  /// Forgets what is kept of a chat: its entries and its sessions' transcripts (read again from its station when it is
-  /// opened). What waits to be sent, drafts and the chat's row stay.
+  /// Forgets what is kept of a chat: its entries, its sessions' transcripts and what it shows small (read again from its
+  /// station when it is opened). What waits to be sent, drafts and the chat's row stay.
   forgetChat(station: string, thread: number): void {
     this.#write(() => {
       const sessions = this.sql.all("SELECT session FROM thread_member WHERE station = ? AND thread = ?", [station, thread]).map((r) => r[0] as string);
       this.#logCache.clear();
       this.#forgetEntries(station, thread);
       for (const session of sessions) if (this.sql.run("DELETE FROM transcript WHERE station = ? AND session = ?", [station, session]) > 0) this.#tellLog("transcript", station, session);
+      if (this.#filesKept) for (const session of sessions) this.sql.run("DELETE FROM file_kept WHERE station = ? AND session = ?", [station, session]);
     });
   }
 
@@ -1579,6 +1660,7 @@ export class AccountDb {
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
       if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
+      if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();
       this.#logCache.clear();
@@ -1607,6 +1689,19 @@ export class AccountDb {
   static isSqlError(e: unknown): e is SqlError {
     return e instanceof SqlError;
   }
+}
+
+/// A session detail's turns brought to what its summary says, where that is one more turn or the last one gone on (the
+/// summary's last turn, with its id); whether they were. A station from before names no last turn: they are read again.
+export function placeTurn(detail: J, summary: unknown): boolean {
+  const list = Array.isArray(detail?.turns) ? (detail.turns as unknown[]) : null;
+  const last = get(summary, "lastTurn");
+  const n = get(summary, "turns");
+  if (list === null || !isObject(last) || typeof last.id !== "string" || typeof n !== "number") return false;
+  if (n === list.length + 1 && !list.some((t) => get(t, "id") === last.id)) list.push(last);
+  else if (n === list.length && list.length > 0 && get(list[list.length - 1], "id") === last.id) list[list.length - 1] = last;
+  else return false;
+  return true;
 }
 
 /// Whether the turns a session detail lists still end as its summary says.

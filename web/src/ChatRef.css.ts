@@ -1,32 +1,35 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { popKeyframes } from "./styles/keyframes.css.ts";
-import { glass } from "./styles/glass.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { popKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
+import { PANEL_PAD, TEXT_IN, inner, surface } from "@stillfail/ui/styles/align.ts";
 
 /** Where the menu hangs from: the composer's top edge. */
 export const refAnchor = style({ position: "relative", height: "0" });
 /** The composer's own look (styles/composer.css.ts, focused): glass, no border, its corners, its shadow. */
 export const refMenu = style({
   position: "absolute", left: "0", right: "0", bottom: "8px", zIndex: "60", maxHeight: "320px", overflowY: "auto",
-  padding: "12px", border: "0", borderRadius: `calc(32px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  // A small panel's list (docs/ui-panels.md) in the composer's corner: padded 6, its rows rounded as it less that.
+  ...surface(PANEL_PAD, `calc(32px * ${vars.cornerScale} - ${PANEL_PAD}px)`, vars.cornerShape), border: "0",
   ...glass,
   boxShadow: "0 4px 12px rgb(0 0 0 / .07), 0 1px 3px rgb(0 0 0 / .05)",
   transformOrigin: "bottom", animation: `${popKeyframes} 140ms ${vars.easeOut}`,
 });
-export const refHead = style({ display: "flex", gap: "6px", padding: "0 12px 6px", fontSize: vars.textXs, color: vars.muted });
+export const refHead = style({ display: "flex", gap: "6px", padding: `6px ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.muted });
 export const refQuery = style({ color: vars.text });
-export const refEmpty = style({ margin: "0", padding: "6px 12px 4px", fontSize: vars.textSm, color: vars.muted });
+export const refEmpty = style({ margin: "0", padding: `6px ${TEXT_IN}px`, fontSize: vars.textUi, color: vars.muted });
 export const refItem = style({
   display: "grid", gridTemplateColumns: "16px minmax(0, 1fr) auto", alignItems: "center", gap: "10px", width: "100%",
-  minHeight: "38px", padding: "8px 12px", border: "0", borderRadius: `calc(20px * ${vars.cornerScale})`, background: "none", color: vars.text,
-  textAlign: "left", fontSize: vars.textSm, cursor: "pointer", cornerShape: vars.cornerShape,
+  minHeight: "38px", padding: `8px ${TEXT_IN}px`, border: "0", borderRadius: inner, background: "none", color: vars.text,
+  textAlign: "left", fontSize: vars.textUi, cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&[data-active]": { background: vars.hover },
   },
 });
 export const refLogo = style({ display: "grid", placeItems: "center" });
+export const refTitleCell = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
 export const refTitle = style({ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const refTime = style({ fontSize: vars.textXs, color: vars.muted });
+export const refTime = style({ fontSize: vars.textMeta, color: vars.muted });
 
 /** The composer: its mirror is placed in it. */
 export const refHost = style({ position: "relative" });
@@ -50,3 +53,20 @@ export const refChip = style({
   },
 });
 export const refChipHash = style({ marginRight: "1px", opacity: ".7" });
+/**
+ * The station a reference to another station's chat is on, after its title: quieter than it, on the same baseline as
+ * the text around (an inline block's baseline is its text's), not underlined with the title when pointed at (an inline
+ * block takes no decoration from around it), its icon set down to sit with the letters.
+ */
+export const refChipStation = style({
+  display: "inline-block", marginLeft: "4px", padding: "1px 6px", borderRadius: "999px", fontSize: vars.textMeta, color: vars.muted, background: vars.hover,
+  whiteSpace: "nowrap", flexShrink: "0",
+});
+export const refChipStationIcon = style({ verticalAlign: "-1px", marginRight: "2px" });
+
+
+/** The chats of other workspaces a message is about to share (OutsideShare.tsx): one a line, whose after its title. */
+export const outsideList = style({ listStyle: "none", margin: "0", padding: "0", display: "grid", gap: "10px" });
+export const outsideItem = style({ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 0", fontSize: vars.textUi, lineHeight: "1.5" });
+/** What may not be shared, said under it. */
+export const outsideCannot = style({ flexBasis: "100%", margin: "0", fontSize: vars.textMeta, color: vars.red });

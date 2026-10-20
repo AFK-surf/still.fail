@@ -4,13 +4,13 @@
 // the window shows, only that mark drawn on it). Each mark is a numbered pin on its element's corner, what is said about it in a frosted bubble
 // beside the pin; they follow the page as it scrolls (the frame says where the marks are).
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { Close, Edit, Send, Trash } from "../icons.tsx";
+import { Close, Edit, Send, Trash } from "@stillfail/ui/icons.tsx";
 import { offerToDraft, type DraftQuote } from "../draft.ts";
 import type { Picked } from "./frame.ts";
 import * as css from "./Marks.css.ts";
-import * as pagesCss from "../styles/pages.css.ts";
 import { Tip } from "../ui.tsx";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 interface Mark { picked: Picked; comment: string }
 interface Box { x: number; y: number; width: number; height: number }
@@ -143,7 +143,7 @@ export function useMarks({ frame, origin, nonce, name, draftKey, able, scale = 1
   };
 
   const button = on ? (
-    <Tip label={marking ? t("web-main.annotate.stopPicking") : t("web-main.annotate.pageTip")}><button type="button" className={pagesCss.iconBtn} aria-pressed={marking} aria-label={t("web-main.annotate.mark")}
+    <Tip label={marking ? t("web-main.annotate.stopPicking") : t("web-main.annotate.pageTip")}><button type="button" className={pageCss.iconBtn} aria-pressed={marking} aria-label={t("web-main.annotate.mark")}
       onClick={() => mark(!marking)}>
       <Edit size={14} strokeWidth={1.75} />
     </button></Tip>

@@ -5,14 +5,17 @@
 import * as brand from "./brand.ts";
 import { conform } from "./conform.ts";
 import { CoreError } from "./error.ts";
+import * as format from "./format.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
 import type { ClientId, Topic } from "./protocol.ts";
 import { topicKey } from "./protocol.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
+import { qr } from "./qr.ts";
 import type { Store, Value, Watch } from "./store.ts";
 import { equal, get as getU, isObject } from "./util.ts";
+import { ofAddress } from "./workspace.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -103,7 +106,7 @@ export class DecisionForms {
     const key = topicKey(topic);
     if (action === "edit") this.value(topic);
     const existing = this.#drafts.get(key);
-    if (existing && existing.owner !== owner) throw CoreError.invalid("不是这个页面的自动决策草稿");
+    if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.notYours"));
     if (action === "drop") {
       existing?.watch.drop();
       this.#drafts.delete(key);
@@ -119,12 +122,12 @@ export class DecisionForms {
       this.#drafts.set(key, d);
     }
     if (action === "edit") {
-      if (d.pending) throw CoreError.invalid("请等保存完成");
+      if (d.pending) throw CoreError.invalid(t("core-misc.decisionForm.wait"));
       if (isObject(patch)) {
         if (patch.pickOpen === true) d.pickedModel = str(d.value.model);
         if (typeof patch.pickModel === "string") {
           const models = arr(get(get(overviewOf(this.#store, station), "automaticDecisions"), "models"));
-          if (!models.some((m) => get(m, "id") === patch.pickModel)) throw CoreError.invalid("这个决策模型已不可用");
+          if (!models.some((m) => get(m, "id") === patch.pickModel)) throw CoreError.invalid(t("core-misc.decisionForm.modelGone"));
           d.pickedModel = patch.pickModel;
         }
         if (patch.pickConfirm === true && d.pickedModel !== null) {
@@ -142,10 +145,10 @@ export class DecisionForms {
 
   begin(topic: Topic, owner: ClientId): J {
     const d = this.#drafts.get(topicKey(topic));
-    if (!d || d.owner !== owner) throw CoreError.invalid("自动决策草稿已关闭");
-    if (d.pending) throw CoreError.invalid("正在保存");
+    if (!d || d.owner !== owner) throw CoreError.invalid(t("core-misc.decisionForm.closed"));
+    if (d.pending) throw CoreError.invalid(t("core-misc.policy.saving"));
     const m = str(d.value.model) === "" ? null : d.value.model;
-    if (d.value.enabled === true && m === null) throw CoreError.invalid("请选择用于完成检查的模型");
+    if (d.value.enabled === true && m === null) throw CoreError.invalid(t("core-misc.decisionForm.pickModel"));
     d.pending = true;
     d.value.pending = true;
     this.#store.invalidate(topic);
@@ -391,10 +394,26 @@ export class Tokens {
 export const pickOf = (station: string, form: string): Topic => ({ topic: "pick", station, of: `connect-new:${form}` });
 export const tokensOf = (station: string, form: string): Topic => ({ topic: "slackTokens", station, form });
 
+/// The Feishu path's own: an app of one's own (its App ID and Secret, Lark or not, as last verified) or one being made
+/// by scanning (`registration`, as it was started: the overview says how it goes), and the connect it became.
+const feishuBlank = (): J => ({
+  way: "scan", appId: "", appSecret: "", lark: false, identity: null, errors: [], checked: null,
+  registration: null, registered: null, tried: null, creating: false, error: null, connect: null,
+});
+
+/// What a verification was of: it holds while they stay the same.
+const feishuKey = (f: J) => JSON.stringify([str(f.appId).trim(), str(f.appSecret).trim(), f.lark === true]);
+
+const FEISHU_STEPS = ["feishuBind", "feishuWay", "feishuScan", "feishuApp"];
+
 function initial(input: J): J {
   const name = brand.name();
+  const resume = typeof get(input, "resume") === "string";
   return {
-    step: typeof get(input, "resume") === "string" ? "install" : "team",
+    // Where the station has the Feishu connect, the platform first (value: a station without it starts at Slack).
+    step: resume ? "install" : "platform",
+    platform: resume ? "slack" : null,
+    feishu: feishuBlank(),
     resume: get(input, "resume") ?? null,
     mobile: get(input, "mobile") === true,
     team: null,
@@ -418,6 +437,16 @@ function initial(input: J): J {
 
 type FlowDraft = { owner: ClientId; generation: number; pending: boolean; value: J; watches: Watch[] };
 
+/// What the wizard has done beside its own calls: a Feishu bot being made let go of (`cancel`, the station's
+/// registration), and the overview changed (`ready`: its bot made, the connect is added without being asked).
+export type FlowHooks = { cancel(station: string, registration: string): void; ready(topic: Topic): void };
+
+/// A registration's state as the station follows it (the overview), else as it was started.
+function registrationOf(overview: J, f: J): J {
+  if (typeof get(f, "registration") !== "string") return null;
+  return arr(get(overview, "feishuRegistrations")).find((r) => get(r, "id") === f.registration) ?? f.registered ?? null;
+}
+
 /// What the wizard reads besides its own: the model control of the connect being added (choose.ts).
 export type PickOf = (topic: Topic) => Value | undefined;
 
@@ -428,10 +457,13 @@ export class ConnectFlows {
   readonly #drafts = new Map<string, FlowDraft>();
   #next = 0;
 
-  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void) {
+  readonly #hooks: FlowHooks;
+
+  constructor(store: Store, pick: PickOf, clearPick: (station: string, form: string) => void, hooks: FlowHooks = { cancel: () => {}, ready: () => {} }) {
     this.#store = store;
     this.#pick = pick;
     this.#clearPick = clearPick;
+    this.#hooks = hooks;
   }
 
   open(topic: Topic, owner: ClientId, input: J): void {
@@ -443,7 +475,12 @@ export class ConnectFlows {
     }
     const station = topic.station as string;
     const form = topic.form as string;
-    const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) => this.#store.watch(s, () => this.#store.invalidate(topic)));
+    const watches = [{ topic: "overview", station } as Topic, pickOf(station, form), tokensOf(station, form)].map((s) =>
+      this.#store.watch(s, () => {
+        this.#store.invalidate(topic);
+        if (s.topic === "overview") this.#hooks.ready(topic);
+      }),
+    );
     this.#drafts.set(key, { owner, generation: ++this.#next, pending: false, value: initial(input), watches });
     this.#store.invalidate(topic);
   }
@@ -452,6 +489,7 @@ export class ConnectFlows {
     const key = topicKey(topic);
     const d = this.#drafts.get(key);
     if (d && d.owner === owner) {
+      this.#letGo(topic, d);
       this.#drafts.delete(key);
       for (const w of d.watches) w.drop();
       this.#clearPick(topic.station as string, topic.form as string);
@@ -468,6 +506,19 @@ export class ConnectFlows {
       this.drop(topic, owner);
     }
     return gone;
+  }
+
+  /// Its Feishu bot still waiting to be made by scanning: the station stops waiting for it.
+  #letGo(topic: Topic, d: FlowDraft): void {
+    const station = topic.station as string;
+    let overview: J = null;
+    try {
+      overview = overviewOf(this.#store, station);
+    } catch {
+      // Not read: as it was started.
+    }
+    const r = registrationOf(overview, d.value.feishu);
+    if (r !== null && get(r, "state") === "waiting") this.#hooks.cancel(station, str(get(r, "id")));
   }
 
   #own(topic: Topic, owner: ClientId): FlowDraft {
@@ -490,7 +541,17 @@ export class ConnectFlows {
     if (get(patch, "config") !== undefined && typeof patch.config !== "string") throw CoreError.invalid(t("core-misc.connect.config_not_text"));
     for (const field of ["adding", "requireMention"]) if (get(patch, field) !== undefined && typeof patch[field] !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
     if (get(patch, "mode") !== undefined && patch.mode !== "single-session" && patch.mode !== "multi-session") throw CoreError.invalid(t("core-misc.connect.no_such_mode"));
-    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
+    const platform = get(patch, "platform");
+    if (platform !== undefined && platform !== "slack" && platform !== "feishu") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+    const feishu = get(patch, "feishu");
+    if (feishu !== undefined) {
+      if (!isObject(feishu)) throw CoreError.invalid(t("core-misc.params.not_text"));
+      for (const field of ["appId", "appSecret"]) if (get(feishu, field) !== undefined && typeof feishu[field] !== "string") throw CoreError.invalid(t("core-misc.params.not_text"));
+      if (get(feishu, "lark") !== undefined && typeof feishu.lark !== "boolean") throw CoreError.invalid(t("core-misc.params.not_bool"));
+      if (get(feishu, "way") !== undefined && feishu.way !== "scan" && feishu.way !== "app") throw CoreError.invalid(t("core-misc.connect.not_ready"));
+      for (const field of ["way", "appId", "appSecret", "lark"]) if (get(feishu, field) !== undefined) d.value.feishu[field] = feishu[field];
+    }
+    for (const field of ["team", "adding", "settings", "icon", "iconError", "config", "mode", "requireMention", "platform"]) if (get(patch, field) !== undefined) d.value[field] = patch[field];
     if (typeof get(patch, "config") === "string") d.value.config = patch.config.trim();
     this.#store.invalidate(topic);
   }
@@ -502,6 +563,10 @@ export class ConnectFlows {
     const step = str(view.step, "team");
     const allowed =
       to === "back" ||
+      (step === "platform" && (target === "team" || (target === "feishuBind" && view.platforms.includes("feishu")))) ||
+      (step === "feishuBind" && target === "feishuWay" && view.canCreate === true) ||
+      (step === "feishuWay" && target === "feishuApp") ||
+      ((step === "feishuScan" || step === "feishuApp") && target === "feishuWay") ||
       (step === "team" && (target === "token" || target === "manual")) ||
       (step === "team" && target === "app" && view.chosen !== null) ||
       ((step === "app" || step === "manual") && target === "team") ||
@@ -509,6 +574,8 @@ export class ConnectFlows {
     if (!allowed) throw CoreError.invalid(t("core-misc.connect.not_ready"));
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.busy"));
+    if (step === "feishuScan" && target !== "feishuScan") this.#letGo(topic, d);
+    if (step === "platform") d.value.platform = target === "team" ? "slack" : "feishu";
     d.value.step = target;
     this.#store.invalidate(topic);
     return {};
@@ -527,10 +594,18 @@ export class ConnectFlows {
     const p = this.#pick(pickOf(station, form));
     if (p !== undefined && "err" in p) throw p.err;
     const picked = p !== undefined ? p.ok : null;
-    const step = str(v.step, "team");
+    // A station without the Feishu connect (one from before it) says no `feishuRegistrations`: Slack's at once.
+    const feishuOffered = Array.isArray(get(overview, "feishuRegistrations"));
+    v.platforms = feishuOffered ? ["slack", "feishu"] : ["slack"];
+    let step = str(v.step, "team");
+    if (step === "platform" && !feishuOffered) step = "team";
+    v.step = step;
+    const feishu = v.platform === "feishu" && (FEISHU_STEPS.includes(step) || step === "done");
     const mobile = v.mobile === true;
-    const title =
-      step === "team" && !mobile && teams.length === 0
+    const title = step === "platform" ? "core-misc.connect.title.platform"
+      : step === "feishuBind" ? "core-misc.connect.title.bind"
+      : FEISHU_STEPS.includes(step) ? `core-misc.connect.title.${step}`
+      : step === "team" && !mobile && teams.length === 0
         ? "core-misc.connect.title.get_token"
         : step === "team" && !mobile && v.adding === true
           ? "core-misc.connect.title.add_token"
@@ -539,10 +614,17 @@ export class ConnectFlows {
             : ["token", "app", "install", "manual"].includes(step)
               ? `core-misc.connect.title.${step}`
               : "core-misc.connect.title.bind";
-    const order = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+    const slackOrder = step === "manual" || (step === "bind" && (v.madeId === null || v.madeId === undefined)) ? ["manual", "bind"] : ["team", "app", "install", "bind"];
+    const order = feishu
+      ? ["platform", "feishuBind", "feishuWay", step === "feishuApp" ? "feishuApp" : "feishuScan"]
+      : feishuOffered && typeof v.resume !== "string" ? ["platform", ...slackOrder] : slackOrder;
     const back =
-      step === "team"
-        ? "close"
+      step === "platform" ? "close"
+        : step === "feishuBind" ? "platform"
+        : step === "feishuWay" ? "feishuBind"
+        : step === "feishuScan" || step === "feishuApp" ? "feishuWay"
+        : step === "team"
+        ? feishuOffered && typeof v.resume !== "string" ? "platform" : "close"
         : step === "token" || step === "app" || step === "manual"
           ? "team"
           : step === "install" && typeof v.resume === "string"
@@ -566,6 +648,7 @@ export class ConnectFlows {
     v.chosen = chosen;
     v.made = made;
     v.pick = picked;
+    v.feishu = feishuView(v.feishu, overview, d.pending);
     return v;
   }
 
@@ -579,30 +662,72 @@ export class ConnectFlows {
     if (action === "config" && (step === "token" || v.gettingToken === true) && v.configReady === true) [name, p] = ["slack.addConfigToken", { refreshToken: v.config }];
     else if (action === "make" && step === "app" && v.canMake === true) [name, p] = ["slack.makeApp", { team: get(v.chosen, "teamId") ?? null, settings: v.settings, icon: v.icon ?? null }];
     else if (action === "verify" && (step === "install" || step === "manual")) [name, p] = ["slack.verify", { ...tokenInput, install: get(v.made, "state") ?? null }];
+    else if (action === "register" && (step === "feishuWay" || (step === "feishuScan" && v.feishu.failed === true))) [name, p] = ["feishu.register", {}];
+    else if (action === "verify" && step === "feishuApp" && v.feishu.canVerify === true) [name, p] = ["feishu.verify", feishuApp(v.feishu)];
+    else if (action === "create" && v.canCreate === true && ((step === "feishuApp" && v.feishu.verified === true) || (step === "feishuScan" && get(v.feishu.registration, "state") === "done"))) {
+      const app = step === "feishuApp" ? feishuApp(v.feishu) : { registration: get(v.feishu.registration, "id") };
+      [name, p] = ["feishu.createConnect", { feishu: app, bind: bindOf(v.pick), mode: v.mode, requireMention: v.requireMention }];
+    }
     else if (action === "create" && step === "bind" && v.canCreate === true && verified) {
       let slack: J = { ...tokenInput };
       if (typeof get(v.made, "state") === "string") slack = { appToken: tokenInput.appToken ?? null, install: v.made.state };
       else if (typeof get(v.made, "appId") === "string") slack.appId = v.made.appId;
-      const bind = structuredClone(get(v.pick, "value") ?? {});
-      for (const f of ["model", "effort"]) if (bind[f] === null || bind[f] === undefined) bind[f] = "";
-      [name, p] = ["connect.create", { input: { kind: "slack", mode: v.mode, requireMention: v.requireMention, bind, slack } }];
+      [name, p] = ["connect.create", { input: { kind: "slack", mode: v.mode, requireMention: v.requireMention, bind: bindOf(v.pick), slack } }];
     } else throw CoreError.invalid(t("core-misc.connect.not_ready"));
     p.station = station;
     const d = this.#own(topic, owner);
     if (d.pending) throw CoreError.invalid(t("core-misc.connect.working"));
     d.pending = true;
+    if (name === "feishu.createConnect") Object.assign(d.value.feishu, { creating: true, error: null });
+    if (name === "feishu.register") d.value.feishu.error = null;
+    this.#store.invalidate(topic);
     return [d.generation, name, p];
+  }
+
+  /// Whose form it is (one known).
+  ownerOf(topic: Topic): ClientId {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d) throw CoreError.invalid(t("core-misc.connect.closed"));
+    return d.owner;
+  }
+
+  /// Its bot made by scanning and nothing tried with it yet: the connect is to be added now (once for each bot made).
+  ready(topic: Topic): boolean {
+    const d = this.#drafts.get(topicKey(topic));
+    if (!d || d.pending || d.value.platform !== "feishu" || d.value.step !== "feishuScan") return false;
+    let v: J;
+    try {
+      v = this.value(topic);
+    } catch {
+      return false;
+    }
+    const r = v.feishu.registration;
+    if (get(r, "state") !== "done" || v.canCreate !== true || d.value.feishu.tried === get(r, "id")) return false;
+    d.value.feishu.tried = get(r, "id");
+    return true;
   }
 
   finish(topic: Topic, generation: number, action: string, result: { ok: J } | { err: CoreError }): boolean {
     const d = this.#drafts.get(topicKey(topic));
     if (!d || d.generation !== generation) return false;
     d.pending = false;
+    if (action === "create") d.value.feishu.creating = false;
+    if ("err" in result && d.value.platform === "feishu" && (action === "create" || action === "register")) d.value.feishu.error = result.err.message;
     if ("ok" in result) {
       const r = result.ok;
       if (action === "config") Object.assign(d.value, { team: get(r, "teamId") ?? null, config: "", adding: false, step: "app" });
       else if (action === "make") Object.assign(d.value, { madeId: get(r, "appId") ?? null, iconError: get(r, "iconError") ?? null, step: "install" });
+      else if (action === "register") {
+        const registered = { id: get(r, "id"), url: get(r, "url"), expiresAt: get(r, "expiresAt"), state: "waiting" };
+        Object.assign(d.value.feishu, { registration: get(r, "id") ?? null, registered, tried: null, error: null, connect: null });
+        d.value.step = "feishuScan";
+      }
+      else if (action === "create" && d.value.platform === "feishu" && FEISHU_STEPS.includes(d.value.step)) {
+        d.value.feishu.connect = get(r, "id") ?? null;
+        d.value.step = "done";
+      }
       else if (action === "create") d.value.step = "done";
+      else if (action === "verify" && d.value.step === "feishuApp") Object.assign(d.value.feishu, { identity: get(r, "identity") ?? null, errors: arr(get(r, "errors")).filter((e) => typeof e === "string"), checked: feishuKey(d.value.feishu) });
       else if (action === "verify" && get(r, "identity") !== undefined && r.identity !== null && Array.isArray(get(r, "errors")) && r.errors.length === 0) d.value.step = "bind";
     }
     this.#store.invalidate(topic);
@@ -610,23 +735,98 @@ export class ConnectFlows {
   }
 }
 
+/// What a connect being added runs on, from its model control.
+function bindOf(pick: J): J {
+  const bind = structuredClone(get(pick, "value") ?? {});
+  for (const f of ["model", "effort"]) if (bind[f] === null || bind[f] === undefined) bind[f] = "";
+  return bind;
+}
+
+/// The last link drawn as a QR code (the view is made again on every change; the link seldom is).
+let drawn: [string, ReturnType<typeof qr>] | null = null;
+function qrOf(url: string): ReturnType<typeof qr> {
+  if (drawn === null || drawn[0] !== url) drawn = [url, qr(url)];
+  return drawn[1];
+}
+
+/// An app of one's own as the station takes it.
+const feishuApp = (f: J): J => ({ appId: str(f.appId).trim(), appSecret: str(f.appSecret).trim(), domain: f.lark === true ? "lark" : "feishu" });
+
+/// The Feishu path as drawn: what is typed and whether it was verified as it is, the bot being made by scanning (its
+/// QR code while it waits, where it stands in words), the connect being added and why that failed.
+function feishuView(f: J, overview: J, pending: boolean): J {
+  const reg = registrationOf(overview, f);
+  const state = str(get(reg, "state"));
+  const url = str(get(reg, "url"));
+  const verified = f.checked === feishuKey(f);
+  const errors: string[] = verified ? f.errors : [];
+  const stateText =
+    reg === null ? null
+      : state === "waiting" ? t("core-misc.connect.feishu.waiting")
+      : state === "done" ? (f.error === null ? t("core-misc.connect.feishu.made") : t("core-misc.connect.feishu.made_failed"))
+      : state === "denied" ? t("core-misc.connect.feishu.denied")
+      : state === "expired" ? t("core-misc.connect.feishu.expired")
+      : str(get(reg, "error")) !== "" ? t("core-misc.connect.feishu.failed_because", { error: str(get(reg, "error")) })
+      : t("core-misc.connect.feishu.failed");
+  const out: J = {
+    way: f.way === "app" ? "app" : "scan",
+    appId: str(f.appId),
+    appSecret: str(f.appSecret),
+    lark: f.lark === true,
+    canVerify: !pending && str(f.appId).trim() !== "" && str(f.appSecret).trim() !== "",
+    verified: verified && f.identity !== null && errors.length === 0,
+    errors,
+    failed: state === "denied" || state === "expired" || state === "failed",
+    creating: f.creating === true,
+    error: f.error ?? null,
+    connect: f.connect ?? null,
+  };
+  if (verified && f.identity !== null) out.identity = f.identity;
+  if (reg !== null) out.registration = reg;
+  if (stateText !== null) out.stateText = stateText;
+  if (state === "waiting" && url !== "") {
+    const code = qrOf(url);
+    if (code !== null) out.qr = code;
+  }
+  return out;
+}
+
 // ── the add-profile pages (profile_flow.rs) ──
 
-const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
-const usesTextOf = (ids: string[]) => ids.map((u) => (u === "claude" ? t("core-views.present.uses.claude") : u === "codex" ? t("core-views.present.uses.codex") : t("core-views.present.uses.decision"))).join(" · ");
-const runtimeName = (r: string) => (r === "claude" ? "Claude Code" : "Codex");
+const usesNames = (u: providers.Uses) => ([[u.claude, "claude"], [u.codex, "codex"], [u.dsh, "dsh"], [u.grok, "grok"], [u.decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+const usesTextOf = present.usesText;
+const runtimeName = format.runtimeLabel;
 
-function usesOf(source: providers.Source, endpoint: string | null, protocol: string | null): string[] {
+/// The runtimes a station runs only where its overview's `updates` lists them.
+const LISTED = ["dsh", "grok"];
+
+/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness and Grok Build each on one that lists its
+/// version (a station from before it does not, and is not offered it).
+export function stationRuntimes(overview: J): string[] {
+  const listed = (id: string) => arr(get(overview, "updates")).some((u) => get(u, "id") === id);
+  return format.RUNTIMES.filter((r) => !LISTED.includes(r) || listed(r));
+}
+
+/// A runtime's subscription: the plan as the picker names it, and who is signed in to, as the steps name it.
+const PLANS: Record<string, { plan: string; provider: string }> = {
+  claude: { plan: "Claude", provider: "Claude" },
+  codex: { plan: "ChatGPT", provider: "ChatGPT" },
+  grok: { plan: "SuperGrok", provider: "Grok" },
+};
+const planOf = (runtime: string) => PLANS[runtime] ?? PLANS.claude!;
+
+function usesOf(source: providers.Source, endpoint: string | null, protocol: string | null, runtimes: string[]): string[] {
   const own = source.endpointRequired ? (endpoint ?? providers.example(source.id)) : null;
   const p = protocol ?? source.protocols?.[0] ?? null;
   const at = providers.endpoints(source, own, source.endpointRequired ? p : null);
-  return at !== null ? usesNames(providers.uses(at)) : [];
+  return at !== null ? usesNames(providers.uses(at, source.id)).filter((u) => u === "decision" || runtimes.includes(u)) : [];
 }
 
-function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean): J {
+function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, runtimes: string[]): J {
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
-  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : null;
-  const uses = usesOf(source, null, null);
+  // xAI's plan (SuperGrok) runs Grok Build.
+  const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : null;
+  const uses = usesOf(source, null, null, runtimes);
   const cn = providers.chinaOf(source.id);
   return {
     id: source.id,
@@ -647,18 +847,20 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean): J 
   };
 }
 
-/// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand.
-export function groups(supported: string[] | null): J[] {
+/// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
+/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan). xAI
+/// has a plan (SuperGrok) where the station runs Grok Build.
+export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic";
-      return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan)] : [];
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "xai" && runtimes.includes("grok"));
+      return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "local") {
-      for (const runtime of ["claude", "codex"]) {
+      for (const runtime of runtimes) {
         const uses = [runtime];
         tiles.push({ id: `env-${runtime}`, name: t("core-views.flow.env", { runtime: runtimeName(runtime) }), group: "local", kind: "env", hasKey: false, hasPlan: false, runtime, endpointRequired: false, protocols: [], keyOptional: true, uses, usesText: usesTextOf(uses) });
       }
@@ -668,6 +870,8 @@ export function groups(supported: string[] | null): J[] {
   return out;
 }
 
+const consoleOf = (overview: J): boolean => get(overview, "consoleSignIn") === true;
+
 function supportedOf(overview: J): string[] | null {
   const list = get(overview, "apiProviders");
   return Array.isArray(list) ? list.flatMap((p) => (typeof get(p, "id") === "string" ? [p.id] : [])) : null;
@@ -676,25 +880,28 @@ function supportedOf(overview: J): string[] | null {
 const findTile = (gs: J[], id: string): J => gs.flatMap((g) => arr(g.providers)).find((p) => p.id === id);
 const blank = () => ({ provider: "", method: "", endpoint: "", protocol: "", region: "", key: "", error: null, pending: false });
 
-function profileView(station: string, draft: J, overview: J): J {
-  const gs = groups(supportedOf(overview));
+function profileView(station: string, draft: J, overview: J, manages = false): J {
+  const runtimes = stationRuntimes(overview);
+  const gs = groups(supportedOf(overview), runtimes, consoleOf(overview));
   const tile = typeof draft.provider === "string" ? findTile(gs, draft.provider) : undefined;
   const method = typeof draft.method === "string" && draft.method !== "" ? draft.method : null;
   const out: J = {
     step: "pick", station, title: t("core-views.flow.pick"), hint: t("core-views.flow.pick_hint"), groups: gs, tile: tile ?? null, method, choices: [], showEndpoint: false,
     endpoint: draft.endpoint ?? null, protocols: [], regions: [], region: null, showKey: false, key: draft.key ?? null, keyLabel: "", canSubmit: false, pending: draft.pending === true,
-    submitLabel: "", usesLine: "", error: draft.error ?? null,
+    submitLabel: "", usesLine: "", error: draft.error ?? null, signIn: null,
   };
   if (tile === undefined) return out;
   const name = str(tile.name);
   out.title = t("core-views.flow.connect", { name });
   out.hint = "";
   const runtime = str(tile.runtime, "claude");
+  // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does.
+  const opencode = tile.id === "opencode-go";
   if (method === null) {
-    const plan = runtime === "claude" ? "Claude" : "ChatGPT";
+    const plan = opencode ? "OpenCode Go" : planOf(runtime).plan;
     out.step = "method";
     out.choices = [
-      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${runtime}`) },
+      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${opencode ? "opencode" : runtime}`) },
       { id: "key", title: t("core-views.flow.key_card"), hint: t("core-views.flow.key_card_hint", { name }) },
     ];
     return out;
@@ -702,7 +909,16 @@ function profileView(station: string, draft: J, overview: J): J {
   out.step = "connect";
   const kind = str(tile.kind, "api-provider");
   if (method === "plan") {
+    if (opencode) {
+      out.signIn = { runtime: "claude", access: "opencode-go", provider: "OpenCode" };
+      out.usesLine = t("core-views.flow.uses", { uses: usesTextOf(arr(tile.uses).filter((u: unknown) => u !== "decision")) });
+      return out;
+    }
     out.usesLine = t("core-views.flow.uses", { uses: runtimeName(runtime) });
+    // Signed in with the runtime's own command: one the station does not have is installed first, the sign-in after.
+    const install = present.installView(runtime, arr(get(overview, "updates")), manages);
+    if (install !== null && install.state !== "installed") out.install = install;
+    else out.signIn = { runtime, provider: planOf(runtime).provider };
     return out;
   }
   if (kind === "env") {
@@ -736,12 +952,13 @@ function profileView(station: string, draft: J, overview: J): J {
   const source = providers.find(sourceId);
   const untried = source !== null && !!source.decision && !source.chat && !source.responses && !source.anthropic;
   out.submitLabel = untried ? t("core-views.flow.add") : t("core-views.flow.verify_add");
-  const uses = source !== null ? usesOf(source, endpoint !== "" ? endpoint : null, protocol) : [];
+  const uses = source !== null ? usesOf(source, endpoint !== "" ? endpoint : null, protocol, runtimes) : [];
   out.usesLine = uses.length === 0 ? t("core-views.flow.uses_none") : t("core-views.flow.uses", { uses: usesTextOf(uses) });
   return out;
 }
 
-type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch };
+/// `watch`: the station's overview and its workspace (the viewer's role: whether they may install a runtime).
+type ProfileDraft = { owner: ClientId; value: J; pending: boolean; watch: Watch[] };
 
 export class ProfileFlows {
   readonly #store: Store;
@@ -754,7 +971,7 @@ export class ProfileFlows {
   disconnect(owner: ClientId): void {
     for (const [k, d] of [...this.#drafts]) {
       if (d.owner !== owner) continue;
-      d.watch.drop();
+      for (const w of d.watch) w.drop();
       this.#drafts.delete(k);
     }
   }
@@ -763,7 +980,8 @@ export class ProfileFlows {
     const d = this.#drafts.get(topicKey(topic));
     if (!d) return null;
     const station = topic.station as string;
-    return profileView(station, d.value, overviewOf(this.#store, station));
+    const role = get(this.#store.value({ topic: "workspace", workspace: ofAddress(station) }), "ok")?.role;
+    return profileView(station, d.value, overviewOf(this.#store, station), role === "owner" || role === "admin");
   }
 
   change(topic: Topic, owner: ClientId, action: string, patch: J): J {
@@ -772,20 +990,21 @@ export class ProfileFlows {
     const existing = this.#drafts.get(key);
     if (existing && existing.owner !== owner) throw CoreError.invalid(t("core-views.flow.not_yours"));
     if (action === "drop") {
-      existing?.watch.drop();
+      for (const w of existing?.watch ?? []) w.drop();
       this.#drafts.delete(key);
       this.#store.invalidate(topic);
       return null;
     }
     let d = existing;
     if (!d) {
-      const watch = this.#store.watch({ topic: "overview", station }, () => this.#store.invalidate(topic));
+      const watch = [{ topic: "overview", station }, { topic: "workspace", workspace: ofAddress(station) }].map((t) => this.#store.watch(t, () => this.#store.invalidate(topic)));
       d = { owner, value: blank(), pending: false, watch };
       this.#drafts.set(key, d);
     }
     if (action === "edit") {
       if (d.pending) throw CoreError.invalid(t("core-views.flow.wait"));
-      const gs = groups(supportedOf(overviewOf(this.#store, station)));
+      const o = overviewOf(this.#store, station);
+      const gs = groups(supportedOf(o), stationRuntimes(o), consoleOf(o));
       if (!isObject(patch)) return null;
       if (typeof patch.provider === "string") {
         if (patch.provider === "") d.value = blank();

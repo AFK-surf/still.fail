@@ -3,22 +3,33 @@
 // (the shell keeps a page that is replaced by another, app.tsx). What the composer writes to is the page's: it says so
 // (`useHost().use`), and the composer asks it when a message goes.
 import { ArchiveNotice } from "../ArchiveNotice.tsx";
-import { createContext, useContext, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams } from "react-router";
 import { StationContext, type Station } from "../station.tsx";
 import { useApp } from "./app.tsx";
-import { ChatScreen, openAttach, openedAs, useComposerBar, type Draft } from "./Chat.tsx";
+import { ChatScreen, ChatWaiting, openAttach, openedAs, sendSharing, useComposerBar, type Draft } from "./Chat.tsx";
 import { ComposerExtras } from "../Chat.tsx";
+import { openRefSheet, openStationFiles } from "./StationFiles.tsx";
 import { useDraft } from "../draft.ts";
-import { useMorph } from "../morph.ts";
+import { settling, useMorph } from "../morph.ts";
 import { useStationCall, type Attachment } from "../api.ts";
 import { NewChatScreen } from "./NewChat.tsx";
-import { Loading } from "./parts.tsx";
 import * as css from "./ChatHost.css.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as rootCss from "./styles/root.css.ts";
 import { t } from "../i18n.ts";
+import { whenRowIn } from "../madeChat.ts";
+
+// The composer's height, set at its page's root (MobileComposer), as that element's own; the room it leaves a chat's
+// list, a length worked out there and inherited (ChatHost.css.ts): one changing with the other only past a few lines.
+// A browser without registered properties inherits both as they are, as before.
+for (const property of [
+  { name: "--m-bottom", syntax: "<length>", inherits: false, initialValue: "72px" },
+  { name: "--m-composer-room", syntax: "<length>", inherits: true, initialValue: "0px" },
+]) {
+  try { globalThis.CSS?.registerProperty?.(property); } catch { /* registered already (a module loaded again) */ }
+}
 
 /** What the composer writes to, as the page above it says. */
 export interface HostComposer {
@@ -37,7 +48,8 @@ export interface HostComposer {
   type?(): void;
 }
 
-interface Host { draft: Draft; use(spec: HostComposer): void }
+/** The same while the page is (what is typed changes `now` alone): the page above is not drawn again at each key. */
+interface Host { now: RefObject<Draft>; use(spec: HostComposer): void }
 const HostContext = createContext<Host | null>(null);
 
 /** The page's composer: its draft, and where the page says what it writes to. */
@@ -62,33 +74,34 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
   // The callbacks as the page last gave them; what it shows, as state (changing only when it does).
   const latest = useRef<HostComposer | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
-  const use = (spec: HostComposer) => {
+  const use = useCallback((spec: HostComposer) => {
     latest.current = spec;
     setShown((was) => (was && was.station === spec.station && was.session === (spec.session ?? null) && was.placeholder === spec.placeholder && was.offline === spec.offline && was.archived === spec.archived ? was
       : { station: spec.station, session: spec.session ?? null, placeholder: spec.placeholder, offline: spec.offline, ...(spec.archived !== undefined ? { archived: spec.archived } : {}) }));
-  };
+  }, []);
   const station = id === undefined ? undefined : stations?.find((s) => s.id === id);
   // The host is outside the chat's StationContext: what it writes goes to the station the page says (a new chat's, as
   // picked), else the chat's, by its address, not the context's.
   const writesTo = stations?.find((s) => s.address === shown?.station) ?? station;
   // Each chat keeps what is written to it; a new chat's goes on into the chat it makes. Files go to the station the
   // page writes to (its composer says which).
-  const upload = useRef<(file: File, onProgress?: (sent: number) => void) => Promise<Attachment>>(() => Promise.reject(new Error(t("web-mobile.chat.noStationUpload"))));
   const draftKey = chat === undefined || station === undefined ? undefined : draftKeyOf(station.address, chat);
-  const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address, upload: (file, onProgress) => upload.current(file, onProgress) });
+  const shared = useDraft({ key: draftKey, station: shown?.station ?? station?.address });
   const [focus, setFocus] = useState(0);
   const draft: Draft = { ...shared, focus, bumpFocus: () => setFocus((n) => n + 1) };
   const now = useRef(draft);
   now.current = draft;
   const root = useRef<HTMLDivElement>(null);
-  const body = id === undefined ? <NewChatScreen />
-    : !stations ? <Loading text={t("web-mobile.reading")} />
-    : !station ? <Loading text={t("web-mobile.noStation")} />
-    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>;
-  const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} upload={upload} />;
+  const host = useMemo<Host>(() => ({ now, use }), [use]);
+  // The same element while the page is the same, so typing (this drawing again) leaves it as it is.
+  const body = useMemo(() => id === undefined ? <NewChatScreen />
+    : !stations ? <ChatWaiting text={t("common.readingStations")} />
+    : !station ? <ChatWaiting gone={t("web-mobile.noStation")} />
+    : <StationContext.Provider value={station}><ChatScreen /></StationContext.Provider>, [id, stations, station]);
+  const composer = shown && <MobileComposer shown={shown} draftKey={draftKey} latest={latest} draft={draft} now={now} root={root} />;
   return (
-    <HostContext.Provider value={{ draft, use }}>
-      <div className={css.mChatHost} ref={root}>
+    <HostContext.Provider value={host}>
+      <div className={css.mChatHost} ref={root} data-new={id === undefined || undefined}>
         {body}
         {/* Once shown, it stays (the page above changing hands it on); in its station (the chats its @ offers). */}
         {writesTo ? <StationContext.Provider value={writesTo}>{composer}</StationContext.Provider> : composer}
@@ -98,34 +111,61 @@ export function ChatHost({ stations }: { stations: Station[] | undefined }) {
 }
 
 /** The composer: a floating capsule at the page's foot, with the files and quotes going with the message, as the wide screen's composer shows them. */
-export function MobileComposer({ shown, draftKey, latest, draft, now, root, upload: uploader, inline = false }: {
+export function MobileComposer({ shown, draftKey, latest, draft, now, root, inline = false }: {
   shown: Shown; draftKey: string | undefined; latest: RefObject<HostComposer | null>; draft: Draft; now: RefObject<Draft>;
-  root: RefObject<HTMLDivElement | null>; upload: RefObject<(file: File, onProgress?: (sent: number) => void) => Promise<Attachment>>; inline?: boolean;
+  root: RefObject<HTMLDivElement | null>; inline?: boolean;
 }) {
   const app = useApp();
-  const call = useStationCall(shown.station);
-  uploader.current = (file, onProgress) => call.upload(file, onProgress);
   const upload = draft.add;
   const locked = shown.offline || !!shown.archived || draft.starting;
   const capsule = useRef<HTMLDivElement>(null);
+  // The capsule itself, the box that changes shape (useMorph, below).
+  const frame = useRef<HTMLDivElement>(null);
   // What is above keeps its end clear of the capsule, whatever its height.
   useLayoutEffect(() => {
     const el = capsule.current;
     const page = root.current;
     if (!el || !page) return;
-    const set = () => page.style.setProperty("--m-bottom", `${el.offsetHeight}px`);
-    set();
-    const observer = new ResizeObserver(set);
+    // Every element of the page inherits it: each change has the whole page's style worked out anew (a long chat's, all
+    // its messages). So it changes once the capsule has its new shape, not at every frame of its motion there (morph.ts).
+    let waiting = false;
+    let held: (() => void) | null = null;
+    const put = () => {
+      held = null;
+      const height = `${el.offsetHeight}px`;
+      if (page.style.getPropertyValue("--m-bottom") !== height) page.style.setProperty("--m-bottom", height);
+    };
+    // Shorter as what was just sent leaves it, it keeps the list's foot until the message's row is in the list (madeChat.ts
+    // whenRowIn), and gives it up in that frame: given up before, the list's end drops at once, and rises as the row comes.
+    const set = () => {
+      waiting = false;
+      held?.();
+      if (el.offsetHeight < (parseFloat(page.style.getPropertyValue("--m-bottom")) || 0)) held = whenRowIn(put);
+      else put();
+    };
+    put();
+    const observer = new ResizeObserver(() => {
+      // A new chat's choices sit just above the composer: they must follow its height while it moves, or the
+      // growing box covers them. There is no long message list to invalidate on that page.
+      const moving = !page.hasAttribute("data-new") && frame.current ? settling(frame.current) : null;
+      if (!moving) return set();
+      if (waiting) return;
+      waiting = true;
+      void moving.then(set, set);
+    });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => { observer.disconnect(); held?.(); };
   }, [root]);
   const { menu, bar, expanded } = useComposerBar({
     draft, draftKey, sessionKey: shown.session ?? null, placeholder: shown.placeholder, locked,
-    onPlus: () => openAttach(app, upload), onType: () => latest.current?.type?.(), onSend: () => latest.current?.send(now.current),
+    onPlus: (plus) => openAttach(app, plus, upload, () => openStationFiles(app, shown.station, (items) => now.current.addDropped(items))), onType: () => latest.current?.type?.(), onSend: () => {
+      // What it refers to of other workspaces is shared first, when the viewer says (Chat.tsx sendSharing).
+      const spec = latest.current;
+      if (spec) sendSharing(app, spec.station, now.current.text, () => spec.send(now.current));
+    },
   });
   // Growing or shrinking (a line more, a file, a quote, sent and emptied) in one motion, as the wide screen's
   // (morph.ts): after the text box has taken its height (useComposerBar), so that it is read with it.
-  const frame = useRef<HTMLDivElement>(null);
   useMorph(frame, `${expanded}|${draft.text}|${draft.files.length}|${draft.quotes.length}|${draft.error}|${shown.offline}|${shown.archived}`);
   return (
     <div className={`${inline ? css.mInlineComposer : `${css.mComposer} ${css.mHostComposer}`} ${rootCss.wide}`} ref={capsule}>
@@ -136,7 +176,13 @@ export function MobileComposer({ shown, draftKey, latest, draft, now, root, uplo
         onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); if (!locked) upload(e.dataTransfer.files); } }}>
         {shown.archived && <ArchiveNotice className={css.mComposerOffline} offline={shown.offline} restore={() => latest.current?.restore?.() ?? Promise.resolve()} />}
         {shown.offline && <p className={css.mComposerOffline}>{t("web-mobile.chat.offline")}</p>}
-        <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus} />
+        <ComposerExtras draft={draft} focusQuote={draft.focusQuote} onFocused={draft.quoteFocused} onDone={draft.bumpFocus}
+          onRef={(f) => openRefSheet(app, f, {
+            // A folder goes as a zip only from the chat's own station (zipped there).
+            zips: !!f.ref?.dir && f.ref.station === shown.station,
+            setMode: (mode) => now.current.setMode(f.id, mode),
+            asFiles: draft.asFiles, setAsFiles: (on) => now.current.setAsFiles(on),
+          })} />
         {bar}
         {draft.error && <p className={`${partsCss.mError} ${css.mComposerError}`}>{draft.error}</p>}
       </div>

@@ -81,13 +81,19 @@ export class Account extends DurableObject<Env> {
     };
   }
 
-  async create(identity: Identity, id: string, name: string, appleGrant?: string): Promise<Response> {
+  /** `shared`: an account several people sign in to (App Store review's, password.ts): a new session ends its oldest
+   * when there are as many as it may have, rather than being refused. `appleGrant`: an Apple sign-in's provider grant,
+   * kept (encrypted) for revoking it when the account is deleted; required of an Apple identity. */
+  async create(identity: Identity, id: string, name: string, shared = false, appleGrant?: string): Promise<Response> {
     return this.ctx.blockConcurrencyWhile(async () => {
       const now = nowSeconds();
       const data = this.data() ?? { ...identity, blocked: false, sessions: [] };
       if (data.sub !== identity.sub || !validId(id) || name.length > 80) return denied();
       if (data.blocked) return reply({ error: "account_blocked" }, 403);
       this.prune(data);
+      if (shared)
+        for (const old of [...data.sessions].sort((a, b) => a.created - b.created).slice(0, Math.max(0, data.sessions.length - LIMITS.sessions + 1)))
+          await this.revoke(data, old.id, "removed");
       if (data.sessions.length >= LIMITS.sessions || !this.charge()) return limited();
       if (identity.provider === "apple") {
         if (!appleGrant) return reply({ error: "apple_grant_missing" }, 401);
@@ -207,6 +213,12 @@ export class Account extends DurableObject<Env> {
     return reply({ revoked: true, scope: all ? "account" : "session" });
   }
 
+  /** The account deleted itself (DELETE /v1/me, once the Directory let it go): every session ends and nothing of it is kept. */
+  async erase(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+
   async administer(blocked: boolean): Promise<Response> {
     const data = this.data();
     if (!data) return reply({ error: "account_not_found" }, 404);
@@ -235,9 +247,11 @@ export class Account extends DurableObject<Env> {
     }
   }
 
-  /** Whether an access token's session is still live (not logged out, blocked or expired). */
-  live(claims: Claims): boolean {
-    return Boolean(this.session(this.data(), claims)) && this.charge();
+  /** Whether an access token's session is still live (not logged out, blocked or expired); `limited` when it is, but
+   * over its requests a minute. */
+  live(claims: Claims): boolean | "limited" {
+    if (!this.session(this.data(), claims)) return false;
+    return this.charge() ? true : "limited";
   }
 
   async fetch(request: Request): Promise<Response> {

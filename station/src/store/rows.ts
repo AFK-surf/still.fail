@@ -19,12 +19,26 @@ export function slackSurface(connect: string, teamId: string | null): string {
   return teamId ? `slack:${teamId}` : `slack:${connect}`;
 }
 
+/// Where a Feishu connect's threads live: the connect's own (docs/feishu.md).
+export const feishuSurface = (connect: string): string => `feishu:${connect}`;
+
 export type SessionScope = "thread" | "all";
+
+/// Who looks, as far as the station's workspaces go (docs/multi-workspace.md): their workspace, and whether it is the
+/// station's home one (absent: it is, as on a station in one workspace).
+export type InWorkspace = { workspace: string; home?: boolean };
+
+/// Whether a session whose chat is in `ws` (null: the station's home workspace) is one `viewer` may see and use: a
+/// member of one workspace sees nothing of another's chats.
+export const sees = (viewer: InWorkspace, ws: string | null): boolean => ws === viewer.workspace || (ws === null && viewer.home !== false);
 
 export type SessionRow = {
   key: string; connect: string; scope: SessionScope; title: string | null; createdBy: string | null; runtime: string;
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null;
+  /// Which of the station's workspaces its chat is in (docs/multi-workspace.md): null is its home workspace (sessions
+  /// from before, and those made outside any workspace's request). Not the `workspace` above, its directory.
+  ws: string | null;
   /// Not for the pages (serde skip).
   token: string;
   running: boolean; createdAt: number; lastActiveAt: number; archivedAt: number | null; archivedBy: string | null;
@@ -36,7 +50,7 @@ export type NewSession = {
   key: string; connect: string; scope?: SessionScope | null; title?: string | null; createdBy?: string | null;
   runtime: string; profile: string; profilePinned?: boolean; model?: string | null; effort?: string | null;
   fast?: boolean | null; workspace: string; cwd?: string | null; runtimeSessionId?: string | null; token: string;
-  createdAt: number; lastActiveAt: number;
+  createdAt: number; lastActiveAt: number; ws?: string | null;
 };
 
 /// A place people talk: a Slack thread, or a chat on the station's page.
@@ -66,7 +80,7 @@ export type Attachment = { name: string; path: string; size: number; width?: num
 export type EntryRow = {
   agentIdentity: Json | undefined; thread: number; n: number; kind: EntryKind; target: number | null; ts: string | null;
   authorKind: AuthorKind; author: string; text: string | null; attachments: Attachment[]; quotes: Quote[];
-  declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
+  declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
 };
 
@@ -110,7 +124,7 @@ export type ProcessRow = { pgid: number; startedAt: number; runtime: string; lab
 /// A message being recorded (NewMessage::new's defaults may be left out).
 export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
-  quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; card?: Json | null;
+  quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null;
 };
 
@@ -139,12 +153,12 @@ export type TurnFor = { profile: string | null; person: string | null; thread: n
 export type StoreChange =
   /// Anything about that session changed.
   | { type: "session"; key: string }
-  /// It was deleted.
-  | { type: "sessionRemoved"; key: string }
+  /// It was deleted; `ws` the workspace its chat was in (null: the home one).
+  | { type: "sessionRemoved"; key: string; ws?: string | null }
   /// Entries were appended there (contiguous, in order), or its sessions changed (none).
   | { type: "thread"; id: number; entries: EntryRow[] }
-  /// It went, with every entry it had.
-  | { type: "threadRemoved"; id: number }
+  /// It went, with every entry it had; `ws` as its session's.
+  | { type: "threadRemoved"; id: number; ws?: string | null }
   /// A viewer's read position moved.
   | { type: "read"; viewer: string; thread: number; n: number }
   /// The Slack users a viewer said are them changed.
@@ -259,9 +273,62 @@ export function toSession(r: Json): SessionRow {
     key: r.key, connect: r.connect, scope: r.scope === "all" ? "all" : "thread", title: r.title, createdBy: r.created_by,
     runtime: r.runtime, profile: r.profile, profilePinned: r.profile_pinned === 1, model: r.model, effort: r.effort,
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
-    workspace: r.workspace, cwd: r.cwd ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
+    workspace: r.workspace, cwd: r.cwd ?? null, ws: r.ws ?? null, token: r.token, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
   };
+}
+
+/// A chat an agent opened for another (opened_chats): each side by its station ('' for this one) and session key.
+export type Opened = {
+  childStation: string; child: string; parentStation: string; parent: string; key: string; title: string | null;
+  link: string | null; state: string | null; createdAt: number;
+};
+
+export function toOpened(r: Json): Opened {
+  return {
+    childStation: r.child_station, child: r.child, parentStation: r.parent_station, parent: r.parent, key: r.key, title: r.title,
+    link: r.link, state: r.state, createdAt: r.created_at,
+  };
+}
+
+/// A chat published as a snapshot (docs/public-share.md): its link's id and key, by whom and when, up to which message.
+export type Published = { id: string; thread: number; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number };
+
+export function toPublished(r: Json): Published {
+  return { id: r.id, thread: r.thread, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size };
+}
+
+/// How long a chat stays shared with a workspace whose agents neither read it nor write to it (docs/chat-share.md):
+/// after that a person must share it again.
+export const XSHARE_IDLE_MS = 6 * 60 * 60_000;
+
+/// Why a chat once shared with an agent's workspace is not now.
+export const LAPSED = "that chat's share with your workspace lapsed, unused for 6 hours: a person of its workspace must share it again (by @-mentioning it in a message to you, or in its chat info)";
+
+/// A chat shared with other workspaces (chat_shares, docs/chat-share.md): each workspace with when its agents last read
+/// it or wrote to it, or it was shared with them (`used`).
+export type ChatShare = { to: { workspace: string; name: string; used: number }[]; write: boolean; by: string; at: number };
+
+/// A chat_shares row as stored: every workspace it names, those whose share lapsed too (one kept from before `used`
+/// was used when it was shared).
+export function toChatShare(r: Json): ChatShare {
+  let to: Json = [];
+  try {
+    to = JSON.parse(r.shared);
+  } catch {}
+  const list = Array.isArray(to)
+    ? to.filter((t: Json) => typeof t?.workspace === "string").map((t: Json) => ({ workspace: t.workspace as string, name: String(t.name ?? t.workspace), used: typeof t.used === "number" ? t.used : r.at }))
+    : [];
+  return { to: list, write: r.write === 1, by: r.by, at: r.at };
+}
+
+/// Whether a workspace's share is still on at `now`: used within XSHARE_IDLE_MS.
+export const shareLive = (t: { used: number }, now: number) => now - t.used < XSHARE_IDLE_MS;
+
+/// A share as it is at `now`: the workspaces it is still on for; null when none.
+export function liveShare(share: ChatShare, now: number): ChatShare | null {
+  const to = share.to.filter((t) => shareLive(t, now));
+  return to.length === 0 ? null : { ...share, to };
 }
 
 export function toThread(r: Json): ThreadRow {
@@ -281,7 +348,7 @@ export function toEntry(r: Json): EntryRow {
     agentIdentity: parsed(r.agent_identity), thread: r.thread, n: r.n, kind: r.kind === "edit" ? "edit" : "message",
     target: r.target, ts: r.ts, authorKind: authorKind(r.author_kind), author: r.author, text: r.text,
     attachments: fromJsonList(r.attachments, attachment), quotes: fromJsonList(r.quotes, quote), declared: r.declared,
-    client: r.client, profile: r.profile, options: parsed(r.options), card: parsed(r.card), at: r.at,
+    client: r.client, profile: r.profile, runtime: r.runtime ?? null, options: parsed(r.options), card: parsed(r.card), at: r.at,
   };
 }
 

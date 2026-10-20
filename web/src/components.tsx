@@ -5,11 +5,10 @@ import type { Level, PersonShown, Quota } from "./api.ts";
 import type { Meter } from "./core/shapes.ts";
 import { useOnlyMine, useSidebarMode, type SidebarMode } from "./station.tsx";
 import { Segmented, Tip } from "./ui.tsx";
-import { Archive, Check, Filter } from "./icons.tsx";
+import { Check, Filter } from "@stillfail/ui/icons.tsx";
 import { useLocation, useNavigate } from "react-router";
 import { DropdownMenu } from "radix-ui";
-import * as controlsCss from "./styles/controls.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./components.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
@@ -18,30 +17,33 @@ import { t } from "./i18n.ts";
 /**
  * A filter: 全部 or only the viewer's (我参与的 for chats, 我创建的 for connects), from a menu; for chats (`watching`)
  * also the watching ones (监控中). `compact`: a filter button alone, marked while it filters; else the filter's name
- * beside it. `archive`: the archive's page, the menu's last item under a line. Its words are the chats' with `watching`,
- * else the connects' (`label` and `mine`, which named them, are no longer read).
+ * beside it. `decisions` (奏) and `archive` (已归档, the archive's page, under a line): lists the sidebar shows in place
+ * of the chats, each with a page of its own; another list picked there goes back to the chats. Its words are the chats'
+ * with `watching`, else the connects' (`label` and `mine`, which named them, are no longer read).
  */
 export function MineFilter({ compact, archive, watching, decisions }: { label?: string; mine?: string; compact?: boolean; archive?: string | undefined; watching?: boolean; decisions?: { to: string; chats: string } }) {
   const [onlyMine, setOnlyMine] = useOnlyMine();
   const [mode, setMode] = useSidebarMode();
-  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 in their place; connects: all or mine.
-  const filter: SidebarMode = watching ? (decisions || mode !== "decisions" ? mode : "all") : onlyMine ? "mine" : "all";
+  // Chats: one of three (the core keeps 我参与的 and 监控中 apart), or 奏 or the archive in their place; connects: all or mine.
+  const shown = (mode === "decisions" && !decisions) || (mode === "archive" && !archive) ? "all" : mode;
+  const filter: SidebarMode = watching ? shown : onlyMine ? "mine" : "all";
   const setFilter = (value: SidebarMode) => watching ? setMode(value) : setOnlyMine(value === "mine");
   const of = watching ? "chats" : "connects";
   const mine = t(`web-main.filter.${of}.mine`);
-  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
+  const named = filter === "decisions" ? t("web-main.decisions.title") : filter === "archive" ? t("web-main.filter.archived")
+    : filter === "mine" ? mine : filter === "watching" ? t("web-main.filter.watching") : t("web-main.filter.all");
   const navigate = useNavigate();
-  // On the 奏 page, a list of chats in its place goes back to the chats.
-  const onDecisions = useLocation().pathname === decisions?.to;
-  // Gone to the archive, the focus is not brought back to the button (it would be ringed there, over the page left).
+  const path = useLocation().pathname;
+  // Gone to another page, the focus is not brought back to the button (it would be ringed there, over the page left).
   const leaving = useRef(false);
   const item = (value: SidebarMode, text: string) => (
-    <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => {
+    <DropdownMenu.Item className={`${controlsCss.menuItem} ${controlsCss.chooserItem}`} onSelect={() => {
       setFilter(value);
-      if (value === "decisions" && decisions && !onDecisions) { leaving.current = true; navigate(decisions.to); }
-      else if (value !== "decisions" && decisions && onDecisions) { leaving.current = true; navigate(decisions.chats); }
+      const to = value === "decisions" ? decisions?.to : value === "archive" ? archive
+        : path === decisions?.to || path === archive ? decisions?.chats : undefined;
+      if (to && to !== path) { leaving.current = true; navigate(to); }
     }}>
-      <span className={chatCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
+      <span className={controlsCss.chooserCheck}>{filter === value && <Check size={14} />}</span>{text}
     </DropdownMenu.Item>
   );
   return (
@@ -50,7 +52,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
         <Filter size={16} strokeWidth={1.8} />{!compact && <span>{named}</span>}
       </DropdownMenu.Trigger></Tip>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${chatCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
+        <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList} ${controlsCss.chooserMenu}`} align="end" sideOffset={6} collisionPadding={8}
           onCloseAutoFocus={(e) => { if (leaving.current) { leaving.current = false; e.preventDefault(); } }}>
           {item("all", t(`web-main.filter.${of}.all`))}
           {item("mine", mine)}
@@ -58,9 +60,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
           {decisions && item("decisions", t("web-main.decisions.title"))}
           {archive && <>
             <DropdownMenu.Separator className={controlsCss.menuSep} />
-            <DropdownMenu.Item className={`${controlsCss.menuItem} ${chatCss.chooserItem}`} onSelect={() => { leaving.current = true; navigate(archive); }}>
-              <span className={chatCss.chooserCheck}><Archive size={14} /></span>{t("web-main.filter.archived")}
-            </DropdownMenu.Item>
+            {item("archive", t("web-main.filter.archived"))}
           </>}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -75,7 +75,7 @@ export function MineFilter({ compact, archive, watching, decisions }: { label?: 
 export function CreatorText({ creator, verb = "created" }: { creator: { via?: string | null; shown?: PersonShown } | null | undefined; verb?: "created" | "started" }) {
   if (!creator?.shown) return null;
   const said = verb === "created" ? "created" : "started";
-  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : ""}`, { name: creator.shown.display })}</span>;
+  return <span className={css.creator}>{t(`web-main.creator.${said}${creator.via === "slack" ? ".slack" : creator.via === "feishu" ? ".feishu" : ""}`, { name: creator.shown.display })}</span>;
 }
 
 /** Who a connect belongs to: avatar and name as the core names them. */
@@ -94,88 +94,106 @@ export function OwnerLabel({ owner }: { owner: { id: string; shown?: PersonShown
 
 /**
  * A profile's allowance, as the core puts its windows (shortest first, each marked): compact, a rounded box per window
- * with what is left written in it (its mark too when there is more than one), its edge drawn as far as is left.
- * `small`: where a line is lower than a row (the model control).
+ * (QuotaChip); else each window's number large over its cells (Dial). `small`: where a line is lower than a row (the
+ * model control).
  */
 export function QuotaBars({ quota, compact, small, bare }: { quota: Quota | null | undefined; compact?: boolean; small?: boolean; bare?: boolean }) {
   if (!quota) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{t("web-main.quota.unchecked")}</p>;
   if (quota.state !== "ok" || quota.windows.length === 0) return compact ? null : <p className={`${shellCss.muted} ${css.quotaNote}`}>{quota.detail ?? t("web-main.quota.unknown")}</p>;
   if (compact) {
-    const lone = quota.windows.length === 1;
     return (
       <span className={css.quotaChips}>
         {quota.windows.map((w) => (
           // Bare: inside a control, so not a stop of their own for the keyboard; the tip still shows on hover.
-          <Tip key={w.label} label={<>{t("web-main.quota.left", { label: w.label, left: w.left })}{w.refills && <><br />{w.refills}</>}</>}>
-            <EdgeChip fill={w.left} level={w.level} mark={lone ? null : w.mark} label={t("web-main.quota.left", { label: w.label, left: w.left })} small={small} bare={bare} />
+          <Tip key={w.label} label={<>{quotaLeft(w)}{w.refills && <><br />{w.refills}</>}</>}>
+            <QuotaChip window={w} marked={quota.windows.length > 1} small={small} bare={bare} />
           </Tip>
         ))}
       </span>
     );
   }
-  // The profile's own page: each window's number large, ten cells lit as far as is left, its name and when it refills.
+  // The profile's own page: each window's number large, its cells, its name and when it refills.
   return (
     <div className={css.quotaDials}>
-      {quota.windows.map((w) => (
-        <div key={w.label} className={css.quotaDial} data-level={w.level}>
-          <span className={css.quotaDialNumber}>{w.left}<small>%</small></span>
-          <span className={css.quotaDialCells} role="img" aria-label={t("web-main.quota.left", { label: w.label, left: w.left })}>
-            {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < Math.round(w.left / 10) || undefined} />)}
-          </span>
-          <span className={css.quotaDialLabel}>{w.label}</span>
-          <span className={css.quotaDialReset}>{w.refills ?? "\u00a0"}</span>
-        </div>
-      ))}
+      {quota.windows.map((w) => <Dial key={w.label} number={String(w.left)} unit="%" fill={leftOf(w.left)} level={w.level} label={w.label} note={w.refills} aria={quotaLeft(w)} />)}
     </div>
   );
 }
 
-/** A rounded box with a figure in it (its mark before it, when given) and its edge drawn as far as `fill` (0–100),
- * clockwise from the top left, in the colour of the core's `level`: an allowance's window, a machine's meter; or, as
- * level `progress`, how much of a download is in (in the accent, its edge moving smoothly to each new share). What else
- * it is given (a tip's trigger props and ref) goes on the box. */
-export function EdgeChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text?: string | undefined; small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">) {
-  const p = Math.max(0, Math.min(100, fill));
+// How far a box is filled or its cells lit, decided here for all of them, as each is read: an allowance as a battery,
+// as far as is left (what it says); a machine's CPU, memory or disk as a disk's bar, as far as is used (100 less what
+// is left), so that a fuller one means less room though its words say what is left.
+const leftOf = (left: number) => Math.max(0, Math.min(100, left));
+const usedOf = (left: number) => 100 - leftOf(left);
+
+/** A figure large (what is left), ten cells lit as far as `fill` (0–100) in the colour of its level, its name and a
+ * quiet note under: an allowance's window on its profile's page, a machine's CPU, memory or disk on its own. */
+function Dial({ number, unit, fill, level, label, note, aria }: { number: string; unit: string; fill: number; level: Level | string; label: string; note: string | null | undefined; aria: string }) {
+  const lit = Math.round(fill / 10);
+  return (
+    <div className={css.quotaDial} data-level={level}>
+      <span className={css.quotaDialNumber}>{number}<small>{unit}</small></span>
+      <span className={css.quotaDialCells} role="img" aria-label={aria}>
+        {Array.from({ length: 10 }, (_, i) => <i key={i} data-on={i < lit || undefined} />)}
+      </span>
+      <span className={css.quotaDialLabel}>{label}</span>
+      <span className={css.quotaDialReset}>{note ?? "\u00a0"}</span>
+    </div>
+  );
+}
+
+/** A machine's CPU, memory and disk on its own page (a station's details): as an allowance's windows on its profile's,
+ * each what is left large over its cells. `row`: the three across the width however narrow (the phone's page). */
+export function MeterDials({ meters, row = false }: { meters: Meter[]; row?: boolean }) {
+  return <div className={css.quotaDials} data-row={row || undefined}>{meters.map((m) => <Dial key={m.label} number={m.big} unit={m.unit} fill={usedOf(m.left)} level={m.level} label={m.title} note={m.total} aria={`${m.title} ${m.big} ${m.unit}`} />)}</div>;
+}
+
+type ChipProps = { small?: boolean | undefined; bare?: boolean | undefined } & Omit<ComponentProps<"span">, "children">;
+
+/** A rounded box with a figure in it (its mark before it, when given) and its ground filled from the left as far as
+ * `fill` (0–100): grey while there is plenty, in the colour of the core's `level` once it runs low; as level `progress`,
+ * in the accent, its fill moving smoothly to each new share. What else it is given (a tip's trigger props and ref) goes
+ * on the box. Drawn only through QuotaChip, MeterChip and ProgressChip, which say how full. */
+function FillChip({ fill, level, mark, label, text, small, bare, ...rest }: { fill: number; level: Level | string; mark?: ReactNode; label: string; text: string } & ChipProps) {
   return (
     <span {...rest} className={css.quotaChip} data-level={level} data-small={small || undefined} tabIndex={bare ? undefined : 0} role="img" aria-label={label}>
-      <svg className={css.quotaChipEdge} aria-hidden="true">
-        <rect className={css.quotaChipTrack} pathLength={100} />
-        {p > 0 && <rect className={css.quotaChipLeft} pathLength={100} strokeDasharray={`${p} 100`} />}
-      </svg>
-      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}{text ?? `${fill}%`}</span>
+      <i className={css.quotaChipFill} style={{ width: `${Math.max(0, Math.min(100, fill))}%` }} aria-hidden="true" />
+      <span className={css.quotaChipText}>{mark != null && <span className={css.quotaChipMark}>{mark}</span>}<span>{text}</span></span>
     </span>
   );
 }
 
-/** A machine's CPU, memory and disk as the allowance's boxes are drawn: each its name and how full, its edge drawn as
- * far as that; what it is in the tip. */
+/** What is left of an allowance's window, in words: with its name when it has one. */
+const quotaLeft = (w: { label?: string; left: number }) =>
+  w.label ? t("web-main.quota.left", { label: w.label, left: w.left }) : t("web-main.quota.leftAlone", { left: w.left });
+
+/** An allowance's window (or the one an agent is short of): what is left written in it, filled as far as that.
+ * `marked`: its mark before it (where there is more than one). */
+export function QuotaChip({ window: w, marked = true, ...rest }: { window: { label?: string; mark: string; left: number; level: Level | string }; marked?: boolean } & ChipProps) {
+  return <FillChip {...rest} fill={leftOf(w.left)} level={w.level} mark={marked ? w.mark : null} text={`${w.left}%`} label={quotaLeft(w)} />;
+}
+
+/** A machine's CPU, memory or disk: its name and what is left, filled as far as is used. `brief`: the figure alone,
+ * small (a station's row). */
+export function MeterChip({ meter: m, brief = false, ...rest }: { meter: Meter; brief?: boolean } & ChipProps) {
+  const text = brief ? `${m.big}${m.unit === "%" ? "%" : m.unit.slice(0, 1)}` : m.remaining;
+  return <FillChip small={brief} {...rest} fill={usedOf(m.left)} level={m.level} mark={m.short} text={text} label={`${m.label} ${m.remaining}`} />;
+}
+
+/** How much of something coming is in (0–100): in the accent, filled as far as that. */
+export function ProgressChip({ percent, label, ...rest }: { percent: number; label: string } & ChipProps) {
+  return <FillChip {...rest} fill={percent} level="progress" text={`${percent}%`} label={label} />;
+}
+
+/** A machine's CPU, memory and disk, each a MeterChip; what it is in the tip. `alerts`: only those running low. */
 export function MeterChips({ meters, bare, alerts = false }: { meters: Meter[]; bare?: boolean; alerts?: boolean }) {
   return (
     <span className={css.quotaChips}>
       {meters.filter((m) => !alerts || m.level !== "ok").map((m) => (
         <Tip key={m.label} label={`${m.label} ${m.value}${m.note ? ` · ${m.note}` : ""}`}>
-          <EdgeChip fill={m.percent} level={m.level} mark={m.short} text={alerts ? m.remaining : undefined} label={`${m.label} ${m.percent}%${alerts && m.remaining ? ` · ${m.remaining}` : ""}`} bare={bare} />
+          <MeterChip meter={m} bare={bare} />
         </Tip>
       ))}
-    </span>
-  );
-}
-
-/** What is left of a window, as a ring: full when untouched, shorter as it goes, coloured by the core's `level`; the
- * number left inside (up to 99; a full ring says 100 by itself). Use eats it clockwise from the top. */
-export function QuotaRing({ left, level, size = 26 }: { left: number; level: Level; size?: number }) {
-  const used = 100 - left;
-  const stroke = 3;
-  const c = size / 2;
-  const r = c - stroke / 2 - 0.5;
-  const around = 2 * Math.PI * r;
-  return (
-    <span className={css.quotaRing} data-level={level} style={{ width: size, height: size }} role="img" aria-label={t("web-main.quota.leftAlone", { left })}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ strokeWidth: stroke }}>
-        <circle className={css.quotaRingTrack} cx={c} cy={c} r={r} />
-        {left > 0 && <circle className={css.quotaRingFill} cx={c} cy={c} r={r} strokeDasharray={`${(around * left) / 100} ${around}`} transform={`rotate(${-90 + used * 3.6} ${c} ${c})`} />}
-      </svg>
-      {left < 100 && <span className={css.quotaRingNumber}>{left}</span>}
     </span>
   );
 }
@@ -189,24 +207,6 @@ export function PeopleStack({ people, max = 3 }: { people: { id: string; shown: 
         ? <img key={p.id} className={cloudCss.person} src={p.shown.picture} alt="" width={16} height={16} referrerPolicy="no-referrer" />
         : <span key={p.id} className={`${cloudCss.person} ${cloudCss.personLetter}`} aria-hidden="true">{([...p.shown.display][0] ?? "?").toUpperCase()}</span>)}
       {people.length > max && <span className={css.peopleMore}>+{people.length - max}</span>}
-    </span></Tip>
-  );
-}
-
-/** A percentage as a small ring, filled clockwise from the top; colour follows the same levels as the bars. */
-export function Ring({ percent, level, size = 28, label, title }: { percent: number; level: Level; size?: number; label: string; title?: string }) {
-  const p = percent;
-  const r = (size - 4) / 2;
-  const c = 2 * Math.PI * r;
-  return (
-    <Tip label={title ?? `${label} ${p}%`}><span className={css.ring}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-        <circle className={css.ringTrack} cx={size / 2} cy={size / 2} r={r} />
-        <circle className={css.ringFill} data-level={level} cx={size / 2} cy={size / 2} r={r}
-          strokeDasharray={`${(c * p) / 100} ${c}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-        <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle">{p}</text>
-      </svg>
-      <span className="ring-label">{label}</span>
     </span></Tip>
   );
 }

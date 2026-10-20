@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS entries (
   at INTEGER NOT NULL,
   client TEXT,
   profile TEXT,
+  runtime TEXT,
   options TEXT,
   card TEXT,
   PRIMARY KEY (thread, n)
@@ -143,6 +144,9 @@ CREATE TABLE IF NOT EXISTS turns (
   about_n INTEGER,
   about_ts TEXT
 );
+-- A session's turns, by when they started: every list of chats and sessions counts each session's turns and takes its
+-- latest (sessionStats); without it each scanned every turn of every session (some 160 ms a list on a busy station).
+CREATE INDEX IF NOT EXISTS turns_by_session ON turns (session_key, started_at);
 CREATE TABLE IF NOT EXISTS processes (
   pgid INTEGER PRIMARY KEY,
   started_at INTEGER NOT NULL,
@@ -272,6 +276,46 @@ CREATE TABLE IF NOT EXISTS usage_files (
   offset INTEGER NOT NULL,
   model TEXT
 );
+-- Chats an agent opened for another (chat_create, sessions/opened.ts): the session opened (child) and the one that
+-- opened it (parent), each by its station ('' for this one) and key, with the key the opener gave the call. The station
+-- of either keeps a row: the child's to tell its parent how its turns end, the parent's to know its children by.
+CREATE TABLE IF NOT EXISTS opened_chats (
+  child_station TEXT NOT NULL,
+  child TEXT NOT NULL,
+  parent_station TEXT NOT NULL,
+  parent TEXT NOT NULL,
+  key TEXT NOT NULL,
+  title TEXT,
+  link TEXT,
+  state TEXT,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (child_station, child)
+);
+CREATE INDEX IF NOT EXISTS opened_chats_by_key ON opened_chats (parent_station, parent, key, child_station);
+-- Chats shared with other workspaces (docs/chat-share.md, xshare/), by the session key their links name: to whom
+-- (to: JSON [{workspace, name}]), whether they may write in it, who changed it last and when.
+CREATE TABLE IF NOT EXISTS chat_shares (
+  session TEXT PRIMARY KEY,
+  shared TEXT NOT NULL,
+  write INTEGER NOT NULL DEFAULT 0,
+  by TEXT NOT NULL,
+  at INTEGER NOT NULL
+);
+-- Chats published as a snapshot anyone with its link reads (docs/public-share.md, publish/): the link's id and key, the
+-- chat's title then, who published it (email, name) and when, its last message (upto, an n) and its size in bytes. The
+-- snapshot itself is in published/<id>/ beside the database.
+CREATE TABLE IF NOT EXISTS published (
+  id TEXT PRIMARY KEY,
+  thread INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  by_name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  upto INTEGER NOT NULL,
+  size INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS published_by_thread ON published (thread);
 `;
 
 /// Each message as it reads now: its latest edit's words, files and quotes.
@@ -336,6 +380,8 @@ export function addClientColumn(db: DatabaseSync): void {
   if (!has(db, "entries", "client")) db.exec("ALTER TABLE entries ADD COLUMN client TEXT");
   // The profile a notice is about; the `merged` view has no need of it.
   if (!has(db, "entries", "profile")) db.exec("ALTER TABLE entries ADD COLUMN profile TEXT");
+  // The runtime a notice says is not installed (offered to install).
+  if (!has(db, "entries", "runtime")) db.exec("ALTER TABLE entries ADD COLUMN runtime TEXT");
   // A block post's answers to pick from; the `merged` view has no need of them.
   if (!has(db, "entries", "options")) db.exec("ALTER TABLE entries ADD COLUMN options TEXT");
   // A message's card; an options card is kept in `options` too, which stations from before cards read.
@@ -359,4 +405,11 @@ export function addAutoTitleColumns(db: DatabaseSync): void {
 /// add_watch_column: the column watching jobs came with (jobs.watch).
 export function addWatchColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "watch")) db.exec("ALTER TABLE jobs ADD COLUMN watch INTEGER NOT NULL DEFAULT 0");
+}
+
+/// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat
+/// is in (sessions.ws) and whose archive policy a row is (archive_policy.ws); NULL is the station's home workspace.
+export function addWorkspaceColumns(db: DatabaseSync): void {
+  if (!has(db, "sessions", "ws")) db.exec("ALTER TABLE sessions ADD COLUMN ws TEXT");
+  if (!has(db, "archive_policy", "ws")) db.exec("ALTER TABLE archive_policy ADD COLUMN ws TEXT");
 }

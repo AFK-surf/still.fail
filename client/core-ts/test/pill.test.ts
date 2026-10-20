@@ -31,7 +31,7 @@ test("trouble_and_what_the_status_says_show_at_once", () => {
   assert.equal(tone(t.step(100, raw(link("busy"), null))[0]), "busy");
   assert.equal(tone(t.step(200, null)[0]), "back");
   t = new Timing();
-  const slow = { state: "slow", text: "studio 读取对话 · 2 秒", items: [{ state: "slow", text: "studio 读取对话", detail: "已等 2 秒" }] };
+  const slow = { state: "slow", text: "studio 读取对话 · 2 秒", items: [{ state: "slow", text: "studio 读取对话", detail: "已等待 2 秒" }] };
   const [s] = t.step(0, raw(null, slow));
   assert.deepEqual([tone(s), s.items[0].text], ["busy", "studio 读取对话"]);
   assert.equal(raw(null, { state: null, text: null, items: [] }), null);

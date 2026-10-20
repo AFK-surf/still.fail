@@ -4,9 +4,9 @@
 import type { ReactNode } from "react";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
 import { Tip } from "./ui.tsx";
-import * as css from "./DoingMark.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import { t } from "./i18n.ts";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 
 type Words = Record<string, string | number | boolean | null | undefined>;
 
@@ -23,10 +23,10 @@ export function useDoingState(calls: string | readonly string[], on: Words = {})
 }
 
 interface MarkProps {
-  /** On the spinner (its size, where it sits). */
-  className?: string;
-  /** The failure mark's size (px). */
-  size?: number;
+  /** On the spinner (where it sits, its colour; never its size). */
+  className?: string | undefined;
+  /** In a line of small text (a row's end, a pill, a small button's words): 12, else a button's icon's size, 14. */
+  inline?: boolean;
   /** What is in its place otherwise (an icon a button shows), undefined for nothing. */
   idle?: ReactNode;
   /** What the spinner says to a screen reader; none hides it (the button around it already says). */
@@ -38,14 +38,14 @@ interface MarkProps {
 }
 
 /** The spinner, or the failure mark, for a state the caller already has (several calls, or one its menu reads). */
-export function DoingShown({ state, className, size = 12, idle = null, label, side, bare }: MarkProps & { state: DoingState }) {
+export function DoingShown({ state, className, inline = false, idle = null, label, side, bare }: MarkProps & { state: DoingState }) {
   if (state.running) {
-    const cls = className ? `${waitingCss.spinner} ${className}` : waitingCss.spinner;
-    const spinner = label || state.note ? <span className={cls} role="status" aria-label={state.note ?? label} /> : <span className={cls} aria-hidden="true" />;
+    const spinner = <Spinner inline={inline} className={className} label={state.note ?? label} />;
     return state.note && !bare ? <Tip label={state.note} {...(side ? { side } : {})}>{spinner}</Tip> : spinner;
   }
   if (state.error !== undefined) {
-    const mark = <span className={css.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: state.error })}>!</span>;
+    const size = inline ? 12 : 14;
+    const mark = <span className={partsCss.failedMark} style={{ width: size, height: size, fontSize: size - 4 }} role="img" aria-label={t("web-main.doing.failedWhy", { error: state.error })}>!</span>;
     return bare ? mark : <Tip label={state.error} {...(side ? { side } : {})}>{mark}</Tip>;
   }
   return <>{idle}</>;

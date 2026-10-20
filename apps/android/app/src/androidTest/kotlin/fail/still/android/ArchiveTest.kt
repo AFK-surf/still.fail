@@ -1,8 +1,8 @@
 // Archiving a chat with nothing left in it, with real touches injected as the system's own (UiAutomation, as in
 // DecisionsTest), on the app over a fake core: on the home list an archivable row swiped left past the threshold is
 // archived (chat.archive) and leaves; short of it, it springs back; up or down is the list's (it scrolls); a tap opens
-// the chat; a row that cannot be archived does not move; its 归档 chip archives it too. In a chat that can be archived,
-// 归档这个 chat under the agent's last all-done post archives it. `shots` pictures them (light) into files/shots.
+// the chat; a row that cannot be archived does not move; its 归档 chip archives it too, and stays on it as it leaves. In a chat that can be archived,
+// 归档此 chat under the agent's last all-done post archives it. `shots` pictures them (light) into files/shots.
 package fail.still.android
 
 import android.graphics.Bitmap
@@ -57,9 +57,9 @@ class ArchiveTest {
     )
 
     private val busy = row("ember:c-1", "侧栏和设置的几处间距", "在改", stateText = "在等：CI 跑完", tone = "wait")
-    private val done = row("ember:c-2", "README 里的命令", "改好了，已推到 main", stateText = "做完了", settled = true)
-    private val alsoDone = row("ember:c-3", "换掉旧的图标", "都换好了", stateText = "做完了", settled = true)
-    private val rest = (4..14).map { row("ember:c-$it", "第 $it 件事", "还在做", stateText = "在等：Alice 看截图") }
+    private val done = row("ember:c-2", "README 里的命令", "改好了，已推到 main", stateText = "已完成", settled = true)
+    private val alsoDone = row("ember:c-3", "换掉旧的图标", "都换好了", stateText = "已完成", settled = true)
+    private val rest = (4..14).map { row("ember:c-$it", "第 $it 件事", "还在做", stateText = "等待：Alice 看截图") }
 
     private fun chats(items: List<ChatItem>) = ChatsView(
         me = fail.still.android.data.Me(id = Fixtures.account.email), stations = listOf(StationState(Fixtures.STATION, "st", "studio", "online")),
@@ -222,6 +222,19 @@ class ArchiveTest {
         assertArchived(h, done.session)
     }
 
+    /** A row archived (gone from the list, as the core takes it out at once) keeps its 归档 chip while it shrinks and fades. */
+    @Test fun leavingRowKeepsItsChip() {
+        val h = home()
+        val r = h.record("archive-chip-leave")
+        putChats(h, listOf(busy, alsoDone) + rest)
+        h.deliver()
+        r.frames(3)
+        assertEquals("the leaving row's chip", 1, chips("归档「${done.title}」").size)
+        r.frames(20)
+        r.end()
+        assertTrue("chip gone after it left", chips("归档「${done.title}」").isEmpty())
+    }
+
     // ── a chat ──
 
     private val talk = listOf(
@@ -239,7 +252,7 @@ class ArchiveTest {
             if (name == "chat.archive") putChats(h, listOf(busy, alsoDone))
             JsonNull
         }
-        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, key = done.session))
+        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, archiveOffered = true, key = done.session))
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         return h
     }
@@ -255,18 +268,18 @@ class ArchiveTest {
         h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = false, key = done.session))
         h.deliver()
         r.frames(5)
-        assertEquals("exit retains the real button while it moves", 1, rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes().size)
-        rule.onNodeWithText("归档这个 chat").assertIsNotEnabled()
+        assertEquals("exit retains the real button while it moves", 1, rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes().size)
+        rule.onNodeWithText("归档此对话").assertIsNotEnabled()
         assertTrue("leaving button cannot archive", h.fake.calls.none { it.first == "chat.archive" })
         r.frames(20)
         r.end()
-        assertTrue("button removed after exit", rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes().isEmpty())
+        assertTrue("button removed after exit", rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes().isEmpty())
     }
 
     @Test fun chatKeepStaysInChat() {
         val h = chat()
         val before = h.app.stack.toList()
-        rule.onNodeWithText("不再提醒归档").performClick()
+        rule.onNodeWithText("保留").performClick()
         h.settle()
         assertTrue(h.fake.calls.any { it.first == "chat.keep" })
         assertTrue(h.fake.calls.none { it.first == "chat.archive" })
@@ -275,7 +288,7 @@ class ArchiveTest {
 
     @Test fun chatButtonArchives() {
         val h = chat()
-        val buttons = rule.onAllNodesWithText("归档这个 chat").fetchSemanticsNodes()
+        val buttons = rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes()
         assertEquals("one button", 1, buttons.size)
         // Under the last all-done post, not the earlier one.
         assertTrue(buttons[0].boundsInRoot.top > bounds("这件做完了").top)
@@ -287,7 +300,7 @@ class ArchiveTest {
     @Test fun chatArchiveSlidesBackToList() {
         val h = chat()
         val r = h.record("archive-back")
-        rule.onNodeWithText("归档这个 chat").performClick()
+        rule.onNodeWithText("归档此对话").performClick()
         r.frames(32)
         r.end()
         assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
@@ -300,7 +313,7 @@ class ArchiveTest {
             JsonNull
         }
         val before = h.app.stack
-        tap(bounds("归档这个 chat").center)
+        tap(bounds("归档此对话").center)
         h.settle()
         assertEquals("failed archive keeps the chat open", before, h.app.stack)
         assertTrue("failure is visible", h.app.toast?.contains("归档失败") == true)
@@ -350,12 +363,12 @@ class ArchiveTest {
             JsonNull
         }
         val recording = h.record(name)
-        rule.onNodeWithText("不再提醒归档").performClick()
+        rule.onNodeWithText("保留").performClick()
         recording.frames(32)
         recording.end()
         h.settle()
         shot("$name-kept")
-        assertTrue(rule.onAllNodesWithText("不再提醒归档").fetchSemanticsNodes().isEmpty())
+        assertTrue(rule.onAllNodesWithText("保留").fetchSemanticsNodes().isEmpty())
         assertEquals(2, h.app.stack.size)
     }
 

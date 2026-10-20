@@ -4,6 +4,7 @@ import { test } from "node:test";
 import * as f from "../src/format.ts";
 import { fromLocale, holdLanguage, tr } from "../src/i18n.ts";
 import { compareOrder, family, key, name, same } from "../src/shapes/model.ts";
+import * as providers from "../src/shapes/providers.ts";
 import { available, common, fallback } from "../src/shapes/reasoning.ts";
 
 holdLanguage();
@@ -16,6 +17,13 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.compactNumber(1200), "1.2K");
   assert.equal(f.compactNumber(70_600), "70.6K");
   assert.equal(f.compactNumber(3_000_000), "3M");
+  assert.equal(f.compactNumber(2_413_900_000), "2.4B");
+  assert.equal(f.decimal("62500.0000000000"), "62,500");
+  assert.equal(f.decimal("0.0000000000"), "0");
+  assert.equal(f.decimal("1234567.891"), "1,234,567.89");
+  assert.equal(f.decimal("12.50"), "12.5");
+  assert.equal(f.decimal("-0.001"), "0");
+  assert.equal(f.decimal("lots"), "lots");
   assert.equal(f.duration(850), "850ms");
   assert.equal(f.duration(185_000), "3 分 5 秒");
   const now = 1_790_467_200_000;
@@ -34,6 +42,13 @@ test("words_as_the_clients_had_them", () => {
   assert.equal(f.agentLabel("gpt-6-astra", "medium"), "GPT-6 Astra · medium");
   assert.equal(f.agentLabel("my-model", null), "my-model");
   assert.equal(f.cleanText("<@U1> hi   there"), "hi there");
+  const plain = (s: string) => f.cleanText(f.plainText(s));
+  assert.equal(plain("改成 `tsgo` 了，**快**很多 ~~慢~~ *真的*"), "改成 tsgo 了，快很多 慢 真的");
+  assert.equal(plain("看 [PR #12](https://github.com/a/b/pull/12) 和 https://x.dev/a?b=1"), "看 PR #12 和 [链接]");
+  assert.equal(plain("<https://x.dev|文档> <https://y.dev> <#C1|ops> &lt;b&gt; &amp;"), "文档 [链接] #ops <b> &");
+  assert.equal(plain("![](shot.png) [](/tmp/a.pdf) [报告](report.pdf)"), "[图片] [文件] 报告");
+  assert.equal(plain("## 结论\n- 一\n1. 二\n> 三\n| a | b |\n|---|---|\n```ts\nlet x_y = 1\n```"), "结论 一 二 三 a b let x_y = 1");
+  assert.equal(plain("`**不动**` snake_case_name 2*3*4"), "**不动** snake_case_name 2*3*4");
   assert.deepEqual(f.splitThread("C0OPS/1727.0001"), ["C0OPS", "1727.0001"]);
   assert.equal(f.splitThread("nope"), null);
   assert.equal(f.refillsIn(now + 185 * MINUTE, now), "3 小时 5 分钟后刷新");
@@ -55,6 +70,15 @@ test("words_in_english", () => {
   assert.equal(f.timeUntilIn("en", now + 3 * 60 * MINUTE, now), "in 3 hr");
   assert.equal(f.refillsInLang("en", now + 185 * MINUTE, now), "Refills in 3 hr 5 min");
   assert.equal(f.refillsInLang("en", now + 25 * 60 * MINUTE, now), "Refills in 1 day 1 hr");
+  // The station names quota windows in Chinese; they are said in the viewer's language, and still marked.
+  assert.equal(f.windowName("5 小时", "en"), "5 hours");
+  assert.equal(f.windowName("1 小时", "en"), "1 hour");
+  assert.equal(f.windowName("3 天", "en"), "3 days");
+  assert.equal(f.windowName("每周 · Opus", "en"), "Weekly · Opus");
+  assert.equal(f.windowName("每月", "en"), "Monthly");
+  assert.equal(f.windowName("5 小时", "zh"), "5 小时");
+  assert.equal(f.windowName("Spark", "en"), "Spark");
+  assert.deepEqual(f.windowMark(f.windowName("3 天", "en")), ["3D", 1]);
 });
 
 test("spellings_of_one_model_share_a_key", () => {
@@ -109,6 +133,35 @@ test("reported_levels_aliases_empty_and_legacy", () => {
   assert.deepEqual(available("claude", "gpt-6-astra", catalog), fallback("claude"));
   const limited = available("codex", "gpt-6-luna", catalog);
   assert.ok(!common([astra, limited], "codex").includes("ultra"));
+});
+
+test("deepseek_harness_is_named_thinks_at_its_own_levels_and_runs_on_any_endpoint", () => {
+  assert.deepEqual(["claude", "codex", "dsh"].map(f.runtimeLabel), ["Claude Code", "Codex", "DeepSeek Harness"]);
+  assert.deepEqual(f.RUNTIMES, ["claude", "codex", "dsh", "grok"]);
+  assert.deepEqual(fallback("dsh"), ["low", "medium", "high", "max"]);
+  assert.deepEqual(available("dsh", "deepseek-v4", { codex: { "deepseek-v4": ["low"] } }), fallback("dsh"));
+  const runs = (id: string, endpoint: string | null = null, protocol: string | null = null) => {
+    const at = providers.endpoints(providers.find(id)!, endpoint, protocol);
+    return at === null ? null : providers.runtimes(providers.uses(at, id));
+  };
+  assert.deepEqual(runs("opencode-go"), ["claude", "codex", "dsh"]);
+  assert.deepEqual(runs("anthropic"), ["claude", "dsh"]);
+  assert.deepEqual(runs("openai"), ["codex", "dsh"]);
+  assert.deepEqual(runs("deepseek"), ["dsh"]);
+  assert.deepEqual(runs("jev"), []);
+  assert.deepEqual(runs("cloudflare-ai-gateway", "https://gateway.ai.cloudflare.com/v1/a/b/compat", "chat_completions"), ["dsh"]);
+});
+
+test("grok_build_is_named_thinks_up_to_max_and_runs_on_xais_own_api_alone", () => {
+  assert.equal(f.runtimeLabel("grok"), "Grok Build");
+  assert.deepEqual(fallback("grok"), ["low", "medium", "high", "xhigh", "max"]);
+  assert.deepEqual(available("grok", "grok-5", { codex: { "grok-5": ["low"] } }), fallback("grok"));
+  assert.deepEqual(available("grok", "grok-5", { grok: { "grok-5": ["low", "high"] } }), ["low", "high"]);
+  const runs = (id: string) => providers.runtimes(providers.uses(providers.endpoints(providers.find(id)!, null, null)!, id));
+  assert.deepEqual(runs("xai"), ["codex", "dsh", "grok"]);
+  // Another provider speaking the same protocol does not run it, nor xAI's endpoints said with no provider.
+  assert.deepEqual(runs("openai"), ["codex", "dsh"]);
+  assert.deepEqual(providers.runtimes(providers.uses(providers.endpoints(providers.find("xai")!, null, null)!)), ["codex", "dsh"]);
 });
 
 test("fills_and_counts", () => {

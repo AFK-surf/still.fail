@@ -1,6 +1,7 @@
 // The API providers a profile can reach with a key, and where each speaks which protocol (client/core-ts/src/shapes/schema.ts providers.rs:
 // what the runtimes' environment is made from, so it follows the same list). Only what setting up a runtime needs:
 // `find`, `endpoints`, `cleanEndpoint`, `uses`.
+import type { RuntimeKind } from "./runtime.ts";
 
 export type Protocol = "chat_completions" | "responses" | "anthropic";
 
@@ -154,8 +155,9 @@ export function endpoints(source: Source, endpoint: string | undefined, protocol
 }
 
 /// The runtimes a provider's profile can run, from where it speaks: Anthropic's protocol is Claude Code's, Responses
-/// Codex's.
-export const runtimesOf = (at: Endpoints): ("claude" | "codex")[] => [
+/// Codex's; DeepSeek Harness speaks all three (chat completions too).
+export const runtimesOf = (at: Endpoints): RuntimeKind[] => [
   ...(at.anthropic !== undefined ? (["claude"] as const) : []),
   ...(at.responses !== undefined ? (["codex"] as const) : []),
+  ...(at.chat !== undefined || at.anthropic !== undefined || at.responses !== undefined ? (["dsh"] as const) : []),
 ];

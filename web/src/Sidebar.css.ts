@@ -1,11 +1,14 @@
 // The sidebar: the brand on top, the chat list (or a settings list) under it, a foot at the bottom. Also the station's,
 // the cloud's and the admin console's settings lists, which are drawn with the same rows.
 import { fallbackVar, globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { accountTrigger } from "./cloud/workspace.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
-import { shell } from "./styles/shell.css.ts";
-import { kindIcon, kindMark, resizeHandle } from "./ui.css.ts";
+import { dock, shell } from "./styles/shell.css.ts";
+import { kindIcon, kindMark } from "./ui.css.ts";
+import { outsetEnd, outsetStart, oversize } from "@stillfail/ui/styles/align.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { resizeHandle } from "@stillfail/ui/parts.css.ts";
+import { STILL, stillAtOnce } from "@stillfail/ui/styles/still.ts";
 
 const wide = "(min-width: 701px)";
 const narrow = "(max-width: 700px)";
@@ -17,11 +20,20 @@ export const sidebar = style({
   WebkitUserSelect: "none", userSelect: "none",
   "@media": {
     [wide]: {
-      selectors: { '[data-sidebar="closed"] &': { overflow: "hidden" } },
+      selectors: { '[data-sidebar="closed"] &, [data-sidebar-moving] &': { overflow: "hidden" } },
     },
     // On a narrow screen the sidebar is the page's list: it gives way to the page opened from it.
     [narrow]: { selectors: { [`${shell}[data-detail="true"] &`]: { display: "none" } } },
   },
+});
+// In the block with the rail (shell.css.ts dock): its ground is the block's, its width its own, cut as the block closes.
+globalStyle(`${dock} > ${sidebar}`, {
+  background: "none", flex: "none", width: fallbackVar(vars.sidebarW, "240px"),
+});
+// Open, reaching 8 into the rail's 56 (empty there, right of its places): its rows 13 from the rail's ground, as that
+// ground is from the window's edge, not 21; its right edge where it was. Closed, after the rail, cut by the bar.
+globalStyle(`:root:not([data-sidebar="closed"]) ${dock} > ${sidebar}`, {
+  "@media": { [wide]: { ...outsetStart(8), width: `calc(${fallbackVar(vars.sidebarW, "240px")} + 8px)` } },
 });
 globalStyle(`${sidebar} :is(input, textarea)`, { WebkitUserSelect: "text", userSelect: "text" });
 globalStyle(`${sidebar} :is(a, img, svg)`, { WebkitUserDrag: "none" });
@@ -32,11 +44,26 @@ globalStyle(`${sidebar} > :not(${resizeHandle})`, { "@media": { [wide]: { minWid
 export const brand = style({
   display: "flex", alignItems: "center", gap: 8, height: 56, padding: "0 16px",
   selectors: {
-    // The desktop app has no title bar: the top row holds the window's buttons (apps/desktop/src/main.ts puts them in
-    // it), the buddy beside them, and drags the window.
-    "[data-desktop] &": { height: 44, paddingLeft: 86, WebkitAppRegion: "drag" },
+    // The desktop app has no title bar: the top row drags the window. On macOS it holds the window's buttons
+    // (apps/desktop/src/main.ts puts them in it), the buddy beside them; on Windows they are at the page's right.
+    "[data-desktop] &": { height: 44, WebkitAppRegion: "drag" },
+    '[data-desktop="inset"] &': { paddingLeft: 86 },
+    // Beside the rail (Rail.css.ts), the window's buttons reach over it into this row.
+    '[data-desktop="inset"] [data-rail] &': { paddingLeft: 30 },
     // Full screen, the window's buttons are gone.
-    "[data-desktop][data-fullscreen] &": { paddingLeft: 16 },
+    '[data-desktop="inset"][data-fullscreen] &': { paddingLeft: 16 },
+  },
+  "@media": {
+    // No rail on a narrow window: the buttons are all in this row.
+    [narrow]: { selectors: { '[data-desktop="inset"] [data-rail] &': { paddingLeft: 86 } } },
+    // Beside the rail on the web, nothing is left in it (no name, no buddy, no window to drag): a margin only.
+    // Nor in the desktop app full screen, its window's buttons gone, nor on Windows, whose buttons are at the right.
+    // Closed (shown a while over the page, Rail.tsx peekSidebar), none either: the bar starts under the window's buttons,
+    // its first row level with the rail's first place.
+    [wide]: { selectors: {
+      ':root:is(:not([data-desktop="inset"]), [data-fullscreen]) [data-rail] &': { height: 8 },
+      ':root[data-sidebar="closed"] [data-rail] &': { height: 0 },
+    } },
   },
 });
 /** 云端侧边栏：lockup 在 workspace 切换器上方（always with `brand`, whose desktop top row still wins） */
@@ -47,6 +74,7 @@ export const brandCompact = style({ height: 48, padding: "0 16px" });
 const band = {
   position: "relative", zIndex: 1, flex: "none",
   background: `color-mix(in srgb, ${vars.sidebar} 72%, transparent)`, WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+  // With the sidebar's ground as it closes to the bar (shell.css.ts dock): moved with it (brand.tsx moveSidebar).
 } as const;
 export const navTop = style(band);
 
@@ -61,19 +89,25 @@ export const navScroll = style({
  * whole sidebar's height. */
 export const navSlider = style({ position: "absolute", inset: 0, overflow: "hidden", display: "flex" });
 export const navTrack = style({
-  flex: "none", width: "400%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
+  flex: "none", width: "500%", display: "flex", transition: `transform 240ms ${vars.easeOut}`,
   selectors: {
-    "&[data-filter=mine]": { transform: "translateX(-25%)" },
-    "&[data-filter=watching]": { transform: "translateX(-50%)" },
-    "&[data-filter=decisions]": { transform: "translateX(-75%)" },
+    "&[data-filter=mine]": { transform: "translateX(-20%)" },
+    "&[data-filter=watching]": { transform: "translateX(-40%)" },
+    "&[data-filter=decisions]": { transform: "translateX(-60%)" },
+    "&[data-filter=archive]": { transform: "translateX(-80%)" },
     // To 奏 from its row in the sidebar's foot: its rows come out of that row instead (DecisionDesk.tsx).
     "&[data-instant]": { transition: "none" },
   },
-  "@media": { "(prefers-reduced-motion: reduce)": { transition: "none" } },
 });
 // Each pane sized by the track alone: otherwise the track's height is its tallest pane's content, and any change in a
 // row (the time shown on hover) lays out every row of all the lists again, a frame dropped per row passed while scrolling.
-globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "25%", contain: "strict" });
+globalStyle(`${navTrack} > ${navScroll}`, { flex: "none", width: "20%", contain: "strict" });
+// The panes not shown (inert) are not drawn, nor their rows' motions run: drawn, they cost every frame that changed
+// anything as much as the one shown (their rings went on turning off to the side). Only while the track rests: sliding
+// (data-sliding, Sidebar.tsx), the panes it passes are drawn from its start, and the one it leaves stays a slide's time
+// before it goes (it gets inert before the slide starts); the one it goes to shows at once (that has no transition).
+globalStyle(`${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, { contentVisibility: "hidden", transition: "content-visibility 0s 240ms allow-discrete" });
+globalStyle(`${STILL} ${navTrack}:not([data-sliding]) > ${navScroll}[inert]`, stillAtOnce);
 
 export const navFoot = style({ ...band, marginTop: "auto", padding: 8 });
 export const navFootRow = style({ display: "flex", alignItems: "center", gap: 4 });
@@ -82,14 +116,14 @@ globalStyle(`${navFootRow} > ${iconBtn}, ${navFootRow} > * > ${iconBtn}`, { flex
 
 export const navHeading = style({
   display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 8px 4px",
-  fontSize: vars.textXs, lineHeight: "18px", color: vars.muted,
+  fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,
 });
-export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textSm, color: vars.muted });
+export const navEmpty = style({ margin: "16px 10px", fontSize: vars.textUi, color: vars.muted });
 export const navError = style({ color: vars.red });
 
 export const navRow = style({
   display: "flex", alignItems: "center", gap: 8, minHeight: 32, padding: "6px 10px", lineHeight: "20px", borderRadius: vars.rNav,
-  fontSize: vars.textSm, color: vars.text, transition: `background ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
+  fontSize: vars.textUi, color: vars.text, transition: `background ${vars.dur} ${vars.easeOut}`, cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
     '&[aria-current="page"]': { background: vars.selected },
@@ -104,11 +138,28 @@ export const navRow = style({
 });
 globalStyle(`${navRow} svg`, { color: vars.muted, flex: "none" });
 export const navText = style(ellipsis);
-/** 新建对话, with the filter beside it. */
-export const navNew = style({ display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px" });
+/** The windows whose sidebar's top row is only a margin (Windows, its buttons at the page's right; brand, above). */
+const marginTop = ':root:is([data-desktop="custom"], [data-desktop="overlay"]):not([data-fullscreen]):not([data-sidebar="closed"])';
+/** The action over a list (SidebarList.tsx NavAction): 新建对话, with the filter beside it; 添加 Station, …. */
+export const navNew = style({
+  display: "flex", alignItems: "center", gap: 4, padding: "6px 8px 2px",
+  // There it drags the window too, all but its controls (as the page's bar beside it does): with that margin, all that
+  // is empty above and beside 新建对话. Not in the closed bar, floating over the page.
+  selectors: { [`${marginTop} &`]: { WebkitAppRegion: "drag" } },
+});
+globalStyle(`${marginTop} ${navNew} :is(a, button, input, select, textarea, [role="button"], [tabindex])`, { WebkitAppRegion: "no-drag" });
 globalStyle(`${navNew} > ${navRow}`, { flex: 1, minWidth: 0 });
-// Align the compose icon with the 14px completion check below.
-globalStyle(`${navNew} > ${navRow} > svg`, { transform: "translateX(-1px)" });
+/**
+ * Folded and shown a while, the bar floats with a corner (shell.css.ts dock: the rail's places' 9 px ground, 6 in): what
+ * stands in its top right corner (the lists' filter) is 6 from its top and its side, rounded as the rail's places are,
+ * concentric with it; the band ends 6 under it too, not 2 (the lists starting at once under the band).
+ */
+globalStyle(`[data-sidebar="closed"] ${navNew}`, { paddingRight: 6, paddingBottom: 6 });
+globalStyle(`[data-sidebar="closed"] ${navNew} > :last-child:not(${navRow})`, { borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape });
+/** 待处理, under 新建对话 (cloud/workspace.tsx): as inset as it; nothing when there is nothing to do. */
+export const navTodo = style({ padding: "2px 8px 8px", selectors: { "&:empty": { display: "none" } } });
+/** 新建对话's icon: aligned with the 14px completion check below. */
+export const navCompose = style({ transform: "translateX(-1px)" });
 
 // ── a chat's row ──
 
@@ -133,8 +184,6 @@ export const navSession = style({
 export const rowAside = style({
   selectors: { [`${navSessionWrap}:hover &`]: { display: "none" } },
 });
-/** A station's link coming back: a small turning ring (the global spinner) where the row's mark goes. */
-export const rowSpinner = style({ width: 12, height: 12, borderWidth: 1.5 });
 
 // One column, as wide as the row leaves it: an auto one grows to a long title's whole length, and the row with it.
 export const navSessionText = style({
@@ -146,29 +195,33 @@ export const navSessionHead = style({
   display: "flex", alignItems: "center", gap: 6, minWidth: 0, height: 20, lineHeight: "20px",
   selectors: { [`${navSessionWrap}:hover &`]: { paddingRight: 24 } },
 });
+/** The title's mark in a 10px column, the state line's icon (ChatMark.tsx WaitingText `slot`) centred under it; none, no column. */
+export const navMarkSlot = style({ display: "flex", flex: "none", width: 10, justifyContent: "center", selectors: { "&:empty": { display: "none" } } });
 export const navSessionTitle = style({
   flex: 1, ...ellipsis,
   selectors: {
-    [`${navSession}[data-unread] &`]: { fontWeight: 600, color: vars.text },
+    [`${navSession}[data-unread] &`]: { fontWeight: 500, color: vars.text },
     [`${navSession}[data-offline] &`]: { opacity: 0.5 },
   },
 });
 export const navSessionMeta = style({
-  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textXs, color: vars.muted, whiteSpace: "nowrap",
+  display: "flex", alignItems: "center", gap: 6, fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap",
   // Not clipped: the starter's ring (RowPicture.css.ts) stands 2px out of its 16px face, past this 18px line. The last
   // message ellipsizes itself.
   // Every row is two lines high, message or not, so a row that gains its first message does not grow.
   height: 18, lineHeight: "18px",
+  // A state line's icon in the mark's column: what follows starts where the title does, the head's gap on.
+  vars: { "--lead-gap": "6px" },
   selectors: { [`${navSession}[data-offline] &`]: { opacity: 0.5 } },
 });
 export const navSessionLast = style({
-  flex: 1, ...ellipsis, fontSize: vars.textXs, color: vars.muted,
+  flex: 1, ...ellipsis, fontSize: vars.textMeta, color: vars.muted,
   // Its turn (something waits on the viewer, ChatMark.tsx WaitingText): in ink.
   selectors: { "&[data-turn]": { color: vars.text } },
 });
 /** When is rarely what one looks for in the list: it shows on hover (and keyboard focus), giving its room to the message otherwise. */
 export const navTime = style({
-  marginLeft: "auto", flex: "none", color: vars.subtle, fontVariantNumeric: "tabular-nums",
+  marginLeft: "auto", flex: "none", color: vars.subtle, fontSize: vars.textCaption, fontVariantNumeric: "tabular-nums",
   selectors: {
     [`${navSession} &`]: { display: "none" },
     [`${navSessionWrap}:hover &, ${navSession}:focus-visible &`]: { display: "inline" },
@@ -178,32 +231,19 @@ export const navTime = style({
 export const sessionKind = style({
   display: "inline-grid", flex: "none",
   selectors: {
-    [`${navSessionHead} &`]: { width: 14, placeItems: "center" },
+    // As wide as the agent's mark under it (RowPicture.css.ts asideAgent), so the two are centred on one line.
+    [`${navSessionHead} &`]: { width: 16, placeItems: "center" },
     [`${navSession}[data-offline] &`]: { color: vars.subtle },
   },
 });
 globalStyle(`${sessionKind} ${kindIcon}`, { width: 14, height: 14 });
 // The buddy has air around it in its artwork: at 16px it reads as big as the 14px platform marks.
-globalStyle(`${sessionKind} ${kindMark}`, { margin: -1 });
+globalStyle(`${sessionKind} ${kindMark}`, oversize(1));
 /** Archive, beside a row while pointed at: centred on the title line (20px tall, 7px down the row). */
 export const rowArchive = style({
   position: "absolute", top: 5, right: 6, width: 24, height: 24, opacity: 0, pointerEvents: "none",
   selectors: { [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" } },
 });
-/** 归档 in words, for a chat with nothing left in it (the core's `archivable`): a small chip on the title line, in the
- * icon's place, while the row is pointed at (always, on a touch screen). */
-export const rowArchiveChip = style({
-  position: "absolute", top: 7, right: 8, height: 20, padding: "0 8px", border: 0, borderRadius: 10,
-  background: `color-mix(in srgb, ${vars.text} 8%, transparent)`, color: vars.text, fontFamily: "inherit",
-  fontSize: vars.textXs, lineHeight: "20px", fontWeight: 500, cursor: "pointer", opacity: 0, pointerEvents: "none",
-  selectors: {
-    [`${navSessionWrap}:hover &, &:focus-visible`]: { opacity: 1, pointerEvents: "auto" },
-    "&:hover": { background: `color-mix(in srgb, ${vars.text} 13%, transparent)` },
-  },
-  "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
-});
-globalStyle(`${navSessionWrap}[data-archivable]:hover ${navSessionHead}`, { paddingRight: 48 });
-globalStyle(`${navSessionWrap}[data-archivable] ${navSessionHead}`, { "@media": { "(hover: none)": { paddingRight: 48 } } });
 
 /** Stations not working: a row at the top of the sidebar's foot, over the account; its dot says the worst of it. */
 export const stationTrouble = style({ marginBottom: 4, color: vars.text });
@@ -220,18 +260,30 @@ globalStyle(`${stationTrouble}[role="status"]:hover`, { background: "transparent
 /** The stations' row and, while down, 重试 at its end (a button, so beside the link, not in it). */
 export const stationRow = style({ position: "relative", marginBottom: 4 });
 globalStyle(`${stationRow} > ${stationTrouble}`, { marginBottom: 0 });
+// Beside the rail, whose glyph says how the stations are (Rail.tsx), the line is there only for what is wrong.
+globalStyle(`${stationRow}:not(:has(> ${stationTrouble}[data-state], > * > ${stationTrouble}[data-state]))`, { "@media": { [wide]: { display: "none" } } });
 globalStyle(`${stationRow} > ${stationTrouble}[data-retry]`, { paddingRight: 64 });
 export const waitingRetry = style({
-  flex: "none", height: 22, padding: "0 10px", marginRight: -4, borderRadius: 999, border: 0, cursor: "pointer",
-  background: vars.hover, color: vars.text, fontSize: vars.textSm, display: "inline-flex", alignItems: "center", gap: 5,
+  flex: "none", height: 22, padding: "0 10px", ...outsetEnd(4), borderRadius: 999, border: 0, cursor: "pointer",
+  background: vars.hover, color: vars.text, fontSize: vars.textUi, display: "inline-flex", alignItems: "center", gap: 5,
   selectors: {
     "&:hover:not(:disabled)": { background: vars.line },
     "&:disabled": { cursor: "progress" },
     [`${stationRow} > &`]: { position: "absolute", right: 6, top: 5, marginRight: 0 },
   },
 });
-export const waitingItems = style({ display: "grid", gap: 6, maxWidth: 320 });
+/** However many there are, within the window: what does not fit scrolls (the tip's own padding is 5px each side). */
+export const waitingItems = style({
+  display: "grid", gap: 6, maxWidth: 320, maxHeight: "calc(var(--radix-tooltip-content-available-height, 100vh) - 10px)",
+  overflowY: "auto",
+});
 export const waitingItem = style({ display: "grid", gap: 1 });
 export const waitingDetail = style({ opacity: 0.7 });
 /** Under a page's "loading…": quiet. */
-export const statusLine = style({ display: "block", marginTop: 4, fontSize: 12, color: vars.muted });
+export const statusLine = style({ display: "block", marginTop: 4, fontSize: vars.textMeta, color: vars.muted });
+
+/** The foot's status line: the stations, and the services left up long beside them (cloud/workspace.tsx). */
+export const navFootStatus = style({ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, marginBottom: 4, selectors: { "&:empty": { marginBottom: 0 } } });
+globalStyle(`${navFootStatus} > :first-child`, { flex: "1", minWidth: 0 });
+// The line keeps the gap under it, not the stations' row: with the row's own margin the chip beside it centred 2px low.
+globalStyle(`${navFootStatus} > :is(${stationRow}, ${stationTrouble})`, { marginBottom: 0 });

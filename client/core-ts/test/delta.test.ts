@@ -1,7 +1,10 @@
 // The Rust core's delta.rs tests, ported.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, diff, largerThan } from "../src/delta.ts";
+import { apply, diff, jsonLength, largerThan } from "../src/delta.ts";
+import { toJson, utf8 } from "../src/util.ts";
+import { Rng } from "./sim-iroh.ts";
+import { seeds } from "./sim-seeds.ts";
 
 function roundTrip(old: unknown, next: unknown) {
   const ops = diff(old, next);
@@ -50,4 +53,32 @@ test("knows_when_ops_outgrow_the_value", () => {
   const long = { timeline: Array.from({ length: 100 }, (_, i) => `message ${i}`) };
   const longer = { timeline: [...long.timeline, "one more"] };
   assert.ok(!largerThan(diff(long, longer), longer));
+});
+
+// largerThan counts the value instead of writing it out: the count is the written bytes, whatever the value holds.
+test("a_value_is_counted_as_its_json_bytes", () => {
+  const pieces = ["", "a", "\"", "\\", "\n", "\u0001", "中文", "😀", "\ud800", "x\udc00y", "é", "\u2028"];
+  for (const seed of seeds()) {
+    const rng = new Rng(seed);
+    const text = () => Array.from({ length: rng.int(0, 4) }, () => pieces[rng.int(0, pieces.length - 1)]).join("");
+    const value = (depth: number): unknown => {
+      const k = rng.int(0, depth > 3 ? 5 : 8);
+      if (k === 0) return null;
+      if (k === 1) return rng.next() < 0.5;
+      if (k === 2) return [0, -1, 1.5, 1e21, 2 ** 53, -0.25, Number.NaN][rng.int(0, 6)];
+      if (k === 3 || k === 4) return text();
+      if (k === 5) return undefined;
+      if (k === 6) return Array.from({ length: rng.int(0, 4) }, () => value(depth + 1));
+      return Object.fromEntries(Array.from({ length: rng.int(0, 4) }, () => [text(), value(depth + 1)]));
+    };
+    for (let i = 0; i < 400; i++) {
+      const v = value(0);
+      if (v === undefined) continue;
+      const bytes = utf8(toJson(v)).length;
+      const said = `seed ${seed} (SIM_SEED=${seed}), value ${i}: ${JSON.stringify(v)}`;
+      assert.equal(jsonLength(v), bytes, said);
+      const limit = rng.int(0, bytes + 2);
+      assert.equal(jsonLength(v, limit) <= limit, bytes <= limit, `${said}, limit ${limit}`);
+    }
+  }
 });

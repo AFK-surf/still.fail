@@ -4,14 +4,13 @@ import { Link } from "react-router";
 import { useStations } from "./api.ts";
 import { useCall, useTopic } from "./core/react.ts";
 import type { ArchiveOptionView, ArchivePolicyDraft, ArchivePolicyView, AutomaticDecisionDraft, AutomaticDecisionView } from "./core/shapes.ts";
-import { useAct, useToast } from "./toast.tsx";
+import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "./doing.ts";
-import { Button, Dialog, Field, Segmented, StatusDot, Switch } from "./ui.tsx";
+import { Button, Dialog, Field, Segmented, StatusDot, Switch, Spinner, Waiting, WaitLine } from "./ui.tsx";
 import { ModelTriple } from "./ModelTriple.tsx";
 import type { Picking } from "./pick.ts";
-import { ChevronRight, Plus, Trash } from "./icons.tsx";
-import * as waitingCss from "./styles/waiting.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import { ChevronRight, Plus, Trash } from "@stillfail/ui/icons.tsx";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { stationBase } from "./station.tsx";
 import * as pages from "./styles/pages.css.ts";
 import * as css from "./AutomaticDecisions.css.ts";
@@ -32,19 +31,19 @@ export function AutomaticDecisions({ workspace }: { workspace: string }) {
 export function AutomaticDecisionCompletion({ workspace }: { workspace: string }) {
   const stations = useStations(workspace);
   return <div className={css.content}>
-    {!stations.value && <p className={css.note}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
+    {!stations.value && (stations.error ? <p className={css.note}>{stations.error.message}</p> : <Waiting count={2} text={t("common.readingStations")} />)}
     {stations.value?.length === 0 && <p className={css.note}>{t("web-pages.automaticDecisions.addStation")}</p>}
     <ul className={pages.list}>{stations.value?.map(s => s.online && s.overview?.automaticDecisions
       ? <AutomaticDecisionPanel key={s.station} workspace={workspace} station={s.station} name={s.name} view={s.overview.automaticDecisions} />
-      : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}>{s.name}</span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
+      : <li key={s.station} className={pages.listRow}><StatusDot state={s.online ? "online" : "offline"} /><span className={pages.listRowText}><span className={pages.listRowTitle}>{s.name}</span><span className={css.note}>{!s.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? <><Spinner inline />{" "}{t("common.connecting")}</> : t("web-pages.automaticDecisions.upgrade")}</span></span></li>)}</ul>
   </div>;
 }
 
 function AutomaticDecisionPanel({ workspace, station, name, view }: { workspace: string; station: string; name: string; view: AutomaticDecisionView }) {
   const {d, state, saving, saveFailed, reviewing, reviewFailed, canReview, edit, save, review} = useAutomaticDecisionForm(station, view);
-  const status = (text: string) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{text}</span></span></li>;
+  const status = (text: string, waiting = false) => <li className={pages.listRow}><StatusDot state="online" /><span className={pages.listRowText}><span className={pages.listRowTitle}>{name}</span><span className={css.note}>{waiting && <><Spinner inline />{" "}</>}{text}</span></span></li>;
   if (!view.canEdit) return status(t("web-pages.automaticDecisions.adminOnly"));
-  if (!d) return status(state.error?.message ?? t("web-pages.automaticDecisions.readingConfig"));
+  if (!d) return state.error ? status(state.error.message) : status(t("web-pages.automaticDecisions.readingConfig"), true);
   const busy = d.pending || saving;
   const chosen = view.models.find(m => m.id === d.model);
   return <li>
@@ -81,8 +80,9 @@ export function AutomaticDecisionPolicy({ workspace, station }: { workspace: str
   const s = stations.value?.find((x) => x.station === station);
   const policy = s?.online ? s.overview?.automaticDecisions?.policy : undefined;
   if (policy && s?.overview?.automaticDecisions?.canEdit) return <ArchivePolicy station={station} policy={policy} />;
-  return <p className={css.note}>{stations.error?.message ?? (!stations.value ? t("web-pages.automaticDecisions.reading")
-    : !s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("web-pages.automaticDecisions.connecting")
+  if (!stations.value && !stations.error) return <WaitLine text={t("common.readingStations")} />;
+  return <p className={css.note}>{stations.error?.message ?? (!stations.value ? t("common.readingStations")
+    : !s?.online ? t("web-pages.automaticDecisions.offline") : !s.overview ? t("common.connecting")
     : s.overview.automaticDecisions && !s.overview.automaticDecisions.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>;
 }
 
@@ -96,7 +96,7 @@ function ArchivePolicy({ station, policy }: { station: string; policy: ArchivePo
   const add = (archive: boolean) => { void form.add(archive).then((key) => { if (key) setEditing({ kind: "option", key }); }); };
   return <div className={css.policy}>
     {(form.saving || form.saveFailed) && <div className={css.policyHead}>
-      {form.saving && <span className={`${waitingCss.spinner}`} aria-hidden="true" />}
+      {form.saving && <Spinner inline />}
       {form.saveFailed && <span className={css.error} role="alert">{form.saveFailed}</span>}
     </div>}
     <button type="button" className={css.policyWords} disabled={busy} onClick={() => open({ kind: "text" })}>{policy.text}</button>

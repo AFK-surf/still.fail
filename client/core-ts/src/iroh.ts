@@ -12,11 +12,14 @@ export type IrohAddr = { id: string; relays?: string[]; ips?: string[] };
 /// heard (`timeout`), or something else (`other`, `reason` in words).
 export type CloseReason = { kind: "application" | "local" | "timeout" | "other"; reason: string };
 
-/// One way a connection can go now: through a relay (its URL) or direct; whether it is the one chosen, its round trip.
-export type IrohPath = { selected: boolean; relay: string | null; rttMs: number };
+/// One way a connection can go now: through a relay (its URL) or direct; whether it is the one chosen, its round trip,
+/// and the packets sent and lost on it alone since it opened (`id` tells one way's counts from another's). The
+/// connection's own counts take in every way it tried, those dropped with packets still out counted lost. `ip`: a direct
+/// way's address at the other end (`ip:port`; null through a relay, or from a host before it said it).
+export type IrohPath = { id: string; selected: boolean; relay: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number };
 
 /// What went over a connection since it opened.
-export type IrohStats = { rxBytes: number; txBytes: number; txPackets: number; lostPackets: number };
+export type IrohStats = { rxBytes: number; txBytes: number };
 
 /// A stream both ways (or one way: `read` then answers null at once).
 export interface IrohStream {
@@ -50,6 +53,9 @@ export interface IrohEndpoint {
   id(): string;
   /// A connection offering `alpn` (and the `additional` ones, for a station from before a rename).
   connect(addr: IrohAddr, alpn: Uint8Array, additional: Uint8Array[]): Effect.Effect<IrohConnection, HostError>;
+  /// The next connection another endpoint opened to this one, on one of the ALPNs it was bound to take (`alpns`), with
+  /// the one agreed; null once the endpoint is closed. A host that takes none (the browser's) has no `accept`.
+  accept?(): Effect.Effect<{ connection: IrohConnection; alpn: Uint8Array } | null>;
   /// Where an endpoint is, without looking it up (tests, a LAN with no relay).
   addAddr(addr: IrohAddr): void;
   /// The network changed: its sockets and relay connection looked at anew.
@@ -68,6 +74,8 @@ export type BindOptions = {
   lookup: boolean;
   /// Relays alone, no IP transports (what measures a relay's way must not go direct).
   relayOnly: boolean;
+  /// The ALPNs it takes connections on (`accept`): none, it takes none.
+  alpns?: Uint8Array[];
 };
 
 export interface Iroh {

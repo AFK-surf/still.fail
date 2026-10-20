@@ -54,6 +54,7 @@
 		8E81CB88BEB461C66A98EC73 /* MarkdownHotPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EA7CEA7BC0245349A76DB43 /* MarkdownHotPathTests.swift */; };
 		943466102CB3916321AA4518 /* WidgetFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = 282F3E78D54C4772D4D1C7DE /* WidgetFeed.swift */; };
 		9FC997FDC4B5258490B99401 /* PhotosUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E46F9F9084D46ECEF009E536 /* PhotosUI.framework */; };
+		A99158BF194C80655715F92E /* stillfail-core.js in Resources */ = {isa = PBXBuildFile; fileRef = 760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */; };
 		B0DB75DEB977FDDE6C09F3BB /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5948A7FF69B49D7514763CD7 /* WidgetKit.framework */; };
 		B8B4CA33C7B3E2AA8BFA9CB0 /* ToolStepRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F8BFEA54C0C94F5BC4B6494 /* ToolStepRendering.swift */; };
 		B98167224C27775C870D51D5 /* HistoryTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD61577DB0E446A8B73E2A2B /* HistoryTimeline.swift */; };
@@ -67,7 +68,6 @@
 		E8EFB17D6487BF6D9E986F59 /* NewChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2DE4889D0A986882AB930C2 /* NewChat.swift */; };
 		EF53C57AD72AF107DD52E4CC /* AuthenticationServices.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAFD32954893ABB324AFA974 /* AuthenticationServices.framework */; };
 		F2A714A7E563490880DC6ACF /* MarkdownParser in Frameworks */ = {isa = PBXBuildFile; productRef = 027209FF2D5D8741B5184703 /* MarkdownParser */; };
-		F9B42F67E452681EED2B5733 /* stillfail-core.js in Resources */ = {isa = PBXBuildFile; fileRef = EF77201B457D90BCA6BEBD2A /* stillfail-core.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -135,6 +135,7 @@
 		729D23748EEC6F7C6370668A /* ChatDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetails.swift; sourceTree = "<group>"; };
 		72B7CFE0C7DF5ECEF051EB2C /* AppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
 		74233A3FF0A66C2A09DD04B4 /* ChatRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRenderingTests.swift; sourceTree = "<group>"; };
+		760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "stillfail-core.js"; sourceTree = "<group>"; };
 		7624AEA455E9FFEF3B6D53D3 /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
 		85548373412A3907F4F5E410 /* ChatSlack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSlack.swift; sourceTree = "<group>"; };
 		8989631140C542D58754D2AE /* ChatProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatProtocolTests.swift; sourceTree = "<group>"; };
@@ -154,7 +155,6 @@
 		E4B6BC3221C2A9CE71014F98 /* NativeScrollingPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScrollingPerformanceTests.swift; sourceTree = "<group>"; };
 		E7528F3FA255DE028C234B57 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		E917716F8F4153750310E7F2 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
-		EF77201B457D90BCA6BEBD2A /* stillfail-core.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "stillfail-core.js"; sourceTree = "<group>"; };
 		EF9C3D0A5411B736F85B8C0C /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		F0D842FE11E9550EDB2B0699 /* ChatTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTimeline.swift; sourceTree = "<group>"; };
 		F7FD0EE4D1172B7D3F4F7773 /* CoreBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreBridge.swift; sourceTree = "<group>"; };
@@ -205,8 +205,8 @@
 		41FD9F2DBEA654B6911AC499 = {
 			isa = PBXGroup;
 			children = (
+				ABCF5D39AE693E2801CE449F /* ios-client-pr-conflict-951a9d */,
 				8E2A4FA9AA293BA78BDC04BD /* Shared */,
-				E481378892A332CE23231D9D /* still.fail */,
 				8193A5A7604299898DF7F3B9 /* StillFail */,
 				FE65BAEB0CA1A69D2F093E85 /* StillFailTests */,
 				03FEDF2073622EF563041101 /* StillFailWidgets */,
@@ -235,6 +235,14 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		90229E58828327142DC236F8 /* .airbuild */ = {
+			isa = PBXGroup;
+			children = (
+				94136286F146E1C3A0A0AF32 /* generated */,
+			);
+			path = .airbuild;
+			sourceTree = "<group>";
+		};
 		90C06ABB40FFD78BC9737933 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -247,6 +255,22 @@
 				5948A7FF69B49D7514763CD7 /* WidgetKit.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		94136286F146E1C3A0A0AF32 /* generated */ = {
+			isa = PBXGroup;
+			children = (
+				9E7353D13F321CF1A105B0BD /* core */,
+			);
+			path = generated;
+			sourceTree = "<group>";
+		};
+		9E7353D13F321CF1A105B0BD /* core */ = {
+			isa = PBXGroup;
+			children = (
+				760ADB1A8CCFF55C8B3E1A0F /* stillfail-core.js */,
+			);
+			path = core;
 			sourceTree = "<group>";
 		};
 		9F4DB58F3637DB9B7C808C50 /* Core */ = {
@@ -265,20 +289,13 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
-		B36A89C36BD02514ADDE2A3D /* core */ = {
+		ABCF5D39AE693E2801CE449F /* ios-client-pr-conflict-951a9d */ = {
 			isa = PBXGroup;
 			children = (
-				EF77201B457D90BCA6BEBD2A /* stillfail-core.js */,
+				90229E58828327142DC236F8 /* .airbuild */,
 			);
-			path = core;
-			sourceTree = "<group>";
-		};
-		CBBA0B2097812753676A3DA2 /* .airbuild */ = {
-			isa = PBXGroup;
-			children = (
-				DDE8E1B89F6F7B723C1AE6D0 /* generated */,
-			);
-			path = .airbuild;
+			name = "ios-client-pr-conflict-951a9d";
+			path = ../..;
 			sourceTree = "<group>";
 		};
 		CF048ED95EDCA8C4CB430193 /* Views */ = {
@@ -302,23 +319,6 @@
 				37F87C3322B0C3B75DC3C614 /* Workspace.swift */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		DDE8E1B89F6F7B723C1AE6D0 /* generated */ = {
-			isa = PBXGroup;
-			children = (
-				B36A89C36BD02514ADDE2A3D /* core */,
-			);
-			path = generated;
-			sourceTree = "<group>";
-		};
-		E481378892A332CE23231D9D /* still.fail */ = {
-			isa = PBXGroup;
-			children = (
-				CBBA0B2097812753676A3DA2 /* .airbuild */,
-			);
-			name = still.fail;
-			path = ../..;
 			sourceTree = "<group>";
 		};
 		E934DF45F1282E083984969F /* Products */ = {
@@ -482,7 +482,7 @@
 			files = (
 				7956E8CB7A20A9588B286331 /* Assets.xcassets in Resources */,
 				D39839710C694C413538DA2A /* Localizable.xcstrings in Resources */,
-				F9B42F67E452681EED2B5733 /* stillfail-core.js in Resources */,
+				A99158BF194C80655715F92E /* stillfail-core.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

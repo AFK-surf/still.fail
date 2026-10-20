@@ -6,6 +6,7 @@
 // (`useMorph`).
 
 import { useLayoutEffect, useRef, type RefObject } from "react";
+import { play } from "@stillfail/ui/motion.ts";
 
 /** What moves with the box: its text and its buttons (not the text's unseen measure, Chat.tsx). */
 const PARTS = "textarea:not([aria-hidden]), button";
@@ -30,7 +31,7 @@ export function shapeOf(box: HTMLElement): Shape {
 }
 
 /** Each box's motion under way and who started it, so a new one stops the one before and nothing else. */
-const running = new WeakMap<HTMLElement, { by: string; all: Animation[] }>();
+const running = new WeakMap<HTMLElement, { by: string; all: Animation[]; end?: () => void }>();
 
 /**
  * From `from` (read before its layout changed) to how `box` is laid out now, in `timing`; `by` says who moves it (a
@@ -43,9 +44,10 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
   stop(box);
   const style = getComputedStyle(box);
   const height = box.getBoundingClientRect().height;
-  const all = [box.animate([
+  const radius = Math.min(parseFloat(style.borderTopLeftRadius), height / 2);
+  const all = [play(box, [
     { ...frames[0], borderRadius: `${from.radius}px`, cornerShape: from.corner, overflow: "clip" },
-    { ...frames[1], borderRadius: `${Math.min(parseFloat(style.borderTopLeftRadius), height / 2)}px`, cornerShape: style.getPropertyValue("corner-shape"), overflow: "clip" },
+    { ...frames[1], borderRadius: `${radius}px`, cornerShape: style.getPropertyValue("corner-shape"), overflow: "clip" },
   ], timing)];
   // Read with the box at its start: where the new layout puts each part then.
   for (const part of box.querySelectorAll(PARTS)) {
@@ -54,17 +56,77 @@ export function morph(box: HTMLElement, by: string, from: Shape, frames: [Keyfra
     const now = part.getBoundingClientRect();
     const x = was.left - now.left, y = was.top - now.top;
     if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
-    all.push(part.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
+    all.push(play(part, [{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
   }
   running.set(box, { by, all });
   void all[0]!.finished.then(() => { if (running.get(box)?.all === all) running.delete(box); }, () => {});
   return all;
 }
 
+/**
+ * `box` gone to a new shape in its own place (its text changed: a capsule becoming a box, a file's card come into it):
+ * it is laid out as it ends at once, and only its ground (what it is drawn on: its colour, its frost, its shadow, its
+ * corners) goes from the shape it had to this one, on a layer of its own under what it holds. Nothing in it is cut by
+ * that shape: its text and buttons go from where they showed to their places with the ground; what came into it anew
+ * is in its place from the first (a dropped file's mark arrives there, drive/flight.ts), its place not moving.
+ */
+export function grow(box: HTMLElement, by: string, from: Shape, timing: KeyframeAnimationOptions): Animation[] {
+  stop(box);
+  const style = getComputedStyle(box);
+  const now = box.getBoundingClientRect();
+  const radius = Math.min(parseFloat(style.borderTopLeftRadius), now.height / 2);
+  const ground = document.createElement("span");
+  ground.setAttribute("aria-hidden", "true");
+  Object.assign(ground.style, {
+    position: "absolute", zIndex: "-1", pointerEvents: "none", inset: "0",
+    background: style.background, boxShadow: style.boxShadow, backdropFilter: style.backdropFilter,
+    border: style.border, cornerShape: style.getPropertyValue("corner-shape"),
+    // At rest (its motion over, before it is taken away) it is the box's ground as it ends.
+    borderRadius: `${radius}px`,
+  });
+  // Its ground drawn by the layer meanwhile, not by the box: the box's own shows nothing.
+  const own = { background: box.style.background, boxShadow: box.style.boxShadow, backdropFilter: box.style.backdropFilter, borderColor: box.style.borderColor, isolation: box.style.isolation };
+  Object.assign(box.style, { background: "transparent", boxShadow: "none", backdropFilter: "none", borderColor: "transparent", isolation: "isolate" });
+  box.prepend(ground);
+  const was = from.rect;
+  const inset = `${was.top - now.top}px ${now.right - was.right}px ${now.bottom - was.bottom}px ${was.left - now.left}px`;
+  const all = [play(ground, [
+    { inset, borderRadius: `${from.radius}px` },
+    { inset: "0px", borderRadius: `${radius}px` },
+  ], timing)];
+  for (const part of box.querySelectorAll(PARTS)) {
+    const at = from.parts.get(part);
+    if (!at) continue;
+    const to = part.getBoundingClientRect();
+    const x = at.left - to.left, y = at.top - to.top;
+    if (Math.abs(x) < 0.5 && Math.abs(y) < 0.5) continue;
+    all.push(play(part, [{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], timing));
+  }
+  // Its ground back on the box, the layer gone: when it is there, or at once when it is stopped (a new shape read from
+  // the box as it is drawn, not from the box the layer draws for).
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    ground.remove();
+    Object.assign(box.style, own);
+  };
+  running.set(box, { by, all, end });
+  void all[0]!.finished.then(() => { end(); if (running.get(box)?.all === all) running.delete(box); }, () => {});
+  return all;
+}
+
 /** Stops `box`'s motion (only what `morph` started on it): it is laid out as it is, to be read or moved anew. */
 export function stop(box: HTMLElement): void {
-  for (const a of running.get(box)?.all ?? []) a.cancel();
+  const was = running.get(box);
+  for (const a of was?.all ?? []) a.cancel();
+  was?.end?.();
   running.delete(box);
+}
+
+/** When `box`'s motion under way ends (done or stopped), if it has one. */
+export function settling(box: HTMLElement): Promise<unknown> | null {
+  return running.get(box)?.all[0]?.finished ?? null;
 }
 
 /** Who moves `box` now (the `by` of its motion under way), if anyone. */
@@ -92,11 +154,11 @@ export function useMorph(box: RefObject<HTMLElement | null>, laidOut: string, pa
     const paged = shown.current.page !== page;
     from.current = null;
     shown.current = { laidOut, page };
-    if (!el || !was || el.hasAttribute("data-send-held") || paged || movingBy(el) === "page" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!el || !was || el.hasAttribute("data-send-held") || paged || movingBy(el) === "page") return;
     stop(el);
     const height = el.getBoundingClientRect().height;
     // Its size unchanged (a letter more on the same line), nothing moves.
     if (Math.abs(height - was.rect.height) < 0.5 && was.corner === getComputedStyle(el).getPropertyValue("corner-shape")) return;
-    morph(el, "text", was, [{ height: `${was.rect.height}px` }, { height: `${height}px` }], { duration: 260, easing: easeOut() });
+    grow(el, "text", was, { duration: 260, easing: easeOut() });
   }, [laidOut, page]); // eslint-disable-line react-hooks/exhaustive-deps
 }

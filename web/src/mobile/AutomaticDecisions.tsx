@@ -4,10 +4,11 @@ import { useParams } from "react-router";
 import { useAutomaticDecisionForm, usePolicyDraft, usePolicyForm } from "../AutomaticDecisions.tsx";
 import { useStations } from "../api.ts";
 import type { ArchiveOptionView, ArchivePolicyView, AutomaticDecisionView } from "../core/shapes.ts";
-import { ChevronRight, Refresh } from "../icons.tsx";
+import { ChevronRight, Refresh } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { SheetGrab, SheetHead, useApp } from "./app.tsx";
-import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Seg, Spinner, TopBack } from "./parts.tsx";
+import { Button, FailedMark, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, SectionHeader, Seg, TopBack } from "./parts.tsx";
+import { Spinner, Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { ModelList } from "./History.tsx";
 import { GoRow } from "./Settings.tsx";
 import * as css from "./AutomaticDecisions.css.ts";
@@ -34,12 +35,13 @@ export function AutomaticDecisionCompletionScreen() {
   return <div className={`${pages.mScreen} ${pages.mScroll}`}>
     <TopBack label={t("web-pages.automaticDecisions.title")} onBack={app.pop} />
     <LargeTitle small="" big={t("web-pages.automaticDecisions.completion")} />
-    {!stations.value && <p className={settings.mPageNote}>{stations.error?.message ?? t("web-pages.automaticDecisions.reading")}</p>}
+    {!stations.value && <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} />}
     {stations.value?.length===0 && <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.addStation")}</p>}
     {stations.value?.map(s => <Fragment key={s.station}>
       {s.online && s.overview?.automaticDecisions
         ? <DecisionPanel station={s.station} name={s.name} view={s.overview.automaticDecisions} />
-        : <><SectionHeader title={s.name} start={24} /><p className={settings.mPageNote}>{!s.online ? t("web-pages.automaticDecisions.offlineNote") : !s.overview ? t("web-pages.automaticDecisions.connecting") : t("web-pages.automaticDecisions.upgrade")}</p></>}
+        : <><SectionHeader title={s.name} start={24} />{s.online && !s.overview ? <WaitLine className={settings.mPageNote} text={t("common.connecting")} />
+          : <p className={settings.mPageNote}>{!s.online ? t("web-pages.automaticDecisions.offlineNote") : t("web-pages.automaticDecisions.upgrade")}</p>}</>}
     </Fragment>)}
     <div style={{height:30}} />
   </div>;
@@ -48,7 +50,7 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
   const app=useApp();
   const {d,state,saving,refreshing,saveFailed,refreshFailed,reviewing,reviewFailed,canReview,edit,save,refresh,review}=useAutomaticDecisionForm(station,view);
   if (!view.canEdit) return <p className={settings.mPageNote}>{t("web-pages.automaticDecisions.adminOnly")}</p>;
-  if (!d) return <p className={settings.mPageNote}>{state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")}</p>;
+  if (!d) return <WaitLine className={settings.mPageNote} text={state.error?.message ?? t("web-pages.automaticDecisions.readingConfig")} error={!!state.error} />;
   const busy=d.pending || saving;
   const chosen=view.models.find(m=>m.id===d.model);
   const pick=()=>app.sheet({height:0.5,content:()=><>
@@ -56,7 +58,7 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
     {d.pick && <ModelList models={d.pick.options} runtime="codex" picked={d.model} onPick={model=>{app.sheet(null);edit({model});}} />}
   </>});
   return <>
-    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={name} start={24} /></div>{refreshing ? <Spinner size={16} /> : <NavButton icon={Refresh} label={t("web-pages.automaticDecisions.refresh")} onClick={refresh} />}</div>
+    <div className={css.stationHead}><div className={css.stationName}><SectionHeader title={name} start={24} /></div>{refreshing ? <Spinner /> : <NavButton icon={Refresh} label={t("web-pages.automaticDecisions.refresh")} onClick={refresh} />}</div>
     {refreshFailed && <p className={`${settings.mPageNote} ${parts.mRed}`}>{refreshFailed}</p>}
     <ListCard>
       <ListRow onClick={busy ? undefined : ()=>edit({enabled:!d.enabled})}>
@@ -66,7 +68,7 @@ function DecisionPanel({station,name,view}:{station:string;name:string;view:Auto
       <GoRow title={t("web-pages.automaticDecisions.model")} value={chosen?.name ?? (d.model ? t("web-pages.automaticDecisions.unavailable", {model:d.model}) : t("web-pages.automaticDecisions.pickModel"))} onClick={()=>{if(!busy)pick();}} />
       {canReview && <ListRow onClick={busy || reviewing ? undefined : review}>
         <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{t("web-pages.automaticDecisions.review")}</span></span>
-        {reviewing ? <Spinner size={16} /> : reviewFailed && <FailedMark error={reviewFailed} size={14} />}
+        {reviewing ? <Spinner inline /> : reviewFailed && <FailedMark error={reviewFailed} size={14} />}
       </ListRow>}
       {view.policy && <ListRow onClick={()=>app.push(app.at(`/settings/automatic-decisions/completion/${encodeURIComponent(station)}`))}>
         <span className={`${parts.mGrow} ${lists.mRowText}`}><span className={lists.mRowTitle}>{t("web-pages.archivePolicy.title")}</span><span className={`${lists.mRowNote} ${view.policy.failed ? parts.mRed : ""}`}>{t("web-pages.archivePolicy.optionCount",{n:view.policy.options.length})}{view.policy.summaryText ? ` · ${view.policy.summaryText}` : ""}</span></span>
@@ -88,8 +90,9 @@ export function AutomaticDecisionPolicyScreen() {
     <TopBack label={t("web-pages.automaticDecisions.completion")} onBack={app.pop} />
     <LargeTitle small={s?.name ?? ""} big={t("web-pages.archivePolicy.title")} />
     {view?.policy && view.canEdit ? <PolicySection station={station} policy={view.policy} />
-      : <p className={settings.mPageNote}>{stations.error?.message ?? (!stations.value ? t("web-pages.automaticDecisions.reading")
-        : !s?.online ? t("web-pages.automaticDecisions.offlineNote") : !s.overview ? t("web-pages.automaticDecisions.connecting")
+      : !stations.value ? <Waiting shape="cards" count={2} text={t("common.readingStations")} error={stations.error?.message} />
+      : s?.online && !s.overview ? <WaitLine className={settings.mPageNote} text={t("common.connecting")} />
+      : <p className={settings.mPageNote}>{stations.error?.message ?? (!s?.online ? t("web-pages.automaticDecisions.offlineNote")
         : view && !view.canEdit ? t("web-pages.automaticDecisions.adminOnly") : t("web-pages.automaticDecisions.upgrade"))}</p>}
     <div style={{height:30}} />
   </div>;
@@ -107,7 +110,7 @@ function PolicySection({station,policy}:{station:string;policy:ArchivePolicyView
   const open=(edit:PolicyEdit)=>{void form.reset().then(()=>sheet(edit));};
   const add=(archive:boolean)=>{void form.add(archive).then(key=>{if(key)sheet({kind:"option",key});});};
   return <>
-    <div className={css.stationHead}><div className={css.stationName}><p className={settings.mPageNote}>{t("web-pages.archivePolicy.textLead")}</p></div>{form.saving ? <Spinner size={16} /> : form.saveFailed && <FailedMark error={form.saveFailed} size={14} />}</div>
+    <div className={css.stationHead}><div className={css.stationName}><p className={settings.mPageNote}>{t("web-pages.archivePolicy.textLead")}</p></div>{form.saving ? <Spinner inline /> : form.saveFailed && <FailedMark error={form.saveFailed} size={14} />}</div>
     <ListCard><ListRow onClick={busy ? undefined : ()=>open({kind:"text"})}>
       <span className={`${parts.mGrow} ${css.policyWords}`}>{policy.text}</span>
     </ListRow></ListCard>

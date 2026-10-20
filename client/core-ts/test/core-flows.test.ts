@@ -12,7 +12,7 @@ import { STORAGE_KEY } from "../src/accounts.ts";
 import { Core } from "../src/core.ts";
 const STATION = (station: string) => ({ station });
 import { FakeHost, jsonResponse } from "../src/testing.ts";
-import { account, apply, call, nowS, subscribe, v } from "./helpers.ts";
+import { account, apply, call, nowS, readsOf, subscribe, v } from "./helpers.ts";
 import { run } from "./run.ts";
 import { base, overview, session, started, stationHost, stationReplies, threadView } from "./station-fixture.ts";
 import { apply as applyOps } from "../src/delta.ts";
@@ -26,6 +26,9 @@ import { PENDING_PREFIX } from "../src/views/local.ts";
 import { deferralKey } from "../src/decisions.ts";
 import { encode } from "../src/ops.ts";
 import { EXPORT_MS } from "../src/trace.ts";
+
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -63,6 +66,8 @@ test("two_workspaces_are_kept_apart", async () => {
   assert.ok(String(v(values, 3).text).startsWith("一号 读取对话 · 3 秒"), JSON.stringify(v(values, 3)));
   assert.equal(v(values, 4).state ?? null, null, JSON.stringify(v(values, 4)));
   assert.equal(v(values, 5).items.length, 1);
+  // The plain one says the station's workspace too (its name, not held here: its id): two workspaces are said in it.
+  assert.equal(v(values, 5).items[0].text, "一号 · w1 读取对话", JSON.stringify(v(values, 5)));
   // What a new chat was last started on: each workspace's own.
   call(core, ui, 6, "newChat.pick", { scope: "w1", station: "a" });
   await host.settle();
@@ -119,7 +124,7 @@ test("a_chats_connection_says_only_what_is_of_its_workspace", async () => {
   here.end();
   await settle();
   apply(host, values);
-  assert.deepEqual([v(values, 1).tone, v(values, 1).text], ["back", "已连上"]);
+  assert.deepEqual([v(values, 1).tone, v(values, 1).text], ["back", "已连接"]);
   there.end();
   core.close();
 });
@@ -149,7 +154,7 @@ test("a_beta_app_says_so_and_an_account_not_let_in_is_blocked", async () => {
   await host.settle();
   apply(host, values);
   let entry = v(values, 1)[0];
-  assert.deepEqual([entry.blocked, entry.error?.code, entry.workspaces.length], ["这个账号还没开通测试版", "not_beta", 0]);
+  assert.deepEqual([entry.blocked, entry.error?.code, entry.workspaces.length], ["此账号尚未开通测试版", "not_beta", 0]);
   assert.ok(host.requests.filter((r) => r.url.includes("/v1/")).every((r) => r.headers.some(([k]) => k === "x-stillfail-channel")));
   // Let in: its workspaces, marked as let in, nothing blocked.
   letIn = true;
@@ -221,10 +226,14 @@ test("calls_are_traces_and_nothing_goes_out_when_tracing_is_off", async () => {
     const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 1);
     const ui = core.connect();
     call(core, ui, 1, "memory.get", { station: "ws/st" });
+    // Asking nothing, answered at once: not sent. Failing at once: sent.
+    call(core, ui, 2, "chat.place", { station: "ws/st", thread: 7, seq: 3 });
+    call(core, ui, 3, "picture", { url: "ftp://nope" });
     await host.settle();
     await host.time.pass(EXPORT_MS + 100);
     const names = exports(host).flatMap(spansOf).map((s) => s.name);
     assert.ok(names.includes("GET /admin/api/memory") && names.includes("memory.get"), JSON.stringify(names));
+    assert.ok(!names.includes("chat.place") && names.includes("picture"), JSON.stringify(names));
     core.close();
   }
   const { host, core } = await started({ ...base(), "GET /memory": { global: "" } }, 0);
@@ -269,7 +278,10 @@ test("a_streamed_preview_hands_its_answer_on_as_it_comes_until_cancelled_or_its_
   assert.equal((core.inner.status.value() as J).state ?? null, null);
   Queue.offerUnsafe(bodies[0].queue, new TextEncoder().encode("data: 1\n\n"));
   await host.settle();
-  assert.deepEqual(said(), [{ id: 1, value: { chunk: base64(new TextEncoder().encode("data: 1\n\n")) } }]);
+  // Each piece beside its value, not in it.
+  const piece = host.takeEmitted().map(([, m]) => m as J);
+  assert.deepEqual(piece.map((m) => ({ id: m.id, value: m.value })), [{ id: 1, value: { chunk: true } }]);
+  assert.equal(new TextDecoder().decode(piece[0].bytes), "data: 1\n\n");
   // Cancelled: it answers so, and the body is let go (the station stops asking the service).
   core.receive(ui, { kind: "cancel", id: 1, cancel: true });
   await host.settle();
@@ -303,7 +315,8 @@ test("a_preview_socket_is_only_carried_by_the_mesh_and_its_messages_are_checked"
   assert.equal(said.get(2).error.code, "not_found", "no socket open by that name");
   assert.throws(() => parseCall("preview.socket.send", { socket: "s1", text: "a", close: [1000, ""] }));
   assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", close: [4001, "done"] }), { kind: "previewSocketSend", socket: "s1", frame: { close: [4001, "done"] } });
-  assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", binary: base64(new Uint8Array([0, 1])) }), { kind: "previewSocketSend", socket: "s1", frame: { binary: new Uint8Array([0, 1]) } });
+  assert.deepEqual(parseCall("preview.socket.send", { socket: "s1", binary: true }, new Uint8Array([0, 1])), { kind: "previewSocketSend", socket: "s1", frame: { binary: new Uint8Array([0, 1]) } });
+  assert.throws(() => parseCall("preview.socket.send", { socket: "s1", binary: true }), "a binary frame's bytes come beside the call");
   core.close();
 });
 
@@ -392,6 +405,19 @@ test("a_decision_is_answered_in_its_chat_set_aside_on_the_device_and_dismissed_o
   core.close();
 });
 
+test("an_app_of_its_own_names_the_device_by_itself_not_by_still_fail", async () => {
+  // still.fail mbui (apps/mbui) runs this core too: those approving its device tell it apart from still.fail's own app
+  const { host, core } = await started();
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.3628", model: "OPPO PLP110", client: "still.fail mbui", locale: "zh-CN" });
+  call(core, ui, 2, "auth.begin", { redirect_uri: "r", return_to: "/" });
+  await host.settle();
+  const emitted = host.takeEmitted().map(([, m]) => m as J);
+  const url = String(emitted.find((m) => m.id === 2 && "ok" in m).ok.url);
+  assert.ok(url.includes(`name=${encode("still.fail mbui Android · OPPO PLP110")}`), url);
+  core.close();
+});
+
 test("the_device_says_what_it_is_once_and_the_core_decides_what_follows", async () => {
   const { host, core } = await started();
   stationReplies(host, (req) => (req.method === "POST" && req.url.endsWith("/threads/7/messages") ? { n: 4 } : undefined));
@@ -465,7 +491,7 @@ test("a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key", async ()
   await host.time.pass(SOON_MS + 50);
   await host.settle();
   assert.deepEqual(kept(), ["修一下"]);
-  assert.deepEqual(await ask(host, core, ui, 7, "draft.get", { key: "new:ws/st" }), { text: "", quotes: [], files: [] });
+  assert.deepEqual(noId(await ask(host, core, ui, 7, "draft.get", { key: "new:ws/st" })), { text: "", quotes: [], files: [] });
   core.close();
 });
 
@@ -605,7 +631,7 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   assert.equal(n.accounts.length, 2);
   assert.equal(n.pickAccount, true);
   assert.deepEqual(n.accounts[0].quotaLine, { text: "5 小时 90%" });
-  assert.deepEqual(n.accounts[1].quotaLine, { text: "5 小时只剩 20%", level: "amber" });
+  assert.deepEqual(n.accounts[1].quotaLine, { text: "5 小时剩余 20%", level: "amber" });
   // A model on another runtime takes it, and its default depth.
   await ask(host, core, ui, 4, "newChat.pick", { scope: "ws", model: "gpt-6-astra" });
   apply(host, values);
@@ -641,6 +667,8 @@ test("a_new_chat_runs_on_what_was_last_picked_there_as_far_as_the_station_still_
   // A chat made there is asked for with it, and the scope's next new chat starts there too.
   const made = await ask(host, again, ui, 8, "newChat.create", { station: "ws/st" });
   assert.ok(String(made.key).startsWith(PENDING_PREFIX), JSON.stringify(made));
+  // named as the core names what it makes (localId), not from the clock: a replay gets the recorded key again
+  assert.match(String(made.key), /^new:chat-[0-9a-f]{18}$/);
   await host.settle();
   const last = stationPosted(host, "/sessions").at(-1);
   assert.deepEqual([last?.model, last?.profile], ["claude-opus-5-5", "p2"]);
@@ -660,15 +688,15 @@ test("a_sessions_model_control_says_what_changes_and_saves_it_on_the_station", a
   let p = v(values, 1);
   // It runs on p1, the station's pick, with no model set.
   assert.deepEqual([p.runtimeFixed, p.value.model ?? null, p.account.text], [true, null, "自动 · p1@x.com"]);
-  assert.equal(p.saveText, "不变");
+  assert.equal(p.saveText, "无变更");
   // Kept to p2 and moved to Sonnet, which p2 does not run: back to the station's pick, said so.
   await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "session:k1", profile: "p2" });
   await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "session:k1", model: "claude-sonnet-5", effort: "high" });
   apply(host, values);
   p = v(values, 1);
   assert.equal(p.draft.profile ?? null, null);
-  assert.ok(String(p.dropped).includes("改成了自动分配"), JSON.stringify(p));
-  assert.ok(String(p.force).startsWith("指定的账号「p2」没有启用"), JSON.stringify(p));
+  assert.ok(String(p.dropped).includes("已改为自动分配"), JSON.stringify(p));
+  assert.ok(String(p.force).startsWith("所选账号「p2」未启用"), JSON.stringify(p));
   assert.equal(p.whoLevel, "amber");
   assert.equal(p.becomes[1], "high");
   assert.equal(p.changed, true);
@@ -822,13 +850,20 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   subscribe(core, ui, 1, { topic: "notify" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, show: [] });
+  assert.deepEqual(v(values, 1), { on: true, asked: false, push: true, kinds: { wait: true, failed: true, done: "away", message: true }, preview: true, permission: "unknown", show: [] });
+  // What the system allows, as the app finds it: shown to every UI, not kept.
+  call(core, ui, 4, "notify.permission", { state: "denied" });
+  call(core, ui, 5, "notify.set", { preview: false });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).permission, "denied");
+  assert.equal(v(values, 1).preview, false);
   // Off (and asked, as Android moves its old settings over): pushes go, and are not taken while off.
   call(core, ui, 2, "notify.set", { on: false, asked: true });
   call(core, ui, 3, "push.register", { kind: "fcm", token: "t" });
   await host.settle();
   apply(host, values);
-  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, show: [] });
+  assert.deepEqual(v(values, 1), { on: false, asked: true, push: false, kinds: { wait: true, failed: true, done: "away", message: true }, preview: false, permission: "denied", show: [] });
   assert.equal(host.stored(PUSH_KEY), undefined);
   // Kept across a restart.
   core.close();
@@ -841,7 +876,8 @@ test("notifications_are_on_until_turned_off_and_kept_so_with_no_pushes", async (
   const emitted = host.takeEmitted().map(([, m]) => m as J);
   const ok = (id: number) => emitted.find((m) => m.id === id && "ok" in m)?.ok;
   assert.deepEqual([ok(2), ok(3)], [{ show: false }, { show: false }]);
-  assert.equal(emitted.find((m) => m.id === 1 && "value" in m).value.on, false);
+  const after = emitted.find((m) => m.id === 1 && "value" in m).value;
+  assert.deepEqual([after.on, after.preview, after.permission], [false, false, "unknown"], "the setting kept, the system's answer asked again");
   again.close();
 });
 
@@ -892,10 +928,10 @@ test("a_chats_jobs_are_shown_as_the_core_puts_them_and_a_jobs_output_says_when_i
   // Restarting first, then alive, then what is over; each with its dot and its line; the heads' notes.
   const jobs = v(values, 1);
   assert.deepEqual(jobs.jobs.map((j: J) => j.id), ["s", "w", "done"]);
-  assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个在盯着"]);
-  assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清掉 1 个已结束的"]);
+  assert.deepEqual([jobs.alarm, jobs.servicesNote, jobs.jobsNote], ["restart", "1 个在重启", "1 个运行中"]);
+  assert.deepEqual([jobs.ended, jobs.clear, jobs.clearText], [1, ["k1"], "清除 1 个已结束的"]);
   const w = jobs.jobs[1];
-  assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "在盯着 · 1 分钟 · 1 条通知"]);
+  assert.deepEqual([w.tone, w.meta[0].text, w.meta[1].text, w.detail], ["live", "CI 还在跑", " · 2 分钟前", "运行中 · 1 分钟 · 1 条通知"]);
   assert.deepEqual([jobs.jobs[0].meta[0].text, jobs.jobs[2].tone], ["正在重启", "off"]);
   // Its output: the last line and when, in words; the station follows it, so it is not read again.
   assert.deepEqual([v(values, 2).last, v(values, 2).said], ["step 3", "最后输出 · 3 分钟前"]);
@@ -930,7 +966,8 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "修一下登录", client: "android 0.1.1123" });
   await host.settle();
   await host.settle();
-  const asked = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/")).map((r) => [r.url.replace("https://stillfail.test/admin/api", ""), new TextDecoder().decode(r.body!)]);
+  // What is written (a list read as what changed of it is no write).
+  const asked = host.requests.filter((r) => r.method === "POST" && r.url.includes("/admin/api/") && readsOf(r).length === 0).map((r) => [r.url.replace("https://stillfail.test/admin/api", ""), new TextDecoder().decode(r.body!)]);
   assert.deepEqual(asked.map(([p]) => p), ["/sessions", "/sessions", "/threads/9/messages"]);
   // It carries the key given here: the station's rows say it of the chat made.
   assert.deepEqual(JSON.parse(asked[0][1]), { runtime: "claude", model: "opus", clientKey: key });
@@ -940,6 +977,35 @@ test("a_new_chat_is_there_at_once_and_what_is_sent_to_it_goes_in_once_the_statio
   // The page is the station's chat now, under the key it was opened with, and says the one the station gave it.
   apply(host, values);
   assert.deepEqual([v(values, 2).pending, v(values, 2).key], [false, "ember:c-1"]);
+  core.close();
+});
+
+test("a_chat_made_here_is_titled_by_what_was_sent_until_its_station_has_a_message_in_it", async () => {
+  // Made, and read by its station before the message sent with it is in it: its station calls it what it calls a chat
+  // with nothing said in it yet (the page went from the words sent to （暂无消息） and back as the chat was made).
+  const made = { ...threadView(7, 0), title: "（暂无消息）", createdBy: "a@x.com" };
+  const { host, core } = await started({ ...base(), "GET /threads": [made], "GET /chats": [{ id: "7", thread: 7, session: "k1", title: "（暂无消息）", agents: [], lastActiveAt: 1 }], "GET /threads/7/entries?limit=50": { first: 1, last: 0, entries: [] } });
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/sessions") return { key: "k1", thread: made };
+    if (req.method === "POST" && path === "/threads/7/messages") return { n: 1 };
+    return undefined;
+  });
+  const ui = core.connect();
+  const values = new Map();
+  subscribe(core, ui, 1, { topic: "chat", station: "ws/st", thread: 7 });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).title, "（暂无消息）");
+  const key = String((await ask(host, core, ui, 2, "chat.create", { station: "ws/st", runtime: "claude", model: "opus" })).key);
+  call(core, ui, 3, "chat.send", { station: "ws/st", session: key, text: "\n修一下登录\n就是那个按钮" });
+  await host.settle();
+  await host.settle();
+  subscribe(core, ui, 4, { topic: "chat", station: "ws/st", session: key });
+  await host.settle();
+  apply(host, values);
+  // Its first line with words, by its thread and by the key it was asked for with.
+  assert.deepEqual([v(values, 1).title, v(values, 4).title], ["修一下登录", "修一下登录"]);
   core.close();
 });
 
@@ -1049,7 +1115,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   const values = new Map();
   answersOf(host, values);
   const a = v(values, 1);
-  assert.deepEqual([a.loading, a.note, a.errors], [false, undefined, []]);
+  assert.deepEqual([a.wait.reading, a.note, a.errors], [false, undefined, []]);
   assert.equal(a.days.length, 2);
   assert.equal(a.days[0].label, "今天");
   const first = a.days[0].items[0];
@@ -1058,6 +1124,17 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   // One station: which one is not said.
   assert.equal(first.place, undefined);
   assert.deepEqual([a.days[1].items[0].how, a.days[1].items[0].deletable], ["空闲后自动归档", false]);
+  assert.deepEqual([first.id, a.total, a.more], ["k1", 2, false]);
+  // Looked for by words in its title, or only the newest so many: the rest said to be left out.
+  subscribe(core, ui, 4, { topic: "archive", scope: "ws", q: "K2" });
+  subscribe(core, ui, 5, { topic: "archive", scope: "ws", limit: 1 });
+  subscribe(core, ui, 6, { topic: "archive", scope: "ws", q: "nothing like it" });
+  await host.settle();
+  answersOf(host, values);
+  const ids = (n: number) => v(values, n).days.flatMap((d: J) => d.items.map((i: J) => i.id));
+  assert.deepEqual([ids(4), v(values, 4).total, v(values, 4).more], [["k2"], 1, false]);
+  assert.deepEqual([ids(5), v(values, 5).total, v(values, 5).more], [["k1"], 2, true]);
+  assert.deepEqual([ids(6), v(values, 6).note], [[], "没有匹配的归档对话"]);
   // Put back in the list: it leaves the archive before the call answers.
   call(core, ui, 2, "chat.archive", { station: "ws/st", thread: 7, session: "k1", archived: false });
   await host.settle();
@@ -1068,7 +1145,7 @@ test("the_archive_is_its_stations_archived_chats_newest_first_by_day_and_one_res
   call(core, ui, 3, "session.delete", { station: "ws/st", key: "k2" });
   await host.settle();
   assert.ok("ok" in answersOf(host, values).get(3)!);
-  assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "没有归档的对话。"]);
+  assert.deepEqual([v(values, 1).days, v(values, 1).note], [[], "暂无已归档的对话"]);
   core.close();
 });
 
@@ -1092,8 +1169,15 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   answersOf(host, values);
   const c = v(values, 2);
   assert.deepEqual([c.app, c.build, c.loading], ["android", 1320, false]);
-  assert.equal(c.days[0].label, "今天");
-  assert.deepEqual(c.days[0].entries.map((e: J) => e.note), ["还没发布", "更新到 0.1.1330 后就有", "还没发布", "你的版本已包含"]);
+  // A tab a part, this app's first; the desktop's carries the web's.
+  assert.deepEqual(c.tabs.map((x: J) => [x.part, x.label]), [["android", "安卓"], ["desktop", "桌面"], ["web", "网页"], ["station", "Station"], ["cloud", "云端"]]);
+  const notes = (part: string) => c.tabs.find((x: J) => x.part === part).days.flatMap((d: J) => d.entries.map((e: J) => e.note));
+  assert.equal(c.tabs[0].days[0].label, "今天");
+  assert.deepEqual(notes("android"), ["未发布", "更新到 0.1.1330 后可用", ""]);
+  // Another part's tab says what is not out of that part.
+  assert.deepEqual(notes("desktop"), [""]);
+  assert.deepEqual(notes("station"), ["未发布"]);
+  assert.deepEqual(notes("cloud"), []);
   // The first build seen here: nothing is news.
   assert.equal(c.news, undefined, JSON.stringify(c));
   // Updated, the app started again: what it brought, until seen.
@@ -1113,6 +1197,38 @@ test("the_changelog_says_what_this_app_has_and_what_an_update_brought_until_seen
   assert.equal(v(values, 2).news, undefined);
   // Read once at each start (the TS core reads it then and as the cloud's socket opens: docs/core-ts.md).
   assert.equal(host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length, 2);
+  core.close();
+});
+
+test("a_newer_build_says_what_it_brings_this_app_the_changelog_read_again_when_it_came_after", async () => {
+  const host = new FakeHost();
+  const now = Math.round(host.nowMs() / 1000);
+  const entry = (version: number, parts: string[], text: string) => ({ version, commit: "c", at: now, text: [text], fixes: [], parts });
+  let out = 1335;
+  let entries = [entry(1330, ["android", "web"], "修复：列表跳动"), entry(1325, ["station"], "修复：station 的"), entry(1322, ["desktop"], "新功能：桌面的")];
+  host.onFetch((req) => {
+    const path = req.url.replace("https://stillfail.test", "");
+    if (path === "/v1/changelog") return jsonResponse(200, { entries, released: { android: out, web: out, station: 1320, desktop: 1322 } });
+    if (path === "/releases/android/latest.json") return jsonResponse(200, { versionCode: out, versionName: `0.1.${out}`, file: `android/stillfail-${out}.apk`, sha256: "ab", size: 9 });
+    return jsonResponse(404, {});
+  });
+  const core = await Core.create(host, { clock: host.time.clock, sample: 0 });
+  const ui = core.connect();
+  await host.settle();
+  const reads = () => host.requests.filter((r) => r.url.endsWith("/v1/changelog")).length;
+  // From 1320, 1335 brings Android one line (the station's and the desktop's are not the app's).
+  let newer = await ask(host, core, ui, 1, "app.update", { platform: "android", versionCode: 1320 });
+  assert.deepEqual([newer.versionCode, newer.news], [1335, ["修复：列表跳动"]]);
+  // From 1330, nothing: the home screen does not offer it.
+  newer = await ask(host, core, ui, 2, "app.update", { platform: "android", versionCode: 1330 });
+  assert.deepEqual([newer.versionCode, newer.news], [1335, []]);
+  assert.equal(reads(), 1, "the changelog read at the start knew 1335");
+  // A build out after the changelog kept was read: it is read again first, and the build's lines are known with it.
+  out = 1340;
+  entries = [entry(1338, ["android"], "新功能：新的"), ...entries];
+  newer = await ask(host, core, ui, 3, "app.update", { platform: "android", versionCode: 1330, now: true });
+  assert.deepEqual([newer.versionCode, newer.news], [1340, ["新功能：新的"]]);
+  assert.equal(reads(), 2);
   core.close();
 });
 
@@ -1232,6 +1348,123 @@ test("connect_wizard_configuration_and_oauth_install_keep_one_draft", async () =
   assert.equal(name, "connect.create");
   assert.deepEqual(params.input.slack, { appToken: "app-token", install: "oauth-state" });
   assert.ok(host.requests.every((r) => !r.url.includes("slack.com")));
+  core.close();
+});
+
+/// Its station with the Feishu connect: the overview says the bots being made (none at first).
+function withFeishu(core: Core, registrations: J[]): void {
+  const at = { topic: "overview", station: "ws/st" };
+  core.inner.data.set(at, { ...(structuredClone(core.inner.store.get(at)) as J), feishuRegistrations: registrations });
+}
+
+test("connect_wizard_offers_feishu_where_its_station_has_it_and_adds_a_scanned_bot_on_its_own", async () => {
+  const { host, core } = await choosing();
+  const waiting = { id: "r1", url: "https://accounts.feishu.cn/oauth/v1/app/verify?flow_id=abc&name=still.fail", expiresAt: 1_790_000_600_000, state: "waiting" };
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (req.method === "POST" && path === "/feishu/registrations") return { ...waiting, overview: { ...(structuredClone(core.inner.store.get({ topic: "overview", station: "ws/st" })) as J), feishuRegistrations: [waiting] } };
+    if (req.method === "DELETE" && path.startsWith("/feishu/registrations/")) return {};
+    if (path === "/feishu/connects") return { id: "codex-bot" };
+    return undefined;
+  });
+  const ui = core.connect();
+  const topic = connectTopic("feishu");
+  const form = { station: "ws/st", form: "feishu" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  const flow = core.inner.forms.connects;
+  // A station from before the Feishu connect: Slack's steps at once.
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).platforms], ["team", ["slack"]]);
+  withFeishu(core, []);
+  let view = flow.value(topic);
+  assert.deepEqual([view.step, view.platforms, view.back, view.number, view.total], ["platform", ["slack", "feishu"], "close", 1, 5]);
+  assert.throws(() => flow.go(topic, ui, "feishuWay"), "the platform comes first");
+  flow.go(topic, ui, "feishuBind");
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.platform, view.back, view.number, view.total], ["feishuBind", "feishu", "platform", 2, 4]);
+  await ask(host, core, ui, 2, "pick.set", { station: "ws/st", of: "connect-new:feishu", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 3, "pick.save", { station: "ws/st", of: "connect-new:feishu" });
+  flow.go(topic, ui, "feishuWay");
+  await ask(host, core, ui, 4, "connect.flow.register", form);
+  view = flow.value(topic);
+  assert.equal(view.step, "feishuScan");
+  assert.equal(view.feishu.registration.id, "r1");
+  assert.equal(typeof view.feishu.stateText, "string");
+  const code = view.feishu.qr;
+  assert.ok(code.size >= 21 && (code.size - 17) % 4 === 0, String(code.size));
+  assert.deepEqual([code.rows.length, code.rows.every((r: string) => r.length === code.size && /^[01]+$/.test(r))], [code.size, true]);
+  assert.equal(code.rows[0].slice(0, 7), "1111111", "a finder pattern in its corner");
+  const shaped = present.decorate(topic, structuredClone(view), { now: 0, offsetMin: 0 });
+  assert.ok("ok" in conform("ConnectFlowView", shaped), JSON.stringify(conform("ConnectFlowView", shaped)));
+  assert.equal(stationPosted(host, "/feishu/connects").length, 0, "nothing added before the bot is made");
+  // Made: the connect is added without being asked, once.
+  withFeishu(core, [{ ...waiting, state: "done", appId: "cli_1", domain: "feishu" }]);
+  await host.settle();
+  withFeishu(core, [{ ...waiting, state: "done", appId: "cli_1", domain: "feishu" }]);
+  await host.settle();
+  const sent = stationPosted(host, "/feishu/connects");
+  assert.equal(sent.length, 1);
+  assert.deepEqual([sent[0].feishu, sent[0].bind.model, sent[0].bind.runtime, sent[0].mode], [{ registration: "r1" }, "gpt-6-astra", "codex", "multi-session"]);
+  view = flow.value(topic);
+  assert.deepEqual([view.step, view.feishu.connect, view.feishu.creating], ["done", "codex-bot", false]);
+  assert.equal(host.requests.filter((r) => r.method === "DELETE").length, 0, "a bot made is not let go of");
+  core.close();
+});
+
+test("connect_wizard_checks_a_feishu_app_of_ones_own_and_lets_go_of_a_bot_not_made", async () => {
+  const { host, core } = await choosing();
+  let verified = 0;
+  stationReplies(host, (req) => {
+    const path = req.url.replace("https://stillfail.test/admin/api", "");
+    if (path === "/feishu/verify") return ++verified === 1 ? { identity: null, errors: ["app_secret 无效"] } : { identity: { botName: "Codex 机器人", tenant: { key: "t", name: "某公司" } }, errors: [] };
+    if (req.method === "POST" && path === "/feishu/registrations") return { id: "r2", url: "https://accounts.feishu.cn/x", expiresAt: 1 };
+    if (req.method === "DELETE" && path.startsWith("/feishu/registrations/")) return {};
+    if (path === "/feishu/connects") return { id: "own-bot" };
+    return undefined;
+  });
+  withFeishu(core, []);
+  const ui = core.connect();
+  const flow = core.inner.forms.connects;
+  const topic = connectTopic("own");
+  const form = { station: "ws/st", form: "own" };
+  await ask(host, core, ui, 1, "connect.flow.open", form);
+  await ask(host, core, ui, 2, "connect.flow.go", { ...form, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 3, "pick.set", { station: "ws/st", of: "connect-new:own", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 4, "pick.save", { station: "ws/st", of: "connect-new:own" });
+  flow.go(topic, ui, "feishuWay");
+  assert.equal(flow.value(topic).feishu.way, "scan");
+  flow.edit(topic, ui, { feishu: { way: "app" } });
+  assert.equal(flow.value(topic).feishu.way, "app");
+  flow.go(topic, ui, "feishuApp");
+  assert.equal(flow.value(topic).feishu.canVerify, false);
+  assert.throws(() => flow.edit(topic, ui, { feishu: { lark: "yes" } }));
+  await ask(host, core, ui, 5, "connect.flow.edit", { ...form, input: { feishu: { appId: " cli_9 ", appSecret: "wrong", lark: true } } });
+  await ask(host, core, ui, 6, "connect.flow.verify", form);
+  let view = flow.value(topic);
+  assert.deepEqual([view.feishu.verified, view.feishu.errors], [false, ["app_secret 无效"]]);
+  await assert.rejects(ask(host, core, ui, 7, "connect.flow.create", form), "not verified");
+  await ask(host, core, ui, 8, "connect.flow.edit", { ...form, input: { feishu: { appSecret: "right" } } });
+  assert.deepEqual(flow.value(topic).feishu.errors, [], "what was found wrong goes once it is changed");
+  await ask(host, core, ui, 9, "connect.flow.verify", form);
+  view = flow.value(topic);
+  assert.deepEqual([view.feishu.verified, view.feishu.identity.botName], [true, "Codex 机器人"]);
+  assert.deepEqual(stationPosted(host, "/feishu/verify").at(-1), { appId: "cli_9", appSecret: "right", domain: "lark" });
+  const created = await ask(host, core, ui, 10, "connect.flow.create", form);
+  assert.equal(created.id, "own-bot");
+  assert.deepEqual(stationPosted(host, "/feishu/connects")[0].feishu, { appId: "cli_9", appSecret: "right", domain: "lark" });
+  assert.deepEqual([flow.value(topic).step, flow.value(topic).feishu.connect], ["done", "own-bot"]);
+  // A bot being made by scanning, the wizard closed: its station stops waiting for it.
+  const other = { station: "ws/st", form: "gone" };
+  withFeishu(core, []);
+  await ask(host, core, ui, 11, "connect.flow.open", other);
+  await ask(host, core, ui, 12, "connect.flow.go", { ...other, input: { to: "feishuBind" } });
+  await ask(host, core, ui, 13, "pick.set", { station: "ws/st", of: "connect-new:gone", model: "gpt-6-astra", runtime: "codex" });
+  await ask(host, core, ui, 14, "pick.save", { station: "ws/st", of: "connect-new:gone" });
+  await ask(host, core, ui, 15, "connect.flow.go", { ...other, input: { to: "feishuWay" } });
+  await ask(host, core, ui, 16, "connect.flow.register", other);
+  assert.equal(flow.value(connectTopic("gone")).feishu.registration.state, "waiting", "as it was started, before the overview says");
+  await ask(host, core, ui, 17, "connect.flow.drop", other);
+  await host.settle();
+  assert.deepEqual(host.requests.filter((r) => r.method === "DELETE").map((r) => r.url.replace("https://stillfail.test/admin/api", "")), ["/feishu/registrations/r2"]);
   core.close();
 });
 
@@ -1375,5 +1608,18 @@ test("automatic_decision_drafts_require_a_model_and_preserve_failed_saves", asyn
   assert.equal(forms.value(topic).dirty, false);
   forms.change(topic, ui, "drop", {});
   assert.equal(forms.value(topic), null);
+  core.close();
+});
+
+test("the_spans_a_core_sends_say_which_build_of_its_app_it_is_once_its_ui_has_said", async () => {
+  const { host, core } = await started(base(), 1);
+  const ui = core.connect();
+  call(core, ui, 1, "client.device", { app: "android", build: "0.1.2420" });
+  await host.settle();
+  await host.time.pass(EXPORT_MS + 100);
+  const sent = exports(host);
+  assert.equal(sent.length, 1);
+  const resource = JSON.parse(new TextDecoder().decode(sent[0].body!)).resourceSpans[0].resource.attributes as J[];
+  assert.deepEqual(resource.find((a) => a.key === "service.version")?.value, { stringValue: "0.1.2420" });
   core.close();
 });

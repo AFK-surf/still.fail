@@ -46,6 +46,8 @@ export const cloud = {
   /** `code`: an invite code, for an account not let in yet (still.fail is invite-only). */
   createWorkspace: (sub: string, name: string, code?: string) => operations(sub).workspaceCreate<WorkspaceView>(code ? { name, invite_code: code } : { name }),
   renameWorkspace: (sub: string, id: string, name: string) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, name }),
+  /** Its icon and emoji together, as a station's (../stationPick.ts); "" takes either away. */
+  setWorkspaceMark: (sub: string, id: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRename<WorkspaceView>({ workspace: id, emoji: mark.emoji, icon: mark.icon }),
   /** The workspace's own relays, the whole list (cloud directory.ts setRelays). */
   setRelays: (sub: string, id: string, relays: string[]) => operations(sub).workspaceSetRelays<WorkspaceView>({ workspace: id, relays }),
   deleteWorkspace: (sub: string, id: string) => operations(sub).workspaceDelete<{ ok: true }>({ workspace: id }),
@@ -63,9 +65,14 @@ export const cloud = {
   acceptInvitation: (sub: string, token: string) => operations(sub).invitationAccept<WorkspaceView>({ token }),
   setRole: (sub: string, id: string, member: string, role: Role) => operations(sub).workspaceSetRole<WorkspaceView>({ workspace: id, member, role }),
   removeMember: (sub: string, id: string, member: string) => operations(sub).workspaceRemoveMember<{ ok: true }>({ workspace: id, member }),
-  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; command: string }>({ workspace: id, name }),
+  enroll: (sub: string, id: string, name: string) => operations(sub).workspaceEnroll<{ token: string; expires_at: number; install: string; installWindows?: string; command: string }>({ workspace: id, name }),
   renameStation: (sub: string, id: string, station: string, name: string) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, name }),
+  /** Its icon and emoji together (../stationPick.ts); "" takes either away. */
+  setStationMark: (sub: string, id: string, station: string, mark: { emoji: string; icon: string }) => operations(sub).workspaceRenameStation<WorkspaceView>({ workspace: id, station, emoji: mark.emoji, icon: mark.icon }),
   removeStation: (sub: string, id: string, station: string) => operations(sub).workspaceRemoveStation<{ ok: true }>({ workspace: id, station }),
+  /** A station of another workspace (its address there, in its home workspace) added to `workspace` as it is: the core
+   * makes the enrollment here and has the station join with it (client/core-ts/src/views/memberships.ts). */
+  joinStation: (workspace: string, station: string) => core().call("station.join", { workspace, station }) as Promise<{ joined: { workspace: string; workspaceName: string; name: string } | null }>,
   revokeLoginSession: (sub: string, id: string) => operations(sub).loginSessionRevoke<{ ok: true }>({ id }),
 };
 
@@ -73,7 +80,8 @@ export const cloud = {
 export const admin = {
   me: (sub: string) => operations(sub).adminMe<{ email: string }>(),
   /** Each with its sign-up link on the web app. */
-  createCode: (sub: string, note: string, days: number) => operations(sub).adminCreateCode<InviteCodeView & { url: string }>({ note, days }),
+  /** With `beta`, whoever redeems it is let into the test channel too. */
+  createCode: (sub: string, note: string, days: number, beta = false) => operations(sub).adminCreateCode<InviteCodeView & { url: string }>({ note, days, ...(beta ? { beta } : {}) }),
   revokeCode: (sub: string, code: string) => operations(sub).adminRevokeCode<{ ok: true }>({ code }),
   /** Lets the account `user` into the test channel (app.youdid.wtf), or out of it. */
   setBeta: (sub: string, user: string, on: boolean) => operations(sub).adminSetBeta<{ sub: string; beta: boolean }>({ user, on }),
@@ -81,7 +89,21 @@ export const admin = {
   setMayCreate: (sub: string, user: string, on: boolean) => operations(sub).adminSetMayCreate<{ sub: string; may_create: boolean }>({ user, on }),
   /** Blocks the account `user` (signed out everywhere, kept out), or lets it back. */
   block: (sub: string, user: string, on: boolean) => operations(sub).adminBlock<{ blocked: boolean }>({ user, on }),
+  /** Gives an email the test channel or the standard plan (one left out stays as it was): an account signed in with it at
+   *  once (its `sub`), otherwise (`sub` null) the first that signs in with it. */
+  setPending: (sub: string, email: string, rights: { beta?: boolean; may_create?: boolean }) =>
+    operations(sub).adminSetPending<{ email: string; sub: string | null }>({ email, ...rights }),
+  /** Takes back what an email nobody signed in with yet was given. */
+  removePending: (sub: string, email: string) => operations(sub).adminRemovePending<{ ok: true }>({ email }),
   deleteWorkspace: (sub: string, workspace: string) => operations(sub).adminDeleteWorkspace<{ ok: true }>({ workspace }),
+  /** A workspace for a company: its owners by email (members when they first sign in), and limits of its own. */
+  createWorkspace: (sub: string, input: { name: string; owners: string[]; members: number; stations: number }) =>
+    operations(sub).adminCreateWorkspace<{ id: string; joined: string[]; added: string[] }>(input),
+  setLimits: (sub: string, workspace: string, limits: { members: number; stations: number }) =>
+    operations(sub).adminSetLimits<{ members: number; stations: number }>({ workspace, ...limits }),
+  /** A station's enrollment for any workspace, the admin not in it. */
+  enroll: (sub: string, workspace: string, name: string) =>
+    operations(sub).adminEnroll<{ token: string; expires_at: number; install: string; installWindows?: string; command: string }>({ workspace, name }),
   /** Where a bug report stands. */
   feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),
 };

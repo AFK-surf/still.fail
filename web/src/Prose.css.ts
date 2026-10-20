@@ -1,6 +1,6 @@
 // Markdown's own parts.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 
 /** A message's file placed in its text: on a line of its own, a little apart from the text around it. */
@@ -17,6 +17,9 @@ globalStyle(`${inlineFilesItem} > button`, { width: "100% !important", height: "
 export const fileLink = style({
   display: "inline", padding: 0, border: 0, background: "none", font: "inherit", color: vars.blue, cursor: "pointer", textAlign: "inherit",
 });
+
+/** A web address in what a person wrote (withBareLinks): a link as one in markdown is. */
+export const bareLink = style({ color: vars.blue });
 
 /** A message the agent sent: a plain card so its content (code, tables, chips) keeps its own colours. */
 /** Code blocks: a quiet frame, the language and a copy button above, highlighting in the page's own tones. */
@@ -40,13 +43,14 @@ export const codeBar = style({
   },
 });
 export const codeLang = style({
-  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: "10px", letterSpacing: ".02em",
+  padding: "0 6px", fontFamily: "var(--font-sans, inherit)", fontSize: vars.textCaption, letterSpacing: ".02em",
   color: vars.subtle,
 });
 export const codeCopy = style({
+  // In the block's top right corner, 4 in (codeBar): rounded as the block less that, concentric with it.
   display: "inline-flex", alignItems: "center", gap: "4px", border: "0",
-  borderRadius: `calc(6px * ${vars.cornerScale})`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
-  height: "24px", padding: "0 7px", fontSize: "11px",
+  borderRadius: `calc(12px * ${vars.cornerScale} - 4px)`, color: vars.muted, cursor: "pointer", cornerShape: vars.cornerShape,
+  height: "24px", padding: "0 7px", fontSize: vars.textCaption,
   background: `color-mix(in srgb, ${vars.canvas} 80%, transparent)`,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
@@ -65,10 +69,10 @@ globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
 globalStyle(`${markdown} ${codeBlock} pre`, {
-  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: "12px", lineHeight: "1.55",
+  margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textMeta, lineHeight: "1.55",
 });
 globalStyle(`${codeShiki} pre.shiki`, {
-  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: "12px",
+  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: vars.textMeta,
   lineHeight: "1.55",
 });
 // Dark: vitesse-dark's colours, which Shiki puts in `--shiki-dark` beside the light ones it writes inline.
@@ -78,4 +82,4 @@ globalStyle(`:root:not([data-theme="light"]) ${codeShiki} .shiki, :root:not([dat
   "@media": { "(prefers-color-scheme: dark)": shikiDark },
 });
 globalStyle(`${codeShiki} pre.shiki code`, { fontFamily: vars.fontMono, padding: "0", background: "none" });
-globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: "12.5px", lineHeight: "1.6" });
+globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });

@@ -2,6 +2,8 @@
 // runtime takes). How an access kind reaches its models (the environment, Codex's overrides) is agents/profiles.ts's.
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
@@ -11,6 +13,9 @@ import { type Endpoints, endpoints, find, type Source } from "../agents/provider
 import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
+import { CONSOLE } from "./console.ts";
+import { platform } from "../platform/index.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -53,6 +58,8 @@ export type Urls = {
   chatgpt: string;
   /// Claude's OAuth token endpoint (renewing a login).
   claudeToken: string;
+  /// The OpenCode Console (an OpenCode Go profile signed in to it: console.ts).
+  console: string;
 };
 
 export const URLS: Urls = {
@@ -60,11 +67,17 @@ export const URLS: Urls = {
   anthropic: "https://api.anthropic.com",
   chatgpt: "https://chatgpt.com",
   claudeToken: "https://platform.claude.com/v1/oauth/token",
+  console: CONSOLE,
 };
 
 /// The access kinds each runtime can use.
 export function accessKinds(runtime: Runtime): AccessKind[] {
-  return runtime === "claude" ? ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"] : ["subscription", "opencode-go", "api-provider", "env"];
+  if (runtime === "claude") return ["subscription", "opencode-go", "anthropic-api", "api-provider", "env"];
+  // DeepSeek Harness has no subscription to sign in to here: an account of its own is set up by variables.
+  if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
+  // Grok Build: SuperGrok signed in to, an xAI key, or its own variables.
+  if (runtime === "grok") return ["subscription", "api-provider", "env"];
+  return ["subscription", "opencode-go", "api-provider", "env"];
 }
 
 /// Access kinds that authenticate with a key the profile stores.
@@ -77,9 +90,10 @@ export const needsKey = (kind: AccessKind, provider: string | undefined): boolea
 /// The runtimes an access kind runs without its provider (profiles.rs runtimes_of): a provider's follow from where it
 /// speaks (`runtimesFor`).
 export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runtime[] {
-  if (kind === "opencode-go") return ["claude", "codex"];
-  if (kind === "anthropic-api") return ["claude"];
+  if (kind === "opencode-go") return ["claude", "codex", "dsh"];
+  if (kind === "anthropic-api") return ["claude", "dsh"];
   if (kind === "api-provider") return [];
+  if (kind === "subscription" && runtime === "dsh") return [];
   return runtime ? [runtime] : [];
 }
 
@@ -87,7 +101,12 @@ export function runtimesOf(kind: AccessKind, runtime: Runtime | undefined): Runt
 export const runtimesFor = (access: Json, runtime: unknown): Runtime[] => profileRuntimes({ id: "", home: "", runtime: runtime as Runtime, access });
 
 /// The command to sign a subscription profile in, run on the station's machine.
-export const loginCommand = (runtime: Runtime, home: string) => (runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login` : `CODEX_HOME=${home} codex login`);
+/// None for DeepSeek Harness, which has no subscription here.
+export const loginCommand = (runtime: Runtime, home: string) =>
+  runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login`
+  : runtime === "codex" ? `CODEX_HOME=${home} codex login`
+  : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
+  : "";
 
 /// What a check is given: the account and where it lives.
 export type CheckOptions = {
@@ -101,6 +120,8 @@ export type CheckOptions = {
   env: Env;
   /// On the machine's own login.
   machine: boolean;
+  /// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console.
+  login?: boolean;
   /// The machine login's current token, renewed when about to run out (oauth.ts).
   machineToken?: (env: Env) => Promise<{ token: string }>;
   urls?: Urls;
@@ -111,7 +132,7 @@ export type CheckOptions = {
 const check = (state: string, detail: string, models: string[] | null): ProfileCheck => ({ state, detail, models, checkedAt: 0 });
 
 async function get(url: string, headers: Record<string, string>): Promise<Response> {
-  return fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+  return profileFetch(url, { headers, signal: AbortSignal.timeout(15_000) });
 }
 
 /// The ids of a `/v1/models` answer.
@@ -126,7 +147,8 @@ const sorted = (list: string[]) => list.sort((a, b) => (a < b ? -1 : a > b ? 1 :
 /// Runs a runtime's own status command, in `env` only; what it said and how it ended.
 function statusOf(command: string, args: string[], env: Env): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL" }, (error, stdout, stderr) => {
+    const r = platform.runnable(command, args, env as NodeJS.ProcessEnv);
+    execFile(r.file, r.args, { env: env as NodeJS.ProcessEnv, timeout: 20_000, killSignal: "SIGKILL", windowsVerbatimArguments: r.windowsVerbatimArguments }, (error, stdout, stderr) => {
       if (error && (error as NodeJS.ErrnoException).code === "ENOENT") return reject(new Error(`${command}: ${error.message}`));
       if (error && error.killed) return reject(new Error(`${command} ${args.join(" ")} timed out`));
       const code = error ? (typeof (error as any).code === "number" ? (error as any).code : null) : 0;
@@ -152,6 +174,8 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
   if (o.kind === "opencode-go") {
     // The model list answers any key; the usage is the key's own, so it is what tells a key that works.
     const usage = await get(`${urls.opencode}/v1/usage`, { authorization: `Bearer ${o.key}` });
+    // A sign-in refused is one to sign in again (the account's own key would not be).
+    if (o.login === true && (usage.status === 401 || usage.status === 403)) return check("login", t("station.profile.consoleSignedOut"), null);
     if (!usage.ok) return check("failed", t("station.profile.keyRefused", { provider: "OpenCode Go", status: usage.status }), null);
     const response = await get(`${urls.opencode}/v1/models`, { authorization: `Bearer ${o.key}` });
     if (!response.ok) return check("failed", t("station.profile.modelsUnreadable", { provider: "OpenCode Go", status: response.status }), null);
@@ -201,7 +225,37 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     if (output.code !== 0) throw new Error(`Command failed: codex login status\n${text}`);
     return check("ok", text.split("\n")[0] || t("station.profile.signedIn"), null);
   }
+  if (o.kind === "subscription" && o.runtime === "grok") {
+    // `grok models` says whether it is signed in, and the account's models (* the default, - the rest).
+    const output = await statusOf("grok", ["models"], { ...o.env, GROK_HOME: join(o.home, "grok"), GROK_DISABLE_AUTOUPDATER: "1" });
+    const text = `${output.stdout}${output.stderr}`;
+    if (/not authenticated|not logged in|sign in/i.test(text)) return check("login", t("station.profile.signedOut"), null);
+    if (output.code !== 0) throw new Error(`Command failed: grok models\n${text.trim()}`);
+    const models = grokModels(text);
+    const email = grokEmail(o.home);
+    return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models.length > 0 ? models : null);
+  }
   return check("unknown", t("station.profile.envUnchecked"), null);
+}
+
+/// The models `grok models` lists: a line each, `* id (default)` or `- id`.
+export function grokModels(text: string): string[] {
+  return text.split("\n").flatMap((line) => {
+    const m = /^\s*[*-]\s+(\S+)/.exec(line);
+    return m ? [m[1]!] : [];
+  });
+}
+
+/// Whose account Grok Build is signed in with, as its auth.json says (agents/grok.ts: its home is the profile's grok/).
+export function grokEmail(home: string): string | null {
+  try {
+    const auth: Json = JSON.parse(readFileSync(join(home, "grok", "auth.json"), "utf8"));
+    for (const entry of Object.values(auth ?? {})) {
+      const email = (entry as Json)?.email;
+      if (typeof email === "string" && email !== "") return email;
+    }
+  } catch {}
+  return null;
 }
 
 /// The models a Claude subscription's OAuth token may use; null when Anthropic does not say.

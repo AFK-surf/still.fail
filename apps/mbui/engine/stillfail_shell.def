@@ -1,0 +1,11 @@
+; The Rust shell's C ABI (client/shell/src/lib.rs, stillfail_shell.dll), what the engine links it by: an import
+; library is made of this (CMakeLists.txt), so the engine builds without the shell built.
+LIBRARY stillfail_shell.dll
+EXPORTS
+  sf_shell_start
+  sf_shell_call
+  sf_shell_call_sync
+  sf_shell_stats
+  sf_free
+  sf_shell_stop
+  sf_utc_offset_min

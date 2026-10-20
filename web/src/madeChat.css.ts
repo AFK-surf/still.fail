@@ -14,6 +14,7 @@ globalStyle(`${made} [data-made-arrive] ${msgMine}`, { visibility: "visible" });
 // chat's emphasis transition. Cover descendants too: a delayed sending/waiting status sets its own visibility.
 globalStyle(`${msgMine}[data-send-covered], ${msgMine}[data-send-covered] *`, { visibility: "hidden !important" as "hidden" });
 // The composer's hint is gone as the words are sent, and comes in where it is once they have left the composer (only
-// that eased: going, or a theme's change, is not). So too for a message sent in an open chat (data-sent).
-globalStyle(`:is(${made}, :root[data-sent]):not([data-made-hint]) [data-made-field]::placeholder`, { transition: "color 200ms cubic-bezier(.2, .8, .2, 1)" });
-globalStyle(`:root[data-made-hint="hidden"] [data-made-field]::placeholder`, { color: "transparent" });
+// that eased: going, or a theme's change, is not). So too for a message sent in an open chat (data-sent). Both marks
+// are the field's own (madeChat.ts): on the page's root, each change had every element's style worked out anew.
+globalStyle(`${made} [data-made-field]:not([data-made-hint])::placeholder, [data-made-field][data-sent]:not([data-made-hint])::placeholder`, { transition: "color 200ms cubic-bezier(.2, .8, .2, 1)" });
+globalStyle(`[data-made-field][data-made-hint="hidden"]::placeholder`, { color: "transparent" });

@@ -1,16 +1,16 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { composerWrap } from "./styles/cloud.css.ts";
 import { composerBox } from "./styles/composer.css.ts";
-import { glass } from "./styles/glass.ts";
+import { glass } from "@stillfail/ui/styles/glass.ts";
 
 export const newChatSub = style({
   textWrap: "balance", wordBreak: "keep-all", overflowWrap: "anywhere", margin: "0 0 8px", color: vars.muted,
-  fontSize: vars.textSm, lineHeight: "20px",
+  fontSize: vars.textUi, lineHeight: "20px",
 });
 export const spentNotice = style({
-  margin: "0 0 8px", padding: "8px 12px", borderRadius: "10px",
-  background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textSm,
+  margin: "0 0 8px", padding: "8px 12px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.amber} 12%, transparent)`, color: vars.text, fontSize: vars.textUi,
 });
 /** New chat: a centred composer with the choices of where and on what it runs. */
 export const newChat = style({
@@ -22,7 +22,7 @@ export const newChatInner = style({
 /** Where the offer of the machine's sessions hangs, under the status line: it takes no room (NewChat.tsx). */
 export const newChatOffer = style({ position: "relative", height: "0", width: "100%" });
 globalStyle(`${newChatOffer} > *`, { position: "absolute", top: "0", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" });
-export const newChatTitle = style({ margin: "0", fontSize: vars.textLg, lineHeight: "34px", fontWeight: "600" });
+export const newChatTitle = style({ margin: "0", fontSize: vars.textHeading, lineHeight: "34px", fontWeight: "600" });
 export const newChatStatus = style({});
 export const newChatHeld = style({ border: `1px solid ${vars.line}` });
 /** Here rather than with its class: it comes after .new-chat-held, and wins over it. */
@@ -41,3 +41,6 @@ globalStyle(`${newChatInner} > ${composerWrap}, ${newChatInner} > form`, { justi
 globalStyle(composerBox, {
   border: "0", ...glass, boxShadow: "0 1px 3px rgb(0 0 0 / .04)",
 });
+/** The bar over a new chat (its 文件, where a chat's bar has it): over the page, taking none of its room or its pointer. */
+export const newChatBar = style({ position: "absolute", top: "0", left: "0", right: "0", zIndex: 1, pointerEvents: "none" });
+globalStyle(`${newChatBar} > *`, { pointerEvents: "auto" });

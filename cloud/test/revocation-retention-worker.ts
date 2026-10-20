@@ -37,7 +37,7 @@ export class RevocationFixture extends DurableObject<Env> {
   // The runtime dispatches alarms and hibernatable socket events to this bound
   // fixture class, so forward them to the real Directory under test.
   async alarm(): Promise<void> { await this.#directory.alarm(); }
-  async webSocketMessage(): Promise<void> { await this.#directory.webSocketMessage(); }
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> { await this.#directory.webSocketMessage(ws, message); }
   async webSocketClose(ws: WebSocket, code: number): Promise<void> { await this.#directory.webSocketClose(ws, code); }
   async webSocketError(ws: WebSocket): Promise<void> { await this.#directory.webSocketError(ws); }
   async #settle(): Promise<string[]> {
@@ -69,7 +69,8 @@ export class RevocationFixture extends DurableObject<Env> {
           INSERT INTO provider_identities VALUES ('apple','synthetic-apple','alice');
           INSERT INTO workspaces (id,name,created_by,created_at) VALUES ('a','A','alice',0),('b','B','bob',0);
           INSERT INTO members VALUES ('a','alice','owner',0),('a','bob','member',0),('b','bob','owner',0);
-          INSERT INTO stations (id,workspace,name,enrolled_at,enrolled_by) VALUES ('station-a','a','Station',0,'alice');
+          INSERT INTO stations (id) VALUES ('station-a');
+          INSERT INTO station_members (workspace,station,name,enrolled_at,enrolled_by) VALUES ('a','station-a','Station',0,'alice');
         `);
       } else if (body.op === "revoke") await this.#directory.revokeSessions(body.sub ?? "alice", body.sids ?? null, body.cutoff);
       else if (body.op === "role") await this.#directory.setRole("alice", "a", "bob", body.role ?? "member");

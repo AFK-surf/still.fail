@@ -1,56 +1,83 @@
+import { makePastedFile, pastedInfo, PASTE_THRESHOLD } from "./pastedText.ts";
 // still.fail's own chat with a session, after Zork's: your messages sit right in a
 // bubble with only their time; everyone else (people and the agent) gets an
 // avatar, a name and the time over their words. Passages of earlier messages
 // can be quoted with a comment, and files ride along as cards (images shown).
-import { sentImage, sentImageKey } from "./sentImages.ts";
+import { sentFileKey, sentImage, sentImageKey, uploadImageKey } from "./sentImages.ts";
 import { ArchiveNotice } from "./ArchiveNotice.tsx";
-import { ArrowDown, ArrowUp, Bot, Brain, Chats, Close, Command, Edit, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Think, Trash, Web } from "./icons.tsx";
-import { Fragment, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
+import { ArrowDown, ArrowUp, Bell, Bot, Brain, Chats, Check, Close, Command, Edit, Folder, Info, Plus, Quote as QuoteIcon, Read, Received, Retry, Said, Search, Send, Sparks, Stop, Think, Trash, Web } from "@stillfail/ui/icons.tsx";
+import { createContext, memo, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from "react";
 import { Link, useHref, useSearchParams } from "react-router";
-import { useApi, useChatSend, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
+import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
-import { stationBase, usePerson, useStation } from "./station.tsx";
-import { Avatar, ICON, ModelLogo, Pill, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
+import { chatOfLink } from "./chatRefs.ts";
+import { Hover, PathSession } from "./Peeks.tsx";
+import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
-import { placeFiles, Prose } from "./Prose.tsx";
-import { shortcutOf, takesKeys, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
-import { chatImages, FileLink, FilePreview, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
+import { chatPage } from "./chatPage.ts";
+import { Prose, withBareLinks } from "./Prose.tsx";
+import { placeFiles } from "../../client/core-ts/src/placed.ts";
+import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
+import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
 import { imageBox } from "./imageBox.ts";
 import { thumbhashUrl } from "./thumbhash.ts";
 import { OpenFile, VizFile } from "./Viz.tsx";
-import { useStickToBottom } from "./scroll.ts";
-import { animate, arrive, EASE_OUT, follower, moveState, type AnimationPlaybackControls, type Follower } from "./motion.ts";
+import { useVirtualList, useVirtualModel, type VirtualList } from "./virtual/list.tsx";
+import type { Align, Item } from "./virtual/model.ts";
+import { animate, arrive, EASE_OUT, ENTER, follower, glider, motionMs, moveState, type AnimationPlaybackControls, type Follower } from "@stillfail/ui/motion.ts";
 import { motionValue, type MotionValue } from "motion";
 import { flushSync } from "react-dom";
-import { DraftKey, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { DraftKey, offerToDraft, pathWords, useDraft, useDraftInbox, type Draft, type DraftQuote, type Pending } from "./draft.ts";
+import { carriesDrive, droppedFrom, droppedFromFinder, droppedOf, useDropOver } from "./drive/drag.ts";
+import { useLanding } from "./drive/flight.ts";
+import { useThisMachine } from "./thisMachine.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck, ChatSentElsewhere } from "./core/shapes.ts";
+import type { ArchiveCheck, ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
-import { core } from "./core/react.ts";
+import { core, useCall } from "./core/react.ts";
 import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
+import { useOutsideShare } from "./OutsideShare.tsx";
 import { useMorph } from "./morph.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
 import * as composerCss from "./styles/composer.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as dockCss from "./dock.css.ts";
-import { sendingHere, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { sendingHere, sendingNow, sentAfter, toMadeChat as toMadeChatOf } from "./madeChat.ts";
+import { after, claimReserved, listQueue, queueRow } from "./listQueue.ts";
 import { thumbId } from "./viewerFlight.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import { failure, useToast, useAct } from "./toast.tsx";
+import { failure, useToast, useAct } from "@stillfail/ui/toast.tsx";
 import { MessageDecision } from "./Decisions.tsx";
+import { Settles } from "./settling.tsx";
+import { AgentHover, ChatAgentKeys, ChatAgents } from "./AgentCard.tsx";
 import * as decisionsCss from "./Decisions.css.ts";
 import { useDoing } from "./doing.ts";
-import { jumped, jumpWords, useJump } from "./jumpTo.ts";
+import { useChatFind } from "./ChatFind.tsx";
+import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
+import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
+
+// The composer's height, set on a chat (ChatPanel), as that element's own; the room it leaves the chat's list, a length
+// worked out there and inherited (styles/session.css.ts): the composer growing (a line more, or its width changing as
+// a side panel slides in) restyles the chat's every message only when the room it leaves does (past one line), not
+// at each change of its height. As the phone's (mobile/ChatHost.tsx). A browser without registered properties inherits
+// both as they are.
+for (const property of [
+  { name: "--composer-height", syntax: "<length>", inherits: false, initialValue: "0px" },
+  { name: "--composer-room", syntax: "<length>", inherits: true, initialValue: "0px" },
+]) {
+  try { globalThis.CSS?.registerProperty?.(property); } catch { /* registered already (a module loaded again) */ }
+}
 
 /**
  * From a new chat to the chat it made (madeChat.ts): its scene leaves, the composer moves to the chat's foot
@@ -66,66 +93,61 @@ export function toMadeChat(go: () => void): void {
 }
 
 /**
- * A chat's messages and its composer. Before its agent has a chat (`chat.thread` null) there are no messages, and
- * `ensureChat` makes the chat with the first message, which `onSent` then follows.
+ * A chat's messages and its composer, by the chat's key (its agent's session; `draftKey`: whose draft the composer
+ * shows, the page's own key, which what is in it does the page's things by: chatPage.ts). Drawn again only when what it
+ * is given changes, or the chat does.
  */
-export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, onSent, made, onArchive }: {
-  /** Whose draft the composer shows here. */
-  chat: ChatView; draftKey: string; lives: ReadonlyMap<string, Live>; onOpenHistory(key: string, entry?: number): void;
-  ensureChat?: () => Promise<{ key: string; thread: ChatTo }>; onSent?: (to: ChatTo) => void;
+export const ChatPanel = memo(function ChatPanel({ session, draftKey, made }: {
+  session: string; draftKey: string;
   /** What is sent to until its thread is known: the core's key of a chat made here (`chat.create`), or the agent's
    *  whose page it is (the core has the station make its chat behind what is sent). */
-  made?: string;
-  /** Archives the chat, as its bar's 归档 does: offered under the agent's last post once it is all done (ChatRows). */
-  onArchive?: (() => void) | undefined;
+  made?: string | undefined;
 }) {
+  const chat = useChat(useStation().address, { session }).value;
+  return chat ? <ChatShown chat={chat} session={session} draftKey={draftKey} made={made} /> : null;
+});
+
+function ChatShown({ chat, session, draftKey, made }: { chat: ChatView; session: string; draftKey: string; made: string | undefined }) {
   const station = useStation();
   const list = useRef<HTMLDivElement>(null);
   const composerHeight = useComposerHeight();
-  const floor = useRef<HTMLDivElement>(null);
   const api = useApi();
   const { thread, outbox } = chat;
   const id = thread?.id ?? null;
   const to: ChatTo | null = id ?? made ?? null;
-  const [quotes, setQuotes] = useState<DraftQuote[]>([]);
-  const [focusQuote, setFocusQuote] = useState<string | null>(null);
-  const quoteFocused = useCallback(() => setFocusQuote(null), []);
-  const rows = useMessageList(list, floor, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives);
+  const lives = useLives(station.address, chat.agents.map((a) => a.session.key));
+  const rows = useMessageList(list, chat, `${station.address}:${chat.thread?.id ?? chat.agents[0]?.session.key ?? ""}`, lives, 28);
   // Files are kept in a session's workspace: what is sent here goes to the first agent's.
   const keeper = chat.agents[0]?.session.key ?? null;
-  const ownerOf = (file: Attachment) => ownerIn(chat, file);
-  // The messages are kept as they are while nothing they show changes (MessageRow): what they are handed stays the same
-  // function, the latest one behind it, and `owners` says when whose files are whose has changed.
-  const images = () => chatImages([...rows.messages, ...outbox.map((o) => ({ authorKind: "person", ...o }))], ownerOf);
-  const latest = useRef({ ownerOf, onOpenHistory, images, onArchive });
-  latest.current = { ownerOf, onOpenHistory, images, onArchive };
-  const [stable] = useState(() => ({ owner: (file: Attachment) => latest.current.ownerOf(file), open: (key: string) => latest.current.onOpenHistory(key), images: () => latest.current.images(),
-    archive: () => latest.current.onArchive?.() }));
+  // An image opened here steps through the chat's (the core tells those beside it, as this page's chat names it).
+  const gallery = useMemo(() => ({ chat: { session } }), [session]);
   useShortcut("chat.latest", rows.toEnd);
-  const askedFile = useAskedFile(list, rows.messages, ownerOf);
-  // Selecting text inside one message offers to quote it.
-  const quoting = useSelectionQuote(list, (q) => {
-    const quote = { ...q, comment: "", id: `${Date.now()}` };
-    setQuotes((all) => [...all, quote]);
-    setFocusQuote(quote.id);
-  });
+  // Its own find, in place of the browser's (ChatFind.tsx).
+  const find = useChatFind(list, rows.virtual, id, rows.messages, composerHeight);
+  useShortcut("chat.find", find.show);
+  const askedFile = useAskedFile(list, rows.messages);
+  // What waits to be decided here and does not show: a button over the list leads to it.
+  const asks = useAsksShown(rows.virtual, chat);
+  // Selecting text inside one message offers to quote it: into the chat's draft, its composer's (by its key).
+  const quoting = useSelectionQuote(list, (quote) => offerToDraft(draftKey, { files: [], quotes: [], quote }));
 
   return (
     // The list runs on under the composer, frosted over it (its styles): its foot leaves the composer's height free.
     <section className={sessionCss.chat} aria-label={t("web-main.chat.label")} data-under-composer="" data-avoid-previews="" style={{ "--composer-height": `${composerHeight}px` } as CSSProperties}>
       <div className={sessionCss.chatPane}>
+      {find.bar}
       {rows.away && <ToLatest station={station.address} thread={id} waiting={rows.waiting} onClick={rows.toEnd} />}
-      <Gallery.Provider value={stable.images}>
-      <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps}
+      {asks.length > 0 && id !== null && <ToAsk station={station.address} thread={id} asks={asks} above={rows.away} />}
+      <Gallery.Provider value={gallery}>
+      <div className={`${sessionCss.chatList} ${css.chatMessages}`} ref={list} {...quoting.listProps} {...sentAfter(chat)}
         onClick={(e) => {
           const to = historyLinkClicked(e);
-          // At the entry it names (else its start); opened, not toggled.
-          if (to) { e.preventDefault(); onOpenHistory(to.key, to.entry); }
+          // At the entry it names (else its start); opened, not toggled. Another chat's agent's opens with its chat (ChatPage).
+          if (to && chat.agents.some((a) => a.session.key === to.key)) { e.preventDefault(); chatPage.history(draftKey, to.key, to.entry); }
         }}>
         <DraftKey.Provider value={draftKey}>
-          <ChatRows chat={chat} rows={rows} to={to} owners={ownersOf(chat)} owner={stable.owner} onOpenHistory={stable.open} onArchive={onArchive ? stable.archive : undefined} />
+          <ChatRows chat={chat} rows={rows} to={to} />
         </DraftKey.Provider>
-        <div ref={floor} className={chatCss2.chatFloor} aria-hidden="true" />
       </div>
       </Gallery.Provider>
       </div>
@@ -134,85 +156,141 @@ export function ChatPanel({ chat, draftKey, lives, onOpenHistory, ensureChat, on
       {chat.archived && <ArchiveNotice className={css.offlineNotice} offline={chat.offline} restore={() => api.archive({ thread: id, session: keeper ?? "" }, false)} />}
       {chat.offline && <p className={css.offlineNotice} role="status">{station.name ? t("web-main.chat.offline.named", { name: station.name }) : t("web-main.chat.offline")}</p>}
       {/* The one composer of the chat pages sits here (dock.tsx), kept as the page changes. */}
-      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper} quotes={quotes} setQuotes={setQuotes} focusQuote={focusQuote} onFocused={quoteFocused}
-        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} {...(ensureChat ? { ensureChat } : {})} {...(onSent ? { onSent } : {})} />
+      <ComposerSlot variant="chat" station={station} draftKey={draftKey} thread={to} sessionKey={keeper}
+        locked={chat.offline || !!chat.archived} placeholder={chat.archived ? t("web-main.chat.archivedPlaceholder") : t("web-main.composer.placeholder")} />
     </section>
   );
 }
 
-/** The session of a chat that keeps a file: the agent whose workspace holds it, else the first (what is sent goes there). */
-export function ownerIn(chat: ChatView, file: Attachment): string | null {
-  return chat.agents.find((a) => file.path.startsWith(`${a.session.workspace}/`))?.session.key ?? chat.agents[0]?.session.key ?? null;
+/**
+ * 忽略 under a post that asks what no one has decided (the core's `asked`): the viewer lets it go (`decision.dismiss`:
+ * their lists and the bell say nothing of it any more), going at once (settling.tsx) and back if that fails.
+ */
+function AskDismiss({ thread, seq, asked, answered }: { thread: number; seq: number; asked: boolean;
+  /** Its post answered: it goes as the options it is under close (Decisions.tsx MessageDecision), not before. */
+  answered: boolean;
+}) {
+  const station = useStation().address;
+  const call = useCall();
+  const act = useAct();
+  const [gone, setGone] = useState(false);
+  return (
+    <Settles shown={(asked || answered) && !gone}>
+      <button type="button" className={css.askDismiss} onClick={() => {
+        setGone(true);
+        act(call("decision.dismiss", { station, thread, seq }).catch((e: unknown) => { setGone(false); throw e; }), t("web-main.decisions.dismissWhat"));
+      }}>{t("web-main.chat.asks.dismiss")}</button>
+    </Settles>
+  );
 }
 
-/** Whose files are whose in a chat, in a word: when it changes, its messages' files are drawn again. */
-export function ownersOf(chat: ChatView): string {
-  return `${chat.agents[0]?.session.key ?? ""} ${chat.agents.map((a) => `${a.session.key}=${a.session.workspace}`).join(" ")}`;
+/**
+ * The way to what waits to be decided in this chat (the core's `asks`: a card no one has answered, or what an agent
+ * needs a person for) while its post does not show: a bell, no words, where the way to the chat's end is (over it when
+ * both show: `above`). Pressed, the chat goes to the post (jumpTo.ts), then to the next one's the next time, round again.
+ */
+function ToAsk({ station, thread, asks, above }: { station: string; thread: number; asks: ChatAsk[]; above: boolean }) {
+  const [turn, setTurn] = useState(0);
+  const next = asks[turn % asks.length]!;
+  return (
+    <Tip label={t("web-main.chat.asks.go")} side="top">
+      {/* Pressed with the cursor in the composer, it stays there. */}
+      <button type="button" className={`${css.chatToBottom} ${css.chatToAsk}`} data-above={above || undefined} aria-label={t("web-main.chat.asks.go")}
+        onMouseDown={(e) => e.preventDefault()} onClick={() => { jumpTo({ station, thread, seq: next.seq }); setTurn((n) => n + 1); }}>
+        <Bell size={16} />
+      </button>
+    </Tip>
+  );
+}
+
+const NO_ASKS: ChatAsk[] = [];
+
+/**
+ * What waits to be decided in a chat whose post does not show, for the button that leads to it (ToAsk; the phone's,
+ * mobile/Chat.tsx), both screens: the chat's `asks` (none in an archived one), and none at all while each one's post
+ * shows in the pane. The pane says which posts do not show (out of it, or under the composer); one outside the window
+ * of messages does not.
+ */
+export function useAsksShown(virtual: VirtualList, chat: ChatView): ChatAsk[] {
+  const asks = chat.archived || !chat.thread ? NO_ASKS : chat.asks ?? NO_ASKS;
+  const posts = asks.map((a) => a.seq).join(" ");
+  const [shown, setShown] = useState(true);
+  useEffect(() => {
+    if (posts === "") return;
+    const { model } = virtual;
+    // Each one's post in the pane: among its items, and reaching into it (below what covers its top).
+    const check = () => {
+      const all = posts.split(" ").every((seq) => {
+        const top = model.offsetOf(`m:${seq}`);
+        return top !== undefined && top < model.paneHeight && top + (model.sizes.get(`m:${seq}`)?.height ?? 1) > model.covered;
+      });
+      setShown(all);
+    };
+    check();
+    return virtual.watch(check);
+  }, [virtual.model, posts, chat.messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  return asks.length > 0 && shown ? NO_ASKS : asks;
+}
+
+/** The session that keeps a file shown out of its chat (the decisions page), where the core does not say (`owner`). */
+export const FileKeeper = createContext<string | null>(null);
+
+/** The session whose workspace keeps a file, which its preview goes through: the core's word, else FileKeeper's. */
+function useKeeper(): (file: Attachment) => string | null {
+  const keeper = useContext(FileKeeper);
+  return (file) => file.owner ?? keeper;
 }
 
 /**
  * What a chat's list holds, the same on both screens (this page; the phone's, mobile/Chat.tsx): older pages loading, its
  * messages with the unread line, what is sent from here on its way (`to`: where it goes), and its agents at work.
- * `owner` and `onOpenHistory` stay the same functions while the page lasts; `owners` says when whose files are whose
- * has changed.
+ * What is done from it (an agent's history or card opened, the chat archived) is done on the page by the chat's key
+ * (chatPage.ts); what each message shows beside it (whether its agent is the chat's, 归档, what was sent to Slack after
+ * it) the core says on the message.
  */
-export function ChatRows({ chat, rows, to, owners, owner, onOpenHistory, onArchive }: {
-  chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null; owners: string;
-  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
-  /** Archives the chat (its page's 归档). */
-  onArchive?: (() => void) | undefined;
-}) {
-  const { messages, divider, shown, rowOf, caughtAgent, poseOf } = rows;
-  const here = (key: string | undefined) => key !== undefined && chat.agents.some((a) => a.session.key === key);
+export function ChatRows({ chat, rows, to }: { chat: ChatView; rows: ReturnType<typeof useMessageList>; to: ChatTo | null }) {
+  const { messages, shown, rowOf, caughtAgent, poseOf, virtual } = rows;
   // Where a decision's options answer: none while nothing can be sent.
   const thread = chat.offline || chat.archived ? null : chat.thread?.id ?? null;
-  // Nothing left in it (the core's `archivable`) and its agent's last post said it is all done: 归档 right under that
-  // post, as a decision's options are (only at the chat's end, not in an older window).
-  const last = chat.newer ? undefined : messages.findLast((m) => m.authorKind === "agent" && !m.system);
-  const archiveAt = onArchive && chat.archivable && !chat.offline && last?.ending === "all_done" ? last.seq : null;
-  // What the archive check made of it, under the same post (in words: the option it picked and what came of it).
-  const checkAt = chat.archiveCheck && last?.ending === "all_done" ? last.seq : null;
-  // What its agents sent to Slack meanwhile, each after the message it followed (0: before the first).
-  const sentAfter = new Map<number, ChatSentElsewhere[]>();
-  for (const s of chat.elsewhere ?? []) sentAfter.set(s.after, [...(sentAfter.get(s.after) ?? []), s]);
-  const sent = (after: number) => sentAfter.get(after)?.map((s) => <SentElsewhere key={s.key} sent={s} agentHere={here(s.by.agent ?? undefined)} onOpenHistory={onOpenHistory} />);
+  const locked = chat.offline || !!chat.archived;
+  // What each item is: only those the list makes (virtual/list.tsx) are drawn.
+  const drawn = new Map<string, () => ReactNode>();
+  const sent = (list: ChatSentElsewhere[] | undefined) => { for (const s of list ?? []) drawn.set(`e:${s.key}`, () => <SentElsewhere key={`e:${s.key}`} sent={s} />); };
+  drawn.set("older", () => <div key="older" data-vk="older" className={css.chatOlder} aria-hidden="true"><Spinner /></div>);
+  drawn.set("line", () => <div key="line" data-vk="line" className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div>);
+  sent(chat.elsewhere);
+  for (const m of messages) {
+    drawn.set(`m:${m.seq}`, () => {
+      const { enter, emitted, caught } = rowOf(m);
+      return <MessageRow key={`m:${m.seq}`} message={m} enter={enter} emitted={emitted} caught={caught} thread={thread} />;
+    });
+    sent(m.elsewhere);
+  }
+  // The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it.
+  drawn.set("newer", () => <div key="newer" data-vk="newer" className={css.chatNewer} aria-hidden="true"><Spinner /></div>);
+  for (const o of chat.outbox) drawn.set(`o:${o.id}`, () => <OutboxRow key={`o:${o.id}`} o={o} to={to} locked={locked} />);
+  // A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does.
+  for (const { agent, leaving } of shown) {
+    drawn.set(`a:${agent.key}`, () => <Activity key={`a:${agent.key}`} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} stoppable={chat.agents.length > 1} />);
+  }
+  const empty = messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length;
   return (
-    <>
-      {chat.more && <div className={css.chatOlder} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {messages.length === 0 && chat.outbox.length === 0 && !chat.elsewhere?.length && (
+    <ChatAgents.Provider value={chat.agents}>
+    <ChatAgentKeys.Provider value={chat.agents.map((a) => a.session.key).join("\n")}>
+      {empty && (
         <div className={css.chatEmpty}>
           <p>{t("web-main.chat.empty")}</p>
         </div>
       )}
-      {sent(0)}
-      {messages.map((m) => {
-        const line = m.seq === divider ? <div className={css.chatUnreadLine} data-unread-line role="separator"><span>{t("web-main.chat.unreadLine")}</span></div> : null;
-        const { enter, emitted, caught } = rowOf(m);
-        // Keyed as a whole: a bare [line, row] pair is placed by its index, and an older page coming in above would
-        // shift every index and draw every message anew.
-        return (
-          <Fragment key={m.seq}>
-            {line}
-            <MessageRow message={m} focus={chat.focusLast === true && m.seq === messages.at(-1)?.seq} enter={enter} emitted={emitted} caught={caught} thread={thread}
-              agentHere={here(m.by.agent)} owners={owners} owner={owner} onOpenHistory={onOpenHistory}
-              {...(archiveAt === m.seq ? { archive: onArchive } : {})} {...(checkAt === m.seq ? { check: chat.archiveCheck } : {})} />
-            {sent(m.seq)}
-          </Fragment>
-        );
-      })}
-      {/* The page after the window shown, while it is short of the chat's end (`chat.newer`), loading as the reader nears it. */}
-      {chat.newer && <div className={css.chatNewer} aria-hidden="true"><span className={waitingCss.spinner} /></div>}
-      {chat.outbox.map((o) => <OutboxRow key={o.id} o={o} to={to} locked={chat.offline || !!chat.archived} owner={owner} />)}
-      {/* A reply comes whole, as a message: while an agent works, its activity (always the last thing in the chat) says what it does. */}
-      {shown.map(({ agent, leaving }) => (
-        <Activity key={agent.key} agent={agent} leaving={leaving} caught={caughtAgent(agent.key)} pose={poseOf(agent.key)} onOpen={() => onOpenHistory(agent.key)} />
-      ))}
-    </>
+      {virtual.layout.rows.flatMap((row, i) => [virtual.above(row, i === 0), drawn.get(row.key)?.()])}
+      {virtual.after()}
+    </ChatAgentKeys.Provider>
+    </ChatAgents.Provider>
   );
 }
 
 /**
- * Over the list away from its end: glides down, and follows new messages again (scroll.ts); from a window short of the
+ * Over the list away from its end: glides down, and follows new messages again (virtual/model.ts); from a window short of the
  * end, goes there at once, turning while the latest page comes (`chat.latest`), not pressed again meanwhile.
  */
 function ToLatest({ station, thread, waiting, onClick }: { station: string; thread: number | null; waiting: number; onClick(): void }) {
@@ -224,7 +302,7 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
     <Tip label={state.error ?? t("web-main.chat.toLatest")} shortcut="chat.latest" side="top">
       <button type="button" className={css.chatToBottom} aria-label={t("web-main.chat.toLatest")} data-count={waiting > 0 || undefined}
         disabled={coming} aria-busy={coming || undefined} onClick={onClick}>
-        <DoingShown state={state} className={controlsCss.iconSpinner} size={16} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
+        <DoingShown state={state} idle={<ArrowDown size={16} strokeWidth={2} />} bare />
         {waiting > 0 && <span>{t("web-main.chat.newMessages", { n: waiting })}</span>}
       </button>
     </Tip>
@@ -233,11 +311,23 @@ function ToLatest({ station, thread, waiting, onClick }: { station: string; thre
 
 const SENDING_SHOWS_MS = 800;
 
+/**
+ * What is sent from here, its images still going up among its files: each in its place and shape at once, drawn from
+ * this device (as its message is, once up: `Attachment.upload`), not a card that turns into a picture later.
+ */
+function upImages(o: Outgoing): Outgoing {
+  const going = o.uploads?.filter((f) => isImage(f.name)) ?? [];
+  if (!going.length) return o;
+  const shown = going.map((f): Attachment => ({ name: f.name, path: uploadImageKey(f.id), size: f.size, upload: f.id, ...(f.width && f.height ? { width: f.width, height: f.height } : {}) }));
+  return { ...o, attachments: [...(o.attachments ?? []), ...shown] };
+}
+
 /** A message sent from here that the chat does not show yet: on its way, or failed with a way to send it again or drop it. */
-function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; locked: boolean; owner: (file: Attachment) => string | null }) {
+function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: boolean }) {
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
+  const draftKey = useContext(DraftKey);
   // Each turns in its icon's place while it goes; failed, a red mark there a few seconds, why on hover.
   const retry = useDoingState("chat.retry", { station, id: o.id });
   const drop = useDoingState("chat.discard", { station, id: o.id });
@@ -249,22 +339,35 @@ function OutboxRow({ o, to, locked, owner }: { o: Outgoing; to: ChatTo | null; l
   const showsAt = o.createdAt + SENDING_SHOWS_MS;
   const [delay] = useState(() => `${Math.max(0, showsAt - Date.now())}ms`);
   return (
-    <MineMessage data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined}>
-      <MineWords message={o} owner={owner} />
+    <MineMessage data-vk={`o:${o.id}`} data-author={t("web-main.chat.you")} data-role="person" data-enter data-unsent={o.state === "failed" || undefined} data-joined={o.joined || undefined}>
+      <MineWords message={upImages(o)} />
+      {o.uploads?.filter((f) => !isImage(f.name)).map((f) => <FileCard key={f.id} file={f} pending={o.state !== "failed"} sent={f.sent} error={o.state === "failed" ? o.error ?? null : null} />)}
       {o.state === "failed"
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
             <Tip label={o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.notSent")}>
-              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{t("web-main.chat.unsent")}</span>
+              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{o.final && o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.unsent")}</span>
             </Tip>
-            <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
-              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
-              <DoingShown state={retry} className={css.msgUnsentSpinner} idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
+            {o.final
+              // Refused as it is (a file this station does not have): sent again it would be again. Its words go back to
+              // the composer, to be sent anew.
+              ? <button type="button" className={css.msgUnsentBtn} disabled={locked || busy || !draftKey}
+                  onClick={() => {
+                    if (to === null || !draftKey) return;
+                    if (!offerToDraft(draftKey, { files: [], text: o.text, quotes: o.quotes.map((q, i) => ({ ...q, id: `${o.id}-${i}` })) })) return;
+                    sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) })));
+                  }}>
+                  <Edit size={12} strokeWidth={2} />{t("common.edit")}</button>
+              : <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
+                  onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
+                  <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>}
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
-              <DoingShown state={drop} className={css.msgUnsentSpinner} idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
+              <DoingShown state={drop} inline idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.sending")}</span>}
+        // Another sent soon after it: that one says it is on its way.
+        : o.followed ? null
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : o.waits ?? t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -330,7 +433,7 @@ export interface RowState { enter: true | undefined; emitted: "held" | "emitting
  * messages, where the unread line goes, whether to offer the way to the end (`away`, with what waits there:
  * `waiting`; `toEnd` takes it), the agents at work, and how each message comes in.
  */
-export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>) {
+export function useMessageList(list: RefObject<HTMLDivElement | null>, chat: ChatView, place: string, lives: ReadonlyMap<string, Live>, gap: number, cover?: (lead: number) => number) {
   const sending = useChatSend();
   const station = useStation().address;
   const id = chat.thread?.id ?? null;
@@ -339,10 +442,9 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
   const short = !!chat.newer;
   // Whose a message is, the core says.
   const mineOf = (m: ChatMessage) => m.mine;
-  useStickToBottom(list, `.${conversationCss.msg}`, floor, short);
-  useWindowMoves(list, messages);
-  useHistoryFade(list, messages);
-  useAtScrollEnd(list, messages, place);
+  // Where the list is and which of its rows are made (virtual/model.ts): told where it opens before its rows are drawn.
+  const made = useVirtualModel(place, gap);
+  const { model } = made;
   // Where the reader leaves it, the core keeps too, on the device (it opens there next, while nothing is unread, also
   // after a reload): the message at the top of the pane and where its top is, or none at its end. A core from before
   // `chat.place` does not know it.
@@ -352,25 +454,41 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     const seq = ts === null ? null : seqOf.current.get(ts);
     if (id !== null && seq !== undefined) void sending.place(id, seq, seq === null ? null : offset).catch(() => undefined);
   };
-  // Taken to where it was left or to the unread line before anything loads by where the pane is.
-  // With nothing unread, the core may open it short of its end where it was left (`at`): that message goes at the top,
-  // or where its top was (`atOffset`) when it is the very entry left there.
-  const opened = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
-  const at = opened ? { ts: opened.ts, offset: opened.seq === chat.at ? chat.atOffset ?? null : null } : null;
-  useRememberPlace(list, place, messages.length > 0, short, leave, at);
-  // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line.
+  // A message asked to be shown (jumpTo.ts) is where it opens this time, rather than the unread line; so is one its
+  // link names (`?message=<seq>`, a notification's: docs/notifications.md), asked for once the link is read.
   const asked = useRef(false);
-  if (useJump(station, id) !== null) asked.current = true;
-  const divider = useUnreadLine(list, chat, asked);
-  // Without a chat there is nothing older (or newer) to load.
-  const older = () => (id === null ? Promise.resolve() : sending.older(id));
-  useOlderOnScroll(list, chat.more, chat.messages[0]?.seq, older);
-  useJumpTo(list, station, id, messages, chat.more, older);
-  const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
-  useNewerOnScroll(list, short, chat.messages.at(-1)?.seq, newer);
-  useShowing(floor, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
-  const away = useAwayFromBottom(list);
-  const toEnd = useToEnd(list, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
+  const [search, setSearch] = useSearchParams();
+  const named = Number(search.get("message"));
+  const linked = id !== null && Number.isSafeInteger(named) && named > 0 ? named : null;
+  if (useJump(station, id) !== null || linked !== null) asked.current = true;
+  useEffect(() => {
+    if (linked === null || id === null) return;
+    jumpTo({ station, thread: id, seq: linked });
+    setSearch((now) => { now.delete("message"); return now; }, { replace: true });
+  }, [linked, id, station, setSearch]);
+  const divider = chat.unreadLine ?? null;
+  // Where it opens, said once its messages are there: where it was left here (`leftAt`), else where the core says it
+  // was left (`at`: that message at the top, or where its top was, `atOffset`, when it is the very entry left there);
+  // left at its end with nothing new since, at its end, followed. Not for a message asked to be shown.
+  const opened = useRef<string | null>(null);
+  if (opened.current !== place && messages.length > 0) {
+    opened.current = place;
+    const saved = leftAt.get(place);
+    const core = chat.unreadLine == null && chat.at != null ? messages.find((m) => m.seq >= chat.at!) ?? null : null;
+    if (asked.current) { /* useJumpTo takes it there */ }
+    else if (saved) {
+      const seq = seqOf.current.get(saved.ts);
+      if (!(saved.bottom !== null && messages.at(-1)?.ts === saved.bottom) && seq !== undefined) model.goto(`m:${seq}`, "at", saved.offset);
+    } else if (core) model.goto(`m:${core.seq}`, core.seq === chat.at && chat.atOffset != null ? "at" : "start", core.seq === chat.at ? chat.atOffset ?? 0 : 0);
+  }
+  // Something unread, the first time it shows (it may come from the station a moment after opening): the line near the
+  // top, with about four lines of what came before it still in view; over where it was left. Opened at a message asked
+  // to be shown, the line is drawn and the pane not moved to it.
+  const lined = useRef<string | null>(null);
+  if (lined.current !== place && divider !== null) {
+    lined.current = place;
+    if (!asked.current) model.goto("line", "start", 4 * 23);
+  }
   // A message sent from here eases in once, from the outbox; its own copy that replaces it does not again.
   const sentHere = useRef(new Set<string>());
   for (const o of chat.outbox) sentHere.current.add(o.text);
@@ -383,29 +501,133 @@ export function useMessageList(list: RefObject<HTMLDivElement | null>, floor: Re
     { key: session.key, who: session.agentText, runtime: session.runtime, maker: session.maker, activity: lives.get(session.key)?.activity ?? null, since, wait }
   ));
   const started = new Set(chat.agents.filter((a) => a.started).map((a) => a.session.key));
-  const emissions = useEmissions(list);
-  useActivityGlide(list);
+  const emissions = useEmissions(list, () => model.mode.kind === "follow");
   const shown = useLinger(atWork, emissions.keeps);
   emissions.take(messages, saidHere, new Set(shown.map((s) => s.agent.key)));
+
+  // The list's items, in order: each a row of its own.
+  const items: Item[] = [];
+  if (chat.more) items.push({ key: "older", estimate: 30, place: false });
+  for (const s of chat.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
+  for (const m of messages) {
+    if (m.seq === divider) items.push({ key: "line", estimate: 20 });
+    // One waiting to come out of its avatar takes no room, not even the gap before it (the list measures it so): known,
+    // not guessed, so that nothing below it moves for a guess and back for the fact.
+    items.push(emissions.stateOf(m.seq) === "held" ? { key: `m:${m.seq}`, estimate: 0, exact: -gap } : { key: `m:${m.seq}`, estimate: tallOf(m) });
+    for (const s of m.elsewhere ?? []) items.push({ key: `e:${s.key}`, estimate: 64 });
+  }
+  if (chat.newer) items.push({ key: "newer", estimate: 30, place: false });
+  for (const o of chat.outbox) items.push({ key: `o:${o.id}`, estimate: 44 });
+  for (const { agent } of shown) items.push({ key: `a:${agent.key}`, estimate: 24, place: false });
+
+  // What changed since it was last drawn: messages gone from an end as the core's window moved along the chat (their
+  // room is not held), and messages come at its end (said as the reader watches: followed gliding, the last from its
+  // top; caught up on, history read in or missed while the link was down: taken at once).
+  const first = messages[0]?.seq;
+  const last = messages.at(-1)?.seq;
+  const was = useRef({ first, last, place, keys: new Set<string>() });
+  const before = was.current.place === place ? was.current : { first: undefined, last: undefined };
+  useEffect(() => { was.current = { first, last, place, keys: new Set(items.map((item) => item.key)) }; });
+  const trimmed = (before.first !== undefined && first !== undefined && first > before.first) || (before.last !== undefined && last !== undefined && last < before.last);
+  const came = before.last !== undefined && last !== undefined && last > before.last ? messages.filter((m) => m.seq > before.last!) : [];
+  const smooth = came.length === 0 || came.some((m) => saidHere(m.seq));
+  // What came at the list's end is followed from the top of the last of it: a row is come at the end when all that
+  // stands after it came with it or is an agent's activity (always the last thing in the chat). A long message come
+  // alone is so read from its start; come with its agent's activity after it (a message sent, the agent starting on
+  // it), the pane goes on to the end, where the activity is. Not what a chat opens with.
+  const had = before === was.current ? was.current.keys : null;
+  let arrived: string | null = null;
+  if (had && smooth) {
+    for (let i = items.length - 1; i >= 0; i--) {
+      const key = items[i]!.key;
+      const added = !had.has(key);
+      if (added) { arrived = key; break; }
+      if (!key.startsWith("a:")) break;
+    }
+  }
+  const virtual = useVirtualList(list, made, items, { short, trimmed, smooth, arrived, ...(cover ? { cover } : {}) });
+  useQueuedEntries(list);
+
+  usePlace(virtual, place, messages, short, leave);
+  useHistoryFade(list, messages);
+  // Without a chat there is nothing older (or newer) to load.
+  const older = () => (id === null ? Promise.resolve() : sending.older(id));
+  useLoadNear(virtual, "top", !!chat.more, chat.messages[0]?.seq, older);
+  useJumpTo(list, virtual, station, id, messages, chat.more, older);
+  const newer = () => (id === null ? Promise.resolve() : sending.newer(id));
+  useLoadNear(virtual, "bottom", short, chat.messages.at(-1)?.seq, newer);
+  useShowing(virtual, station, chat, (seq) => (id === null ? Promise.resolve() : sending.read(id, seq)));
+  const away = useAwayFromBottom(virtual);
+  const toEnd = useToEnd(list, virtual, chat, () => (id === null ? Promise.resolve() : sending.latest(id)));
+  useActivityGlide(list, virtual);
+  // The list's own way to one of its messages, for what is drawn in it (a quote's card, a file asked for).
+  useEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    lists.set(el, { goto: (ts, align, pad) => { const seq = seqOf.current.get(ts); return seq !== undefined && virtual.goto(`m:${seq}`, align, pad); } });
+    return () => { lists.delete(el); };
+  }, [list, virtual]);
+
+  // A message comes in (`enter`) only the first time its row is made: made again as the reader scrolls back to it, it
+  // is there.
+  const gone = useRef(new Set<number>());
+  const rowsMade = useRef(new Set<number>());
+  const nowMade = new Set(virtual.layout.rows.flatMap((r) => (r.key.startsWith("m:") ? [Number(r.key.slice(2))] : [])));
+  for (const seq of rowsMade.current) if (!nowMade.has(seq)) gone.current.add(seq);
+  useEffect(() => { rowsMade.current = nowMade; });
   const rowOf = (m: ChatMessage): RowState => {
     const mine = mineOf(m);
     const told = !mine && !m.system;
-    const enter = saidHere(m.seq) && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
-    return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: saidHere(m.seq) ? undefined : true };
+    const fresh = saidHere(m.seq) && !gone.current.has(m.seq);
+    const enter = fresh && !(mine && sentHere.current.has(m.text)) && !(told && emissions.emits(m.seq)) ? true : undefined;
+    return { enter, emitted: told ? emissions.stateOf(m.seq) : null, caught: fresh ? undefined : true };
   };
   const caughtAgent = (key: string) => (started.has(key) ? undefined : true);
   // Short of the end, the way there shows wherever the reader is, with how many wait there.
   const waiting = short ? chat.thread?.unread ?? 0 : 0;
-  return { messages, divider, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf };
+  return { messages, away: away || short, waiting, toEnd, shown, rowOf, caughtAgent, poseOf: emissions.poseOf, virtual };
+}
+
+/**
+ * A message come in (eased in: `[data-enter]`, not one sent from here nor one out of its agent's avatar, which take
+ * their turns themselves) comes in its turn among what changes the list's height (listQueue.ts): its room not taken
+ * till then, it eases in as it takes it.
+ */
+function useQueuedEntries(list: RefObject<HTMLElement | null>) {
+  const seen = useRef(new WeakSet<Element>());
+  useLayoutEffect(() => {
+    const pane = list.current;
+    if (!pane) return;
+    // (An outbox row takes the turn what sent it took: words sent from the composer fly into it, madeChat.ts sendingHere;
+    // an option picked, Decisions.tsx. One sent otherwise comes in like any other.)
+    for (const el of pane.querySelectorAll<HTMLElement>(":scope > [data-enter]")) {
+      if (seen.current.has(el)) continue;
+      seen.current.add(el);
+      if (el.dataset.vk?.startsWith("o:") && (sendingNow() || claimReserved(el))) continue;
+      queueRow(el, () => after(motionMs(ENTER.duration)));
+    }
+  });
+}
+
+/** A list's way to one of its messages (by `ts`), by its pane: what is drawn in it finds it there. */
+const lists = new WeakMap<HTMLElement, { goto(ts: string, align: Align, pad?: number): boolean }>();
+
+/** About how tall a message stands before it is measured: its lines of words, and what it carries. */
+function tallOf(m: ChatMessage): number {
+  let breaks = 0;
+  for (let i = m.text.indexOf("\n"); i >= 0 && breaks < 60; i = m.text.indexOf("\n", i + 1)) breaks++;
+  const lines = Math.min(60, Math.ceil(m.text.length / 48) + breaks);
+  return (m.mine ? 44 : 30) + lines * 23 + (m.attachments?.length ?? 0) * 72 + (m.quotes?.length ?? 0) * 56;
 }
 
 /**
  * The way to a chat's end, from the button over the list or its shortcut: down the list, gliding, as always; from a
  * window short of the end (`chat.newer`), its latest page in its place first (`latest`), then straight to its bottom,
  * with nothing gliding or coming in. A message sent from such a window takes the reader there the same way (the core
- * puts the latest page in place as it sends); sent from up the list, straight to its bottom.
+ * does not move the window as it sends: the list asks for the latest page itself); sent from up the list, straight to
+ * its bottom.
  */
-function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: () => Promise<unknown>): () => void {
+function useToEnd(list: RefObject<HTMLElement | null>, virtual: VirtualList, chat: ChatView, latest: () => Promise<unknown>): () => void {
   const toast = useToast();
   const short = !!chat.newer;
   // Going to the end: once the latest page is in, the list goes to its bottom.
@@ -415,58 +637,45 @@ function useToEnd(list: RefObject<HTMLElement | null>, chat: ChatView, latest: (
   useLayoutEffect(() => {
     if (short || !going.current) return;
     going.current = false;
-    list.current?.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+    virtual.toEnd(true);
   });
+  const toLatest = useRef(() => {});
+  toLatest.current = () => {
+    going.current = true;
+    latest().catch((e: unknown) => { going.current = false; toast(t("web-main.chat.toLatestFailed", { error: failure(e) })); });
+  };
   // A message sent (the composer says so as it sends, `sent`, rather than the outbox growing: on a quick link the
-  // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again.
+  // station has it before the outbox ever shows it): from up the list, to its bottom at once, following again; from a
+  // window short of the end, its latest page first. Left waiting for the reader to load the rest, the list jumped to
+  // the end at once whenever a page they scrolled to reached it.
   useEffect(() => {
     const el = list.current;
     if (!el) return;
     const sent = () => {
-      if (isShort.current) going.current = true;
-      else if (el.hasAttribute("data-reading-up")) el.dispatchEvent(new CustomEvent("to-bottom", { detail: "at-once" }));
+      if (isShort.current) toLatest.current();
+      else if (virtual.model.mode.kind !== "follow") virtual.toEnd(true);
     };
     el.addEventListener("sent", sent);
     return () => el.removeEventListener("sent", sent);
-  }, [list]);
+  }, [list, virtual]);
   return () => {
-    if (!short) {
-      list.current?.dispatchEvent(new Event("to-bottom"));
-      return;
-    }
-    going.current = true;
-    latest().catch((e: unknown) => { going.current = false; toast(t("web-main.chat.toLatestFailed", { error: failure(e) })); });
+    if (!short) virtual.toEnd();
+    else toLatest.current();
   };
 }
 
 /** New historical rows share one short opacity fade; existing rows never replay when their status changes. */
 function useHistoryFade(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  const seen = useRef(new WeakSet<HTMLElement>());
+  // By message, not by row: a row made again as the reader scrolls back to it does not fade in again.
+  const seen = useRef(new Set<string>());
   useLayoutEffect(() => {
     for (const row of list.current?.querySelectorAll<HTMLElement>(":scope > [data-ts]") ?? []) {
-      if (seen.current.has(row)) continue;
-      seen.current.add(row);
+      const ts = row.dataset.ts!;
+      if (seen.current.has(ts)) continue;
+      seen.current.add(ts);
       if (row.hasAttribute("data-caught") && document.visibilityState === "visible") row.dataset.historyFade = "";
     }
-  }, [list, messages]);
-}
-
-/**
- * Tells the list (scroll.ts) when messages leave its ends as the core's window moves along the chat (a page in at one
- * end, as many out at the other): it lets go of the room it held at its foot. Told as the change is laid out, before
- * the list puts the reader's message back in place.
- */
-function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessage[]): void {
-  const first = messages[0]?.seq;
-  const last = messages.at(-1)?.seq;
-  const was = useRef({ first, last });
-  useLayoutEffect(() => {
-    const before = was.current;
-    was.current = { first, last };
-    const moved = (before.first !== undefined && first !== undefined && first > before.first)
-      || (before.last !== undefined && last !== undefined && last < before.last);
-    if (moved) list.current?.dispatchEvent(new Event("trimmed"));
-  }, [list, first, last]);
+  });
 }
 
 /**
@@ -474,7 +683,7 @@ function useWindowMoves(list: RefObject<HTMLElement | null>, messages: ChatMessa
  * (below what floats there, as the unread line) and flashed, after the list has been put where it opens (the unread
  * line, where it was left). Older than the window: older pages load until it is in; not there at all, nothing.
  */
-function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
+function useJumpTo(list: RefObject<HTMLDivElement | null>, virtual: VirtualList, station: string, thread: number | null, messages: ChatMessage[], more: boolean | undefined, older: () => Promise<unknown>) {
   const seq = useJump(station, thread);
   const loading = useRef(false);
   useEffect(() => {
@@ -487,34 +696,27 @@ function useJumpTo(list: RefObject<HTMLDivElement | null>, station: string, thre
       } else jumped();
       return;
     }
-    // A frame later: after the list has been put where it opens.
-    const frame = requestAnimationFrame(() => {
+    // Its top near the pane's, below what floats over it there (the phone's bar), as the unread line; then, its row
+    // made, flashed (or the words a search found in it marked).
+    let frame = requestAnimationFrame(() => {
       const words = jumpWords();
       jumped();
-      const pane = list.current;
-      const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
-      if (!pane || !target) return;
-      // A reader's move: the pane keeps it rather than holding its bottom.
-      pane.dispatchEvent(new WheelEvent("wheel"));
-      // Its top near the pane's, below what floats over it there (the phone's bar: its scroll padding), as the unread line.
-      const covered = parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0;
-      pane.scrollTop += target.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 12;
-      // Said at once (the browser says it a frame later): the pane keeps this place, not the one it held as the list
-      // re-renders for the jump being taken (scroll.ts).
-      pane.dispatchEvent(new Event("scroll"));
-      // Opened from a search: the words found marked in it (kept until the chat is left), the first in view.
-      if (words?.length && markWords(target, words)) {
-        const first = searchHits[0]!.getBoundingClientRect();
-        const bottom = pane.getBoundingClientRect().bottom;
-        if (first.bottom > bottom) {
-          pane.scrollTop += first.top + first.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
-          pane.dispatchEvent(new Event("scroll"));
+      virtual.goto(`m:${seq}`, "start", 12);
+      frame = requestAnimationFrame(() => {
+        const pane = list.current;
+        const target = pane?.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${CSS.escape(message.ts)}"]`);
+        if (!pane || !target) return;
+        // Opened from a search: the words found marked in it (kept until the chat is left), the first in view.
+        if (words?.length && markWords(target, words)) {
+          const first = searchHits[0]!.getBoundingClientRect();
+          const box = pane.getBoundingClientRect();
+          if (first.bottom > box.bottom) virtual.goto(`m:${seq}`, "at", box.height / 2 - (first.top + first.height / 2 - target.getBoundingClientRect().top));
+          return;
         }
-        return;
-      }
-      target.classList.remove(css.msgFlash);
-      void target.offsetWidth;
-      target.classList.add(css.msgFlash);
+        target.classList.remove(css.msgFlash);
+        void target.offsetWidth;
+        target.classList.add(css.msgFlash);
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, [seq, messages, more]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -529,33 +731,9 @@ let searchStrokes: { layer: HTMLElement; observer: ResizeObserver } | null = nul
 
 /** The strokes under `ranges`, in a layer over `root` (its box, so they move with it); laid out again as it resizes. */
 function drawStrokes(root: HTMLElement, ranges: Range[]): void {
-  const layer = document.createElement("span");
-  layer.dataset.searchMarks = "";
-  layer.setAttribute("aria-hidden", "true");
-  if (getComputedStyle(root).position === "static") root.style.position = "relative";
-  const svgNs = "http://www.w3.org/2000/svg";
-  const place = () => {
-    const box = root.getBoundingClientRect();
-    const strokes: Element[] = [];
-    for (const range of ranges) {
-      for (const rect of range.getClientRects()) {
-        if (rect.width < 1) continue;
-        const svg = document.createElementNS(svgNs, "svg");
-        svg.setAttribute("viewBox", "0 0 100 9");
-        svg.setAttribute("preserveAspectRatio", "none");
-        Object.assign(svg.style, { left: `${rect.left - box.left - 2}px`, top: `${rect.bottom - box.top - 4}px`, width: `${rect.width + 4}px`, height: "9px" });
-        const path = document.createElementNS(svgNs, "path");
-        path.setAttribute("d", "M1 6 C 25 3, 55 8, 99 4");
-        path.setAttribute("pathLength", "1");
-        path.style.animationDelay = `${strokes.length * 180}ms`;
-        svg.append(path);
-        strokes.push(svg);
-      }
-    }
-    layer.replaceChildren(...strokes);
-  };
+  const layer = strokeLayer(root);
+  const place = () => placeStrokes(layer, root, ranges);
   place();
-  root.append(layer);
   // Laid out again (the pane resized): drawn where the words are now, not drawn in again.
   let first = true;
   const observer = new ResizeObserver(() => {
@@ -616,85 +794,14 @@ export function sameMessage(a: ChatMessage, b: ChatMessage): boolean {
  * them). Nothing unread: no line, and the chat opens at its bottom or where it was left; something unread takes it to
  * the line even so. Answers the seq of the message the line goes over.
  */
-export function useUnreadLine(ref: RefObject<HTMLElement | null>, chat: ChatView, elsewhere?: RefObject<boolean>): number | null {
-  const target = chat.unreadLine ?? null;
-  // Until something unread shows (it may come from the station a moment after opening), there is nothing to jump to.
-  // Coming back to a chat with something unread goes to the line too, over where it was left (useRememberPlace).
-  const jumped = useRef(false);
-  useEffect(() => {
-    if (jumped.current || target === null) return;
-    jumped.current = true;
-    // Opened at a message asked to be shown (`elsewhere`, jumpTo.ts): the line is drawn, the pane not moved to it.
-    if (elsewhere?.current) return;
-    const pane = ref.current;
-    const line = pane?.querySelector<HTMLElement>("[data-unread-line]");
-    if (!pane || !line) return;
-    // A reader's move: the pane lets it take the position instead of holding its bottom.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    // The line near the top, below what floats over the pane there (the phone's bar: its scroll padding), with about
-    // four lines of what came before it still in view.
-    const style = getComputedStyle(pane);
-    const covered = parseFloat(style.scrollPaddingTop) || 0;
-    const text = parseFloat(style.lineHeight) || 22;
-    pane.scrollTop += line.getBoundingClientRect().top - pane.getBoundingClientRect().top - covered - 4 * text;
-    // Said at once (the browser says it a frame later): until then the pane, still following its bottom, would take
-    // itself back there as the list re-renders (scroll.ts).
-    pane.dispatchEvent(new Event("scroll"));
-  }, [ref, target]);
-  return target;
-}
-
-/** Exact scroll end, separate from the 120px threshold for the jump button and the following animation. */
-function useAtScrollEnd(ref: RefObject<HTMLElement | null>, messages: ChatMessage[], place: string): void {
-  // Opening/restoring the pane is already in its final appearance. Only the reader's scrolling enables fades.
-  useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const enable = () => pane.setAttribute("data-focus-motion", "");
-    const key = (event: KeyboardEvent) => {
-      if (!takesKeys(event.target instanceof Element ? event.target : null) && ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) enable();
-    };
-    pane.addEventListener("wheel", enable, { passive: true });
-    pane.addEventListener("touchmove", enable, { passive: true });
-    pane.addEventListener("pointerdown", enable, { passive: true });
-    pane.addEventListener("keydown", key);
-    return () => {
-      pane.removeEventListener("wheel", enable);
-      pane.removeEventListener("touchmove", enable);
-      pane.removeEventListener("pointerdown", enable);
-      pane.removeEventListener("keydown", key);
-      pane.removeAttribute("data-focus-motion");
-    };
-  }, [ref, place]);
-  useLayoutEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const check = () => pane.toggleAttribute("data-at-end", pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2);
-    check();
-    pane.addEventListener("scroll", check, { passive: true });
-    const resize = new ResizeObserver(check);
-    resize.observe(pane);
-    for (const child of pane.children) resize.observe(child);
-    return () => { pane.removeEventListener("scroll", check); resize.disconnect(); pane.removeAttribute("data-at-end"); };
-  }, [ref, messages]);
-}
-
 /** Whether the reader is scrolled up, away from the newest messages (more than a screenful's corner). */
-export function useAwayFromBottom(ref: RefObject<HTMLElement | null>): boolean {
+export function useAwayFromBottom(virtual: VirtualList): boolean {
   const [away, setAway] = useState(false);
   useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    const check = () => setAway(pane.scrollHeight - pane.scrollTop - pane.clientHeight > 120);
+    const check = () => setAway(virtual.model.toEnd > 120);
     check();
-    pane.addEventListener("scroll", check, { passive: true });
-    const resize = new ResizeObserver(check);
-    resize.observe(pane);
-    return () => {
-      pane.removeEventListener("scroll", check);
-      resize.disconnect();
-    };
-  }, [ref]);
+    return virtual.watch(check);
+  }, [virtual.model]); // eslint-disable-line react-hooks/exhaustive-deps
   return away;
 }
 
@@ -719,18 +826,25 @@ const leftAt = new Map<string, { ts: string; offset: number; bottom: string | nu
  * goes, and as the reader comes to rest too: a page that is reloaded or closed
  * is not left that way.
  */
-export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string, ready: boolean, short = false, onLeave?: (ts: string | null, offset: number | null) => void, opensAt: { ts: string; offset: number | null } | null = null): void {
-  const [saved] = useState(() => leftAt.get(key));
-  const restored = useRef(false);
-  const latest = useRef({ short, onLeave });
-  latest.current = { short, onLeave };
-  /** Where the reader is: the message at the pane's top and its offset, and the last message if at the end. */
-  const where = useCallback((pane: HTMLElement) => {
-    const top = pane.getBoundingClientRect().top;
-    const first = [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].find((m) => m.getBoundingClientRect().bottom > top);
-    const end = !latest.current.short && pane.scrollHeight - pane.scrollTop - pane.clientHeight <= 2;
-    return first ? { ts: first.dataset.ts!, offset: first.getBoundingClientRect().top - top, bottom: end ? lastTs(pane) : null } : null;
-  }, []);
+function usePlace(virtual: VirtualList, key: string, messages: ChatMessage[], short: boolean, onLeave: (ts: string | null, offset: number | null) => void): void {
+  const latest = useRef({ short, onLeave, messages });
+  latest.current = { short, onLeave, messages };
+  const { model } = virtual;
+  /** Where the reader is: the first message showing and where its top is, and the last message if at the end. */
+  const where = useCallback(() => {
+    const { messages, short } = latest.current;
+    const showing = model.showing();
+    if (!showing) return null;
+    const tsOf = new Map(messages.map((m) => [`m:${m.seq}`, m.ts]));
+    for (let i = showing.first; i <= showing.last; i++) {
+      const item = model.keyAt(i);
+      const ts = item === undefined ? undefined : tsOf.get(item);
+      if (ts === undefined) continue;
+      const end = !short && model.mode.kind === "follow";
+      return { ts, offset: model.offsetOf(item!)!, bottom: end ? messages.at(-1)?.ts ?? null : null };
+    }
+    return null;
+  }, [model]);
   /** What was last told (`onLeave`), so the same is not told again. */
   const told = useRef<string | null>(null);
   const tell = useCallback((at: { ts: string; offset: number; bottom: string | null }) => {
@@ -739,138 +853,78 @@ export function useRememberPlace(ref: RefObject<HTMLElement | null>, key: string
     const said = JSON.stringify([ts, offset]);
     if (said === told.current) return;
     told.current = said;
-    latest.current.onLeave?.(ts, offset);
+    latest.current.onLeave(ts, offset);
   }, []);
   useEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    // Told once the pane comes to rest, after it has been put where it was left (before that, it is not the reader's).
+    // Told once the pane comes to rest, where the reader put it (not where it opened).
     let rest: ReturnType<typeof setTimeout> | undefined;
-    const record = () => {
-      const at = where(pane);
-      if (at) leftAt.set(key, at);
+    let at = model.layout().scrollTop;
+    const stop = virtual.watch(() => {
+      const now = model.layout().scrollTop;
+      if (now === at) return;
+      at = now;
       clearTimeout(rest);
       rest = setTimeout(() => {
-        const now = restored.current && pane.isConnected ? where(pane) : null;
-        if (now) tell(now);
+        const here = where();
+        if (here) { leftAt.set(key, here); tell(here); }
       }, REST_MS);
-    };
-    pane.addEventListener("scroll", record, { passive: true });
+    });
+    // Told as the page goes: the model says where it was.
     return () => {
+      stop();
       clearTimeout(rest);
-      pane.removeEventListener("scroll", record);
+      const here = where();
+      if (here) { leftAt.set(key, here); tell(here); }
+      else if (!latest.current.short) latest.current.onLeave(null, null);
     };
-  }, [ref, key, where, tell]);
-  // Told as the page goes, while the pane is still laid out (a layout effect's cleanup runs before it is taken away).
-  useLayoutEffect(() => {
-    const pane = ref.current;
-    if (!pane) return;
-    return () => {
-      if (!pane.isConnected) return;
-      const at = where(pane);
-      if (at) leftAt.set(key, at);
-      if (at) tell(at);
-      else if (!latest.current.short) latest.current.onLeave?.(null, null);
-    };
-  }, [ref, key, where, tell]);
-  const opensTs = opensAt?.ts ?? null;
-  const opensOffset = opensAt?.offset ?? null;
-  useEffect(() => {
-    if (!ready || restored.current) return;
-    restored.current = true;
-    const pane = ref.current;
-    if (!pane) return;
-    if (!saved) {
-      // Opened where it was left (the core keeps it: the page since reloaded, or this page's place long let go): that
-      // message where its top was, when the core says, else at the top, below what floats over the pane there (the
-      // phone's bar: its scroll padding).
-      const at = opensTs === null ? null : pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${opensTs}"]`);
-      if (!at) return;
-      pane.dispatchEvent(new WheelEvent("wheel"));
-      const offset = opensOffset ?? (parseFloat(getComputedStyle(pane).scrollPaddingTop) || 0);
-      pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - offset;
-      pane.dispatchEvent(new Event("scroll"));
-      return;
-    }
-    // Left at the bottom with nothing new since: it opens at the bottom, following it (the top message's offset would
-    // not land there once what is below it is laid out otherwise: images still loading, an activity come or gone).
-    if (saved.bottom !== null && lastTs(pane) === saved.bottom) return;
-    const at = pane.querySelector<HTMLElement>(`.${conversationCss.msg}[data-ts="${saved.ts}"]`);
-    if (!at) return;
-    // A reader's move: the pane keeps it rather than holding its bottom.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    pane.scrollTop += at.getBoundingClientRect().top - pane.getBoundingClientRect().top - saved.offset;
-    pane.dispatchEvent(new Event("scroll"));
-  }, [ref, saved, ready, opensTs, opensOffset]);
+  }, [model, key, where, tell]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** How long the pane stays still before where the reader is gets told (`useRememberPlace`). */
 const REST_MS = 400;
 
-/** The last message's `ts` in a pane. */
-function lastTs(pane: HTMLElement): string | null {
-  return [...pane.querySelectorAll<HTMLElement>(`.${conversationCss.msg}[data-ts]`)].at(-1)?.dataset.ts ?? null;
-}
-
-/**
- * Loads the page before what is shown (`more`: there is one; `first`: what is
- * shown first) when the reader comes within about a screenful of the top (or
- * when what is loaded does not fill the pane). What is on screen stays put: the
- * pane keeps the reader's message in place as content grows above (scroll.ts).
- */
-export function useOlderOnScroll(ref: RefObject<HTMLElement | null>, more: boolean, first: number | string | undefined, older: () => Promise<unknown>): void {
-  useLoadNear(ref, "top", more, first, older);
-}
-
-/**
- * Loads the page after what is shown while the chat shows a window short of its end (`newer`; `last`: what is shown
- * last) when the reader comes within about a screenful of its bottom (or when what is loaded does not fill the pane).
- * What is on screen stays put as it comes in below and as many messages leave above (scroll.ts).
- */
-export function useNewerOnScroll(ref: RefObject<HTMLElement | null>, newer: boolean, last: number | string | undefined, load: () => Promise<unknown>): void {
-  useLoadNear(ref, "bottom", newer, last, load);
-}
-
 /**
  * One page per approach to an edge of the pane: a page is asked when the reader is within a screenful of `edge`
  * (`can`: there is one; `at`: what is shown at that edge, asked after once). The pane is judged as the reader
- * scrolls, not as the page comes in: until the pane has put the reader's message back (scroll.ts, as it is laid out),
+ * scrolls, not as the page comes in: until the pane has put the reader's message back (virtual/model.ts),
  * it still looks near the edge, and would ask for another page at once. So after a page, nothing is asked until a
  * frame after it is in, and then only as the reader scrolls (or while what is loaded does not fill the pane).
  */
-function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
+export function useLoadNear(virtual: VirtualList, edge: "top" | "bottom", can: boolean, at: number | string | undefined, load: () => Promise<unknown>): void {
   const latest = useRef({ load, at });
   latest.current = { load, at };
   const asked = useRef<number | string | undefined>(undefined);
   /** Judges the pane now; set while it is up. */
   const fill = useRef<(() => void) | null>(null);
+  const { model } = virtual;
   useEffect(() => {
-    const el = ref.current;
-    if (!el || !can) return;
+    if (!can) return;
     let live = true;
     let busy = false;
-    const near = () => (edge === "top" ? el.scrollTop : el.scrollHeight - el.scrollTop - el.clientHeight) <= el.clientHeight;
+    const near = () => model.paneHeight > 0 && (edge === "top" ? model.toStart : model.toEnd) <= model.paneHeight;
     const check = () => {
       const { load, at } = latest.current;
       if (busy || asked.current === at || !near()) return;
       asked.current = at;
       busy = true;
-      // Two frames on, the page is laid out and the reader's place put back (or the page never came: asked again).
+      // Two frames on, the page is in and the reader's place kept (or the page never came: asked again).
       const settle = () => requestAnimationFrame(() => requestAnimationFrame(() => {
         busy = false;
-        if (live && el.scrollHeight <= el.clientHeight) check();
+        if (live && model.fits) check();
       }));
       void load().then(settle, () => { asked.current = undefined; settle(); });
     };
-    fill.current = () => { if (el.scrollHeight <= el.clientHeight) check(); };
+    fill.current = () => { if (model.fits) check(); };
     check();
-    el.addEventListener("scroll", check, { passive: true });
+    // As the reader scrolls: where the pane is, not what came into it.
+    let top = model.layout().scrollTop;
+    const stop = virtual.watch(() => { const now = model.layout().scrollTop; if (now !== top) { top = now; check(); } });
     return () => {
       live = false;
       fill.current = null;
-      el.removeEventListener("scroll", check);
+      stop();
     };
-  }, [ref, can, edge]);
+  }, [model, can, edge]); // eslint-disable-line react-hooks/exhaustive-deps
   // A page in that does not fill the pane leaves nothing to scroll: the next is asked without waiting for the reader.
   useEffect(() => fill.current?.(), [at]);
 }
@@ -879,7 +933,7 @@ function useLoadNear(ref: RefObject<HTMLElement | null>, edge: "top" | "bottom",
  * Tells the core this page shows the chat, and whether its end (`floor`) is in view: what is read, where the unread
  * line goes and which notices are not shown follow from it there (client/core-ts/src/attend.ts).
  */
-export function useShowing(floor: RefObject<HTMLElement | null>, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
+export function useShowing(virtual: VirtualList, station: string, chat: ChatView, read: (seq: number) => Promise<unknown>): void {
   const thread = chat.thread?.id ?? null;
   const session = chat.key ?? chat.agents[0]?.session.key ?? null;
   // A core from before `client.focus` (an older desktop app's) reads nothing itself: the page records what is read, as
@@ -901,24 +955,26 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
   }, []);
   useEffect(readHere, [readHere, newest, known]);
   useEffect(() => {
-    const el = floor.current;
+    const { model } = virtual;
     const of = { station, thread, session };
     const tell = () => void core().focus({ chat: { ...of, end: old.current.end && !short.current } }).catch((e: unknown) => {
       if ((e as { code?: string }).code === "unknown_call") { old.current.on = true; readHere(); }
     });
     tell();
-    const observer = el && new IntersectionObserver((entries) => {
-      old.current.end = entries.some((e) => e.isIntersecting);
+    // Its end in view: the pane within a few pixels of the last of what it scrolls.
+    const stop = virtual.watch(() => {
+      const end = model.paneHeight > 0 && model.toEnd <= 4;
+      if (end === old.current.end) return;
+      old.current.end = end;
       if (old.current.on) readHere(); else tell();
     });
-    if (el) observer?.observe(el);
     document.addEventListener("visibilitychange", readHere);
     return () => {
-      observer?.disconnect();
+      stop();
       document.removeEventListener("visibilitychange", readHere);
       void core().focus({ left: of }).catch(() => undefined);
     };
-  }, [floor, station, thread, session, readHere]);
+  }, [virtual.model, station, thread, session, readHere]); // eslint-disable-line react-hooks/exhaustive-deps
   // The window reaching the chat's end with its end in view, or leaving it: said again.
   const isShort = chat.newer === true;
   const told = useRef(isShort);
@@ -934,97 +990,99 @@ export function useShowing(floor: RefObject<HTMLElement | null>, station: string
  * One message of the chat. It is drawn again only when something it shows changes: an agent at work makes the chat
  * draw again many times a second (its activity), and every message's Markdown would be laid out anew each time.
  */
-const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, agentHere, owner, onOpenHistory, thread, options = true, archive, check, focus }: {
-  focus?: boolean;
-  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined; agentHere: boolean;
+const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught, thread, options = true }: {
+  message: ChatMessage; enter: true | undefined; emitted: "held" | "emitting" | null; caught: true | undefined;
   /** Its chat's thread, where a decision's options answer (Decisions.tsx); null while nothing can be sent there. */
   thread: number | null;
   /** A decision's options under it (the decisions page has them at its foot instead). */
   options?: boolean;
-  /** Whose files are whose, in a word: when it changes, the files are drawn again. */
-  owners: string;
-  owner: (file: Attachment) => string | null; onOpenHistory: (key: string) => void;
-  /** Its chat is all done: 归档 under it (ArchiveOption). */
-  archive?: (() => void) | undefined;
-  /** What the archive check made of its chat, under its all-done post. */
-  check?: ArchiveCheck | undefined;
 }) {
+  const chat = useContext(DraftKey);
   if (m.mine) {
     return (
-      <MineMessage data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught}>
-        <MineWords message={m} owner={owner} />
-        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). */}
-        {m.waiting
-          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.chat.waitingAgent")}</span>
+      <MineMessage data-vk={`m:${m.seq}`} data-outgoing={m.outgoing} data-author={t("web-main.chat.you")} data-ts={m.ts} data-role="person" data-enter={enter} data-caught={caught} data-joined={m.joined || undefined}>
+        <MineWords message={m} />
+        {/* Not taken by its agents yet: after a second it says it waits (the delay is the stylesheet's). Their next
+            message soon after: under that one instead, close under this. */}
+        {m.followed ? null : m.blocked && m.blocked.state !== "installed" ? <BlockedLine install={m.blocked} /> : m.waiting
+          ? <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${css.msgWaitingLate}`}><Spinner inline />{t("web-main.chat.waitingAgent")}</span>
           : <Time className={conversationCss.msgTime} stamp={m.time?.createdAt} />}
       </MineMessage>
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice text={m.text} profile={m.profile} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
-  const agent = agentHere ? m.by.agent : undefined;
+  const agent = m.by.here ? m.by.agent : undefined;
   return (
-    <OthersMessage data-focus={focus || undefined} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
+    <OthersMessage data-vk={`m:${m.seq}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
-      avatar={<MessageAvatar message={m} name={who} />} time={m.time?.createdAt}
+      avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{who}</button>
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{who}</button>
         // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
-      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
+      <Quotes quotes={m.quotes} files={m.attachments} />
       {m.authorKind === "person"
-        ? <>{m.text && <PersonWords text={m.text} />}<Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles owner={owner} text={m.text} files={besideQuotes(m.quotes, m.attachments)} />}
+        ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
+        : <ProseWithFiles text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
-      {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
-      {check && <p className={css.archiveCheck} data-failed={check.failed || undefined}>{check.text}</p>}
-      {archive && <ArchiveOption thread={m.thread} onArchive={archive} />}
+      {/* It asks what no one has decided (the core's `asked`): letting it go, right under it, closing with its options. */}
+      {options && (m.card || m.options?.length) && !(m.card?.type === "login" && m.card.login)
+        ? <MessageDecision message={m} thread={thread}>{thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</MessageDecision>
+        : <>
+          {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
+          {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={false} />}
+        </>}
+      {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
+      {/* Coming and going in one motion (settling.tsx), as the phone's does. */}
+      {options && chat && <Settles shown={!!m.archive}><ArchiveOption thread={m.thread} chat={chat} /></Settles>}
     </OthersMessage>
   );
-}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.agentHere === b.agentHere && a.owners === b.owners && a.thread === b.thread
-  && a.options === b.options && a.archive === b.archive && a.check?.text === b.check?.text && a.check?.failed === b.check?.failed && a.focus === b.focus && sameMessage(a.message, b.message));
+}, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.thread === b.thread && a.options === b.options && sameMessage(a.message, b.message));
 
 /**
  * What an agent of the chat said in Slack rather than here, or a person's Slack message it was given (the core reads
- * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar, with
- * where it went or came from over its words beside a bar, as the execution history has it.
+ * them from its transcript; the chat does not keep them): drawn as a message of theirs, Slack's mark on the avatar and
+ * where it went or came from after its name telling it apart.
  */
-const SentElsewhere = memo(function SentElsewhere({ sent: s, agentHere, onOpenHistory }: { sent: ChatSentElsewhere; agentHere: boolean; onOpenHistory: (key: string) => void }) {
-  const agent = agentHere ? s.by.agent : undefined;
+const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentElsewhere }) {
+  const chat = useContext(DraftKey);
+  const agent = s.by.here ? s.by.agent : undefined;
   const received = s.received === true;
+  const kind = s.place?.surface;
   const place = s.place
-    ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
-    : <><SlackLogo size={12} />Slack</>;
+    ? <><ElsewhereLogo kind={kind} size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
+    : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
   return (
-    <OthersMessage data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
+    <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
-        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack />}
+        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
       name={agent
-        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => onOpenHistory(agent)}>{s.by.name}</button>
-        : <span className={css.msgName}>{s.by.name}</span>}>
-      <div className={`${historyCss.hReceived} ${historyCss.hPost}`} data-failed={s.failed ?? false}>
-        <div className={historyCss.hLabel}>
+        ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
+        : <span className={css.msgName}>{s.by.name}</span>}
+      route={
+        <span className={css.msgRoute}>
           {received ? <Received {...ICON} size={14} /> : <Send {...ICON} size={14} />}
           {t(received ? "web-main.chat.fromSlack" : "web-main.history.sentTo")}
           {s.place?.url
             ? <a className={historyCss.hPlace} href={s.place.url} target="_blank" rel="noopener">{place}</a>
             : <span className={historyCss.hPlace}>{place}</span>}
           {s.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
-        </div>
-        <div className={`${historyCss.hQuote} ${historyCss.hQuoteMd} ${conversationCss.markdown}`}><Prose>{s.text}</Prose></div>
-      </div>
+        </span>
+      }>
+      <div className={conversationCss.markdown}><Prose>{s.text}</Prose></div>
     </OthersMessage>
   );
-}, (a, b) => a.agentHere === b.agentHere && a.onOpenHistory === b.onOpenHistory && JSON.stringify(a.sent) === JSON.stringify(b.sent));
+}, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
 
 /**
  * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
- * message, in the accent as a decision's recommended option is. Turns while the archive is under way (doing.ts).
+ * message, in the accent. Turns while the archive is under way (doing.ts).
  */
-function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () => void }) {
+function ArchiveOption({ thread, chat }: { thread: number; chat: string }) {
   const station = useStation().address;
   const busy = useDoing("chat.archive", { station, thread, archived: true });
   const keepState = useDoingState("chat.keep", { station, thread });
@@ -1036,23 +1094,25 @@ function ArchiveOption({ thread, onArchive }: { thread: number; onArchive: () =>
       <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
         aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), t("web-main.chat.keep.what"), t("web-main.chat.keep.done"))}>
         <span className={decisionsCss.optionLabel}>{t("web-main.chat.keep")}</span>
-        <DoingShown state={keepState} className={decisionsCss.optionSpinner} />
+        <DoingShown state={keepState} className={decisionsCss.optionSpinner} inline />
       </button>
       <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
-        aria-busy={busy || undefined} onClick={onArchive}>
+        aria-busy={busy || undefined} onClick={() => chatPage.archive(chat)}>
         <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
-        {busy && <span className={`${waitingCss.spinner} ${decisionsCss.optionSpinner}`} aria-hidden="true" />}
+        {busy && <Spinner inline className={decisionsCss.optionSpinner} />}
       </button>
     </div>
   );
 }
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
-export function StaticMessage({ message, owner }: { message: ChatMessage; owner: (file: Attachment) => string | null }) {
-  return <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} agentHere={false} thread={null} options={false}
-    owners="" owner={owner} onOpenHistory={noHistory} />;
+export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
+  return (
+    <FileKeeper.Provider value={keeper}>
+      <MessageRow message={message} enter={undefined} emitted={null} caught={undefined} thread={null} options={false} />
+    </FileKeeper.Provider>
+  );
 }
-const noHistory = () => {};
 
 type Data = { [key: `data-${string}`]: string | number | boolean | undefined };
 
@@ -1063,12 +1123,12 @@ export function MineMessage({ children, ...data }: Data & { children: ReactNode 
 
 /** What a viewer's own message says, its quotes and files with it: the same whether the station has it yet (a
  * MessageRow) or it is still on its way (an OutboxRow), so it does not change as the one takes the other's place. */
-function MineWords({ message: m, owner }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments">; owner: (file: Attachment) => string | null }) {
+function MineWords({ message: m }: { message: Pick<ChatMessage, "text" | "quotes" | "attachments"> }) {
   return (
     <>
-      <Quotes quotes={m.quotes} files={m.attachments} owner={owner} />
+      <Quotes quotes={m.quotes} files={m.attachments} />
       <MineBubble text={m.text} />
-      <Files owner={owner} files={besideQuotes(m.quotes, m.attachments)} />
+      <Files files={besideQuotes(m.quotes, m.attachments)} />
     </>
   );
 }
@@ -1079,17 +1139,19 @@ export function MineBubble({ text }: { text: string }) {
 }
 
 /** What a person wrote, as every message of a person's draws it (their own in its bubble, someone else's as it is):
- * plain text, its references to chats as chips. */
+ * plain text, its references to chats as chips and its web addresses as links. */
 export function PersonWords({ text }: { text: string }) {
-  return <div className={chatCss2.msgPlain}><WithRefs text={text} /></div>;
+  return <div className={chatCss2.msgPlain}><WithRefs text={text} words={withBareLinks} /></div>;
 }
 
 /**
  * What still.fail itself says: a pill across the chat, in one line and no time. A click opens it: all its words, wrapped,
  * and its time under it. The station begins its failures with ⚠️ (Slack shows it so); here a failure is the pill in
  * red instead. In one about a profile (its sign-in failed), what went wrong (after its ：) links to that profile's page.
+ * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
+ * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string; profile: string | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined }) {
+function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
@@ -1099,15 +1161,18 @@ function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string
   const [open, setOpen] = useState(false);
   const toggle = () => setOpen((o) => !o);
   return (
-    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
+    <div className={`${conversationCss.msg} ${css.msgSystem}`} data-vk={vk} data-ts={ts} data-role="system" data-enter={enter} data-caught={caught} role="note">
       <div className={css.msgSystemBox} data-failed={failed ? "" : undefined} data-open={open || undefined}
         role="button" tabIndex={0} aria-expanded={open}
-        onClick={(e) => { if (!(e.target as Element).closest("a")) toggle(); }}
+        onClick={(e) => { if (!(e.target as Element).closest("a, button")) toggle(); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-        <div className={conversationCss.markdown}>
-          {profile && colon >= 0
-            ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
-            : <Prose>{said}</Prose>}
+        <div className={css.msgSystemLine}>
+          <div className={conversationCss.markdown}>
+            {profile && colon >= 0
+              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+              : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+          </div>
+          {report && <ReportAction thread={report.thread} seq={report.seq} />}
         </div>
       </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
@@ -1115,14 +1180,84 @@ function SystemNotice({ text, profile, time, ts, enter, caught }: { text: string
   );
 }
 
-/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says. */
-export function OthersMessage({ avatar, name, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; time: Stamp | undefined; children: ReactNode }) {
+/**
+ * Under the viewer's message that waits for a runtime the station does not have (core `blocked`), in place of its
+ * waiting: how that stands, in red while nothing is under way, and installing it. The whole line is what installs it
+ * (as a message not delivered is sent again from its line), so it is as big to press as it is wide. Once installed it
+ * waits again.
+ */
+function BlockedLine({ install }: { install: RuntimeInstall }) {
+  const stuck = install.state === "missing" || install.state === "failed";
+  const { busy, run } = useInstall(install);
+  const words = (
+    <>
+      {install.state === "installing" ? <Spinner inline /> : stuck && <span className={partsCss.failedMark} style={{ width: 12, height: 12, fontSize: 8 }} aria-hidden>!</span>}
+      <span className={css.blockedWords}>{install.title}{install.state === "installing" && install.percent != null && ` ${install.percent}%`}</span>
+      {install.note && !install.action && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.blockedWords}>{install.note}</span></>}
+      {install.action && <><span className={css.blockedDot} aria-hidden>·</span><span className={css.blockedAction}>{install.action}</span></>}
+    </>
+  );
+  const className = `${conversationCss.msgTime} ${css.blocked}`;
+  return install.action
+    ? <button type="button" className={className} data-stuck={stuck || undefined} title={install.detail} disabled={busy} aria-busy={busy || undefined} onClick={run}>{words}</button>
+    : <span className={className} data-stuck={stuck || undefined} title={install.detail ?? install.note}>{words}</span>;
+}
+
+/** Installing a notice's runtime: whether it is under way here, and doing it (software.update; a manager's: `action`). */
+function useInstall(install: RuntimeInstall) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  return { busy, run: () => { if (install.action) act(api.updateSoftware(install.runtime), install.action); } };
+}
+
+/** Installing a runtime the station does not have, a word at the end of a notice that says so. */
+function InstallAction({ install }: { install: RuntimeInstall }) {
+  const { busy, run } = useInstall(install);
+  if (!install.action) return null;
+  return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={run}>{install.action}</button></>;
+}
+
+/** Sending a failure notice to the still.fail team, a word at its end (out of its words, so a long one cut short keeps
+ * it): asked first, saying when to and what goes; what it was filed as is said once sent. */
+function ReportAction({ thread, seq }: { thread: number; seq: number }) {
+  const station = useStation().address;
+  const busy = useDoing("chat.report", { station, thread, seq });
+  const call = useCall();
+  const toast = useToast();
+  const act = useAct();
+  const [asking, setAsking] = useState(false);
+  const action = t("common.report.action");
+  const run = () => {
+    setAsking(false);
+    act(call("chat.report", { station, thread, seq }).then((a) => {
+      const answer = a as { number?: number; duplicate?: boolean } | null;
+      toast(t(answer?.duplicate ? "common.report.again" : "common.report.done", { number: answer?.number ?? "?" }));
+    }), action);
+  };
+  return (
+    <span className={css.msgSystemEnd}>
+      <span className={css.blockedDot} aria-hidden>·</span>
+      <button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={() => setAsking(true)}>{action}</button>
+      <Dialog open={asking} title={t("common.report.title")} description={t("common.report.lead")} onClose={() => setAsking(false)}
+        footer={<><Button variant="ghost" onClick={() => setAsking(false)}>{t("common.cancel")}</Button><Button variant="primary" onClick={run}>{action}</Button></>}>
+        <p className={css.reportSends}>{t("common.report.sends")}</p>
+      </Dialog>
+    </span>
+  );
+}
+
+/** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it
+ * went or came from, when not here) between the two. */
+export function OthersMessage({ avatar, name, route, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; route?: ReactNode; time: Stamp | undefined; children: ReactNode }) {
   return (
     <div className={`${conversationCss.msg} ${css.msgRow}`} {...data}>
       {avatar}
       <div className={css.msgMain}>
         <div className={conversationCss.msgHead}>
           {name}
+          {route}
           <Time className={conversationCss.msgTime} stamp={time} />
         </div>
         {children}
@@ -1131,14 +1266,17 @@ export function OthersMessage({ avatar, name, time, children, ...data }: Data & 
   );
 }
 
-/** An agent's picture in a chat: its model's maker, in the agents' ground. */
-export function AgentAvatar({ maker, runtime, slack }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean }) {
+/** An agent's picture in a chat: its model's maker, in the agents' ground. One of the chat's (`agent`, its session's key)
+ * has its card while it is pointed at (AgentCard.tsx). */
+export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean | "feishu"; agent?: string | undefined }) {
   return (
-    <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
-      {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
-      {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-      {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
-    </span>
+    <AgentHover agent={agent}>
+      <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
+        {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
+        {/* What it said went to Slack, not here: Slack's mark on its corner. */}
+        {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
+      </span>
+    </AgentHover>
   );
 }
 
@@ -1152,8 +1290,8 @@ export function MessageName({ children }: { children: ReactNode }) {
   return <span className={css.msgName}>{children}</span>;
 }
 
-function MessageAvatar({ message, name }: { message: ChatMessage; name: string }) {
-  if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} />;
+function MessageAvatar({ message, name, agent }: { message: ChatMessage; name: string; agent: string | undefined }) {
+  if (message.authorKind === "agent") return <AgentAvatar maker={message.by.maker} runtime={message.by.runtime} agent={agent} />;
   if ((message.authorKind === "ember" || message.authorKind === "stillfail")) return <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><Mark size={12} /></span>;
   const picture = message.by.picture;
   return picture
@@ -1166,26 +1304,31 @@ function MessageAvatar({ message, name }: { message: ChatMessage; name: string }
  * part on a warm ground (whose message, the passage) leading back to it, then
  * what was said about it.
  */
-function Quotes({ quotes, files, owner }: { quotes: Quote[] | undefined; files: Attachment[] | undefined; owner: (file: Attachment) => string | null }) {
+function Quotes({ quotes, files }: { quotes: Quote[] | undefined; files: Attachment[] | undefined }) {
+  const owner = useKeeper();
   if (!quotes?.length) return null;
   // In the list the card is in: each screen's (and the phone's pages under the one on top) has its own.
   const jump = (from: Element, ts: string, text: string) => {
     const pane = from.closest<HTMLElement>(`.${css.chatMessages}`);
-    const target = pane?.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
-    if (!pane || !target) return;
-    // A reader's move: the pane lets it take the position.
-    pane.dispatchEvent(new WheelEvent("wheel"));
-    const range = findText(target, text);
-    if (range && "highlights" in CSS) {
-      const rect = range.getBoundingClientRect();
-      pane.scrollTop += rect.top + rect.height / 2 - (pane.getBoundingClientRect().top + pane.clientHeight / 2);
-      flashRange(range);
-      return;
-    }
-    target.scrollIntoView({ block: "center" });
-    target.classList.remove(css.msgFlash);
-    void target.offsetWidth;
-    target.classList.add(css.msgFlash);
+    const way = pane ? lists.get(pane) : undefined;
+    // Its message's middle at the pane's, by the list (its row made if it was not); then, its row there, the quoted
+    // words at the middle and flashed, or the whole message.
+    if (!pane || !way?.goto(ts, "center")) return;
+    requestAnimationFrame(() => {
+      const target = pane.querySelector<HTMLElement>(`[data-ts="${CSS.escape(ts)}"]`);
+      if (!target) return;
+      const range = findText(target, text);
+      if (range) {
+        const rect = range.getBoundingClientRect();
+        const box = pane.getBoundingClientRect();
+        way.goto(ts, "at", box.height / 2 - (rect.top + rect.height / 2 - target.getBoundingClientRect().top));
+        flashRange(range);
+        return;
+      }
+      target.classList.remove(css.msgFlash);
+      void target.offsetWidth;
+      target.classList.add(css.msgFlash);
+    });
   };
   return (
     <div className={css.quoteCards}>
@@ -1234,14 +1377,29 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ owner, text, files }: { owner: (file: Attachment) => string | null; text: string; files: Attachment[] | undefined }) {
+function ProseWithFiles({ text, files, session = null, from }: {
+  text: string; files: Attachment[] | undefined;
+  /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null;
+  /** Another chat's agent wrote it (session_send): its link, whose session (and station) the paths are of. */ from?: string | undefined;
+}) {
   const { placed, rest } = useMemo(() => placeFiles(text, files), [text, files]);
+  const here = useStation().address;
+  const paths = useMemo(() => {
+    if (session !== null) return { key: session };
+    const of = from ? chatOfLink(from) : null;
+    // A local page knows only its own station: the link's station is taken to be it.
+    return of ? { key: of.id, ...(here.includes("/") && of.station !== here ? { station: of.station } : {}) } : null;
+  }, [session, from, here]);
+  // The same function while the keeper is: a new one each render would have Prose parse the text again whenever this
+  // draws (its station's context changing draws every message's).
+  const keeper = useContext(FileKeeper);
+  const file = useCallback((f: Attachment, as: "shown" | "link", words?: ReactNode) => as === "link" ? <FileLink sessionKey={f.owner ?? keeper} file={f}>{words}</FileLink> : <PlacedFile sessionKey={f.owner ?? keeper} file={f} />, [keeper]);
   return (
     <>
       <div className={conversationCss.markdown}>
-        <Prose files={placed} file={(f, as, words) => as === "link" ? <FileLink sessionKey={owner(f)} file={f}>{words}</FileLink> : <PlacedFile sessionKey={owner(f)} file={f} />}>{text}</Prose>
+        <PathSession.Provider value={paths}><Prose files={placed} file={file}>{text}</Prose></PathSession.Provider>
       </div>
-      <Files owner={owner} files={rest} />
+      <Files files={rest} />
     </>
   );
 }
@@ -1260,7 +1418,7 @@ function PlacedFile({ sessionKey, file }: { sessionKey: string | null; file: Att
  * latest one of that name opens on its own (OpenFile: beside the chat, or over it on a phone), its message brought
  * into view. Anything else that name opens in a preview.
  */
-export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: ChatMessage[], owner: (file: Attachment) => string | null): ReactNode {
+export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: ChatMessage[]): ReactNode {
   const [search, setSearch] = useSearchParams();
   const open = useContext(OpenFile);
   const asked = search.get("file");
@@ -1268,33 +1426,38 @@ export function useAskedFile(list: RefObject<HTMLDivElement | null>, messages: C
     if (!asked) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
       const file = messages[i]!.attachments?.find((f) => f.name === asked);
-      const key = file ? owner(file) : null;
+      const key = file?.owner ?? null;
       if (file && key !== null) return { file, key, ts: messages[i]!.ts };
     }
     return null;
-  }, [asked, messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [asked, messages]);
   const drawn = !!found && !!open && kindOf(found.file.name).kind === "html";
   const done = () => setSearch((now) => { now.delete("file"); return now; }, { replace: true });
   useEffect(() => {
     if (!found || !drawn) return;
     open!(found.key, found.file);
-    list.current?.querySelector(`[data-ts="${CSS.escape(found.ts)}"]`)?.scrollIntoView({ block: "center" });
+    if (list.current) lists.get(list.current)?.goto(found.ts, "center");
     done();
   }, [found, drawn]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!found || drawn) return null;
   return <FilePreview open onClose={done} sessionKey={found.key} file={found.file} />;
 }
 
-/** A message's files; `owner` says which session of the chat keeps each (null: none can show it). */
-function Files({ owner, files }: { owner: (file: Attachment) => string | null; files: Attachment[] | undefined }) {
+/** A message's files, each through the session that keeps it (none: it cannot show). */
+function Files({ files }: { files: Attachment[] | undefined }) {
+  const owner = useKeeper();
   if (!files?.length) return null;
-  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.path} sessionKey={owner(f)} file={f} />)}</div>;
+  // One still going up is on no station yet: drawn from this device alone.
+  return <div className={css.msgFiles}>{files.map((f) => <FileItem key={f.upload ?? f.path} sessionKey={f.upload && f.path === uploadImageKey(f.upload) ? null : owner(f)} file={f} />)}</div>;
 }
 
 /** Images already brushed in on this page (session key and path): shown again, they just show. */
 const revealed = new Set<string>();
 
-/** Images and video stills load near the screen; other files are a card. Either opens in a preview. */
+/**
+ * Images and video stills load near the screen; other files are a card. Either opens in a preview, an image's whether
+ * its thumbnail has come or not (the preview fetches the image itself, showing how far it has come).
+ */
 function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
   const station = useStation();
   const image = isImage(file.name);
@@ -1302,20 +1465,28 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   const [videoFailed, setVideoFailed] = useState(false);
   const box = useRef<HTMLButtonElement>(null);
   const near = useNear(box, image || video);
-  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && near, true);
+  // One here already is drawn at once, near the screen or not yet known to be (its row just made again).
+  const [here] = useState(() => image && sessionKey !== null && fileHere(station.address, sessionKey, file, true));
+  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null && (near || here), true);
   const still = useVideoStill(sessionKey ?? "", file, video && sessionKey !== null && near);
-  const [local] = useState(() => image ? sentImage(station.address, file.path) : undefined);
+  const [local] = useState(() => image ? sentImage(station.address, sentFileKey(file)) : undefined);
   const url = local ?? fetched.url;
   const failed = !local && fetched.failed;
   const [open, setOpen] = useState(false);
   // An image seen before, or that comes at once, just shows; one that takes a while is brushed in from the top.
   const born = useRef(performance.now());
-  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(local ? "instant" : null);
+  const key = `${sessionKey}\n${file.path}`;
+  const [loaded, setLoaded] = useState<"instant" | "reveal" | null>(local || (url && revealed.has(key)) ? "instant" : null);
   const shown = () => {
-    const key = `${sessionKey}\n${file.path}`;
     setLoaded(local || revealed.has(key) || performance.now() - born.current < 150 ? "instant" : "reveal");
     revealed.add(key);
   };
+  // Its picture already decoded (the same URL drawn before): shown before this frame is painted, not after its load
+  // event, a frame or more later, the placeholder showing meanwhile.
+  const img = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    if (loaded === null && img.current?.complete && img.current.naturalWidth > 0) shown();
+  }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
   const preview = sessionKey !== null && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey={sessionKey} file={file} />;
   const { letterbox, ...size } = look.box(file, video ? 96 : undefined);
   if (video && sessionKey !== null) {
@@ -1338,12 +1509,12 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
   if (image) {
     return (
       <>
-        <button ref={box} type="button" className={look.image} data-send-image={sentImageKey(file.path)} onClick={() => (url || failed) && setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
+        <button ref={box} type="button" className={look.image} data-send-image={sentFileKey(file)} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })} style={size} data-letterbox={letterbox ? "" : undefined}
           data-viewer-thumb={url && sessionKey !== null ? thumbId(station.address, sessionKey, file.path) : undefined}
-          data-loaded={loaded ?? undefined} data-failed={failed || undefined}>
+          data-loaded={loaded ?? undefined} data-failed={failed || undefined} data-near={near || undefined}>
           {loaded !== "instant" && <Waiting hash={file.thumbhash} fit={letterbox} />}
           {failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
-          {url && <img src={url} alt={file.name} onLoad={shown} />}
+          {url && <img ref={img} src={url} alt={file.name} onLoad={() => { if (loaded === null) shown(); }} />}
         </button>
         {preview}
       </>
@@ -1355,6 +1526,24 @@ function FileItem({ sessionKey, file }: { sessionKey: string | null; file: Attac
       <button type="button" className={look.open} onClick={() => setOpen(true)} aria-label={t("web-main.file.view", { name: file.name })}>{look.card(file)}</button>
       {preview}
     </>
+  );
+}
+
+/**
+ * A file drawn as the chat draws it, but still: an image's box (fetched at once), else its card; nothing opens from it.
+ * A published chat's preview (Publish.tsx), where a tap ticks the file instead.
+ */
+export function FileLook({ sessionKey, file }: { sessionKey: string | null; file: Attachment }) {
+  const image = isImage(file.name);
+  const fetched = useFileShown(sessionKey ?? "", file, image && sessionKey !== null, true);
+  if (!image || sessionKey === null) return look.card(file);
+  const { letterbox, ...size } = look.box(file);
+  return (
+    <span className={look.image} style={size} data-letterbox={letterbox ? "" : undefined} data-loaded={fetched.url ? "instant" : undefined} data-failed={fetched.failed || undefined}>
+      {!fetched.url && <Waiting hash={file.thumbhash} fit={letterbox} />}
+      {fetched.failed && <span className={css.msgImageUnavailable} aria-hidden="true"><Read size={20} /><span>{t("web-main.file.noPreview")}</span></span>}
+      {fetched.url && <img src={fetched.url} alt={file.name} />}
+    </span>
   );
 }
 
@@ -1370,16 +1559,62 @@ function Waiting({ hash, fit }: { hash: string | undefined; fit?: { width: strin
 /** How the chat draws a file: an image's button, the box it takes before it loads and what shows until then; a file's card and its button. */
 const look = { image: css.msgImage, wait: css.msgImageWait, box: (f: Attachment, least?: number) => imageBox(f, least), open: css.fileCardOpen, card: (f: Attachment) => <FileCard file={f} /> };
 
-function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
-  // A file of more than one part says how far it has gone.
-  const going = pending && sent !== undefined && file.size > 4 * 1024 * 1024
-    ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
-    : t("web-main.file.uploading");
+const NO_MARK = { current: null };
+
+/** A file's name as its card shows it: what is cut is the middle of its name, never its extension. */
+function FileName({ name }: { name: string }) {
+  const dot = name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 && name.length - dot <= 8 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  return <span className={css.fileCardName}><span className={css.fileCardStem}>{stem}</span>{ext && <span className={css.fileCardExt}>{ext}</span>}</span>;
+}
+
+/**
+ * What a file is, at a glance: a sheet with its extension on it (a folder its own shape), drawn in the text's colour.
+ * One going up fills from the bottom as it goes; one that failed has its extension in red.
+ */
+export function FileTile({ name, dir = false, progress, error = false, land = false, style }: {
+  name: string; dir?: boolean; progress?: number | undefined; error?: boolean;
+  /** A card's in the composer: where a mark dropped on the chat lands (drive/flight.ts). */
+  land?: boolean; style?: CSSProperties;
+}) {
+  const own = useRef<SVGSVGElement>(null);
+  useLanding(land ? own : NO_MARK);
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot + 1).toUpperCase() : "";
+  const id = useId();
   return (
-    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-error={error ? true : undefined}>
-      {pending ? <span className={waitingCss.spinner} aria-hidden="true" /> : <Read size={16} aria-hidden="true" />}
+    <svg ref={own} className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true" data-error={error || undefined} style={style}>
+      {dir ? (
+        <path d="M2.75 8.5Q2.75 5.75 5.5 5.75H11.5L14.5 9H24.5Q27.25 9 27.25 11.75V28.5Q27.25 31.25 24.5 31.25H5.5Q2.75 31.25 2.75 28.5Z"/>
+      ) : (
+        <>
+          {progress !== undefined && (
+            <>
+              <clipPath id={id}><path d="M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z" /></clipPath>
+              <rect className={css.fileTileFill} x="0" width="30" y={36 - 36 * Math.max(0, Math.min(1, progress))} height="36" clipPath={`url(#${id})`} />
+            </>
+          )}
+          <path d="M6 1.75H19L26.25 9V31Q26.25 34.25 23 34.25H6Q2.75 34.25 2.75 31V5Q2.75 1.75 6 1.75Z"/>
+          <path d="M19 1.75V6.5Q19 9 21.5 9H26.25" />
+          {ext
+            ? <text x="14.5" y="27" textAnchor="middle" className={css.fileTileExt} textLength={ext.length >= 3 ? 17 : undefined} lengthAdjust="spacingAndGlyphs">{ext}</text>
+            : <path d="M8.5 19H20.5M8.5 23.5H17" />}
+        </>
+      )}
+    </svg>
+  );
+}
+
+export function FileCard({ file, onRemove, pending, sent, error }: { file: Pick<Attachment, "name" | "size"> & { path?: string }; onRemove?: () => void; pending?: boolean; sent?: number | undefined; error?: string | null }) {
+  // How far it has gone, once that is known.
+  const going = pending && sent !== undefined && file.size > 0
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((sent / file.size) * 100), size: fileSize(file.size) })
+    : t("common.uploading");
+  return (
+    <Tip label={file.path ?? file.name} cut={!file.path}><span className={css.fileCard} data-card="" data-error={error ? true : undefined}>
+      <FileTile name={file.name} progress={pending ? (sent ?? 0) / Math.max(1, file.size) : undefined} error={!!error} land={!!onRemove} />
       <span className={css.fileCardText}>
-        <span className={css.fileCardName}>{file.name}</span>
+        <FileName name={file.name} />
         <span className={css.fileCardMeta}>{error ?? (pending ? going : fileSize(file.size))}</span>
       </span>
       {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: file.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
@@ -1404,8 +1639,7 @@ export interface ComposerProps {
    */
   thread: ChatTo | null;
   sessionKey: string | null;
-  quotes?: DraftQuote[]; setQuotes?(update: (all: DraftQuote[]) => DraftQuote[]): void;
-  /** A quote just added: its comment line takes the focus. */
+  /** A quote just added: its comment line takes the focus (the draft's own, where not given). */
   focusQuote?: string | null; onFocused?(): void;
   ensureChat?: () => Promise<{ key: string; thread: ChatTo }>;
   onSent?: (to: ChatTo) => void;
@@ -1413,6 +1647,8 @@ export interface ComposerProps {
   onSending?: (text: string | null) => void;
   /** Choices shown in the toolbar, between attach and send (a new chat's station, model and effort). */
   toolbar?: ReactNode;
+  /** Said right on top of the box. */
+  above?: ReactNode;
   placeholder?: string;
   /** While true (a new chat being made) nothing can be sent. */
   locked?: boolean;
@@ -1426,13 +1662,17 @@ export interface ComposerProps {
 
 export function Composer(props: ComposerProps) {
   const api = useApi();
-  const { draftKey, carry, quotes = [], setQuotes = () => {} } = props;
-  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}), upload: (file, onProgress) => api.uploadFile(file, onProgress), quotes: [quotes, setQuotes] });
+  const { draftKey, carry } = props;
+  // Its quotes are its draft's: a passage selected in the chat is offered to it by its key (useDraftInbox).
+  const draft = useDraft({ key: draftKey, ...(carry ? { carry } : {}) });
   return <ComposerView {...props} draft={draft} />;
 }
 
+/** How long the composer stays a box after it loses the cursor, for the cursor to come back without it shrinking. */
+const LET_GO_MS = 300;
+
 /** The chat's composer, also used where a page sends its draft as a reply to a decision. */
-export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = null, onFocused = () => {}, ensureChat, onSent, onSending, toolbar, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
+export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuote = draft.focusQuote, onFocused = draft.quoteFocused, ensureChat, onSent, onSending, toolbar, above, placeholder = t("web-main.composer.placeholder"), locked = false, roomy = false, draftKey }: ComposerProps & {
   draft: Draft; submitDraft?: (draft: Draft) => void;
 }) {
   const api = useApi();
@@ -1449,8 +1689,16 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
     warmed.current = Date.now();
     void api.warm(sessionKey).catch(() => {});
   };
+  const station = useStation().address;
+  // The station of the machine the desktop app is on, when it is one of this workspace's: what Finder drops are on.
+  const here = useThisMachine(station);
+  // Files dragged over its chat's page (ChatPage.tsx useChatDrop).
+  const pageOver = useDropOver();
+  const outside = useOutsideShare();
   const send = async () => {
     if (submitDraft) { submitDraft(draft); return; }
+    // Chats of other workspaces it refers to: shared with this one first, as the viewer says (OutsideShare.tsx).
+    if (!(await outside.ask(station, draft.text))) return;
     // In a chat (not a new one's first message, onSending's): its words stay where they were typed until its row is in
     // the list, then go there (madeChat.ts), over the dock.
     const field = input.current;
@@ -1489,38 +1737,74 @@ export function ComposerView({ draft, submitDraft, thread, sessionKey, focusQuot
   const box = useRef<HTMLFormElement>(null);
   // What it is laid out by: any change of it may change its height (a line more or less, capsule ⇄ box, files).
   useMorph(box, `${multiline}|${text}|${files.length}|${quotes.length}`, roomy);
+  // A box while it has the cursor; lost, a capsule a moment later, so that a cursor gone and back at once (a click
+  // that hands it back) does not shrink and grow it.
+  const letGo = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(letGo.current), []);
   return (
     <div className={cloudCss.composerWrap}>
+      {outside.node}
       {menu}
+      {above && <div className={css.composerAbove}>{above}</div>}
       <form ref={box} className={`${composerCss.composerBox} ${refCss.refHost}`} data-multiline={multiline || undefined} data-dragging={dragging || undefined}
-        onFocus={() => setFocused(true)}
-        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setFocused(false); }}
+        onFocus={() => { clearTimeout(letGo.current); setFocused(true); }}
+        onBlur={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          clearTimeout(letGo.current);
+          letGo.current = setTimeout(() => setFocused(false), LET_GO_MS);
+        }}
         onSubmit={(e) => { e.preventDefault(); submit(); }} onClick={() => input.current?.focus()}
         // Locked (its station offline), no file is taken in.
-        onDragOver={(e) => { if (e.dataTransfer.types.includes("Files") && !locked) { e.preventDefault(); setDragging(true); } }}
+        // Over a chat's page the page shows where they go (ChatPage.tsx useChatDrop); the composer is not marked then.
+        onDragOver={(e) => { if ((e.dataTransfer.types.includes("Files") || carriesDrive(e.dataTransfer)) && !locked) { e.preventDefault(); if (pageOver === null) setDragging(true); } }}
         onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { if (e.dataTransfer.files.length) { e.preventDefault(); setDragging(false); if (!locked) add(e.dataTransfer.files); } }}>
+        onDrop={(e) => {
+          // Dropped on a chat's page, the page takes it (ChatPage.tsx useChatDrop: its marks fly here).
+          if (pageOver !== null) return;
+          // A station's files (the chat's 文件 tab): named by their path there, until switched to files.
+          if (carriesDrive(e.dataTransfer)) { e.preventDefault(); setDragging(false); if (!locked) draft.addDropped(droppedOf(e.dataTransfer).map(droppedFrom)); return; }
+          if (e.dataTransfer.files.length) {
+            e.preventDefault(); setDragging(false);
+            if (locked) return;
+            // From Finder on a machine that is a station: named by their path there, as a station's files are.
+            const named = droppedFromFinder(e.dataTransfer, here);
+            if (named) draft.addDropped(named); else add(e.dataTransfer.files);
+          }
+        }}>
         <ComposerExtras draft={draft} focusQuote={focusQuote} onFocused={onFocused} onDone={() => input.current?.focus()} />
         {field}
-        <div className={css.composerToolbar}>
-          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
-          <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
-            <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
-              <Plus size={18} />
-            </button>
-          </Tip>
-          {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
-          <Tip label={draft.uploading ? t("web-main.composer.stillUploading") : t("web-main.composer.send")}>
-            <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={draft.starting || undefined}>
-              {draft.starting ? <span className={waitingCss.spinner} aria-hidden="true" /> : <ArrowUp size={16} strokeWidth={2} />}
-            </button>
-          </Tip>
-        </div>
+        <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files) add(e.target.files); e.target.value = ""; }} />
+        <ComposerTools picker={picker} locked={locked} toolbar={toolbar} ready={ready} starting={draft.starting} />
       </form>
       {draft.error && <p className={`${controlsCss.fieldError} ${css.chatError}`} role="alert">{draft.error}</p>}
     </div>
   );
 }
+
+/**
+ * The composer's foot: a file to send, what the page puts there (`toolbar`), and send. Drawn again only when what it
+ * shows changes, not at every key typed.
+ */
+const ComposerTools = memo(function ComposerTools({ picker, locked, toolbar, ready, starting }: {
+  /** The composer's file field, which the attach button opens. */
+  picker: RefObject<HTMLInputElement | null>; locked: boolean; toolbar: ReactNode; ready: boolean; starting: boolean;
+}) {
+  return (
+    <div className={css.composerToolbar}>
+      <Tip label={t("web-main.composer.attach")} shortcut="composer.file">
+        <button type="button" className={css.attachBtn} aria-label={t("web-main.composer.attach")} disabled={locked} onClick={(e) => { e.stopPropagation(); picker.current?.click(); }}>
+          <Plus size={18} />
+        </button>
+      </Tip>
+      {toolbar && <div className={css.composerChoices} onClick={(e) => e.stopPropagation()}>{toolbar}</div>}
+      <Tip label={t("web-main.composer.send")}>
+        <button type="submit" className={css.sendBtn} disabled={!ready} aria-label={t("web-main.composer.send")} aria-busy={starting || undefined}>
+          {starting ? <Spinner /> : <ArrowUp size={16} strokeWidth={2} />}
+        </button>
+      </Tip>
+    </div>
+  );
+});
 
 /**
  * With a mouse, and nothing that takes keys focused, what the composer's box says instead of its placeholder: that
@@ -1550,7 +1834,7 @@ export function sendDraft(draft: Draft, to: ChatTo | null, ensureChat: (() => Pr
  * starts a line); with nothing typed, ↑ / ↓ go to the chat above or below. What a preview's marks offer the draft
  * `draftKey` comes in. Answers the box and the menu of chats (put over the composer), for the composer to place.
  */
-export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines = 3, layout, enterSends = true, onType, onSubmit }: {
+export function useComposerText({ draft, input, draftKey, sessionKey, locked, placeholder, className, lines, layout, enterSends = true, onType, onSubmit }: {
   draft: Draft; input: RefObject<HTMLTextAreaElement | null>; draftKey: string | undefined; sessionKey: string | null; locked: boolean;
   placeholder: string; className: string; lines?: number; layout?: unknown; enterSends?: boolean; onType(): void; onSubmit(): void;
 }): { menu: ReactNode; field: ReactNode } {
@@ -1580,13 +1864,53 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     const end = el.selectionStart;
     setReference(null);
     // Its mark, from the core, which keeps its link until it is sent; in its place if the `@words` are still there.
-    void core().call("chat.ref", { station: item.station, id: item.id, title: item.title, base }).then((answer) => {
+    // One of another workspace's: its link kept for this workspace's messages too (`into`).
+    void core().call("chat.ref", { station: item.station, id: item.id, title: item.title, base, into: scopeOf(here) }).then((answer) => {
       const { mark } = answer as { mark: string };
       const now = input.current?.value ?? "";
       if (now[start] !== "@") return;
       caretAt.current = start + mark.length + 1;
       setText(`${now.slice(0, start)}${mark} ${now.slice(end)}`);
     }, (e: unknown) => toast(t("web-main.composer.refFailed", { title: item.title, error: failure(e) })));
+  };
+  // A chat's link pasted (copied from its row's menu: `[its title](its link)`) goes in as a reference, as one picked
+  // with `@` does, when the chat is of this workspace; the rest of what is pasted as it is.
+  const here = useStation().address;
+  const pasteReferences = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData("text/plain");
+    const found = here.includes("/") ? [...pasted.matchAll(/\[([^\]\n]{1,120})\]\((\S+?)\)/g)].flatMap((m) => {
+      const chat = chatOfLink(m[2]!);
+      return chat && scopeOf(chat.station) === scopeOf(here) ? [{ m, chat }] : [];
+    }) : [];
+    if (found.length === 0) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const [start, end, before] = [el.selectionStart, el.selectionEnd, el.value];
+    const marks = found.map(async ({ m, chat }) => {
+      try {
+        const { mark } = (await core().call("chat.ref", { station: chat.station, id: chat.id, title: m[1], base })) as { mark: string };
+        // A link to its execution history: the mark kept as that link, not the chat's.
+        if (chat.history) {
+          const at = chat.station.indexOf("/");
+          const page = `${base}/w/${chat.station.slice(0, at)}/s/${chat.station.slice(at + 1)}/chats/${encodeURIComponent(chat.id)}${chat.history}`;
+          await core().call("chat.refs", { links: [[mark.slice(2, -1), page]] });
+        }
+        return mark;
+      } catch {
+        return m[0];
+      }
+    });
+    void Promise.all(marks).then((made) => {
+      let text = "", at = 0;
+      found.forEach(({ m }, i) => { text += pasted.slice(at, m.index) + made[i]; at = m.index + m[0].length; });
+      text += pasted.slice(at);
+      // Typed on meanwhile: at the end.
+      const now = input.current?.value ?? "";
+      const [from, to] = now === before ? [start, end] : [now.length, now.length];
+      caretAt.current = from + text.length;
+      setText(`${now.slice(0, from)}${text}${now.slice(to)}`);
+      onType();
+    });
   };
   // Where the caret goes once the text changed by hand is drawn (before anything more is typed).
   const caretAt = useRef<number | null>(null);
@@ -1598,11 +1922,14 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.setSelectionRange(at, at);
   }, [text]);
   // A preview's marks beside the chat: their screenshot and a quote each, to say more about before sending.
-  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words }) => {
+  useDraftInbox(locked ? undefined : draftKey, ({ files: offered, quotes: added, text: words, quote, dropped }) => {
     if (words) setText(text.trim() ? `${text.trimEnd()}\n${words}` : words);
     if (offered.length) add(offered);
-    if (added.length) draft.setQuotes((all) => [...all, ...added]);
-    input.current?.focus();
+    if (dropped?.length) draft.addDropped(dropped);
+    if (added.length) draft.addQuotes(added);
+    // A passage selected in the chat: its comment line takes the focus.
+    if (quote) draft.quote(quote);
+    else input.current?.focus();
   });
   // Grow with the text up to its lines, then scroll; the frame is never resized by hand. Its width changing re-wraps
   // the text (or the placeholder), so it is measured again then; below the limit it never scrolls. Sized before it is
@@ -1621,7 +1948,9 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     el.after(probe);
     const fit = () => {
       const style = getComputedStyle(el);
-      const limit = lines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const limit = lines === undefined
+        ? Math.max(parseFloat(style.lineHeight), Math.min(480, window.innerHeight * 0.4))
+        : lines * parseFloat(style.lineHeight) + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
       probe.style.width = `${el.clientWidth}px`;
       probe.placeholder = el.placeholder;
       probe.value = el.value;
@@ -1656,7 +1985,8 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
     resize.observe(el);
     const scrolled = () => { edges(); over(); };
     el.addEventListener("scroll", scrolled);
-    return () => { resize.disconnect(); el.removeEventListener("scroll", scrolled); probe.remove(); };
+    window.addEventListener("resize", fit);
+    return () => { resize.disconnect(); window.removeEventListener("resize", fit); el.removeEventListener("scroll", scrolled); probe.remove(); };
   }, [text, lines, layout]); // eslint-disable-line react-hooks/exhaustive-deps
   const menu = reference && !locked && (
     <div className={refCss.refAnchor}>
@@ -1670,7 +2000,16 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
         onChange={(e) => { setText(e.target.value); onType(); lookForReference(e.target); }}
         onSelect={(e) => lookForReference(e.currentTarget)}
         onBlur={() => setReference(null)}
-        onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); } }}
+        onPaste={(e) => {
+          if (draft.starting) return;
+          if (e.clipboardData.files.length) { e.preventDefault(); if (!locked) add(e.clipboardData.files); return; }
+          const pasted = e.clipboardData.getData("text/plain");
+          if (!locked && pasted.length >= PASTE_THRESHOLD) {
+            e.preventDefault();
+            add([makePastedFile(pasted)], pastedInfo(pasted));
+            onType();
+          } else pasteReferences(e);
+        }}
         onKeyDown={(e) => {
           if (reference && !e.nativeEvent.isComposing) {
             const n = refItems.current.length;
@@ -1703,8 +2042,12 @@ export function useComposerText({ draft, input, draftKey, sessionKey, locked, pl
  * (the one just added, `focusQuote`, takes the focus; Enter in it goes back to the text, `onDone`), then the files, an
  * image as its picture.
  */
-export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void }) {
-  const { quotes, setQuotes, files } = draft;
+export function ComposerExtras({ draft, focusQuote, onFocused, onDone, onRef }: {
+  draft: Draft; focusQuote: string | null; onFocused(): void; onDone(): void;
+  /** A station's file's card tapped, where there is no hover (a phone's: mobile/StationFiles.tsx RefSheet). */
+  onRef?: ((f: Pending) => void) | undefined;
+}) {
+  const { quotes, files } = draft;
   const rest = besideQuotes(quotes, files) ?? [];
   const quoteInputs = useRef(new Map<string, HTMLInputElement>());
   useEffect(() => {
@@ -1721,10 +2064,10 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
             return (
             <div key={q.id} className={css.composerQuote} onClick={(e) => e.stopPropagation()}>
               <QuoteCard quote={q} picture={own && <PendingFile file={own} />}
-                onRemove={() => { setQuotes((all) => all.filter((x) => x.id !== q.id)); if (own) draft.remove(own.id); }} comment={
+                onRemove={() => { draft.unquote(q.id); if (own) draft.remove(own.id); }} comment={
                 <input ref={(el) => { if (el) quoteInputs.current.set(q.id, el); else quoteInputs.current.delete(q.id); }}
                   className={`${css.quoteCardComment} ${css.quoteCardInput}`} value={q.comment} placeholder={t("web-main.quote.commentPlaceholder")} aria-label={t("web-main.quote.commentLabel", { author: q.author })}
-                  onChange={(e) => { const v = e.target.value; setQuotes((all) => all.map((x) => (x.id === q.id ? { ...x, comment: v } : x))); }}
+                  onChange={(e) => draft.comment(q.id, e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) { e.preventDefault(); onDone(); } }} />
               } />
             </div>
@@ -1734,19 +2077,139 @@ export function ComposerExtras({ draft, focusQuote, onFocused, onDone }: { draft
       )}
       {rest.length > 0 && (
         <div className={css.composerFiles}>
-          {rest.map((f) => <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)} />)}
+          {rest.map((f) => f.link ? <LinkCard key={f.id} file={f} onRemove={() => draft.remove(f.id)} /> : f.ref ? <RefCard key={f.id} file={f} draft={draft} onRemove={() => draft.remove(f.id)} onTap={onRef && (() => onRef(f))} /> : <PendingFile key={f.id} file={f} onRemove={() => draft.remove(f.id)}
+            onRetry={f.pastedFile && f.error ? () => { draft.remove(f.id); draft.add([f.pastedFile!], f.pasted); } : undefined}
+            onRestore={f.pasted?.text === undefined || draft.starting ? undefined : () => {
+              draft.setText(draft.text ? `${draft.text}\n${f.pasted!.text}` : f.pasted!.text!);
+              draft.remove(f.id);
+              onDone();
+            }} />)}
         </div>
       )}
     </>
   );
 }
 
-/** A file waiting to go with the message: an image as its picture, anything else a card. */
-function PendingFile({ file: f, onRemove }: { file: Pending; onRemove?: () => void }) {
+/**
+ * A file or folder dragged in from where it is: named by its path (which station has it, and where), or sent as a file
+ * (a folder of the chat's own station as a zip). Hovered, the card says all of it, and switches it there; as it does
+ * whether this chat takes what is dragged in as files.
+ */
+function RefCard({ file: f, draft, onRemove, onTap }: { file: Pending; draft: Draft; onRemove: () => void; onTap?: (() => void) | undefined }) {
+  const ref = f.ref!;
+  const station = useStation();
+  const asFile = ref.mode === "file";
+  const pending = asFile && !f.done && !f.error;
+  const going = f.sent !== undefined && f.size > 0
+    ? t("web-main.file.uploadingPart", { percent: Math.floor((f.sent / f.size) * 100), size: fileSize(f.size) })
+    : t("common.uploading");
+  // A folder goes as a zip only from the chat's own station (zipped there).
+  const zips = ref.dir && ref.station === station.address;
+  const meta = asFile ? f.error ?? (pending ? going : fileSize(f.done?.size ?? f.size)) : `${ref.stationName} · ${t("web-main.file.modePath")}`;
+  // Hovered: its name, where it is (its station, its folder), how it goes (a path, the file, a folder as a zip), and how
+  // this chat takes what is dragged in; each switched there.
+  const where = ref.path.slice(0, Math.max(ref.path.lastIndexOf("/"), ref.path.lastIndexOf("\\"))) || ref.path;
+  const info = (
+    <div className={css.refInfo}>
+      <div className={css.refInfoHead}>
+        <span className={css.refInfoText}>
+          <span className={css.refInfoName}>{f.name}</span>
+          <span className={css.refInfoPath} title={ref.path}><bdi>{ref.stationName} · {where}</bdi></span>
+        </span>
+        {(!ref.dir || zips) && (
+          <Segmented className={css.refInfoMode} label={t("web-main.file.sendAs")} value={ref.mode} onChange={(mode) => draft.setMode(f.id, mode)}
+            options={[{ value: "path", label: t("web-main.file.modePath") }, { value: "file", label: t(ref.dir ? "web-main.file.modeZip" : "web-main.file.modeFile") }]} />
+        )}
+      </div>
+      <label className={css.refInfoChat}>
+        <span>{t("web-main.file.chatAsFiles")}</span>
+        <Switch small checked={draft.asFiles} onChange={draft.setAsFiles} label={t("web-main.file.chatAsFiles")} />
+      </label>
+    </div>
+  );
+  const card = (
+    <span className={css.fileCard} data-card="" data-error={asFile && f.error ? true : undefined} data-named={!asFile || undefined}
+      {...(onTap ? { role: "button", tabIndex: 0, onClick: onTap, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTap(); } } } : {})}>
+      <FileTile land name={asFile && ref.dir ? `${f.name}.zip` : f.name} dir={ref.dir && !asFile} progress={pending ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={asFile && !!f.error} />
+      <span className={css.fileCardText}>
+        <FileName name={asFile && ref.dir ? `${f.name}.zip` : f.name} />
+        <span className={css.fileCardMeta}>{meta}</span>
+      </span>
+      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+    </span>
+  );
+  // Where nothing hovers, a tap says all of it (`onTap`); else hovered.
+  return onTap ? card : <Hover tile content={info}>{card}</Hover>;
+}
+
+/**
+ * A link shared in (docs/share-in.md), waiting to go with the message as words: a card as a file's, a globe where a
+ * file's sheet is, its title (cut short) over its site. Nothing goes up: it is never under way, and it does not hold
+ * the message back.
+ */
+function LinkCard({ file: f, onRemove }: { file: Pending; onRemove: () => void }) {
+  const link = f.link!;
+  const title = link.title || link.url;
+  return (
+    <Tip label={link.url}><span className={css.fileCard} data-card="" data-link="">
+      <LinkTile />
+      <span className={css.fileCardText}>
+        <span className={css.fileCardName}><span className={css.fileCardStem}>{title}</span></span>
+        <span className={css.fileCardMeta}>{link.site ?? hostOf(link.url)}</span>
+      </span>
+      <button type="button" className={css.fileCardRemove} aria-label={t("web-main.file.remove", { name: title })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>
+    </span></Tip>
+  );
+}
+
+/** A link's host (`www.youtube.com`), or the link itself where it has none. */
+function hostOf(url: string): string {
+  try { return new URL(url).host || url; } catch { return url; }
+}
+
+/** What a link is, where a file's sheet stands (FileTile's box and lines): a globe. */
+function LinkTile() {
+  return (
+    <svg className={css.fileTile} width="30" height="36" viewBox="0 0 30 36" aria-hidden="true">
+      <circle cx="15" cy="18" r="11.25" />
+      <path d="M3.75 18H26.25M15 6.75C11.75 10 10.25 14 10.25 18S11.75 26 15 29.25M15 6.75C18.25 10 19.75 14 19.75 18S18.25 26 15 29.25" />
+    </svg>
+  );
+}
+
+/** A file waiting to go with the message: an image as its picture (clicked, shown whole), anything else a card. */
+function PendingFile({ file: f, onRemove, onRestore, onRetry }: { file: Pending; onRemove?: () => void; onRestore?: (() => void) | undefined; onRetry?: (() => void) | undefined }) {
+  const station = useStation();
+  // A picture dropped on the chat: its mark lands here (drive/flight.ts).
+  const thumb = useRef<HTMLSpanElement>(null);
+  useLanding(thumb);
+  const [open, setOpen] = useState(false);
+  // Not sent yet: no session keeps it, it is shown from this device.
+  const shown: Attachment = { name: f.name, path: `draft:${f.id}`, size: f.size };
+  if (f.pasted) {
+    // Cut short (a failure said at length), all of it on hover.
+    const meta = f.error ?? (!f.done ? t("common.uploading") : t("web-main.composer.pasteAttachment", { count: f.pasted.characters.toLocaleString("en-US") }));
+    return <><span className={css.fileCard} data-card="" data-error={f.error ? true : undefined}>
+      <FileTile name={f.name} progress={!f.done && !f.error ? (f.sent ?? 0) / Math.max(1, f.size) : undefined} error={!!f.error} />
+      <span className={css.fileCardText}>
+        <button type="button" className={css.pasteCardTitle} onClick={(e) => { e.stopPropagation(); setOpen(true); }}>{f.pasted.preview || t("web-main.composer.pastedText")}</button>
+        <Tip label={meta} cut><span className={`${css.fileCardMeta} ${css.pasteCardMeta}`}>{meta}</span></Tip>
+      </span>
+      <span className={css.pasteCardActions}>
+        {onRetry && <Tip label={t("web-main.composer.retryPaste")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.retryPaste")} onClick={(e) => { e.stopPropagation(); onRetry(); }}><Retry size={13} /></button></Tip>}
+        {onRestore && <Tip label={t("web-main.composer.expandPaste")}><button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.expandPaste")} onClick={(e) => { e.stopPropagation(); onRestore(); }}><Edit size={13} /></button></Tip>}
+        {onRemove && <button type="button" className={css.fileCardRemove} aria-label={t("web-main.composer.removePaste")} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
+      </span>
+    </span>{f.pastedFile && f.preview && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.pastedFile, url: f.preview }} />}</>;
+  }
   return f.preview ? (
-    <Tip label={f.error ?? f.name}><span className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : undefined} data-error={f.error ? true : undefined}>
-      <img src={f.preview} alt={f.name} />
-      {!f.done && !f.error && <span className={css.composerThumbBusy}><span className={waitingCss.spinner} aria-hidden="true" /></span>}
+    <Tip label={f.error ?? f.name}><span ref={thumb} data-card="" className={css.composerThumb} data-send-image={f.done ? sentImageKey(f.done.path) : f.error ? undefined : uploadImageKey(f.id)} data-error={f.error ? true : undefined}>
+      <button type="button" className={css.composerThumbOpen} aria-label={t("web-main.file.view", { name: f.name })} data-viewer-thumb={thumbId(station.address, "", shown.path)}
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}>
+        <img src={f.preview} alt={f.name} />
+      </button>
+      {f.image && <FilePreview open={open} onClose={() => setOpen(false)} sessionKey="" file={shown} local={{ blob: f.image, url: f.preview }} />}
+      {!f.done && !f.error && <span className={css.composerThumbBusy}><Spinner /></span>}
       {onRemove && <button type="button" className={css.composerThumbRemove} aria-label={t("web-main.file.remove", { name: f.name })} onClick={(e) => { e.stopPropagation(); onRemove(); }}><Close size={12} /></button>}
     </span></Tip>
   ) : <FileCard file={f.done ?? f} pending={!f.done && !f.error} sent={f.sent} error={f.error} {...(onRemove ? { onRemove } : {})} />;
@@ -1779,7 +2242,7 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
     if (atWork.some((a) => a.key === key) || keep.has(key)) s.stopped = null;
     else if (s.stopped === null) s.stopped = now;
     if (s.stopped === null) continue;
-    const at = now - s.stopped < HOLD_MS ? s.stopped + HOLD_MS : s.stopped + HOLD_MS + FADE_MS;
+    const at = now - s.stopped < HOLD_MS ? s.stopped + HOLD_MS : s.stopped + HOLD_MS + motionMs(FADE_MS);
     if (at <= now) shown.current.delete(key);
     else next = Math.min(next ?? at, at);
   }
@@ -1793,59 +2256,79 @@ export function useLinger(atWork: AgentAtWork[], keep: ReadonlySet<string>): { a
 
 /**
  * An activity keeps its place on screen as what is above it changes at once (a message arriving, one coming out of an
- * avatar, an image loading): it glides from where it showed to where it is laid out now, and a change while it is on
- * its way goes on from where it is and the speed it has. What the pane's width lays out anew is taken at once.
+ * avatar, an image loading): it glides from where it showed to where it is laid out now, by the pane's own law
+ * (motion.ts glider), so that it and the pane gliding to the end move together, one way; a change while it is on its
+ * way goes on from where it is. What the pane's width lays out anew is taken at once.
  */
-const GLIDE = { type: "spring", visualDuration: 0.3, bounce: 0 } as const;
+/** How long after the pane's width last changed its rows may still come to stand as they wrap now. */
+const REWRAP_MS = 200;
 
-function useActivityGlide(list: RefObject<HTMLDivElement | null>) {
+function useActivityGlide(list: RefObject<HTMLDivElement | null>, virtual: VirtualList) {
   useEffect(() => {
     const pane = list.current;
     if (!pane) return;
-    const rows = new Map<HTMLElement, { top: number; y: Follower }>();
-    const contentWidth = () => {
-      const style = getComputedStyle(pane);
-      return pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    };
-    let width = contentWidth();
+    const { model } = virtual;
+    // `at`: where it is laid out in the pane's content; `closed`: how much shorter what is above it has got as things
+    // closed in it (model.ts `closedBefore`), which it simply went along with, as every row below does; `y`: how far
+    // it is drawn from where it is laid out, gliding to nothing after a move at once.
+    const rows = new Map<string, { el: HTMLElement; at: number; closed: number; y: Follower }>();
+    let width = model.paneWidth;
+    let rewrapped = -Infinity;
+    let pending = false;
+    // How far the list has moved the pane at once to keep its place (rows above measured, an older page come in): by
+    // as much, an activity is elsewhere in the pane's content and nowhere else on screen: not a move to glide.
+    let kept = virtual.kept();
+    // Judged as the list says anything changed, from where it says each activity stands: nothing of the page is read.
     const check = () => {
-      const now = contentWidth();
-      const rewrapped = now !== width;
-      width = now;
-      const seen = new Set<HTMLElement>();
-      for (const el of pane.querySelectorAll<HTMLElement>(`:scope > .${css.agentActivity}`)) {
-        seen.add(el);
-        const top = layoutSpot(pane, el).y;
-        const row = rows.get(el);
+      // The pane as wide as it was? While it changes (a side panel sliding), and until its rows are measured as they
+      // wrap now, what moves an activity is the page laid out anew: taken at once.
+      if (model.paneWidth !== width) { width = model.paneWidth; rewrapped = performance.now(); pending = true; }
+      const shift = virtual.kept() - kept;
+      kept += shift;
+      if (shift) for (const row of rows.values()) row.at += shift;
+      const layout = model.layout();
+      // A row just made stands at a guessed height until the page reports it: what moves an activity is taken as the
+      // pane takes it, the guess and then the fact (below).
+      const anew = pending || performance.now() - rewrapped < REWRAP_MS;
+      pending = false;
+      const seen = new Set<string>();
+      for (const { key } of layout.rows) {
+        if (!key.startsWith("a:")) continue;
+        const el = pane.querySelector<HTMLElement>(`:scope > [data-vk="${CSS.escape(key)}"]`);
+        if (!el) continue;
+        seen.add(key);
+        // Where it stands in the pane's content.
+        const at = model.offsetOf(key)! + layout.scrollTop;
+        const closed = model.closedBefore(key);
+        let row = rows.get(key);
+        if (row && row.el !== el) { row.y.stop(); rows.delete(key); row = undefined; }
         if (!row) {
-          const made = { top, y: follower(top, (v) => { el.style.transform = Math.abs(v - made.top) < 0.01 ? "" : `translateY(${v - made.top}px)`; }) };
-          rows.set(el, made);
+          rows.set(key, { el, at, closed, y: glider(0, (v) => { el.style.transform = Math.abs(v) < 0.01 ? "" : `translateY(${v}px)`; }) });
           continue;
         }
-        if (top === row.top) continue;
-        row.top = top;
+        // What closes above it as it closes moves it as it moves every row below: not a move of its own.
+        const moved = at - row.at + (closed - row.closed);
+        row.at = at;
+        row.closed = closed;
+        if (Math.abs(moved) < 0.01) continue;
         // One folded to its avatar, out flying, shows nothing: it is where it is laid out, for the avatar to fly to.
-        if (rewrapped || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(top);
+        // Moved as the pane is not gliding (it took the change at once, or the reader holds it): where it is laid out.
+        if (anew || !model.glides || document.visibilityState !== "visible" || el.hasAttribute("data-away")) row.y.jump(0);
         else {
-          row.y.to(top, GLIDE);
-          // Laid out elsewhere, it is drawn where it was until the glide takes it.
-          el.style.transform = `translateY(${row.y.value - top}px)`;
+          // Laid out elsewhere at once as the pane glides, it is drawn where it was, and glides from there with it.
+          row.y.jump(row.y.value - moved);
+          row.y.to(0);
         }
       }
-      for (const [el, row] of rows) if (!seen.has(el)) { row.y.stop(); rows.delete(el); }
+      for (const [key, row] of rows) if (!seen.has(key)) { row.y.stop(); rows.delete(key); }
     };
-    const resize = new ResizeObserver(check);
-    const watch = () => { resize.disconnect(); resize.observe(pane); for (const child of pane.children) resize.observe(child); };
-    const mutations = new MutationObserver(() => { watch(); check(); });
-    mutations.observe(pane, { childList: true, subtree: true, characterData: true });
-    watch();
     check();
+    const stop = virtual.watch(check);
     return () => {
-      resize.disconnect();
-      mutations.disconnect();
+      stop();
       for (const row of rows.values()) row.y.stop();
     };
-  }, [list]);
+  }, [list, virtual.model]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Where an element sits in the pane's content, by layout: scrolling does not move it, nor does a transform. */
@@ -1869,7 +2352,7 @@ function layoutSpot(pane: HTMLElement, el: Element) {
  * jumps; where it goes is read anew each frame (the message growing, the activity gliding down), and going home it is
  * on springs, from the speed it has. The message's own avatar is where it lands, the same picture in the same place. Until its turn
  * a message waits folded to nothing. With reduced motion messages just appear, and so do those no one watches come
- * out: arriving while the page is hidden or the reader has scrolled up (scroll.ts), and all still waiting when the page
+ * out: arriving while the page is hidden or the reader has scrolled up (virtual/model.ts), and all still waiting when the page
  * is hidden or the reader scrolls up (the browser barely runs timers for a hidden page, so a queue would otherwise
  * still be playing out long after); an avatar then on its way goes home from where it is.
  */
@@ -1884,7 +2367,7 @@ const RISE = 0.42;
 const DROP_MS = 280;
 const FLY = { type: "spring", visualDuration: 0.26, bounce: 0 } as const;
 
-export function useEmissions(list: RefObject<HTMLDivElement | null>) {
+export function useEmissions(list: RefObject<HTMLDivElement | null>, following: () => boolean = () => true) {
   const decided = useRef(new Map<number, boolean>());
   const done = useRef(new Set<number>());
   // `at`: when it began waiting; its agent's activity folds to its avatar from then.
@@ -1893,7 +2376,6 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
   const [current, setCurrent] = useState<{ seq: number; agent: string; pose: Pose; at: number; chain?: boolean } | null>(null);
   const flight = useRef<{ el: HTMLElement; x: Follower; y: Follower; s: MotionValue<number>; sx: MotionValue<number>; sy: MotionValue<number> } | null>(null);
   const [, rerender] = useState(0);
-  const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   // Where the avatar of an agent's activity shows: where it is laid out, and how far its row is from there, gliding.
   const home = (avatar: HTMLElement) => {
@@ -1906,11 +2388,13 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     el.classList.add(css.avatarFlying);
     Object.assign(el.style, { left: "0", top: "0", width: `${avatar.offsetWidth}px`, height: `${avatar.offsetHeight}px` });
     pane.append(el);
-    // Its ring turning as the real one does (the copy's would start over): they hand over to each other unmoved.
-    const ring = (n: Element) => n.getAnimations({ subtree: true }).find((x) => (x.effect as KeyframeEffect | null)?.pseudoElement === "::after");
+    // Its ring stepping as the real one does (the copy's would start over): they hand over to each other unmoved.
+    const ring = (n: Element) => n.getAnimations({ subtree: true }).filter((x): x is CSSAnimation => x instanceof CSSAnimation);
     const turning = ring(avatar);
-    const copied = ring(el);
-    if (turning && copied) copied.currentTime = turning.currentTime;
+    for (const copied of ring(el)) {
+      const real = turning.find((x) => x.animationName === copied.animationName);
+      if (real) copied.currentTime = real.currentTime;
+    }
     // Squashed and stretched (sx, sy) from its foot; swelling (s) from its middle.
     const at = { ...home(avatar), s: 1, sx: 1, sy: 1 };
     const h = avatar.offsetHeight;
@@ -1937,8 +2421,27 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     f.el.remove();
     flight.current = null;
   };
+  // Their turn among what changes the list's height (listQueue.ts): taken as the first sets out, kept while one after
+  // another comes out, given back once none is left.
+  const slot = useRef<{ granted: boolean; out(): void; over(): void } | null>(null);
+  const giveBack = () => {
+    const s = slot.current;
+    slot.current = null;
+    if (s?.granted) s.over();
+    else s?.out();
+  };
   const nextAfter = (agent: string | null) => {
+    if (queue.current.length && !slot.current?.granted) {
+      // Not its turn yet: asked for once, and on from here when it comes (drawn again then).
+      if (!slot.current && list.current) {
+        const s = { granted: false, out: () => {}, over: () => {} };
+        slot.current = s;
+        s.out = listQueue(list.current).take(() => new Promise<void>((resolve) => { s.granted = true; s.over = resolve; rerender((n) => n + 1); }));
+      }
+      if (!slot.current?.granted) return;
+    }
     const next = queue.current.shift();
+    if (!next) giveBack();
     // The same agent's next message goes straight on: its activity is folded already, and its avatar out.
     setCurrent(next ? { ...next, pose: next.agent === agent ? "float" : "fold" } : null);
   };
@@ -1961,10 +2464,11 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     } else {
       land();
       setCurrent(null);
+      giveBack();
     }
     rerender((n) => n + 1);
   };
-  const watched = () => document.visibilityState === "visible" && !list.current?.hasAttribute("data-reading-up");
+  const watched = () => document.visibilityState === "visible" && following();
   useLayoutEffect(() => {
     if (!watched()) release();
     else if (!current && queue.current.length) nextAfter(null);
@@ -2015,7 +2519,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       step();
     };
     // Folding since it began waiting: on once folded.
-    if (pose === "fold") timer = setTimeout(() => go("float"), Math.max(0, FOLD_MS - (performance.now() - current.at)));
+    if (pose === "fold") timer = setTimeout(() => go("float"), Math.max(0, motionMs(FOLD_MS) - (performance.now() - current.at)));
     let hop: AnimationPlaybackControls | undefined;
     if (pose === "float") {
       const f = (flight.current ??= launch(pane, avatar));
@@ -2060,7 +2564,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
         queue.current.shift();
         done.current.add(seq);
         setCurrent({ ...next, pose: "float", chain: true });
-      }, SPIT_MS);
+      }, motionMs(SPIT_MS));
     }
     if (pose === "return") {
       if (!flight.current) { finish(seq, agent, false); return; }
@@ -2068,7 +2572,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
     }
     return () => { clearTimeout(timer); cancelAnimationFrame(frame); hop?.stop(); };
   }, [current?.seq, current?.pose]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => land, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { land(); giveBack(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     /** Agents whose activity must stay while their messages come out. */
@@ -2078,7 +2582,7 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
       for (const m of messages) {
         if (decided.current.has(m.seq)) continue;
         const agent = m.authorKind === "agent" ? m.by.agent : undefined;
-        const emits = !reduced && watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
+        const emits = watched() && saidHere(m.seq) && agent !== undefined && showing.has(agent);
         decided.current.set(m.seq, emits);
         if (emits) queue.current.push({ seq: m.seq, agent: agent!, at: performance.now() });
       }
@@ -2109,17 +2613,29 @@ export function useEmissions(list: RefObject<HTMLDivElement | null>) {
  * in, the line growing from its avatar; it leaves fading and folding its room away; for a message to come out of its
  * avatar the line folds to the avatar. Each of these goes from wherever it shows, cut off by the next or not.
  */
-function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean }; onOpen(): void }) {
+function Activity({ agent, leaving, caught, pose, stoppable }: { agent: AgentAtWork; leaving: boolean; caught: true | undefined; pose: { folded: boolean; away: boolean };
+  /** Stopped alone, from its row (the chat has other agents). */
+  stoppable: boolean;
+}) {
+  const chat = useContext(DraftKey);
+  const api = useApi();
+  const act = useAct();
   const wait = agent.wait;
   const now = useSteady(wait ? { key: "wait", text: wait.text ?? t("web-main.activity.waiting") } : agent.activity?.now ?? { key: "busy", text: t("web-main.activity.busy") });
   const row = useRef<HTMLDivElement>(null);
   const line = useRef<HTMLButtonElement>(null);
   const tail = useRef<HTMLSpanElement>(null);
-  // One there when the chat opened is there at once.
+  // One there when the chat opened is there at once. One that starts comes in its turn among what changes the list's
+  // height (listQueue.ts): after the reader's message on its way from the composer has landed, under it, not first and
+  // then pushed down by it.
   useLayoutEffect(() => {
     if (caught) return;
+    const el = row.current!;
     const move = { duration: FADE_MS / 1000, ease: EASE_OUT };
-    arrive([[row.current!, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+    return queueRow(el, () => {
+      arrive([[el, { "grid-template-rows": "0px", opacity: "0" }], [line.current!, { transform: "scale(0.5)" }]], move);
+      return after(motionMs(FADE_MS));
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Set here, not by React: the change is made where what shows before it can be read.
   const was = useRef({ leaving: false, folded: false });
@@ -2127,21 +2643,19 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
     const el = row.current!;
     if (leaving !== was.current.leaving) {
       // Reading where it goes lays the list out with its room folded for a moment, shorter than the pane scrolled to its
-      // end: the browser pulls the pane up then, and it is put back (the list is held where it was while it folds).
-      const pane = el.parentElement;
-      const top = pane?.scrollTop ?? 0;
-      moveState([[el, ["grid-template-rows", "opacity"]]], () => el.toggleAttribute("data-leaving", leaving), { duration: FADE_MS / 1000, ease: EASE_OUT });
-      if (pane && pane.scrollTop !== top) pane.scrollTop = top;
+      // end: the browser pulls the pane up then, and moveState puts it back (the list is held where it was as it folds).
+      void moveState([[el, ["grid-template-rows", "opacity"]]], () => el.toggleAttribute("data-leaving", leaving), { duration: FADE_MS / 1000, ease: EASE_OUT });
     }
     if (pose.folded !== was.current.folded) {
-      moveState([[tail.current!, ["width", "opacity"]]], () => el.toggleAttribute("data-folded", pose.folded), { duration: FOLD_MS / 1000, ease: EASE_OUT });
+      void moveState([[tail.current!, ["width", "opacity"]]], () => el.toggleAttribute("data-folded", pose.folded), { duration: FOLD_MS / 1000, ease: EASE_OUT });
     }
     was.current = { leaving, folded: pose.folded };
   });
   return (
-    <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
-      <button ref={line} type="button" className={css.activityLine} onClick={onOpen} aria-label={`${agent.who}：${now.current.text}`}>
-        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span></span>
+    <div ref={row} className={`${conversationCss.msg} ${css.agentActivity}`} data-vk={`a:${agent.key}`} data-transient="" data-agent={agent.key} data-caught={caught} data-away={pose.away || undefined} data-waiting={wait ? "" : undefined}>
+      <div className={css.activityRow}>
+      <button ref={line} type="button" className={css.activityLine} onClick={() => { if (chat) chatPage.history(chat, agent.key); }} aria-label={`${agent.who}：${now.current.text}`}>
+        <span className={css.activityAvatar} aria-hidden="true"><span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`}><ModelLogo maker={agent.maker} runtime={agent.runtime} size={12} /></span><span className={css.activityRing} /></span>
         <span ref={tail} className={css.activityTail}>
           <span className={css.activityNow}>
             {now.previous && <span key={`was-${now.n - 1}`} className={css.activityNowText} data-out="">{now.previous.text}</span>}
@@ -2152,6 +2666,12 @@ function Activity({ agent, leaving, caught, pose, onOpen }: { agent: AgentAtWork
             : agent.since ? <span className={css.activityElapsed}><Elapsed since={agent.since} /></span> : null}
         </span>
       </button>
+      {stoppable && (
+        <Tip label={t("web-main.activity.stop", { who: agent.who })}>
+          <button type="button" className={css.activityStop} aria-label={t("web-main.activity.stop", { who: agent.who })} onClick={() => act(api.stop(agent.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))}><Stop size={12} fill="currentColor" /></button>
+        </Tip>
+      )}
+      </div>
     </div>
   );
 }
@@ -2189,7 +2709,7 @@ export function useSteady(now: { key: string; text: string }) {
   }, [now.key, now.text, state.current.key, state.current.text]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!state.previous) return;
-    const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), CROSS_MS);
+    const timer = setTimeout(() => setState((s) => ({ ...s, previous: null })), motionMs(CROSS_MS));
     return () => clearTimeout(timer);
   }, [state.previous]);
   return state;
@@ -2197,13 +2717,25 @@ export function useSteady(now: { key: string; text: string }) {
 
 /** Seconds (then minutes) since a moment, ticking; at most `most` seconds. */
 export function Elapsed({ since, most }: { since: number; most?: number }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+  const shown = () => {
+    const s = Math.max(0, Math.floor((Date.now() - since) / 1000));
+    return span(most === undefined ? s : Math.min(s, most));
+  };
+  // Its words changed in place each second, not drawn by React: nothing around it is drawn again, and the lists that
+  // watch what changes in them pass over it (`data-ticking`).
+  const [first] = useState(shown);
+  const el = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const tick = () => {
+      const words = el.current?.firstChild;
+      const now = shown();
+      if (words && words.nodeValue !== now) words.nodeValue = now;
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, []);
-  const s = Math.max(0, Math.floor((now - since) / 1000));
-  return <>{span(most === undefined ? s : Math.min(s, most))}</>;
+  }, [since, most]); // eslint-disable-line react-hooks/exhaustive-deps
+  return <span ref={el} data-ticking="">{first}</span>;
 }
 
 /** How long a wait has gone on, ticking, at most its limit, with the limit: 1m 20s / 10m. */
@@ -2247,18 +2779,47 @@ function findText(root: Element, wanted: string): Range | null {
   return range;
 }
 
-let flashTimer: ReturnType<typeof setTimeout> | undefined;
-/** Highlights a range for a moment (CSS custom highlights; the style fades via the ::highlight rule). */
+let passageMarks: { host: HTMLElement; layer: HTMLElement; timer: ReturnType<typeof setTimeout> } | null = null;
+/**
+ * Marks a range for a moment, as Android's TextMark: a rounded ground behind each of its lines, as tall as its words, a
+ * little past their ends; in, held, and faded (`[data-passage-marks]`, global.css.ts). The layer is in the block the
+ * words are in, below them and above its ground (your bubble's).
+ */
 function flashRange(range: Range): void {
-  const highlights = (CSS as unknown as { highlights: Map<string, unknown> }).highlights;
-  const Highlight = (window as unknown as { Highlight: new (...r: Range[]) => unknown }).Highlight;
-  highlights.set("quote-flash", new Highlight(range));
-  document.documentElement.dataset.quoteFlash = "on";
-  clearTimeout(flashTimer);
-  flashTimer = setTimeout(() => { document.documentElement.dataset.quoteFlash = "fading"; }, 1600);
-  setTimeout(() => {
-    if (document.documentElement.dataset.quoteFlash === "fading") { highlights.delete("quote-flash"); delete document.documentElement.dataset.quoteFlash; }
-  }, 2600);
+  unmarkPassage();
+  const common = range.commonAncestorContainer;
+  const at = common instanceof HTMLElement ? common : common.parentElement;
+  const host = at?.closest<HTMLElement>(`p, li, td, th, h1, h2, h3, h4, h5, h6, blockquote, .${conversationCss.msgBubble}`) ?? at;
+  if (!host) return;
+  host.dataset.passageHost = "";
+  const layer = document.createElement("span");
+  layer.dataset.passageMarks = "";
+  layer.setAttribute("aria-hidden", "true");
+  host.append(layer);
+  // One ground a line: a range's rects may be one per element it crosses (code, a link) on the same line.
+  const lines: { left: number; top: number; right: number; bottom: number }[] = [];
+  for (const r of range.getClientRects()) {
+    if (r.width < 1) continue;
+    const line = lines.find((l) => r.top < l.bottom && r.bottom > l.top && Math.abs((r.top + r.bottom) - (l.top + l.bottom)) < r.height);
+    if (line) Object.assign(line, { left: Math.min(line.left, r.left), top: Math.min(line.top, r.top), right: Math.max(line.right, r.right), bottom: Math.max(line.bottom, r.bottom) });
+    else lines.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  }
+  const box = host.getBoundingClientRect();
+  const x = box.left + host.clientLeft, y = box.top + host.clientTop;
+  layer.replaceChildren(...lines.map((l) => {
+    const ground = document.createElement("span");
+    Object.assign(ground.style, { left: `${l.left - x - 3}px`, top: `${l.top - y - 1}px`, width: `${l.right - l.left + 6}px`, height: `${l.bottom - l.top + 2}px` });
+    return ground;
+  }));
+  passageMarks = { host, layer, timer: setTimeout(unmarkPassage, 2400) };
+}
+
+function unmarkPassage(): void {
+  if (!passageMarks) return;
+  clearTimeout(passageMarks.timer);
+  passageMarks.layer.remove();
+  delete passageMarks.host.dataset.passageHost;
+  passageMarks = null;
 }
 
 /** Opens the chat `step` rows above (-1) or below (1) the open one in the sidebar; false when there is none. */

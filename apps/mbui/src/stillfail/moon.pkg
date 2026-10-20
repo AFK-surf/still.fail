@@ -1,0 +1,21 @@
+import {
+  "stillfail/core",
+  "mbui/host",
+  "mbui/ui",
+  "stillfail/sfcore",
+  "stillfail/sfapp",
+  "stillfail/sf",
+}
+
+options(
+  "is-main": true,
+  targets: { "link_native.mbt": [ "native" ], "link_js.mbt": [ "js" ] },
+  "native-stub": [ "core_engine.m" ],
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "stub-cc-flags": "-fobjc-arc -O2",
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit -framework AuthenticationServices -framework SystemConfiguration -framework Security -framework CoreFoundation -framework Foundation -liconv out/core/aarch64-apple-darwin/libmbui_core.a out/core/aarch64-apple-darwin/libstillfail_shell.a -Fout/core/hermes/Library/Frameworks/macosx -framework hermes -lc++ -Wl,-rpath,@executable_path/../../../../../../out/core/hermes/Library/Frameworks/macosx -Wl,-rpath,@executable_path/../Frameworks -Wl,-dead_strip",
+    },
+  },
+)

@@ -1,8 +1,9 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { previewBar, previewFrame } from "./Preview.css.ts";
 import * as stageCss from "./PreviewStage.css.ts";
+import { STILL, stillAtOnce } from "@stillfail/ui/styles/still.ts";
 
 /** A web service's place in its chat's side panel: the frame is drawn over it (Previews.tsx). */
 export const slot = style({ flex: "1", minHeight: "0" });
@@ -53,6 +54,8 @@ export const card = style({
     "&[data-mode=hidden]": { visibility: "hidden", pointerEvents: "none" },
     /** Its page comes down into it: it shows as that ends. */
     "&[data-mode=small]": { animation: `${fadeInKeyframes} 120ms ${vars.easeOut} 180ms both` },
+    // Its page's coming down is 1ms then.
+    [`${STILL} &[data-mode=small]`]: stillAtOnce,
     "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` },
   },
 });
@@ -84,7 +87,7 @@ export const name = style({
   ...glass,
   position: "absolute", left: "8px", bottom: "8px", display: "flex", alignItems: "center", gap: "6px",
   maxWidth: "calc(100% - 16px)", height: "24px", padding: "0 10px 0 9px", borderRadius: "999px", color: vars.text,
-  fontSize: vars.textXs, fontWeight: "500", boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
+  fontSize: vars.textMeta, fontWeight: "500", boxShadow: "0 1px 4px rgb(0 0 0 / .08)",
 });
 /** Behind the front one (at rest): its page's edge alone. */
 globalStyle(`${layer}:not([data-spread]) ${card}[data-front=false] > *`, { visibility: "hidden" });
@@ -114,7 +117,7 @@ export const capsule = style({
   ...glass,
   position: "fixed", right: "16px", bottom: "16px", zIndex: "30", display: "flex", alignItems: "center", gap: "7px",
   height: "34px", padding: "0 15px 0 13px", border: "0", borderRadius: "999px", color: vars.text, font: "inherit",
-  fontSize: vars.textSm, fontWeight: "500", cursor: "pointer", pointerEvents: "auto",
+  fontSize: vars.textUi, fontWeight: "500", cursor: "pointer", pointerEvents: "auto",
   boxShadow: "var(--pv-shadow)",
   animation: `${fadeInKeyframes} 160ms ${vars.easeOut}`,
 });

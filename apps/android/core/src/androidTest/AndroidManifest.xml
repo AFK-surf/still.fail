@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- A screen for SecureStoreTest's prompt to go over. -->
+        <activity android:name="fail.still.core.PromptHost" android:exported="false" />
+    </application>
+</manifest>

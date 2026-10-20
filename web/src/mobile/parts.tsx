@@ -3,19 +3,22 @@
 // or an sp a pixel here.
 import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Badge as BadgeKind, Maker, Quota, RuntimeKind } from "../api.ts";
-import { Check, ChevronLeft, Plug, type IconProps } from "../icons.tsx";
+import { Check, ChevronLeft, Filter, Plug, Plus, Settings, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Mark as BrandMark, illustrationUrl } from "../brand.tsx";
-import { SlackLogo } from "../ui.tsx";
+import { ElsewhereLogo, SlackLogo } from "../ui.tsx";
+import { MARKS, MONO } from "../modelMarks.ts";
 import { QuotaBars } from "../components.tsx";
 import { doingMatches, failed as itFailed, useDoing, useDoingFailed } from "../doing.ts";
 import type { DoingItem } from "../core/shapes.ts";
-import { useApp } from "./app.tsx";
+import { useApp, useRootPage, type MenuItem } from "./app.tsx";
 import * as css from "./parts.css.ts";
-import * as waitingCss from "../styles/waiting.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
+import * as pagesCss from "./styles/pages.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
 import { t } from "../i18n.ts";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -31,13 +34,10 @@ export type Icon = (props: IconProps) => ReactNode;
 
 // ── model marks ────────────────────────────────────────────────────────
 
-const MAKERS = new Set(["anthropic", "openai", "deepseek", "qwen", "zhipu", "gemini", "kimi", "minimax", "xai"]);
-/** Marks of one colour, drawn in the page's ink. */
-const MONO = new Set(["anthropic", "openai", "kimi", "xai"]);
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's. */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
 export function MakerIcon({ maker, runtime, size }: { maker?: Maker | undefined; runtime?: RuntimeKind | string | undefined; size: number }) {
-  const id = maker && MAKERS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : "anthropic";
+  const id = maker && MARKS.has(maker.id) ? maker.id : runtime === "codex" ? "openai" : runtime === "dsh" ? "dsh" : runtime === "grok" ? "xai" : "anthropic";
   return <img className={css.mMaker} src={`${BASE}models/${id}.svg`} alt={maker?.name ?? ""} width={size} height={size} data-mono={MONO.has(id) || undefined} />;
 }
 
@@ -70,7 +70,7 @@ export function ModelMark({ maker, runtime, size = 36, state, around = "var(--m-
   const badge = xs ? 11 : 15;
   return (
     <span className={css.mModelMark} style={{ width: size, height: size }}>
-      <span className={css.mModelTile} style={{ borderRadius: xs ? 6 : 11 }}>
+      <span className={css.mModelTile} style={{ borderRadius: `calc(${xs ? 6 : 11}px * ${vars.cornerScale})` }}>
         <MakerIcon maker={maker} runtime={runtime} size={Math.round(size * (xs ? 0.6 : 0.56))} />
       </span>
       {state && state !== "done" && <Badge state={state} size={badge} ring={xs ? 1.5 : 2} around={around} style={{ position: "absolute", right: -3, bottom: -3 }} />}
@@ -115,7 +115,7 @@ export function QuotaRings({ quota }: { quota?: Quota | undefined }) {
   return <QuotaBars quota={quota} compact bare />;
 }
 
-/** Whose service a profile runs on: Anthropic or OpenAI for a subscription or a key, OpenCode for OpenCode Go. */
+/** Whose service a profile runs on: Anthropic, OpenAI or xAI for a subscription or a key, OpenCode for OpenCode Go. */
 export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: string; kind?: string | undefined; mark?: string | null | undefined; size?: number }) {
   if (kind === "opencode-go" || mark === "opencode") {
     return (
@@ -125,8 +125,8 @@ export function ProviderMark({ runtime, kind, mark, size = 16 }: { runtime: stri
     );
   }
   // A key on a listed provider: its maker's mark, or the generic plug where there is none.
-  if (kind === "api-provider") return mark ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
-  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : { id: "openai", name: "OpenAI" };
+  if (kind === "api-provider") return mark && MARKS.has(mark) ? <MakerIcon maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
+  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : { id: "openai", name: "OpenAI" };
   return <MakerIcon maker={maker} runtime={runtime} size={size} />;
 }
 
@@ -141,6 +141,8 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
 }) {
   const row = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ x: number; w: number; moved: boolean } | null>(null);
+  // A capsule stays round; a rounded rectangle takes the smooth corner over the longer radius.
+  const smooth = radius * 2 < height;
   useLayoutEffect(() => {
     const el = row.current?.querySelectorAll<HTMLElement>(`.${css.mSegOption}`)[selected];
     if (!el) return;
@@ -149,21 +151,16 @@ export function Seg({ options, selected, onSelect, height = 30, fill = false, ra
   }, [selected, options.length]);
   return (
     <div className={`${css.mSeg}${className ? ` ${className}` : ""}`} data-track={track || undefined} data-fill={fill || undefined}
-      style={{ height, borderRadius: radius, padding: inset }}>
+      data-smooth={smooth || undefined} style={{ height, borderRadius: smooth ? `calc(${radius}px * ${vars.cornerScale})` : radius, padding: inset }}>
       <div className={css.mSegRow} ref={row}>
         {thumb && <span className={css.mSegThumb} data-moved={thumb.moved || undefined}
-          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: Math.max(0, radius - inset) }} />}
+          style={{ transform: `translateX(${thumb.x}px)`, width: thumb.w, borderRadius: smooth ? `calc(${radius}px * ${vars.cornerScale} - ${inset}px)` : Math.max(0, radius - inset) }} />}
         {options.map((label, i) => (
           <button key={label} type="button" className={css.mSegOption} data-on={i === selected || undefined} onClick={() => onSelect(i)}>{label}</button>
         ))}
       </div>
     </div>
   );
-}
-
-/** The wide screen's spinner (../styles/waiting.css.ts), at a size; `color`, its turning part's (on a dark ground). */
-export function Spinner({ size, color }: { size: number; color?: string }) {
-  return <span className={`${waitingCss.spinner} ${css.mSpinner}`} style={{ width: size, height: size, borderWidth: size < 14 ? 1.5 : 2, ...(color ? { borderTopColor: color } : {}) }} aria-hidden="true" />;
 }
 
 // ── navigation ─────────────────────────────────────────────────────────
@@ -187,14 +184,16 @@ export function failedIn(doing: readonly DoingItem[], calls: string | readonly s
 
 /** Where `calls` about what `on` names stand on this device (../doing.ts): a spinner while under way, the failure mark a few
  *  seconds after one failed, nothing otherwise. For a row whose menu or sheet that asked it may be closed by then. */
-export function DoingMark({ calls, on, size = 14, color }: { calls: string | readonly string[]; on?: Parameters<typeof useDoing>[1]; size?: number; color?: string }) {
+export function DoingMark({ calls, on, inline = false, onColor = false }: { calls: string | readonly string[]; on?: Parameters<typeof useDoing>[1]; inline?: boolean; onColor?: boolean }) {
   const running = useDoing(calls, on);
   const error = useDoingFailed(calls, on);
-  return running ? <Spinner size={size} {...(color ? { color } : {})} /> : error !== undefined ? <FailedMark error={error} size={size} /> : null;
+  return running ? <Spinner inline={inline} className={onColor ? partsCss.mSpinOnColor : undefined} /> : error !== undefined ? <FailedMark error={error} size={inline ? 12 : 14} /> : null;
 }
 
 export function NavBack({ label, onClick }: { label: string; onClick: () => void }) {
-  return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} />{label}</button>;
+  // A place's top page (the bottom bar under it) has nowhere to go back to: its room kept, nothing drawn in it.
+  if (useRootPage()) return <span className={css.mNavBack} aria-hidden="true" style={{ visibility: "hidden" }}><ChevronLeft size={22} /></span>;
+  return <button type="button" className={css.mNavBack} onClick={onClick}><ChevronLeft size={22} /><span className={css.mNavBackWord}>{label}</span></button>;
 }
 
 /** A bar's button: the icon alone, no disc behind it (a bar's buttons are quiet). */
@@ -218,6 +217,60 @@ export function TopBack({ label, onBack, trailing }: { label: string; onBack: ()
   return <div className={`${css.mTopBack} ${trailing !== undefined ? css.mTopBackRow : ""}`}><NavBack label={label} onClick={onBack} />{trailing}</div>;
 }
 
+/** A place's primary action (placeActions.tsx): in the bottom bar's notch on its top page, at its head's end when pushed. */
+export interface PlaceAction { key: string; label: string; run: () => void }
+
+/**
+ * A place's page's head (文件, Station, Profile, 连接, 用量, 已归档, 奏). Its top page, the bottom bar under it: Home's
+ * top bar, the gear to the settings and the page's name, what else it does at its end (its primary action is in the
+ * bar's notch). Opened from elsewhere (the settings, a link): a page like any other, back to where it came from, with
+ * its primary action at its end too.
+ */
+export function PlaceHead({ title, back, onBack, trailing, primary }: {
+  title: string; back: string; onBack: () => void; trailing?: ReactNode; primary?: PlaceAction | null | undefined;
+}) {
+  const app = useApp();
+  if (!useRootPage()) {
+    const plus = primary ? <NavButton icon={Plus} iconSize={20} label={primary.label} onClick={primary.run} /> : null;
+    return <NavBar back={back} onBack={onBack} title={title} trailing={trailing || plus ? <>{trailing}{plus}</> : undefined} />;
+  }
+  return (
+    <header className={`${css.mPlaceHead} ${pagesCss.mGlass}`}>
+      <button type="button" className={barsCss.mNavButton} onClick={() => app.push(app.at("/settings"))} aria-label={t("web-mobile.settings.title")}>
+        <Settings size={22} />
+      </button>
+      <h1 className={css.mPlaceTitle}>{title}</h1>
+      {trailing}
+    </header>
+  );
+}
+
+/** What a place is, said where its list would be while that has nothing (its top page says it nowhere else). */
+export function PlaceNote({ children }: { children: ReactNode }) {
+  return <p className={css.mPlaceNote}>{children}</p>;
+}
+
+/** A choice of a filter's menu, ticked when it is the one; the others keep its room. */
+export const ticked = (on: boolean) => (on ? <Check size={16} /> : <span style={{ width: 16 }} />);
+
+/**
+ * A list's filter in a head (the chats', the connects'): its icon, in the accent while it narrows the list (`on`);
+ * tapped, its menu under it (`items`, the one chosen ticked). `label` says what it is set to.
+ */
+export function FilterMenu({ on, label, items }: { on: boolean; label: string; items: MenuItem[] }) {
+  const app = useApp();
+  return (
+    <button type="button" className={`${barsCss.mNavButton} ${css.mFilterMenu}`} data-on={on || undefined} aria-label={label}
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        // The menu is 180 wide (app.tsx MenuHost): its right edge under the button's.
+        app.menu({ anchor: new DOMRect(r.right - 180, r.top, 0, r.height), items });
+      }}>
+      <Filter size={20} />
+    </button>
+  );
+}
+
 /** A page's large title (stations, settings): a small line over a big word. */
 export function LargeTitle({ small, big }: { small: string; big: string }) {
   return <div className={css.mLargeTitle}><span>{small}</span><h1>{big}</h1></div>;
@@ -225,8 +278,13 @@ export function LargeTitle({ small, big }: { small: string; big: string }) {
 
 // ── lists and cards ────────────────────────────────────────────────────
 
-export function SectionHeader({ title, trailing, start = 20 }: { title: string; trailing?: string | undefined; start?: number }) {
-  return <div className={css.mSection} style={{ paddingLeft: start }}><b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}</div>;
+/** A section's title; `mark`: what it holds at a glance (a vendor's mark), before it. */
+export function SectionHeader({ title, trailing, start = 20, mark }: { title: string; trailing?: string | undefined; start?: number; mark?: ReactNode }) {
+  return (
+    <div className={css.mSection} style={{ paddingLeft: start }}>
+      {mark && <span className={css.mSectionMark} aria-hidden="true">{mark}</span>}<b>{title}</b>{trailing !== undefined && <span>{trailing}</span>}
+    </div>
+  );
 }
 
 export function Card({ onClick, children }: { onClick?: () => void; children: ReactNode }) {
@@ -249,12 +307,13 @@ export function ListRow({ onClick, children }: { onClick?: (() => void) | undefi
 /** A row of a picking sheet: what, a line under it, two short notes at its end (each by one of those lines), and a check on the chosen one. */
 /** `mark`: a small mark after the label (what a workspace has waiting); `busy`: what it asked is under way (a spinner at its end, not pressed again);
  *  `failed`: why what it asked failed a moment ago (the failure mark at its end). */
-export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, failed, accent = false, leading, mark, onClick }: {
-  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; failed?: string | undefined; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
+/// `done`: what it stands for is done (a station joined): not picked again, its ink kept, a green check at its end.
+export function PickRow({ label, sub, aside, checked = false, enabled = true, busy = false, done = false, failed, accent = false, leading, mark, onClick }: {
+  label: string; sub?: string | undefined; aside?: [string, string]; checked?: boolean; enabled?: boolean; busy?: boolean; done?: boolean; failed?: string | undefined; accent?: boolean; leading?: ReactNode; mark?: ReactNode; onClick: () => void;
 }) {
   const title = mark ? <span className={css.mPickLabel}><span className={css.mPickLabelText}>{label}</span>{mark}</span> : <span>{label}</span>;
   return (
-    <button type="button" className={css.mPickRow} disabled={!enabled || busy} data-accent={accent || undefined} data-busy={busy || undefined} aria-busy={busy || undefined} onClick={onClick}>
+    <button type="button" className={css.mPickRow} disabled={!enabled || busy || done} data-accent={accent || undefined} data-busy={busy || undefined} data-done={done || undefined} aria-busy={busy || undefined} onClick={onClick}>
       {leading}
       {aside === undefined
         ? <span className={css.mPickText}>{title}{sub !== undefined && <small>{sub}</small>}</span>
@@ -264,7 +323,7 @@ export function PickRow({ label, sub, aside, checked = false, enabled = true, bu
             {sub !== undefined ? <small>{sub}</small> : <span />}<small className={css.mPickAside}>{aside[1]}</small>
           </span>
         )}
-      {busy ? <Spinner size={14} /> : failed !== undefined ? <FailedMark error={failed} /> : checked && <Check size={14} className={partsCss.mAccent} />}
+      {busy ? <Spinner inline /> : failed !== undefined ? <FailedMark error={failed} /> : done ? <Check size={14} className={css.mPickDone} /> : checked && <Check size={14} className={partsCss.mAccent} />}
     </button>
   );
 }
@@ -282,7 +341,7 @@ export function InfoRow({ onClick, busy = false, failed, children }: { onClick?:
   return onClick
     ? (
       <button type="button" className={listsCss.mInfoRow} disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
-        {children}{busy ? <Spinner size={14} /> : failed !== undefined && <FailedMark error={failed} />}
+        {children}{busy ? <Spinner inline /> : failed !== undefined && <FailedMark error={failed} />}
       </button>
     )
     : <div className={listsCss.mInfoRow}>{children}</div>;
@@ -296,7 +355,7 @@ export function Field({ value, onChange, placeholder, mono = false }: { value: s
 export function Button({ label, primary, busy = false, enabled = true, onClick }: { label: string; primary: boolean; busy?: boolean; enabled?: boolean; onClick: () => void }) {
   return (
     <button type="button" className={css.mButton} data-primary={primary || undefined} disabled={!enabled || busy} onClick={onClick}>
-      {busy && <Spinner size={14} />}{label}
+      {busy && <Spinner className={primary ? partsCss.mSpinOnColor : undefined} />}{label}
     </button>
   );
 }
@@ -308,22 +367,24 @@ export function LinkButton({ label, busy = false, failed, enabled = true, classN
 }) {
   return (
     <button type="button" className={`${partsCss.mLink} ${css.mLinkButton}${className ? ` ${className}` : ""}`} disabled={!enabled || busy} aria-busy={busy || undefined} onClick={onClick}>
-      {busy ? <Spinner size={13} /> : failed !== undefined && <FailedMark error={failed} size={13} />}{label}
+      {busy ? <Spinner inline /> : failed !== undefined && <FailedMark error={failed} size={12} />}{label}
     </button>
   );
 }
 
-/** Something is on its way: said in words, centred on the page. */
-export function Loading({ text }: { text: string }) {
-  return <div className={css.mLoading}>{text}</div>;
+/** What a page says where its body would be when what it shows is not there (not found, no station); a wait is a
+ *  `Waiting` (@stillfail/ui waiting.tsx). */
+export function Gone({ text }: { text: string }) {
+  return <div className={css.mGone}>{text}</div>;
 }
 
 export function Mark({ size = 14 }: { size?: number }) {
   return <BrandMark size={size} />;
 }
 
-export function SlackMark({ size = 13 }: { size?: number }) {
-  return <SlackLogo size={size} />;
+/** `kind`: where it is (a connect's kind, a place's surface): Feishu's mark for Feishu, else Slack's. */
+export function SlackMark({ size = 13, kind }: { size?: number; kind?: string | null | undefined }) {
+  return kind ? <ElsewhereLogo kind={kind} size={size} /> : <SlackLogo size={size} />;
 }
 
 /** A scene beside text that says the same (Android's illustrations, as the web has them). */

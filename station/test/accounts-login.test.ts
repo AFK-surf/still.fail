@@ -7,14 +7,14 @@ import { join } from "node:path";
 import { deviceCode, LoginManager, type LoginState, stripAnsi } from "../src/accounts/login.ts";
 import { MachineLogins } from "../src/accounts/machine.ts";
 import { linkCodexAuth } from "../src/agents/machine-logins.ts";
-import { approval, fakeLogin, idToken, machine, script, temp, upon } from "./accounts-fakes.ts";
+import { approval, exe, fakeLogin, idToken, machine, sameAs, script, temp, upon } from "./accounts-fakes.ts";
 
 test("a subscription sign-in relays the link, the code and the result", async () => {
   const dir = temp("login");
   const fake = join(dir, "fake-login");
   const approved = approval(dir);
   script(fake, fakeLogin(approved.path));
-  const logins = new LoginManager(dir, { claude: fake, codex: fake });
+  const logins = new LoginManager(dir, { claude: exe(fake), codex: exe(fake) });
   const heard: string[] = [];
   logins.changes((id) => heard.push(id));
   const wait = (profile: string, state: LoginState) =>
@@ -27,7 +27,7 @@ test("a subscription sign-in relays the link, the code and the result", async ()
     assert.equal(heard[0], "sub");
     await logins.submitCode("sub", "wrong", "zh");
     assert.ok((await wait("sub", "failed")).error!.includes("invalid code"));
-    await assert.rejects(logins.submitCode("sub", "x", "zh"), /没有在等授权码/);
+    await assert.rejects(logins.submitCode("sub", "x", "zh"), /未在等待授权码/);
     await logins.start(sub, "zh");
     await wait("sub", "needs_code");
     await assert.rejects(logins.submitCode("sub", "  ", "zh"), /空/);
@@ -68,7 +68,7 @@ test("the machine's own logins are read from the machine's own homes", async () 
   const m = machine({
     // Only answers for the machine's own home: no CLAUDE_CONFIG_DIR may reach it.
     claude: `[ -n "$CLAUDE_CONFIG_DIR" ] && exit 3; echo '{"loggedIn":true,"authMethod":"claude.ai","email":"a@x.com","subscriptionType":"max"}'`,
-    codex: `[ "$CODEX_HOME" = "$HOME/.codex" ] || exit 3; echo "Logged in using ChatGPT"`,
+    codex: `${sameAs("CODEX_HOME", ".codex")} || exit 3; echo "Logged in using ChatGPT"`,
   });
   mkdirSync(join(m.home, ".codex"));
   mkdirSync(join(m.home, ".claude"));
@@ -91,14 +91,14 @@ test("signed out, not installed and keychain only are said as such", async () =>
   let logins = new MachineLogins(m.env, undefined, () => "zh");
   await logins.refresh();
   let got = logins.get();
-  assert.deepEqual([got[0]!.installed, got[0]!.loggedIn, got[0]!.text], [true, false, "Claude Code 没有登录"]);
-  assert.deepEqual([got[1]!.installed, got[1]!.text], [false, "没有装 Codex"]);
+  assert.deepEqual([got[0]!.installed, got[0]!.loggedIn, got[0]!.text], [true, false, "Claude Code 未登录"]);
+  assert.deepEqual([got[1]!.installed, got[1]!.text], [false, "未安装 Codex"]);
   m = machine({ claude: `echo '{"loggedIn":true,"email":"a@x.com","subscriptionType":"pro"}'`, codex: `echo "Logged in using ChatGPT"` });
   logins = new MachineLogins(m.env, undefined, () => "zh");
   await logins.refresh();
   got = logins.get();
-  assert.deepEqual([got[0]!.usable, got[0]!.text], [false, "Claude Code 已登录 a@x.com（Pro），登录在钥匙串里，station 读不到"]);
-  assert.deepEqual([got[1]!.usable, got[1]!.text], [false, "Codex 已登录，登录存在钥匙串里"]);
+  assert.deepEqual([got[0]!.usable, got[0]!.text], [false, "Claude Code 已登录 a@x.com（Pro），登录信息在钥匙串中，station 无法读取"]);
+  assert.deepEqual([got[1]!.usable, got[1]!.text], [false, "Codex 已登录，登录信息保存在钥匙串中"]);
 });
 
 test("a machine profile's codex home links the machine's auth.json", () => {

@@ -1,17 +1,17 @@
 // Models by name, by series: the model control's list, and a profile's list of models to enable.
 import { globalStyle, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mono, muted } from "./styles/shell.css.ts";
 import { card } from "./styles/pages.css.ts";
-import { quotaChips, quotaRingNumber } from "./components.css.ts";
+import { quotaChips } from "./components.css.ts";
 import { newChat } from "./NewChat.css.ts";
 import { runCardRow } from "./pages/Connect.css.ts";
-import { input } from "./styles/controls.css.ts";
-import { chooserChevron, modelPoolItem } from "./styles/chat.css.ts";
+import { input, chooserChevron } from "@stillfail/ui/styles/controls.css.ts";
+import { modelPoolItem } from "./styles/chat.css.ts";
 import { onboardingRow } from "./cloud/settings.css.ts";
-import { sessionDetails } from "./pages/ChatPage.css.ts";
+import { sessionHead } from "./pages/ChatPage.css.ts";
 import { composerChoices } from "./Chat.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, columns, outsetStart, outsetTop, pillInner } from "@stillfail/ui/styles/align.ts";
 
 /** A series of models in the control's list: its models one under another, each as wide as the list. */
 export const series = style({ display: "flex", flexDirection: "column", gap: 1 });
@@ -19,64 +19,88 @@ export const series = style({ display: "flex", flexDirection: "column", gap: 1 }
 /** A series in a profile's list of models to enable: its name, a toggle for all of it, its models under. */
 export const poolSeries = style({ display: "grid", gap: 2, selectors: { "& + &": { marginTop: 10 } } });
 export const poolSeriesHead = style({ display: "flex", alignItems: "center", gap: 10, padding: "0 8px" });
-globalStyle(`${poolSeriesHead} h4`, { margin: 0, fontSize: vars.textXs, fontWeight: 500, color: vars.muted });
+globalStyle(`${poolSeriesHead} h4`, { margin: 0, fontSize: vars.textMeta, fontWeight: 500, color: vars.muted });
 
 export const runOptionText = style({ display: "grid", gap: "1px", flex: "1", minWidth: "0" });
-export const runPickerPanel = style({ padding: "6px" });
-export const runPicker = style({ display: "flex", gap: "4px", maxHeight: "420px" });
+/** The panel's lines: a tint of the text, seen in either theme (the page's line is lost on dark). */
+const rule = `1px solid color-mix(in srgb, ${vars.text} 10%, transparent)`;
+/** The panel: the filter across its top, the columns side by side under it with a line between, the foot under a line. */
+/** Its corner from the foot's pills (align.ts pillInner): a menu's would leave a crescent by the one in its corner. */
+export const runPickerPanel = style({ vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) }, padding: "0", overflow: "hidden" });
+/** What sits by a panel's corner (6px in from it) takes the corner's own shape, less that: squarer, it looks cut in; a pill leaves a crescent. */
+const inner = `calc(${vars.rMenu} - 6px)`;
+export const runPickerAccountsPanel = style({ padding: "6px" });
+export const runPickerSearch = style({
+  display: "flex", alignItems: "center", gap: "8px", padding: `10px ${PANEL_PAD + TEXT_IN}px`, borderBottom: rule, color: vars.subtle,
+  cursor: "text",
+});
+globalStyle(`${runPickerSearch} input`, {
+  flex: "1", minWidth: "0", border: "0", outline: "none", background: "none", color: vars.text, font: "inherit", fontSize: vars.textUi,
+});
+globalStyle(`${runPickerSearch} input::placeholder`, { color: vars.subtle });
+export const runPicker = style({ display: "flex", maxHeight: "360px" });
 export const runPickerFoot = style({
-  display: "flex", justifyContent: "flex-end", gap: "6px", marginTop: "6px", padding: "8px 4px 2px",
+  display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "8px", padding: "6px",
+  borderTop: rule,
 });
+/** A column: only the models' scrolls (the others are short); each after the first has a line before it. */
 export const runPickerColumn = style({
-  display: "flex", flexDirection: "column", gap: "1px", minWidth: "110px", overflowY: "auto",
+  display: "flex", flexDirection: "column", gap: "1px", minWidth: "120px", padding: "6px", overflowX: "hidden",
+  selectors: { "& + &": { borderLeft: rule } },
 });
+/** What is picked: a mark at its row's end (none on the others). */
+export const runCheck = style({ marginLeft: "auto", flex: "none", color: vars.accent, visibility: "hidden" });
 /** The accounts, in a panel beside the model control's. */
 export const runPickerAccounts = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "220px", maxWidth: "320px", maxHeight: "420px", overflowY: "auto",
 });
-globalStyle(`${runPickerAccounts} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+globalStyle(`${runPickerAccounts} h4`, { margin: `4px ${TEXT_IN}px 6px`, fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 /** Under an account's name: what is left of it, gray unless running low. */
 export const runAccountNote = style({
-  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textXs, fontWeight: 400, color: vars.muted,
+  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textMeta, fontWeight: 400, color: vars.muted,
   selectors: { "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red } },
 });
 /** The room the foot's line has: what the columns leave beside the buttons, never more. */
 export const runPickerWhoRoom = style({ flex: "1 1 0", width: 0, minWidth: 0, display: "flex" });
 /** The foot's line that says who runs it, and opens the accounts. */
 export const runPickerWho = style({
-  display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "28px", padding: "0 8px",
-  border: 0, borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none",
-  color: vars.muted, font: "inherit", fontSize: vars.textXs, cursor: "pointer",
+  display: "inline-flex", alignItems: "center", gap: "4px", minWidth: 0, maxWidth: "100%", height: "24px", padding: `0 ${TEXT_IN}px`,
+  border: 0, borderRadius: "999px", background: "none",
+  color: vars.muted, font: "inherit", fontSize: vars.textMeta, cursor: "pointer",
   selectors: {
     "&:hover, &[data-state=open]": { background: vars.hover, color: vars.text },
     "&[data-level=amber]": { color: vars.amber }, "&[data-level=red]": { color: vars.red },
   },
 });
+export const runPickerWhoLead = style({ flex: "none", color: vars.subtle });
+globalStyle(`${runPickerWho}:not([data-level]) > ${runPickerWhoLead} + *`, { color: vars.text, fontWeight: "500" });
 export const runPickerWhoChevron = style({
   flex: "none",
 });
-export const runPickerEfforts = style({ minWidth: "80px" });
+export const runPickerEfforts = style({ minWidth: "136px" });
 export const runPickerOption = style({
-  display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: "4px 8px", border: "0",
-  borderRadius: `calc(6px * ${vars.cornerScale})`, background: "none", color: vars.text, font: "inherit",
-  fontSize: vars.textSm, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
+  display: "flex", alignItems: "center", gap: "6px", minHeight: "30px", padding: `4px ${TEXT_IN}px`, border: "0",
+  borderRadius: inner, background: "none", color: vars.text, font: "inherit",
+  fontSize: vars.textUi, textAlign: "left", cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover },
-    "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "600" },
+    "&[aria-pressed=\"true\"]": { background: vars.hover, fontWeight: "500" },
   },
 });
-export const runPickerNote = style({ margin: "0 8px 6px", fontSize: vars.textXs, color: vars.amber });
-export const btnSm = style({ height: "28px", padding: "0 10px", fontSize: vars.textXs });
+globalStyle(`${runPickerOption}[aria-pressed="true"] > ${runCheck}, ${runPickerOption}[aria-pressed="true"] ${runCheck}`, { visibility: "visible" });
+export const runPickerNote = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.amber });
+/** The picker's own buttons: a small panel's small pills (ui.css.ts panelButton). */
+export const btnSm = style({ height: "24px", padding: "0 10px", fontSize: vars.textMeta, borderRadius: "999px", cornerShape: "round" });
 export const modelTriple = style({
   display: "inline-flex", alignItems: "center", gap: "6px", maxWidth: "100%", justifySelf: "start", alignSelf: "start",
   width: "max-content", height: "30px", padding: "0 10px", border: "1px solid transparent",
   borderRadius: `calc(9px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: "none", color: vars.text,
-  font: "inherit", fontSize: vars.textSm, lineHeight: "20px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
+  font: "inherit", fontSize: vars.textUi, lineHeight: "20px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden",
   selectors: {
     "&:hover": { background: vars.hover },
     "&[data-state=\"open\"]": { background: vars.hover },
     "&:disabled": { color: vars.muted, cursor: "default" },
-    [`${newChat} &`]: { height: "28px", fontSize: vars.textXs },
+    [`${newChat} &`]: { height: "28px", fontSize: vars.textMeta },
   },
 });
 /**
@@ -88,7 +112,7 @@ export const modelTripleFit = style({
   selectors: {
     // In a row of a list, a ring's mark sits beside it, so the ring is on the row's line.
     // Where it heads text, the control's text lines up with the text under it (its border and padding stand out).
-    [`:is(${sessionDetails}, ${card}) > &`]: { marginLeft: "-11px" },
+    [`:is(${sessionHead}, ${card}) > &`]: outsetStart(columns.modelControl),
   },
 });
 export const tripleModel = style({
@@ -135,16 +159,25 @@ export const tripleEffort = style({
     [`${modelTriple}[data-drop~="effort"] &`]: { display: "none" },
   },
 });
-export const runPickerSpent = style({ fontSize: vars.textXs, color: vars.amber });
+export const runPickerSpent = style({ fontSize: vars.textMeta, color: vars.amber });
 /** As wide as its models when the panel opens, within bounds (100–280px); a filter then leaves it as it is (ModelTriple keeps it). */
-export const runPickerModels = style({ minWidth: "100px", maxWidth: "280px", flex: "none" });
+export const runPickerModels = style({ minWidth: "200px", maxWidth: "300px", flex: "1 1 auto", overflowY: "auto" });
 /** A model's name too long for the column is cut short. */
 export const runOptionName = style({ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-export const runPickerFilter = style({ height: "30px", margin: "0 4px 6px", fontSize: vars.textSm });
+/** The station another station's model comes from, after its name on its line: its mark, else its name (the model's
+ *  name gives way first). */
+export const runOptionFrom = style({ display: "inline-flex", alignItems: "center", flex: "none", fontSize: vars.textMeta, fontWeight: 400, color: vars.muted, whiteSpace: "nowrap" });
+/** One not usable here till borrowed: faint, its station too, until it is the one picked. */
+globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionName}`, { color: vars.muted });
+globalStyle(`${runPickerOption}[data-availability="borrowable"]:not([aria-pressed="true"]) ${runOptionFrom}`, { opacity: 0.5 });
+/** Over the foot: the model picked is not usable here yet. */
+export const runPickerBorrow = style({ margin: `0 ${TEXT_IN}px 6px`, fontSize: vars.textMeta, color: vars.muted });
+/** The borrowing dialog's paragraphs. */
+export const borrowLine = style({ margin: "0 0 8px" });
 export const runPickerGroup = style({});
-export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textXs });
-globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textXs, whiteSpace: "normal", maxWidth: "260px" });
-globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.muted });
+export const runPickerEmpty = style({ margin: "4px 8px", fontSize: vars.textMeta });
+globalStyle(`${runOptionText} ${muted}`, { fontSize: vars.textMeta, whiteSpace: "normal", maxWidth: "260px" });
+globalStyle(`${runPickerColumn} h4`, { margin: "4px 8px 6px", fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.muted });
 globalStyle(`${runPickerOption} ${quotaChips}`, { marginLeft: "auto", paddingLeft: "12px" });
 /** The model control takes the room left beside the other choices, and fits itself in it (.model-triple-fit). */
 globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
@@ -152,13 +185,8 @@ globalStyle(`${composerChoices} > :not(${modelTripleFit})`, { flex: "none" });
 globalStyle(`${modelPoolItem} ${mono}`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${modelTriple} ${quotaChips}`, { marginLeft: "2px" });
 globalStyle(`${modelTriple} ${chooserChevron}`, { color: vars.muted, flex: "none" });
-globalStyle(`${modelTriple} ${quotaRingNumber}`, { display: "none" });
-globalStyle(`${runPickerGroup} h5`, { margin: "8px 8px 2px", fontSize: vars.textXs, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
+globalStyle(`${runPickerGroup} h5`, { margin: `8px ${TEXT_IN}px 2px`, fontSize: vars.textMeta, lineHeight: "18px", fontWeight: "500", color: vars.subtle });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
-globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", marginTop: "-5px" });
+globalStyle(`${runCardRow} > ${modelTripleFit}`, { flex: "1 1 auto", ...outsetTop(5) });
 /** Here rather than with its class: it comes after .composer-choices > :not(.model-triple-fit), and wins over it. */
 globalStyle(`${onboardingRow} ${input}`, { flex: "1", minWidth: "0" });
-
-/** A pick on its way (pick.save): a small ring where the chevron goes. */
-export const tripleSpinner = style({});
-globalStyle(`${tripleSpinner}${spinner}`, { width: "12px", height: "12px", borderWidth: "1.5px" });

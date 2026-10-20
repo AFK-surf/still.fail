@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef } from "react";
 import type { ChatItem } from "./api.ts";
 import type { WorkspaceMark } from "./core/shapes.ts";
-import { reducedMotion } from "./motion.ts";
+import { play } from "@stillfail/ui/motion.ts";
 import { StatusText, Tip } from "./ui.tsx";
 import { jumpTo } from "./jumpTo.ts";
 import * as css from "./ChatMark.css.ts";
 import { t } from "./i18n.ts";
-import { Bell, Check, Wait } from "./icons.tsx";
+import { Bell, Check, Wait, Watch } from "@stillfail/ui/icons.tsx";
 
 export type ChatTone = "busy" | "done" | "alert" | "wait" | "other";
 
@@ -44,8 +44,8 @@ export function ChatMark({ item, inline }: { item: ChatItem; inline?: boolean })
     let had = shown.get(key);
     if (!had) shown.set(key, had = { tone, since: -Infinity });
     else if (had.tone !== tone) shown.set(key, had = { tone, since: performance.now() });
-    if (!tone || performance.now() - had.since > 300 || !mark.current || reducedMotion()) return;
-    mark.current.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
+    if (!tone || performance.now() - had.since > 300 || !mark.current) return;
+    play(mark.current, [{ transform: "scale(0)" }, { transform: "scale(1.3)", offset: 0.6 }, { transform: "scale(1)" }], { duration: 320, easing: "ease-out" });
   }, [key, tone]);
   return tone ? <span ref={mark} className={inline ? css.chatMarkInline : css.chatMark} data-tone={tone} role="img" aria-label={t(`web-main.chatMark.${tone}`)} /> : null;
 }
@@ -68,21 +68,28 @@ export function MarkCounts({ mark }: { mark: WorkspaceMark | undefined }) {
 /**
  * A row's second line from where its chat stands (the core's `stateText`; a core before it: its decision's `decision.text`):
  * 奏 · … (Decision · …) in ink, its lead bold; 要你帮忙：… (Needs you: …) in ink too (it wants the viewer); 出问题：…, 在等：…, 做完了 as quiet as the
- * last message would be. `slot` (the phone's list, as Android's): a lead said as an icon (a bell, the waiting arc, a check)
+ * last message would be. `slot` (every chat list, as Android's): a lead said as an icon (a bell, the waiting arc, a check; 监控中 a radar before its words;
+ * the two still going, waiting and watching, move: waiting's dots breathe in turn, the radar's arcs light up in turn, going out)
  * stands in the title's mark's column, centred under it, and what follows starts where the title does.
  */
-export function WaitingText({ text, className, compactNeed = false, slot = false }: { text: string; className: string; compactNeed?: boolean; slot?: boolean }) {
-  const need = compactNeed || slot ? /^(?:要你帮忙|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
+export function WaitingText({ text, className, slot = false }: { text: string; className: string; slot?: boolean }) {
+  const need = slot ? /^(?:要你帮忙|需要你处理|Needs you)(?:[：:]\s*|$)/.exec(text) : null;
   const lead = /^(?:奏|Decision)(?: · |$)/.test(text) ? text.split(" · ")[0]! : "";
-  const turn = lead !== "" || /^(?:要你帮忙|Needs you:)/.test(text);
-  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) : null;
+  const turn = lead !== "" || /^(?:要你帮忙|需要你处理|Needs you:)/.test(text);
+  const watch = slot && !need ? WATCH.exec(text) : null;
+  const icon = slot ? need ?? DONE.exec(text) ?? WAIT.exec(text) ?? watch : null;
+  const motion = icon && !need && !DONE.test(text) ? (watch ? "watch" : "wait") : undefined;
   if (icon) {
-    const label = t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
-    const rest = text.slice(icon[0].length);
+    const label = watch ? text : t(need ? "web-main.chatMark.alert" : DONE.test(text) ? "web-main.status.done" : "web-main.status.waiting");
+    // Watching keeps its words after its radar.
+    const rest = watch ? text : text.slice(icon[0].length);
+    const Moving = watch ? Watch : Wait;
     return (
       <span className={`${className} ${css.leadLine}`} data-turn={turn || undefined} data-state-line="" aria-label={text}>
-        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label}>
-          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+        <Tip label={label}><span className={css.leadSlot} role="img" aria-label={label} data-motion={motion}>
+          {need ? <Bell size={14} /> : DONE.test(text) ? <Check size={14} strokeWidth={1.7} /> : watch ? <Watch size={14} strokeWidth={1.7} /> : <Wait size={14} strokeWidth={1.7} />}
+          {/* What moves, each part on a copy of its own (ChatMark.css.ts leadSlot). */}
+          {motion && MOVING[motion].map((n) => <span key={n} data-part={n}><Moving size={14} strokeWidth={1.7} /></span>)}
         </span></Tip>
         {rest && <span className={css.leadRest}>{rest}</span>}
       </span>
@@ -90,22 +97,25 @@ export function WaitingText({ text, className, compactNeed = false, slot = false
   }
   return (
     <span className={className} data-turn={turn || undefined} data-state-line="">
-      {need ? <><Tip label={t("web-main.chatMark.alert")}><span className={css.needMark} role="img" aria-label={t("web-main.chatMark.alert")}>
-        <Bell size={14} />
-      </span></Tip>{text.slice(need[0].length) && <> {text.slice(need[0].length)}</>}</>
-        : <>{lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} /></>}
+      {lead && <b className={css.waitingLead}>{lead}</b>}<StatusText text={text.slice(lead.length)} />
     </span>
   );
 }
 
+/** The parts of the icons that move, by their place among the icon's children: waiting's three dots; watching's dot and arcs. */
+const MOVING = { wait: [2, 3, 4], watch: [1, 2, 3] } as const;
+
 /** The core's done and waiting leads, in either language (as ui.tsx StatusText reads them). */
-const DONE = /^(?:做完了(?:：|$)|Done(?:: |$))/;
-const WAIT = /^(?:在等：|等待中$|Waiting(?:: |$))/;
+const DONE = /^(?:(?:做完了|已完成)(?:：|$)|Done(?:: |$))/;
+const WAIT = /^(?:在等：|等待：|等待中$|Waiting(?:: |$))/;
+/** The core's watching (an agent waiting on a watch of its own, present.ts): 监控中, Watching. */
+const WATCH = /^(?:监控中|Watching)(?:：|: |$)/;
 
 /**
  * A row pressed on its state line (WaitingText) when the core says which message the state is about (`stateAbout`):
- * its chat, as it opens, goes to that message (jumpTo.ts). Pressed elsewhere, about none, or with something unread (the
- * chat opens at the unread line, the message read on from there): nothing here.
+ * its chat, as it opens, goes to that message (jumpTo.ts). Pressed elsewhere, about none (a line that asks for a
+ * decision is: the chat itself leads to what waits, Chat.tsx ToAsk), or with something unread (the chat opens at the
+ * unread line, the message read on from there): nothing here.
  */
 export function jumpFromLine(item: ChatItem, target: EventTarget): void {
   if (item.stateAbout == null || item.unread || item.thread == null || !(target instanceof Element) || !target.closest("[data-state-line]")) return;

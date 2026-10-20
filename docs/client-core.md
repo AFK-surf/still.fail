@@ -15,7 +15,7 @@ client. Only iroh and, on Android, the IO are native:
 The UI never talks to still.fail cloud or a station itself. It sends **calls** and
 holds **subscriptions** to the core over one message channel, and renders the
 snapshots the core pushes. Several UIs (tabs, windows) share one core: one
-device key, one link per station, one token refresh, one cache.
+device key, one link per station address, one token refresh, one cache.
 
 ## Execution model
 
@@ -32,8 +32,27 @@ asks the network. One sync scheduler
 (`src/sync/scheduler.ts`; `src/sync/cloud.ts`, `src/station/sync.ts`) owns all
 traffic to still.fail cloud and the stations, keeps everything current by itself
 whatever the UI shows, and takes the UI's attention (`client.focus`, a topic
-shown) only as priority. Stations and still.fail cloud push what changes
-(events, sockets); nothing is read again on a timer.
+shown) only as priority. A station's requests run two at a time, and two more
+of what a UI has open or a person waits on (`URGENT_ROOM`): on a slow link a
+read can take a minute, and the chat opened does not wait behind it. Stations
+and still.fail cloud push what changes (events, sockets); nothing is read again
+on a timer. Every request to a station but a preview's asks its answer
+compressed (`accept-encoding: zstd`; an event stream flushed event by event and
+compressed against its last megabyte, station/src/mesh/compress.ts), and it is
+decompressed as it comes (fzstd, the same on every host: the browser and
+Hermes have no zstd of their own); a station from before sends it as it is.
+A station's history — every chat's entries (the latest chats first, a page of
+each in turn), each listed session's detail where its turns changed and the
+latest page of its transcript — is brought onto the device in the background
+in batches (`POST /batch`: some 40 reads in one request, compressed as one;
+`#history` in sync.ts), behind what is shown: a read a request, a new device
+made some 500 of them of one station. A chat opened whose latest entries are
+not there yet has that page read alone, at once; a station from before batches
+is read a request a read (asked again after an hour).
+The exceptions to
+keeping everything current: what a station's agents spent (`stationUsage`) and
+its archived chats (`archivedRows`) are read only while a page shows them (one
+that changed meanwhile is read as a page shows it again).
 
 Topics are keyed collections (`src/collections.ts`): a change to a record
 recomputes only the items that read it, and a subscription that says `keyed`
@@ -63,13 +82,36 @@ What differs per platform comes in through one interface, `Host`
 
 iroh comes from the host too (`src/iroh.ts`): the browser's is relay-only (no
 UDP), the native ones are the full endpoint. The credential, renewal, request
-lines and the choice of relay are the core's (`src/mesh.ts`).
+lines and the choice of relay are the core's (`src/mesh.ts`). Links are kept by
+station address: a station in several workspaces (docs/multi-workspace.md) has
+a link in each, dialled to the same station id, each presenting its own
+workspace's credential and renewed, dropped and reopened on its own; how fast
+a relay brought replies and what went over the links today are the station's,
+shared.
 
 ## Protocol (UI ↔ core)
 
 Messages are JSON-shaped data (structured clone on the web, JSON strings
-natively). Binary values (file bytes) are base64 strings everywhere, so the
-protocol is the same on every host.
+natively). Bytes (a file's, a frame's) never go in the JSON as base64: a message carries at most one run of bytes
+beside its JSON. A call may carry some, `{ "id": 7, "call": "station.upload.part", "params": { … }, "bytes": <bytes> }`
+(a file's part going up); its values and its answer may too, `{ "id": 7, "value": { … }, "bytes": <bytes> }`,
+`{ "id": 7, "ok": { "type": "image/png" }, "bytes": <bytes> }` (a file read: its JSON says what they are). On the web
+and the desktop they go in the message (structured clone; the desktop's utility process posts `{ json, bytes }` on the
+page's port, and the page posts them in its message); Android's engine hands them over as a byte array beside the JSON
+both ways (`__native.emitBytes`, `__stillfail.receiveBytes`). On a phone, a 4 MB part made base64, sent as a 5 MB
+string and read back took longer than it took to come over the network.
+
+The composer's `composer.add` hands selected files to the core, which owns
+their upload and reports progress through the `composer` topic. On the web,
+the worker receives a structured-cloned Blob. Electron cannot carry that DOM
+object into its Node utility process: its channel adapter (`src/hosts/file-port.ts`)
+keeps the Blob in the page and sends a descriptor, restored to a `FileSource`
+before the core reads the call. The core pulls at most one 4 MB part at a time
+per upload; the adapter carries those bytes as ArrayBuffers on the same port.
+It releases the page's file on success or removal, keeps failed uploads' sources
+for the outbox's retry, and fails outstanding reads when the port closes.
+Only local file IO lives in this adapter: draft state,
+station requests, progress, errors and sending stay in the shared core.
 
 UI → core:
 
@@ -138,25 +180,32 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `accounts` | — | signed-in accounts (no tokens) |
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
 | `workspace` | `workspace` | the workspace view (members, stations) |
-| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s) / `error` + message |
+| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online or after 12 tries in a row missed, and at once when the cloud says it is back, the UI comes back or the station answers a request; one that was up is tried as coming back for its first 3 misses whatever the cloud says) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
-| `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats (read again after `chat.archive`, `session.delete`) |
+| `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
 | `threads` | `station` | `/threads`: every thread (`ThreadView`: its sessions, people, first person message, `last` entry, `lastMessage`, the viewer's `read` and `unread`), latest message first |
 | `chatRows` | `station` | `/chats`: the viewer's sidebar rows as the station puts them together (`ChatRow`; docs/station-storage.md, The sidebar) |
 | `session` | `station`, `key` | `/sessions/:key`: `{ session, threads, turns, jobs }` (no messages, no transcript) |
 | `jobs` | `station` | `/jobs`: its background jobs still up (running, or a service being started again), newest first, each with the `chat` it is in as the viewer's sidebar has it |
-| `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read again on its `usage` event (it recorded more, about once a minute while agents work); a station from before it answers 404 |
+| `stationUsage` | `station` | `/usage?from=&tz=`: what its agents spent from this device's midnight 29 days ago, days as its clock has them (`rows` added up by day, thread, person, profile and model, each with `cost` at the model's API prices; the `threads`, `people` and `profiles` they name; `since`, the earliest call recorded; `reading` while the transcripts are read for the first time). Read only while a page shows it (some 200 KB, changing with every model call): on its `usage` event (it recorded more; told at most once a minute) while shown, else marked to be read as it is next shown; a station from before it answers 404 |
 | `job` | `station`, `id` | `/jobs/:id` as it is now, with what the clients show of it (jobs.ts): kept current by its events, read again each half minute (every 4 s from a station too old to say whose it is) |
 | `jobLog` | `station`, `job` (id), `lines` | `{ text, outputAt, last, said }`: the job's last `lines` lines of output and when it last grew (below); `last` its last line, `said` (最后输出 · 3 分钟前) goes out fresh as it changes (jobs.ts) |
 | `thread` | `station`, `thread` (id) | `{ first, last, caught, end, entries, thread }`: a window of the thread's entries `first ..= last` (`EntryView`s, never changed once read), at most 150 (`WINDOW`). It opens where the chat is to be read — the page before the first entry not read and the page from it while something is unread, else where it was left (`chat.place`), else the latest page — and its first value is whole: from what is kept when all of it is and it is current (the station's `threads` say how far each goes), else read first. `chat.older` / `chat.newer` bring in the page before / after (a page is kept ahead either way), as many going at the other end; `end`: it reaches the thread's latest entry, so what is said joins it; short of it, what is said waits on the device. `caught`: its last entry read rather than told as it was said. `thread` is its summary |
 | `live` | `station`, `key` | the session as it runs (below) |
 | `host` | `station` | host samples (`HostInfo`) |
-| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it |
+| `net` | `station` | this device's connection to the station, sampled every 2 s while shown and the app is in view (station/topics.ts): its way (`path`, `relay`), round trip, bytes, the last minute's samples, the relays as measured; none before a connection of its own is open |
+| `way` | `station` | the same reading's way alone, `{ path, relay }`: one sampler with `net`, but it changes only when the way does, so what shows only how a station is reached (the `stations` list) does not go out again with each reading |
+| `status` | `workspace?` | what the core is waiting on, when it is worth saying (`StatusView`, status.ts): of a workspace its stations' waits (the relay and links opened for them too), its account's still.fail cloud socket down and the relay opened for no station; with none, all of it, each station said with its workspace's name (`bft · Team`) while the core has more than one workspace |
 | `connection` | `station` | what a chat on the station says of its connection (`ConnectionView`, pill.ts): its link down or coming back, else its workspace's `status`; trouble at once, coming back only after 1.5 s, `back` (已连上) 1.5 s only after one was shown. No page shows it any more (the phones dropped the pill over a chat); kept for apps from before |
-| `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's |
+| `notices` | `workspace?` | what a person hears about while the client runs: chats of theirs that want them (docs/notifications.md); a workspace's, or every one's (each `Notice` names its `workspace` and `station` address) |
 | `notify` | `workspace?` | notifications on this device: on or off, asked, whether to hold pushes, the notices to show now (docs/notifications.md), only the workspace's for a page in one |
 | `adbShare` | — | this phone's adb as lent to a station's agents (`AdbShareView`, adb.ts; docs/adb-share.md): whether it is and to which, how the offer goes (`phase`), how the station's adb holds the phone (`adb`, `serial`, `message`), until when, the tunnels open now. Kept in memory only |
+| `adbCard` | `station` | a link to the station's 共享调试 as a message shows it (`AdbCard`, adb.ts `card`): 共享调试 and how this phone's adb stands with that station (not shared, shared with another, connecting, the minutes left, what is missing; sent again each minute); `lendable` false on a core that cannot lend it (the web) |
+| `joinable` | `workspace` | the stations 添加 station offers to add to the workspace as they are (`JoinableView`, views/memberships.ts; docs/multi-workspace.md): those of the viewer's other workspaces whose home workspace (the cloud does not list them there as `joined`) the viewer is an owner or admin of, not in this one already, each with its address in its home workspace and a line (`甲 · 在线`); `offered` while the viewer manages another workspace at all, `loading` while one of them is not read. From what is held of the workspaces only |
+| `memberships` | `station` | the workspaces the station is in (`MembershipsView`): its `GET /workspaces`, its home one first. Only for the owners and admins of its home workspace (`manages`: the page is in that one, and the viewer manages it); read while a page shows it, kept by its address; again after `station.join`. A station from before several workspaces says so (`error`) |
+| `screens` | `station` | the station's screens a person can see and drive (`ScreensView`; docs/remote-screens.md, screens.ts): its `GET /screens` as its stream opens, then its `screens` events; kept in memory only. Each screen with `line` (what it is, its size, who is on it) and `link` (its page in the app). `control`: the viewer may drive (not a read-only member); `outdated`: a station from before screens (404), which has none until it is updated; `known`: it said which it has since the core started; `note`: why there are none |
+| `screenCard` | `station`, `screen` | a link to one of the station's screens as a message shows it (`ScreenCard`, screens.ts `screenCard`): the screen's title and `line` from its list; one the list no longer has (its station reached), `gone`; one of a station not reached, what its id says it is; `peek`: the station previews it (`screen.view` with `peek`, the card showing it live) |
 
 ```jsonc
 // live
@@ -164,7 +213,7 @@ notices are only of the workspace the viewer is in (attend.ts).
   "loaded": true,             // the stream has sent the transcript it had; until then `timeline` may be partial
   "first": 800,               // where `timeline` starts in the transcript: its latest page first, `history.older` loads those before
   "timeline": [ … ],          // TimelineEntry: the transcript from entry `first`, appended as it grows
-  "usage": { "modelCalls": 3, "inputTokens": 1200, "cachedTokens": 900, "outputTokens": 80, "model": "claude-…" } | null,
+  "usage": { "modelCalls": 3, "inputTokens": 1200, "cachedTokens": 900, "outputTokens": 80, "model": "claude-…", "contextTokens": 420, "contextWindow": null, "cost": 0.0123, "unpricedCalls": 0 } | null,
   "steps": [ … ],             // steps in flight (LiveStep; an ended one keeps "ended": true until the entry that records it arrives)
   "phase": { "phase": "requesting", "since": 1790000000000 } | null
 }
@@ -190,8 +239,35 @@ that only notifications change it:
   does not.
 - Station topics: while any topic of a station is live, the station's
   `/events` stream is held open, with `?host=1` while a `host` topic is live
-  (the stream is opened anew when that changes; the old one closes once the
-  new one is open, so nothing falls between them). Events go into the topics
+  (the stream is opened anew when that changes, and when it is to follow a
+  session it does not, one at work or shown; one it follows that no longer
+  is stays followed until then; the old one closes once the new one is
+  open). Every stream
+  after the first asks `since=<the last event id heard>` (an id is the
+  station's run and the event's number in it, `<run>.<n>`): one taking over
+  from a stream still open, and one coming back after its link went (on a
+  weak link that is every minute or so: the link moves to a better way, or
+  loses its way). So does the first, when a core before this one heard
+  one: the last id is written down in the same write as what its event
+  changed (the `heard` record), and an app started again within the hour
+  (a phone lets its process go often) reads nothing again either; taken up
+  so, the station's history is swept as after reading everything. The
+  station keeps what it told for an hour (while
+  nobody follows too, for one coming back) and tells what came after first,
+  with the same ids, then the viewer's sidebar rows and overview as they
+  changed meanwhile, and answers `stillfail-resumed: 1`: nothing is read
+  again. When it cannot (more than that ago, or another run's), it says
+  `missed` and the station is read again, once; a station from before
+  resuming does not answer so, and a stream coming back reads it again as
+  before (one taking over only on `missed`). Read again, a list some of
+  which is held (`chatRows`, `archivedRows`, `threads`, `sessions`; after a
+  write too) is asked as what changed of it, `POST /changed/<list>` with
+  each held row's digest (`digest.ts`, docs/station-storage.md, Reading):
+  only the rows that differ come, and the list is put together from them
+  and what is held, in the station's order (an answer that does not add up,
+  and a station from before, are read whole; one from before is asked again
+  after an hour). Most of a list is as it is held: on a slow link the whole
+  lists were most of what reading a station again carried. Events go into the topics
   as they come: `session` replaces the summary in `sessions` (an archived one
   leaves the list) and in its `session` topic (whose `turns` are read again
   only when the summary's `turns` or `lastTurn` differ from them);
@@ -199,9 +275,11 @@ that only notifications change it:
   (a thread left with none goes), and makes its `session` topic a 404 error;
   `thread` appends the new entries to that `thread` topic (those it has are
   skipped; entries past a gap wait while the gap is read, once, with
-  `?from=&to=`) and, since it does not carry unread counts, reads
-  `/threads/:id` for the `threads` and `session` topics that list it (bursts
-  coalesced over 400 ms; a 404 removes it); `thread-removed` takes the thread
+  `?from=&to=`; history older than what is held is the background's, in
+  batches) and, since it does not carry unread counts, reads `/threads/:id`
+  for the `threads` and `session` topics that list it (bursts coalesced over
+  400 ms; a 404 removes it) — unless the station tells it as the viewer has it,
+  `thread-view`, which goes in place and is not read; `thread-removed` takes the thread
   out of them, makes its `thread` topic a 404 error and forgets what is kept of
   it; `read` sets the thread's `read` there, and `unread` to 0 when it covers
   the last entry (else the thread is read again), and turns off `unread` of
@@ -212,9 +290,9 @@ that only notifications change it:
   `jobs` (or goes in front), and in `jobs` while it is up (one not listed there
   yet reads `jobs` again, for its chat; one no longer up leaves); `overview`
   and `host` are the whole values. After the stream
-  was down, every live topic of the station is read once when it reopens
-  (`thread` topics only what came after them: `?after=<last>`); `link` says
-  how the stream is.
+  was down and could not be resumed, every live topic of the station is read
+  once when it reopens (`thread` topics only what came after them:
+  `?after=<last>`); `link` says how the stream is.
 - `thread` shows what is kept on the device of the thread (its latest page)
   at once, then reads `?after=<last>`; with nothing kept it reads the latest
   page. What it reads is kept (docs/station-storage.md, In the client core),
@@ -225,7 +303,13 @@ that only notifications change it:
   keeping what comes: the station sends no more than the last 200 entries, so
   a timeline message past what it has (or before it: the transcript written
   anew) starts the timeline there. `history.older` brings the pages before, from
-  what is kept, else `GET /sessions/:key/timeline?before=&limit=`.
+  what is kept, else `GET /sessions/:key/timeline?before=&limit=`. Both ask
+  `brief=1`: what is pushed and paged is what a history shows before a step is
+  opened (docs/station-storage.md, Reading); a step or thought in brief says
+  so (`brief`, with its `entries`), and `history.detail` reads those entries
+  whole as it is opened (`?from=&to=`), never pushed, behind what is shown
+  (`Priority.detail`, above `background`, below `shown`). A station from
+  before it passes over `brief=1` and sends everything whole.
 - `jobLog` reads `GET /jobs/:id/log?lines=<n>` once and follows it on
   `/events?job=<id>&lines=<n>`: the station sends `job-log` (`id`, `lines`,
   `text`, `outputAt`) at once and whenever the log's size or time changes
@@ -245,7 +329,7 @@ built from subscribed inside the core (`Store::watch`: it counts as a
 subscriber and hears each change); a change only marks the view stale, and it
 is computed once, when its coalesced emission goes out, however many of them
 changed. A workspace view watches the `chatRows` / `link` (for `stations`:
-`link` / `overview` / `host`; for `connects`: `overview`) of the stations that
+`link` / `overview` / `host` / `way`; for `connects`: `overview`) of the stations that
 are online — connected to still.fail cloud right now, as the `workspace` topic says —
 and follows the workspace's station list as it changes. It has no value until
 the `workspace` topic has one; a failed `workspace` is the view's error, while
@@ -274,14 +358,17 @@ the views.
 | View | Params | Value |
 | --- | --- | --- |
 | `chats` | `scope`, `mine` | the sidebar: `{ me, stations, loading, days }`; every station's rows side by side |
-| `stations` | `scope` | every station of the scope, each with its link, overview, host and usable models |
+| `stations` | `scope` | every station of the scope, each with its link, overview, host, how this device reaches it (`way`: its words and `via`, from the `way` topic; the figures are `stationNet`'s) and usable models; one the workspace joined (its home is another: docs/multi-workspace.md) says so, `joined`, with its home's name, `home`, when the viewer is in that one too |
+| `stationNet` | `station` | this device's connection to the station with every figure (`StationNet`, present.ts `net`), from its `net`: subscribed where the figures are drawn (station cards, its page), which is what has them sampled; null before a connection of its own is open |
 | `connects` | `scope`, `mine` | every connect of every online station: `{ me, items: [{ station, stationName, connect }], loading }`; with `mine`, those whose `createdBy.id` is me |
 | `chat` | `station`, and `thread` (id) or `session` (key) | an item's page: `{ me, thread, title, people, agents, messages, more, outbox, link }` |
 | `archive` | `scope` | the archive: `{ days, errors, loading, note }`, every online station's archived chats newest first by the day they were archived |
 | `chatJobs` | as `chat` | the chat's services and jobs as its pages show them (`ChatJobsView`, jobs.ts): every one, what matters first, each with its dot (`tone`), word, line (`meta`) and times in words (computed again when they next change, to the second); the button's `alarm`, the groups' notes, how many are current and ended, whose ended ones clearing takes |
+| `imageNear` | as `chat`, and `path` | an image of the chat open in the preview: the ones just before and after it (`ImageNear`, placed.ts), in the order its page shows them (each message's placed files first, then those below it; the outbox's last), each with its `owner`; told only for the one open, not the chat's every image |
 | `usage` | `scope`, `days?` (7, the default, or 30) | what the agents of the scope's online stations spent (`UsageView`, views/usage.ts): `tiles` (cost, calls, input and output tokens), `daily` (each day's cost split by `series`, the four people who spent most and 其他), `lists` (按人 / 按对话 / 按账号 / 按模型, the most spent first, each with its share; a person merged across Slack and the page by email), `notes` (stations offline or too old, the first read under way, models without a price, since when anything is recorded) |
 | `decisions` | `workspace` | the 奏 page: the cards waiting for the viewer in the workspace's chats (`DecisionsView`, decisions.ts; the name is from when the only cards were decisions), whatever their agents' states: `{ items, count, loading }`, each item `{ station, stationName, session, thread, title, seq, message, before, card, options, deferred?, text }` (the post with the card and the one or two messages before it as `chat` shows messages; `card` is `{type: "options", options}` or `{type: "text", placeholder?}`; `options` an options card's, the recommended one last, empty for a text card); pending and not dismissed by the viewer, oldest asked first, those set aside on this device (`decision.defer`) last; `count` for 奏 N |
 | `longJobs` | `scope` | the services and jobs up longer than an hour on the scope's stations that are up (their `jobs`), oldest first, in groups: `{ groups: [{ key, head, jobs }] }`, each job with `whereText` and `age` |
+| `shareIn` | `scope`, `source`, `query?` | where something another app shares goes (`ShareInView`, share-in.ts; docs/share-in.md): the scope's chats on still.fail's page newest first, the one a thing from the same site went to last first (`kept`, with why), and the stations up now for a new chat (`newOn` the one it starts on) |
 
 `live` (above) stays its own topic: its steps change many times a second,
 while `chat` changes with messages.
@@ -315,7 +402,7 @@ station, applies `mine`, and groups them by day.
 The `chat` view's `title` is the thread's title; else the first line of the
 first thing a person said in it (`firstText`, Slack mentions left out, spaces
 collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
-`（还没有消息）`.
+`新对话`.
 
 ```jsonc
 // stations
@@ -325,7 +412,7 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
-  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex if a profile has models enabled; those models, distinct and sorted
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh, grok if a profile has models enabled; those models, distinct and sorted
 }]
 
 // chat
@@ -372,8 +459,10 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | Call | Params | Result |
 | --- | --- | --- |
 | `auth.begin` | `redirect_uri`, `return_to`, `device_name` | `{ url }` to open (web: navigate; native: system browser) |
+| `auth.password` | `email`, `password`, `device_name` | `{ account }`: signed in with an account still.fail cloud set up for a password (REVIEW_ACCOUNTS: App Store review's); a wrong one fails `login_wrong_password` |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
+| `auth.deleteAccount` | `account` | — : the account deleted in still.fail cloud (`DELETE /v1/me`), then forgotten here as signing out does. Refused `sole_owner` while it is the only owner of a workspace with other members |
 | `slack.tokens.edit` | `station`, `form` (the generated `SlackTokenForm`), `input` (changed `appToken`, `botToken`, `connect`, `install`; `clear` invalidates verification) | the transient draft; also published as `{ topic: "slackTokens", station, form }` (`SlackTokensView`) |
 | `slack.tokens.verify` | `station`, `form` | `true` only for the current verified draft; errors and identity in the topic. Late results for edited or closed forms cannot advance it |
 | `slack.tokens.drop` | `station`, `form` | clears the in-memory draft; disconnecting its owning UI also clears it. Nothing is saved to device storage |
@@ -388,29 +477,42 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `chat.newer` | `station`, `thread` | `{ more }`: loads the page after the chat's newest loaded entry (it is short of the end), from the device when it is there (kept ahead), as many going at the start; read, not said: nothing comes in with a motion |
 | `chat.latest` | `station`, `thread` | — ; the chat's latest page in place of its window (the reader goes to its end); sending from a window short of its end does it too |
 | `chat.place` | `station`, `thread`, `seq?` | — ; where the reader leaves the chat: the entry at the top of what shows, short of its end, or none at its end. It opens there next while nothing is unread (held while the core runs) |
+| `chat.around` | `station`, `thread`, `seq` | — ; the chat's window about that entry (a message found in it, to be shown): a page before it and one after, read now where not held; left as it is when the entry is well within it |
+| `chat.find` | `station`, `thread`, `query`, `bring?` | `{ words, hits: [{ seq, count }], held, of, whole }`: the chat's messages that have every word of `query` (case aside), oldest first, each with how many times the words are in its text; looked for on the device. `whole`: all the chat is on it (`held` of its `of` entries); `bring`: what is not is read first, while its station answers |
 | `history.older` | `station`, `key` | `{ more }`: loads the page (200 entries) of the session's transcript before its `live` topic's `first` into it — from what is kept, else from the station — so the `history` view's `items` grow in front (`more` in the view: there are older ones) |
+| `history.detail` | `station`, `key`, `from`, `to` | — ; reads the session's transcript entries `from` to `to` whole in place of what is kept of them in brief, as a history's step or thought in brief (`brief`, its `entries`) is opened: the `history` view shows it whole once they are in. Behind what is shown (`Priority.detail`); tried while the station seems away too, failing as the request does |
 | `chat.read` | `station`, `thread`, `seq` | — ; records that the viewer has read the chat up to entry `seq` (`PUT /threads/:id/read {n}`); nothing is sent when it is read that far already. `unread` in `chats` follows. The clients no longer call it: the core reads a chat up to its newest message while a UI shows its end on a page in view (`client.focus`, attend.ts) |
 | `client.focus` | `visible?`, `focused?`, `chat?`, `left?`, `workspace?` | — ; where this UI's attention is (docs/notifications.md): what is read, a chat's `unreadLine` (held for the visit, older pages loaded first while `unreadAbove`) and which notices show follow from it; `workspace`, the one it is in (else its chat's) |
-| `station.upload` | `station`, `key`, `name`, `bytes` | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
-| `station.upload.part` | `station`, `id` (the UI's, one per file), `name`, `size`, `offset`, `bytes` (at most 16 MB) | `{ have, file? }`: how much of the file the station has (the next part starts there) and, once whole, the attachment. Up to 1 GB a file; a station from before parts takes it whole once all parts are in, up to 50 MB |
-| `station.file` | `station`, `key`, `name` | `{ type, bytes }` |
-| `station.file.part` | `station`, `key`, `name`, `offset`, `length` (at most 8 MB) | `{ type, total, bytes }`: a part of the file and its whole size, for a big one fetched onto the disk a part at a time; `unsupported` from a station before parts |
-| `station.poster` | `station`, `key`, `name` | `{ type, bytes }`, a video's first frame as a small JPEG the station makes; null when it has none |
-| `cache.usage` | — | `{ chats: [{ station, thread, title, sessions, bytes }] }`: what this device keeps of each chat (its messages, its sessions' transcripts), for a page of what it keeps |
-| `cache.clear` | `station`, `thread` | — ; forgets what is kept of the chat (its messages and transcripts, read again from the station when it is opened); its outbox, draft and row stay |
-| `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `body?`, `stream?` | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers, body }`; with `stream`, values `{ head: { status, headers } }` then `{ chunk }` for each piece of the body as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
-| `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary }` for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
-| `preview.socket.send` | `socket`, one of `text`, `binary`, `close: [code, reason]` | — ; what the page sends on the socket it named so |
+| `station.upload` | `station`, `key`, `name`; the file as the call's bytes | the attachment (into that session's workspace; a message may carry uploads of any session in its chat) |
+| `station.upload.part` | `station`, `id` (the UI's, one per file), `name`, `size`, `offset`, `progress?`; the part (at most 16 MB) as the call's bytes | `{ have, file? }` (with `progress`, values `{ sent }`, the part's bytes gone so far, as they go): how much of the file the station has (the next part starts there) and, once whole, the attachment. Up to 1 GB a file; a station from before parts takes it whole once all parts are in, up to 50 MB |
+| `station.file` | `station`, `key`, `name`, `thumb?`, `progress?` | `{ type }`, the file as its bytes; with `thumb`, the station's small one of an image, kept on the device (`file_kept`, docs/core-db.md): a chat opened again, the app started anew, shows it without reading it again; with `progress`, values `{ loaded, total }` as it comes |
+| `station.file.part` | `station`, `key`, `name`, `offset`, `length` (at most 8 MB), `progress?`, `stream?` | `{ type, total }`, the part as its bytes (with `progress`, values `{ loaded }`, the part's bytes so far, as it comes; with `stream`, its bytes beside those values instead, 64 KB at a time, for what writes each where it goes as it comes): a part of the file and its whole size, for a big one fetched onto the disk a part at a time; `unsupported` from a station before parts |
+| `station.poster` | `station`, `key`, `name` | `{ type }` with the JPEG as its bytes, a video's first frame as a small JPEG the station makes, kept on the device as a thumbnail is; null when it has none |
+| `file.open` | `station`, `key`, `path` | `{ name, path, type, size }`, a file a message names, whole (at most 16 MB), as its bytes (`GET /sessions/:key/open?raw=1`; a station from before `raw` puts them in its JSON as base64, read here) |
+| `cache.usage` | — | `{ chats: [{ station, thread, title, sessions, bytes }] }`: what this device keeps of each chat (its messages, its sessions' transcripts, the thumbnails and posters it showed), for a page of what it keeps |
+| `cache.clear` | `station`, `thread` | — ; forgets what is kept of the chat (its messages, transcripts, thumbnails and posters, read again from the station when it is opened); its outbox, draft and row stay |
+| `station.preview` | `station`, `port`, `method`, `path`, `headers?`, `stream?`; its body, if any, as the call's bytes | a request to a web service on the station's machine (`/preview/<port>`): `{ status, headers }`, the body as its bytes; with `stream`, values `{ head: { status, headers } }` then `{ chunk: true }` with each piece of the body as its bytes as it comes, and the answer (null) at its end. Only waited on (`status`) until its head; cancelled, the station stops asking the service |
+| `preview.socket` | `station`, `port`, `path`, `headers?`, `socket` (a name the UI gives it) | a WebSocket of that service, over the mesh only: values `{ open: { protocol } }`, then `{ text }` or `{ binary: true }` (the message as its bytes) for each message; the answer is its close, `{ code, reason }`. Cancelling the call drops it |
+| `preview.socket.send` | `socket`, one of `text`, `binary: true` (the message as the call's bytes), `close: [code, reason]` | — ; what the page sends on the socket it named so |
+| `screen.view` | `station`, `screen` (its id), `view` (a name the UI gives it), `codecs?` (`["h264","jpeg"]`: those the UI decodes), `maxWidth?`, `maxHeight?` (1920×1080), `control?` (true) | a view of one of the station's screens (docs/remote-screens.md), over the mesh only: values `{ state }` (`ScreenViewState`, whole each time it changes: the phase, 只看/控制, who else is on it, the frame's size, the pointer), `{ config: { codec, width, height } }` with the avcC (H.264) as `bytes` (none for JPEG), then `{ frame: { key, ts } }` with the frame as `bytes` (H.264 in AVCC, or a JPEG); while it drives the screen, `{ clipboard: { type: "text", text } }` or `{ clipboard: { type: "png", size } }` with the PNG as `bytes`, a copy made on the screen; the answer (null) once it ended (the last state says why). The core opens it again when the link drops (`reconnecting`). Cancelling the call ends it |
+| `screen.ack` | `view`, `ts` | — ; the UI decoded the frame of that timestamp (the station sends at most 2 ahead of it) |
+| `screen.keyframe` | `view` | — ; the UI's decoder lost its state: the next frame is a key frame |
+| `screen.input` | `view`, `input` (`{t:"pointer", kind, x, y, buttons}`, `{t:"wheel", x, y, dx, dy}`, `{t:"key", kind, key, code, mods}`, `{t:"text", text}`, `{t:"reveal", path}` (a file dropped into it shown in the machine's file manager, where the state's `drop.reveal` says it can): coordinates 0..1 of the frame) | — ; dropped while the view only looks |
+| `screen.clipboard` | `view`, `text` or `png: true` (the PNG as the call's bytes), `paste?` (true) | — ; the screen's clipboard set (text at most 1 MB, a PNG 8 MB), then pasted where its focus is; refused while the view only looks or the screen carries no such type (the state's `clipboard`) |
+| `screen.control` | `view`, `control` | — ; 只看 (false) or 控制 (true): the view goes on, opened again with it |
 | `migrate` | `accounts`, `device` | — (web only: what localStorage held before the core existed) |
 | `push.key` / `push.register` / `push.unregister` | see docs/notifications.md | this device's push registration, with every signed-in account |
 | `newChat.pick` | `scope`, `station?` (its id), `model?`, `runtime?`, `effort?`, `profile?` (null: the default depth, the station's pick) | — ; what a new chat in the scope starts on, kept on the device (choose.rs): the `newChat` view follows. A model keeps its runtime where it runs there; a runtime changed takes its default depth |
 | `newChat.create` | `station` | `{ key, runtime, model, effort? }`: `chat.create` with what is picked on that station; the scope's next new chat starts there |
 | `newChat.migrate` | `choices` (by station id), `last?`, `lastIn?` | — ; what a client kept before the core did, taken where the core keeps nothing |
+| `shareIn.open` | `scope`, `source`, `station`, `id?`, `title?`, `key?` (a new chat's composer key, when not `new:<station>`) | `{ station, key, session?, thread?, title? }`: what is shared put after what the composer of the chat (`id`, its row) or of a new chat on `station` holds, once; nothing is sent, the page opens the chat; the chat is kept as where that site's things go |
 | `pick.set` / `pick.save` | `station`, `of` (`new`, `session:<key>`, `connect:<id>`, `connect-new`), and for `set` any of `model`, `runtime`, `effort`, `profile`, `open`, `clear` | a model control's picks until saved (the `pick` topic); `save` makes them what it runs on (`session.settings`, `connect.put`, the new chat's choice), `{ saved }` |
+| `pick.borrow` | `station`, `of` | the picked model is one another station of the workspace offers (`ModelOption.availability` `borrowable`): that station shares the profile with this one (`profile.share`, its allow list with this station added; managers only), `{ borrowed }`; the copy comes as any share does (docs/station-share.md) |
 | `adb.share` | `station`, `connect?`, `pair?` (adbd's ports, as the app found them), `device`, `android`, `package`, `minutes?` (60) | — ; lends this phone's adb to the station's agents (native cores only), or the offer as it is now; another station's in place of one before (docs/adb-share.md) |
 | `adb.stop` | — | — ; lent no longer |
 | `adb.pair` | `code` | `{ message }`: the station's adb pairs with the phone through its pairing port |
 | `adb.grant` | — | `{ message }`: the station's adb grants the app `WRITE_SECURE_SETTINGS`, to turn Wireless debugging on itself |
+| `station.join` | `workspace`, `station` (its address in its home workspace), `name?` (its name there, by default) | `{ joined }`: the station added to `workspace` as it is (docs/multi-workspace.md): an enrollment made there as the account that reaches it, then the station's `POST /workspaces/join {token}` over its home workspace's link; the accounts read again, so it is listed there, and its `memberships`. A refusal is said in words: a station from before (404), a cloud from before (the station says it cannot yet), a workspace lock, the plan's limit |
 
 A UI never makes a request of a station or still.fail cloud itself (no method, no
 path): it names what it wants done, and the core knows the request that does it
@@ -430,14 +532,16 @@ thread, else its session), `chats.archived`,
 `profile.useMachineLogin`, `profile.put`, `profile.delete`, `profile.quota`,
 `profile.check`, `profile.login`, `profile.cancelLogin`, `profile.loginCode`,
 `login.new`, `login.code`, `login.drop`, `job.get`, `job.log`, `job.stop`,
-`memory.get`, `software.update`, `software.check`, `software.channel`. still.fail cloud's take
+`memory.get`, `software.update`, `software.check`, `software.channel`, `drive.setRoots` (a station in several workspaces keeps a
+list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's window for it up on that Mac, docs/remote-screens.md "Grants"; the overview read again). still.fail cloud's take
 `account`: `workspace.create`, `workspace.rename`, `workspace.setRelays`, `workspace.delete`,
 `workspace.invite`, `workspace.addMembers`, `workspace.removeAdded`,
 `workspace.revokeInvitation`, `workspace.setRole`, `workspace.removeMember`,
 `workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,
 `invitation.preview`, `invitation.accept`, `invitation.decline`,
 `loginSession.revoke`, `admin.me`, `admin.createCode`, `admin.revokeCode`,
-`admin.feedbackStatus`.
+`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`,
+`admin.createWorkspace`, `admin.setLimits`, `admin.enroll`.
 
 An operation answers only after the live topics it touches are current, so
 the UI never invalidates caches itself and a page that navigates right after a
@@ -446,10 +550,15 @@ edits) becomes the `overview`; a thread (`chat.forSession`, a new chat) goes
 into `threads` and the `session` topics; a read position into the threads; a
 job stopped into its session's `jobs` and into `jobs` (as its `job` event
 would); otherwise the touched topics are read again (sessions → `session`,
-`sessions` and `chatRows`; a thread answered → `chatRows` as well; connects →
-`overview` and `sessions`; profiles, Slack → `overview`; `slack.identity` →
-`overview` (its answer) and `chatRows`). A write to still.fail cloud reads the
-account topics again. The station's events bring the same a moment later.
+`sessions` and `chatRows`, and `archivedRows` while a page shows it; a
+session's process stopped or let go (`session.stop`, `session.evict`) → its
+`session` alone, the lists that show it its station's `session` and `chat`
+events change; warmed (`session.warm`, as a person types) and
+`widget.setState` → nothing (its station tells the first, a page reads the
+other); a thread answered → `chatRows` as well; connects → `overview` and
+`sessions`; profiles, Slack → `overview`; `slack.identity` → `overview` (its
+answer) and `chatRows`). A write to still.fail cloud reads the account topics
+again. The station's events bring the same a moment later.
 
 ## Layout
 
@@ -475,11 +584,11 @@ The core's modules (`client/core-ts/src`):
 - `data.ts`, `db/` — the data (docs/core-db.md): a SQLite database per signed-in account (`db/schema.ts` its tables and migrations, `db/account.ts` its writer and reads), the device's own values, what came before imported once (`db/import.ts`).
 - `sync/scheduler.ts`, `sync/cloud.ts`, `station/sync.ts` — everything kept current, by itself; `station/topics.ts` — the station topics, read from the records; `station/requests.ts`, `station/wire.ts` — requests over a link.
 - `accounts.ts` — sign-in (PKCE), token refresh (one at a time per account), persistence. `cloud.ts` — still.fail cloud's API.
-- `mesh.ts` — the device endpoint and station links: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
+- `mesh.ts` — the device endpoint and station links, one per station address: the credential and its renewal, reopening, hedging on a wake, relay measurement and moving.
 - `entries.ts` — a thread's entries merged into messages (edits applied): the one place that does it.
 - `workspace.ts` — the workspaces, each with what is its own. `notices.ts`, `attend.ts` (`client.focus`, `notify`), `status.ts`, `pill.ts`, `doing.ts`, `adb.ts`.
 - `activity.ts`, `history.ts`, `present.ts`, `format.ts`, `decisions.ts`, `jobs.ts`, `looks.ts`, `changelog.ts` — what the clients show, decided once for every client.
-- `views/` — the view topics (chats, chat, stations, decisions, usage, admin…), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
+- `views/` — the view topics (chats, chat, stations, decisions, usage, admin…; `views/memberships.ts`, a station in several workspaces), and `views/local.ts`, the local overlays (outbox, pending chats, renames and pins under way).
 - `choose.ts`, `forms.ts` — the new-chat and model pickers, the forms (automatic decisions, Slack tokens, the connect wizard, adding a profile).
 - `trace.ts` — traces of user actions (docs/telemetry.md). `testing.ts` — a host for tests.
 
@@ -503,6 +612,23 @@ The `:core` module is `fail.still.core.StillFailCore` (behind its `Engine`
 interface): `call(name, params)` and `topic(topic)` as a `Flow<TopicState>` —
 shared by everyone who collects the same topic, deltas applied as on the web
 (keyed ones too: `Delta.kt`), unsubscribed 2 s after the last collector leaves.
+The app is in modules, each seeing only those it is on, so the compiler keeps the layering:
+
+| module | what | on |
+|---|---|---|
+| `:shared` | the core's data and calls (`data/`, with the generated `Shapes.kt`, `Operations.kt`), the design (`ui/`, with the generated `Icons.kt`; `ui/Controls.kt`: buttons, fields, rows to pick from), the app's state and routes (`AppState.kt`: `AppState`, `Screen`, `LocalApp`; `Places.kt`), and the pages' parts more than one page module shows (`screens/`: `PageParts.kt`, `SettingParts.kt`, `FileKinds.kt`, `Notes.kt`, `PlacePage.kt`…) | `:core` |
+| `:settings` | the settings' pages (`screens/`: stations, profiles, connects, the vault, the workspace…) | `:shared` |
+| `:chat` | the chats' pages (`screens/`: home, a chat, its composer, files, previews, history, decisions…) | `:shared` |
+| `:drive` | a station's drive (`drive/`) | `:shared` |
+| `:app` | the activity, the app's frame (`App.kt`: the pages drawn by `Screen`), notifications, pushes, updates, adb lending, the remote screens (`remote/`), the share sheet (`share/`), sign-in and settings' home | all |
+
+The three page modules stand side by side: lint, which analyses a module only after those it is on, analyses them at
+once (in a line, one after another: 52 s for all of it, 2026-10-18). What one shows or opens of another's (a station's
+card, the workspaces' switcher, a file in the chat's viewer…) goes through `screens/Elsewhere.kt`, which the app fills in
+as it starts (`StillFailApp`); what `:shared` must tell the app, through hooks it sets (`TopicTiming`, `AppHooks`) or an
+interface it fills (`AppUpdates`). The pages keep their package (`fail.still.android.screens`) across the modules; what
+one module takes of another is public. In `:app`, the remote screens and the share sheet take nothing of the drive, and
+the remote screens nothing of the pages (`scripts/check.sh`: phone packages one way).
 
 ## Desktop
 
@@ -578,9 +704,15 @@ shapes every topic's value passes through on its way out): `node
 client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts` and Android's
 `data/Shapes.kt`, and `--check` keeps them from drifting.
 
-`connectFlow {station, form}` owns the complete Slack connection wizard: team,
+`connectFlow {station, form}` owns the complete connection wizard. It starts at the
+platform where the station has the Feishu connect (its overview lists
+`feishuRegistrations`; a station without it starts at Slack's steps). Slack: team,
 configuration token, app settings, installation, token verification, model binding
-and submission. Calls are `connect.flow.open/edit/go/config/make/verify/create/drop`.
+and submission. Feishu (docs/feishu.md): model binding, then the bot made by scanning
+(`register`; the registration followed through the overview, its link as a QR code
+from `qr.ts`, the connect added by the core itself once the bot is made, the
+registration cancelled when the form closes) or an app of one's own verified. Calls
+are `connect.flow.open/edit/go/config/make/verify/register/create/drop`.
 The core chooses desktop inline versus mobile separate token steps. Each form has
 its own `connect-new:<form>` pick and token state, belongs to its client, and is
 removed on close/disconnect. Secrets are transient; no draft is written to Data.

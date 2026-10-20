@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { installScript, releaseType } from "../src/install.ts";
+import { createHash } from "node:crypto";
+import { bundledInstallScript, installScript, releaseType } from "../src/install.ts";
 
 test("the installer braces every variable that words follow, so no shell takes a character for part of its name", () => {
   const script = installScript("https://ember.test");
@@ -52,10 +53,34 @@ test("the releases bucket serves the station's releases and the apps' builds, an
   assert.equal(releaseType("desktop/stillfail-mac.yml"), "text/yaml; charset=utf-8");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip"), "application/zip");
   assert.equal(releaseType("desktop/stillfail-0.1.1092-arm64-mac.zip.blockmap"), "application/octet-stream");
+  // The Windows app's: its feed (named by the channel alone), its installer and that one's blockmap.
+  assert.equal(releaseType("desktop/stillfail.yml"), "text/yaml; charset=utf-8");
+  assert.equal(releaseType("desktop/stillfail-beta.yml"), "text/yaml; charset=utf-8");
+  assert.equal(releaseType("desktop/web/stillfail-beta-web.json"), "application/json");
+  assert.equal(releaseType("desktop/web/stillfail-beta-web-0.1.3000.tar.gz"), "application/gzip");
+  assert.equal(releaseType("desktop/web/../station.json"), null);
+  assert.equal(releaseType("desktop/stillfail-0.1.2400-x64-win.exe"), "application/vnd.microsoft.portable-executable");
+  assert.equal(releaseType("desktop/stillfail-beta-0.1.2400-x64-win.exe.blockmap"), "application/octet-stream");
+  assert.equal(releaseType("desktop/stillfail-0.1.2400-arm64-win.exe"), null);
+  assert.equal(releaseType("desktop/other.yml"), null);
   // The old app's feed is not served: it is replaced by hand.
   assert.equal(releaseType("desktop/latest-mac.yml"), null);
   assert.equal(releaseType("desktop/ember-0.1.1092-arm64-mac.zip"), null);
   assert.equal(releaseType("desktop/other-mac.yml"), null);
+  // The modules' packages: each one's feeds and its archives, one for every machine or a platform's.
+  assert.equal(releaseType("modules/media/media.json"), "application/json");
+  assert.equal(releaseType("modules/media/media-beta.json"), "application/json");
+  assert.equal(releaseType("modules/media/media-0.1.3600.tar.gz"), "application/gzip");
+  assert.equal(releaseType("modules/media/media-0.1.3600-linux-x64.tar.gz"), "application/gzip");
+  for (const file of ["modules/media/books.json", "modules/media/books-0.1.3600.tar.gz", "modules/media/media-0.1.3600-other.tar.gz", "modules/media/media-1.tar.gz", "modules/my-mod/my-mod.json", "modules/media/x/media.json", "modules/media.json"]) {
+    assert.equal(releaseType(file), null, file);
+  }
+  // The prebuilt native parts (scripts/native.ts prebuild), by part, target and key.
+  assert.equal(releaseType("natives/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"), "application/gzip");
+  assert.equal(releaseType("natives/engine-win32-x64-95311552b24140105c1a54aa.tar.gz"), "application/gzip");
+  for (const file of ["natives/shell-win32-x64-e873.tar.gz", "natives/shell-other-e873ee4f2e77b28f78c16a38.tar.gz", "natives/../station.json", "natives/x/shell-win32-x64-e873ee4f2e77b28f78c16a38.tar.gz"]) {
+    assert.equal(releaseType(file), null, file);
+  }
   assert.equal(releaseType("android/latest.json"), "application/json");
   assert.equal(releaseType("station.json"), "application/json");
   assert.equal(releaseType("android/stillfail-1124.apk"), "application/vnd.android.package-archive");
@@ -69,8 +94,10 @@ test("the releases bucket serves the station's releases and the apps' builds, an
 /**
  * Runs the installer on a machine made up in a temporary directory: its HOME, a release of a stand-in command (it says
  * what it was asked), and launchctl, curl and uname that say what they were asked (a Mac, whatever runs the test).
+ * `os` "linux" or "wsl" makes it a Linux (x64) instead, with a systemd for the user (`systemd`) or none; "wsl" is
+ * Windows' Linux (its kernel says microsoft) with Windows' cmd.exe and wslpath, its drive C: in <root>/c.
  */
-function machine() {
+function machine(os: "mac" | "linux" | "wsl" = "mac", systemd = true) {
   const root = mkdtempSync(join(tmpdir(), "install-test-"));
   const home = join(root, "home");
   const stub = join(root, "stub");
@@ -85,9 +112,25 @@ function machine() {
   const tool = (name: string, body: string) => writeFileSync(join(stub, name), `#!/bin/sh\necho "${name} $*" >> "$HOME/said"\n${body}`, { mode: 0o755 });
   tool("launchctl", '[ "$1" = print ] && exit 1\nexit 0\n');
   tool("curl", `while [ $# -gt 0 ]; do [ "$1" = -o ] && cp "${join(root, "release.tar.gz")}" "$2"; shift; done\n`);
-  tool("uname", '[ "$1" = -m ] && echo arm64 || echo Darwin\n');
-  const run = (args: string[] = [], env: Record<string, string> = {}) => {
-    const done = spawnSync("sh", ["-c", installScript("https://app.still.fail"), "sh", ...args], {
+  if (os === "mac") tool("uname", '[ "$1" = -m ] && echo arm64 || echo Darwin\n');
+  else tool("uname", '[ "$1" = -m ] && echo x86_64 || echo Linux\n');
+  const osrelease = join(root, "osrelease");
+  writeFileSync(osrelease, os === "wsl" ? "6.6.87.2-microsoft-standard-WSL2\n" : "6.8.0-45-generic\n");
+  tool("systemctl", systemd ? "exit 0\n" : "exit 1\n");
+  tool("loginctl", "exit 0\n");
+  if (os === "wsl") {
+    mkdirSync(join(root, "c/Users/kim/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup"), { recursive: true });
+    tool("cmd.exe", 'case "$*" in *APPDATA*) printf \'%s\\r\\n\' \'C:\\Users\\kim\\AppData\\Roaming\' ;; esac\n');
+    tool("wslpath", `case $1 in
+  -u) printf '%s\\n' "$2" | sed -e 's#^C:#${root}/c#' -e 's#\\\\#/#g' ;;
+  -w) printf '%s\\n' "$2" | sed -e 's#^${root}/c#C:#' -e 's#/#\\\\#g' ;;
+esac
+`);
+    tool("pgrep", "exit 1\n");
+  }
+  const run = (args: string[] = [], env: Record<string, string> = {}, installer = installScript("https://app.still.fail")) => {
+    const script = installer.replaceAll("/proc/sys/kernel/osrelease", osrelease);
+    const done = spawnSync("sh", ["-c", script, "sh", ...args], {
       // Only these: not the caller's (an agent's STILLFAIL_DATA or EMBER_DATA would aim it at the real station).
       env: { HOME: home, PATH: `${stub}:/usr/bin:/bin:/usr/sbin:/sbin`, ...env } as unknown as NodeJS.ProcessEnv,
       encoding: "utf8",
@@ -96,6 +139,46 @@ function machine() {
   };
   return { root, home, run, done: () => rmSync(root, { recursive: true, force: true }) };
 }
+
+test("in WSL the station runs without Windows' PATH, and Windows keeps WSL up from its sign-in on", () => {
+  const m = machine("wsl");
+  try {
+    const done = m.run(["tok"], { WSL_DISTRO_NAME: "Ubuntu", PATH: `${join(m.root, "stub")}:/usr/bin:/bin:/mnt/c/Program Files/nodejs:/mnt/c/Windows` });
+    assert.equal(done.status, 0, done.out);
+    const unit = readFileSync(join(m.home, ".config/systemd/user/stillfail-station.service"), "utf8");
+    const path = /^Environment=PATH=(.*)$/m.exec(unit)?.[1] ?? "";
+    assert.match(path, /\/usr\/bin/);
+    assert.doesNotMatch(path, /\/mnt\//, "none of Windows' directories");
+    const keeper = join(m.root, "c/Users/kim/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/stillfail-station-Ubuntu.vbs");
+    assert.equal(readFileSync(keeper, "utf8"), 'CreateObject("WScript.Shell").Run "wsl.exe -d ""Ubuntu"" --exec sleep 3153600000", 0, False\r\n');
+    // Started now too, as at the next sign-in.
+    assert.match(done.said, /cmd\.exe \/c wscript\.exe C:\\Users\\kim\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\stillfail-station-Ubuntu\.vbs/);
+    assert.match(done.out, /stillfail-station-Ubuntu\.vbs/);
+    assert.match(done.said, /systemctl --user enable stillfail-station\.service/);
+  } finally {
+    m.done();
+  }
+  const bare = machine("wsl", false);
+  try {
+    // No systemd: run in the background, and told how to turn it on (no keeper: nothing would start it with WSL).
+    const done = bare.run(["tok"], { WSL_DISTRO_NAME: "Ubuntu" });
+    assert.equal(done.status, 0, done.out);
+    assert.match(done.out, /\/etc\/wsl\.conf/);
+    assert.doesNotMatch(done.said, /wscript/);
+  } finally {
+    bare.done();
+  }
+  const linux = machine("linux");
+  try {
+    // Another Linux keeps its PATH as it is and hears nothing of WSL.
+    const done = linux.run(["tok"], { PATH: `${join(linux.root, "stub")}:/usr/bin:/bin:/mnt/tools/bin` });
+    assert.equal(done.status, 0, done.out);
+    assert.match(readFileSync(join(linux.home, ".config/systemd/user/stillfail-station.service"), "utf8"), /^Environment=PATH=.*:\/mnt\/tools\/bin/m);
+    assert.doesNotMatch(done.out, /WSL/);
+  } finally {
+    linux.done();
+  }
+});
 
 test("an install from before the rename is moved, not installed beside it", () => {
   const m = machine();
@@ -160,7 +243,7 @@ test("with both places there the new one is used and the old one left; a fresh m
     assert.equal(done.status, 0, done.out);
     assert.ok(existsSync(join(fresh.home, ".stillfail", "app", "VERSION")));
     assert.ok(!existsSync(join(fresh.home, ".ember")));
-    assert.match(done.said, /stillfail station enroll https:\/\/app\.still\.fail tok/);
+    assert.match(done.said, /stillfail station enroll https:\/\/app\.still\.fail tok --stay/);
   } finally {
     fresh.done();
   }
@@ -179,6 +262,124 @@ test("the release says which channel it came from, for the station to go back fr
     const stable = m.run([], { STILLFAIL_CHANNEL: "anything" });
     assert.equal(stable.status, 0, stable.out);
     assert.equal(readFileSync(join(m.home, ".stillfail", "app", "CHANNEL"), "utf8"), "stable\n");
+  } finally {
+    m.done();
+  }
+});
+
+test("a handover the new release cannot take leaves the station running on the old release, not restarted", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  let pid = 0;
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    assert.equal(m.run().status, 0, "installed, with its service");
+    writeFileSync(join(data, "app", "VERSION"), "old\n");
+    // The running station, as ps tells it: asked to hand over (SIGUSR2), it says its new Node did not come up.
+    const fake = join(m.root, "stillfail-station");
+    writeFileSync(
+      fake,
+      `#!/bin/sh\ntrap 'echo "the new release did not start" > "${data}/run/handoff-failed"' USR2\ntouch "${m.root}/listening"\nwhile :; do sleep 0.2; done\n`,
+      { mode: 0o755 },
+    );
+    // Not this process's child (the installer runs while this waits, so none is reaped here): one that has ended goes.
+    pid = Number(execFileSync("sh", ["-c", `"${fake}" </dev/null >/dev/null 2>&1 & echo $!`], { encoding: "utf8" }));
+    while (!existsSync(join(m.root, "listening"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    mkdirSync(join(data, "run"), { recursive: true });
+    const said = `{"pid": ${pid}, "startedAt": 1700000000000, "handoff": 1, "drain": 1}`;
+    writeFileSync(join(data, "run", "station.json"), said);
+    writeFileSync(join(m.home, "said"), "");
+
+    const update = m.run();
+    assert.equal(update.status, 1, update.out);
+    assert.match(update.out, /the new release did not start/);
+    assert.match(update.out, /无法交接.*station 继续使用原版本运行|Couldn't hand over.*keeps running the previous version/);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "old\n", "the old release back in its place");
+    assert.ok(!existsSync(join(data, "app.old")) && !existsSync(join(data, "app.failed")));
+    assert.ok(process.kill(pid, 0), "the station still runs");
+    assert.doesNotMatch(update.said, /launchctl (bootout|bootstrap)/, "and is not restarted");
+    assert.equal(readFileSync(join(data, "run", "station.json"), "utf8"), said);
+  } finally {
+    if (pid) process.kill(pid, "SIGKILL");
+    m.done();
+  }
+});
+
+const sha256Of = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
+
+test("a station updating itself installs only the release its signed words name, by that release's own installer", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    // The release carries its installer (scripts/installers.ts), here one that says it ran and what it was handed.
+    const own = bundledInstallScript("zh").replace("set -eu\n", 'set -eu\necho "its own installer: $STILLFAIL_INSTALLER_HANDED $(basename "$STILLFAIL_ARCHIVE")" >> "$HOME/said"\n');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "bin", "install.zh.sh"), own);
+    execFileSync("tar", ["-czf", join(m.root, "release.tar.gz"), "-C", join(m.root, "release"), "stillfail"]);
+    const sha = sha256Of(join(m.root, "release.tar.gz"));
+    const bundled = bundledInstallScript("zh");
+    const told = { STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_INSTALL_LANG: "zh" };
+
+    // Not where the station names (no STILLFAIL_ORIGIN): nothing.
+    assert.notEqual(m.run([], {}, bundled).status, 0);
+    // A download that is not the signed release: not installed.
+    const bad = m.run([], { ...told, STILLFAIL_RELEASE_SHA256: "0".repeat(64) }, bundled);
+    assert.equal(bad.status, 1, bad.out);
+    assert.match(bad.out, /与签名不符/);
+    assert.ok(!existsSync(join(data, "app")), "nothing installed");
+    assert.match(bad.said, /curl .*https:\/\/releases\.test\/releases\/stillfail-station-darwin-arm64\.tar\.gz/);
+
+    // The signed one: downloaded once, then installed by the installer it carries, handed the download.
+    writeFileSync(join(m.home, "said"), "");
+    const good = m.run([], { ...told, STILLFAIL_RELEASE_SHA256: sha }, bundled);
+    assert.equal(good.status, 0, good.out);
+    assert.equal(readFileSync(join(data, "app", "VERSION"), "utf8"), "new\n");
+    assert.match(good.said, /its own installer: 1 stillfail\.tar\.gz/);
+    assert.equal(good.said.match(/^curl /gm)?.length, 1, good.said);
+    // The download it was handed is gone with its directory.
+    assert.deepEqual(readdirSync("/tmp").filter((f) => f.startsWith("stillfail-handed.") && existsSync(join("/tmp", f, "stillfail.tar.gz")) && sha256Of(join("/tmp", f, "stillfail.tar.gz")) === sha), []);
+  } finally {
+    m.done();
+  }
+});
+
+test("a station updating itself runs on the Node its signed words name, the machine's own only when it is that one", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "NODE_VERSION"), "24.21.0\n");
+    execFileSync("tar", ["-czf", join(m.root, "release.tar.gz"), "-C", join(m.root, "release"), "stillfail"]);
+    // The Node, as node-dist.sh keeps it (bin/node in a tarball): a stand-in that says its version.
+    const dist = join(m.root, "node");
+    mkdirSync(join(dist, "bin"), { recursive: true });
+    writeFileSync(join(dist, "bin", "node"), '#!/bin/sh\necho v24.21.0\n', { mode: 0o755 });
+    execFileSync("tar", ["-czf", join(m.root, "node.tar.gz"), "-C", dist, "bin/node"]);
+    const stub = join(m.root, "stub");
+    writeFileSync(join(stub, "curl"), `#!/bin/sh\necho "curl $*" >> "$HOME/said"\nwhile [ $# -gt 1 ]; do\n  case "$1" in */releases/node/*) node=yes ;; esac\n  [ "$1" = -o ] && { [ -n "\${node:-}" ] && cp "${join(m.root, "node.tar.gz")}" "$2" || cp "${join(m.root, "release.tar.gz")}" "$2"; }\n  shift\ndone\n`, { mode: 0o755 });
+    const told = { STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_RELEASE_SHA256: sha256Of(join(m.root, "release.tar.gz")) };
+    const bundled = bundledInstallScript("zh");
+
+    const bad = m.run([], { ...told, STILLFAIL_NODE_SHA256: "0".repeat(64) }, bundled);
+    assert.equal(bad.status, 1, bad.out);
+    assert.match(bad.out, /Node 24\.21\.0 校验失败/);
+    assert.ok(!existsSync(join(data, "node", "v24.21.0")) && !existsSync(join(data, "node", "v24.21.0.part")));
+    // No .sha256 asked for: the signed hash is the binary's own.
+    assert.doesNotMatch(bad.said, /\.sha256/);
+
+    // A machine's own node of that version that is not that very binary is not taken.
+    const ownBin = join(m.root, "own");
+    mkdirSync(ownBin);
+    writeFileSync(join(ownBin, "node"), '#!/bin/sh\n# another build\necho v24.21.0\n', { mode: 0o755 });
+    const good = m.run([], { ...told, STILLFAIL_NODE_SHA256: sha256Of(join(dist, "bin", "node")), PATH: `${stub}:${ownBin}:/usr/bin:/bin:/usr/sbin:/sbin` }, bundled);
+    assert.equal(good.status, 0, good.out);
+    assert.equal(readFileSync(join(data, "node", "v24.21.0", "bin", "node"), "utf8"), readFileSync(join(dist, "bin", "node"), "utf8"));
+    assert.match(good.said, /curl .*\/releases\/node\/node-v24\.21\.0-darwin-arm64\.tar\.gz/);
   } finally {
     m.done();
   }

@@ -1,7 +1,7 @@
 // What changed between two values of a topic, as a few ops (delta.rs), so a long transcript that grew by one message
 // goes out as one `append`. Objects are compared key by key (in the order serde_json keeps them: sorted), an array
 // that only grew is an `append`, one of the same length is compared item by item, anything else is `set` whole.
-import { compareKeys, equal, isObject, toJson, utf8 } from "./util.ts";
+import { compareKeys, equal, isObject } from "./util.ts";
 
 export type Segment = string | number;
 export type Op = { path: Segment[]; set: unknown } | { path: Segment[]; append: unknown[] } | { path: Segment[]; remove: true };
@@ -16,15 +16,22 @@ export function diff(old: unknown, next: unknown): Op[] {
 function diffAt(path: Segment[], old: unknown, next: unknown, ops: Op[]): void {
   if (old === next) return;
   if (isObject(old) && isObject(next)) {
-    for (const key of Object.keys(next).sort(compareKeys)) {
+    // Only the keys that may differ are put in order (serde's): the rest are the same value, no ops; sorting every
+    // object's keys on every change was much of what the core did on a phone (2026-10-19).
+    const has = Object.prototype.hasOwnProperty;
+    const changed: string[] = [];
+    for (const key of Object.keys(next)) if (!has.call(old, key) || old[key] !== next[key]) changed.push(key);
+    if (changed.length > 1) changed.sort(compareKeys);
+    for (const key of changed) {
       path.push(key);
-      if (Object.prototype.hasOwnProperty.call(old, key)) diffAt(path, old[key], next[key], ops);
+      if (has.call(old, key)) diffAt(path, old[key], next[key], ops);
       else ops.push({ path: [...path], set: next[key] });
       path.pop();
     }
-    for (const key of Object.keys(old).sort(compareKeys)) {
-      if (!Object.prototype.hasOwnProperty.call(next, key)) ops.push({ path: [...path, key], remove: true });
-    }
+    const gone: string[] = [];
+    for (const key of Object.keys(old)) if (!has.call(next, key)) gone.push(key);
+    if (gone.length > 1) gone.sort(compareKeys);
+    for (const key of gone) ops.push({ path: [...path, key], remove: true });
     return;
   }
   if (Array.isArray(old) && Array.isArray(next)) {
@@ -84,7 +91,77 @@ function place(root: Record<string, unknown>, path: Segment[], make: boolean): {
   return null;
 }
 
-/// Whether `ops` take more bytes as JSON than `value` itself: then the value is sent whole.
+/// Whether `ops` take more bytes as JSON than `value` itself: then the value is sent whole. Counted, not written out:
+/// writing the whole value as sorted JSON and encoding it, on every change of a topic, was much of what the core did on
+/// a phone (2026-10-19); the value is counted only as far as the ops' size.
 export function largerThan(ops: Op[], value: unknown): boolean {
-  return utf8(toJson(ops)).length >= utf8(toJson(value)).length;
+  const size = jsonLength(ops);
+  return jsonLength(value, size) <= size;
+}
+
+const PAST = Symbol("past");
+
+/// How many bytes `v` takes as JSON in UTF-8 (`utf8(toJson(v)).length`: the order of its keys changes nothing), or
+/// some number above `limit` once it is past it.
+export function jsonLength(v: unknown, limit = Number.POSITIVE_INFINITY): number {
+  let n = 0;
+  const add = (k: number): void => {
+    n += k;
+    if (n > limit) throw PAST;
+  };
+  const go = (x: unknown, inList: boolean): void => {
+    if (x === null) return add(4);
+    switch (typeof x) {
+      case "string":
+        return add(utf8Length(JSON.stringify(x)));
+      case "number":
+        return add(JSON.stringify(x).length);
+      case "boolean":
+        return add(x ? 4 : 5);
+      case "object":
+        break;
+      default:
+        // undefined, a function: null in a list, left out of an object (JSON.stringify's rules).
+        if (inList) add(4);
+        return;
+    }
+    const o = x as { toJSON?: () => unknown };
+    if (typeof o.toJSON === "function") return go(o.toJSON(), inList);
+    if (Array.isArray(x)) {
+      add(2 + Math.max(0, x.length - 1));
+      for (const item of x) go(item, true);
+      return;
+    }
+    add(2);
+    let first = true;
+    for (const k of Object.keys(x)) {
+      const item = (x as Record<string, unknown>)[k];
+      if (item === undefined || typeof item === "function" || typeof item === "symbol") continue;
+      add((first ? 0 : 1) + utf8Length(JSON.stringify(k)) + 1);
+      first = false;
+      go(item, false);
+    }
+  };
+  try {
+    go(v, false);
+  } catch (e) {
+    if (e === PAST) return n;
+    throw e;
+  }
+  return n;
+}
+
+/// A string's length in UTF-8, as TextEncoder makes it (a lone surrogate is U+FFFD, three bytes).
+function utf8Length(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length && (s.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
 }

@@ -8,12 +8,20 @@
 #   stillfail status                                    where the station is: its workspace and cloud, whether it is
 #                                                       online, and why it does no work when it does none
 #   stillfail update [--beta|--stable]                  updates this station to its cloud's latest release, on its
-#                                                       channel (stable, or the test channel's); --beta/--stable puts
-#                                                       it on that channel first (back to the stable release even when
-#                                                       that is older than the beta it runs)
-#   stillfail station enroll <cloud-origin> <token> [--provider comma]
-#                                                       joins a workspace in still.fail cloud (or in Comma)
+#                                                       channel (stable, or the test channel's), once its signature
+#                                                       verifies; --beta/--stable puts it on that channel first (back to
+#                                                       the stable release even when that is older than the beta it runs)
+#   stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay]
+#                                                       joins a workspace in still.fail cloud (or in Comma), leaving
+#                                                       those it is in; --join stays in them, --stay too when it is in
+#                                                       one (docs/multi-workspace.md); --lock pins that workspace lock
+#                                                       (docs/workspace-lock.md)
 #   stillfail station id
+#   stillfail lock status|reset                         the workspace lock on this station: what is pinned, or taking
+#                                                       it away (when every device that could sign is lost)
+#   stillfail heap                                      a heap snapshot of the running station's main thread, written
+#                                                       to <data>/run (only the latest kept; it holds the station's
+#                                                       tokens): what its memory holds, for Chrome's DevTools
 # The data is in $STILLFAIL_DATA (else $EMBER_DATA), default ~/.stillfail; ~/.ember is the old default, which the
 # station moves there on its first start (the Rust station's former.rs).
 set -eu
@@ -26,30 +34,32 @@ station=${STILLFAIL_STATION_BIN:-${EMBER_STATION_BIN:-$here/mesh/target/release/
 case "${1:-} ${2:-}" in
   "start "*) shift; exec "$station" run --app "$here" --data "$data" "$@" ;;
   "update "*)
-    # From the cloud the station is in (its installer, without a token, updates). Before the station first ran,
-    # its data may still be at the old place.
-    cloud="$data/mesh/cloud.json"
-    [ -f "$cloud" ] || cloud="$HOME/.ember/mesh/cloud.json"
-    origin=$(sed -n 's/.*"origin": *"\([^"]*\)".*/\1/p' "$cloud" 2>/dev/null | head -1)
-    [ -n "$origin" ] || { echo "这台 station 还没有加入 workspace，无从更新" >&2; exit 1; }
-    # Comma keeps its station releases and installer under /stations (cloud.json's provider).
-    grep -q '"provider": *"comma"' "$cloud" 2>/dev/null && origin="$origin/stations"
-    # Its channel, set first when named (the station's last line says it); a station that cannot say (a clone not
-    # built) takes the stable one.
-    case "${2:-}" in
-      --beta) set -- beta ;;
-      --stable) set -- stable ;;
-      "") set -- ;;
-      *) echo "usage: stillfail update [--beta|--stable]" >&2; exit 2 ;;
-    esac
-    channel=$("$station" channel "$@" --app "$here" --data "$data" 2>/dev/null | tail -n 1) || true
-    case "$channel" in
-      stable|beta) ;;
-      *) [ $# -eq 0 ] || { echo "没能把 station 设成 $1 渠道" >&2; exit 1; }; channel=stable ;;
-    esac
-    curl -fsSL "$origin/install.sh" | STILLFAIL_CHANNEL="$channel" sh ;;
+    # The channel's latest release, verified by this release's Node (the station's `update`: its signature, newer than
+    # this one) and installed by the installer this release carries, told what it must hash to
+    # (docs/release-signing.md). Not the cloud's installer: whoever serves it could put anything here.
+    node=${STILLFAIL_NODE:-$here/node/bin/node}
+    [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail update: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
+    case "${2:-}" in --beta|--stable|"") ;; *) echo "usage: stillfail update [--beta|--stable]" >&2; exit 2 ;; esac
+    shift
+    plan=$("$node" "$here/station/main.js" update "$@" --app "$here" --data "$data") || exit $?
+    script=""
+    while IFS='=' read -r key value; do
+      case $key in
+        script) script=$value ;;
+        STILLFAIL_ORIGIN|STILLFAIL_CHANNEL|STILLFAIL_RELEASE_SHA256|STILLFAIL_NODE_SHA256|STILLFAIL_INSTALL_LANG) export "$key=$value" ;;
+      esac
+    done <<PLAN
+$plan
+PLAN
+    [ -n "$script" ] || { echo "stillfail update: no installer to run" >&2; exit 1; }
+    STILLFAIL_DATA=$data exec sh "$script" ;;
   "station enroll") shift 2; exec "$station" enroll "$@" --data "$data" ;;
   "status "*|"station status") exec "$station" status --data "$data" ;;
   "station id") exec "$station" id --data "$data" ;;
-  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] | stillfail station id" >&2; exit 2 ;;
+  "lock status"|"lock reset") exec "$station" lock "$2" --data "$data" ;;
+  "heap "*)
+    node=${STILLFAIL_NODE:-$here/node/bin/node}
+    [ -x "$node" ] && [ -f "$here/station/main.js" ] || { echo "stillfail heap: $here is not an installed release (no node/bin/node or station/main.js)" >&2; exit 1; }
+    exec "$node" "$here/station/main.js" heap --data "$data" ;;
+  *) echo "usage: stillfail start [--port N] | stillfail status | stillfail update [--beta|--stable] | stillfail station enroll <cloud-origin> <token> [--provider comma] [--lock <hash>] [--join | --stay] | stillfail station id | stillfail lock status|reset | stillfail heap" >&2; exit 2 ;;
 esac

@@ -1,24 +1,32 @@
 // The one way a model is chosen, wherever it is: the model, the runtime (where it can still change, and the model runs
 // on more than one), how hard it thinks, and who runs it (the station's pick, or one profile kept to). One panel, from
 // one control that shows them together. Picks there are a draft until 确定; a panel closed otherwise changes nothing.
-import { ChevronDown, ChevronRight } from "./icons.tsx";
+import { Check, ChevronDown, ChevronRight, Search } from "@stillfail/ui/icons.tsx";
 import { Popover } from "radix-ui";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ModelOption } from "./api.ts";
 import type { Picking } from "./pick.ts";
 import { QuotaBars } from "./components.tsx";
 import { RUNTIME_LABEL } from "./format.ts";
-import { ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { Button, Dialog, ModelLogo, ProviderLogo, RuntimeLogo, Tip } from "./ui.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./ModelTriple.css.ts";
 import * as css2 from "./ModelTriple.css.ts";
-import * as chatCss from "./styles/chat.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 import { DoingShown } from "./DoingMark.tsx";
+import { StationMark } from "./StationMark.tsx";
 import { t } from "./i18n.ts";
 
 /** What the control leaves out, in turn, as its room narrows: the account first (its name, then all of it), the runtime, the effort. Never the model. */
 const DROPS = ["", "name", "name account", "name account runtime", "name account runtime effort"];
+
+/** An effort as it is said (low → 低 / Low); one the words do not know, as it is spelled, its first letter up. */
+export function effortText(effort: string): string {
+  const key = `web-main.model.effortLevel.${effort}`;
+  const said = t(key);
+  return said !== key ? said : effort.charAt(0).toUpperCase() + effort.slice(1);
+}
 
 /** The option a model is, however it is spelled (openai/gpt-6-astra is gpt-6-astra). */
 export function optionOf<O extends { model: string; ids?: string[] }>(options: O[], model: string | null | undefined): O | undefined {
@@ -37,6 +45,10 @@ export function modelName(options: { model: string; name?: string; ids?: string[
  */
 export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = false }: { pick: Picking; onConfirm(): void; side?: "top" | "bottom"; modelOnly?: boolean }) {
   const [open, setOpen] = useState(false);
+  // Borrowing the picked model's account from another station: asked again in a dialog of its own (the stations differ).
+  const [asking, setAsking] = useState(false);
+  const [borrowError, setBorrowError] = useState<string | null>(null);
+  const toast = useToast();
   const v = pick.view;
   const options = v?.options ?? [];
   const value = v?.value;
@@ -71,7 +83,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
       trigger.dataset.drop = DROPS[level]!;
       setDrop(level);
     };
-    measure();
+    // Measured as the observer reports, the page laid out by then (its first report comes before the first paint):
+    // measured here, a panel coming in (a history's head has one) laid the whole page out in the middle of its commit.
     const observer = new ResizeObserver(measure);
     observer.observe(room);
     return () => observer.disconnect();
@@ -87,7 +100,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             <>
               <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : t("web-main.model.pick")}</span></span></Tip>
               {!modelOnly && !v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
-              {!modelOnly && <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ?? t("web-main.model.defaultEffort")}</span>}
+              {!modelOnly && <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ? effortText(value.effort) : t("web-main.model.defaultEffort")}</span>}
               {!modelOnly && v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
               {!modelOnly && account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
@@ -100,8 +113,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             </>
           )}
           {/* What was picked on its way: a ring in place of the chevron, not opened again meanwhile; failed, a red mark there a few seconds. */}
-          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} className={css2.tripleSpinner} label={t("web-main.saving")} side="top"
-            idle={<ChevronDown size={12} className={chatCss.chooserChevron} />} />
+          <DoingShown state={{ running: !!pick.saving, error: pick.saveFailed }} inline label={t("common.saving")} side="top"
+            idle={<ChevronDown size={12} className={controlsCss.chooserChevron} />} />
         </Popover.Trigger>
       </span>
       <Popover.Portal>
@@ -109,21 +122,28 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
           {/* The accounts' panel stands beside this one: this one is what it is placed by. */}
           <Popover.Root open={showAccounts} onOpenChange={setShowAccounts}>
           <Popover.Anchor asChild><div>
+          {/* Many models: a filter, across the panel's top. */}
+          {options.length > 8 && (
+            <label className={css2.runPickerSearch}>
+              <Search size={14} />
+              <input placeholder={t("web-main.model.search")} value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
+            </label>
+          )}
           <div className={css2.runPicker}>
             <div className={`${css2.runPickerColumn} ${css2.runPickerModels}`} style={modelsWidth === null ? undefined : { width: modelsWidth }}
               ref={(el) => { if (el && modelsWidth === null) setModelsWidth(Math.ceil(parseFloat(getComputedStyle(el).width))); }}>
-              <h4>{t("web-main.model.models")}</h4>
-              {/* Many models: a filter; the models by series. */}
-              {options.length > 8 && (
-                <input className={`${controlsCss.input} ${css2.runPickerFilter}`} placeholder={t("web-main.model.search")} value={filter} onChange={(e) => setFilter(e.target.value)} autoFocus />
-              )}
+              {options.length <= 8 && <h4>{t("web-main.model.models")}</h4>}
               {groups.map(([who, list]) => (
                 <div key={who} className={`${css2.runPickerGroup} ${css.series}`}>
                   {groups.length > 1 && <h5>{who}</h5>}
                   {list.map((o) => (
-                    <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={v.option === o.model} onClick={() => pick.set({ model: o.model })}>
+                    <Tip key={o.model} label={o.ids.join("\n")}><button type="button" className={css2.runPickerOption} aria-pressed={v.option === o.model} data-availability={o.availability} onClick={() => pick.set({ model: o.model })}>
                       <ModelLogo maker={o.maker} runtime={o.runtimes[0] ?? value.runtime} size={14} />
                       <span className={css2.runOptionText}><span className={css2.runOptionName}>{o.name}</span>{o.spent && <span className={css2.runPickerSpent}>{o.spent.text}</span>}</span>
+                      {/* Another station's, on the same line: where it comes from (borrowed), or where it is (not usable here till borrowed). */}
+                      {o.fromStation && <span className={css2.runOptionFrom} title={o.fromText} aria-label={o.fromText}>
+                        {o.fromStation.icon || o.fromStation.emoji ? <StationMark emoji={o.fromStation.emoji} icon={o.fromStation.icon} size={14} /> : o.fromStation.name}</span>}
+                      <Check size={14} className={css2.runCheck} />
                     </button></Tip>
                   ))}
                 </div>
@@ -135,7 +155,7 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                 <h4>{t("web-main.model.runtime")}</h4>
                 {v.runtimes.map((r) => (
                   <button key={r} type="button" className={css2.runPickerOption} aria-pressed={draft.runtime === r} onClick={() => pick.set({ runtime: r })}>
-                    <RuntimeLogo runtime={r} size={14} />{RUNTIME_LABEL[r]}
+                    <RuntimeLogo runtime={r} size={14} />{RUNTIME_LABEL[r]}<Check size={14} className={css2.runCheck} />
                   </button>
                 ))}
               </div>
@@ -143,33 +163,40 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             {!modelOnly && <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
               <h4>{t("web-main.model.effort")}</h4>
               {[null, ...v.efforts].map((e) => (
-                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ?? t("web-main.model.default")}</button>
+                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ? effortText(e) : t("web-main.model.default")}<Check size={14} className={css2.runCheck} /></button>
               ))}
               {v.fastAvailable && <>
                 <h4>{t("web-main.model.speed")}</h4>
                 {([null, false, true] as const).map((fast) => (
-                  <Tip key={String(fast)} label={fast === true ? t("web-main.model.fastNote") : null}><button type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? t("web-main.model.fastSubscription") : fast ? "Fast" : t("web-main.model.standard")}</button></Tip>
+                  <Tip key={String(fast)} label={fast === true ? t("web-main.model.fastNote") : null}><button type="button" className={css2.runPickerOption} aria-pressed={(draft.fast ?? null) === fast} onClick={() => pick.set({ fast })}>{fast === null ? t("web-main.model.fastSubscription") : fast ? "Fast" : t("web-main.model.standard")}<Check size={14} className={css2.runCheck} /></button></Tip>
                 ))}
               </>}
             </div>}
           </div>
+          {/* The model picked is another station's: said so over the foot, which borrows it rather than confirming. */}
+          {v.borrow && <p className={css2.runPickerBorrow}>{v.borrow.allowed ? v.borrow.note : v.borrow.why ?? v.borrow.note}</p>}
           <div className={css2.runPickerFoot}>
               {/* In the room the columns leave: a long name is cut short rather than widening the panel. */}
               {!modelOnly && <span className={css2.runPickerWhoRoom}><Popover.Trigger className={css2.runPickerWho} data-level={v.whoLevel}>
                 {/* Short, in the room it has: the account kept to by its name before the @; amber says the station's pick runs low, or the one kept to gave way (its panel says which). */}
-                <span className={css2.runOptionName}>{v.who}</span>
+                <span className={css2.runPickerWhoLead}>{t("web-main.model.account")}</span>
+                {/* The station's pick (no profile kept to): 自动; else the account kept to, by its name before the @. */}
+                <span className={css2.runOptionName}>{draft.profile ? v.who : t("web-main.model.auto")}</span>
                 <ChevronRight size={12} className={css2.runPickerWhoChevron} />
               </Popover.Trigger></span>}
             {/* Not a Popover.Close: within the accounts' Root, that would close theirs. */}
-            <button type="button" className={`${controlsCss.btn} ${controlsCss.btnGhost} ${css2.btnSm}`} onClick={() => setOpen(false)}>{t("common.cancel")}</button>
-            {/* Nothing changed: it says so, and only closes. */}
-            <button type="button" className={v.changed ? `${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}` : `${controlsCss.btn} btn-secondary ${css2.btnSm}`} disabled={!v.option}
-              onClick={() => { setOpen(false); if (v.changed) onConfirm(); }}>{v.changed ? t("common.confirm") : t("web-main.model.unchanged")}</button>
+            <button type="button" className={`${controlsCss.btn} ${css2.btnSm}`} onClick={() => setOpen(false)}>{t("common.cancel")}</button>
+            {/* Nothing changed: there is nothing to confirm (取消, or a click outside, closes). */}
+            {v.borrow
+              ? <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}`} disabled={!v.borrow.allowed || !pick.borrow}
+                onClick={() => { setOpen(false); setBorrowError(null); setAsking(true); }}>{v.borrow.action}</button>
+              : <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary} ${css2.btnSm}`} disabled={!v.option || !v.changed}
+                onClick={() => { setOpen(false); onConfirm(); }}>{t("common.confirm")}</button>}
           </div>
           </div></Popover.Anchor>
               <Popover.Portal>
                 {/* The accounts: a panel beside this one, its foot on this one's foot. */}
-                <Popover.Content className={`${controlsCss.popover} ${css2.runPickerPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
+                <Popover.Content className={`${controlsCss.popover} ${css2.runPickerAccountsPanel} ${css2.runPickerAccounts}`} side="right" align="end" sideOffset={14} alignOffset={-6} collisionPadding={8}
                   onOpenAutoFocus={(e) => e.preventDefault()}>
                   <h4>{t("web-main.model.account")}</h4>
                   {v.dropped && <p className={css2.runPickerNote}>{v.dropped}</p>}
@@ -188,6 +215,17 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
           </Popover.Root>
         </Popover.Content>
       </Popover.Portal>
+      {v.borrow && (
+        <Dialog open={asking} onClose={() => setAsking(false)} title={v.borrow.title}
+          footer={<>
+            <Button variant="ghost" onClick={() => setAsking(false)}>{t("common.cancel")}</Button>
+            <Button variant="primary" busy={!!pick.borrowing} disabled={!v.borrow.allowed}
+              onClick={() => { void pick.borrow?.().then(() => { setAsking(false); toast(t("web-main.model.borrowed")); }, (e: unknown) => setBorrowError(failure(e))); }}>{v.borrow.action}</Button>
+          </>}>
+          {v.borrow.lines.map((line, i) => <p key={i} className={css2.borrowLine}>{line}</p>)}
+          {borrowError && <p className={controlsCss.fieldError} role="alert">{borrowError}</p>}
+        </Dialog>
+      )}
     </Popover.Root>
   );
 }

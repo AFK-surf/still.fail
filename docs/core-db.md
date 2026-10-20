@@ -49,12 +49,16 @@ instead.
 | `meta` | key | — | the account, when what came before was imported |
 | `said` (+ `said_index`, FTS5 trigram) | id; station, thread, seq | n, at, text | each message's latest words, kept by triggers on `entry` (`ensureSaid`): what ⌘K's search finds |
 | `log_use` | kind, station, id | opened, evicted | when a log's chat was last opened here, whether its items were let go for room (`ensureKept`) |
+| `file_kept` | station, session, name, kind (`thumb`, `poster`) | type, size, used; `bytes` (base64: they are small, and given beside the answer) | an image's thumbnail and a video's poster as the station sent them (`station.file` with `thumb`, `station.poster`): a file sent never changes, and a chat opened again shows them without reading them again (`ensureFilesKept`) |
 
-`said` and `log_use` are made where missing at every open, not by a migration (the version stays, so an older core
-still writes the database; `said`'s triggers keep it current under it too). The room an account's database takes is
-kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown, least recently used first (opened here,
-or last active), transcripts before entries, go down to 80% of it, their words with them; a log let go is not synced
-again until its chat is opened.
+`said` and `log_use` are made where missing at every open, `file_kept` as the first file is kept, not by a migration
+(the version stays, so an older core still writes the database; `said`'s triggers keep it current under it too). The
+room an account's database takes is kept within `KEPT` (data.ts, 256 MB): past it, the items of the logs not shown,
+least recently used first (opened here, or last active), transcripts before entries, go down to 80% of it, their words
+with them; a log let go is not synced again until its chat is opened. `file_kept` has room of its own (account.ts
+`FILES_KEPT`, 64 MB of base64, none over 1 MB): past it, the least lately shown go down to 80% of it (when one was
+shown is noted at most once a day, as noting it writes its row again); they count with their session's first chat in
+`cache.usage` and go with it in `cache.clear`.
 
 Indexes: `chat (archived, pinned_at DESC, last_active DESC)` (a list's first screen across stations), by thread, by
 session, the rows at work (`running`), those that ask something or are unread (`tone`/`asks`), those the 奏 page
@@ -100,7 +104,12 @@ There is one writer by construction:
   relay their page's messages over a BroadcastChannel to it and what it says back (each holds a lock of its own, which
   tells the core when a tab is gone). When the tab running the core goes, its lock goes to a waiting worker, which
   starts the core from the same databases; every page subscribes again (`{rejoin: true}`; calls in flight fail as
-  when a worker restarts). SQLite's module is loaded by that worker alone.
+  when a worker restarts). SQLite's module is loaded by that worker alone. A page's worker ends as the page leaves
+  (`pagehide`; a new one if it comes back from the back/forward cache), and the app's pages are served `no-store`, so
+  no worker sits frozen in that cache holding the lock (an iOS home-screen app coming back from Google's sign-in waited
+  on one for good). A worker holding the lock answers a starting worker's `hello` at once, its core started or not; one
+  silent for 3 s has the lock taken from it (`steal`), and on waking it ends and its page starts a worker that follows.
+  If it still held the OPFS handles, the new core's databases are in memory for that run (said by `status`).
 
 A database that cannot be opened (another process holds it) is one in memory for this run, said by `status`
 (`core-logic.status.db.busy`).

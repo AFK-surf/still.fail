@@ -11,9 +11,11 @@ import fail.still.android.data.Host
 import fail.still.android.data.Link
 import fail.still.android.data.Memory
 import fail.still.android.data.Meter
+import fail.still.android.data.HostDetail
 import fail.still.android.data.NetFigure
 import fail.still.android.data.StationNet
 import fail.still.android.data.StationView
+import fail.still.android.data.StationWay
 import fail.still.android.data.Topics
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -27,15 +29,22 @@ class StationsLayoutTest {
         hostname = "h", os = "macOS", arch = "arm64", cpus = 10, cpuModel = "Apple M2", load = 0.2, uptimeSec = 1e5,
         memory = Memory(32L shl 30, 12L shl 30), disk = Disk("/", 500L shl 30, 200L shl 30), emberRssBytes = 1, checkedAt = 1,
         summary = "", line = "", facts = emptyList(), usage = "", emberText = "",
-        meters = listOf(Meter("CPU", "C", 20, "ok", "20%"), Meter("内存", "M", 40, "ok", "40%"), Meter("磁盘", "D", 60, "ok", "60%")),
+        meters = listOf(Meter(label = "CPU", short = "CPU", percent = 20, left = 80, level = "ok", value = "20%", remaining = "空闲 80%", big = "80", unit = "%", title = "CPU 空闲", total = "负载 2.0"), Meter(label = "内存", short = "内存", percent = 40, left = 60, level = "ok", value = "40%", remaining = "剩 19.2 G", big = "19.2", unit = "GB", title = "内存剩", total = "共 32 GB"), Meter(label = "磁盘", short = "磁盘", percent = 60, left = 40, level = "ok", value = "60%", remaining = "剩 200.0 G", big = "200", unit = "GB", title = "磁盘剩", total = "共 500 GB")),
+        identity = "Apple M2 · 32 GB · macOS", details = listOf(HostDetail("主机名", "h"), HostDetail("芯片", "Apple M2 · 10 核 · arm64"), HostDetail("已运行", "1 天 3 小时"), HostDetail("still.fail", "进程占用 38 MB")),
     )
     private val net = StationNet(path = "直连", rtt = NetFigure("12 ms", "ok"), rttHistory = emptyList(), down = "1.2 MB/s", up = "30 KB/s", total = "", downTotal = "212 MB", upTotal = "9.6 MB")
 
     private fun station(name: String, online: Boolean, read: Boolean = true, reconnecting: Boolean = false) = StationView(
         station = "${Fixtures.WS}/$name", id = name, name = name, summary = if (online) "10 核 · 32 GB" else "3 小时前离线",
         face = if (online) "idle" else "offline", online = online, link = Link(if (online) "online" else "offline"),
-        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, net = if (online && read) net else null, reconnecting = reconnecting,
+        runtimes = emptyList(), models = emptyList(), host = if (online && read) host else null, way = if (online && read) StationWay(path = net.path) else null, reconnecting = reconnecting,
     )
+
+    /** The stations' list, and each station's connection with its figures as its card follows it (`stationNet`). */
+    private fun show(h: Harness, list: List<StationView>) {
+        h.fake.put(Topics.stations(Fixtures.WS), list)
+        list.forEach { h.fake.put<StationNet?>(Topics.stationNet(it.station), if (it.host != null) net else null) }
+    }
 
     @Test fun states() {
         val h = Harness(rule)
@@ -47,7 +56,7 @@ class StationsLayoutTest {
             "reconnecting" to listOf(station("studio", true, reconnecting = true), station("mini", true, read = false, reconnecting = true), station("air", true)),
         )
         val tops = shown.map { (name, list) ->
-            rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), list) }
+            rule.runOnUiThread { show(h, list) }
             h.settle()
             h.record(name).end()
             list.map { rule.onNodeWithText(it.name).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
@@ -63,10 +72,10 @@ class StationsLayoutTest {
     private fun looks(dark: Boolean) {
         val h = Harness(rule)
         h.launch(listOf(Screen.Stations), dark)
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
+        rule.runOnUiThread { show(h, listOf(station("studio", true), station("mini", false), station("air", true, read = false))) }
         h.settle()
         h.record("look-${if (dark) "dark" else "light"}").end()
-        rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(station("studio", true, reconnecting = true), station("mini", false), station("air", true))) }
+        rule.runOnUiThread { show(h, listOf(station("studio", true, reconnecting = true), station("mini", false), station("air", true))) }
         h.settle()
         h.record("reconnecting-${if (dark) "dark" else "light"}").end()
         rule.runOnUiThread { h.app.push(Screen.Station("${Fixtures.WS}/studio")) }
@@ -84,10 +93,10 @@ class StationsLayoutTest {
             "page-reconnecting" to station("studio", true, reconnecting = true),
         )
         val tops = shown.map { (name, st) ->
-            rule.runOnUiThread { h.fake.put(Topics.stations(Fixtures.WS), listOf(st)) }
+            rule.runOnUiThread { show(h, listOf(st)) }
             h.settle()
             h.record(name).end()
-            listOf("在这台上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
+            listOf("在此 station 上").map { rule.onNodeWithText(it).getBoundsInRoot().top }.also { Log.i("motion", "$name: $it") }
         }
         tops.drop(1).forEach { assertEquals(tops[0], it) }
     }

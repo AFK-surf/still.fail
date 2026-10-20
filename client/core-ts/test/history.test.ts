@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as format from "../src/format.ts";
-import { args, hint, parsePrompt, presentHistory, type Context } from "../src/history.ts";
+import { args, doing } from "../src/activity.ts";
+import { hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
 
 holdLanguage();
@@ -37,15 +38,104 @@ test("a_slack_place_is_named_with_its_workspace_and_links_to_its_thread", () => 
   assert.deepEqual([unknown.name, unknown.url], ["#C9", null]);
 });
 
+test("a_feishu_place_is_named_by_its_chat_and_opens_in_feishu_or_lark", () => {
+  const threads = [
+    { surface: "feishu:codex-bot", channel: "oc_a1b2", threadTs: "om_x1", channelName: "产品群", createdAt: 1_790_000_000_000, sessions: [{ session: "s1" }] },
+    { surface: "feishu:lark-bot", channel: "oc_c3", threadTs: "omt_t9", sessions: [] },
+  ];
+  const workspaces = new Map([
+    ["T1", { name: "Acme", url: "https://acme.slack.com/" }],
+    ["feishu:lark-bot", { name: "Co", url: format.feishuApplink("lark") }],
+  ]);
+  assert.deepEqual(format.splitThread("oc_a1b2/om_x1"), ["oc_a1b2", "om_x1"]);
+  assert.deepEqual(format.splitThread("oc_a1b2/omt_t9"), ["oc_a1b2", "omt_t9"]);
+  assert.equal(format.splitThread("oc_a1b2/om x"), null);
+  const p = format.place(threads, "oc_a1b2/om_x1", 480, workspaces) as J;
+  assert.deepEqual([p.name, p.surface, p.session, p.url], ["产品群", "feishu", "s1", "https://applink.feishu.cn/client/chat/open?openChatId=oc_a1b2"]);
+  const lark = format.place(threads, "oc_c3/omt_t9", 480, workspaces) as J;
+  assert.deepEqual([lark.name, lark.surface, lark.url], ["飞书对话", "feishu", "https://applink.larksuite.com/client/chat/open?openChatId=oc_c3"]);
+  // Begun when its thread was made (its ts is a message's id, not a time).
+  assert.equal(format.threadName(threads, "oc_a1b2", "om_x1", 480)[1], format.threadName([{ channel: "C1", threadTs: "1790000000" }], "C1", "1790000000", 480)[1]);
+});
+
+test("a_feishu_person_is_heard_as_a_slack_one_is", () => {
+  const [said] = parsePrompt('<message via="feishu" connect="codex-bot" thread="oc_a1/om_1" from="Ada (slack:codex-bot:ou_1)" user="slack:codex-bot:ou_1" ts="om_2">\nhi\n</message>');
+  assert.deepEqual([said.length, said[0].slack, said[0].text], [1, true, "hi"]);
+});
+
 test("a_prompt_is_the_messages_it_carried_and_embers_words_around_them", () => {
   const [said] = parsePrompt('<message via="slack" connect="cl" you="ember (<@UBOT>)" thread="C1/1.0" from="Ada (U1)" ts="1.2">\nhi\n</message>');
   assert.deepEqual([said.length, said[0].user, said[0].ts, said[0].text], [1, "U1", "1.2", "hi"]);
   const [messages, note] = parsePrompt('Heads up.\n<message via="slack" from="Ada &amp; Co (U1)" ts="1.2" thread="C1/1.0">\nhi <@UBOT>\n</message>\n(Thread C1/1.0 had messages before you were brought in; read them.)');
   assert.equal(note, "Heads up.");
-  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true }]);
+  assert.deepEqual(messages, [{ user: "U1", name: "Ada & Co", ts: "1.2", text: "hi <@UBOT>", thread: "C1/1.0", slack: true, station: false }]);
   const [old] = parsePrompt('<slack user="U2" bot ts="3.4">\nyo\n</slack>');
   assert.equal(old[0].user, "U2");
   assert.equal(old[0].text, "yo");
+});
+
+test("a_message_the_station_cut_short_is_still_read_as_one", () => {
+  const cut = '<message via="ember" from="ember" ts="9.1">\nRemote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)';
+  const [messages, note] = parsePrompt(cut);
+  assert.equal(note, "");
+  assert.deepEqual(
+    messages.map((m) => [m.station, m.text]),
+    [[true, 'Remote task t1 on mini1: {"job":{"state":"done"\n… (1505 more characters)']],
+  );
+  // Words not cut by the station and missing their closing tag are not a message.
+  assert.equal(parsePrompt('<message via="ember" from="ember" ts="9.1">\nhi')[0].length, 0);
+});
+
+test("a_station_notice_is_a_jobs_words_or_an_event_in_a_line", () => {
+  const said = "OVER BUDGET: run 1 took 301 s\n\njobs:\n  +   0 s    13 s  plan";
+  const notices = [
+    `Job "ci-time-watch" (job_2b767635) says: ${said}`,
+    'Service "web" (job_1, port 5173) says: up',
+    'Job "shot" (job_2) ended with exit code 1.\nIts last lines:\n```\nboom\n```',
+    'Service "web" (job_1, port 5173) ended with a signal; the station starts it again in 2 s.',
+    'Job "shot" (job_2) was stopped by Ada from still.fail\'s page.',
+    'The station restarted; Job "shot" (job_2) could not be started again: no such file',
+    'The chat you opened, "Fix CI" (https://still.fail/chats/c-1), needs a person: pick one. They are asked there; help if you can, or wait. Read it with chat_read; write to its agent with session_send to its link.',
+    'Remote task t1 on mini1: {"job":{"state":"running"}}',
+  ];
+  const text = notices.map((n) => `<message via="ember" from="ember" ts="9.1">\n${n}\n</message>`).join("\n");
+  assert.equal(parsePrompt(text)[0][0].station, true);
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text }] }, cx([], [], []));
+  const { tasks, messages } = h.items[0].body.content;
+  assert.deepEqual(messages.map((m: J) => [m.key, m.notice, m.from.name, m.text]), [
+    ["9.1.0", "job", "ci-time-watch", said],
+    ["9.1.1", "job", "web", "up"],
+    ["9.1.7", "stillfail", "still.fail", notices[7]],
+  ]);
+  assert.deepEqual(tasks.map((x: J) => [x.text, x.agent, x.failed, x.result]), [
+    ["任务已退出（退出码 1）：shot", false, true, "boom"],
+    ["服务被信号终止，正在重新启动：web", false, true, null],
+    ["任务已被 Ada 停止：shot", false, false, null],
+    ["任务无法重新启动：shot", false, true, "no such file"],
+    ["对话需要你处理：Fix CI", true, false, "pick one"],
+  ]);
+});
+
+test("a_task_notification_is_read_into_how_the_work_ended", () => {
+  const note = (status: string, summary: string, more = "") =>
+    `<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>toolu_1</tool-use-id>\n<output-file>/tmp/b1.output</output-file>\n<status>${status}</status>\n<summary>${summary}</summary>${more}\n</task-notification>`;
+  const [tasks, rest] = parseTasks(
+    `Heads up.\n${note("completed", 'Background command "Push and wait for "CI"" completed (exit code 0)')}\n` +
+      note("failed", 'Background command "Run tests" failed with exit code 2') +
+      note("killed", 'Background command "Watch" was stopped after reaching its background time limit', "\n<note>more</note>") +
+      note("completed", 'Agent "Map it" finished', "\n<note>n</note>\n<result>## Found\n**it**</result>\n<usage>u</usage>"),
+  );
+  assert.equal(rest, "Heads up.");
+  assert.deepEqual(tasks, [
+    { agent: false, name: 'Push and wait for "CI"', status: "completed", code: 0, result: null },
+    { agent: false, name: "Run tests", status: "failed", code: 2, result: null },
+    { agent: false, name: "Watch", status: "killed", code: null, result: null },
+    { agent: true, name: "Map it", status: "completed", code: null, result: "## Found\n**it**" },
+  ]);
+  const h = presentHistory({ loaded: true, timeline: [{ kind: "user", text: note("failed", 'Background command "Run tests" failed with exit code 2') }] }, cx([], [], []));
+  const received = h.items[0].body.content;
+  assert.equal(received.note, null);
+  assert.deepEqual(received.tasks, [{ text: "后台命令失败（退出码 2）：Run tests", agent: false, failed: true, result: null, md: null }]);
 });
 
 test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
@@ -77,6 +167,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.deepEqual([m.from.name, m.text, m.place.name, m.place.session], ["你", "hi @ds-ember", "#ops", "s1"]);
   const g = items[1].body.content;
   assert.equal(g.summary, "看看目录 · 共 3 项");
+  // Named by its latest call as the chat's activity says that call while it runs.
+  assert.equal(presentHistory({ ...live, timeline: live.timeline.slice(0, 5) }, cx(threads, members, slack)).items[1].body.content.summary, `${doing("Read", '{"file_path":"/a.ts"}')} · 共 2 项`);
   assert.equal(g.title, "读取 1 个文件、运行 1 条命令");
   assert.deepEqual([g.failures, g.pending], [1, 1]);
   assert.deepEqual(g.rows.map((r: J) => r.kind), ["thought", "step", "step", "step"]);
@@ -84,10 +176,11 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[1].content.meta, "2 秒");
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
-  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name], [true, "#ops"]);
+  assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "#ops", "human"]);
   assert.equal(items[2].at, 1790467205000);
   assert.equal(items[0].at, null);
-  assert.equal(items[3].body.content.text, "标记为做完了");
+  assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为已完成", "done"]);
+  assert.deepEqual(items[0].turn, { text: "3 步 · 发出 1 条" });
   const waits = (a: string, next: string | null) => {
     const timeline: J[] = [{ kind: "tool_call", tool: "mcp__ember__chat_state", text: a, at: "2026-09-27T00:00:00.000Z" }];
     if (next !== null) timeline.push({ kind: "user", text: '<message via="ember">done</message>', at: next });
@@ -106,14 +199,22 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(h.phase.text, "正在启动 Codex");
   assert.equal(h.usage[4].value, "50%");
   assert.equal(h.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50");
-  assert.equal(h.edge, "已到 Session 开始处");
+  assert.equal(h.edge, "已到会话开头");
+  // A station since tells the context and the cost too.
+  const more = (usage: J) => presentHistory({ ...live, usage: { ...live.usage, ...usage } }, cx(threads, members, slack));
+  const now2 = more({ contextTokens: 86_000, cost: 3.214, unpricedCalls: 0 });
+  assert.deepEqual(now2.usage.slice(5), [{ label: "上下文", value: "86K" }, { label: "费用估算", value: "$3.21" }]);
+  assert.equal(now2.usageLine, "调用 3 次 · 输入 2K（缓存 50%） · 输出 50 · 上下文 86K · 约 $3.21");
+  assert.equal(more({ contextTokens: 86_000, contextWindow: 258_000, cost: 1, unpricedCalls: 1 }).usage[5].value, "86K / 258K（33%）");
+  assert.equal(more({ contextTokens: 1, cost: 1, unpricedCalls: 1 }).usage[6].value, "≥$1.00");
+  assert.equal(more({ contextTokens: 1, cost: 0, unpricedCalls: 3 }).usage[6].value, "该模型无价目");
 });
 
 test("an_empty_history_says_why", () => {
   const edge = (live: J, started: boolean) => presentHistory(live, { ...cx([], [], []), started }).edge;
-  assert.equal(edge({ loaded: false }, true), "正在读取执行历史…");
-  assert.equal(edge({ loaded: true }, false), "运行时还没开始这个会话。");
-  assert.equal(edge({ loaded: true, offline: true }, true), "station 离线，这台设备上还没有这个会话的执行历史。");
+  assert.equal(edge({ loaded: false }, true), "正在读取执行历史");
+  assert.equal(edge({ loaded: true }, false), "运行时尚未开始此会话");
+  assert.equal(edge({ loaded: true, offline: true }, true), "station 离线，此设备上暂无该会话的执行历史");
 });
 
 test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_start", () => {
@@ -128,7 +229,7 @@ test("a_timeline_loaded_from_further_on_counts_entries_from_the_transcripts_star
   };
   const h = presentHistory(live, cx([], [], []));
   assert.deepEqual([h.items[0].key, h.items[1].entries], ["e400", [401, 402]]);
-  assert.deepEqual([h.more, h.edge, h.empty], [true, "正在读取更早的执行历史…", false]);
+  assert.deepEqual([h.more, h.edge, h.empty], [true, "正在读取更早的执行历史", false]);
   assert.equal(presentHistory({ loaded: true, first: 400, timeline: [] }, cx([], [], [])).more, true);
 });
 
@@ -156,4 +257,52 @@ test("a_post_read_from_the_transcript_stands_where_it_was_made", () => {
   const items = presentHistory({ loaded: true, timeline }, cx([], [], [])).items;
   assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "post", "text"]);
   assert.equal(items[1].body.content.text, "done");
+});
+
+test("each_prompt_that_woke_the_agent_begins_a_turn_saying_when_and_what_it_did", () => {
+  const timeline = [
+    { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "z" },
+    { kind: "user", text: '<message via="web" from="Ada (a@x.com)" ts="1.2" thread="EMBER/1.0">\nhi\n</message>', at: "2026-09-27T01:02:00.000Z" },
+    { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "a" },
+    { kind: "tool_result", callId: "a", ok: true, text: "x" },
+    { kind: "user", text: "do this", subagent: true },
+    { kind: "tool_call", tool: "Bash", text: '{"command":"ls"}', callId: "b", subagent: true },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"EMBER/1.0","text":"done","kind":"all_done"}', callId: "p" },
+    { kind: "user", text: "Your turn ended without a state.", at: "2026-09-28T03:00:00.000Z" },
+    { kind: "tool_call", tool: "mcp__stillfail__chat_state", text: '{"kind":"waiting","seconds":60,"for":"CI"}', at: "2026-09-28T03:00:01.000Z" },
+    { kind: "assistant", text: "waiting on CI" },
+  ];
+  const at = (iso: string) => Date.parse(iso);
+  const items = presentHistory({ loaded: true, timeline }, { ...cx([], [], []), now: at("2026-09-28T04:00:00.000Z") }).items;
+  assert.deepEqual(items.map((i: J) => i.body.kind), ["group", "received", "group", "received", "group", "post", "received", "mark", "text"]);
+  // A page that begins mid-turn has no turn for what came before its first prompt; a sub-agent's prompt begins none.
+  assert.deepEqual(items.map((i: J) => i.turn === undefined ? null : i.turn.text), [null, "2 步 · 发出 1 条", null, null, null, null, "未发消息", null, null]);
+  // Said in the viewer's time (UTC+8 here): today's by its clock alone, an earlier day's with its date.
+  assert.deepEqual([items[1].turn.at, items[1].turn.time], [at("2026-09-27T01:02:00.000Z"), "9/27 09:02"]);
+  assert.equal(items[6].turn.time, "11:00");
+  // How each post and mark left the turn.
+  assert.equal(items[5].body.content.ends, "done");
+  assert.equal(items[7].body.content.ends, "waiting");
+  const state = (kind: string) => presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_state", text: `{"kind":"${kind}"}` }] }, cx([], [], [])).items[0].body.content;
+  assert.deepEqual([state("all_done").ends, state("need_human").ends, state("need_human").text, state("odd").ends], ["done", "human", "已暂停，等待人工处理", undefined]);
+  const post = presentHistory({ loaded: true, timeline: [{ kind: "tool_call", tool: "mcp__stillfail__chat_post", text: '{"to":"x","text":"t"}' }] }, cx([], [], [])).items[0].body.content;
+  assert.equal(post.ends, undefined);
+});
+
+test("a_task_on_another_station_says_where_it_runs_and_what", () => {
+  const studio = "d2e33e62a1f88dd30e759c734b6604599a6e4024dbb926b1cd81b99c42da4956";
+  const call = (id: string, a: J) => ({ kind: "tool_call", tool: "mcp__stillfail__station_task", callId: id, text: JSON.stringify({ station: studio, ...a }), at: "2026-10-18T00:00:00Z" });
+  const done = (id: string) => ({ kind: "tool_result", callId: id, ok: true, text: "{}", at: "2026-10-18T00:00:01Z" });
+  const live = {
+    timeline: [
+      { kind: "user", text: "check it" },
+      call("a", { action: "prepare", key: "check", name: "typecheck web", command: "exec 2>&1\npnpm -C web tsc" }),
+      done("a"),
+      call("b", { action: "start", key: "check" }),
+      done("b"),
+    ],
+  };
+  const g = presentHistory(live, { ...cx([], [], []), stations: new Map([[studio, "Studio"]]) }).items[1].body.content;
+  assert.deepEqual(g.rows.map((r: J) => r.content.said), ["在 Studio 上准备 typecheck web", "在 Studio 上运行 typecheck web"]);
+  assert.equal(g.summary, "在 Studio 上运行 typecheck web · 共 2 项");
 });

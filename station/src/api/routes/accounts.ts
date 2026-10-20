@@ -5,12 +5,13 @@ import { type Request, type Answer, error, json, percentDecode } from "../reques
 import type { Route } from "../admin.ts";
 import { type Accounts, Refusal } from "../../accounts/index.ts";
 import type { Sharing } from "../../share/index.ts";
-import type { Viewer } from "../../mesh/credential.ts";
+import { type Viewer, managesStation } from "../../mesh/credential.ts";
 import { tr, type Lang } from "../../ops/i18n.ts";
+import { savePolicy } from "../../sessions/archive-policy.ts";
 
 /// Who may share: a workspace manager.
 function manager(viewer: Viewer, lang: Lang) {
-  if (viewer.role !== "owner" && viewer.role !== "admin") throw new Refusal(403, tr(lang, "station.share.managersOnly"));
+  if (!managesStation(viewer)) throw new Refusal(403, tr(lang, "station.share.managersOnly"));
 }
 
 /// Which stations may use a share: null (every one), or station ids.
@@ -27,6 +28,9 @@ export type AccountsRouteDeps = {
   sharing?: Sharing;
   /// GET /overview's answer for the request's viewer, in its language: what edits answer with.
   overview(r: Request): Promise<unknown> | unknown;
+  /// Where a joined workspace's archive policy is kept (docs/multi-workspace.md: one each), and the review of the done
+  /// chats asked again once it changed. The home workspace's is the accounts'.
+  policies?: { store: Parameters<typeof savePolicy>[0]; review(): void };
 };
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
@@ -51,7 +55,7 @@ function input(r: Request): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Route[] => {
+export const routes = ({ accounts, sharing, overview, policies }: AccountsRouteDeps): Route[] => {
   /// Answered by the accounts, their refusals as `{error}` with their status; 503 while there are none.
   const answer = async (f: (a: Accounts) => Promise<Answer> | Answer): Promise<Answer> => {
     if (accounts === undefined) return error(503, "station starting");
@@ -63,6 +67,21 @@ export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Rout
     }
   };
   const view = async (r: Request) => overview(r);
+  /// The archive policy of the joined workspace the viewer is in, changed by one of its owners or admins.
+  const joinedPolicy = (r: Request) => {
+    if (r.viewer.role !== "owner" && r.viewer.role !== "admin") throw new Refusal(403, tr(r.lang, "station.decisions.managersOnlyPolicy"));
+    if (policies === undefined) throw new Refusal(503, "station starting");
+    let changed: string | null;
+    try {
+      changed = savePolicy(policies.store, input(r), { kind: "person", email: r.viewer.email, name: r.viewer.name || null }, r.viewer.workspace);
+    } catch (e) {
+      if (e instanceof Refusal) throw e;
+      throw new Refusal(400, (e as Error).message);
+    }
+    if (changed !== null) policies.review();
+  };
+  // The station's accounts are every workspace's it is in alike (docs/multi-workspace.md); the archive policy is each
+  // workspace's own.
   const route = (method: string, pattern: RegExp, handle: (r: Request, args: string[]) => Promise<Answer>): Route => ({ method, pattern, handle });
 
   return [
@@ -84,19 +103,26 @@ export const routes = ({ accounts, sharing, overview }: AccountsRouteDeps): Rout
     route("POST", /^\/logins$/, (r) => answer(async (a) => ok(await a.newLogin(input(r), r.viewer, r.lang)))),
     route("PUT", /^\/*automatic-decisions\/*$/, (r) =>
       answer(async (a) => {
-        a.putAutomaticDecisions(input(r), r.viewer);
+        a.putAutomaticDecisions(input(r), r.viewer, r.lang);
+        return ok(await view(r));
+      }),
+    ),
+    route("PUT", /^\/*archiving\/*$/, (r) =>
+      answer(async (a) => {
+        a.putArchiving(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
     ),
     route("PUT", /^\/*automatic-decisions\/+policy\/*$/, (r) =>
       answer(async (a) => {
-        a.putArchivePolicy(input(r), r.viewer);
+        if (r.viewer.home === false) joinedPolicy(r);
+        else a.putArchivePolicy(input(r), r.viewer, r.lang);
         return ok(await view(r));
       }),
     ),
     route("POST", /^\/*automatic-decisions\/+review\/*$/, (r) =>
       answer(async (a) => {
-        const queued = a.reviewUndecided(r.viewer);
+        const queued = a.reviewUndecided(r.viewer, r.lang);
         return ok({ queued, overview: await view(r) });
       }),
     ),

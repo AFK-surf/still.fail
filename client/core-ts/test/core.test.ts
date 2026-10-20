@@ -18,6 +18,9 @@ import { fromBase64, base64, parseJson, toJsonBytes } from "../src/util.ts";
 import { account, apply, call, cloudCore, count, nowS, signIn, stationAnswers, subscribe, v, answers } from "./helpers.ts";
 import { current, tr } from "../src/i18n.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 const code = (f: () => unknown) => {
   try {
     f();
@@ -41,6 +44,9 @@ test("parses_the_client_messages_of_the_protocol", () => {
   assert.deepEqual(parseClientMessage({ id: 4, subscribe: { topic: "chats", scope: "ws" } }), { kind: "subscribe", id: 4, subscribe: { topic: "chats", scope: "ws", mine: false } });
   assert.deepEqual(parseClientMessage({ id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7 } }), { kind: "subscribe", id: 5, subscribe: { topic: "chat", station: "w/s", thread: 7, session: null } });
   assert.deepEqual(parseClientMessage({ id: 6, subscribe: { topic: "chat", station: "w/s", session: "ds:C1:1.0" } }), { kind: "subscribe", id: 6, subscribe: { topic: "chat", station: "w/s", thread: null, session: "ds:C1:1.0" } });
+  // The cards of links in a message (a screen's, a station's 共享调试) are asked for by the UIs as any topic is.
+  assert.deepEqual(parseClientMessage({ id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } }), { kind: "subscribe", id: 8, subscribe: { topic: "screenCard", station: "w/s", screen: "desktop" } });
+  assert.deepEqual(parseClientMessage({ id: 9, subscribe: { topic: "adbCard", station: "w/s" } }), { kind: "subscribe", id: 9, subscribe: { topic: "adbCard", station: "w/s" } });
   assert.deepEqual(parseClientMessage({ id: 8, subscribe: { topic: "session", station: "ws1/st1", key: "k" } }), { kind: "subscribe", id: 8, subscribe: { topic: "session", station: "ws1/st1", key: "k" } });
   assert.deepEqual(parseClientMessage({ id: 2, subscribe: { topic: "accounts" } }), { kind: "subscribe", id: 2, subscribe: { topic: "accounts" } });
   assert.deepEqual(parseClientMessage({ id: 3, subscribe: { topic: "workspace", workspace: "w" } }), { kind: "subscribe", id: 3, subscribe: { topic: "workspace", workspace: "w" } });
@@ -53,7 +59,7 @@ test("answers_take_the_shapes_of_the_protocol", () => {
   assert.deepEqual(wire(answer(7, { ok: null })), { id: 7, ok: null });
   assert.deepEqual(wire(answer(7, { err: new CoreError("forbidden", "没有权限", 403) })), { id: 7, error: { code: "forbidden", message: "没有权限", status: 403 } });
   assert.deepEqual(wire({ id: 8, delta: diff({ t: [1] }, { t: [1, 2] }) }), { id: 8, delta: [{ path: ["t"], append: [2] }] });
-  assert.deepEqual(wire(answer(9, { err: new CoreError("unknown_call", "没有这个调用：x") })), { id: 9, error: { code: "unknown_call", message: "没有这个调用：x" } });
+  assert.deepEqual(wire(answer(9, { err: new CoreError("unknown_call", "未知调用：x") })), { id: 9, error: { code: "unknown_call", message: "未知调用：x" } });
 });
 
 test("unknown_calls_are_refused", () => {
@@ -65,6 +71,7 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("auth.begin", { redirect_uri: "r", return_to: "/", device_name: "Mac" }), { kind: "authBegin", redirectUri: "r", returnTo: "/", deviceName: "Mac" });
   assert.deepEqual(parseCall("auth.complete", { query: "?code=c&state=s" }), { kind: "authComplete", query: "?code=c&state=s" });
   assert.deepEqual(parseCall("auth.signOut", { account: "sub1" }), { kind: "signOut", account: "sub1" });
+  assert.deepEqual(parseCall("auth.deleteAccount", { account: "sub1" }), { kind: "deleteAccount", account: "sub1" });
   assert.deepEqual(parseCall("client.error", { source: "android.decode", message: "chat: 读不懂" }), { kind: "clientError", source: "android.decode", message: "chat: 读不懂" });
   assert.deepEqual(parseCall("workspace.rename", { account: "a", workspace: "w", name: "n" }), {
     kind: "op",
@@ -76,18 +83,25 @@ test("parses_each_call", () => {
   });
   assert.equal(code(() => parseCall("station.request", { station: "ws/st", method: "GET", path: "/sessions" })), "unknown_call");
   assert.equal(code(() => parseCall("cloud.request", { account: "a", method: "GET", path: "/v1/me" })), "unknown_call");
-  const part = parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, bytes: "aGVsbG8=" });
-  assert.deepEqual({ ...part, bytes: [...(part as { bytes: Uint8Array }).bytes] }, { kind: "stationUploadPart", station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, bytes: [...new TextEncoder().encode("hello")] });
-  const upload = parseCall("station.upload", { station: "w/s", name: "a.png", bytes: "aGVsbG8=" });
+  const hello = new TextEncoder().encode("hello");
+  const part = parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4 }, hello);
+  assert.deepEqual({ ...part, bytes: [...(part as { bytes: Uint8Array }).bytes] }, { kind: "stationUploadPart", station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, bytes: [...new TextEncoder().encode("hello")], progress: false });
+  assert.equal((parseCall("station.upload.part", { station: "w/s", id: "abcdefgh12", name: "a.bin", size: 10, offset: 4, progress: true }, hello) as { progress: boolean }).progress, true);
+  const upload = parseCall("station.upload", { station: "w/s", name: "a.png" }, hello);
   assert.deepEqual({ ...upload, bytes: [...(upload as { bytes: Uint8Array }).bytes] }, { kind: "stationUpload", station: "w/s", name: "a.png", bytes: [...new TextEncoder().encode("hello")] });
   assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png" }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: false });
   assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", thumb: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: true, progress: false });
   assert.deepEqual(parseCall("station.file", { station: "w/s", key: "k", name: "a.png", progress: true }), { kind: "stationFile", station: "w/s", key: "k", name: "a.png", thumb: false, progress: true });
+  assert.deepEqual(parseCall("station.file.part", { station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4 }), { kind: "stationFilePart", station: "w/s", key: "k", name: "a.bin", offset: 0, length: 4, progress: false, stream: false });
+  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: true, stream: false });
+  assert.deepEqual(parseCall("drive.read", { station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, stream: true }), { kind: "driveRead", station: "w/s", root: "/r", path: "/r/a", offset: 4, length: 4, progress: false, stream: true });
   assert.deepEqual(parseCall("chat.send", { station: "w/s", thread: 7, text: "hi" }), { kind: "chatSend", station: "w/s", thread: 7, text: "hi", attachments: [], quotes: [], client: null });
   assert.deepEqual(parseCall("chat.send", { station: "w/s", thread: 7, text: "hi", client: "android 0.1.1123" }), { kind: "chatSend", station: "w/s", thread: 7, text: "hi", attachments: [], quotes: [], client: "android 0.1.1123" });
   assert.deepEqual(parseCall("chat.retry", { station: "w/s", thread: 7, id: "out-1" }), { kind: "chatRetry", station: "w/s", thread: 7, id: "out-1" });
   assert.deepEqual(parseCall("chat.discard", { station: "w/s", thread: 7, id: "out-1" }), { kind: "chatDiscard", station: "w/s", thread: 7, id: "out-1" });
   assert.deepEqual(parseCall("chat.older", { station: "w/s", thread: 7 }), { kind: "chatOlder", station: "w/s", thread: 7 });
+  assert.deepEqual(parseCall("chat.around", { station: "w/s", thread: 7, seq: 3 }), { kind: "chatAround", station: "w/s", thread: 7, seq: 3 });
+  assert.deepEqual(parseCall("chat.find", { station: "w/s", thread: 7, query: "a b" }), { kind: "chatFind", station: "w/s", thread: 7, query: "a b", bring: false });
   assert.deepEqual(parseCall("history.older", { station: "w/s", key: "ember:c-1" }), { kind: "historyOlder", station: "w/s", key: "ember:c-1" });
   assert.deepEqual(parseCall("station.measure", { station: "w/s" }), { kind: "stationMeasure", station: "w/s" });
   assert.deepEqual(parseCall("chat.read", { station: "w/s", thread: 7, seq: 12 }), { kind: "chatRead", station: "w/s", thread: 7, seq: 12 });
@@ -115,8 +129,10 @@ test("checks_params", () => {
     assert.ok((e as CoreError).message.includes("return_to"), (e as CoreError).message);
   }
   assert.equal(code(() => parseCall("auth.signOut", null)), "invalid_params");
+  assert.equal(code(() => parseCall("auth.deleteAccount", {})), "invalid_params");
   assert.equal(code(() => parseCall("workspace.rename", { account: "a", name: "n" })), "invalid_params");
-  assert.equal(code(() => parseCall("station.upload", { station: "w/s", name: "n", bytes: "not base64!" })), "invalid_params");
+  // A file going up carries its bytes beside the call; base64 in it is not taken.
+  assert.equal(code(() => parseCall("station.upload", { station: "w/s", name: "n", bytes: "aGVsbG8=" })), "invalid_params");
 });
 
 test("migrate_takes_accounts_and_a_32_byte_device_key", () => {
@@ -398,6 +414,18 @@ test("prefs_are_kept_on_the_device_and_moved_in_once_without_writing_over", asyn
   await host.settle();
   const refused = host.takeEmitted().filter(([, m]) => "error" in m && (m.id === 5 || m.id === 6)).length;
   assert.equal(refused, 2);
+  // Motion: reduced or full, or (none) as the system asks.
+  set(30, { motion: "reduce" });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).motion, "reduce");
+  set(31, { motion: "slow" });
+  await host.settle();
+  assert.equal(host.takeEmitted().filter(([, m]) => "error" in m && m.id === 31).length, 1);
+  set(32, { motion: null });
+  await host.settle();
+  apply(host, values);
+  assert.equal(v(values, 1).motion, undefined);
   set(7, { invite: "ABCD-EFGH" });
   await host.settle();
   apply(host, values);
@@ -477,12 +505,15 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   await host.settle();
   const values = new Map();
   apply(host, values);
-  assert.deepEqual(values.get(1), { text: "", quotes: [], files: [] });
+  assert.deepEqual(noId(values.get(1)), { text: "", quotes: [], files: [], links: [] });
   call(core, ui, 2, "draft.put", { station: "ws/st", chat: "new", text: "修一下登录", quotes: [{ author: "a", text: "b", comment: "" }], files: [{ name: "x.png", path: "up/x.png", size: 3 }] });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).text, "修一下登录");
   assert.equal(v(values, 1).files[0].path, "up/x.png");
+  // its name, the core's, kept with it
+  const named = v(values, 1).id;
+  assert.match(named, /^[A-Za-z0-9_-]{8,64}$/);
   await host.time.pass(350);
   await run(core.inner.data.written);
   core.close();
@@ -495,10 +526,13 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   apply(host, values2);
   assert.equal(v(values2, 1).text, "修一下登录");
   assert.equal(v(values2, 1).quotes[0].author, "a");
+  assert.equal(v(values2, 1).id, named);
   call(again, ui2, 2, "draft.put", { station: "ws/st", chat: "new", text: " ", quotes: [], files: [] });
   await host.settle();
   apply(host, values2);
-  assert.deepEqual(values2.get(1), { text: "", quotes: [], files: [] });
+  assert.deepEqual(noId(values2.get(1)), { text: "", quotes: [], files: [], links: [] });
+  // emptied: what is written next is another draft
+  assert.notEqual(v(values2, 1).id, named);
   await run(again.inner.data.written);
   again.close();
   again = await Core.create(host, { clock: host.time.clock, sample: 0 });

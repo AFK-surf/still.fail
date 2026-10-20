@@ -1,77 +1,94 @@
-import { Archive, Edit, Pin, Unplug } from "./icons.tsx";
+import { Archive, Copy, Edit, File, Pin, ShieldCheck, Unplug } from "@stillfail/ui/icons.tsx";
+import { StationMark } from "./StationMark.tsx";
+import { useCopyChatLink, useCopyTranscripts } from "./ChatRef.tsx";
 import { stationBase, useSidebarMode, type ChatFilter } from "./station.tsx";
 import { SidebarActions } from "./SidebarActions.tsx";
-import { NavLink, useLocation, useNavigate } from "react-router";
-import { stationApi, useChats, useStationCall, useStatus, type ChatItem } from "./api.ts";
-import { prime } from "./core/react.ts";
+import { NavSection, NavTop } from "./SidebarList.tsx";
+import { NavLink, useLocation } from "react-router";
+import { useGo, useHere } from "./go.ts";
+import { stationApi, useStationCall, useStatus, type ChatItem, type ChatsView } from "./api.ts";
+import { prime, useTopic, useTopicSelect } from "./core/react.ts";
+import type { Topic } from "./core/client.ts";
 import { RowAside } from "./RowPicture.tsx";
-import { Retry, Waiting, WaitingItems } from "./Status.tsx";
-import { failure, useToast } from "./toast.tsx";
-import { Confirm, ConnectKindIcon, ICON, SkeletonRows, Time, Tip } from "./ui.tsx";
+import { Retry, Waiting as StatusWaiting, WaitingItems } from "./Status.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
+import { Confirm, ConnectKindIcon, ICON, Time, Tip, Waiting } from "./ui.tsx";
 import { chatClicked } from "./telemetry.ts";
 import { useComposerMove } from "./dock.tsx";
 import { goToNeighbour } from "./Chat.tsx";
 import { useShortcut } from "./keymap.ts";
 import { ChatMark, jumpFromLine, stateLine, WaitingText } from "./ChatMark.tsx";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ContextMenu } from "radix-ui";
 import { TitleInput, useRename, useRenaming } from "./Rename.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { StationGlyph, glyphCounts } from "./StationGlyph.tsx";
 import { useHeldOrder, useListMotion, usePointerOver } from "./listMotion.ts";
 import { useWorkspaceMarks } from "./lastChat.ts";
 import * as nav from "./Sidebar.css.ts";
 import * as decisionsCss from "./Decisions.css.ts";
 import { DecisionRows, openedAt, openedRecently } from "./DecisionDesk.tsx";
+import { ArchiveRows } from "./pages/Archive.tsx";
 import * as chatCss from "./styles/chat.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
 import { t } from "./i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 /**
  * The chats of a workspace, newest first and
  * grouped by day, as the core's `chats` view has them; optionally only the
  * ones the viewer started or the watching ones, or in their place the decisions waiting for the viewer (奏,
- * DecisionRows: picked, one shows on `decisions`), with `newChat` above them and the way to the `archive` in the
- * filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
+ * DecisionRows: picked, one shows on `decisions`) or the archived chats (ArchiveRows, its page `archive`), with
+ * `newChat` above them and the filter's menu beside it. With no station its empty state leads to `stationsPage` (the page itself, where stations are
  * added: nothing is appended to it).
  */
-export function ChatList({ scope, newChat, stationsPage, archive, decisions, top }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode }) {
+export function ChatList({ scope, newChat, stationsPage, archive, decisions, top, below }: { scope: string; newChat: string; stationsPage: string; archive: string; decisions: string; top?: ReactNode; below?: ReactNode }) {
   const [mode] = useSidebarMode();
   useShortcut("chat.prev", () => goToNeighbour(-1));
   useShortcut("chat.next", () => goToNeighbour(1));
-  // The lists are followed at once, side by side: switching slides from one to another with nothing to wait for.
-  const all = useChats(scope, false);
-  const mine = useChats(scope, true);
-  const watching = useChats(scope, false, true);
+  // No station at all: nothing to filter (the lists themselves follow their own topics, ChatPane).
+  const none = useTopicSelect<ChatsView, boolean>(chatsTopic(scope, "all"), (s) => !!s.value && !s.value.loading && s.value.stations.length === 0);
   // To 奏 from its row in the sidebar's foot, its rows come out of that row (DecisionDesk.tsx): no sliding then.
+  const archiveSeen = useRef(false);
+  if (mode === "archive") archiveSeen.current = true;
   const was = useRef(mode);
   const instant = useRef(false);
   if (was.current !== mode) {
     instant.current = mode === "decisions" && openedRecently();
     was.current = mode;
   }
-  // The page it was going to is there (or another took its place).
-  const path = useLocation().pathname;
-  useEffect(() => setGoing(null), [path]);
   return (
     <>
-      <div className={nav.navTop}>
-        {top}
-        <SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`}
-          showFilter={!(all.value && !all.value.loading && all.value.stations.length === 0)} />
-      </div>
+      <GoingArrived />
+      <NavTop top={top} below={below}
+        action={<SidebarActions newChat={newChat} archive={archive} workspace={`/w/${scope}`} showFilter={!none} />} />
       <div className={nav.navSlider}>
-        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined}>
-          <ChatPane chats={all} scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
-          <ChatPane chats={mine} scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
-          <ChatPane chats={watching} scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
+        <div className={nav.navTrack} data-filter={mode} data-instant={instant.current || undefined} ref={sliding}>
+          {/* Followed at once, side by side: switching slides from one to another with nothing to wait for. */}
+          <ChatPane scope={scope} filter="all" stationsPage={stationsPage} hidden={mode !== "all"} />
+          <ChatPane scope={scope} filter="mine" stationsPage={stationsPage} hidden={mode !== "mine"} />
+          <ChatPane scope={scope} filter="watching" stationsPage={stationsPage} hidden={mode !== "watching"} />
           <DecisionRows active={mode === "decisions"} page={decisions} />
+          {/* Made once first shown (it can be long, and is rarely looked at), kept then for sliding back to it. */}
+          {archiveSeen.current ? <ArchiveRows scope={scope} hidden={mode !== "archive"} /> : <div className={nav.navScroll} />}
         </div>
       </div>
     </>
   );
+}
+
+/** Marks the track while it slides (`data-sliding`): the panes it passes are drawn then (Sidebar.css.ts navTrack). */
+function sliding(track: HTMLElement | null): (() => void) | undefined {
+  if (!track) return undefined;
+  const slid = (e: TransitionEvent) => {
+    if (e.target !== track || e.propertyName !== "transform") return;
+    if (e.type === "transitionrun") track.dataset.sliding = "";
+    else delete track.dataset.sliding;
+  };
+  const types = ["transitionrun", "transitionend", "transitioncancel"] as const;
+  for (const type of types) track.addEventListener(type, slid);
+  return () => { for (const type of types) track.removeEventListener(type, slid); };
 }
 
 /**
@@ -109,9 +126,11 @@ export function useGlassBands(): (el: HTMLElement | null) => (() => void) | void
  * sleep. Cloud not reached, it offers to try again at once; a station down does not.
  */
 export function StationTrouble({ scope, to }: { scope: string; to: string }) {
-  const view = useChats(scope, false).value;
+  // Only what it shows (the stations, their glyph and trouble): not each change of the list's rows.
+  const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
+    (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
   const status = useStatus(scope);
-  if (!view || view.stations.length === 0) return status?.state ? <Waiting status={status} /> : null;
+  if (!view || view.stations.length === 0) return status?.state ? <StatusWaiting status={status} /> : null;
   const counts = glyphCounts(view, status?.state === "trouble");
   const trouble = view.trouble;
   const waiting = !trouble && status?.state ? status : undefined;
@@ -132,6 +151,27 @@ export function StationTrouble({ scope, to }: { scope: string; to: string }) {
   );
 }
 
+/** What is wrong with the stations (the core's `trouble`: which, or how many; red while one fails), or nothing. */
+export function useStationTrouble(scope: string): ChatsView["trouble"] | undefined {
+  return useTopicSelect<ChatsView, ChatsView["trouble"] | undefined>(chatsTopic(scope, "all"), (s) => s.value?.trouble, (a, b) => a === b);
+}
+
+/**
+ * The stations in the rail (Rail.tsx): their glyph, what the foot's line would say on hover, leading to the stations.
+ */
+export function RailStations({ scope, to, on, className }: { scope: string; to: string; on: boolean; className: string }) {
+  const view = useTopicSelect<ChatsView, ChatsView | undefined>(chatsTopic(scope, "all"), (s) => s.value,
+    (a, b) => a?.stations === b?.stations && a?.glyph === b?.glyph && a?.trouble === b?.trouble);
+  const status = useStatus(scope);
+  const counts = glyphCounts(view, status?.state === "trouble");
+  const label = view?.trouble?.text ?? (status?.state ? status.text : undefined) ?? view?.glyph?.summary ?? "Station";
+  return (
+    <Tip label={label} side="right">
+      <NavLink className={className} to={to} data-on={on || undefined} aria-label={`Station：${label}`}><StationGlyph counts={counts} size={20} /></NavLink>
+    </Tip>
+  );
+}
+
 /**
  * 奏 N in the sidebar's foot, by the stations: the decisions waiting for the viewer in the workspace (the core's
  * `decisions` count), leading to their page. Nothing while there are none (or from a core before them).
@@ -147,8 +187,14 @@ export function DecisionsEntry({ scope, to }: { scope: string; to: string }) {
   );
 }
 
-/** One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an offline station's chats say so row by row. */
-function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: ReturnType<typeof useChats>; scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
+/**
+ * One of the lists, all, the viewer's or the watching ones: its states (connecting, failing, empty) and its days; an
+ * offline station's chats say so row by row. Drawn again only when what it is given changes (its topic's value, the
+ * filter shown): the sidebar around it drawing again (a page's change elsewhere, a side panel opening) left its every
+ * row drawn and measured again (listMotion), all three lists of them.
+ */
+const ChatPane = memo(function ChatPane({ scope, filter, stationsPage, hidden }: { scope: string; filter: ChatFilter; stationsPage: string; hidden: boolean }) {
+  const chats = useTopic<ChatsView>(chatsTopic(scope, filter));
   const view = chats.value;
   const stations = view?.stations ?? [];
   const [over, pointer] = usePointerOver();
@@ -166,8 +212,7 @@ function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: Retur
   return (
     <div ref={ref} className={nav.navScroll} aria-hidden={hidden || undefined} inert={hidden || undefined} {...pointer}>
       {chats.error && !view && <p className={`${nav.navEmpty} ${nav.navError}`}>{chats.error.message}</p>}
-      {days.length === 0 && note.failing.map((s) => <Tip key={s.station} label={s.message ?? undefined}><p className={`${nav.navEmpty} ${nav.navError}`}>{s.text}</p></Tip>)}
-      {days.length === 0 && note.reading && !chats.error && <SkeletonRows />}
+      {days.length === 0 && (note.reading || note.failing.length > 0) && !chats.error && <Waiting shape="rows" dense note={note} />}
       {days.length === 0 && view && note.empty && (
         <p className={nav.navEmpty}>{filter === "mine" ? t("web-main.sidebar.noneMine")
           : filter === "watching" ? t("web-main.sidebar.noneWatching")
@@ -175,14 +220,13 @@ function ChatPane({ chats, scope, filter, stationsPage, hidden }: { chats: Retur
           : <>{t("web-main.sidebar.noStation.before")}<NavLink className={chatCss.inlineLink} to={stationsPage}>{t("web-main.sidebar.noStation.link")}</NavLink>{t("web-main.sidebar.noStation.after")}</>}</p>
       )}
       {days.map((day) => (
-        <section key={day.daysAgo} aria-label={day.label}>
-          <div className={nav.navHeading} data-flip={`day:${day.daysAgo}`}>{day.label}</div>
-          {day.items.map((item) => <ChatRow key={rowKey(item)} item={item} lead={lead} />)}
-        </section>
+        <NavSection key={day.daysAgo} title={day.label} flip={`day:${day.daysAgo}`}>
+          {day.items.map((item) => <ChatRow key={rowKey(item)} scope={scope} filter={filter} row={rowKey(item)} lead={lead} />)}
+        </NavSection>
       ))}
     </div>
   );
-}
+});
 
 /** A row pinned or let go moves at once, even while the list is held still under the pointer. */
 const pinMoved = (was: ChatItem, now: ChatItem): boolean => Boolean(was.pinned) !== Boolean(now.pinned);
@@ -214,7 +258,30 @@ function useScrolling() {
  * dot before its title (ChatMark.tsx), who is in it small at the second line's end. While a piece of work in it waits,
  * the second line says on whom and what; with all its work over, the row is faded.
  */
-function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
+const ChatRow = memo(function ChatRow({ scope, filter, row: key, lead }: { scope: string; filter: ChatFilter; row: string; lead: "agents" | "people" }) {
+  const item = useTopicSelect<ChatsView, ChatItem | undefined>(chatsTopic(scope, filter), (s) => rowsOf(s.value).get(key));
+  return item ? <ChatRowOf item={item} lead={lead} /> : null;
+});
+
+/** A list's rows by their key, made once for each value of its topic. */
+const indexed = new WeakMap<ChatsView, Map<string, ChatItem>>();
+function rowsOf(view: ChatsView | undefined): Map<string, ChatItem> {
+  if (!view) return NO_ROWS;
+  let rows = indexed.get(view);
+  if (!rows) {
+    rows = new Map(view.days.flatMap((d) => d.items.map((item) => [rowKey(item), item] as const)));
+    indexed.set(view, rows);
+  }
+  return rows;
+}
+const NO_ROWS = new Map<string, ChatItem>();
+
+/** The topic of one of the lists, all, the viewer's or the watching ones (as useChats subscribes to it). */
+function chatsTopic(scope: string, filter: ChatFilter): Topic {
+  return { topic: "chats", scope, mine: filter === "mine", ...(filter === "watching" ? { watching: true } : {}) };
+}
+
+function ChatRowOf({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) {
   const { connect } = item;
   const to = `${stationBase(item.station)}/chats/${encodeURIComponent(item.id)}`;
   const move = useComposerMove();
@@ -223,14 +290,18 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
   const [asking, setAsking] = useState(false);
   const archiveAsked = () => { if (item.watch) setAsking(true); else void archive(); };
   const pin = usePin(item);
+  const keep = useKeep(item);
+  const toast = useToast();
+  const copyLink = useCopyChatLink(toast);
+  const copyTranscripts = useCopyTranscripts(item.station, toast);
   const rename = useRename(item.station);
   const [editing, setEditing] = useState(false);
   // Pinned, renamed (its new name shown meanwhile) or brought back from the archive, until the station answers.
   const renamingTo = useRenaming(item.station, item.session);
   // Failed: a red mark in the spinner's place a few seconds more, why on hover (the menu that asked has closed).
   const saving = useDoingState(["chat.pin", "chat.rename", "chat.archive"], { station: item.station, session: item.session });
-  const goingTo = useGoing();
-  const here = decodeURIComponent(useLocation().pathname) === decodeURIComponent(to);
+  const going = useGoing(to);
+  const where = useHere();
   // A new chat its station has not made yet, or one on a station offline, is neither renamed nor archived.
   const menu = !item.offline && !item.pending;
   const row = (
@@ -239,9 +310,10 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
         chatClicked();
         if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) jumpFromLine(item, e.target);
         move(e, to, "chat");
-        if (!here && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing(to);
+        const from = decodeURIComponent(where());
+        if (from !== decodeURIComponent(to) && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) setGoing({ to: decodeURIComponent(to), from });
       }}
-      data-going={goingTo === null ? undefined : goingTo === to ? "here" : "away"}
+      data-going={going}
       // Pressing a chat does not take the focus from the composer: it stays there, focused, into the next chat.
       onMouseDown={(e) => e.preventDefault()}
       // Pointed at or pressed: its chat is read meanwhile, there when the page opens.
@@ -249,23 +321,24 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
       <span className={nav.navSessionText}>
         {/* Where the chat happens sits at the title's end, top right. */}
         <span className={nav.navSessionHead}>
-          <ChatMark item={item} inline />
+          <span className={nav.navMarkSlot}><ChatMark item={item} inline /></span>
           {editing
             ? <TitleInput value={item.title} onDone={(title) => { setEditing(false); rename(item, title); }} />
             : <span className={nav.navSessionTitle}>{renamingTo ?? item.title}</span>}
-          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} className={nav.rowSpinner} label={t("web-main.saving")} side="right" /></span>}
+          {/* The station it runs on, by its icon (the core gives one only with several stations). */}
+          {(item.stationEmoji || item.stationIcon) && !editing && <Tip label={item.stationName}><span className={nav.sessionKind} aria-label={item.stationName}><StationMark emoji={item.stationEmoji} icon={item.stationIcon} size={12} /></span></Tip>}
+          {(saving.running || saving.error !== undefined) && !editing && <span className={nav.sessionKind}><DoingShown state={saving} inline label={t("common.saving")} /></span>}
           {/* Only an agent that came from elsewhere (Slack) says so; one made on ember needs no mark. */}
-          {/* Slack is the only kind of connect there is. */}
           {/* Its station offline, or its link coming back: marked unplugged there (the core says which, row by row). A
               spinner on a row is only ever something its person did, under way. */}
           {item.offline || item.reconnecting
-            ? <Tip label={item.offline ?? item.reconnecting} side="right"><span className={nav.sessionKind} aria-label={item.offline ?? item.reconnecting}><Unplug size={12} /></span></Tip>
-            : connect && <Tip label={item.originText ?? "Slack"} side="right"><span className={nav.sessionKind}><ConnectKindIcon kind="slack" size={12} /></span></Tip>}
+            ? <Tip label={item.offline ?? item.reconnecting}><span className={nav.sessionKind} aria-label={item.offline ?? item.reconnecting}><Unplug size={12} /></span></Tip>
+            : connect && <Tip label={item.originText ?? "Slack"}><span className={nav.sessionKind}><ConnectKindIcon kind={item.originKind ?? "slack"} size={12} /></span></Tip>}
         </span>
         {/* The last thing said, who is in the chat, and when (in their place while pointed at). */}
         <span className={nav.navSessionMeta}>
           {/* Where it stands, when the core has words for it (奏 · …, 要你帮忙：…, 做完了), instead. */}
-          {stateLine(item) ? <WaitingText compactNeed text={stateLine(item)!} className={nav.navSessionLast} />
+          {stateLine(item) ? <WaitingText slot text={stateLine(item)!} className={nav.navSessionLast} />
             : item.last ? <LastMessage item={item} /> : <span className={nav.navSessionLast} />}
           <RowAside item={item} lead={lead} size={16} className={nav.rowAside} />
           <Time className={nav.navTime} stamp={item.time?.lastActiveAt} fixed />
@@ -274,7 +347,7 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
     </NavLink>
   );
   return (
-    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)} data-archivable={(menu && !editing && item.archivable) || undefined}>
+    <div className={nav.navSessionWrap} data-editing={editing || undefined} data-flip={rowKey(item)}>
     {menu ? (
       // Right-clicking a row: what can be done to the chat.
       <ContextMenu.Root modal={false}>
@@ -284,12 +357,18 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
             {/* A station from before pins says nothing of them: its chats are not pinned from here. */}
             {item.pinned != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => void pin()}><Pin size={14} />{item.pinned ? t("web-main.chat.unpin") : t("web-main.chat.pin")}</ContextMenu.Item>}
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => setEditing(true)}><Edit size={14} />{t("web-main.chat.rename")}</ContextMenu.Item>
+            {/* Kept: never offered for archiving, nor archived on its own (a chat of its own only: a thread). */}
+            {item.thread != null && <ContextMenu.Item className={controlsCss.menuItem} onSelect={keep}><ShieldCheck size={14} />{item.kept ? t("web-main.chat.unkeep") : t("web-main.chat.keep")}</ContextMenu.Item>}
+            {/* Its link, for another chat's agent to read it (chat_read / session_history), on any station of the workspace. */}
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyLink(item)}><Copy size={14} />{t("web-main.chat.copyLink")}</ContextMenu.Item>
+            {/* Where its agents' sessions are kept on the station's machine: each agent's, one per line. */}
+            <ContextMenu.Item className={controlsCss.menuItem} onSelect={() => copyTranscripts(item.agents.length > 0 ? item.agents.map((a) => a.key) : [item.session])}><File size={14} />{t("web-main.chat.copyTranscript")}</ContextMenu.Item>
             <ContextMenu.Item className={controlsCss.menuItem} onSelect={archiveAsked}><Archive size={14} />{t("web-main.chat.archive")}</ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
     ) : row}
-    {menu && !editing && (item.archivable ? <ArchiveChip item={item} archive={archiveAsked} /> : <ArchiveButton item={item} archive={archiveAsked} />)}
+    {menu && !editing && <ArchiveButton item={item} archive={archiveAsked} />}
     {item.watch && <Confirm open={asking} title={t("web-main.chat.archiveAsk", { title: item.title })} description={item.watch.ask} action={t("web-main.chat.archive")}
       onConfirm={() => { setAsking(false); void archive(); }} onClose={() => setAsking(false)} />}
     </div>
@@ -302,13 +381,13 @@ function ChatRow({ item, lead }: { item: ChatItem; lead: "agents" | "people" }) 
  */
 function useArchive(item: ChatItem, to: string) {
   const api = stationApi(useStationCall(item.station));
-  const path = useLocation().pathname;
-  const navigate = useNavigate();
+  const here = useHere();
+  const navigate = useGo();
   const toast = useToast();
   return async () => {
     // Move away now, to the chat beside it in the list (the list page if none); a slow response must not navigate over
     // a chat opened meanwhile.
-    if (decodeURIComponent(path) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
+    if (decodeURIComponent(here()) === decodeURIComponent(to) && !goToNeighbour(1) && !goToNeighbour(-1)) navigate(`${stationBase(item.station)}/chats`);
     try {
       await api.archive(item, true);
       toast(t("web-main.chat.archived"));
@@ -319,18 +398,30 @@ function useArchive(item: ChatItem, to: string) {
 }
 
 /**
- * The chat a row's click is going to, while its page is on the way (the page before stays until the chat is read,
- * core/react.ts useReady): its row is the one shown selected meanwhile, so the click answers at once.
+ * The chat a row's click is going to (`to`), from the page open then (`from`), while its page is on the way (the page
+ * before stays until the chat is read, core/react.ts useReady): its row is the one shown selected meanwhile, so the click
+ * answers at once. Both paths decoded.
  */
-let going: string | null = null;
+let going: { to: string; from: string } | null = null;
 const goingHeard = new Set<() => void>();
-function setGoing(to: string | null): void {
-  if (going === to) return;
-  going = to;
+function setGoing(next: { to: string; from: string } | null): void {
+  if (going?.to === next?.to && going?.from === next?.from) return;
+  going = next;
   for (const heard of goingHeard) heard();
 }
-function useGoing(): string | null {
-  return useSyncExternalStore((heard) => { goingHeard.add(heard); return () => goingHeard.delete(heard); }, () => going, () => going);
+const hearGoing = (heard: () => void) => { goingHeard.add(heard); return () => { goingHeard.delete(heard); }; };
+/** A row's part in it (its page, `to`): the one gone to, the one left, or neither; only those two rows draw again. */
+function useGoing(to: string): "here" | "away" | undefined {
+  const path = decodeURIComponent(to);
+  const now = () => (going === null ? undefined : going.to === path ? "here" : going.from === path ? "away" : undefined);
+  return useSyncExternalStore(hearGoing, now, now);
+}
+
+/** The page it was going to is there (or another took its place): no row is going anywhere any more. */
+function GoingArrived() {
+  const path = useLocation().pathname;
+  useEffect(() => setGoing(null), [path]);
+  return null;
 }
 
 function primeChat(item: ChatItem): void {
@@ -352,23 +443,25 @@ function usePin(item: ChatItem) {
   };
 }
 
+/** 保留 from a row's menu, or 取消保留 once kept: the toast says what it means for the archive. */
+function useKeep(item: ChatItem) {
+  const api = stationApi(useStationCall(item.station));
+  const act = useAct();
+  return () => {
+    if (item.thread == null) return;
+    const kept = item.kept === true;
+    act(api.keepChat(item.thread, !kept), t(kept ? "web-main.chat.unkeep.what" : "web-main.chat.keep.what"), t(kept ? "web-main.chat.unkeep.done" : "web-main.chat.keep.done"));
+  };
+}
+
 /** Beside a chat's row while pointed at: puts it in the archive. */
 function ArchiveButton({ item, archive }: { item: ChatItem; archive: () => void }) {
   return (
-    <Tip label={t("web-main.chat.archive")} side="right">
-      <button type="button" className={`${pagesCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
+    <Tip label={t("web-main.chat.archive")}>
+      <button type="button" className={`${pageCss.iconBtn} ${nav.rowArchive}`} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
         <Archive size={16} />
       </button>
     </Tip>
-  );
-}
-
-/** Nothing left in its chat (the core's `archivable`): 归档 in words at the row's end while it is pointed at. */
-function ArchiveChip({ item, archive }: { item: ChatItem; archive: () => void }) {
-  return (
-    <button type="button" className={nav.rowArchiveChip} aria-label={t("web-main.chat.archiveNamed", { title: item.title })} onMouseDown={(e) => e.preventDefault()} onClick={archive}>
-      {t("web-main.chat.archive")}
-    </button>
   );
 }
 

@@ -4,6 +4,7 @@
 import type { ChatItem, Person, RowAgent } from "./api.ts";
 import { Avatar, ModelLogo, Tip } from "./ui.tsx";
 import * as css from "./RowPicture.css.ts";
+import { t } from "./i18n.ts";
 
 /** A row's agents by their mark: those that look the same (one maker's models) are drawn once. */
 function agentGroups(item: ChatItem) {
@@ -26,7 +27,7 @@ export function RowAside({ item, lead, size, className }: { item: ChatItem; lead
   if (groups.length === 0 && !withPeople) return null;
   const shownAgents = groups.slice(0, 3);
   const agents = groups.length > 0 && (
-    <Tip key="agents" label={item.agents.map((a) => a.agentText).join("、")} side="right"><span className={`${css.aside} ${className}`}>
+    <Tip key="agents" label={item.agents.map((a) => a.agentText).join(t("web-main.list.separator"))}><span className={`${css.aside} ${className}`}>
       {shownAgents.map((g) => (
         <span key={g.key} className={css.asideAgent}>
           <ModelLogo maker={g.maker} runtime={g.runtime} size={size - 4} />
@@ -37,7 +38,7 @@ export function RowAside({ item, lead, size, className }: { item: ChatItem; lead
   );
   const shownPeople = people.slice(0, 3);
   const faces = withPeople && (
-    <Tip key="people" label={item.peopleText ?? ""} side="right"><span className={`${css.aside} ${className}`}>
+    <Tip key="people" label={item.peopleText ?? ""}><span className={`${css.aside} ${className}`}>
       {shownPeople.map((p) => <Face key={p.id} person={p} size={size} starter={people.length > 1 && p.id === item.creator?.id} />)}
       {people.length > shownPeople.length && <span className={css.asideMore}>+{people.length - shownPeople.length}</span>}
     </span></Tip>

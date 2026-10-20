@@ -49,11 +49,12 @@ function links(data: Data, workspace: string): [string, string][] {
   return [...record(data, KEY).filter(([, l]) => workspaceOf(l) === workspace), ...record(data, `${KEY}:${workspace}`)];
 }
 
-/// Keeps these links (title, link), each with its workspace's, the latest, the oldest going past 200.
-export function keep(data: Data, added: Iterable<[string, string]>): void {
+/// Keeps these links (title, link), each with its workspace's (or, `into`, with that workspace's: a chat of another
+/// workspace referred to from one of its chats), the latest, the oldest going past 200.
+export function keep(data: Data, added: Iterable<[string, string]>, into?: string | null): void {
   const by = new Map<string, [string, string][]>();
   for (const [ti, l] of added) {
-    const workspace = workspaceOf(l);
+    const workspace = into ?? workspaceOf(l);
     if (workspace === null || ti === "") continue;
     let all = by.get(workspace);
     if (!all) {
@@ -69,11 +70,36 @@ export function keep(data: Data, added: Iterable<[string, string]>): void {
   }
 }
 
-/// The mark for a chat picked, its link kept until the mark is sent.
-export function mark(data: Data, base: string, station: string, id: string, fullTitle: string): string {
+/// The mark for a chat picked, its link kept until the mark is sent: with the chat's workspace, and with `into` (the
+/// workspace written in) when that is another.
+export function mark(data: Data, base: string, station: string, id: string, fullTitle: string, into?: string | null): string {
   const ti = title(fullTitle);
-  keep(data, [[ti, link(base, station, id)]]);
+  const l = link(base, station, id);
+  keep(data, [[ti, l]]);
+  if (into != null && into !== workspaceOf(l)) keep(data, [[ti, l]], into);
   return `@[${ti}]`;
+}
+
+/// The chats a text written on `station` refers to by its marks, as links (each once, in order).
+export function marked(data: Data, station: string, text: string): string[] {
+  const all = links(data, ofAddress(station));
+  const out: string[] = [];
+  for (const m of text.matchAll(/@\[([^\]\n]{1,120})\]/g)) {
+    const hit = [...all].reverse().find(([x]) => x === m[1]);
+    if (hit && !out.includes(hit[1])) out.push(hit[1]);
+  }
+  return out;
+}
+
+/// The station (`<workspace>/<station>`) and chat a chat's page link names, or null.
+export function linkedChat(l: string): { station: string; id: string } | null {
+  const m = /\/w\/([^/?#\s]+)\/s\/([^/?#\s]+)\/chats\/([^/?#\s]+)/.exec(l);
+  if (!m) return null;
+  try {
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
 }
 
 /// What is written in a chat on `station`, its marks made links to chats of its workspace.
@@ -120,13 +146,31 @@ export function search(chats: J, query: string, station: string | null | undefin
   return { items: [...titled, ...rest].slice(0, limit ?? Infinity) };
 }
 
+/// At most this many chats of the viewer's other workspaces the `@` menu offers at once.
+export const OUTSIDE_SHOWN = 3;
+
+/// The `@` menu with the viewer's other workspaces' chats (`outside`, each saying whose), as they are offered without
+/// crowding this workspace's: none until something is typed; then only those whose title has it, after this workspace's
+/// whose title has it and before the rest of this workspace's, those already shared with it (`scope`) first, at most
+/// OUTSIDE_SHOWN.
+export function withOutside(local: J[], outside: J[], query: string, scope: string, limit: number | null | undefined): J[] {
+  const q = query.trim().toLowerCase();
+  if (q === "") return local;
+  const titled = (i: J) => typeof get(i, "title") === "string" && (get(i, "title") as string).toLowerCase().includes(q);
+  const shared = (i: J) => arr(get(get(i, "xshare"), "to")).includes(scope);
+  const theirs = outside.filter(titled);
+  const offered = [...theirs.filter(shared), ...theirs.filter((i) => !shared(i))].slice(0, OUTSIDE_SHOWN);
+  return [...local.filter(titled), ...offered, ...local.filter((i) => !titled(i))].slice(0, limit ?? Infinity);
+}
+
 /// The words a search looks for: what is typed, split at spaces, each to be found (case aside).
 export function terms(query: string): string[] {
   return [...new Set(query.toLowerCase().split(/\s+/).filter((w) => w !== ""))];
 }
 
-/// How much of a line goes before the first word found, at most, when the line is cut to show it.
-const LEAD = 24;
+/// How much of a line goes before the first word found, at most, when the line is cut to show it: little, so a phone's
+/// narrow row still shows the words.
+const LEAD = 8;
 /// How much of a line a found message gives (the page fits it to its width).
 const LINE_MAX = 240;
 

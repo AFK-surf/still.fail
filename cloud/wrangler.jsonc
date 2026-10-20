@@ -8,6 +8,7 @@
 //   stillfail-web-beta the same files, on BETA_ORIGIN's: the test channel (wrangler.web-beta.jsonc)
   //   stillfail-admin    the admin's console, static, on ADMIN_ORIGIN's (wrangler.admin.jsonc)
   //   stillfail-preview  the preview host, static, on PREVIEW_ORIGIN's (wrangler.preview.jsonc)
+  //   stillfail-share    the share host, static, on share.still.fail: published chats (wrangler.share.jsonc)
   // A route takes precedence over a Custom Domain on the same host, so the API's and the relay's paths reach their
   // Workers and every other path the static ones.
   // Each host has its new name (still.fail) and its old one (3720.org), both bound for good (docs/rename-still-fail.md):
@@ -24,6 +25,7 @@
     { "pattern": "admin.still.fail/v1/*", "zone_name": "still.fail" },
     { "pattern": "app.still.fail/healthz*", "zone_name": "still.fail" },
     { "pattern": "app.still.fail/install.sh*", "zone_name": "still.fail" },
+    { "pattern": "app.still.fail/install.ps1*", "zone_name": "still.fail" },
     { "pattern": "app.still.fail/releases/*", "zone_name": "still.fail" },
     { "pattern": "app.still.fail/.well-known/*", "zone_name": "still.fail" },
     // The test channel's host, on its own domain (youdid.wtf, the dual of still.fail): the same API (index.ts gates it to
@@ -31,12 +33,14 @@
     { "pattern": "app.youdid.wtf/v1/*", "zone_name": "youdid.wtf" },
     { "pattern": "app.youdid.wtf/healthz*", "zone_name": "youdid.wtf" },
     { "pattern": "app.youdid.wtf/install.sh*", "zone_name": "youdid.wtf" },
+    { "pattern": "app.youdid.wtf/install.ps1*", "zone_name": "youdid.wtf" },
     { "pattern": "app.youdid.wtf/releases/*", "zone_name": "youdid.wtf" },
     { "pattern": "app.youdid.wtf/.well-known/*", "zone_name": "youdid.wtf" },
     { "pattern": "ember.3720.org/v1/*", "zone_name": "3720.org" },
     { "pattern": "admin.ember.3720.org/v1/*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/healthz*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/install.sh*", "zone_name": "3720.org" },
+    { "pattern": "ember.3720.org/install.ps1*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/releases/*", "zone_name": "3720.org" },
     { "pattern": "ember.3720.org/.well-known/*", "zone_name": "3720.org" },
   ],
@@ -54,12 +58,22 @@
     // stations and devices in mainland China, where Cloudflare's is slow or out of reach; one in Hong Kong (Alibaba
     // Cloud, on a line tuned for the mainland), near enough to both the mainland and abroad.
     "RELAY_URLS": "https://39.105.157.122,https://47.76.247.168",
+    // Ways into those two for devices alone (src/relays.ts): Beijing's machine forwarding to Hong Kong's relay, and
+    // Hong Kong's to Beijing's (nginx on :8443, each with its own certificate), so a phone in the mainland reaches a
+    // station abroad (bft in Tokyo, whose line to Beijing loses packets) through Beijing and Hong Kong's good line.
+    "RELAY_ENTRIES": "https://39.105.157.122:8443,https://47.76.247.168:8443",
     // What they are called on a station's card (经中继北京).
-    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港" },
+    "RELAY_NAMES": { "https://app.still.fail": "Cloudflare", "https://39.105.157.122": "北京", "https://47.76.247.168": "香港", "https://39.105.157.122:8443": "北京转香港", "https://47.76.247.168:8443": "香港转北京" },
     "GOOGLE_CLIENT_ID": "",
     // The operator console's one Google account (src/admin.ts); replace it when deploying your own.
     "ADMIN_EMAIL": "zuozijian1994@gmail.com",
+    // Where the sign-in codes come from (src/mail.ts).
+    "EMAIL_FROM": "noreply@still.fail",
   },
+  // Signing in with an email (src/login.ts): Cloudflare Email Service sends the codes, from EMAIL_FROM (vars), whose
+  // domain is onboarded for sending (dashboard: Email Service › Email Sending; it adds the DNS records). Without the
+  // binding or the address, a sign-in goes straight to Google.
+  "send_email": [{ "name": "EMAIL" }],
   // The stations' releases (scripts/release.sh puts them, install.sh gets them from /releases/).
   "r2_buckets": [{ "binding": "RELEASES", "bucket_name": "stillfail-releases" }],
   "durable_objects": {
@@ -69,11 +83,18 @@
       { "name": "LOGINS", "class_name": "LoginAttempt" },
       { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
+      // How loaded the relays are, for the console (src/relay-load.ts).
+      { "name": "RELAY_LOAD", "class_name": "RelayLoad" },
+      // still.fail's relay process, in the relay's Worker: the cron reads its counters (src/relay-load.ts).
+      { "name": "RELAY", "class_name": "Relay", "script_name": "stillfail-relay" },
     ],
   },
+  // The relay's counters, every minute (src/index.ts scheduled).
+  "triggers": { "crons": ["* * * * *"] },
   // Fresh installs create these. Existing production namespaces were transferred with the same
   // stillfail-v1 tag by migrate-workers.py before route cutover; never replay the old Worker's migrations here.
   "migrations": [
     { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
+    { "tag": "stillfail-v2", "new_sqlite_classes": ["RelayLoad"] },
   ],
 }

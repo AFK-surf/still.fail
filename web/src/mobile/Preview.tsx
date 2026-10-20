@@ -2,7 +2,7 @@
 // that goes back to the chat. Found by its job; people know it by its name. The core keeps the job as it changes (a
 // restart is said over the page, and it loads again once the service is back).
 import { useReady } from "../core/react.ts";
-import { LOCAL_MS } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { useParams } from "react-router";
 import { useJob } from "../api.ts";
 import { fileSourceOf, StationPreview } from "../Preview.tsx";
@@ -15,6 +15,7 @@ import * as css from "./Preview.css.ts";
 import * as barsCss from "./styles/bars.css.ts";
 import * as homeCss from "./styles/home.css.ts";
 import { t } from "../i18n.ts";
+import { Waiting } from "@stillfail/ui/waiting.tsx";
 
 export function PreviewScreen() {
   const app = useApp();
@@ -40,6 +41,8 @@ export function PreviewScreen() {
   return (
     <div className={`${pagesCss.mScreen} ${css.mPreview}`}>
       <NavBar back={t("web-mobile.nav.chat")} onBack={app.pop} title={job?.name ?? t("web-mobile.preview.service")} sub={<span className={barsCss.mNavbarNote}>{station.name}</span>} />
+      {/* Not read yet: the room it will fill, saying so (no blank page meanwhile). */}
+      {!error && !job && <Waiting fill shape="cards" count={1} />}
       {error && !job && <p className={homeCss.mNote}>{t("web-mobile.preview.notFound", { error })}</p>}
       {job && !up && <p className={homeCss.mNote}>{t("web-mobile.preview.stopped", { name: job.name })}</p>}
       {job && up && (

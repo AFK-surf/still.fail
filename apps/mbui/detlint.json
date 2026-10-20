@@ -1,0 +1,281 @@
+{
+  "mbt": {
+    "roots": [
+      "src"
+    ],
+    "framework": [
+      "src/host",
+      "src/core"
+    ],
+    "clock_sources": [
+      "src/core",
+      "src/host"
+    ],
+    "frame_core": [
+      "src/host"
+    ]
+  },
+  "globals": {
+    "roots": [
+      "src/sfapp"
+    ]
+  },
+  "flows": [
+    "e2e/flows/*.drive"
+  ],
+  "scripts": [
+    "scripts/*.sh",
+    "scripts/*.mjs",
+    "scripts/*.py",
+    "e2e/*.sh",
+    "e2e/*.ts",
+    "e2e/*.py",
+    "e2e/flows/*.check",
+    "e2e/win/*"
+  ],
+  "skip": [
+    "scripts/detlint*.py",
+    "mbui",
+    "out"
+  ],
+  "style": {
+    "tokens": [
+      "src/sf/tokens.mbt"
+    ]
+  },
+  "counts": {
+    "frame-request": {
+      "src/sfapp/chat.mbt": 1,
+      "src/sfapp/composer.mbt": 2,
+      "src/sfapp/drive_reader.mbt": 2,
+      "src/sfapp/pick.mbt": 1,
+      "src/sfapp/recent.mbt": 1,
+      "src/sfapp/service.mbt": 1,
+      "src/sfapp/updates.mbt": 1
+    },
+    "settle": {},
+    "flow-wait": {
+      "e2e/flows/09-paste-long.drive": 1,
+      "e2e/flows/15-drive-lend.drive": 1,
+      "e2e/flows/22-answer-option.drive": 2,
+      "e2e/flows/23-dismiss.drive": 2,
+      "e2e/flows/24-close-option.drive": 2,
+      "e2e/flows/25-archive.drive": 1,
+      "e2e/flows/26-history.drive": 2,
+      "e2e/flows/27-pin.drive": 3,
+      "e2e/flows/28-decisions-page.drive": 1,
+      "e2e/flows/36-archive-restore.drive": 1,
+      "e2e/flows/41-notice-failed.drive": 1,
+      "e2e/flows/42-notice-looking.drive": 3,
+      "e2e/flows/43-notify-off.drive": 6,
+      "e2e/flows/47-service-page.drive": 7,
+      "e2e/flows/49-update.drive": 2,
+      "e2e/flows/67-lock-wait.drive": 2,
+      "e2e/flows/70-card-motion.drive": 3,
+      "e2e/flows/71-card-keep.drive": 1,
+      "e2e/flows/72-bar-archive.drive": 1,
+      "e2e/flows/73-pick-words.drive": 2,
+      "e2e/flows/93-share-files.drive": 4,
+      "e2e/flows/95-recent-photos.drive": 3,
+      "e2e/flows/96-viewer.drive": 8,
+      "e2e/flows/97-video-frames.drive": 4
+    },
+    "script-wait": {
+      "e2e/android-flow.sh": 7,
+      "e2e/flows/49-update.check": 2,
+      "e2e/peer.ts": 1,
+      "e2e/win.sh": 2,
+      "scripts/android-core.sh": 3,
+      "scripts/beta.sh": 1,
+      "scripts/core.sh": 2,
+      "scripts/e2e-local.sh": 6,
+      "scripts/shots.sh": 8,
+      "scripts/web-ref.mjs": 3,
+      "scripts/web-shots.mjs": 1
+    },
+    "page-settle": {},
+    "frame-count": {},
+    "literal-time": {},
+    "stable-mode": {},
+    "retired-api": {},
+    "app-clock": {
+      "src/sfapp/bar.mbt": 1,
+      "src/sfapp/chat.mbt": 5,
+      "src/sfapp/chat_fixture.mbt": 1,
+      "src/sfapp/decisions.mbt": 3,
+      "src/sfapp/drive_reader.mbt": 2,
+      "src/sfapp/emit.mbt": 5,
+      "src/sfapp/preview.mbt": 1
+    },
+    "wall-clock": {
+      "src/coredemo/shelf.mbt": 1,
+      "src/sfreplay/source.mbt": 1,
+      "src/stillfail/main.mbt": 1
+    },
+    "poll": {
+      "src/sfapp/composer.mbt": 1,
+      "src/sfapp/drive_reader.mbt": 1,
+      "src/sfapp/preview.mbt": 2,
+      "src/sfapp/recent.mbt": 2,
+      "src/sfapp/service.mbt": 1
+    },
+    "host-read": {},
+    "builtin-hash": {},
+    "hash-order": {},
+    "globals": {},
+    "style-literal": {
+      "src/coredemo/main.mbt": 39,
+      "src/gallery/view.mbt": 66,
+      "src/player/audio.mbt": 34,
+      "src/player/player.mbt": 109,
+      "src/sf/glass.mbt": 5,
+      "src/sf/markdown.mbt": 55,
+      "src/sf/parts.mbt": 70,
+      "src/sf/picture.mbt": 1,
+      "src/sfapp/app.mbt": 47,
+      "src/sfapp/bar.mbt": 38,
+      "src/sfapp/chat.mbt": 151,
+      "src/sfapp/composer.mbt": 126,
+      "src/sfapp/decide.mbt": 53,
+      "src/sfapp/decisions.mbt": 139,
+      "src/sfapp/drive.mbt": 158,
+      "src/sfapp/drive_parts.mbt": 73,
+      "src/sfapp/drive_reader.mbt": 153,
+      "src/sfapp/drive_sheets.mbt": 70,
+      "src/sfapp/emit.mbt": 2,
+      "src/sfapp/flight.mbt": 2,
+      "src/sfapp/history.mbt": 244,
+      "src/sfapp/home.mbt": 167,
+      "src/sfapp/home_menu.mbt": 24,
+      "src/sfapp/keep.mbt": 12,
+      "src/sfapp/link_menu.mbt": 10,
+      "src/sfapp/messages.mbt": 267,
+      "src/sfapp/newchat.mbt": 184,
+      "src/sfapp/pages.mbt": 59,
+      "src/sfapp/pick.mbt": 19,
+      "src/sfapp/preview.mbt": 191,
+      "src/sfapp/preview_marks.mbt": 114,
+      "src/sfapp/recent.mbt": 14,
+      "src/sfapp/service.mbt": 127,
+      "src/sfapp/settings/archive.mbt": 51,
+      "src/sfapp/settings/connects.mbt": 33,
+      "src/sfapp/settings/home.mbt": 50,
+      "src/sfapp/settings/memory.mbt": 56,
+      "src/sfapp/settings/parts.mbt": 26,
+      "src/sfapp/settings/profiles.mbt": 143,
+      "src/sfapp/settings/security.mbt": 80,
+      "src/sfapp/settings/sheet.mbt": 63,
+      "src/sfapp/settings/stations.mbt": 154,
+      "src/sfapp/settings/usage.mbt": 99,
+      "src/sfapp/settings/vault.mbt": 83,
+      "src/sfapp/share.mbt": 90,
+      "src/sfapp/sheets.mbt": 316,
+      "src/sfapp/station_files.mbt": 74,
+      "src/sfapp/updates.mbt": 10,
+      "src/sfapp/wide.mbt": 73,
+      "src/sfapp/wide_chat.mbt": 35,
+      "src/sfapp/wide_keys.mbt": 60,
+      "src/sfapp/wide_pop.mbt": 51,
+      "src/sfapp/wide_side.mbt": 141,
+      "src/sfkit/glass.mbt": 55,
+      "src/sfkit/kit.mbt": 29,
+      "src/shelf/reader.mbt": 136,
+      "src/shelf/view.mbt": 48,
+      "src/stillfail/main.mbt": 3,
+      "src/videos/view.mbt": 82
+    },
+    "box-loose": {
+      "src/coredemo/main.mbt": 20,
+      "src/gallery/view.mbt": 33,
+      "src/player/audio.mbt": 15,
+      "src/player/player.mbt": 46,
+      "src/sf/glass.mbt": 1,
+      "src/sf/markdown.mbt": 31,
+      "src/sf/parts.mbt": 29,
+      "src/sf/picture.mbt": 2,
+      "src/sfapp/app.mbt": 18,
+      "src/sfapp/bar.mbt": 18,
+      "src/sfapp/chat.mbt": 58,
+      "src/sfapp/composer.mbt": 52,
+      "src/sfapp/decide.mbt": 18,
+      "src/sfapp/decisions.mbt": 53,
+      "src/sfapp/drive.mbt": 63,
+      "src/sfapp/drive_parts.mbt": 26,
+      "src/sfapp/drive_reader.mbt": 65,
+      "src/sfapp/drive_sheets.mbt": 22,
+      "src/sfapp/emit.mbt": 1,
+      "src/sfapp/flight.mbt": 3,
+      "src/sfapp/history.mbt": 113,
+      "src/sfapp/home.mbt": 71,
+      "src/sfapp/home_menu.mbt": 7,
+      "src/sfapp/keep.mbt": 6,
+      "src/sfapp/link_menu.mbt": 3,
+      "src/sfapp/messages.mbt": 120,
+      "src/sfapp/newchat.mbt": 63,
+      "src/sfapp/pages.mbt": 23,
+      "src/sfapp/pick.mbt": 8,
+      "src/sfapp/preview.mbt": 76,
+      "src/sfapp/preview_marks.mbt": 38,
+      "src/sfapp/recent.mbt": 5,
+      "src/sfapp/service.mbt": 47,
+      "src/sfapp/settings/archive.mbt": 16,
+      "src/sfapp/settings/connects.mbt": 17,
+      "src/sfapp/settings/home.mbt": 22,
+      "src/sfapp/settings/memory.mbt": 24,
+      "src/sfapp/settings/parts.mbt": 29,
+      "src/sfapp/settings/profiles.mbt": 61,
+      "src/sfapp/settings/security.mbt": 39,
+      "src/sfapp/settings/sheet.mbt": 18,
+      "src/sfapp/settings/stations.mbt": 71,
+      "src/sfapp/settings/usage.mbt": 41,
+      "src/sfapp/settings/vault.mbt": 35,
+      "src/sfapp/share.mbt": 37,
+      "src/sfapp/sheets.mbt": 138,
+      "src/sfapp/station_files.mbt": 27,
+      "src/sfapp/updates.mbt": 5,
+      "src/sfapp/wide.mbt": 30,
+      "src/sfapp/wide_chat.mbt": 14,
+      "src/sfapp/wide_keys.mbt": 23,
+      "src/sfapp/wide_pop.mbt": 17,
+      "src/sfapp/wide_side.mbt": 53,
+      "src/sfkit/glass.mbt": 17,
+      "src/sfkit/kit.mbt": 20,
+      "src/shelf/reader.mbt": 73,
+      "src/shelf/view.mbt": 28,
+      "src/stillfail/main.mbt": 2,
+      "src/videos/view.mbt": 48
+    },
+    "style-exact": {
+      "src/sf/tokens.mbt": 20
+    },
+    "unsettled-ok": {
+      "src/sfreplay/steps.mbt": 1
+    }
+  },
+  "excused": {
+    "frame-request": {},
+    "settle": {},
+    "flow-wait": {},
+    "script-wait": {
+      "scripts/ios-smoke.sh": 1
+    },
+    "page-settle": {},
+    "frame-count": {},
+    "literal-time": {},
+    "stable-mode": {},
+    "retired-api": {},
+    "app-clock": {},
+    "wall-clock": {},
+    "poll": {},
+    "host-read": {},
+    "builtin-hash": {},
+    "hash-order": {},
+    "globals": {},
+    "style-literal": {},
+    "box-loose": {
+      "src/sf/nav_bar.mbt": 1
+    },
+    "style-exact": {},
+    "unsettled-ok": {}
+  }
+}

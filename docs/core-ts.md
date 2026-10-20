@@ -26,11 +26,14 @@
 
 ## Account providers and embedding
 
+An app's own calls and topics come in as modules given to the core as it starts (`modules`): docs/core-modules.md.
+
 The core reaches its accounts' control plane through an `AccountProvider` (`client/core-ts/src/account-provider.ts`): the accounts on this device, `/v1/me`, a workspace's stations, member credentials, account events, push and the workspace operations. Whatever the provider is, the core keeps everything in still.fail cloud's shapes, so topics, UIs and the mesh do not change.
 
 - **still.fail cloud** (`stillfailAccountProvider`, the default): what the core always did — Google PKCE sign-in, rotating refresh tokens, `/v1/me`, `/v1/workspaces/:ws/credential`, the `/v1/events` WebSocket, Web Push, invitations, login sessions and operator lists.
-- **Comma** (`commaAccountProvider({origin, bearer})`, `client/core-ts/src/comma.ts`; contract v1 §4–5): the host app owns the Comma session and gives `bearer(): Promise<string>`; the core has no sign-in (`auth.begin` answers `unsupported`). The account is the session's user (`GET /v1/comma/stations/me`, kept under the storage key `comma/account` so the core starts with it while Comma is away); a 401 for the session removes it. Workspaces' stations come from `GET /v1/comma/workspaces/:id/stations`; each workspace's SSE (`/stations/events`) is followed as `/v1/events` would be (`station` updates in place, `stations` reads the list again, heartbeats keep it alive). Member credentials come from `POST /v1/comma/workspaces/:id/station-credential` and are kept exactly like still.fail cloud's: reused for a day, then asked for again, and the kept one serves until it expires when Comma cannot be reached. `workspace.enroll`, `workspace.renameStation` and `workspace.removeStation` go to Comma's enrollment and station routes; invitations, members, relays, login sessions and the operator's lists fail with `unsupported`. Pushes are Comma's own (APNs through its app), so the core registers none; traces are not sent.
+- **Comma** (`commaAccountProvider({origin, bearer})` or `commaAccountProvider({origin, transport})`, `client/core-ts/src/comma.ts`; contract v1 §4–5): the host app owns the Comma session and gives either `bearer(): Promise<string>` or a `transport` (`fetch`/`fetchStream` as promises) that sends requests with the session itself, so the core never holds the token; the core has no sign-in (`auth.begin` answers `unsupported`). The account is the session's user (`GET /v1/comma/stations/me`, kept under the storage key `comma/account` so the core starts with it while Comma is away); a 401 for the session removes it. Workspaces' stations come from `GET /v1/comma/workspaces/:id/stations`; each workspace's SSE (`/stations/events`) is followed as `/v1/events` would be (`station` updates in place, `stations` reads the list again, heartbeats keep it alive). Member credentials come from `POST /v1/comma/workspaces/:id/station-credential` and are kept exactly like still.fail cloud's: reused for a day, then asked for again, and the kept one serves until it expires when Comma cannot be reached. `workspace.enroll`, `workspace.renameStation` and `workspace.removeStation` go to Comma's enrollment and station routes; invitations, members, relays, login sessions and the operator's lists fail with `unsupported`. Pushes are Comma's own (APNs through its app), so the core registers none; traces are not sent.
 - The station's device tools access (`tools.access`, docs/cloud.md "Control planes") is a station operation for any provider: `tools.access` reads it, `tools.setAccess {access}` sets it (owners and admins; it is `off` until set).
+- The station's variables for what it starts for its agents (docs/agent-env.md) are in its overview (`agentEnv`); `agentEnv.set {text}` (or `{env}`, a patch) changes them (owners and admins); the pages edit them in the `agentEnvForm` draft (`agentEnv.form.open|edit|save|drop`).
 
 **Embedding on Node** (an Electron main process, which is where Comma keeps its session token): `sh scripts/core-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]` lays out `DIR/stillfail-core` — `core-ts.js` (the Node host, one CommonJS bundle, as the desktop app bundles it), `core-ts.d.ts`, the platform's `mesh.node`, `package.json`, `VERSION`/`BUILD`. It publishes nothing. The app then does:
 
@@ -149,6 +152,41 @@ core 这边怎么做到「一行变只算一行」：
 
 （同样的改动下老式订阅者的 core 耗时也降到 17–19 ms：行和输出的复用对两种订阅都有效，差的是按下标 diff 和整值称重。）
 
+## 谁能改什么（2026-10-14）
+
+规则 7 靠「没变的东西是同一个对象」：库里读出的行、做好的列表行、发出去的项都按对象复用，`output.ts` 遇到同一个冻结对象
+直接用上次的输出，`digest.ts` 按对象记 digest。所以共享出去的值一旦被原地改，要么抛错（它被冻结了：#265 在附件上写
+`owner`，带文件的 chat 让整个 core 退出），要么悄悄错（没冻结：diff 看不出变化，界面停在旧值）。规则：
+
+1. **共享的值只读。** 共享的值：`Data.shared()` 读出的（库里的行、文档、日志条目、设备的值）、store 存的和 view 算出的
+   值（`Store.set`、`update`、`compute`）、发出去的（`output.ts`）、各种按对象记的缓存（`#rowsMade`、`#cache`）。
+   从产生起就不再变；要可变的副本用 `Data.get()` 或 `structuredClone`。
+2. **函数只改自己这次新做的对象。** 参数和从参数读到的东西（`p.x`、`arr(p.items)`、`p.list.find(…)`）一律不改，要改就在
+   需要的那一层复制：`{ ...m, by: { ...m.by, here: true } }`；数组用 `map`、`filter`、`[...a, x]`，排序用 `[...a].sort()`
+   （Hermes 0.81 没有 `toSorted`）。没变的部分原样放回，引用保持稳定。浅复制出的新对象只能改它自己的字段
+   （`c.x = 1`），不能改里面的（`c.x.y = 1`、`c[0].z = 1`）。
+3. **派生的字段在做 view 的函数里用新对象产出**：装饰函数（`present.session`、`connect`、`profile`、`host`、`person`、
+   `times`…）、`shownMessage`、`decisions.presentRow`、`attend.chat` 都返回新值，调用方用返回值。
+4. **模块的私有状态不原地改已经交出去的部分**：放进 topic 值的数组和对象，之后只整体替换（例：`applyStep` 结束一个
+   step 是换成新 step）。
+
+谁来保证：
+
+- **运行时**（`util.ts` 的 `sharedValue` / `checkShared`）：core 的测试（`node --test`，或 `STILLFAIL_CHECK_SHARED=1`）和
+  web 的开发构建里，store 存的、算出的、发出去的值在共享处整个深冻结，谁写谁当场抛错，不管测试数据本身冻没冻。
+  生产里不开（只冻结本来就冻结的：库里的行、设备的值、列表行）。一个 view 算的时候抛错，只让它自己的 topic 显示
+  `internal` 错误，core 和别的 topic 照常（`store.ts` 的 `#compute`）。
+- **检查**（`client/core-ts/scripts/writes.ts`，`check.sh` 改到 core 时跑）：做 view 和装饰的文件里，不许对参数和从参数
+  读到的值赋值、`delete`、`++`、调用原地改数组的方法或 `Object.assign`。它按文件内的数据来源推断，不跨函数：别的
+  函数返回的值它当作新做的，那部分由运行时的冻结兜底。
+- **测试**（`test/views.test.ts` 的 `what_the_core_keeps_and_shares_is_never_written_on_whatever_a_chat_holds`）：按种子
+  随机生成一个 chat 和它周围的东西（附件、quotes、card、选项、编辑、outbox、置顶、决策、多个 agent、额度窗口……，60 个
+  种子，`SIM_SEED=<种子>` 重放一个），交给 core 存（冻结），订阅 chat、列表、决策、station、connect、overview 等 topic，
+  断言每个都有值、没有一个报错。检查脚本自己的测试在 `test/writes.test.ts`。
+
+量过的开销（2026-10-14）：深冻结每个对象 V8 约 0.06–0.08 µs、Hermes 0.81.4（Mac）约 0.4–0.7 µs，已冻结的部分约为 0；
+冻结后读属性不变慢。immer 的 produce 比手写展开复制慢 10–14 倍，不用。
+
 ## 刻意和 Rust core 不同的地方
 
 （随做随补；每条写明违反了哪条规则。）
@@ -156,6 +194,9 @@ core 这边怎么做到「一行变只算一行」：
 - 规则 6：Rust 的话题在被订阅时才去读（`Stations::start` → `refetch`，`start_topic` → `spawn_refresh`，chat 打开时
   `open_thread` 读窗口，`job`/`jobLog`/`slackApp`/`footprint`/`stationUsage`/`loginSessions`/`admin` 都是订阅时读）；TS 的订阅
   只读记录，读请求都由同步调度器发起，订阅和 `client.focus` 只调高相关任务的优先级。
+- 规则 6 的例外：`stationUsage`（约 200 KB，每次模型调用都变）和 `archivedRows`（所有归档过的对话）只在有页面显示时读
+  （`Store.inUse`：有订阅或有 view 在看）；没显示时变了只记下，显示时再读（`sync.ts` 的 `usageShown`/`archivedShown`，
+  由话题开始时，或在它的保留期内又被显示时的 `Source.resume` 触发）。
 - 规则 6：Rust 的 `sync.rs` 只同步 workspace、station 的 rows/sessions/threads/overview 和在跑的 agent 的 live；消息由
   `warm` 顺带拉。TS 的同步调度器同步全部业务数据（含每个 chat 的 entries），按优先级排队。
 - 规则 6：cloud 的 `/v1/events` socket 在账号登录期间一直开着（Rust 只在有 account 话题时开）；账号的 workspace 列表一变，
@@ -235,12 +276,24 @@ cloud 的端口、`doing` 的 `since`。
   Trace、wake（hedge/drop 用 race）、call 的执行（可取消的 call 是可 interrupt 的 fiber）。
 - 同步调度器 `src/sync/scheduler.ts`（按 lane 限并发、按 key 去重、按优先级取，UI 只能 `prioritize`）和 cloud 同步
   `src/sync/cloud.ts`（socket、/v1/me、workspace、登录设备、运营列表）。订阅只读记录（`core/routing.ts`）。
-- station 同步 `src/station/sync.ts`：workspace 能到就建链路，events 流每次打开都把 station 整个读一遍（交给调度器），
-  事件更新记录；thread 的 entries 和 transcript 是日志记录（按需从库里懒加载），整段从最新页往前补全；写操作用
-  `afterWrite` 只读它影响的记录。station 话题 `src/station/topics.ts` 只读记录（thread 窗口、live、net 采样、place）。
+- station 同步分三块（`src/station/`），station 话题 `topics.ts` 只读记录（thread 窗口、live、net 采样、place）：
+  - 链路 `link.ts`：workspace 能到就建，events 流的开、断、重连、接管；只管「通不通」，流上来了什么、开流时读什么
+    都交给同步。
+  - 只追加的是单独一个模块 `src/channels/`（`channels.ts`，读哪一段是 `fill.ts` 的纯函数），不认识 station 的接口、
+    数据库、事件流、chat、窗口；用它的人给三样：channel 是什么（`Kind`：怎么问对端、答案怎么解）、条目存哪
+    （`Held`）、怎么到对端（`Reach`），外加每次要的优先级。station 的两种在 `station/channel-kinds.ts`：thread 的
+    entries、会话的 transcript。每个 channel 一条带编号的日志，设备在其中的位置就是手里有的编号（和条目一起落盘），
+    没有别的游标。推送（`thread`、`live` 事件）存下并记「说到第几条」；其它说到第几条的来源（thread 摘要的 `last`、
+    读取的答案、发消息得到的编号）走同一个入口；只有一条规则：手里有一部分、而说到的比手里多或中间有洞，就按编号读
+    （`settle`）。channel 不靠「流把该说的都说了」保持最新：流断了重开时，界面开着的 channel 问一次手里最后一条之后的
+    （`catchUp`），其余的等摘要说它落后。测试 `test/channels.test.ts` 直接对模块写（内存里的假对端和假存储，乱序丢包
+    按种子跑）。
+  - 会变的 `sync.ts`（列表和行、thread 摘要、overview、job、已读）：只有最新值有意义。流推最新值；流回来时先按设备
+    在 station 事件日志里的位置（`cursor.ts`）补发这期间变过的，补不了就重读（`snapshot`，手里有的列表按摘要只取变了
+    的行）。写操作用 `afterWrite` 只读它影响的记录。后台再把其余的搬到设备上（`#history`：各会话详情和每个 channel）。
 - 文字和显示：`present.ts`、`decisions.ts`、`jobs.ts`、`footprint.ts`、`looks.ts`、`history.ts`、`refs.ts`、`notices.ts`、
   `attend.ts`、`pill.ts`、`changelog.ts`、`asks.ts`、`preview-load.ts`、`format.ts`。
-- 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/longJobs/
+- 视图 `src/views/`：chats/chatSearch/chat/stations/connects/decisions/history/archive/workspaceMarks/chatJobs/imageNear/longJobs/
   usage/admin*，覆盖层 `views/local.ts`（outbox、pending、first、changing、archiving 全是记录），改 chat 的 call
   `views/calls.ts`（发送、建 chat、回答卡片、改名置顶归档，启动时把没做完的接着做）。
 - 选择（newChat/pick，`choose.ts`）、表单（自动决策、Slack token、连接向导、加 profile，`forms.ts`）、注意力和通知
@@ -357,7 +410,8 @@ SharedWorker 时多个 core 一起写、各账号共用一个库（已读、未�
   再写，`status` 说出来。
 - web 单写者：每个标签页一个 dedicated worker，拿到 Web Lock `stillfail-core` 的那个跑 core，其它的经 BroadcastChannel
   转发，那个标签页关了由下一个接管，页面收到 `{rejoin: true}` 重新订阅（`web/src/core/worker.ts`、`client.ts`）；
-  页面调用 `navigator.storage.persist()`。桌面/安卓靠 `locking_mode = EXCLUSIVE`，第二个进程打开得到 busy（库在内存里
+  页面离开时结束自己的 worker、页面以 no-store 发，不让冻在前进后退缓存里的 worker 一直攥着锁；拿着锁的 worker 立刻
+  回应新 worker 的 hello，3 秒没回应的锁被抢走（steal）；页面调用 `navigator.storage.persist()`。桌面/安卓靠 `locking_mode = EXCLUSIVE`，第二个进程打开得到 busy（库在内存里
   这一轮，`status` 说出来）；桌面同一进程里 core 因 fatal 重启前先关库。
 - 读就是查询：列表在被读时一条索引查询载入、之后写者逐行维护、topic 走了就放掉；只被 view 盯着的列表不读；chat 列表
   行多（> 500）时首屏 80 行一条查询先出（`chat_recent` 索引），再逐台载入；workspace 标记只读 `tone`/`asks` 选出的行，

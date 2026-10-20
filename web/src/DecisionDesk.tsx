@@ -16,8 +16,10 @@ import { DecisionsIdle } from "./DecisionsIdle.tsx";
 import { StationContext, stationBase } from "./station.tsx";
 import { useShortcut } from "./keymap.ts";
 import { useListMotion } from "./listMotion.ts";
-import { LOCAL_MS, MOVE, reducedMotion } from "./motion.ts";
-import { Time } from "./ui.tsx";
+import { LOCAL_MS, MOVE } from "@stillfail/ui/motion.ts";
+import { Time, Waiting } from "./ui.tsx";
+import { StationMark } from "./StationMark.tsx";
+import * as markCss from "./StationMark.css.ts";
 import * as css from "./DecisionDesk.css.ts";
 import * as deckCss from "./Decisions.css.ts";
 import * as nav from "./Sidebar.css.ts";
@@ -143,13 +145,14 @@ export function DecisionRows({ active, page }: { active: boolean; page: string }
             onMouseDown={(e) => e.preventDefault()} onClick={() => choose(x)}>
             <span className={css.question}>{question(x)}</span>
             <span className={css.meta}>
-              <span className={css.metaWhere}>{x.title} · {x.stationName}</span>
+              <span className={css.metaWhere}>{x.title} · {(x.stationEmoji || x.stationIcon) && <StationMark emoji={x.stationEmoji} icon={x.stationIcon} size={12} className={markCss.inline} />}{x.stationName}</span>
               <Time className={css.metaTime} stamp={x.message.time?.createdAt} fixed />
             </span>
           </button>
         </div>
       ))}
-      {view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
+      {queue.waiting ? <Waiting dense note={queue.waiting} />
+        : view.value && items.length === 0 && <div className={css.emptyList}>{t("web-main.decisions.empty")}</div>}
     </div>
   );
 }
@@ -174,7 +177,7 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
         <div className={css.barLead}>
           {d && <>
             <button type="button" className={css.barChat} onClick={() => onOpen(path)} title={t("web-main.decisions.openChat")}>{d.title}</button>
-            <span className={css.barStation}>{d.stationName}</span>
+            <span className={css.barStation}>{(d.stationEmoji || d.stationIcon) && <StationMark emoji={d.stationEmoji} icon={d.stationIcon} size={12} className={markCss.inline} />}{d.stationName}</span>
           </>}
         </div>
         <div className={css.barActions}>
@@ -201,7 +204,8 @@ export function DecisionPage({ onOpen }: { onOpen: (path: string) => void }) {
               </DecisionFoot>
             </div>
           </StationContext.Provider>
-        ) : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
+        ) : queue.waiting ? <Waiting shape="cards" count={2} note={queue.waiting} />
+          : view.value ? <DecisionsIdle view={view.value} onOpen={onOpen} />
           : empty && <p className={deckCss.empty}>{empty}</p>}
       </div>
     </div>
@@ -224,7 +228,7 @@ function useOpening(list: React.RefObject<HTMLDivElement | null>, active: boolea
     if (!rows.length && performance.now() - from.at <= LOCAL_MS) return;
     const recent = openedRecently();
     openedFrom = null;
-    if (!rows.length || !recent || reducedMotion()) return;
+    if (!rows.length || !recent) return;
     rows.forEach((row, i) => {
       const dy = from.top - row.getBoundingClientRect().top;
       row.style.transform = `translateY(${dy}px)`;

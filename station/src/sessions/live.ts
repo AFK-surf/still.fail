@@ -7,10 +7,12 @@
 // system's change events (fs.watch), not looked at every 250 ms.
 import type { Clock } from "effect";
 import { closeSync, existsSync, type FSWatcher, openSync, readFileSync, readSync, statSync, watch } from "node:fs";
+import { dirname, join } from "node:path";
 import { zstdDecompressSync } from "node:zlib";
 import type { LiveEvent } from "../agents/runtime.ts";
 import { Fibers } from "../ops/fibers.ts";
-import { type ReadState, type TimelineEntry, timelineOf } from "../read/transcript.ts";
+import { type ReadState, type TimelineEntry, brief, timelineOf } from "../read/transcript.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 type Json = any;
 type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
@@ -18,7 +20,20 @@ type Phase = Extract<LiveEvent, { kind: "phase" }>["phase"];
 /// A step in flight: what it is, not what it has written so far.
 export type LiveStep = { id: string; step: "text" | "thinking" | "tool"; tool?: string; subagent?: boolean; parent?: string; input: string; startedAt: number };
 
-export type TranscriptUsage = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; model: string | null };
+/// What a session's calls used, and since later: the prompt its last call sent (the context it carries on with) and the
+/// model's window when the runtime tells it (Codex). Once the usage counter has counted the session, the calls are as
+/// it counts them (its subagents' too) with what they would cost at API prices: `Counted`, the usage page's.
+export type TranscriptUsage = {
+  modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; model: string | null;
+  contextTokens: number; contextWindow: number | null; cost?: number; unpricedCalls?: number;
+};
+
+/// A session's calls as the usage counter counted them (read/usage.ts `sessionUsage`).
+export type Counted = { modelCalls: number; inputTokens: number; cachedTokens: number; outputTokens: number; cost: number; unpricedCalls: number };
+
+const noUsage = (): TranscriptUsage => ({
+  modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null, contextTokens: 0, contextWindow: null,
+});
 
 export type LiveMessage =
   | { type: "steps"; steps: LiveStep[]; phase: { phase: Phase; elapsedMs: number } | null }
@@ -30,36 +45,74 @@ export type LiveMessage =
 
 export type Listener = (message: LiveMessage) => void;
 
+/// A listener told the transcript's entries in brief (read/transcript.ts `brief`): what an execution history shows before
+/// a step is opened, the rest read whole as it is.
+export const inBrief = (listener: Listener): Listener => (m) => listener(m.type === "timeline" ? { ...m, entries: m.entries.map(brief) } : m);
+
 /// How much of a tool's input a step carries: enough to say what it runs.
 const INPUT_CHARS = 300;
+/// The fields of a call's input that say what it runs. A client core before 0.1.2301 says what a running call does by
+/// them (its activity.ts callText); a newer one says it by the call's transcript entry alone and reads none of them, but
+/// a step without them showed only 处理中 in an older one: they stay until no client that old is about.
+const SAYING = ["description", "command", "cmd", "file_path", "path", "pattern", "url", "query", "prompt"];
 /// The output rate is told at most this often, over this window (bytes / 4 ≈ tokens).
 const RATE_EVERY_MS = 1_000;
 const RATE_WINDOW_MS = 2_000;
 const RATE_FIRST_MS = 500;
+/// While a watched session works, the usage counter is asked to count it at most this often (it counts once a turn ends).
+const ASK_MS = 15_000;
 
 const takeChars = (text: string, n: number) => Array.from(text).slice(0, n).join("");
+/**
+ * A call's input as a step carries it: of a JSON object, only the fields that say what it runs, each cut short, so a
+ * long command before it does not cut its description off (it showed as "Run the tests 3 times with new m"); anything
+ * else cut short as it is.
+ */
+export function briefInput(input: string): string {
+  let args: unknown;
+  try {
+    args = JSON.parse(input);
+  } catch {
+    return takeChars(input, INPUT_CHARS);
+  }
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return takeChars(input, INPUT_CHARS);
+  const kept: Record<string, string | string[]> = {};
+  for (const name of SAYING) {
+    const v = (args as Record<string, unknown>)[name];
+    if (typeof v === "string") kept[name] = takeChars(v, INPUT_CHARS);
+    else if (Array.isArray(v)) kept[name] = v.filter((p): p is string => typeof p === "string").map((p) => takeChars(p, INPUT_CHARS));
+  }
+  return JSON.stringify(kept);
+}
 
 /// Reads a transcript as it grows (transcript.rs TranscriptTail): each read gives the timeline entries of the lines
 /// written since the last one, and the usage so far. Everything read is kept, so watchers joining later are served from
 /// memory.
 export class TranscriptTail {
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   readonly path: string;
   private offset = 0;
   private packedStamp: string | null = null;
   private partial = Buffer.alloc(0);
   entries: TimelineEntry[] = [];
-  usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
-  private seen = new Set<string>();
+  usage: TranscriptUsage = noUsage();
+  /// Each Claude response counted, with the output counted of it: one response is written as several lines, its output
+  /// at its fullest on the last.
+  private seen = new Map<string, number>();
+  /// Codex's running totals counted: token counts are told again with rate limits.
+  private totals = new Set<number>();
   private state: ReadState = { inner: new Map() };
+  /// Grok Build's usage file as last read (its size): what the driver keeps of each turn beside the transcript.
+  private grokRead = -1;
 
-  constructor(runtime: "claude" | "codex", path: string) {
+  constructor(runtime: RuntimeKind, path: string) {
     this.runtime = runtime;
     this.path = path;
   }
 
   /// New entries since the last read, with the index of the first.
   read(): [number, TimelineEntry[]] {
+    if (this.runtime === "grok") this.grokUsage();
     let start = this.entries.length;
     const compressed = !existsSync(this.path);
     const disk = compressed ? `${this.path}.zst` : this.path;
@@ -129,30 +182,105 @@ export class TranscriptTail {
     return [start, entries];
   }
 
+  /// Grok Build's transcript says no counts: the usage is what the driver kept of each turn beside it (agents/grok.ts
+  /// usageLine), read whole again when it grew; the context is the last turn's.
+  private grokUsage() {
+    const file = join(dirname(this.path), "stillfail-usage.jsonl");
+    let text: string;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch {
+      return;
+    }
+    if (text.length === this.grokRead) return;
+    this.grokRead = text.length;
+    const n = (v: Json) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+    const usage = noUsage();
+    for (const line of text.split("\n")) {
+      let r: Json;
+      try {
+        r = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const u = r?.usage;
+      if (r?.type !== "stillfail/usage" || !u) continue;
+      usage.modelCalls += Math.max(1, n(u.calls));
+      usage.inputTokens += n(u.input) + n(u.cacheRead) + n(u.cacheWrite);
+      usage.cachedTokens += n(u.cacheRead);
+      usage.outputTokens += n(u.output);
+      if (typeof r.model === "string") usage.model = r.model;
+      if (n(r.context) > 0) usage.contextTokens = n(r.context);
+      if (n(r.window) > 0) usage.contextWindow = n(r.window);
+    }
+    this.usage = usage;
+  }
+
   private addUsage(records: Json[]) {
     const n = (v: Json) => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : 0);
+    const usage = this.usage;
     for (const r of records) {
       if (this.runtime === "claude") {
         const m = r?.type === "assistant" ? r.message : undefined;
         if (!m || m.usage === undefined || typeof m.id !== "string") continue;
-        if (this.seen.has(m.id)) continue;
-        this.seen.add(m.id);
         const u = m.usage;
-        const cached = n(u?.cache_read_input_tokens) + n(u?.cache_creation_input_tokens);
-        this.usage.modelCalls++;
-        this.usage.inputTokens += n(u?.input_tokens) + cached;
-        this.usage.cachedTokens += n(u?.cache_read_input_tokens);
-        this.usage.outputTokens += n(u?.output_tokens);
-        if (typeof m.model === "string" && m.model !== "<synthetic>") this.usage.model = m.model;
+        const output = n(u?.output_tokens);
+        const known = this.seen.get(m.id);
+        if (known !== undefined) {
+          if (output > known) {
+            usage.outputTokens += output - known;
+            this.seen.set(m.id, output);
+          }
+          continue;
+        }
+        this.seen.set(m.id, output);
+        const read = n(u?.cache_read_input_tokens);
+        const written = n(u?.cache_creation_input_tokens);
+        const input = n(u?.input_tokens);
+        usage.modelCalls++;
+        usage.inputTokens += input + read + written;
+        usage.cachedTokens += read;
+        usage.outputTokens += output;
+        if (typeof m.model === "string" && m.model !== "<synthetic>") usage.model = m.model;
+        // The main thread's prompt is the context; a subagent's is its own.
+        if (r.isSidechain !== true) usage.contextTokens = input + read + written;
+      } else if (this.runtime === "dsh") {
+        // dsh's counts are apart: input is what was not cached, the cache's read and written beside it.
+        if (r?.type === "request/context" && n(r.data?.contextWindow) > 0) usage.contextWindow = n(r.data.contextWindow);
+        const u = r?.type === "assistant/message" ? r.data?.usage : undefined;
+        if (u === undefined || u === null) continue;
+        const read = n(u.cacheReadTokens);
+        const input = n(u.inputTokens) + read + n(u.cacheWriteTokens);
+        usage.modelCalls++;
+        usage.inputTokens += input;
+        usage.cachedTokens += read;
+        usage.outputTokens += n(u.outputTokens);
+        usage.contextTokens = input;
+        const model = r.data?.message?.source?.model;
+        if (typeof model === "string") usage.model = model;
+      } else if (this.runtime === "grok") {
+        // Grok Build's transcript says no counts (the station keeps them apart: agents/grok.ts), only the model.
+        if (r?.type === "assistant" && typeof r.model_id === "string" && usage.model === null) usage.model = r.model_id;
       } else {
         const p = r?.payload ?? null;
-        if (r?.type === "turn_context" && typeof p?.model === "string") this.usage.model = p.model;
-        const last = r?.type === "event_msg" && p?.type === "token_count" ? p?.info?.last_token_usage : undefined;
+        if (r?.type === "turn_context" && typeof p?.model === "string") usage.model = p.model;
+        const info = r?.type === "event_msg" && p?.type === "token_count" ? p?.info : undefined;
+        const last = info?.last_token_usage;
         if (last === undefined || last === null) continue;
-        this.usage.modelCalls++;
-        this.usage.inputTokens += n(last.input_tokens);
-        this.usage.cachedTokens += n(last.cached_input_tokens);
-        this.usage.outputTokens += n(last.output_tokens);
+        const total = info?.total_token_usage?.total_tokens;
+        if (typeof total === "number") {
+          if (this.totals.has(total)) continue;
+          this.totals.add(total);
+        }
+        const input = n(last.input_tokens);
+        const cached = Math.min(n(last.cached_input_tokens), input);
+        const output = n(last.output_tokens);
+        usage.modelCalls++;
+        usage.inputTokens += input;
+        usage.cachedTokens += cached;
+        usage.outputTokens += output;
+        usage.contextTokens = input;
+        if (n(info?.model_context_window) > 0) usage.contextWindow = n(info.model_context_window);
       }
     }
   }
@@ -161,10 +289,10 @@ export class TranscriptTail {
 /// A session's transcripts read as one: those of the runtime sessions it ran in before (done, read whole) and then the
 /// one it runs in now, their entries one after another, so its history goes on across a new runtime session.
 export class ChainTail {
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   private tails: TranscriptTail[];
 
-  constructor(runtime: "claude" | "codex", paths: string[]) {
+  constructor(runtime: RuntimeKind, paths: string[]) {
     this.runtime = runtime;
     this.tails = paths.map((path) => new TranscriptTail(runtime, path));
   }
@@ -179,13 +307,15 @@ export class ChainTail {
   }
 
   get usage(): TranscriptUsage {
-    const usage: TranscriptUsage = { modelCalls: 0, inputTokens: 0, cachedTokens: 0, outputTokens: 0, model: null };
+    const usage = noUsage();
     for (const t of this.tails) {
       usage.modelCalls += t.usage.modelCalls;
       usage.inputTokens += t.usage.inputTokens;
       usage.cachedTokens += t.usage.cachedTokens;
       usage.outputTokens += t.usage.outputTokens;
       usage.model = t.usage.model ?? usage.model;
+      // The context is the transcript's written to last that has called the model.
+      if (t.usage.modelCalls > 0) [usage.contextTokens, usage.contextWindow] = [t.usage.contextTokens, t.usage.contextWindow];
     }
     return usage;
   }
@@ -216,10 +346,13 @@ export class ChainTail {
 }
 
 type Rate = { buckets: [number, number][]; toldAt: number; told: number };
-type Watched = { tail: ChainTail; watcher: FSWatcher | null; reading: boolean; arm(): void };
+/// `behind`: the transcript of the runtime session it runs in now is not written yet (a runtime writes it once its
+/// conversation has begun), so where its history goes on is looked for again on each read.
+type Watched = { tail: ChainTail; watcher: FSWatcher | null; reading: boolean; behind: boolean; arm(): void };
 
-/// Where a session's transcripts are: of the runtime sessions it ran in, the first first, ending with its current one.
-export type Locate = (key: string) => { runtime: "claude" | "codex"; paths: string[] } | null;
+/// Where a session's transcripts are: of the runtime sessions it ran in, the first first, ending with its current one
+/// (`current`: whether that one's is among them; when not given, it is).
+export type Locate = (key: string) => { runtime: RuntimeKind; paths: string[]; current?: boolean } | null;
 
 export class LiveHub {
   private steps = new Map<string, LiveStep[]>();
@@ -232,10 +365,40 @@ export class LiveHub {
   private nextId = 0;
   /// Where a session's transcript is, once its runtime has started one.
   private locate: Locate;
+  /// The usage counter's count of a session, and asking it to count soon (agents.ts, once it runs).
+  private count: { of: (key: string) => Counted | null; ask: () => void } | null = null;
+  private askedAt = Number.NEGATIVE_INFINITY;
+  /// Each watched session's usage as last told.
+  private told = new Map<string, string>();
 
   constructor(locate: Locate, clock?: Clock.Clock) {
     this.locate = locate;
     this.time = new Fibers("live", clock);
+  }
+
+  countWith(count: { of: (key: string) => Counted | null; ask: () => void }) {
+    this.count = count;
+  }
+
+  /// A session's usage: what its transcripts say here, its calls as the usage counter counted them once it has (the
+  /// same as the usage page: its subagents' too, and their cost).
+  private usageOf(key: string, tail: ChainTail): TranscriptUsage {
+    let counted: Counted | null = null;
+    try {
+      counted = this.count?.of(key) ?? null;
+    } catch {}
+    const usage = counted !== null && counted.modelCalls > 0 ? { ...tail.usage, ...counted } : tail.usage;
+    this.told.set(key, JSON.stringify(usage));
+    return usage;
+  }
+
+  /// The usage counter counted more: each watched session whose usage changed is told it.
+  usageCounted() {
+    for (const [key, watched] of this.watched) {
+      const before = this.told.get(key);
+      const usage = this.usageOf(key, watched.tail);
+      if (JSON.stringify(usage) !== before) this.emit(key, { type: "timeline", start: watched.tail.entries.length, entries: [], usage });
+    }
   }
 
   private emit(key: string, message: LiveMessage) {
@@ -258,7 +421,7 @@ export class LiveHub {
         this.counted(key, Buffer.byteLength(event.text));
         break;
       case "start": {
-        const input = takeChars(event.input ?? "", INPUT_CHARS);
+        const input = briefInput(event.input ?? "");
         const steps = this.steps.get(key) ?? [];
         // Started again with its input (Claude Code streams it after the start): it keeps when it started.
         const startedAt = steps.find((s) => s.id === event.id)?.startedAt ?? this.time.now();
@@ -316,7 +479,7 @@ export class LiveHub {
       // A watcher that has more than the transcript (it was written anew) is told where it ends.
       const len = tail.entries.length;
       const start = Math.max(Math.min(from, len), last === null ? 0 : Math.max(0, len - last));
-      listener({ type: "timeline", start, entries: tail.entries.slice(start), usage: tail.usage });
+      listener({ type: "timeline", start, entries: tail.entries.slice(start), usage: this.usageOf(key, tail) });
     }
     const phase = this.phase.get(key);
     listener({ type: "steps", steps: [...(this.steps.get(key) ?? [])], phase: phase ? { phase: phase[0], elapsedMs: this.time.now() - phase[1] } : null });
@@ -344,14 +507,23 @@ export class LiveHub {
   moved(key: string) {
     const watched = this.watched.get(key);
     if (!watched) return;
-    const at = this.locate(key);
-    if (!at) return;
     // What the transcript left has is read first: its entries come before the new one's.
     const [start, entries] = watched.tail.read();
-    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: watched.tail.usage });
-    watched.tail.extend(at.paths);
-    watched.arm();
+    if (entries.length > 0) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, watched.tail) });
+    // The new one is usually not written yet: it is looked for on each read until it is.
+    watched.behind = true;
+    this.follow(watched, key);
     this.soon(key);
+  }
+
+  /// Goes on into the transcripts a session that moved on has now, watching the one written to.
+  private follow(watched: Watched, key: string) {
+    const at = this.locate(key);
+    if (!at) return;
+    watched.behind = at.current === false;
+    const path = watched.tail.path;
+    watched.tail.extend(at.paths);
+    if (watched.tail.path !== path) watched.arm();
   }
 
   unsubscribe(key: string, id: number) {
@@ -427,7 +599,7 @@ export class LiveHub {
         watched.watcher = watcher;
       } catch {}
     };
-    const watched: Watched = { tail, watcher: null, reading: false, arm };
+    const watched: Watched = { tail, watcher: null, reading: false, behind: at.current === false, arm };
     this.watched.set(key, watched);
     arm();
     return true;
@@ -436,6 +608,7 @@ export class LiveHub {
   private unwatch(key: string) {
     const watched = this.watched.get(key);
     this.watched.delete(key);
+    this.told.delete(key);
     watched?.watcher?.close();
   }
 
@@ -451,8 +624,14 @@ export class LiveHub {
       const now = this.watched.get(key);
       if (!now) return;
       now.reading = false;
+      if (now.behind) this.follow(now, key);
       const [start, entries] = now.tail.read();
-      if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: now.tail.usage });
+      if (entries.length > 0 || fresh) this.emit(key, { type: "timeline", start, entries, usage: this.usageOf(key, now.tail) });
+      // Working on: the counter counts what it has written so far, now and then.
+      if (entries.length > 0 && this.count !== null && this.time.now() - this.askedAt >= ASK_MS) {
+        this.askedAt = this.time.now();
+        this.count.ask();
+      }
     });
   }
 }

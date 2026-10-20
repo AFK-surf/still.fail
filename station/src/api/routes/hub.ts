@@ -5,6 +5,7 @@
 import { randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, statfsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { clean, fileName as nameOf, inside } from "../../ops/paths.ts";
 import { type Answer, type Request, error, json, param, percentDecode } from "../request.ts";
 import type { Route, Tools } from "../admin.ts";
 import { tr } from "../../ops/i18n.ts";
@@ -29,8 +30,11 @@ import {
 import { shown } from "../../jobs/jobs.ts";
 import { withLock, workspaceFile } from "../../sessions/archive.ts";
 import { roomOf } from "../../sessions/footprint.ts";
-import { dir as thumbsDir, keep } from "../../sessions/thumbs.ts";
+import { dir as thumbsDir, keep } from "../../drive/thumbs.ts";
+import { imageSize } from "../../sessions/image-size.ts";
 import { wall } from "../../ops/fibers.ts";
+import { sessionSeen } from "../seen.ts";
+import { runtimeKind } from "../../agents/runtime.ts";
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
 const ok = (value: unknown, status = 200) => json(status, JSON.stringify(value));
@@ -80,21 +84,9 @@ const text = (v: unknown): string => (v === undefined || v === null ? "" : typeo
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const chars = (s: string, max: number) => [...s].slice(0, max).join("");
 
-/// files.rs `clean`: a path absolute, with `.` and `..` worked out (no link followed).
-function clean(path: string): string {
-  const out: string[] = [];
-  for (const part of path.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") out.pop();
-    else out.push(part);
-  }
-  return `/${out.join("/")}`;
-}
-/// Path::starts_with, component by component, and not the directory itself.
-const inside = (path: string, dir: string) => path !== dir && (dir === "/" || path.startsWith(`${dir}/`));
 const exists = (path: string) => statSync(path, { throwIfNoEntry: false }) !== undefined;
 /// Path::file_name.
-const fileName = (path: string) => path.split("/").filter((p) => p !== "").at(-1) ?? "";
+const fileName = (path: string) => nameOf(path) ?? "";
 
 /// files.rs `sweep_staged`: drops uploads that waited a day without a message taking them.
 export function sweepStaged(dir: string, now = wall.now()) {
@@ -111,7 +103,7 @@ export function sweepStaged(dir: string, now = wall.now()) {
 }
 
 /// Where an upload named `name` is kept in `dir`: its name made safe, and a path of its own.
-function uploadPath(dir: string, name: string): { safe: string; path: string } {
+export function uploadPath(dir: string, name: string): { safe: string; path: string } {
   const base = name.replace(/\\/g, "/").split("/").at(-1) ?? "";
   const safe = chars([...base].map((c) => (c.codePointAt(0)! < 0x20 ? "_" : c)).join("").replace(/^\.+/, ""), 120) || "file";
   mkdirSync(dir, { recursive: true });
@@ -194,9 +186,12 @@ export function quotesOf(given: unknown): Quote[] {
 /// A whole dimension (`as_f64`, no fraction, 0 < v < 100000).
 const dimension = (v: unknown) => (typeof v === "number" && Number.isInteger(v) && v > 0 && v < 100_000 ? v : undefined);
 
-export const routes = ({ read, store, agents }: Tools): Route[] => {
-  /// Answered with the hub, its refusals as `{error}`; 503 while there is none (a station starting).
+export const routes = (tools: Tools): Route[] => {
+  const { read, store } = tools;
+  /// Answered with the hub, its refusals as `{error}`; 503 while there is none (a station starting). The agents' side as it
+  /// is when asked (made after the admin API: services.ts AgentsSide).
   const write = async (f: (s: Store, a: AgentsParts) => Promise<Answer> | Answer): Promise<Answer> => {
+    const agents = tools.agents;
     if (store === undefined || agents === undefined) return error(503, "station starting");
     try {
       return await f(store, agents);
@@ -205,8 +200,9 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       return error(500, (e as Error).message);
     }
   };
-  const session = (s: Store, key: string) => {
-    if (s.getSession(key) === null) throw new Refused(404, `unknown session ${key}`);
+  /// A session there, and in the asker's workspace (one of another is none for them: api/seen.ts).
+  const session = (s: Store, key: string, r: Request) => {
+    if (s.getSession(key) === null || !sessionSeen(s, r.viewer, key)) throw new Refused(404, `unknown session ${key}`);
   };
   const thread = (s: Store, id: string) => {
     const n = /^[+-]?\d+$/.test(id) ? Number(id) : NaN;
@@ -222,8 +218,8 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
     return json(200, `{"key":${JSON.stringify(key)},"thread":${view.body.toString()}}`);
   };
   const runtime = (r: Request, i: Record<string, unknown>) => {
-    const named = text(i.runtime);
-    if (named !== "claude" && named !== "codex") throw new Refused(400, tr(r.lang, "station.admin.badRuntime"));
+    const named = runtimeKind(text(i.runtime));
+    if (named === undefined) throw new Refused(400, tr(r.lang, "station.admin.badRuntime"));
     return named;
   };
   /// Where uploaded files wait for the message that sends them.
@@ -268,7 +264,10 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         }
       }
       if (owner === undefined || !exists(path)) throw new Refused(400, tr(r.lang, "station.files.notUploaded"));
-      const [width, height] = [dimension(o.width), dimension(o.height)];
+      // Its size as the sender read it; else, for a PNG, GIF or WebP, as its header says (a sender that could not read
+      // it, as the desktop's could not). Not a JPEG's: its header does not say which way up it is shown.
+      const read = [dimension(o.width), dimension(o.height)];
+      const [width, height] = read[0] !== undefined && read[1] !== undefined ? read : /\.(png|gif|webp)$/i.test(path) ? (imageSize(path) ?? read) : read;
       const name = str(o.name) ?? path.slice(owner.dir.length + 1);
       const size = typeof o.size === "number" && o.size > 0 ? Math.min(Math.trunc(o.size), Number.MAX_SAFE_INTEGER) : 0;
       const attachment: Attachment = { name: chars(name, 200), path, size };
@@ -329,6 +328,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
                 title: typeof i.title === "string" ? chars(i.title, 120) : null,
                 createdBy: r.viewer.email,
                 clientKey: given("clientKey"),
+                ws: r.viewer.workspace || null,
               },
               r.lang,
             ),
@@ -346,9 +346,10 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
           const kind = runtime(r, i);
           const id = text(i.id);
           const roots = machineRoots();
-          const found = findMachineSession(roots, kind, id);
+          // Only Claude Code's and Codex's terminal sessions are read (read/machine.ts).
+          const found = kind === "dsh" || kind === "grok" ? null : findMachineSession(roots, kind, id);
           if (found === null) throw new Refused(404, tr(r.lang, "station.admin.noLocalSession", { id }));
-          const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang));
+          const [key, chat] = await as(400, () => continueMachineSession(a.hub, roots, found, r.viewer.email, r.lang, r.viewer.home === false ? r.viewer.workspace : null));
           log.info("admin", "machine session continued from the admin page", { session: key, from: id, by: r.viewer.email });
           return made(r, key, chat.id);
         }),
@@ -361,7 +362,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         write((s, a) => {
           const i = input(r);
           const key = text(i.session);
-          session(s, key);
+          session(s, key, r);
           const t = typeof i.title === "string" ? i.title.trim() : "";
           const chat = openChat(a.hub, key, r.viewer.email, t === "" ? null : chars(t, 80));
           return threadView(r, chat.id);
@@ -400,7 +401,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       handle: (r, [k]) =>
         write(async (s, a) => {
           const key = segment(k!);
-          session(s, key);
+          session(s, key, r);
           await deleteSession(a.hub, key);
           log.info("admin", "session deleted from the admin page", { session: key, by: r.viewer.email });
           return ok({ ok: true });
@@ -412,7 +413,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
       handle: (r, [k]) =>
         write((s, a) => {
           const key = segment(k!);
-          session(s, key);
+          session(s, key, r);
           const removed = a.jobs.clearEnded(key);
           log.info("admin", "ended jobs cleared from the admin page", { session: key, by: r.viewer.email, count: removed.length });
           return ok({ removed });
@@ -426,7 +427,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         handle: (r, [k]) =>
           write(async (s, a) => {
             const key = segment(k!);
-            session(s, key);
+            session(s, key, r);
             await archive(a.hub, key, method === "POST");
             return read(r, "summary", { key, lang: r.lang });
           }),
@@ -446,7 +447,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
               await a.hub.evict(key);
               return ok({ ok: true });
             case "warm":
-              session(s, key);
+              session(s, key, r);
               a.hub.warm(key).catch((e) => log.warn("admin", "warming failed", { session: key, error: (e as Error).message }));
               return ok({ ok: true }, 202);
             // How the session runs from its next turn on: its profile, model, effort (configure).
@@ -522,7 +523,7 @@ export const routes = ({ read, store, agents }: Tools): Route[] => {
         write(async (s, a) => {
           const t = thread(s, segment(rawId!));
           const key = text(input(r).session);
-          session(s, key);
+          session(s, key, r);
           await as(400, () => addToThread(a.hub, t.id, key));
           return threadView(r, t.id);
         }),

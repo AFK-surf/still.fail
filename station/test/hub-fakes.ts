@@ -5,6 +5,7 @@ import { TestClock } from "effect/testing";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CommandMissing } from "../src/agents/runner.ts";
 import type { AgentDriver, AgentSession, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
 import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
@@ -92,12 +93,28 @@ export class FakeSession implements AgentSession {
   busyNow = false;
   /// Takes no steer (e.g. a codex turn that is not steerable).
   unsteerable = false;
+  /// What it was retuned to in place (the model and effort of each), and whether it can be (as Claude cannot for effort).
+  retuned: [string | undefined, string | undefined][] = [];
+  retunable = true;
+  /// The address of the station's tools it was given (one taken up: as the station before gave it).
+  toolsUrl: string;
 
   constructor(id: string, options: OpenOptions, events: (event: RuntimeEvent) => void, busy = false) {
     this.sessionId = id;
     this.options = options;
     this.events = events;
     this.busyNow = busy;
+    this.toolsUrl = options.mcpUrl;
+  }
+  /// The test has it say `text` (a text step of its own).
+  says(text: string) {
+    const id = `text-${next()}`;
+    this.events({ type: "live", event: { kind: "start", id, step: "text" } });
+    this.events({ type: "live", event: { kind: "delta", id, field: "text", text } });
+    this.events({ type: "live", event: { kind: "end", id } });
+  }
+  mcpUrl() {
+    return this.toolsUrl;
   }
   /// The test ends the running turn.
   end(outcome: TurnOutcome) {
@@ -130,11 +147,16 @@ export class FakeSession implements AgentSession {
   async abort() {
     this.aborts++;
   }
+  retune(options: OpenOptions) {
+    if (!this.retunable || this.busyNow) return false;
+    this.retuned.push([options.model, options.effort]);
+    return true;
+  }
   async dispose() {
     this.disposed = true;
   }
   snapshot() {
-    return { id: this.sessionId, busy: this.busyNow };
+    return { id: this.sessionId, busy: this.busyNow, mcpUrl: this.toolsUrl };
   }
   detach() {}
 }
@@ -144,6 +166,10 @@ export class FakeDriver implements AgentDriver {
   sessions: FakeSession[] = [];
   /// Runtime session ids that resume fails for.
   unresumable = new Set<string>();
+  /// Why every process it is asked to start does not (like a borrowed login its host did not lend).
+  refuses: string | null = null;
+  /// Its command is not on PATH: every start fails as the runner says it (not installed).
+  missing = false;
   private n = 1;
   /// Times every process it started was ended.
   shutdowns = 0;
@@ -163,15 +189,18 @@ export class FakeDriver implements AgentDriver {
     return this.sessions.length;
   }
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void) {
+    if (this.missing) throw new CommandMissing(this.kind);
+    if (this.refuses !== null) throw new Error(this.refuses);
     if (options.resume !== undefined && this.unresumable.has(options.resume)) throw new Error("no such session");
     const session = new FakeSession(options.resume ?? `${this.kind}-${this.n++}`, options, events);
     this.sessions.push(session);
     return session;
   }
   async adopt(options: OpenOptions, snapshot: unknown, events: (event: RuntimeEvent) => void) {
-    const handed = snapshot as { id: string; busy: boolean } | null;
+    const handed = snapshot as { id: string; busy: boolean; mcpUrl?: string } | null;
     if (!handed) throw new Error("no runner");
     const session = new FakeSession(handed.id, options, events, handed.busy);
+    if (handed.mcpUrl !== undefined) session.toolsUrl = handed.mcpUrl;
     this.sessions.push(session);
     return session;
   }
@@ -202,7 +231,8 @@ export const reply = (to: InboundMessage, ts: string, text: string, over: Partia
   ...over,
 });
 
-export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock };
+/// `workspaces`: those the station is in, its home one first (docs/multi-workspace.md); a session's link names its own.
+export type Setup = { maxNudges?: number; maxWarmClaude?: number; warmMinutes?: number; teamRequireMention?: boolean; link?: boolean; cold?: ColdStorage; clock?: Clock.Clock; place?: { workspace: string; station: string }; workspaces?: string[] };
 
 /// A TestClock for a rig (its hub's, its store's, its sessions'): `adjust(ms)` moves it on, and what was due by then runs.
 /// `asked()` counts the waits begun on it; `begun(n)` resolves once `n` have, each then sleeping on it (an adjust
@@ -266,19 +296,26 @@ export class Rig {
       ["gpt", this.gptChat],
       ["team", this.teamChat],
     ]);
+    this.place = o.place ?? { workspace: "ws", station: "st" };
+    this.workspaces = o.workspaces;
     this.hub = this.newHub({ chats: (id) => chats.get(id), link: o.link, cold: o.cold });
   }
 
+  /// The workspace and station its links name.
+  place: { workspace: string; station: string };
+  workspaces: string[] | undefined;
+
   /// A hub over this rig's store and config (another station's, after a restart: given its own drivers).
-  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean }) {
+  newHub(o: { chats: (id: string) => ChatSurface | undefined; link?: boolean; cold?: ColdStorage; drivers?: AgentDriver[]; internal?: boolean; mcpUrl?: string }) {
     return new Hub({
       config: () => this.config,
       store: this.store,
       chats: o.chats,
       drivers: o.drivers ?? [this.claude, this.codex],
-      mcpUrl: "http://127.0.0.1:1/mcp",
+      mcpUrl: o.mcpUrl ?? "http://127.0.0.1:1/mcp",
       internal: o.internal === false ? null : new InternalChat(),
-      link: o.link ? (key) => `https://ember.test/o/ws/st/${key.replaceAll(":", "%3A")}` : undefined,
+      link: o.link ? (key) => `https://ember.test/o/${this.hub?.wsOf(key) ?? this.place.workspace}/${this.place.station}/${key.replaceAll(":", "%3A")}` : undefined,
+      workspaces: this.workspaces ? () => this.workspaces! : undefined,
       runners: () => [],
       cold: o.cold,
       clock: this.clock,

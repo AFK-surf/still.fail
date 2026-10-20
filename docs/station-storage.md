@@ -201,12 +201,36 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   (the key the asking client shows the chat by until it is made) is said by
   the chat's sidebar item for ten minutes (in memory only): its `chat` event
   can reach the client before the answer does.
-- A session's transcript comes only from `/sessions/:key/live?from=N` (entries
-  from index N — and the usage so far, even when N is all of them — then as
-  they are written; a watcher asking past the end is told where it ends); the
-  station keeps each watched transcript parsed incrementally instead of
-  re-reading the file per request.
+- A session's transcript comes from `/events?live=<key>&from=N&last=200`
+  (entries from index N, no more than the last 200 — and the usage so far,
+  even when N is all of them — then as they are written; a watcher asking past
+  the end is told where it ends) and `GET /sessions/:key/timeline?before=&limit=`
+  (the pages before); the station keeps each watched transcript parsed
+  incrementally instead of re-reading the file per request. With `brief=1` on
+  either, entries come in brief, as an execution history shows them before a
+  step is opened (`read/transcript.ts` `brief`, marked `brief: true`): a call
+  longer than 600 characters by the fields of its input that say what it does
+  (`description`, `command`, `file_path`, … each at most 300; posts, states
+  and Slack calls whole), a result without what it gave (Slack's answer kept to
+  `ok` and `ts`), a thought by its first line. `?from=a&to=b` reads entries a
+  to b whole (both included, at most 1000), as such a step is opened.
 - `GET /chats` — the viewer's sidebar items (The sidebar, below).
+- `POST /batch {gets}` — several reads in one: each path (with its query) is
+  answered as its GET is, and the answer is `{ answers: [{ status, body }] }`
+  in their order, compressed as one and harder than other answers (zstd level
+  9: nobody waits on it). Only the reads a client brings a
+  station's history onto its device with: a thread's entries, a thread, a
+  session, a session's timeline (any other is `400`); at most 64, four at a
+  time. It only reads: a read-only member may ask it.
+- `POST /changed/chats`, `/changed/threads`, `/changed/sessions` (each with
+  its GET's query) `{ held }` — what changed of the list since what the
+  client holds: `held` is each held row's digest by its id (a session's
+  `key`), the digest the row's JSON with its keys sorted, hashed (cyrb53, 53
+  bits, base 36: read/digest.ts; the core's digest.ts is the same, both
+  tested on the same values). The answer is `{ order, rows }`: the list's
+  ids in order, and the rows whose digest differs or that are not held. A
+  client whose stream could not be resumed reads its lists so; it only
+  reads, and a read-only member may ask it.
 - `PUT /me/slack/:user` / `DELETE /me/slack/:user` — the viewer says a Slack
   user is them ("这是我"), or no longer ("不是我"); nothing checks it. The
   answer is the overview, whose `slackUsers` lists the viewer's Slack users.
@@ -254,9 +278,9 @@ in; a chat's is that of the first of its sessions that has one.
 
 - **title**: the chat's title, else the first line of the first thing a person
   said in it (Slack mentions left out, spaces collapsed); with neither, its
-  Slack thread's (the same, then `#channel`, `私信`); else `（还没有消息）`.
+  Slack thread's (the same, then `#channel`, `私信`); else `新对话`.
   Without a chat: the session's title, else its Slack thread's, else
-  `（还没有消息）`.
+  `新对话`.
 - **mine**: a chat the viewer started, wrote in, or is among the people of;
   without a chat, the viewer started the session or is among the people of
   its Slack thread. A person is the viewer by id (an email, or `local`), by
@@ -280,6 +304,17 @@ are those at the moment it opened.
   session when it is that session's own chat). The station also archives
   what has idled past `auto_archive_ms` and is done (`Hub::auto_archive`,
   hourly); anything new said brings it back.
+- An archived, idle session's own directory goes to cold storage
+  (`sessions/cold.ts`): what a build makes again is removed, the rest of its
+  workspace is packed into `workspace.tar.zst` beside it, and the transcripts
+  the station keeps are compressed; all of it is restored before its runtime
+  starts again. Once it has been archived for `archivedWorkspaceDays` (7 by
+  default; 0 keeps them), the station empties its workspace
+  (`expireArchived`, looked at when the next one comes due and hourly): the
+  files sent in its chat (`uploads/`) are taken out of the archive onto the
+  disk, the archive and everything else in the workspace are removed, and the
+  git worktrees it locked are let go. Its transcripts and its threads stay, so
+  it goes on in its history, in an empty workspace.
 - `DELETE /sessions/:key`: ends its process, deletes its rows (turns,
   deliveries, thread_sessions; threads left with no session, with their
   entries or archive files, and reads), its workspace directory and its
@@ -304,7 +339,12 @@ the thread row is marked archived (`archived_at`). Since entries never change,
 the file is the thread as it was, and clients' kept copies stay valid.
 Reading an archived thread reads the file (the same API and summaries,
 answered from the decompressed entries; the last 32 threads read are kept
-decompressed in memory). A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
+decompressed in memory). What lists show of each (its last entry, latest
+message, who wrote and when first, the first thing a person said, each
+message's author for unread counts) is read from its file once a reader
+and kept, by the file as it is (its size and when it was written: one
+archived again is another file): every list of chats, sessions and threads
+read each archived thread's file, some 400 on a busy station. A new entry — someone writing in it (an edit too), or a session of it shown again — loads it back into the
 database first and removes the file. Archiving a session also writes its
 transcript copy, `<data>/archive/transcripts/<session>.jsonl.zst` (the
 runtime's file, compressed); the runtime's own file in the profile's home is
@@ -349,6 +389,7 @@ when it is small:
 | `session` | the session summary (row, state warm/cold/running, last turn, creator, participants) |
 | `session-removed` | `{ key }` |
 | `thread` | `{ id, entries: [appended entries, contiguous] }`; `entries: []` when its sessions changed |
+| `thread-view` | after a `thread` with entries, the thread as `GET /threads/:id` has it for the viewer (their read position and unread count; only to that viewer and language): a client puts it in place rather than read it |
 | `thread-removed` | `{ id }`: it went with every entry (a deleted session took it along) |
 | `read` | `{ viewer, thread, n }` (only to that viewer) |
 | `chat` | an item of the viewer's sidebar, new or changed (only to that viewer) |
@@ -360,6 +401,34 @@ Changes within one turn of the event loop are gathered: one `session` event
 per session, one `overview`, one round of sidebar items. Per-session live steps stay on
 `/sessions/:key/live`.
 
+Each event has an `id:` of the station's run and its number in it
+(`<run>.<n>`; one number for an event told to everyone, whichever streams
+it went to). What is told is kept an hour (at most 20,000 events and 8 MB),
+so a client's stream that takes over from another (the client opens a new one
+whenever what it follows changes, and lets the old one go once the new one is
+open), or comes back after its link went, asks `/events?since=<the last id it
+heard>` and is told first what came after it, as it was, then its viewer's
+sidebar rows and overview where they changed meanwhile, and the answer says
+`stillfail-resumed: 1` (the client reads nothing again); or `missed` (`{}`)
+when that is not all kept, or was another run's, and the client reads the
+station again. So that one coming back misses nothing, what is told is still
+made and kept for an hour after the last stream went; past that, nothing
+before can be resumed. A viewer's sidebar rows and overview are told against
+what their streams were told last (one telling, in each language, for all
+their streams, kept like the rest); a stream that starts afresh reads their
+sidebar before it answers, and is what their changes are told against from
+then on.
+
+Over the mesh, an answer is compressed for a client that asks
+(`accept-encoding: zstd`; station/src/mesh/compress.ts): JSON and text from
+512 bytes, zstd at its fast level, an event stream flushed after each event
+(each comes out whole as it arrives) and compressed against the last
+megabyte of it, so what a stream tells again (a session's summary, a sidebar
+row, the overview) is a few bytes the next time: of a real station's stream
+7% of it, where deflate, looking back 32 KB only, left 24%. Nothing of a
+preview (its page reads what the service sent), and no `content-length` then.
+A client from before asks nothing and gets every answer as it is.
+
 Timers that remain on the station and why: host sampling (above), quota
 refresh every five minutes while some `/events` stream is open (the provider
 cannot notify), an idle process's eviction deadline (a timer per process, set
@@ -367,7 +436,8 @@ when it goes idle, instead of a sweep every minute), Slack reconnect and
 rate-limit backoff, a keepalive comment on open
 event streams every 25 s (proxies close silent ones), a 40 ms coalescing of
 transcript writes for live watchers, a sign-in's 15-minute deadline, the
-profile checks a few seconds after start, the hourly auto-archive, and a look
+profile checks a few seconds after start, the auto-archive (when the next chat
+comes due, at most ten minutes apart), and a look
 at `mesh/cloud.json` every 2 s (enrollment and renames; `MeshFile`).
 
 ### still.fail cloud → devices: `GET /v1/events` (WebSocket)

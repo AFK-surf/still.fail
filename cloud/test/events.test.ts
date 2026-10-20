@@ -114,11 +114,29 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
 
     await alice("PATCH", `/v1/workspaces/${w}`, { name: "House" });
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "rename workspace");
+    // Its mark, as a station's: an icon of still.fail's or a picture, an emoji; in the lists as in the workspace, "" takes it away.
+    await alice("PATCH", `/v1/workspaces/${w}`, { icon: "glyph:rocket:blue", emoji: "🚀" });
+    await expect(on, { alice: [list, ws], bob: [list, ws] }, "workspace icon");
+    let marked = ((await (await bob("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === w);
+    assert.deepEqual([marked.name, marked.icon, marked.emoji], ["House", "glyph:rocket:blue", "🚀"]);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}`, { icon: "rocket" })).status, 400);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}`, {})).status, 400);
+    await alice("PATCH", `/v1/workspaces/${w}`, { icon: "", emoji: "" });
+    await expect(on, { alice: [list, ws], bob: [list, ws] }, "workspace icon cleared");
+    marked = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any);
+    assert.deepEqual([marked.name, "icon" in marked, "emoji" in marked], ["House", false, false]);
 
     const view = (await (await alice("GET", `/v1/workspaces/${w}`)).json()) as any;
     const bobSub = view.members.find((m: any) => m.email === "bob@example.test").sub;
     await alice("PATCH", `/v1/workspaces/${w}/members/${bobSub}`, { role: "admin" });
     await expect(on, { alice: [ws], bob: [list, ws] }, "role");
+
+    // Let into the test channel or out of it: its `/v1/me` changed (user.beta), so its devices read it again.
+    const aliceAdmin = h.as(tokens.alice, "admin");
+    await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: true });
+    await expect(on, { bob: [list] }, "beta on");
+    await aliceAdmin("POST", `/v1/admin/users/${bobSub}/beta`, { on: false });
+    await expect(on, { bob: [list] }, "beta off");
 
     const station = await enrollStation(h, alice, w, "studio");
     await expect(on, { alice: [list, ws], bob: [list, ws] }, "enroll");
@@ -129,7 +147,7 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     assert.equal(first.status, 101);
     await expect(on, {}, "a station connecting tells no one");
     await first.ping!();
-    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "studio", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations });
+    assert.deepEqual(first.frames![0], { type: "state", peers: [{ id: station.id, name: "studio", version: "0.2.0" }], workspace: w, workspace_name: "House", name: "studio", origin: first.frames![0].origin, relay_url: first.frames![0].relay_url, relay_urls: first.frames![0].relay_urls, relay_names: first.frames![0].relay_names, grant_keys: first.frames![0].grant_keys, revocations: first.frames![0].revocations, lock: null, workspaces: [] });
     // bob's role changed above: the credentials he held then are refused, as the station hears at once on connecting.
     assert.deepEqual(first.frames![0].revocations.map((r: any) => [r.kind, r.id]), [["sub", bobSub]]);
     let seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
@@ -139,6 +157,37 @@ test("every change reaches exactly the accounts it affects", { timeout: 30000 },
     await expect(on, { alice: [ws], bob: [ws] }, "rename station");
     await first.ping!();
     assert.equal(first.frames!.at(-1).name, "big studio", "the station learns its new name");
+    // Its emoji: one, kept with it for everyone; "" takes it away; anything not an emoji is refused.
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "🍎🍊" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station emoji");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.deepEqual([seen.name, seen.emoji], ["big studio", "🍎"]);
+    assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "ab" })).status, 400);
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { emoji: "" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station emoji cleared");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.emoji, null);
+    // Its icon, beside the emoji: one of still.fail's by name, or a small picture; anything else is refused, "" takes it away.
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "glyph:rocket", emoji: "🚀" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station icon");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.deepEqual([seen.icon, seen.emoji], ["glyph:rocket", "🚀"]);
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "glyph:dice-3:blue", emoji: "🎲" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station icon in a colour");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.icon, "glyph:dice-3:blue");
+    const picture = "data:image/png;base64,iVBORw0KGgo=";
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: picture });
+    await expect(on, { alice: [ws], bob: [ws] }, "station picture");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.equal(seen.icon, picture);
+    for (const bad of ["rocket", "glyph:Rocket!", "glyph:rocket:", "glyph:rocket:blue:red", "data:image/svg+xml;base64,PHN2Zz4=", `data:image/png;base64,${"A".repeat(60_000)}`]) {
+      assert.equal((await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: bad })).status, 400, bad.slice(0, 30));
+    }
+    await alice("PATCH", `/v1/workspaces/${w}/stations/${station.id}`, { icon: "", emoji: "" });
+    await expect(on, { alice: [ws], bob: [ws] }, "station icon cleared");
+    seen = ((await (await bob("GET", `/v1/workspaces/${w}`)).json()) as any).stations[0];
+    assert.deepEqual([seen.icon, seen.emoji], [null, null]);
 
     first.ws!.close(1000);
     await (await directory(h)).left(station.id);

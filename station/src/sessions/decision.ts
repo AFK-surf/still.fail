@@ -10,6 +10,7 @@ import { accessKind, apiSource, profileEnv, profileVia } from "../agents/profile
 import { endpoints, find } from "../agents/providers.ts";
 import { liveClock, within } from "../ops/fibers.ts";
 import type { Profile } from "./config.ts";
+import { profileFetch } from "../ops/agent-env.ts";
 
 type Json = any;
 
@@ -30,8 +31,9 @@ export type ChoiceQuestion = { instructions: string; criteria: [string, string][
 
 export type ChoiceResult = { probabilities: Record<string, number>; selected: string; model: string; source: "native" | "token_logprobs"; retainedMass: number };
 
-/// What a profile's check says it can decide with (profiles.rs Capability, camelCase JSON).
-export type Capability = { state: string; detail: string; model: string | null; provider: Provider | null; fingerprint: string; models?: string[] };
+/// What a profile's check says it can decide with (profiles.rs Capability, camelCase JSON). `detail` is in Chinese, for
+/// cores from before `reason`, which names it for the core to say in the viewer's language.
+export type Capability = { state: string; detail: string; reason?: string; model: string | null; provider: Provider | null; fingerprint: string; models?: string[] };
 
 export function validate(config: DecisionConfig) {
   let url: URL;
@@ -168,7 +170,7 @@ export async function decide(config: DecisionConfig, question: ChoiceQuestion, s
   if (config.sessionHeader) headers["x-opencode-session"] = randomUUID();
   let response: Response;
   try {
-    response = await fetch(config.endpoint, { method: "POST", headers, body, redirect: "manual", signal: AbortSignal.timeout(12_000) });
+    response = await profileFetch(config.endpoint, { method: "POST", headers, body, redirect: "manual", signal: AbortSignal.timeout(12_000) });
   } catch {
     throw new Error("decision request failed or timed out");
   }
@@ -326,8 +328,8 @@ export const byDecisionPriority = (a: string, b: string) => decisionPriority(a) 
 /// Probes which of a profile's models answer a decision with real probabilities (synthetic evidence only; no
 /// conversation, tools or agent). `check` is the profile's check: its listed models are the first candidates.
 export async function discover(profile: Profile, check: { state: string; models?: string[] | null }, clock: Clock.Clock = liveClock): Promise<Capability> {
-  const capability: Capability = { state: "unsupported", detail: "当前登录未提供决策概率接口", model: null, provider: null, models: [], fingerprint: fingerprint(profile) };
-  if (check.state === "login" || check.state === "failed") return { ...capability, state: "unavailable", detail: "账号恢复后自动检查决策能力" };
+  const capability: Capability = { state: "unsupported", detail: "当前登录未提供决策概率接口", reason: "no_probabilities", model: null, provider: null, models: [], fingerprint: fingerprint(profile) };
+  if (check.state === "login" || check.state === "failed") return { ...capability, state: "unavailable", detail: "账号恢复后自动检查决策能力", reason: "signed_out" };
   const c = connection(profile);
   if (!c) return capability;
   let models: string[] = [...(check.models ?? []), ...profile.models, ...(profile.model !== undefined ? [profile.model] : [])];
@@ -335,14 +337,14 @@ export async function discover(profile: Profile, check: { state: string; models?
   try {
     validate(transport(c, "discovery"));
   } catch {
-    return { ...capability, detail: "Profile 的接口地址不支持决策检查" };
+    return { ...capability, detail: "Profile 的接口地址不支持决策检查", reason: "address" };
   }
   // Env profiles are not listed by their coding runtime. Discover using that profile's own API.
   if (models.length === 0) {
     try {
       const headers: Record<string, string> = { authorization: `Bearer ${c.key}` };
       if (c.sessionHeader) headers["x-opencode-session"] = randomUUID();
-      const response = await fetch(`${c.base.replace(/\/+$/, "")}/models`, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
+      const response = await profileFetch(`${c.base.replace(/\/+$/, "")}/models`, { headers, redirect: "manual", signal: AbortSignal.timeout(8000) });
       if (response.ok) {
         const body: Json = await response.json();
         if (Array.isArray(body?.data)) for (const m of body.data) if (typeof m?.id === "string") models.push(m.id);
@@ -367,7 +369,7 @@ export async function discover(profile: Profile, check: { state: string; models?
   // Bound discovery work.
   await within(clock, 25_000, probe, () => new Error("discovery bounded")).catch(() => undefined);
   if (verified.length > 0) {
-    return { ...capability, state: "ready", detail: `已识别 ${verified.length} 个决策模型`, model: verified[0]!, provider: c.provider, models: [...verified] };
+    return { ...capability, state: "ready", detail: `已识别 ${verified.length} 个决策模型`, reason: "found", model: verified[0]!, provider: c.provider, models: [...verified] };
   }
-  return { ...capability, state: "unavailable", detail: "尚未验证可用的决策模型" };
+  return { ...capability, state: "unavailable", detail: "尚未验证可用的决策模型", reason: "none_verified" };
 }

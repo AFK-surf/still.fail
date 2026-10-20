@@ -134,19 +134,17 @@ test("drop_client_ends_all_its_subscriptions", async () => {
   assert.deepEqual(store.liveTopics(), [sessions]);
 });
 
-test("update_changes_in_place_and_skips_topics_without_a_value", async () => {
+test("update_replaces_the_value_and_skips_topics_without_a_value", async () => {
   const { host, store, pass } = setup();
   const session: Topic = { topic: "session", station: "ws/st", key: "k" };
   store.subscribe(1, 1, session);
   store.update(session, () => assert.fail("no value yet"));
-  store.set(session, { err: new CoreError("x", "出错了") });
+  store.set(session, { err: new CoreError("x", "出错") });
   store.update(session, () => assert.fail("an error is not a value"));
   store.set(session, { ok: { timeline: [1] } });
   await pass(COALESCE_MS * 2);
   host.takeEmitted();
-  store.update(session, (v) => {
-    (v as { timeline: number[] }).timeline.push(2);
-  });
+  store.update(session, (v) => ({ timeline: [...(v as { timeline: number[] }).timeline, 2] }));
   assert.deepEqual(store.get(session), { timeline: [1, 2] });
   await pass(COALESCE_MS * 2);
   assert.deepEqual(host.takeEmitted(), [[1, value(1, { timeline: [1, 2] })]]);
@@ -180,8 +178,7 @@ test("sends_what_changed_after_the_first_value", async () => {
   assert.deepEqual(host.takeEmitted(), [[1, value(1, long(50))]]);
   store.update(session, (v) => {
     const x = v as { timeline: string[]; usage: { n: number } };
-    x.timeline.push("message 50");
-    x.usage.n = 51;
+    return { ...x, timeline: [...x.timeline, "message 50"], usage: { ...x.usage, n: 51 } };
   });
   store.subscribe(2, 7, session);
   assert.deepEqual(host.takeEmitted(), [[2, value(7, long(50))]]);
@@ -318,4 +315,61 @@ test("a_keyed_subscriber_gets_keyed_ops_and_the_others_the_old_ones", async () =
   assert.deepEqual(keyed, { id: 10, delta: [{ path: [], key: ["id"], move: "t30", before: "t0" }] });
   assert.equal(c2, 2);
   assert.ok(Array.isArray(old.delta) || "value" in old);
+});
+
+test("what_the_store_keeps_is_frozen_all_through_in_tests", async () => {
+  const { store, source, pass } = setup();
+  const sessions: Topic = { topic: "sessions", station: "ws/st" };
+  store.subscribe(1, 1, overview());
+  store.subscribe(1, 2, sessions);
+  store.set(overview(), { ok: { n: { m: [1] } } });
+  source.computed = { ok: { rows: [{ id: "a" }] } };
+  store.invalidate(sessions);
+  await pass(COALESCE_MS * 2);
+  const kept = store.get(overview()) as { n: { m: number[] } };
+  const made = store.get(sessions) as { rows: { id: string }[] };
+  assert.ok(Object.isFrozen(kept.n.m) && Object.isFrozen(made.rows[0]));
+  // Changed only by a new value.
+  assert.throws(() => kept.n.m.push(2), TypeError);
+  store.update(overview(), (v) => ({ n: { m: [...(v as typeof kept).n.m, 2] } }));
+  assert.deepEqual(store.get(overview()), { n: { m: [1, 2] } });
+});
+
+test("a_value_its_source_fails_to_make_fails_its_topic_not_the_core", async () => {
+  const host = new FakeHost();
+  const runner = new Runner(host.time.clock);
+  const defects: unknown[] = [];
+  runner.onDefect = (e) => defects.push(e);
+  const store = new Store(host, runner);
+  const sessions: Topic = { topic: "sessions", station: "ws/st" };
+  const kept = Object.freeze({ attachments: Object.freeze([Object.freeze({ path: "/a.png" })]) });
+  let broken = true;
+  store.setSource({
+    start() {},
+    stop() {},
+    // As #265's chat view did: a write on what the core keeps frozen.
+    compute: () => {
+      if (broken) (kept.attachments[0] as { owner?: string }).owner = "k";
+      return { ok: { rows: 1 } };
+    },
+  });
+  store.subscribe(1, 1, sessions);
+  store.subscribe(1, 2, overview());
+  store.invalidate(sessions);
+  store.set(overview(), { ok: 1 });
+  const error = console.error;
+  console.error = () => {};
+  await host.time.pass(COALESCE_MS * 2, 10);
+  console.error = error;
+  const sent = host.takeEmitted() as [number, { id: number; error?: { code: string; message: string }; value?: unknown }][];
+  const bad = sent.find(([, m]) => m.id === 1)?.[1];
+  assert.equal(bad?.error?.code, "internal");
+  assert.match(bad?.error?.message ?? "", /not extensible/);
+  assert.deepEqual(sent.find(([, m]) => m.id === 2)?.[1], value(2, 1));
+  assert.deepEqual(defects, []);
+  // Made again once it can be.
+  broken = false;
+  store.invalidate(sessions);
+  await host.time.pass(COALESCE_MS * 2, 10);
+  assert.deepEqual(host.takeEmitted(), [[1, value(1, { rows: 1 })]]);
 });

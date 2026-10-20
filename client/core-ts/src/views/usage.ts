@@ -3,6 +3,7 @@
 // accounts and which models spent the most.
 import type { CoreError } from "../error.ts";
 import { current, t, tr, type Lang } from "../i18n.ts";
+import { waitNote } from "../looks.ts";
 import * as present from "../present.ts";
 import * as model from "../shapes/model.ts";
 import type { Value } from "../store.ts";
@@ -127,8 +128,8 @@ class Sum {
 
 type Item = { key: string; title: string; sub: string | null; extra: Record<string, J>; sum: Sum };
 
-function itemsShown(items: Item[], total: Sum): J[] {
-  items.sort((a, b) => b.sum.cost - a.sum.cost || b.sum.calls - a.sum.calls || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+function itemsShown(listed: Item[], total: Sum): J[] {
+  const items = [...listed].sort((a, b) => b.sum.cost - a.sum.cost || b.sum.calls - a.sum.calls || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
   const byCost = total.cost > 0;
   return items.map((i) => {
     const share = byCost ? i.sum.cost / total.cost : total.calls > 0 ? i.sum.calls / total.calls : 0;
@@ -141,6 +142,8 @@ function itemsShown(items: Item[], total: Sum): J[] {
       share,
       shareText: percent(share, 1),
       calls: i.sum.calls,
+      callsText: count(i.sum.calls),
+      tokensText: count(i.sum.tokens()),
       detail: t("core-views.usage.detail", { n: count(i.sum.calls), tokens: count(i.sum.tokens()) }),
       ...i.extra,
     };
@@ -199,8 +202,9 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
   for (let i = days - 1; i >= 0; i--) dayList.push(localDay(now - i * DAY_MS, offset));
   const first = dayList[0];
   const several = sources.filter((s) => s.online).length > 1;
-  let loading = false;
   let reading = false;
+  const waiting: string[] = [];
+  const failing: { station: string; name: string; message: string }[] = [];
   const notes: string[] = [];
   let since: number | null = null;
   const total = new Sum();
@@ -223,11 +227,12 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       continue;
     }
     if (s.value === undefined) {
-      loading = true;
+      waiting.push(s.name);
       continue;
     }
     if ("err" in s.value) {
       const e: CoreError = s.value.err;
+      if (e.status !== 404) failing.push({ station: s.address, name: s.name, message: e.message });
       notes.push(e.status === 404 ? t("core-views.usage.note.outdated", { name: s.name }) : t("core-views.named_error", { name: s.name, error: e.message }));
       continue;
     }
@@ -248,8 +253,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
       const text = (k: string): string | null => (typeof get(row, k) === "string" ? row[k] : null);
       const reference = text("person");
       const knownPerson = reference !== null && isObject(get(stationPeople, reference)) ? stationPeople[reference] : undefined;
-      const person = knownPerson !== undefined ? structuredClone(knownPerson) : { id: reference ?? "", name: t("core-views.usage.unknown_person"), email: null };
-      present.person(person, me, members);
+      const person = present.person(knownPerson !== undefined ? knownPerson : { id: reference ?? "", name: t("core-views.usage.unknown_person"), email: null }, me, members);
       const personKey = (typeof person.email === "string" ? person.email : typeof person.id === "string" ? person.id : "").toLowerCase();
       const name = typeof person.shown?.display === "string" ? person.shown.display : "";
       const cost = typeof get(row, "cost") === "number" ? row.cost : 0;
@@ -334,7 +338,7 @@ export function usageView(sources: Source[], daysAsked: number, now: number, off
     notes.push(t("core-views.usage.note.since", { month, day }));
   }
   if (total.unpriced > 0) notes.push(t("core-views.usage.note.unpriced", { n: count(total.unpriced) }));
-  return { days, prices: priceTables(sources, first, today), loading, empty: total.calls === 0, tiles, series, daily, max, lists, notes, basis: t("core-views.usage.basis") };
+  return { days, prices: priceTables(sources, first, today), wait: waitNote(waiting, failing, total.calls === 0), empty: total.calls === 0, tiles, series, daily, max, lists, notes, basis: t("core-views.usage.basis") };
 }
 
 export { tr };

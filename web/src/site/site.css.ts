@@ -2,7 +2,7 @@
 // light when chosen (the switch in its bar: ThemeSwitch.tsx; the demo's app follows the same data-theme). What moves is
 // CSS (no script runs for it), still for those who ask for less motion.
 import { createVar, globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 const NARROW = "screen and (max-width: 860px)";
 const STILL = "(prefers-reduced-motion: reduce)";
@@ -67,7 +67,7 @@ export const nav = style({
 });
 export const navRow = style({ display: "flex", alignItems: "center", height: "64px", gap: "28px" });
 /** The name in the bar: the station buddy and still.fail, its .fail in still.fail's orange. */
-export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: "22px", fontWeight: "700", letterSpacing: "-.03em", color: FG });
+export const brand = style({ display: "flex", alignItems: "center", gap: "10px", fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "-.03em", color: FG });
 export const brandTail = style({ color: ORANGE });
 export const logo = style({ display: "block", height: "28px", width: "auto" });
 // The logo on the left, the rest of the bar on the right.
@@ -76,13 +76,13 @@ export const navLink = style({ transition: "color .2s", selectors: { "&:hover": 
 // The downloads for the device the page is on (data-platform on the root): none shows without it (an iPhone).
 export const forAndroid = style({ display: "none", selectors: { ":root[data-platform=\"android\"] &": { display: "inline" } } });
 export const forComputer = style({ display: "none", selectors: { ":root:is([data-platform=\"mac\"], [data-platform=\"desktop\"]) &": { display: "inline-block" } } });
-globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: "15px" });
+globalStyle(`${navRow} ${navLink}`, { color: "var(--s-muted)", fontSize: vars.textTitle });
 globalStyle(`${navRow} button${navLink}`, { padding: "8px 0", border: "0", background: "none", font: "inherit", cursor: "default" });
 
 /** The downloads' card, under their word while the pointer is on it (or it has focus): frosted, as the bar is. */
 export const menu = style({ position: "relative" });
 export const menuCard = style({
-  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px",
+  position: "absolute", top: "calc(100% + 14px)", left: "50%", display: "grid", gridAutoFlow: "column", gridAutoColumns: "1fr", gap: "6px",
   padding: "6px", borderRadius: "20px", whiteSpace: "nowrap",
   background: `color-mix(in srgb, var(--s-node) 84%, transparent)`, backdropFilter: "blur(20px) saturate(1.4)", WebkitBackdropFilter: "blur(20px) saturate(1.4)",
   boxShadow: `0 16px 48px -16px rgba(0, 0, 0, .5), inset 0 0 0 1px ${LINE}`,
@@ -95,11 +95,11 @@ export const menuCard = style({
 });
 export const menuItem = style({
   display: "grid", gridTemplateRows: "auto 1fr auto", justifyItems: "start", gap: "2px", width: "150px", minHeight: "178px", padding: "14px",
-  borderRadius: "15px", fontSize: "13px", color: DIM, transition: "background .2s",
+  borderRadius: "15px", fontSize: vars.textUi, color: DIM, transition: "background .2s",
   selectors: { "a&:hover": { background: CARD } },
 });
-globalStyle(`${menuItem} > b`, { fontSize: "17px", fontWeight: "650", color: FG, letterSpacing: "-.01em" });
-export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "550" });
+globalStyle(`${menuItem} > b`, { fontSize: vars.textTitle, fontWeight: "600", color: FG, letterSpacing: "-.01em" });
+export const menuGo = style({ gridRow: "3", color: FG, fontWeight: "500" });
 /** The code itself stays dark on white in either theme, with the quiet margin a scanner wants. */
 export const scanCode = style({ display: "block", width: "122px", height: "122px", padding: "8px", borderRadius: "10px", background: "#fff", imageRendering: "pixelated" });
 
@@ -124,7 +124,7 @@ export const navButton = style({ "@media": { [NARROW]: { display: "none" } } });
 
 export const button = style({
   position: "relative", overflow: "hidden", display: "inline-flex", alignItems: "center", gap: "8px", height: "40px", padding: "0 20px", borderRadius: "999px",
-  fontSize: "15px", fontWeight: "550", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
+  fontSize: vars.textTitle, fontWeight: "500", whiteSpace: "nowrap", transition: `transform .2s ${vars.easeOut}, box-shadow .2s, background .2s`,
   selectors: {
     "&:hover": { transform: "translateY(-2px)" },
     "&[data-kind=\"primary\"]": { background: "var(--s-primary)", color: "var(--s-on-primary)" },
@@ -137,7 +137,7 @@ export const button = style({
     "&[data-kind=\"primary\"]:hover": { boxShadow: `0 10px 34px -8px color-mix(in srgb, ${ORANGE} 80%, transparent)` },
     "&[data-kind=\"ghost\"]": { color: FG, boxShadow: `inset 0 0 0 1px ${ink(18)}` },
     "&[data-kind=\"ghost\"]:hover": { background: `${ink(6)}` },
-    "&[data-size=\"large\"]": { height: "50px", padding: "0 28px", fontSize: "16px" },
+    "&[data-size=\"large\"]": { height: "50px", padding: "0 28px", fontSize: vars.textTitle },
   },
 });
 export const actions = style({ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" });
@@ -233,7 +233,7 @@ export const dotSay = style({
 });
 export const dotWords = style({
   display: "block", writingMode: "vertical-rl", textOrientation: "upright",
-  fontSize: "max(.1em, 8px)", fontWeight: "700", lineHeight: "1", whiteSpace: "nowrap",
+  fontSize: "max(.1em, 8px)", fontWeight: "600", lineHeight: "1", whiteSpace: "nowrap",
 });
 
 /** A character of those words: they land one at a time (motion.ts), unseen till then when script will move them. */
@@ -280,16 +280,18 @@ export const edge = style({
   animation: `${turn} 7s linear infinite`,
   "@media": { [NARROW]: { borderRadius: "14px" }, [PHONE_BOX]: { borderRadius: "37px" }, [STILL]: { animation: "none" } },
 });
-/** The demo's box (demo/): the app in it, at its size. */
+/** The demo's box (demo/): the app in it, at its size. Its corners cut by a clip, not a rounded overflow: under one,
+ *  Chromium ignored the phone bar's glass's clip-path (a frosted layer, mobile/Bar.tsx) set while it was out of view,
+ *  and drew the bar as a plain rectangle. */
 export const demo = style({
-  position: "relative", height: "720px", borderRadius: "19px", overflow: "hidden", background: vars.canvas,
-  "@media": { [NARROW]: { borderRadius: "13px", height: "620px" }, [PHONE_BOX]: { borderRadius: "36px" } },
+  position: "relative", height: "720px", overflow: "hidden", clipPath: "inset(0 round 19px)", background: vars.canvas,
+  "@media": { [NARROW]: { clipPath: "inset(0 round 13px)", height: "620px" }, [PHONE_BOX]: { clipPath: "inset(0 round 36px)" } },
 });
 /** The demo's opening frame, built into the page: the phone's app where the box is narrow (as the demo picks: under
  *  700 wide, the box being the page's width less its margins), the desktop's elsewhere. */
 export const frameWide = style({ height: "100%", "@media": { [PHONE_BOX]: { display: "none" } } });
 export const framePhone = style({ height: "100%", display: "none", "@media": { [PHONE_BOX]: { display: "block" } } });
-export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "550", whiteSpace: "nowrap" });
+export const key = style({ padding: "2px 8px", borderRadius: "6px", background: `${ink(8)}`, color: FG, fontWeight: "500", whiteSpace: "nowrap" });
 
 // ---- Sections ----
 
@@ -305,7 +307,7 @@ export const terminal = style({
   position: "relative", maxWidth: "840px", margin: "0 auto", borderRadius: "18px", overflow: "hidden",
   background: "#0F0F12", color: "#E9E9EA", border: `1px solid ${LINE}`,
   boxShadow: `0 50px 100px -40px color-mix(in srgb, ${ORANGE} 50%, transparent)`,
-  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: "12px" } },
+  font: `16px/1.8 ${vars.fontMono}`, "@media": { [NARROW]: { fontSize: vars.textMeta } },
 });
 export const terminalBar = style({ display: "flex", gap: "8px", padding: "16px 18px", borderBottom: `1px solid ${LINE}` });
 export const terminalDot = style({ width: "12px", height: "12px", borderRadius: "50%", background: "#2A2A30" });
@@ -334,6 +336,6 @@ export const prompt = style({ color: ORANGE, userSelect: "none" });
 
 // ---- Footer ----
 
-export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: "14px", borderTop: `1px solid ${LINE}` });
-export const footerRow = style({ display: "flex", alignItems: "center", gap: "24px" });
+export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: vars.textBody, borderTop: `1px solid ${LINE}` });
+export const footerRow = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 24px" });
 export const footerFirst = style({ marginRight: "auto" });

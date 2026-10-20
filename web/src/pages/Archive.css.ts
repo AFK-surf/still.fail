@@ -1,32 +1,32 @@
-import { style } from "@vanilla-extract/css";
-import { vars } from "../styles/tokens.css.ts";
+import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { navSessionWrap } from "../Sidebar.css.ts";
 
-// The archive: one row a chat, its title with when (and where) at the end of its line, its last message the whole
-// line under it; what can be done with it in when's place while it is pointed at. No lines between.
-export const archiveHeading = style({ margin: "18px 10px 4px", fontSize: vars.textXs, color: vars.muted });
-export const archiveRow = style({
-  display: "grid", gap: "2px", padding: "8px 10px", borderRadius: vars.rNav, cornerShape: vars.cornerShape,
-  selectors: {
-    "&:hover, &:focus-within": { background: vars.hover },
-  },
-});
-export const archiveHead = style({ display: "flex", alignItems: "baseline", gap: "12px", minWidth: "0" });
-export const archiveTitle = style({
-  flex: "1", fontSize: vars.textSm, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
-export const archiveMeta = style({
-  fontSize: vars.textXs, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-});
-export const archiveWhen = style({
-  display: "flex", gap: "8px", flex: "none", fontSize: vars.textXs, color: vars.muted, fontVariantNumeric: "tabular-nums",
-  selectors: { [`${archiveRow}:is(:hover, :focus-within) &`]: { display: "none" } },
-});
-/** In the title's line without making it taller. */
-export const archiveActions = style({
-  display: "none", gap: "2px", flex: "none", alignSelf: "center", margin: "-4px -4px -4px 0",
-  selectors: { [`${archiveRow}:is(:hover, :focus-within) &`]: { display: "flex" } },
+// An archived chat's row in the sidebar (Archive.tsx ArchiveRow), a chat's row (Sidebar.css.ts) but for what can be done
+// with it: putting it back and deleting it, over the title's end while it is pointed at (or one of them under way).
+const shown = `${navSessionWrap}:is(:hover, :focus-within, [data-busy]) &`;
+
+/** The title making room for the two buttons. */
+export const head = style({ selectors: { [shown]: { paddingRight: 52 } } });
+/** Centred on the title line (20px tall, 7px down the row), as a chat's archive button is. */
+export const actions = style({
+  position: "absolute", top: 5, right: 6, display: "flex", gap: 2, opacity: 0, pointerEvents: "none",
+  selectors: { [shown]: { opacity: 1, pointerEvents: "auto" } },
   // No pointer to point with: always there.
-  "@media": { "(hover: none)": { display: "flex" } },
+  "@media": { "(hover: none)": { opacity: 1, pointerEvents: "auto" } },
 });
-export const archiveAction = style({ width: "26px", height: "26px" });
-export const archiveDelete = style({ selectors: { "&:hover": { color: vars.red } } });
+export const action = style({ width: 24, height: 24 });
+export const remove = style({ selectors: { "&:hover": { color: vars.red } } });
+
+/** Looking for one: a field as tall as a row, at the list's top, the rows' inset. */
+export const search = style({
+  display: "flex", alignItems: "center", gap: 8, height: 32, padding: "0 10px", marginBottom: 4, borderRadius: vars.rNav,
+  cornerShape: vars.cornerShape, background: vars.hover, color: vars.muted, cursor: "text",
+});
+globalStyle(`${search} input`, {
+  flex: 1, minWidth: 0, border: "none", outline: "none", background: "none", padding: 0, color: vars.text, fontSize: vars.textUi,
+});
+globalStyle(`${search} input::placeholder`, { color: vars.subtle });
+/** Where the list asks for more as it comes near. */
+export const end = style({ height: 1 });
+globalStyle(`${search} input::-webkit-search-cancel-button`, { appearance: "none" });

@@ -1,13 +1,30 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
-import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, RelayLoad, TelemetryLimiter } from "../src/index";
 import { clock, signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
-export { LoginAttempt, LoginLimiter, TelemetryLimiter };
+import type { MailMessage } from "../src/mail";
+export { LoginLimiter, RelayLoad, TelemetryLimiter };
 
 // The moment the tests run at (harness.ts NOW_MS), unless they run on the machine's time (dev.ts). The Worker and its
 // objects share this isolate, and so the clock.
 declare const TEST_NOW_MS: number | null;
 if (TEST_NOW_MS !== null) clock.now = () => TEST_NOW_MS;
+
+/**
+ * With TEST_MAIL (harness.ts `mail`), signing in with an email is offered, its codes sent to https://mail.test/send,
+ * where the harness keeps them, instead of through Cloudflare Email Service; an answer other than 200 is the error the
+ * binding throws, its body the error's code.
+ */
+export class LoginAttempt extends ProductionLoginAttempt {
+  constructor(ctx: DurableObjectState, env: Env & { TEST_MAIL?: string }) {
+    const send = async (message: MailMessage) => {
+      const answer = await fetch("https://mail.test/send", { method: "POST", body: JSON.stringify(message) });
+      if (!answer.ok) throw Object.assign(new Error("not sent"), { code: await answer.text() });
+      return { messageId: crypto.randomUUID() };
+    };
+    super(ctx, env.TEST_MAIL ? { ...env, EMAIL: { send }, EMAIL_FROM: "noreply@relay.example" } : env);
+  }
+}
 
 export class Directory extends ProductionDirectory {
   /** The presence alarm's check, as if it ran at `ms`. */
@@ -31,6 +48,10 @@ export class Directory extends ProductionDirectory {
   expireInviteCode(code: string) {
     this.ctx.storage.sql.exec("UPDATE invite_codes SET expires_at = ? WHERE code = ?", nowSeconds(), code);
   }
+  /** A device's request to be confirmed into a workspace's lock, made `secs` ago. */
+  ageLockRequest(workspace: string, base: string, secs: number) {
+    this.ctx.storage.sql.exec("UPDATE lock_requests SET created_at = ? WHERE workspace = ? AND base = ?", nowSeconds() - secs, workspace, base);
+  }
   /** An account as members were before invite codes: in a workspace, admitted by nothing on record. */
   forgetAdmission(sub: string) {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = NULL WHERE sub = ?", sub);
@@ -40,6 +61,28 @@ export class Directory extends ProductionDirectory {
     this.ctx.storage.sql.exec("UPDATE users SET admitted = ? WHERE sub = ?", admitted, sub);
     this.ctx.storage.sql.exec("DELETE FROM migrations WHERE name = 'free-plan'");
     this.migrateFreePlan();
+  }
+  /**
+   * The stations as they were kept before a station could be in several workspaces: one table, a row each (with
+   * `marks`, the emoji and icon it gained later; without, as a table older than them), each station in the one
+   * workspace it is in now. The split runs again, twice (the second time finds nothing to do). What `stations` holds
+   * after it.
+   */
+  unsplitStations(marks = true): string[] {
+    const sql = this.ctx.storage.sql;
+    const rows = sql.exec("SELECT m.workspace, m.station AS id, m.name, m.emoji, m.icon, m.enrolled_at, m.enrolled_by, s.last_seen, s.version FROM station_members m JOIN stations s ON s.id = m.station ORDER BY m.enrolled_at, m.rowid").toArray();
+    this.ctx.storage.transactionSync(() => {
+      sql.exec("DROP TABLE stations");
+      sql.exec("DELETE FROM station_members");
+      sql.exec(`CREATE TABLE stations (id TEXT PRIMARY KEY, workspace TEXT NOT NULL, name TEXT NOT NULL, enrolled_at INTEGER NOT NULL, enrolled_by TEXT NOT NULL, last_seen INTEGER, version TEXT${marks ? ", emoji TEXT, icon TEXT" : ""})`);
+      for (const r of rows) {
+        sql.exec(`INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version${marks ? ", emoji, icon" : ""}) VALUES (?, ?, ?, ?, ?, ?, ?${marks ? ", ?, ?" : ""})`,
+          r.id, r.workspace, r.name, r.enrolled_at, r.enrolled_by, r.last_seen, r.version, ...(marks ? [r.emoji, r.icon] : []));
+      }
+    });
+    this.migrateStationMembers();
+    this.migrateStationMembers();
+    return sql.exec("PRAGMA table_info(stations)").toArray().map((r) => r.name as string);
   }
   /**
    * `users` made-up accounts over the last four months, about one in three with a workspace of up to five people and
@@ -82,9 +125,10 @@ export class Directory extends ProductionDirectory {
         }
         for (let k = Math.floor(random() * 4); k > 0; k--) {
           const seen = random() < 0.12 ? null : now - Math.floor(random() * random() * random() * 40 * day);
-          sql.exec("INSERT INTO stations (id, workspace, name, enrolled_at, enrolled_by, last_seen, version) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`, id, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub, seen,
-            pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
+          const station = `${"0".repeat(56)}${String(i * 4 + k).padStart(8, "0")}`;
+          sql.exec("INSERT INTO stations (id, last_seen, version) VALUES (?, ?, ?)", station, seen, pick(["0.1.1212", "0.1.1212", "0.1.1212", "0.1.1190", "0.1.1104"]));
+          sql.exec("INSERT INTO station_members (workspace, station, name, enrolled_at, enrolled_by) VALUES (?, ?, ?, ?, ?)",
+            id, station, `${pick(["mac-mini", "studio", "dev-box", "nas", "mbp"])}${k > 1 ? `-${k}` : ""}`, created, owner.sub);
         }
         if (random() < 0.15) {
           sql.exec("INSERT INTO invitations (id, workspace, token_hash, role, email, created_by, expires_at) VALUES (?, ?, ?, 'member', ?, ?, ?)",
@@ -172,6 +216,7 @@ export default {
     }
     return worker.fetch(request, env, ctx);
   },
+  scheduled: worker.scheduled,
 };
 let offline = false;
 let loseRefreshResponse = false;

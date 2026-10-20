@@ -3,36 +3,63 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
+//   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, status } from "./cli.ts";
+import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
+import { readState } from "./cloud/state.ts";
+import { loadKey } from "./cloud/key.ts";
+import { shortCode } from "./cloud/lock.ts";
 import { MeshLive } from "./mesh/mesh.ts";
+import { AwakeLive } from "./ops/awake.ts";
 import { AgentsLive } from "./sessions/agents.ts";
-import { dataDir, flag } from "./ops/files.ts";
-import { setStationLang } from "./ops/i18n.ts";
+import { Browser } from "./browser/service.ts";
+import { dataDir, flag, ownData } from "./ops/files.ts";
+import { setStationLang, stationLang, tr } from "./ops/i18n.ts";
 import { type Control, launcher } from "./ops/launcher.ts";
 import { hearErrors, log } from "./ops/log.ts";
 import { ConfigFile } from "./ops/config.ts";
 import { ErrorReports, builtKey } from "./ops/telemetry.ts";
 import { answer, langOfBrowser } from "./ops/loopback.ts";
+import { ownPorts } from "./ops/own.ts";
 import { version } from "./ops/version.ts";
-import { AdbShares, AdminApi, AdminHost, ControlPlane, Events, Key, MeshNative, Paths, Readers, Store, Up } from "./services.ts";
+import { AdbShares, AdminApi, AgentsSide, AdminHost, ControlPlane, Events, Grants, Helper, HelperFolders, Key, MeshNative, MeshSide, ModulePackages, Modules, Own, Parts, Paths, Peers, Previous, Readers, ScreenRegistry, StationConfig, StationDrive, Store, Up } from "./services.ts";
+import { ModulesLive } from "./modules/live.ts";
+import { VaultLive } from "./vault/module.ts";
+import { AdbLive } from "./adb/module.ts";
+import { BrowserLive } from "./browser/module.ts";
+import { LinksLive } from "./links/module.ts";
+import { FeedbackLive } from "./feedback/module.ts";
+import { AgentHomeLive } from "./agenthome/module.ts";
+import { PublishLive } from "./publish/module.ts";
+import { LoginsLive } from "./logins/module.ts";
+import { UsageLive } from "./usage/module.ts";
+import { SearchLive } from "./search/module.ts";
+import { SlackLive } from "./slack/module.ts";
+import { FeishuLive } from "./feishu/module.ts";
 import { PROVIDERS, type Provider } from "./cloud/provider.ts";
 import { wall } from "./ops/fibers.ts";
+import { answerHeapRequests, heapCommand } from "./ops/heap.ts";
+import { platform } from "./platform/index.ts";
+import { keepRunnerIn } from "./platform/processes.ts";
 
 // Run by the desktop app on its own Electron as Node (apps/desktop/src/station.ts): what this starts (agents, jobs,
 // their tools, the next station at a handover through the launcher, which keeps its own) is not told to be Node too.
 delete process.env.ELECTRON_RUN_AS_NODE;
+// What reads HOME (the machine's logins, its transcripts) finds the user's home there, where the machine names it
+// otherwise (Windows: USERPROFILE).
+if (!process.env.HOME && platform.home(process.env)) process.env.HOME = platform.home(process.env);
 
 const args = process.argv.slice(2);
 const data = dataDir(args);
 const command = args.find((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--") && args[i - 1] !== "--with-parent"));
 /// Flags that take a value: what follows them is no command's argument.
-const VALUED = ["--data", "--provider"];
+const VALUED = ["--data", "--provider", "--lock"];
 
 // What it says on this machine is in the station's language (config.json `language`).
 try {
@@ -41,7 +68,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] | status | id");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
   process.exit(2);
 }
 
@@ -63,19 +90,25 @@ const Loopback = (control: Control) =>
           });
           server.on("listening", () => {
             const port = (server.address() as AddressInfo).port;
+            // Behind the launcher's entrance, the launcher's port is the one there is (the launcher wrote it too).
+            const shown = control.ports?.admin ?? port;
+            ownPorts.add(port).add(shown);
             mkdirSync(join(data, "run"), { recursive: true });
-            writeFileSync(join(data, "run", "ports.json"), `{"admin":${port}}\n`);
-            log.info("station", "loopback port listening (old /admin links go to still.fail cloud)", { port });
+            writeFileSync(join(data, "run", "ports.json"), `{"admin":${shown}}\n`);
+            control.serving("admin", port);
+            log.info("station", "loopback port listening (old /admin links go to still.fail cloud)", { port: shown });
           });
           if (control.loopbackFd !== undefined) server.listen({ fd: control.loopbackFd });
+          else if (control.ports) server.listen(0, "127.0.0.1");
           else {
-            // On its own (no launcher): 4760, or a free port when that is taken and none was named (local.rs).
+            // On its own (no launcher): 4760 on the machine's own data directory, or a free port when that is taken
+            // (or another data directory) and none was named (local.rs).
             const named = flag(args, "--port");
             server.on("error", (e: NodeJS.ErrnoException) => {
               if (e.code === "EADDRINUSE" && !named) server.listen(0, "127.0.0.1");
               else log.error("station", "the loopback port is not had", { error: e.message });
             });
-            server.listen(Number(named ?? 4760), "127.0.0.1");
+            server.listen(Number(named ?? (ownData(data) ? 4760 : 0)), "127.0.0.1");
           }
           return server;
         }),
@@ -88,6 +121,8 @@ function run() {
   const app = flag(args, "--app");
   if (!app) usage();
   const control = launcher(args);
+  // Runners (agents', jobs') from copies under the data directory on Windows, out of reach of the app's installer.
+  keepRunnerIn(join(data, "run", "bin"));
   // Error lines to still.fail's error tracking, while config.json says so (telemetry.errors) and the build has a key.
   const settings = new ConfigFile(data);
   const reports = new ErrorReports({
@@ -103,27 +138,55 @@ function run() {
   });
   hearErrors((line, error) => reports.report(line, error));
   const paths = Layer.succeed(Paths)({ data, app });
-  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer).pipe(Layer.provideMerge(paths));
+  // still.fail Helper, one for the screens and the drive, and one look at its grants.
+  const base = Layer.mergeAll(Key.layer, Readers.layer, Store.layer, MeshNative.layer, Up.layer, ScreenRegistry.layer.pipe(Layer.provideMerge(Grants.layer), Layer.provideMerge(Helper.layer))).pipe(Layer.provideMerge(paths));
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
-  const station = Layer.mergeAll(MeshLive, Loopback(control)).pipe(
+  const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
+    // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive, FeishuLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
+    // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.
+    Layer.provideMerge(StationDrive.layer),
+    Layer.provideMerge(HelperFolders.layer),
+    // The modules beside the station (docs/station-modules.md), started by ModulesLive.
+    Layer.provideMerge(Modules.layer),
+    // The packages of those the station installs itself (modules/packages.ts), read with its updates.
+    Layer.provideMerge(ModulePackages.layer),
     Layer.provideMerge(Events.layer),
     Layer.provideMerge(AdminHost.layer),
     Layer.provideMerge(AdbShares.layer),
+    // The station's browser, its tabs screens (docs/remote-screens.md).
+    Layer.provideMerge(Browser.layer),
+    // config.json, what is the station's own, and the process before this one: the platform's, for every part.
+    Layer.provideMerge(Own.layer),
+    Layer.provideMerge(StationConfig.layer),
+    Layer.provideMerge(Previous.layer),
+    // The requests between the stations of the workspace (mesh/bus.ts): the mesh attaches them, the parts answer.
+    Layer.provideMerge(Peers.layer),
+    // What the mesh and the agents' side share, each filling in its own (services.ts MeshSide).
+    Layer.provideMerge(MeshSide.layer),
+    Layer.provideMerge(Parts.layer),
+    // The agents' side, once made (the admin API asks for it as a request comes).
+    Layer.provideMerge(AgentsSide.layer),
     Layer.provideMerge(parts),
   );
   const main = Effect.gen(function* () {
     yield* SubscriptionRef.set(yield* Up, true);
     control.ready(version());
     log.info("station", "station up", { version: version(), data });
-    // STILLFAIL_MEMLOG: where the memory goes, now and then (for measuring).
-    if (process.env.STILLFAIL_MEMLOG) {
-      wall.every(10_000, () => {
-        const m = process.memoryUsage();
-        log.info("memory", "now", Object.fromEntries(Object.entries(m).map(([k, v]) => [k, Math.round(v / 1048576)])));
-      });
-    }
+    // Where the memory goes, in MB: the main thread's (and resident), and each reader's heap. Every ten minutes, or
+    // every ten seconds with STILLFAIL_MEMLOG (for measuring).
+    const readers = yield* Readers;
+    // `stillfail heap`: a snapshot of this thread's heap, asked for from the command line.
+    answerHeapRequests(data);
+    wall.every(process.env.STILLFAIL_MEMLOG ? 10_000 : 600_000, () => {
+      const m = process.memoryUsage();
+      const mb = (v: number) => Math.round(v / 1048576);
+      void readers.heaps().then((heaps) =>
+        log.info("memory", "now", { ...Object.fromEntries(Object.entries(m).map(([k, v]) => [k, mb(v)])), readers: heaps.map(mb) }),
+      );
+    });
     return yield* Effect.never;
   }).pipe(Effect.provide(station));
   const fiber = Effect.runFork(main);
@@ -152,8 +215,36 @@ switch (command) {
   case "enroll": {
     const [, origin, token] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
     const provider = (flag(args, "--provider") ?? "stillfail") as Provider;
-    if (!origin || !token || !PROVIDERS.includes(provider)) usage();
-    await enroll(data, origin.replace(/\/+$/, ""), token, provider);
+    const lock = flag(args, "--lock");
+    if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
+    // One more workspace, staying in those it is in (docs/multi-workspace.md): at the control plane it is enrolled with.
+    // --stay (the installers'): joins when the station is in a workspace already, else enrolls; at the control plane it
+    // is enrolled with whatever host the command names (the test channel's app.youdid.wtf is still.fail's API too), a
+    // token that plane does not know refused there.
+    const stay = !args.includes("--join") && args.includes("--stay") && staysIn(data);
+    if (args.includes("--join") || stay) {
+      const now = readState(data);
+      if (!stay && now !== null && now.origin !== origin.replace(/\/+$/, "")) {
+        console.error(`this station is enrolled at ${now.origin}; it joins workspaces there only`);
+        process.exit(1);
+      }
+      const joined = await joinWorkspace(data, token, lock).catch((error) => {
+        if (stay) console.error(`this station is in workspace ${now?.workspace_name || now?.workspace} (${now?.origin}): it was to join this one beside it, which did not go through. To move it here instead, remove it from that workspace first.`);
+        throw error;
+      });
+      console.log(tr(stationLang(), "station.cli.joined", { workspace: joined.workspace_name, name: joined.name, id: loadKey(data).id.slice(0, 12) }));
+      // A locked workspace: its owner confirms this station by its code, as one enrolled with `--lock`.
+      if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(loadKey(data).id) }));
+      break;
+    }
+    await enroll(data, origin.replace(/\/+$/, ""), token, provider, lock);
+    break;
+  }
+  // The workspace lock on this machine (docs/workspace-lock.md): what is pinned, or taking it away.
+  case "lock": {
+    const [, what] = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
+    if (what !== "status" && what !== "reset") usage();
+    console.log(lockCommand(data, what));
     break;
   }
   case "status":
@@ -170,6 +261,18 @@ switch (command) {
     process.exitCode = code;
     break;
   }
+  // What `stillfail update` runs, its release verified (updates/command.ts): said, not run, here.
+  case "update": {
+    const { updateCommand } = await import("./updates/command.ts");
+    const code = await updateCommand(args, data);
+    if (code === 2) usage();
+    process.exitCode = code;
+    break;
+  }
+  // A heap snapshot of the running station (ops/heap.ts).
+  case "heap":
+    process.exitCode = await heapCommand(data);
+    break;
   default:
     usage();
 }

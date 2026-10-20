@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "stillfail"
-include(":core", ":app")
+include(":core", ":shared", ":settings", ":chat", ":drive", ":app")

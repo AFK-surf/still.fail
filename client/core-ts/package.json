@@ -12,7 +12,19 @@
     "hermes": "node scripts/hermes-bundle.ts"
   },
   "dependencies": {
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0",
+    "@scure/bip39": "2.4.0",
     "effect": "4.0.0",
+    "fzstd": "0.1.1",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-gfm-strikethrough": "2.0.0",
+    "mdast-util-gfm-table": "2.0.0",
+    "mdast-util-gfm-task-list-item": "2.0.0",
+    "micromark-extension-gfm-strikethrough": "2.1.0",
+    "micromark-extension-gfm-table": "2.1.2",
+    "micromark-extension-gfm-task-list-item": "2.1.0",
     "ws": "8.22.0"
   },
   "devDependencies": {

@@ -5,13 +5,14 @@
 // into the chat it makes.
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { useNavigate } from "react-router";
+import { useGo } from "./go.ts";
 import { Composer, type ComposerProps } from "./Chat.tsx";
 import { StationContext, type Station } from "./station.tsx";
 import { pageChanging, transitionTo } from "./ui.tsx";
 import * as composerCss from "./styles/composer.css.ts";
 import * as css from "./dock.css.ts";
 import { easeOut, morph, shapeOf, stop, type Shape } from "./morph.ts";
+import { whenRowIn } from "./madeChat.ts";
 
 export interface ComposerSpec extends ComposerProps {
   /** The station it sends to (uploads, warming, sending are its). */
@@ -35,6 +36,20 @@ const DockContext = createContext<Dock | null>(null);
 
 /** Frames its place stays put before it stops following it. */
 const STILL_FRAMES = 30;
+
+/** Properties whose change moves nothing anywhere: how a thing looks (a row's hover ground, a colour, a fade). */
+const LOOKS = /^(?:opacity|visibility|color|caret-color|accent-color|fill(?:-opacity)?|stroke(?:-opacity|-dashoffset)?|filter|(?:-webkit-)?backdrop-filter|box-shadow|text-shadow|clip-path|(?:-webkit-)?mask(?:-[a-z]+)*|background(?:-[a-z]+)*|border(?:-[a-z]+)?-color|outline(?:-[a-z]+)*|text-decoration(?:-[a-z]+)*)$/;
+/** Properties that move a thing and what is in it only. */
+const CARRIES = /^(?:transform|translate|scale|rotate|transform-origin)$/;
+const kebab = (property: string) => property.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+/** What a CSS animation that just started changes; null when it can't be told. */
+function animated(e: AnimationEvent): string[] | null {
+  if (!(e.target instanceof Element)) return null;
+  const run = e.target.getAnimations({ subtree: e.pseudoElement !== "" })
+    .find((a) => a instanceof CSSAnimation && a.animationName === e.animationName && ((a.effect as KeyframeEffect | null)?.pseudoElement ?? "") === e.pseudoElement);
+  if (!(run?.effect instanceof KeyframeEffect)) return null;
+  return [...new Set(run.effect.getKeyframes().flatMap((k) => Object.keys(k)))].filter((p) => !["offset", "computedOffset", "easing", "composite"].includes(p)).map(kebab);
+}
 
 export function ComposerDock({ children }: { children: ReactNode }) {
   const [spec, setSpec] = useState<ComposerSpec | null>(null);
@@ -91,9 +106,11 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     carryTo(key) { carry.current = key; },
   }));
   // Where its place is, now and as the page lays out anew (it moves with it, at once). It is followed frame by frame
-  // only while something may be moving it (the window or its place resized, a transition or animation starting, a new
-  // place), until it has stayed still a moment: a loop every frame kept the page from ever being idle, and cost
-  // scrolling frames.
+  // only while something may be moving it (the window or its place resized, a transition or animation starting that
+  // can move it, a new place), until it has stayed still a moment: a loop every frame kept the page from ever being
+  // idle, and cost scrolling frames. One of how something looks (a row's hover ground) can't move it, nor a transform
+  // of what its place is not in: woken by those too, a pointer passing over the sidebar kept it reading the layout every
+  // frame.
   const wake = useRef(() => {});
   useLayoutEffect(() => { put(); });
   useLayoutEffect(() => {
@@ -107,6 +124,10 @@ export function ComposerDock({ children }: { children: ReactNode }) {
       still = 0;
       if (!frame) frame = requestAnimationFrame(follow);
     };
+    const moves = (target: EventTarget | null, properties: string[] | null) => !properties
+      || properties.some((p) => !LOOKS.test(p) && (!CARRIES.test(p) || (target instanceof Node && !!slot.current && target.contains(slot.current))));
+    const transition = (e: TransitionEvent) => { if (moves(e.target, [e.propertyName])) start(); };
+    const animation = (e: AnimationEvent) => { if (moves(e.target, animated(e))) start(); };
     const resize = new ResizeObserver(start);
     wake.current = () => {
       resize.disconnect();
@@ -116,15 +137,15 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     };
     wake.current();
     window.addEventListener("resize", start);
-    document.addEventListener("transitionrun", start, true);
-    document.addEventListener("animationstart", start, true);
+    document.addEventListener("transitionrun", transition, true);
+    document.addEventListener("animationstart", animation, true);
     return () => {
       cancelAnimationFrame(frame);
       resize.disconnect();
       wake.current = () => {};
       window.removeEventListener("resize", start);
-      document.removeEventListener("transitionrun", start, true);
-      document.removeEventListener("animationstart", start, true);
+      document.removeEventListener("transitionrun", transition, true);
+      document.removeEventListener("animationstart", animation, true);
     };
   }, []);
   // Laid out for another page (a new chat becoming its chat, a chat left for a new one), the box goes from where and how
@@ -156,7 +177,6 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const b = inner();
     const wrap = b?.parentElement;
     if (!before || !spec || before === spec.variant || !from || !b || !wrap) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     // From where it was to where its place is now (read without the move under way), its shape and what it holds with
     // it (morph.ts).
     const animate = () => {
@@ -229,7 +249,7 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     if (!dock) return;
     const hold = (event: Event) => {
       const b = inner();
-      if (!b || variant.current !== "new" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      if (!b || variant.current !== "new") return;
       held.current?.release();
       const shape = shapeOf(b);
       const before = { height: b.style.height, width: b.style.width, borderRadius: b.style.borderRadius };
@@ -254,9 +274,22 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     setHeight(el.offsetHeight);
     // Taken in the frame it changes (the composer growing a line, or moving from capsule to box): its place, and the
     // list's foot with it, keep up with it frame by frame rather than a frame or two behind.
-    const resize = new ResizeObserver(() => { if (!moving.current) flushSync(() => setHeight(el.offsetHeight)); });
+    // Shorter as what was just sent leaves it (its images' strip, its lines), it keeps the list's foot where it was until
+    // the message's row is in the list and the pane has started toward it, and gives it up the frame after: given up
+    // before, the list's end, at the pane's foot, drops by as much at once, and rises again as the row comes; in the
+    // row's own frame, the pane takes the two at once rather than gliding.
+    let waiting: (() => void) | null = null;
+    const take = () => { waiting = null; if (el.offsetHeight !== heightNow.current) flushSync(() => setHeight(el.offsetHeight)); };
+    const resize = new ResizeObserver(() => {
+      if (moving.current) return;
+      waiting?.();
+      if (el.offsetHeight >= heightNow.current) { take(); return; }
+      let frame = 0;
+      const stop = whenRowIn(() => { frame = requestAnimationFrame(() => { frame = requestAnimationFrame(take); }); });
+      waiting = () => { stop(); cancelAnimationFrame(frame); waiting = null; };
+    });
     resize.observe(el);
-    return () => resize.disconnect();
+    return () => { resize.disconnect(); waiting?.(); };
   }, [made]);
   // The frame its layout changes with the page (a chat's foot, a new chat's roomy box) it changes at once: eased, its
   // corners showed as a jump (its styles ease them as it grows while typed in).
@@ -267,6 +300,15 @@ export function ComposerDock({ children }: { children: ReactNode }) {
     const frame = requestAnimationFrame(() => setSettled(spec.variant));
     return () => cancelAnimationFrame(frame);
   }, [switching, spec?.variant]);
+  // Put away and shown again (back from a page with none, the files, a station's page…), the same chat's composer is not
+  // made again, so its own focusing on a new chat does not run: it takes the cursor here, as a chat switched to does
+  // (not on touch screens, where it would raise the keyboard).
+  const wasShown = useRef(shown);
+  useLayoutEffect(() => {
+    const back = shown && !wasShown.current;
+    wasShown.current = shown;
+    if (back && window.matchMedia("(pointer: fine)").matches) box.current?.querySelector("textarea")?.focus();
+  }, [shown]);
   // Changes only with the height: the places re-render then, not each time a page hands over what it writes to.
   const value = useMemo(() => ({ ...dock, height }), [dock, height]);
   // Drawn anew with what the page hands it, not with the dock's own height (which changes every frame it grows).
@@ -313,7 +355,7 @@ export function useCarryDraft(): (key: string) => void {
  * left to the link.
  */
 export function useComposerMove(): (event: MouseEvent<HTMLAnchorElement>, to: string, next: "new" | "chat") => void {
-  const navigate = useNavigate();
+  const navigate = useGo();
   return (event, to, next) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const dock = document.querySelector<HTMLElement>(`.${css.composerDock}:not([hidden])`);

@@ -1,0 +1,101 @@
+// The account, as the narrow web has it (web/src/mobile/Me.tsx), from the card atop settings (SettingsHome.kt): who is
+// signed in, the accounts on this device, where it is signed in, and deleting it.
+package fail.still.android.screens
+
+import fail.still.android.ui.pressText
+import fail.still.android.ui.Spinner
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fail.still.android.LocalApp
+import fail.still.android.data.Account
+import fail.still.android.data.Auth
+import fail.still.android.data.Topics
+import fail.still.android.data.WorkspaceEntry
+import fail.still.android.data.rememberTopic
+import fail.still.android.ui.Avatar
+import fail.still.android.ui.C
+import fail.still.android.ui.LargeTitle
+import fail.still.android.ui.ListCard
+import fail.still.android.ui.ListRow
+import fail.still.android.ui.SectionHeader
+import fail.still.android.data.t
+import kotlinx.coroutines.launch
+
+@Composable
+fun MeScreen(current: WorkspaceEntry) {
+    val app = LocalApp.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val accounts by rememberTopic<List<Account>>(app.core, Topics.accounts)
+    val me = current.account
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars)) {
+        TopBack(t("android-settings.title"), app::pop)
+        LargeTitle("", t("android-settings.me.title"))
+        val list = accounts.value.orEmpty()
+        // The accounts on this device, on one card: the one in view first, with who it is, then the others; each signed
+        // out of by itself, as on the web (with one account it is just 退出登录), and another can be added.
+        val signOut = @Composable { a: Account ->
+            // Signing out: home at once, the sign-out going on by itself (a toast if it could not); not asked twice meanwhile.
+            if (app.isDoing("auth.signOut", "account" to a.sub)) Spinner(inline = true)
+            else Text(if (list.size > 1) t("android-settings.me.signOut") else t("android-settings.me.signOutOnly"), fontSize = 15.sp, color = C.red, modifier = Modifier.pressText {
+                app.home()
+                app.act(t("android-settings.me.signOutWhat"), if (list.size > 1) t("android-settings.me.signedOut", "email" to a.email) else null) { Auth.signOut(app.core, a.sub) }
+            })
+        }
+        ListCard {
+            ListRow {
+                Avatar(me.email, me.name.ifEmpty { me.email }, 46.dp, picture = me.picture)
+                Column(Modifier.weight(1f)) {
+                    Text(me.name.ifEmpty { me.email }, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${me.email} · Google", fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                list.find { it.sub == me.sub }?.let { signOut(it) }
+            }
+            list.filter { it.sub != me.sub }.forEach { a ->
+                ListRow {
+                    Text(a.email, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    signOut(a)
+                }
+            }
+            val opening = app.isDoing("auth.begin")
+            ListRow(onClick = if (opening) null else ({ scope.launch { signIn(app, context) } })) {
+                Text(t("android-settings.me.addAccount"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
+                if (opening) Spinner(inline = true)
+            }
+        }
+        SectionHeader(t("android-settings.me.devices"), start = 24.dp)
+        Devices(current)
+        // Deleting the account in view, at the foot as deleting a workspace is: asked first, and the sheet stays until it
+        // is done, with why still.fail cloud refused it (the only owner of a workspace others are in) in it.
+        Spacer(Modifier.height(18.dp))
+        ListCard {
+            ListRow(onClick = {
+                confirm(app, t("android-settings.me.deleteTitle"), t("android-settings.me.deleteText", "email" to me.email), t("android-settings.me.deleteAction"), danger = true) {
+                    Auth.deleteAccount(app.core, me.sub); app.home(); app.toast = t("android-settings.me.deleted", "email" to me.email)
+                }
+            }) { Text(t("android-settings.me.delete"), fontSize = 15.sp, color = C.red) }
+        }
+        Spacer(Modifier.height(30.dp))
+    }
+}

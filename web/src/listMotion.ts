@@ -4,13 +4,13 @@
 // chat with a new message) passes over them on a ground of its own.
 import { useLayoutEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { animate, motionValue, type AnimationPlaybackControls, type MotionValue } from "motion";
-import { MOVE, reducedMotion } from "./motion.ts";
-import { vars } from "./styles/tokens.css.ts";
+import { LEAVE, LEAVE_TO, MOVE, play } from "@stillfail/ui/motion.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 interface Placed { el: HTMLElement; top: number; left: number; width: number; y: MotionValue<number>; run?: AnimationPlaybackControls | undefined }
 
-/** The departing row fades while its neighbours close the gap in the same motion. */
-const LEAVE_MS = 200;
+/** The departing row fades while its neighbours close the gap in the same motion (motion.ts LEAVE). */
+const LEAVE_MS = LEAVE.duration;
 
 /**
  * Moves the children of `list` marked `data-flip="<key>"` from where they were at the last render to where this one
@@ -22,10 +22,17 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
     const box = list.current;
     if (!box) return;
     const was = placed.current;
+    // A list not shown (inert: one the sidebar's track has slid away from, not drawn then: Sidebar.css.ts) keeps no
+    // places, which would lay it out at every change of its rows; shown again, its rows are where they are.
+    if (box.inert) {
+      for (const p of was.values()) { p.run?.stop(); p.y.clearListeners(); p.el.style.transform = ""; }
+      placed.current = new Map();
+      return;
+    }
     const now = new Map<string, Placed>();
     const els = [...box.querySelectorAll<HTMLElement>(":scope [data-flip]:not([data-leaving])")];
-    // Nothing to move from (the list's first rows), or no motion wanted: only where they are is kept.
-    const still = was.size === 0 || reducedMotion();
+    // Nothing to move from (the list's first rows): only where they are is kept.
+    const still = was.size === 0;
     const gone = [...was.keys()].filter((key) => !els.some((el) => el.dataset.flip === key));
     // Which of the rows there before and now went ahead of others: they pass over the rest.
     const kept = els.map((el) => el.dataset.flip!).filter((key) => was.has(key));
@@ -43,7 +50,7 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
         y.on("change", (v) => { entry.el.style.transform = v ? `translateY(${v}px)` : ""; });
         now.set(key, entry);
         if (!still) {
-          el.animate([{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }],
+          play(el, [{ opacity: 0, transform: "scale(0.9)" }, { opacity: 1, transform: "none" }],
             { duration: 240, delay: 100, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "backwards" });
         }
         continue;
@@ -88,7 +95,7 @@ export function useListMotion(list: RefObject<HTMLElement | null>): void {
 function lift(el: HTMLElement) {
   const ground = `color-mix(in srgb, ${vars.text} 6%, ${vars.sidebar})`;
   el.style.zIndex = "1";
-  const run = el.animate(
+  const run = play(el, 
     [{ backgroundColor: ground }, { backgroundColor: ground, offset: 0.6 }, { backgroundColor: "transparent" }],
     { duration: 480, easing: "linear" },
   );
@@ -106,7 +113,7 @@ function leave(box: HTMLElement, p: Placed) {
     transform: "", zIndex: "-1", pointerEvents: "none",
   });
   box.appendChild(ghost);
-  const run = ghost.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(0.9)" }], { duration: LEAVE_MS, easing: "ease-out", fill: "forwards" });
+  const run = play(ghost, [{ opacity: 1, transform: "none" }, LEAVE_TO], { ...LEAVE, fill: "forwards" });
   void run.finished.then(() => ghost.remove(), () => ghost.remove());
 }
 

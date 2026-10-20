@@ -106,11 +106,12 @@ export function changeSummary(before: ArchivePolicy, after: ArchivePolicy): stri
   return said.join("，");
 }
 
-type Kept = { archivePolicy(): { policy: unknown } | null; setArchivePolicy(policy: unknown, author: unknown, summary: string): void };
+type Kept = { archivePolicy(ws?: string | null): { policy: unknown; change: any } | null; setArchivePolicy(policy: unknown, author: unknown, summary: string, ws?: string | null): void };
 
-/// The policy in force: the last one saved, else the default.
-export function currentPolicy(store: Kept): ArchivePolicy {
-  const saved = store.archivePolicy();
+/// The policy in force in a workspace (docs/multi-workspace.md: one each; null, or absent, the station's home one): the
+/// last one saved there, else the default.
+export function currentPolicy(store: Kept, ws: string | null = null): ArchivePolicy {
+  const saved = store.archivePolicy(ws);
   if (saved) {
     try {
       return checkedPolicy(saved.policy);
@@ -119,14 +120,58 @@ export function currentPolicy(store: Kept): ArchivePolicy {
   return DEFAULT_POLICY;
 }
 
-/// Saves a new policy (checked: throws what is wrong) by its author; what it changed, null when nothing did.
-export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor): string | null {
-  const before = currentPolicy(store);
+/// Saves a new policy for a workspace (checked: throws what is wrong) by its author; what it changed, null when nothing
+/// did.
+export function savePolicy(store: Kept, input: unknown, by: PolicyAuthor, ws: string | null = null): string | null {
+  const before = currentPolicy(store, ws);
   const after = checkedPolicy(input);
   const summary = changeSummary(before, after);
   if (summary === "") return null;
-  store.setArchivePolicy(after, by, summary);
+  store.setArchivePolicy(after, by, summary, ws);
   return summary;
+}
+
+/// How many days of checks a policy's view counts, and how many of each option's chats it names.
+const VIEW_DAYS = 7;
+const VIEW_CHATS = 20;
+
+type Viewed = Kept & { decisionsSince(since: number): any[]; now(): number; getSession(key: string): { runtime: string } | null };
+
+/// A workspace's archive policy as the pages show it (accounts' `policyView`, for one workspace: docs/multi-workspace.md):
+/// its words, its options each with the chats of that workspace (`mine`) the checks of the last days put there (by
+/// their latest check), who changed it last, and how many checks failed.
+export function policyView(store: Viewed, ws: string | null, mine: (session: string) => boolean, title: (session: string) => string): any {
+  const policy = currentPolicy(store, ws);
+  const saved = store.archivePolicy(ws);
+  const latest = new Map<string, any>();
+  for (const row of store.decisionsSince(store.now() - VIEW_DAYS * 86_400_000)) if (typeof row.session === "string" && mine(row.session)) latest.set(row.session, row);
+  const byOption = new Map<string, any[]>();
+  let failed = 0;
+  for (const [session, row] of [...latest.entries()].reverse()) {
+    const picked = typeof row.detail?.result?.selected === "string" ? row.detail.result.selected : null;
+    if (picked === null) {
+      failed++;
+      continue;
+    }
+    const list = byOption.get(picked) ?? [];
+    list.push({ session, title: title(session), at: row.at, recommended: row.detail?.accepted === true });
+    byOption.set(picked, list);
+  }
+  const by = saved?.change.by;
+  return {
+    text: policy.policy,
+    options: policy.options.map((o) => {
+      const chats = byOption.get(o.id) ?? [];
+      return { ...o, count: chats.length, chats: chats.slice(0, VIEW_CHATS) };
+    }),
+    days: VIEW_DAYS,
+    checked: latest.size,
+    failed,
+    edited: saved !== null,
+    change: saved
+      ? { at: saved.change.at, summary: saved.change.summary, by: by?.kind === "agent" ? { kind: "agent", session: by.session, title: title(by.session), runtime: store.getSession(by.session)?.runtime ?? null } : { kind: "person", email: by?.email ?? null, name: by?.name ?? null } }
+      : null,
+  };
 }
 
 /// The options of the checks recorded before the policy had them (decision.ts's fixed four).

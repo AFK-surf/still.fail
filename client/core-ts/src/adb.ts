@@ -75,6 +75,8 @@ export class Adb {
   /// The offer's keeper, and its tunnels' scope: closed as the offer stops or moves to another station.
   #keeper: Fiber.Fiber<unknown, unknown> | null = null;
   #tunnelScope: Scope.Closeable | null = null;
+  /// The links tunnels are taken on now (each in the tunnels' scope, until it closes).
+  readonly #accepting = new Set<Link>();
   #changed: Deferred.Deferred<void> = Deferred.makeUnsafe<void>();
 
   constructor(env: AdbEnv) {
@@ -122,8 +124,33 @@ export class Adb {
     };
   }
 
+  /// A link to a station's 共享调试 as a message shows it (the `adbCard` topic): what it is, and in a line how this
+  /// phone's adb stands with that station (its minutes left, sent again each minute as every shown time is).
+  card(station: string): J {
+    const title = t("core-views.adb.card.title");
+    const sharing = this.#offer !== null && this.#offer.station === station;
+    if (!this.#env.host.tcp) return { title, line: t("core-misc.adb.unsupported"), sharing: false, lendable: false };
+    if (this.#offer === null) return { title, line: t("core-views.adb.card.off"), sharing, lendable: true };
+    if (!sharing) return { title, line: t("core-views.adb.card.elsewhere"), sharing, lendable: true };
+    const view = this.value();
+    const minutes = Math.max(0, Math.floor((this.#until - this.#env.host.nowMs()) / 60_000));
+    const line = view.phase !== "offered"
+      ? (view.message ?? t("core-views.adb.card.connecting"))
+      : view.adb === "connected"
+        ? t("core-views.adb.card.connected", { n: minutes })
+        : view.adb === "unpaired"
+          ? t("core-views.adb.card.unpaired")
+          : view.adb === "off"
+            ? t("core-views.adb.card.wireless_off")
+            : view.adb === "missing"
+              ? t("core-views.adb.card.missing")
+              : (view.message ?? (view.adb === "connecting" || view.adb === null ? t("core-views.adb.card.attaching") : t("core-views.adb.card.failed")));
+    return { title, line, sharing, lendable: true };
+  }
+
   #shown(): void {
     this.#env.store.invalidate({ topic: "adbShare" });
+    this.#env.store.invalidateAll((topic) => topic.topic === "adbCard");
   }
 
   #tellChanged(): void {
@@ -195,7 +222,7 @@ export class Adb {
     return Effect.gen({ self: this }, function* () {
       const addr = StationAddr.parse(station);
       const mesh = yield* this.#env.mesh();
-      const link = yield* mesh.link(addr.station, this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
+      const link = yield* mesh.link(addr.toString(), this.#env.credentials(addr.workspace), this.#env.relays(addr.workspace));
       return [mesh, link] as [Mesh, Link];
     });
   }
@@ -253,38 +280,48 @@ export class Adb {
         }
         return { lost: t("core-misc.adb.station_ended"), pause: true } as Ended;
       });
-      const accepting = Effect.gen(function* () {
-        for (;;) {
-          const stream = yield* link.accept();
-          if (stream === null) break;
-          self.#env.runner.fork(Effect.provideService(self.#tunnel(run, stream), Scope.Scope, tunnels));
-        }
-        return { lost: link.closed() ?? t("core-misc.adb.link_lost"), pause: true } as Ended;
-      });
-      const replaced = Effect.as(mesh.replaced(StationAddr.parse(offer.station).station, link), { lost: null, pause: false } as Ended);
+      // The station opens its tunnels on the link its latest offer came on, and it hears of an offer on another link only
+      // once that one is made: tunnels are taken on every link an offer went on for as long as it lasts (or the offer
+      // stops), not only while it is the one offered on (2026-10-17: one opened as the link was replaced went unanswered).
+      if (!this.#accepting.has(link)) {
+        this.#accepting.add(link);
+        const accepting = Effect.gen(function* () {
+          for (;;) {
+            const stream = yield* link.accept();
+            if (stream === null) break;
+            self.#env.runner.fork(Effect.provideService(self.#tunnel(stream), Scope.Scope, tunnels));
+          }
+        }).pipe(Effect.ensuring(Effect.sync(() => this.#accepting.delete(link))));
+        const fiber = this.#env.runner.fork(accepting) as Fiber.Fiber<unknown, unknown>;
+        yield* Scope.addFinalizer(tunnels, Fiber.interrupt(fiber));
+      }
+      const gone = Effect.map(link.conn.closed(), () => ({ lost: link.closed() ?? t("core-misc.adb.link_lost"), pause: true }) as Ended);
+      const replaced = Effect.as(mesh.replaced(StationAddr.parse(offer.station).toString(), link), { lost: null, pause: false } as Ended);
       const stopped = Effect.as(Deferred.await(changed), { changed: true } as Ended);
       const left = Math.max(this.#until - this.#env.host.nowMs(), 0);
       const expired = Effect.as(Effect.sleep(left), { expired: true } as Ended);
-      const ended = yield* Effect.raceAllFirst([hears, accepting, replaced, stopped, expired]);
+      const ended = yield* Effect.raceAllFirst([hears, gone, replaced, stopped, expired]);
       if (!("changed" in ended) && this.#env.host.nowMs() >= this.#until) return { expired: true } as Ended;
       return ended;
     });
   }
 
-  /// One tunnel the station opened: to adbd's port it names, then its bytes both ways.
-  #tunnel(run: number, stream: IrohStream): Effect.Effect<void, never, Scope.Scope> {
+  /// One tunnel the station opened: to adbd's port it names, then its bytes both ways. Served by the offer as it is when
+  /// its head comes, not the one it came on: the phone offers again as its ports change (twice within 1.5 s,
+  /// 2026-10-17), and one opened in between was turned down as 已停止共享.
+  #tunnel(stream: IrohStream): Effect.Effect<void, never, Scope.Scope> {
     return Effect.gen({ self: this }, function* () {
       const refuse = (why: string) => Effect.ignore(Effect.andThen(stream.write(utf8(`${JSON.stringify({ error: why })}\n`)), stream.finish()));
       const carry = { bytes: new Uint8Array() };
       const line = yield* Effect.orElseSucceed(readLine(stream, carry), () => null);
       if (line === null) return;
       const kind = (parseJson(utf8(line)) as J)?.tunnel;
-      const offer = this.#current(run);
-      if (offer === null) return yield* refuse("已经停止共享");
+      const offer = this.#offer;
+      if (offer === null) return yield* refuse("已停止共享");
       const port = kind === "connect" ? offer.connect : kind === "pair" ? offer.pair : null;
-      if (port === null) return yield* refuse(kind === "connect" ? "手机上的无线调试没开" : kind === "pair" ? "手机上的配对窗口没开" : "不认识的通道");
+      if (port === null) return yield* refuse(kind === "connect" ? "手机未开启无线调试" : kind === "pair" ? "手机未打开配对窗口" : "无法识别的通道");
       const tcp = yield* Effect.result(this.#env.host.tcp!(port));
-      if (tcp._tag === "Failure") return yield* refuse(`连不上手机上的 adb：${tcp.failure.message}`);
+      if (tcp._tag === "Failure") return yield* refuse(`无法连接手机上的 adb：${tcp.failure.message}`);
       const conn = tcp.success;
       const ok = yield* Effect.result(stream.write(utf8(`${JSON.stringify({ ok: true })}\n`)));
       if (ok._tag === "Failure") return;

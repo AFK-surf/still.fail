@@ -1,49 +1,60 @@
 import { StationUpdate } from "../StationUpdate.tsx";
 // A chat: a thread (a Slack thread or a chat on still.fail's page) with its people
-// and agents. The messages are the page; each agent's execution history can
+// and agents. The messages are the page; its agents' execution histories can
 // be opened beside them, one tab per agent.
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
-import { CreatorText, PeopleStack, QuotaRing, Ring } from "../components.tsx";
-import { Archive, Boxes, Close, File, Info, PanelClose, PanelOpen, Stop, Unplug, Web } from "../icons.tsx";
+import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "@stillfail/ui/icons.tsx";
+import { DriveTab } from "./DriveTab.tsx";
+import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
 import { Popover, Tabs } from "radix-ui";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Link, Navigate, useHref, useNavigate, useParams, useSearchParams } from "react-router";
 import { PENDING } from "../lastChat.ts";
-import { keepTabs, keptTabs } from "../chatTabs.ts";
-import type { ChatJobsView } from "../core/shapes.ts";
-import { stationApi, useAction, useApi, useChat, useChatJobs, useChats, useHistory, useHost, useLives, useStationCall, type ChatAgent, type ChatView, type Session, type Status, type ChatThread } from "../api.ts";
+import { ownOrigin } from "../stillfailLink.ts";
+import { keepTabs } from "../chatTabs.ts";
+import { usePrefs } from "../prefs.ts";
+import type { ChatJobsView, ChatPublish, ChatShare, Host, StationView } from "../core/shapes.ts";
+import { stationApi, useAction, useApi, useStatus, useChat, useChatJobs, useChats, useHistory, useHost, useStationCall, useStationLook, useAgentCard, useStations, type ChatAgent, type ChatView, type ChatThread } from "../api.ts";
 import { History } from "../History.tsx";
+import { StationMark } from "../StationMark.tsx";
+import { StationCornerDot, StationDot, useStationLink } from "../StationLink.tsx";
+import * as linkCss from "../StationLink.css.ts";
+import { StationPeek } from "../cloud/StationCards.tsx";
+import { Hover } from "../Peeks.tsx";
+import { AgentCard, UsageTiles } from "../AgentCard.tsx";
 import { ModelTriple } from "../ModelTriple.tsx";
 import { usePick } from "../pick.ts";
 import { ChatPanel, goToNeighbour } from "../Chat.tsx";
 import { OpenFile } from "../Viz.tsx";
 import { fileService, fileSourceOf } from "../Preview.tsx";
 import { useShortcut } from "../keymap.ts";
-import { animate, EASE_OUT, LOCAL_MS, reducedMotion, type AnimationPlaybackControls } from "../motion.ts";
+import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
-import { useReady } from "../core/react.ts";
-import { failure, useAct, useToast } from "../toast.tsx";
+import { useReady, useTopicSelect } from "../core/react.ts";
+import { chatPage, useChatPageActions } from "../chatPage.ts";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
-import { DoingShown } from "../DoingMark.tsx";
-import { AgentMark, Confirm, ConnectKindIcon, Empty, ICON, IconButton, Loading, MobileBack, ModelLogo, ResizeHandle, SlackLogo, Time, Tip } from "../ui.tsx";
-import { StatusLine } from "../Status.tsx";
-import { TitleInput, useRenaming } from "../Rename.tsx";
-import * as renameCss from "../Rename.css.ts";
+import { DoingShown, useDoingState } from "../DoingMark.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
+import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
 import * as sidebarCss from "../styles/sidebar.css.ts";
 import * as conversationCss from "../styles/conversation.css.ts";
 import * as css from "./ChatPage.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
 
 import { NAME } from "../channel.ts";
 import { t } from "../i18n.ts";
 import { tx } from "../cloud/words.tsx";
+import { PublishDialog, PublishedLinks, RevokeConfirm } from "../Publish.tsx";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 /**
  * An item's page, one for every item: its chat's messages (none before its agent has a chat), the composer, and its
  * agents' execution histories beside them. The address is the item's: its chat's thread, or its agent's session key
@@ -58,7 +69,7 @@ export function ChatPage() {
   // once there is one, at the same address). A chat made here keeps the page it opened with under the core's key
   // when its address becomes its station's.
   const opened = renamed.get(chat) ?? chat;
-  return <ChatScreen key={opened} of={{ session: opened }} />;
+  return <ChatScreen key={opened} session={opened} />;
 }
 
 /** Chats made here, by the key their station gave them: the core's key their page was opened with. */
@@ -71,13 +82,14 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : "slack";
+    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
 }
 
-function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
+function ChatScreen({ session: chatSession }: { session: string }) {
+  const of: { thread: number } | { session: string } = { session: chatSession };
   const station = useStation();
   const link = useLink();
   const navigate = useNavigate();
@@ -97,18 +109,19 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     navigate(`${link(`/chats/${encodeURIComponent(stationKey)}`)}${location.search}`, { replace: true });
   }, [made, stationKey]);
   const agents = chatView.value?.agents ?? [];
-  const lives = useLives(station.address, agents.map((a) => a.session.key));
-  // One history tab per agent, by session key; each can be closed, and with none open the panel goes away.
+  // One history tab per agent, by its session's key (a chat may have several agents, each with its own): opened from
+  // the agent (its avatar, its name, a row of what it does), closed alone, and with no tab open the panel goes away.
   // Each chat keeps its own tabs. One not opened before opens none (its agents' histories open from them when wanted),
-  // except an agent with no chat yet: its page shows its history. Where the panel would lie over the chat (the styles'
-  // `max-width: 1100px`), none opens by itself: the chat comes first.
+  // except an agent with no chat yet, here or in Slack (the core's `noChat`): its page shows its history. Where the
+  // panel would lie over the chat (the styles' `max-width: 1100px`), none opens by itself: the chat comes first.
   const chatKey = `${station.address}:${"thread" in of ? of.thread : of.session}`;
-  const [kept] = useState(() => keptTabs(chatKey));
-  const [chosen, setTabs] = useState<string[] | null>(() => kept?.tabs ?? null);
+  // Kept by the core for each chat (its prefs' `chatTabs`): read from there, written there (keepTabs).
+  const kept = usePrefs((p) => p.chatTabs[chatKey]);
+  const chosen = kept?.tabs ?? null;
   const [folded] = useState(() => window.matchMedia("(max-width: 1100px)").matches);
   const view = chatView.value;
-  const tabs = chosen ?? (view && !view.thread && !view.pending && !folded && "session" in of ? [of.session] : []);
-  const [active, setActiveState] = useState<string | null>(kept?.active ?? null);
+  const tabs = chosen ?? (view?.noChat && !folded && "session" in of ? [of.session] : []);
+  const active = kept?.active ?? null;
   // The tabs as last left while the agents are not known yet: the panel holds its place instead of coming in later.
   // Its agents' background jobs; a service's tab (`service:<job>`) is the chat's own while one of them has it.
   const jobs = agents.flatMap((a) => a.jobs ?? []);
@@ -118,74 +131,27 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useEffect(() => {
     for (const job of jobs) if (job.open === false) closePreview(previewKey(station.address, job.id));
   }, [jobs, station.address]);
-  const open = agents.length ? tabs.filter((key) => key === JOBS || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const known = agents.length ? tabs.filter((key) => key === JOBS || key === FILES || fileOf(key) !== null || (serviceOf(key) !== null && jobs.some((j) => j.id === serviceOf(key))) || agents.some((a) => a.session.key === key)) : tabs;
+  const isAgent = (key: string) => agents.some((a) => a.session.key === key);
+  const open = known;
   // The job picked in the 任务 tab.
   const [jobPicked, pickJob] = useState<string | null>(null);
   const shown = active && open.includes(active) ? active : open[0] ?? null;
-  // The panel as it was when its last tab closed, kept while it slides out over the chat (which takes the room at once).
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [leaving, setLeaving] = useState<{ tabs: string[]; shown: string; width: number } | null>(null);
+  const sidePanel = useSidePanel(open, shown);
+  const { pageRef, panelRef, leaving } = sidePanel;
   // Tabs and the one in front change together, and are kept for this chat in one write.
   const commit = (next: string[], front: string | null) => {
-    if (next.length) setLeaving(null);
-    else {
-      setOpening(false);
-      if (open.length && shown && panelRef.current && !reducedMotion()) setLeaving({ tabs: open, shown, width: panelRef.current.getBoundingClientRect().width });
-    }
-    setTabs(next);
-    setActiveState(front);
+    sidePanel.changing(next);
     keepTabs(chatKey, { tabs: next, active: front });
   };
   const saveTabs = (next: string[]) => commit(next, active);
   const setActive = (key: string | null) => commit(open, key);
-  // Whether the panel is being opened here (it slides in then), not shown with the chat as it was left.
-  const [opening, setOpening] = useState(false);
-  // Opened, the panel's column widens from nothing and the chat narrows with it, frame by frame; closed, the other way.
-  // The panel keeps its whole width all along and shows through its column as it grows, so it comes in from the right
-  // edge without its content re-laying out. Turned back on its way, it goes on from the width it has. Where the panel
-  // lies over the chat (`max-width: 1100px`) it slides instead.
-  const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
-  const pageRef = useRef<HTMLDivElement>(null);
-  const slide = useRef<{ run: AnimationPlaybackControls; value: number } | null>(null);
-  useLayoutEffect(() => {
-    const page = pageRef.current;
-    const el = panelRef.current;
-    // Slid out: the page has laid itself out without the panel now, so the column it held is let go of in the same frame.
-    if (!sliding) return void page?.style.removeProperty("grid-template-columns");
-    if (!page || !el) return;
-    const was = slide.current;
-    was?.run.stop();
-    const narrow = matchMedia("(max-width: 1100px)").matches;
-    // Its width at rest, without what the motion holds.
-    page.style.removeProperty("grid-template-columns");
-    el.style.removeProperty("width");
-    el.style.removeProperty("transform");
-    const whole = sliding === "out" && leaving ? leaving.width : el.getBoundingClientRect().width;
-    const start = was ? was.value : sliding === "in" ? 0 : whole;
-    const goal = sliding === "in" ? whole : 0;
-    const draw = (v: number) => {
-      el.style.width = `${whole}px`;
-      if (narrow) el.style.transform = `translateX(${whole - v}px)`;
-      else page.style.gridTemplateColumns = `minmax(0, 1fr) ${v}px`;
-    };
-    draw(start);
-    const now = { value: start, run: animate(start, goal, {
-      duration: sliding === "in" ? 0.28 : 0.24, ease: EASE_OUT,
-      onUpdate: (v) => { now.value = v; draw(v); },
-      onComplete: () => {
-        if (slide.current !== now) return;
-        slide.current = null;
-        if (sliding === "out") return setLeaving(null);
-        page.style.removeProperty("grid-template-columns");
-        el.style.removeProperty("width");
-        el.style.removeProperty("transform");
-        setOpening(false);
-      },
-    }) };
-    slide.current = now;
-  }, [sliding]);
   const openTab = (key: string) => {
-    if (open.length === 0 && !reducedMotion()) setOpening(true);
+    // An agent's history goes after the histories already open, before the other tabs.
+    if (isAgent(key) && !open.includes(key)) {
+      const at = open.findLastIndex(isAgent) + 1;
+      return commit([...open.slice(0, at), key, ...open.slice(at)], key);
+    }
     commit(open.includes(key) ? open : [...open, key], key);
   };
   const closeTab = (key: string) => {
@@ -211,6 +177,23 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     setSearch((now) => { now.delete("service"); return now; }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked]);
+  // A task of the chat's (`?job=<id>`, a search's find): its services and tasks, at it.
+  const askedJob = search.get("job");
+  useEffect(() => {
+    if (!askedJob) return;
+    openJobs(askedJob);
+    setSearch((now) => { now.delete("job"); return now; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedJob]);
+  // A link to one of its agents' execution history (`?history=<session>&entry=<n>`, copied from it): opened there.
+  const askedHistory = search.get("history");
+  useEffect(() => {
+    if (!askedHistory) return;
+    const entry = Number(search.get("entry"));
+    openHistory(askedHistory, Number.isSafeInteger(entry) && entry >= 0 ? entry : 0);
+    setSearch((now) => { now.delete("history"); now.delete("entry"); return now; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedHistory]);
   // still.fail's own links (/o/<workspace>/<station>/<session>, as agents post them): one of this chat's agents' web services
   // opens beside the chat; another session of the workspace opens here, in the page, not through the desktop app. In
   // the desktop app (at app://ember) still.fail cloud's links are its own too.
@@ -223,11 +206,19 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       const anchor = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
       if (!anchor) return;
       const url = new URL(anchor.href, location.href);
-      // Another chat's page on this origin (as a reference to it is written, ChatRef.tsx): opened here.
-      const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length) : null;
+      // Another chat's page (as a reference to it is written, ChatRef.tsx): opened here, from this origin or from any of
+      // still.fail cloud's (one written on app.still.fail, read on app.youdid.wtf or in the desktop app).
+      const page = url.origin === location.origin && url.pathname.startsWith(`${opens.current.root}/`) ? url.pathname.slice(opens.current.root.length)
+        : url.origin !== location.origin && ownOrigin(url) ? url.pathname : null;
       if (page && /^(\/w\/[^/]+\/s\/[^/]+)?\/chats\/[^/]+\/?$/.test(page)) {
         event.preventDefault();
         navigate(`${page}${url.search}`);
+        return;
+      }
+      // One of a station's screens (an agent asking a person to take over: docs/remote-screens.md): its viewer, here.
+      if (page && /^\/w\/[^/]+\/s\/[^/]+\/screen\/[^/]+\/?$/.test(page)) {
+        event.preventDefault();
+        navigate(page.replace(/\/$/, ""));
         return;
       }
       const item = /^\/o\/([^/]+)\/([^/]+)\/([^/]+)\/?$/.exec(url.pathname);
@@ -237,7 +228,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       if (service && opens.current.agents.some((a) => a.session.key === session)) {
         event.preventDefault();
         opens.current.openTab(`service:${service}`);
-      } else if (url.origin === location.origin || url.origin === window.stillfailDesktop?.cloudOrigin) {
+      } else if (ownOrigin(url)) {
         event.preventDefault();
         navigate(`/w/${item[1]}/s/${item[2]}/chats/${encodeURIComponent(session)}${url.search}`);
       }
@@ -250,6 +241,12 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     openTab(key);
     setFocus({ key, entry, n: Date.now() });
   };
+  // A chat keeping watch is archived only once asked.
+  const archiveAsked = () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); };
+  // What is in the page (its messages, its bar, its tabs) does these by the chat's key: it is handed none of them.
+  useChatPageActions(chatKey, { history: openHistory, tab: openTab, jobs: openJobs, archive: archiveAsked });
+  // A visualization in a message opens in a tab of the side panel: the same function while the page is this chat's.
+  const [openFile] = useState(() => (session: string, file: { path: string; name: string }) => chatPage.tab(chatKey, fileTab(session, file.path, file.name)));
   const api = stationApi(call);
   const toast = useToast();
   const running = agents.filter((a) => a.status === "running" || a.status === "queued");
@@ -257,12 +254,16 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   useShortcut("chat.stop", running.length ? () => {
     act(Promise.all(running.map((a) => api.stop(a.session.key))), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"));
   } : null);
-  // The history tab in front closes the panel; else the first agent's opens.
+  // A history tab in front closes the panel; else the first one open comes to the front, the chat's own agent's if none is.
   useShortcut("chat.history", agents[0] ? () => {
-    const front = agents.find((a) => a.session.key === shown);
-    if (front) saveTabs([]); else openTab(agents[0]!.session.key);
+    if (shown && isAgent(shown)) saveTabs([]); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
+  // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
+  const drive = useStationDrive(station.address);
+  // Files dragged anywhere over the chat go into its message (useChatDrop).
+  const drop = useChatDrop(chatKey, station.address);
+  const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
   useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
@@ -281,15 +282,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   const [askArchive, setAskArchive] = useState(false);
   useShortcut("chat.archive", chatView.value && !chatView.value.archived && !chatView.value.offline && keeper
     ? () => { if (chatView.value?.watch) setAskArchive(true); else void archive(); } : null);
-  // The chat's name, changed where it is shown: double-click it, or F2.
-  const [renaming, setRenaming] = useState(false);
-  const renamable = !!(chatView.value && !chatView.value.archived && !chatView.value.offline && !chatView.value.pending && keeper);
-  useShortcut("chat.rename", renamable && !renaming ? () => setRenaming(true) : null);
-  const rename = (title: string | null) => {
-    setRenaming(false);
-    if (title === null || !keeper) return;
-    api.rename({ thread, session: keeper }, title).catch((error: unknown) => toast(t("web-pages.settings.workspace.renameFailed", { error: failure(error) })));
-  };
   if (!chatView.value) {
     if (chatView.error) return <Empty><p>{t("web-pages.chat.loadFailed", { error: chatView.error.message })}</p></Empty>;
     // Laid out as the chat will be, its composer already in its place: coming from another chat page, the composer
@@ -298,7 +290,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
       <div className={sessionCss.sessionPage} data-panel={open.length > 0}>
         <div className={jobsCss.sessionMain}>
           <section className={sessionCss.chat} aria-label={t("web-pages.decisions.back")} data-under-composer="" data-avoid-previews="">
-            <Loading label={station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading")} detail={<StatusLine workspace={scopeOf(station.address)} />} />
+            <ChatWaiting />
             <ComposerSlot variant="chat" station={station} draftKey={chatKey} thread={null} sessionKey={null} locked />
           </section>
         </div>
@@ -307,8 +299,6 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   }
   const chat = chatView.value;
   const panel = open.length > 0;
-  // A chat keeping watch is archived only once asked.
-  const archiveAsked = () => { if (chat.watch) setAskArchive(true); else void archive(); };
   // What the panel shows: its tabs, or while it slides out, what it showed.
   const side = panel && shown ? { tabs: open, shown } : leaving;
   const slackUrl = chat.slackUrl;
@@ -319,64 +309,70 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
     <div ref={pageRef} className={sessionCss.sessionPage} data-panel={panel || leaving !== null}>
       {chat.watch && <Confirm open={askArchive} title={t("web-pages.chat.archiveConfirm", { title: chat.title })} description={chat.watch.ask} action={t("web-pages.chat.archive")}
         onConfirm={() => { setAskArchive(false); void archive(); }} onClose={() => setAskArchive(false)} />}
-      <div className={jobsCss.sessionMain}>
+      <div className={`${jobsCss.sessionMain} ${css.dropZone}`} {...drop.handlers}>
+      <DropHint drop={drop} />
       <header className={sidebarCss.pageBar}>
         <MobileBack to={link("/chats")} label={t("web-pages.decisions.back")} />
         {/* The chat's title, then who is in it: its people, then its agents (each opens its history). */}
         <div className={conversationCss.pageBarTitle}>
-          {renaming
-            ? <TitleInput value={chat.title} onDone={rename} className={renameCss.titleInputBar} />
-            : <ChatTitle station={station.address} session={keeper} title={chat.title} onRename={renamable ? () => setRenaming(true) : undefined} />}
+          {/* Text only, under the bar's drag in the desktop app: a chat is renamed in the sidebar. */}
+          <ChatTitle station={station.address} session={keeper} title={chat.title} />
           <StationUpdate station={station.address} notice={chat.stationUpdate} />
+          {agents.length === 0 && <ChatStation />}
           {chat.people.length > 0 && <PeopleStack people={chat.people} max={5} />}
-          {agents.map((a) => (
-            <Tip key={a.session.key} label={`${a.session.agentText}${a.session.badgeText ? ` · ${a.session.badgeText}` : ""} · ${t("web-pages.chat.history")}`}>
-              <button type="button" className={css.agentMarkBtn} onClick={() => toggleHistory(a.session.key)} aria-label={t("web-pages.chat.historyOf", { agent: a.session.agentText })}>
-                <AgentMark maker={a.session.maker} runtime={a.session.runtime} badge={a.badge} badgeText={a.session.badgeText} size={20} />
-              </button>
-            </Tip>
+          {agents.map((a, i) => (
+            <AgentButton key={a.session.key} station={station.address} chat={chatKey} session={chatSession} agent={a.session.key} marked={agents.length > 1 && shown === a.session.key} first={i === 0} />
           ))}
         </div>
-        <div className={css.pageBarActions}>
+        {/* The chat's find bar takes this place while it is open (ChatFind.tsx): it covers none of the chat. */}
+        <div className={css.pageBarActions} data-find-slot="">
           {/* Nothing left in it (the core's `archivable`): archived with one press. */}
           {chat.archivable && keeper && <IconButton label={t("web-pages.chat.archive")} icon={Archive} shortcut="chat.archive" onClick={archiveAsked} />}
-          <JobsPanel station={station.address} view={jobsView} onService={(job) => openTab(`service:${job}`)} onTab={openJobs} />
-          {chat.thread && <ChatInfo chat={chat} thread={chat.thread} />}
+          <JobsPanel station={station.address} session={chatSession} chat={chatKey} />
+          {drive && <IconButton label={t("web-pages.chat.files")} icon={Folder} onMouseDown={keepFocus} onClick={toggleFiles} />}
+          {chat.thread && <ChatInfo station={station.address} session={chatSession} />}
           {slackUrl && (
             <Tip label={t("web-pages.chat.openInSlack")}>
-              <a className={pagesCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
+              <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
-          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onClick={() => openTab(agents[0]!.session.key)} />}
+          {chat.feishuUrl && (
+            <Tip label={t("web-pages.chat.openInFeishu")}>
+              <a className={pageCss.iconBtn} href={chat.feishuUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInFeishu")}><FeishuLogo /></a>
+            </Tip>
+          )}
+          {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
       {/* The chat is the page; its agents' histories sit in a tab set that takes the whole right side. */}
       {/* A visualization in a message opens on its own in a tab of the side panel, beside the chat. */}
-      <OpenFile.Provider value={(session, file) => openTab(fileTab(session, file.path, file.name))}>
-        <ChatPanel chat={chat} draftKey={chatKey} lives={lives} onOpenHistory={openHistory} onArchive={chat.archivable && keeper ? archiveAsked : undefined} {...(sendTo ? { made: sendTo } : {})} />
+      <OpenFile.Provider value={openFile}>
+        <ChatPanel session={chatSession} draftKey={chatKey} made={sendTo} />
       </OpenFile.Provider>
       </div>
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
-            <ResizeHandle variable="--panel-w" edge="left" min={320} max={960} label={t("web-pages.chat.resizePanel")} />
+            <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")}
+              press={{ label: t("web-pages.chat.closePanel"), run: () => saveTabs([]) }} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {
                   if (key === JOBS) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><Boxes size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={t("web-pages.chat.jobs")}>{t("web-pages.chat.jobs")}</span></span>
                         </Tabs.Trigger>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeJobs")} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                       </span>
                     );
                   }
+                  if (key === FILES) return <FilesTab key={key} onClose={() => closeTab(key)} />;
                   const file = fileOf(key);
                   if (file) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={file.name} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><File size={14} strokeWidth={1.75} /><span className={css.sideTabText} data-text={file.name}>{file.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: file.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -387,7 +383,7 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   if (service) {
                     return (
                       <span key={key} className={css.sideTabWrap}>
-                        <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                        <Tip label={service.name} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                           <span className={css.sideTabAgent}><JobDot tone={service.tone} /><span className={css.sideTabText} data-text={service.name}>{service.name}</span></span>
                         </Tabs.Trigger></Tip>
                         <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: service.name })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
@@ -400,54 +396,59 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
                   const label = a.session.agentText;
                   return (
                     <span key={key} className={css.sideTabWrap}>
-                      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key}>
+                      <Tip label={label} cut><Tabs.Trigger className={css.sideTab} value={key} id={tabId(key)} aria-controls={paneId(key)}>
                         <span className={css.sideTabAgent}><ModelLogo maker={a.session.maker} runtime={a.session.runtime} size={14} /><span className={css.sideTabText} data-text={label}>{label}</span></span>
                       </Tabs.Trigger></Tip>
-                      <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.closeHistory", { agent: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
+                      <button type="button" className={css.sideTabClose} aria-label={t("web-pages.chat.close", { name: label })} onClick={() => closeTab(key)}><Close size={12} strokeWidth={2} /></button>
                     </span>
                   );
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onClick={() => saveTabs([])} />
+              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={() => saveTabs([])} />
             </div>
             {side.tabs.map((key) => {
               if (key === JOBS) {
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key}>
-                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} onService={(job) => openTab(`service:${job}`)} />
-                  </Tabs.Content>
+                  <SidePane key={key} of={key} shown={side.shown}>
+                    <JobsTab station={station.address} view={jobsView} picked={jobPicked} onPick={pickJob} chat={chatKey} />
+                  </SidePane>
+                );
+              }
+              if (key === FILES) {
+                // Kept while another tab shows: the folder it is in stays.
+                return (
+                  <SidePane key={key} of={key} shown={side.shown} kept>
+                    <DriveTab chat={chatKey} />
+                  </SidePane>
                 );
               }
               const file = fileOf(key);
               if (file) {
                 // Kept as a web service is (Previews.tsx): small in the corner while another chat or page shows.
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                  <SidePane key={key} of={key} shown={side.shown} kept>
                     <PreviewSlot station={station.address} file={file} name={file.name} restarting={null} draftKey={chatKey} />
-                  </Tabs.Content>
+                  </SidePane>
                 );
               }
               const service = jobs.find((j) => j.id === serviceOf(key));
               // Kept loaded while another tab, chat or page shows (Previews.tsx): only closing its tab ends it.
               if (service) {
                 return (
-                  <Tabs.Content key={key} className={css.sideContent} value={key} forceMount>
+                  <SidePane key={key} of={key} shown={side.shown} kept>
                     {service.port != null && (service.state === "running" || service.state === "exited")
                       ? <PreviewSlot station={station.address} port={service.port} name={service.name} service={service.id} restarting={service.state === "exited" ? { restarts: service.restarts ?? 0 } : null} draftKey={chatKey} />
                       : <Empty><p>{service.state === "failed" ? t("web-pages.chat.serviceFailed", { name: service.name }) : t("web-pages.chat.serviceStopped", { name: service.name })}</p></Empty>}
-                  </Tabs.Content>
+                  </SidePane>
                 );
               }
               const a = agents.find((x) => x.session.key === key);
-              if (!a) return <Tabs.Content key={key} className={css.sideContent} value={key} />;
+              if (!a) return <SidePane key={key} of={key} shown={side.shown} />;
               return (
-                <Tabs.Content key={key} className={css.sideContent} value={key}>
-                  <History station={station.address} sessionKey={key} actions={<SessionActions session={a.session} status={a.status} />}
-                    focus={focus?.key === key ? focus : null}
-                    summary={<HistorySummary agent={a} />}
-                    details={<SessionDetails agent={a} />} />
-                </Tabs.Content>
+                <SidePane key={key} of={key} shown={side.shown}>
+                  <AgentHistory station={station.address} session={chatSession} agent={key} focusEntry={focus?.key === key ? focus.entry : null} focusN={focus?.key === key ? focus.n : 0} />
+                </SidePane>
               );
             })}
           </Tabs.Root>
@@ -456,9 +457,87 @@ function ChatScreen({ of }: { of: { thread: number } | { session: string } }) {
   );
 }
 
+/**
+ * One of the chat's agents, as its avatar in the bar: pressed, its history's tab opens (or, in front, closes); on
+ * hover, its card (AgentCard.tsx), the one its avatar beside its messages has. Those whose history shows are marked,
+ * among several.
+ */
+const AgentButton = memo(function AgentButton({ station: address, chat, session: of, agent: key, marked, first }: {
+  station: string; chat: string; session: string; agent: string; marked: boolean;
+  /** The chat's first agent: one tile with the station it runs on. */
+  first: boolean;
+}) {
+  const agent = useChatAgent(address, of, key);
+  if (!agent) return null;
+  return <AgentTile agent={agent} chat={chat} marked={marked} station={first} />;
+});
+
+/**
+ * A chat not read yet: its messages' shapes, and over them what it waits on: what the core says is slow (正在连接 Studio),
+ * else where it reads from; a connection down, in red.
+ */
+function ChatWaiting() {
+  const station = useStation();
+  const status = useStatus(scopeOf(station.address));
+  const text = status?.text ?? (station.name ? t("web-pages.chat.loadingFrom", { name: station.name }) : t("web-pages.chat.loading"));
+  return <Waiting shape="messages" fill text={text} error={status?.state === "trouble" ? text : null} />;
+}
+
+function AgentTile({ agent, chat, marked, station }: { agent: ChatAgent; chat: string; marked: boolean; station: boolean }) {
+  const { session } = agent;
+  const onHistory = () => chatPage.history(chat, session.key);
+  const where = useChatStation();
+  const link = useStationLink(useStation().address);
+  const label = t("web-pages.chat.historyOf", { agent: session.agentText });
+  // With the station it runs on, one tile: the maker opens the history and has
+  // the agent's card, the station's part its own; the agent's badge on the maker's corner, how the station is reached on the tile's.
+  if (station && where) {
+    return (
+      <span className={`${css.agentStation} ${linkCss.corner}`} data-on={marked || undefined}>
+        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20}
+          wrap={(logo) => <Hover tile content={<AgentCard agent={agent} />}><button type="button" className={css.agentStationAgent} onClick={onHistory} aria-label={label}>{logo}</button></Hover>}>
+          <StationPart where={where} />
+        </AgentMark>
+        <StationCornerDot link={link} />
+      </span>
+    );
+  }
+  return (
+    <Hover tile content={<AgentCard agent={agent} />}>
+      <button type="button" className={css.agentMarkBtn} data-on={marked || undefined} onClick={onHistory} aria-label={label}>
+        <AgentMark maker={session.maker} runtime={session.runtime} badge={agent.badge} badgeText={session.badgeText} size={20} />
+      </button>
+    </Hover>
+  );
+}
+
+/**
+ * An agent's execution history in its tab, with its head (how it runs), what needs seeing to and its details: drawn
+ * again only when the agent, the chat's title or the entry asked for changes, not with the rest of the chat's page.
+ */
+const AgentHistory = memo(function AgentHistory({ station, session, agent: key, focusEntry, focusN }: {
+  station: string; session: string; agent: string;
+  /** An entry to bring into view (`focusN` changes each time it is asked for); null: none. */
+  focusEntry: number | null; focusN: number;
+}) {
+  const agent = useChatAgent(station, session, key);
+  const title = useTopicSelect<ChatView, string | undefined>({ topic: "chat", station, session }, (s) => s.value?.title);
+  if (!agent) return null;
+  return (
+    <History station={station} sessionKey={key} title={title} focusEntry={focusEntry} focusN={focusN}
+      head={<SessionHead agent={agent} />}
+      summary={agent.attention.length > 0 ? <HistorySummary agent={agent} /> : null}
+      details={<SessionDetails agent={agent} />} />
+  );
+});
+
+/** One of a chat's agents, by its key: the same object while it is. */
+function useChatAgent(station: string, session: string, key: string): ChatAgent | undefined {
+  return useTopicSelect<ChatView, ChatAgent | undefined>({ topic: "chat", station, session }, (s) => s.value?.agents.find((a) => a.session.key === key));
+}
+
 /** The 任务 tab's key: every service and job of the chat's agents. */
 const JOBS = "jobs";
-
 /** A visualization's tab: its place among the previews (Preview.tsx's fileService), opened from its message. */
 function fileTab(session: string, path: string, name: string): string {
   return fileService({ session, path, name });
@@ -472,7 +551,8 @@ function serviceOf(key: string): string | null {
 }
 
 /** The chat's web services and background jobs, from the title bar: what matters now, the rest in the 任务 tab. */
-function JobsPanel({ station, view, onService, onTab }: { station: string; view: ChatJobsView; onService: (job: string) => void; onTab: (job?: string) => void }) {
+function JobsPanel({ station, session, chat }: { station: string; session: string; chat: string }) {
+  const view = useChatJobs(station, { session }).value ?? NO_JOBS;
   const [open, setOpen] = useState(false);
   const alarm = view.alarm;
   const close = (then: () => void) => { setOpen(false); then(); };
@@ -480,55 +560,156 @@ function JobsPanel({ station, view, onService, onTab }: { station: string; view:
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.services")} shortcut="chat.jobs">
         <Popover.Trigger asChild>
-          <button type="button" className={`${pagesCss.iconBtn} ${css.jobsTrigger}`} aria-label={t("web-pages.chat.services")} data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
+          <button type="button" className={`${pageCss.iconBtn} ${css.jobsTrigger}`} aria-label={t("web-pages.chat.services")} data-alarm={alarm} data-none={view.jobs.length === 0 || undefined}><Web {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
         <Popover.Content className={`${controlsCss.popover} ${css.jobsPanel}`} align="end" sideOffset={6} collisionPadding={8}>
-          <JobsPopover station={station} view={view} onService={(job) => close(() => onService(job))} onTab={(job) => close(() => onTab(job))} />
+          <JobsPopover station={station} view={view} onService={(job) => close(() => chatPage.tab(chat, `service:${job}`))} onTab={(job) => close(() => chatPage.jobs(chat, job))} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-/** The connect a Slack chat's agents reach Slack through: links into Slack start at its workspace. */
+/** The connect a Slack chat's agents reach Slack through (links into Slack start at its workspace); a Feishu chat's, by
+ * its surface. */
 function slackConnect(chat: ChatView) {
-  return chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const feishu = chat.thread?.surface.startsWith("feishu:") ? chat.thread.surface.slice("feishu:".length) : null;
+  return chat.agents.find((a) => (feishu !== null ? a.connect?.id === feishu : a.connect?.kind === "slack"))?.connect ?? null;
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
-function ChatInfo({ chat, thread }: { chat: ChatView; thread: ChatThread }) {
-  const link = useLink();
-  const connect = slackConnect(chat);
-  const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
-  const where = chat.place;
+function ChatInfo({ station, session }: { station: string; session: string }) {
+  const [open, setOpen] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  // Its thread, while publishing it or asking before one of its links is revoked (the info closes meanwhile).
+  const [publishing, setPublishing] = useState<number | null>(null);
+  const [revoking, setRevoking] = useState<{ thread: number; id: string } | null>(null);
   return (
-    <Popover.Root>
+    <>
+    <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label={t("web-pages.chat.info")}>
         <Popover.Trigger asChild>
-          <button type="button" className={pagesCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
+          <button type="button" className={pageCss.iconBtn} aria-label={t("web-pages.chat.info")}><Info {...ICON} /></button>
         </Popover.Trigger>
       </Tip>
       <Popover.Portal>
-        <Popover.Content className={`${controlsCss.popover} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
-          <dl className={css.details}>
-            {row(t("web-pages.chat.info.from"), where
-              ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
-              : t("web-pages.chat.info.native", { name: NAME }))}
-            {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
-            {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
-            {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
-            {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
-          </dl>
-          {chat.agents.length > 0 && (
-            <ul className={css.detailsList}>
-              {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
-            </ul>
-          )}
+        <Popover.Content className={`${controlsCss.popover} ${controlsCss.panelCard} ${css.chatInfo}`} align="end" sideOffset={6} collisionPadding={8}>
+          <ChatInfoBody station={station} session={session} onShare={() => { setOpen(false); setSharing(true); }}
+            onPublish={(thread) => { setOpen(false); setPublishing(thread); }} onRevoke={(thread, id) => { setOpen(false); setRevoking({ thread, id }); }} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+    {sharing && <ShareOf station={station} session={session} onClose={() => setSharing(false)} />}
+    {publishing !== null && <PublishDialog station={station} thread={publishing} onClose={() => setPublishing(null)} />}
+    <RevokeConfirm station={station} thread={revoking?.thread ?? 0} id={revoking?.id ?? null} onClose={() => setRevoking(null)} />
+    </>
+  );
+}
+
+/** The chat's sharing dialog, as the chat is now (read while it is open). */
+function ShareOf({ station, session, onClose }: { station: string; session: string; onClose(): void }) {
+  const chat = useChat(station, { session }).value;
+  return chat?.xshare && chat.thread ? <ShareDialog share={chat.xshare} thread={chat.thread.id} onClose={onClose} /> : null;
+}
+
+/** What the chat's info says, as the chat is now: read only while it shows. */
+function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { station: string; session: string; onShare(): void; onPublish(thread: number): void; onRevoke(thread: number, id: string): void }) {
+  const chat = useChat(station, { session }).value;
+  const link = useLink();
+  if (!chat?.thread) return null;
+  const thread = chat.thread;
+  const feishu = thread.surface.startsWith("feishu:");
+  const connect = slackConnect(chat);
+  const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
+  const where = chat.place;
+  const share = chat.xshare;
+  // A read-only member does not publish, but sees what is published.
+  const publish = chat.publish && (chat.publish.may || chat.publish.links.length > 0) ? chat.publish : undefined;
+  return (
+    <>
+      <dl className={css.details}>
+        {row(t("web-pages.chat.info.from"), where
+          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
+          : t("web-pages.chat.info.native", { name: NAME }))}
+        {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
+        {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
+        {row(t("web-pages.chat.info.created"), <Time stamp={thread.time?.createdAt} />)}
+        {thread.lastMessage && row(t("web-pages.chat.info.lastMessage"), <Time stamp={thread.lastMessage.time?.createdAt} />)}
+      </dl>
+      {chat.agents.length > 0 && (
+        <ul className={css.detailsList}>
+          {chat.agents.map((a) => <AgentLine key={a.session.key} agent={a} />)}
+        </ul>
+      )}
+      {(share || publish) && (
+        <div className={`${css.infoRows} ${controlsCss.panelEdge}`}>
+          {share && <ShareRow share={share} onOpen={onShare} />}
+          {publish && <PublishRow publish={publish} onOpen={() => onPublish(thread.id)} />}
+          {publish && <PublishedLinks links={publish.links} onRevoke={(id) => onRevoke(thread.id, id)} />}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Making the chat public (docs/public-share.md), in its info: the row that opens what publishes it, for those who may
+ * (not a read-only member), its links under it (PublishedLinks).
+ */
+function PublishRow({ publish, onOpen }: { publish: ChatPublish; onOpen(): void }) {
+  return <PanelRow icon={<Web size={14} />} label={t("web-pages.chat.publish")} onClick={publish.may ? onOpen : undefined} />;
+}
+
+/**
+ * The chat's sharing with the viewer's other workspaces (docs/chat-share.md), last in its info: where it is shared at
+ * the row's end, under way a turning ring there. Only those who may change it (its starter, an owner or admin) open it.
+ */
+function ShareRow({ share, onOpen }: { share: ChatShare; onOpen(): void }) {
+  const station = useStation().address;
+  const state = useDoingState("chat.xshare", { station, session: share.session });
+  const end = (
+    <>
+      <span className={css.shareText}>{share.text}</span>
+      <DoingShown state={state} inline label={t("web-pages.chat.xshare.saving")} />
+    </>
+  );
+  return <PanelRow icon={<Users size={14} />} label={t("web-pages.chat.xshare")} end={end} onClick={share.may ? onOpen : undefined} />;
+}
+
+/**
+ * Which of the viewer's other workspaces it is shared with, ticked, and whether their agents may send in it: done, the
+ * dialog goes at once and the core shows it so while its station is told (`chat.xshare`).
+ */
+function ShareDialog({ share, thread, onClose }: { share: ChatShare; thread: number; onClose(): void }) {
+  const station = useStation().address;
+  const api = stationApi(useStationCall(station));
+  const act = useAct();
+  const [ticked, setTicked] = useState(() => new Set(share.places.filter((p) => p.on).map((p) => p.workspace)));
+  const [write, setWrite] = useState(share.write);
+  const toggle = (id: string) => setTicked((was) => { const next = new Set(was); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const save = () => {
+    onClose();
+    act(api.xshare({ thread, session: share.session }, share.places.filter((p) => ticked.has(p.workspace)).map((p) => p.workspace), write), t("web-pages.chat.xshare.verb"));
+  };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.chat.xshare")} description={t("web-pages.chat.xshare.lead")}
+      footer={<Button variant="primary" onClick={save}>{t("common.done")}</Button>}>
+      <ul className={css.shareList}>
+        {share.places.map((p) => (
+          <li key={p.workspace}>
+            <label className={pagesCss.listRow}>
+              <input type="checkbox" checked={ticked.has(p.workspace)} onChange={() => toggle(p.workspace)} />
+              <span className={pagesCss.listRowTitle}>{p.name}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <div className={css.shareWrite}>
+        <SwitchRow title={t("web-pages.chat.xshare.write")} description={t("web-pages.chat.xshare.writeNote")} checked={write} onChange={setWrite} disabled={ticked.size === 0} />
+      </div>
+    </Dialog>
   );
 }
 
@@ -556,7 +737,7 @@ function HistorySummary({ agent }: { agent: ChatAgent }) {
       {agent.attention.map((a, i) => (
         a.quota ? (
           <Tip key={i} label={<>{a.text}{a.more && <><br />{a.more}</>}</>}>
-            <span className={`${css.attention} ${css.attentionQuota}`}><QuotaRing left={a.quota.left} level={a.quota.level} size={20} /><span className="quota-ring-letter">{a.quota.mark}</span></span>
+            <span className={`${css.attention} ${css.attentionQuota}`}><QuotaChip window={a.quota} small bare /></span>
           </Tip>
         ) : (
           <span key={i} className={css.attention} data-tone={a.kind === "disk" ? "amber" : "red"}>{a.text}</span>
@@ -567,41 +748,167 @@ function HistorySummary({ agent }: { agent: ChatAgent }) {
 }
 
 /**
- * Unfolded under the history's head, by how much each thing matters: the account it runs on (with its quota) first,
- * which can be changed here, or left to the station; then the model and effort; then what it has used; the station
- * last, folded. Changes take from its next turn on.
+ * The history's head: how it runs, in one control (the model, how hard it thinks, the account with its quota), shown
+ * whether its details are open or not. Changes take from its next turn on.
+ */
+function SessionHead({ agent }: { agent: ChatAgent }) {
+  const station = useStation();
+  const toast = useToast();
+  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
+  const pick = usePick(station.address, `session:${agent.session.key}`);
+  const change = useAction(() => pick.save(), () => toast(t("web-pages.chat.pickSaved")));
+  return (
+    <span className={css.sessionHead}>
+      <ModelTriple pick={pick} onConfirm={() => void change.run()} />
+      {change.error && <span className={controlsCss.fieldError} role="alert">{change.error.message}</span>}
+    </span>
+  );
+}
+
+/**
+ * Unfolded under the history's head: what it has used, as its card says it (the figures that say most, large; the
+ * rest in a quiet line), then a row each, its mark leading: what runs it (and its account's page), and the station it
+ * runs on with what runs low on it.
  */
 function SessionDetails({ agent }: { agent: ChatAgent }) {
   const { session } = agent;
   const station = useStation();
   const link = useLink();
-  const toast = useToast();
   const host = useHost(station.address).value;
-  // What it runs on and what its control's panel picked, as the core has them (../pick.ts).
-  const pick = usePick(station.address, `session:${session.key}`);
-  const change = useAction(() => pick.save(), () => toast(t("web-pages.chat.pickSaved")));
+  const look = useStationLook(station.address);
+  const card = useAgentCard(station.address, session.key).value;
+  // A station older than the card's figures: what it has used in a line, as before.
   const usage = useHistory(station.address, session.key).value?.usageLine;
+  const tiles = card && (card.cost || card.cache || card.context);
+  const quiet = tiles ? [card.work, card.tokens].filter(Boolean).join(" · ") : usage;
   return (
     <div className={css.sessionDetails}>
-      {/* How it runs, in one row: the model, how hard it thinks, then the account it runs on (with its quota). */}
-      <ModelTriple pick={pick} onConfirm={() => void change.run()} />
-      {change.error && <p className={controlsCss.fieldError} role="alert">{change.error.message}</p>}
-      {/* What it used: a line, quiet. */}
-      <p className={`${css.runUsage} ${shellCss.muted}`}>
-        {session.runtimeText} · {session.processText}
-        {usage && <> · {usage}</>}
-        {" · "}<Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
-      </p>
-      {/* The station it runs on, and how loaded it is. */}
-      <div className={css.runStation}>
-        <p className={shellCss.muted}>{station.name || host?.hostname || t("web-pages.chat.thisMachine")}{host ? ` · ${host.summary}` : ""}</p>
-        {host && (
-          <div className={css.resourceRings}>
-            {host.meters.map((m) => <Ring key={m.label} percent={m.percent} level={m.level} label={m.short} title={`${m.label} ${m.value}`} />)}
-          </div>
+      {tiles && <UsageTiles card={card} />}
+      {quiet && <p className={css.sessionQuiet}>{quiet}</p>}
+      <div className={css.sessionLine}>
+        <span className={css.sessionLineMark}><AgentMark maker={session.maker} runtime={session.runtime} badge={undefined} size={16} /></span>
+        <span className={css.sessionLineText}>
+          {session.runtimeText} · {session.processText}
+          {session.process === "warm" && <>{" · "}<Evict session={session.key} /></>}
+        </span>
+        <Link className={css.detailLink} to={link(`/settings/accounts/${session.profile}`)}>{t("web-pages.chat.profileDetails")}</Link>
+      </div>
+      <div className={css.sessionLine}>
+        <span className={css.sessionLineMark}><StationMark emoji={look?.emoji} icon={look?.icon} size={16} /></span>
+        <span className={css.sessionLineText}>
+          <span className={css.sessionLineName}>{station.name || host?.hostname || t("web-pages.chat.thisMachine")}</span>
+          {host?.identity ? ` · ${host.identity}` : ""}
+        </span>
+        {host && host.meters.some((m) => m.level !== "ok") && (
+          <span className={css.resourceRings}>
+            <MeterChips meters={host.meters} alerts />
+          </span>
         )}
       </div>
+      <TranscriptLine session={session.key} />
     </div>
+  );
+}
+
+/**
+ * Where its runtime keeps the session's transcript on the station's machine: its file's name (the whole path on
+ * hover), and its path to copy. Nothing before it is written, nor from a station from before it (404).
+ */
+function TranscriptLine({ session }: { session: string }) {
+  const api = useApi();
+  const toast = useToast();
+  const [path, setPath] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setPath(null);
+    api.transcriptPath(session).then((p) => { if (current) setPath(p); }, () => {});
+    return () => { current = false; };
+  }, [api, session]);
+  if (path === null) return null;
+  const copy = () => navigator.clipboard.writeText(path).then(
+    () => toast(t("web-main.chat.transcriptCopied")),
+    (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
+  );
+  return (
+    <div className={css.sessionLine}>
+      <span className={css.sessionLineMark}><File size={16} /></span>
+      <Tip label={path}>
+        <span className={css.sessionLineText}>{t("web-pages.chat.transcript")} · <span className={css.sessionFile}>{path.split(/[\\/]/).pop()}</span></span>
+      </Tip>
+      <button type="button" className={`${css.detailLink} ${css.detailButton}`} onClick={() => void copy()}>{t("web-pages.chat.copyPath")}</button>
+    </div>
+  );
+}
+
+/**
+ * Its idle process, kept warm for the next message, ended now (the station ends it by itself in time): rarely wanted,
+ * so in its details, beside where they say it is warm. Under way, a turning ring; failed, a red mark a few seconds.
+ */
+function Evict({ session }: { session: string }) {
+  const api = useApi();
+  const act = useAct();
+  const station = useStation().address;
+  const evicting = useDoing("session.evict", { station, key: session });
+  const failed = useDoingFailed("session.evict", { station, key: session });
+  return (
+    <button type="button" className={`${css.detailLink} ${css.detailButton}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
+      {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} inline />
+    </button>
+  );
+}
+
+/**
+ * The machine the chat runs on: its name, how it looks (once its view comes) and, until then, its host in a line. Only
+ * what is shown here is followed: its view changes much more often (its load, its agents), and is read by its card.
+ */
+function useChatStation() {
+  const station = useStation();
+  const listed = useTopicSelect<StationView[], boolean>({ topic: "stations", scope: scopeOf(station.address) }, (s) => s.value !== undefined);
+  const look = useStationLook(station.address);
+  const hostname = useTopicSelect<Host, string | undefined>({ topic: "host", station: station.address }, (s) => s.value?.hostname);
+  const line = useTopicSelect<Host, string | undefined>({ topic: "host", station: station.address }, (s) => (look || !s.value ? undefined : `${s.value.hostname} · ${s.value.summary}`));
+  if (!listed) return null;
+  const name = station.name || hostname || t("web-pages.chat.thisMachine");
+  return { name, address: station.address, look, line, settings: `${station.settings}/stations` };
+}
+
+/** The station at a glance on hover (its card, StationCards.tsx); before its view comes, its host in a line. */
+function StationHover({ where, children }: { where: NonNullable<ReturnType<typeof useChatStation>>; children: ReactElement }) {
+  const { look, line, name, address, settings } = where;
+  if (look) return <Hover content={<StationCard address={address} settings={settings} />}>{children}</Hover>;
+  return <Tip label={line ?? name}>{children}</Tip>;
+}
+
+/** The station's card, as its view is now: read only while it shows. */
+function StationCard({ address, settings }: { address: string; settings: string }) {
+  const view = useStations(scopeOf(address)).value?.find((s) => s.station === address);
+  return view ? <StationPeek s={view} settings={settings} panel /> : null;
+}
+
+/** The station's part of its agent's tile: its icon, or its name where it has none (how it is reached is on the tile's corner). */
+function StationPart({ where }: { where: NonNullable<ReturnType<typeof useChatStation>> }) {
+  const { look, name, address } = where;
+  const mark = look && (look.emoji || look.icon);
+  const link = useStationLink(address);
+  return (
+    <StationHover where={where}>
+      <span className={css.agentStationPart} data-name={mark ? undefined : true} tabIndex={look ? 0 : undefined} aria-label={link ? `${name} · ${link.text}` : mark ? name : undefined}>
+        {mark ? <StationMark emoji={look.emoji} icon={look.icon} size={12} /> : name}
+      </span>
+    </StationHover>
+  );
+}
+
+/** The machine the chat runs on, beside its title, while it has no agent to share a tile with; how it is reached, a dot before it. */
+function ChatStation() {
+  const where = useChatStation();
+  const link = useStationLink(useStation().address);
+  if (!where) return null;
+  const { look, name } = where;
+  return (
+    <StationHover where={where}>
+      <span className={css.chatStation} tabIndex={look ? 0 : undefined}>{link && <StationDot link={link} />}{(look?.emoji || look?.icon) && <StationMark emoji={look.emoji} icon={look.icon} size={12} />}{name}</span>
+    </StationHover>
   );
 }
 
@@ -609,34 +916,15 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
  * The chat's name in its bar: while a new one goes (`chat.rename`), that one, a turning ring beside it; its own again if
  * it did not, a red mark there a few seconds saying why.
  */
-function ChatTitle({ station, session, title, onRename }: { station: string; session: string | null; title: string; onRename: (() => void) | undefined }) {
+function ChatTitle({ station, session, title }: { station: string; session: string | null; title: string }) {
   const renamingTo = useRenaming(station, session);
   const renameFailed = useDoingFailed("chat.rename", { station, session: session ?? "" });
   return (
     <>
-      {onRename
-        ? <h1><Tip label={t("web-pages.chat.rename")} shortcut="chat.rename"><button type="button" className={css.titleBtn} onClick={onRename}>{renamingTo ?? title}</button></Tip></h1>
-        : <h1>{renamingTo ?? title}</h1>}
-      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} className={controlsCss.iconSpinner} size={14} label={t("web-pages.settings.stations.renaming")} />
+      <h1>{renamingTo ?? title}</h1>
+      <DoingShown state={{ running: renamingTo !== undefined, error: session === null ? undefined : renameFailed }} label={t("web-pages.settings.stations.renaming")} />
     </>
   );
 }
 
 /** What can be done to it right now: stop a turn, release an idle process. */
-function SessionActions({ session, status }: { session: Session; status: Status }) {
-  const api = useApi();
-  const act = useAct();
-  const station = useStation().address;
-  // Under way: the button turns, wherever it was asked from (the shortcut too); failed, a red mark there a few seconds.
-  const stopping = useDoing("session.stop", { station, key: session.key });
-  const evicting = useDoing("session.evict", { station, key: session.key });
-  const stopFailed = useDoingFailed("session.stop", { station, key: session.key });
-  const evictFailed = useDoingFailed("session.evict", { station, key: session.key });
-  return (
-    <>
-      {(status === "running" || status === "queued") && <IconButton label={t("web-pages.chat.stopTurn")} icon={Stop} shortcut="chat.stop" busy={stopping} failed={stopFailed}
-        onClick={() => act(api.stop(session.key), t("web-pages.chat.stop"), t("web-pages.chat.stopAsked"))} />}
-      {session.process === "warm" && <IconButton label={t("web-pages.chat.evict")} icon={Unplug} busy={evicting} failed={evictFailed} onClick={() => act(api.evict(session.key), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))} />}
-    </>
-  );
-}

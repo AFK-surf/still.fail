@@ -1,5 +1,5 @@
 // Notifications (docs/notifications.md → Clients): one channel (消息), one notification per chat (its tag), opening the
-// workspace’s decisions page. Local notices are those the core's `notify` says to show while the app is in front
+// chat at the message it is about. Local notices are those the core's `notify` says to show while the app is in front
 // (MainActivity; client/core-ts/src/attend.ts decides), pushes come from FCM while it is not (Push.kt). 我 → 通知 turns
 // both off (kept in the core).
 package fail.still.android
@@ -30,6 +30,7 @@ import fail.still.android.data.I18n
 import fail.still.core.CoreException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -41,27 +42,11 @@ object Notifier {
     private const val CHANNEL = "messages"
     /** Every notification has this id; the chat is its tag, so a newer one for a chat replaces the older. */
     private const val ID = 1
-    /** Distinguishes a notification tap from an ordinary chat link. */
-    const val OPEN_DECISIONS = "fail.still.android.OPEN_DECISIONS"
-    /** Where the app kept 我 → 通知 before the core did (AppState.moveNotify). */
-    const val FLAG = "notify"
-
-    /** Where the language last followed is kept (AppState's prefs), for a push that wakes the app with no core to ask. */
-    private const val LANG = "lang"
-    /** Whether this process has followed the core's language (keepLang): then it is the one. */
-    @Volatile private var followed = false
-
-    fun keepLang(prefs: SharedPreferences, lang: String?) {
-        if (lang == null) return
-        followed = true
-        if (prefs.getString(LANG, null) != lang) prefs.edit().putString(LANG, lang).apply()
-    }
+    /** The message a notification is about (its seq in the chat), which its tap opens the chat at. */
+    const val AT = "fail.still.android.AT"
 
     /** The words, in the language last followed (a push may come with no app started). */
-    fun words(context: Context) {
-        I18n.load(context)
-        if (!followed) context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(LANG, null)?.let(I18n::follow)
-    }
+    fun words(context: Context) = KeptLang.words(context)
 
     /** Whether MainActivity is started. */
     @Volatile var inFront = false
@@ -71,13 +56,23 @@ object Notifier {
 
     private fun manager(context: Context) = context.getSystemService(NotificationManager::class.java)
 
-    /** Keep the chat URL for its workspace; a notification tap opens that workspace’s decisions. */
-    fun show(context: Context, tag: String, title: String, body: String, url: String) {
+    /**
+     * What the system lets the app show, as the core's `notify.permission` takes it (what every client's notifications
+     * page shows): the app's notifications on, off, or not asked yet (`asked`: whether it was, as the core keeps it).
+     */
+    fun permission(context: Context, asked: Boolean?): String = when {
+        manager(context).areNotificationsEnabled() -> "granted"
+        Build.VERSION.SDK_INT >= 33 && asked == false -> "default"
+        else -> "denied"
+    }
+
+    /** A tap opens the chat (`url`) at the message it is about (`seq`; at its usual place without one: an older station or cloud). */
+    fun show(context: Context, tag: String, title: String, body: String, url: String, seq: Long?) {
         val manager = manager(context)
         words(context)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, t("android-misc.notify.channel"), NotificationManager.IMPORTANCE_HIGH))
         val open = Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.CLOUD_ORIGIN.trimEnd('/') + url)).setClass(context, MainActivity::class.java)
-            .putExtra(OPEN_DECISIONS, true)
+            .apply { if (seq != null) putExtra(AT, seq) }
         val tap = PendingIntent.getActivity(context, tag.hashCode(), open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
@@ -92,7 +87,7 @@ object Notifier {
         manager.notify(tag, ID, notification)
     }
 
-    fun show(context: Context, notice: Notice) = show(context, notice.tag, notice.title, notice.body, notice.url)
+    fun show(context: Context, notice: Notice) = show(context, notice.tag, notice.title, notice.body, notice.url, notice.seq)
 
     /** A chat opened: its notification is read. */
     fun cancel(context: Context, tag: String) = manager(context).cancel(tag, ID)
@@ -124,6 +119,10 @@ fun rememberNotificationAsk(app: AppState, once: Boolean): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (!granted && !once) app.toast = t("android-misc.notify.allowInSettings", "app" to BuildConfig.APP_NAME)
+        // The answer, to the core at once (the activity was not stopped for the system's dialog).
+        app.scope.launch {
+            try { app.core.call("notify.permission", buildJsonObject { put("state", if (granted) "granted" else "denied") }) } catch (_: CoreException) {}
+        }
     }
     val ask = { if (!Notifier.allowed(context) && Build.VERSION.SDK_INT >= 33) launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
     // Once the core says whether it was asked.

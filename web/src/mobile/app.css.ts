@@ -1,6 +1,11 @@
-import { globalStyle, style } from "@vanilla-extract/css";
-import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "../styles/keyframes.css.ts";
+import { globalStyle, keyframes, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { mScroll } from "./styles/pages.css.ts";
+import { mFromLeftKeyframes, mFromRightKeyframes, mRiseInKeyframes, mRiseOutKeyframes, mToLeftKeyframes, mToRightKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 
+// Another place on the bottom bar: its page comes in from 30 toward the way the ball goes (a place further right, from
+// the right), as it shows; from another bar, it only shows.
+const placeIn = keyframes({ from: { opacity: 0, transform: "translateX(var(--m-place-from, 0px))" }, to: { opacity: 1, transform: "none" } });
 export const mPage = style({
   position: "absolute", inset: "0", background: "var(--m-bg)",
   selectors: {
@@ -10,6 +15,9 @@ export const mPage = style({
     "&[data-role=\"peek\"]": { pointerEvents: "none" },
     "&[data-role=\"top\"]:not([data-swiping])": { transition: "transform 200ms var(--m-standard)" },
     "&[data-swiping]": { boxShadow: "-8px 0 24px rgba(0, 0, 0, .12)" },
+    // Moved by the finger (a transform set at each move, not an animation): each its own layer, only moved, not drawn
+    // anew at every move (with the frosted glass on it).
+    "&[data-swiping], &[data-role=\"peek\"]": { willChange: "transform" },
     // Side by side: the new page pushes in whole from the right, the old goes out whole to the left (and back the other way).
     "&[data-way=\"side\"][data-forward][data-role=\"in\"]": { animation: `${mFromRightKeyframes} 300ms var(--m-standard) both` },
     "&[data-way=\"side\"][data-forward][data-role=\"out\"]": { animation: `${mToLeftKeyframes} 300ms var(--m-standard) both` },
@@ -23,15 +31,17 @@ export const mPage = style({
     // A new chat rises from the bottom, over the page it leaves in place; closed, it goes down the way it came.
     "&[data-way=\"rise\"][data-forward][data-role=\"in\"]": { animation: `${mRiseInKeyframes} 380ms var(--m-ease) both` },
     "&[data-way=\"rise\"]:not([data-forward])[data-role=\"out\"]": { animation: `${mRiseOutKeyframes} 380ms var(--m-ease) both` },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
+    "&[data-place-in]": { animation: `${placeIn} 220ms var(--m-ease) both` },
   },
 });
+// As wide as Safari's own edge gesture reaches in, which a touch here keeps from starting (app.tsx EdgeStrip).
+// A page under the one on top is kept as it was left, not drawn: what moves on it (spinners, a station's glyph
+// breathing, images' waiting blots) stands still meanwhile rather than being worked out every frame unseen.
+globalStyle(`${mPage}[data-role="under"] *, ${mPage}[data-role="under"] *::before, ${mPage}[data-role="under"] *::after`, {
+  animationPlayState: "paused !important" as "paused",
+});
 export const mEdge = style({
-  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "14px",
+  display: "none", position: "absolute", top: "0", bottom: "0", left: "0", zIndex: "40", width: "20px",
   touchAction: "none",
   "@media": {
     "(pointer: coarse)": {
@@ -60,17 +70,13 @@ export const mRecentCatch = style({ position: "absolute", inset: "0" });
 export const mRecent = style({
   position: "absolute", left: "10px", bottom: "calc(72px + var(--m-foot))", display: "flex", flexDirection: "column",
   width: "min(340px, calc(100vw - 20px))", maxHeight: "min(560px, calc(100vh - 100px - var(--m-foot)))", overflow: "hidden",
-  borderRadius: "22px", background: "color-mix(in srgb, var(--m-surface) 88%, transparent)", WebkitBackdropFilter: "blur(24px)",
+  borderRadius: `calc(22px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "color-mix(in srgb, var(--m-surface) 88%, transparent)", WebkitBackdropFilter: "blur(24px)",
   backdropFilter: "blur(24px)", boxShadow: "0 14px 44px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .06)",
   transformOrigin: "26px calc(100% + 36px)", opacity: "0", transform: "scale(.6)",
   transition: "opacity 160ms, transform 200ms var(--m-ease)",
   selectors: {
     [`${mRecentLayer}[data-open] &`]: { opacity: "1", transform: "none", transition: "opacity 180ms, transform 280ms var(--m-ease)" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
   },
 });
 export const mScrim = style({
@@ -81,7 +87,8 @@ export const mScrim = style({
 });
 export const mSheet = style({
   position: "absolute", left: "0", right: "0", bottom: "0", display: "flex", flexDirection: "column",
-  boxSizing: "border-box", maxHeight: "94vh", maxWidth: "680px", marginInline: "auto", paddingBottom: "var(--m-foot)", borderRadius: "26px 26px 0 0",
+  boxSizing: "border-box", maxHeight: "94vh", maxWidth: "680px", marginInline: "auto", paddingBottom: "var(--m-foot)",
+  borderRadius: `calc(26px * ${vars.cornerScale}) calc(26px * ${vars.cornerScale}) 0 0`, cornerShape: vars.cornerShape,
   background: "color-mix(in srgb, var(--m-surface) 80%, transparent)", WebkitBackdropFilter: "blur(28px)",
   backdropFilter: "blur(28px)", boxShadow: "0 -6px 36px rgba(0, 0, 0, .18)", transform: "translateY(100%)",
   // Its height is moved from script (app.tsx SheetHost): on from where a finger lets go of it, at that speed.
@@ -89,11 +96,6 @@ export const mSheet = style({
   selectors: {
     "&[data-open]": { transform: "none", transition: "transform 380ms var(--m-ease)" },
     "&[data-dragging]": { transition: "none" },
-  },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
   },
 });
 export const mGrab = style({
@@ -105,21 +107,17 @@ export const mGrab = style({
 export const mSheetHead = style({ display: "flex", alignItems: "center", padding: "4px 18px 10px" });
 export const mMenuLayer = style({ zIndex: "55" });
 export const mMenu = style({
-  position: "absolute", borderRadius: "14px", background: "var(--m-surface)",
+  position: "absolute", borderRadius: `calc(14px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: "var(--m-surface)",
   boxShadow: "0 12px 36px rgba(0, 0, 0, .25)", overflow: "hidden", transformOrigin: "0 0", opacity: "0",
   transform: "scale(.9)", transition: "opacity 150ms, transform 150ms",
   selectors: {
     "&[data-open]": { opacity: "1", transform: "none", transition: "opacity 200ms, transform 200ms" },
   },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
-  },
 });
 export const mToast = style({
   position: "fixed", left: "50%", bottom: "calc(90px + var(--m-foot))", zIndex: "70", maxWidth: "calc(100% - 48px)",
-  padding: "10px 16px", borderRadius: "18px", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: "14px",
+  padding: "10px 16px", borderRadius: "18px", background: "var(--m-ink)", color: "var(--m-bg)", fontSize: vars.textUi,
   transform: "translateX(-50%)", opacity: "0", transition: "opacity 200ms", pointerEvents: "none",
   selectors: {
     "&[data-open]": { opacity: "1" },
@@ -131,21 +129,20 @@ export const mReader = style({
   selectors: {
     "&[data-open]": { transform: "none" },
   },
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
-  },
 });
 export const mReaderBar = style({ padding: "calc(var(--m-top) + 6px) 16px 10px 10px" });
 export const mReaderBody = style({
   flex: "1", minHeight: "0", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px",
   padding: "0 20px calc(30px + var(--m-foot))",
 });
-export const mReaderLabel = style({ display: "flex", alignItems: "center", fontSize: "13px", color: "var(--m-muted)" });
+export const mReaderLabel = style({ display: "flex", alignItems: "center", fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mGrab} span`, { width: "38px", height: "5px", borderRadius: "3px", background: "var(--m-line)" });
 globalStyle(`${mMenu} button`, {
   display: "flex", alignItems: "center", justifyContent: "space-between", boxSizing: "border-box", width: "100%",
-  minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: "15px !important",
+  minHeight: "46px", padding: "12px 16px", border: "0", background: "none", color: "var(--m-ink)", fontSize: `${vars.textBody} !important`,
   cursor: "pointer",
 });
+
+// A place's top page has the bottom bar over its foot (Bar.tsx): what scrolls on it clears the bar (56 + 22) and its
+// primary action in the notch (令, a ＋), which stands 32 over it, with 16 to spare.
+globalStyle(`${mPage}[data-root] ${mScroll}`, { paddingBottom: "calc(var(--m-foot) + 126px)" });

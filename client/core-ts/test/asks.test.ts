@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { Accounts } from "../src/accounts.ts";
-import { Asks, buddies, devCloud, linkTarget } from "../src/asks.ts";
+import { Asks, PICTURE_RETRY_MS, buddies, devCloud, linkTarget } from "../src/asks.ts";
 import { parseAsk } from "../src/asks-parse.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
@@ -13,6 +13,8 @@ import { run } from "./run.ts";
 holdLanguage();
 // deno-lint-ignore no-explicit-any
 type J = any;
+// A changelog that says nothing of any build.
+const nothing = () => Effect.succeed([] as string[]);
 
 test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   const cloud = "https://app.still.fail";
@@ -20,8 +22,17 @@ test("still_fail_links_open_in_the_app_and_others_do_not", () => {
   assert.equal(linkTarget("https://app.still.fail/invite", cloud), null);
   assert.deepEqual(linkTarget("https://ember.3720.org/w/ws1/s/st1/chats/k%3A1", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "k:1" });
   assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/ds:C1:1.0?service=web", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "ds:C1:1.0", service: "web" });
+  assert.deepEqual(linkTarget("https://app.youdid.wtf/w/ws1/s/st1/chats/k", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "k" });
+  assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k", "https://app.youdid.wtf"), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null });
   assert.equal(linkTarget("https://app.still.fail/o/ws1/st1/k/", cloud).service, null);
   assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/adb", cloud), { opens: "adbShare", workspace: "ws1", station: "st1" });
+  assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/login/l-3", cloud), { opens: "login", workspace: "ws1", station: "st1", login: "l-3" });
+  assert.equal(linkTarget("https://app.still.fail/w/ws1/s/st1/login/", cloud), null);
+  assert.deepEqual(linkTarget("https://app.still.fail/o/ws1/st1/k?history=k%3A2&entry=12", cloud), { opens: "item", workspace: "ws1", station: "st1", session: "k", service: null, history: "k:2", entry: 12 });
+  assert.deepEqual(linkTarget("https://app.still.fail/w/ws1/s/st1/chats/c?history=k", cloud), { opens: "chat", workspace: "ws1", station: "st1", chat: "c", history: "k" });
+  assert.deepEqual(linkTarget("?history=k&entry=3", cloud), { opens: "history", history: "k", entry: 3 });
+  assert.deepEqual(linkTarget("?history=k&entry=x", cloud), { opens: "history", history: "k" });
+  assert.equal(linkTarget("?service=web", cloud), null);
   assert.equal(linkTarget("https://example.com/o/ws1/st1/k", cloud), null);
   assert.equal(linkTarget("https://app.still.fail:8443/o/ws1/st1/k", cloud), null);
   assert.equal(linkTarget("http://app.still.fail/o/ws1/st1/k", cloud), null);
@@ -40,7 +51,7 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
     if (req.url === "https://p.test/a.png") return { status: 200, headers: [["content-type", "image/png"]], body: new Uint8Array([1, 2, 3]) };
     return jsonResponse(404, {});
   });
-  const asks = new Asks(host);
+  const asks = new Asks(host, nothing);
   const asked = () => host.requests.filter((r) => r.url.endsWith("latest.json")).length;
   const newer = await run(asks.update("android", 1100, false, false));
   assert.deepEqual([newer.versionCode, newer.file, newer.extra], [1200, "android/stillfail-1200.apk", undefined]);
@@ -54,10 +65,25 @@ test("a_newer_app_is_asked_for_at_most_hourly_and_a_picture_once", async () => {
   assert.deepEqual([...b[1]], [1, 2, 3]);
   await run(asks.picture("https://p.test/a.png"));
   assert.equal(host.requests.filter((r) => r.url === "https://p.test/a.png").length, 1);
+  // One that could not be fetched (a Google account's where Google cannot be reached) is not asked again a while.
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
+  await assert.rejects(run(asks.picture("https://p.test/gone.png")));
+  assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 1);
+  host.advance(PICTURE_RETRY_MS);
   await assert.rejects(run(asks.picture("https://p.test/gone.png")));
   assert.equal(host.requests.filter((r) => r.url.endsWith("gone.png")).length, 2);
   await assert.rejects(run(asks.picture("file:///etc/passwd")));
+});
+
+test("a_newer_build_comes_with_what_it_brings_the_app", async () => {
+  const host = new FakeHost();
+  host.onFetch(() => jsonResponse(200, { versionCode: 1200, versionName: "0.1.1200", file: "android/stillfail-1200.apk", sha256: "ab", size: 9 }));
+  const asked: [string, number, number][] = [];
+  const asks = new Asks(host, (app, from, to) => Effect.sync(() => (asked.push([app, from, to]), from < 1150 ? ["修复：一件事"] : [])));
+  assert.deepEqual((await run(asks.update("android", 1100, false, false))).news, ["修复：一件事"]);
+  assert.deepEqual((await run(asks.update("android", 1150, false, false))).news, []);
+  assert.equal(await run(asks.update("android", 1200, false, false)), null);
+  assert.deepEqual(asked, [["android", 1100, 1200], ["android", 1150, 1200]]);
 });
 
 test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cached_one", async () => {
@@ -69,7 +95,7 @@ test("an_explicit_update_gets_the_newest_build_or_fails_instead_of_using_the_cac
     if (served === 2) return jsonResponse(200, { invalid: true });
     return jsonResponse(200, { versionCode: served, versionName: `0.1.${served}`, file: `android/stillfail-${served}.apk`, sha256: "ab", size: 9 });
   });
-  const asks = new Asks(host);
+  const asks = new Asks(host, nothing);
   assert.equal((await run(asks.update("android", 1100, false, false))).versionCode, 1200);
   served = 1300;
   assert.equal((await run(asks.update("android", 1100, false, false))).versionCode, 1200);
@@ -94,14 +120,14 @@ test("a_beta_app_takes_its_builds_from_the_beta_feed", async () => {
         : jsonResponse(404, {});
   let host = new FakeHost();
   host.onFetch(feeds);
-  let asks = new Asks(host);
+  let asks = new Asks(host, nothing);
   let accounts = await run(Accounts.load(host));
   assert.equal(((await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J).versionCode, 1200);
   assert.ok(host.requests.every((r) => !r.url.includes("/beta/")));
   host = new FakeHost();
   host.isBeta = true;
   host.onFetch(feeds);
-  asks = new Asks(host);
+  asks = new Asks(host, nothing);
   accounts = await run(Accounts.load(host));
   const newer = (await run(asks.run({ kind: "appUpdate", platform: "android", version: 1100, now: false }, accounts))) as J;
   assert.deepEqual([newer.versionCode, newer.file], [1250, "android/stillfail-1250.apk"]);

@@ -162,11 +162,14 @@ export class Status {
     this.#runner.fork(Effect.repeat(Effect.sleep(TICK_MS).pipe(Effect.andThen(step)), { while: (busy) => busy }));
   }
 
-  #placeName(place: Place): string | null {
+  /// `label`: the workspace a station is said with, when waits of several workspaces are said together (a station may
+  /// be in several, named the same in each).
+  #placeName(place: Place, label: string | null): string | null {
     if ("cloud" in place) return `${brand.name()} cloud`;
     if ("relay" in place) return "relay";
-    const name = this.#nameOf?.(place.station) ?? null;
-    return name === null || name === "" ? null : name;
+    const found = this.#nameOf?.(place.station) ?? null;
+    const name = found === null || found === "" ? null : found;
+    return label === null ? name : `${name ?? "station"} · ${label}`;
   }
 
   /// The `status` topic's value of these waits alone.
@@ -174,7 +177,7 @@ export class Status {
     return value([[this, "all"]]);
   }
 
-  gather(take: Take, into: Gathered): void {
+  gather(take: Take, into: Gathered, label: string | null = null): void {
     const now = this.now();
     const wanted = (sub: string) => take === "all" || take.for.includes(sub);
     for (const sub of [...this.#db.keys()].sort()) {
@@ -189,7 +192,7 @@ export class Status {
       const w = this.#waits.get(id)!;
       if (now - w.since < SLOW_MS) continue;
       if (take !== "all" && !("relay" in w.place)) continue;
-      into.slow.push({ place: this.#placeName(w.place), what: w.what, connecting: w.connecting, age: now - w.since, bytes: w.bytes });
+      into.slow.push({ place: this.#placeName(w.place, label), what: w.what, connecting: w.connecting, age: now - w.since, bytes: w.bytes });
     }
     if (this.#received.length > 0) into.window = Math.max(into.window, Math.min(Math.max(now - this.#received[0][0], 1_000), RATE_WINDOW_MS));
     into.recent += this.#received.filter(([at]) => now - at <= RATE_WINDOW_MS).reduce((s, [, n]) => s + n, 0);
@@ -200,10 +203,10 @@ type Shown = { retryIn: number; message: string; tries: number };
 type Slow = { place: string | null; what: string; connecting: boolean; age: number; bytes: number };
 export type Gathered = { downs: Shown[]; slow: Slow[]; recent: number; window: number; db: { kind: string; detail: string | null }[] };
 
-/// The `status` topic's value (StatusView) of these sets of waits.
-export function value(parts: [Status, Take][]): Record<string, unknown> {
+/// The `status` topic's value (StatusView) of these sets of waits; a set's label says its stations' workspace.
+export function value(parts: ([Status, Take] | [Status, Take, string | null])[]): Record<string, unknown> {
   const all: Gathered = { downs: [], slow: [], recent: 0, window: 0, db: [] };
-  for (const [status, take] of parts) status.gather(take, all);
+  for (const [status, take, label] of parts) status.gather(take, all, label ?? null);
   const items: Record<string, unknown>[] = [];
   // What is kept on the device first: it lasts until something is done about it.
   const said = new Set<string>();
@@ -225,15 +228,23 @@ export function value(parts: [Status, Take][]): Record<string, unknown> {
   }
   // The connections first (the requests wait on them), the oldest first; a stable sort as Rust's.
   const slow = [...all.slow].sort((a, b) => (a.connecting === b.connecting ? b.age - a.age : a.connecting ? -1 : 1));
+  // Waits that say the same (a page's dozen previews) are one line, how many and the oldest's detail: not a list
+  // taller than the window.
+  const alike = new Map<string, { first: Slow; n: number }>();
   for (const w of slow) {
-    const secs = Math.floor(w.age / 1000);
     const text = w.connecting ? t("core-logic.status.connecting", { place: w.place ?? "station" }) : w.place !== null ? t("core-logic.status.at", { place: w.place, what: w.what }) : w.what;
+    const same = alike.get(text);
+    if (same) same.n++;
+    else alike.set(text, { first: w, n: 1 });
+  }
+  for (const [text, { first: w, n }] of alike) {
+    const secs = Math.floor(w.age / 1000);
     const detail = w.connecting
       ? t("core-logic.status.waited", { secs })
       : w.bytes === 0
         ? t("core-logic.status.waited_nothing", { secs })
         : t("core-logic.status.received", { size: size(w.bytes), secs });
-    items.push({ state: "slow", text, detail });
+    items.push({ state: "slow", text: n > 1 ? t("core-logic.status.times", { text, n }) : text, detail });
   }
   if (items.length === 0) return { state: null, text: null, items: [] };
   const window = all.window > 0 ? all.window : RATE_WINDOW_MS;
@@ -241,7 +252,8 @@ export function value(parts: [Status, Take][]): Record<string, unknown> {
   const state = down || all.db.length > 0 ? "trouble" : "slow";
   let text = String(items[0].text);
   if (slow.length > 0 && !down && all.db.length === 0) text += ` · ${t("core-logic.status.seconds", { n: Math.floor(slow[0].age / 1000) })}`;
-  if (items.length > 1) text += ` · ${t("core-logic.status.count", { n: items.length })}`;
+  const count = items.length - alike.size + slow.length;
+  if (count > 1) text += ` · ${t("core-logic.status.count", { n: count })}`;
   if (slow.length > 0 && rate > 0) text += ` · ${size(rate)}/s`;
   return { state, text, items };
 }
@@ -268,6 +280,8 @@ export function stationWhat(method: string, path: string): string {
   if (get && parts.length === 1 && a === "overview") return said("core-logic.status.what.overview");
   if (a === "preview") return said("core-logic.status.what.preview");
   if (!get && parts.length === 1 && a === "uploads") return said("core-logic.status.what.upload");
+  if (a === "drive" && b === "upload") return said("core-logic.status.what.upload");
+  if (get && a === "drive" && (b === "read" || b === "list")) return said("core-logic.status.what.files");
   void b;
   return get ? said("core-logic.status.what.read") : said("core-logic.status.what.write");
 }

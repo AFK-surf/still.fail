@@ -29,15 +29,27 @@ function monthDay(lang: Lang, month: number, day: number): string {
   return tr(lang, `core-logic.format.date.${month}`, { day });
 }
 
-/// 950, 1.2K, 3.4M.
+/// 950, 1.2K, 3.4M, 2.4B.
 export function compactNumber(n: number): string {
   const cut = (v: number, unit: string) => {
     const s = fixed1(v);
     return `${s.endsWith(".0") ? s.slice(0, -2) : s}${unit}`;
   };
+  if (n >= 1_000_000_000) return cut(n / 1_000_000_000, "B");
   if (n >= 1_000_000) return cut(n / 1_000_000, "M");
   if (n >= 1000) return cut(n / 1000, "K");
   return String(round(n));
+}
+
+/// A decimal kept as text, as people read it: "62500.0000000000" is 62,500, "12.5000" is 12.5; at most two decimals,
+/// cut rather than rounded up. Text that is not a decimal stays as it is.
+export function decimal(text: string): string {
+  const m = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text.trim());
+  if (!m) return text;
+  const whole = m[2].replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = (m[3] ?? "").slice(0, 2).replace(/0+$/, "");
+  const sign = m[1] && (whole !== "0" || fraction) ? "-" : "";
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 /// 850ms, 12 秒, 3 分 5 秒, 2 小时 4 分.
@@ -151,6 +163,16 @@ export function refillsInLang(lang: Lang, ms: number, now: number): string {
   return h === 0 ? tr(lang, "core-logic.format.refill.days", { n: Math.trunc(hours / 24) }) : tr(lang, "core-logic.format.refill.days_hours", { n: Math.trunc(hours / 24), h });
 }
 
+/// A quota window's label in the viewer's language: the station names them in Chinese (5 小时, 每周 · Opus, 每月, 3 天);
+/// one it does not name so is shown as it is.
+export function windowName(label: string, lang: Lang = current()): string {
+  const m = /^([0-9]+) (小时|天)(.*)$/.exec(label);
+  if (m) return tr(lang, m[2] === "小时" ? "core-logic.format.window.hours" : "core-logic.format.window.days", { n: Number(m[1]) }) + m[3];
+  if (label.startsWith("每周")) return tr(lang, "core-logic.format.window.weekly") + label.slice(2);
+  if (label.startsWith("每月")) return tr(lang, "core-logic.format.window.monthly") + label.slice(2);
+  return label;
+}
+
 /// A quota window marked by its length (5H, W, M, 3D), and where it goes among the others.
 export function windowMark(label: string): [string, number] {
   if (label.startsWith("每月") || label.startsWith("Monthly")) return ["M", 3];
@@ -224,6 +246,44 @@ export function cleanText(text: string): string {
   return splitWhitespace(out).join(" ");
 }
 
+/// A message's text as plain words on a line, for where it is shown in brief (a chat's row, a notice): Markdown's and
+/// Slack's marks out, code as its letters, a link as its words or [链接] (a file's as [文件], a picture as [图片]).
+export function plainText(text: string): string {
+  const words = (k: string) => tr(current(), `core-views.plain.${k}`);
+  const target = (url: string) => (/^(https?:|mailto:|www\.)/i.test(url) ? words("link") : IMAGE.test(url) ? words("image") : words("file"));
+  const marks = (part: string) =>
+    part
+      .replace(/!\[[^\]\n]*\]\(\s*<?([^)\s>]*)>?[^)]*\)/g, (_, url: string) => (/^(https?:|mailto:)/i.test(url) || IMAGE.test(url) ? words("image") : words("file")))
+      .replace(/\[([^\]\n]*)\]\(\s*<?([^)\s>]*)>?[^)]*\)/g, (_, label: string, url: string) => (label.trim() !== "" ? label : target(url)))
+      .replace(/<((?:https?|mailto):[^>|\s]+)\|([^>]+)>/g, "$2")
+      .replace(/<((?:https?|mailto):[^>|\s]+)>/g, () => words("link"))
+      .replace(/<#[A-Z0-9]+\|([^>]+)>/g, "#$1")
+      .replace(/<@[A-Z0-9]+\|([^>]+)>/g, "@$1")
+      .replace(/<!(here|channel|everyone)(\|[^>]*)?>/g, "@$1")
+      .replace(/https?:\/\/[^\s<>()]+/g, () => words("link"))
+      .replace(/(\*\*|__|~~)(?=\S)([^\n]*?\S)\1/g, "$2")
+      .replace(/(^|[^\w*~])([*_~])(?=[^\s*_~])([^\n]*?[^\s*_~])\2(?![\w*~])/gm, "$1$3")
+      .replace(/\\([\\`*_{}[\]()#+\-.!|~>])/g, "$1")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+  const lines = text
+    .split("\n")
+    .filter((l) => !/^ {0,3}(```|~~~)/.test(l) && !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(l))
+    .map((l) =>
+      l
+        .replace(/^ {0,3}(#{1,6}\s+|>\s?)+/, "")
+        .replace(/^\s*([-*+•]|\d+[.)])\s+(\[[ xX]\]\s+)?/, "")
+        .replace(/^\s*\|(.*?)\|?\s*$/, (_, cells: string) => cells.split("|").map((c) => c.trim()).join(" "))
+        .replace(/^ {0,3}([-*_]\s*){3,}$/, ""),
+    );
+  // Code keeps its letters as they are: only what is outside it loses marks.
+  return lines.join("\n").split(/(`+)([^`]*?)\1/).map((part, i) => (i % 3 === 0 ? marks(part) : i % 3 === 2 ? part : "")).join("");
+}
+
+/// What a link's address names as a picture.
+const IMAGE = /\.(png|jpe?g|gif|webp|svg|heic|avif)(\?[^)\s]*)?$/i;
+
 /// Rust's `split_whitespace`: Unicode white space.
 export function splitWhitespace(text: string): string[] {
   return text.split(/[\s\u0085]+/u).filter((w) => w !== "");
@@ -231,11 +291,13 @@ export function splitWhitespace(text: string): string[] {
 
 /// A thread named for people: where (its channel by name, 私信, or a still.fail chat's title) and when it began.
 export function threadName(threads: unknown[], channel: string, threadTs: string, offsetMin: number): [string, string] {
+  const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const parsed = Number(threadTs);
-  const started = (Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed : 0) * 1000;
+  // A Feishu thread's ts is a message's id: it began when its thread was made.
+  const made = get(thread, "createdAt");
+  const started = Number.isFinite(parsed) && threadTs.trim() !== "" ? parsed * 1000 : typeof made === "number" ? made : 0;
   const [, month, day] = local(started, offsetMin);
   const when = tr(current(), "core-logic.format.date_time", { date: monthDay(current(), month, day), time: clock(started, offsetMin) });
-  const thread = threads.find((t) => str(get(t, "channel")) === channel && str(get(t, "threadTs")) === threadTs);
   const text = (k: string) => str(get(thread, k)) ?? "";
   let where: string;
   if (channel === "EMBER" || channel === "STILLFAIL") {
@@ -245,6 +307,10 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
       const first = cleanText(text("firstText"));
       where = first === "" ? tr(current(), "core-logic.format.thread.chat", { brand: brand.name() }) : first;
     }
+  } else if (isFeishuChat(channel) || str(get(thread, "surface"))?.startsWith("feishu:")) {
+    // A Feishu chat (群, 私聊) by its name, as its station read it.
+    const n = text("channelName");
+    where = n === "" ? tr(current(), "core-logic.format.thread.feishu") : n;
   } else if (channel.startsWith("D")) where = tr(current(), "core-logic.format.thread.dm");
   else {
     const n = text("channelName");
@@ -253,19 +319,30 @@ export function threadName(threads: unknown[], channel: string, threadTs: string
   return [where, when];
 }
 
-/// "C0OPS/1727.0001" → its channel and thread.
+/// A Feishu chat's id (`oc_…`, docs/feishu.md).
+export const isFeishuChat = (channel: string) => /^oc_[A-Za-z0-9_-]+$/.test(channel);
+
+/// "C0OPS/1727.0001" → its channel and thread; a Feishu chat's "oc_…/om_…" (or a topic's "omt_…") too.
 export function splitThread(address: string): [string, string] | null {
   const slash = address.indexOf("/");
   if (slash < 0) return null;
   const channel = address.slice(0, slash);
   const ts = address.slice(slash + 1);
+  if (isFeishuChat(channel)) return /^[A-Za-z0-9_-]+$/.test(ts) ? [channel, ts] : null;
   const dot = ts.indexOf(".");
   const valid = /^[A-Z0-9]+$/.test(channel) && dot > 0 && dot < ts.length - 1 && /^[0-9]+$/.test(ts.slice(0, dot)) && /^[0-9]+$/.test(ts.slice(dot + 1));
   return valid ? [channel, ts] : null;
 }
 
-/// A Slack workspace as the station's connects know it.
+/// A Slack workspace as the station's connects know it; a Feishu connect (by `feishu:<id>`): its tenant and its
+/// AppLink's origin.
 export type SlackWorkspace = { name: string; url: string | null };
+
+/// Where Feishu's (or Lark's) links open its app.
+export const feishuApplink = (domain: string | null | undefined) => (domain === "lark" ? "https://applink.larksuite.com" : "https://applink.feishu.cn");
+
+/// A Feishu chat's link in Feishu, `applink`: its connect's (feishuApplink).
+export const feishuChatUrl = (applink: string, channel: string) => `${applink}/client/chat/open?openChatId=${encodeURIComponent(channel)}`;
 
 /// A thread a history entry came from or went to: its name, where it is, and the way there.
 export function place(threads: unknown[], address: string, offsetMin: number, workspaces: Map<string, SlackWorkspace>): unknown {
@@ -278,6 +355,10 @@ export function place(threads: unknown[], address: string, offsetMin: number, wo
   const session = str(get(first, "session")) ?? null;
   if (channel === "EMBER" || channel === "STILLFAIL") return { name: n, surface: "ember", session };
   const surface = str(get(thread, "surface"));
+  if (isFeishuChat(channel) || surface?.startsWith("feishu:")) {
+    const connect = surface?.startsWith("feishu:") ? workspaces.get(surface) : undefined;
+    return { name: n, surface: "feishu", session, url: feishuChatUrl(connect?.url ?? feishuApplink(null), channel) };
+  }
   const team = surface?.startsWith("slack:") ? workspaces.get(surface.slice(6)) : undefined;
   const teamName = team && team.name !== "" ? team.name : null;
   const named = teamName === null ? n : n.startsWith("#") ? `${teamName}${n}` : `${teamName} ${n}`;
@@ -313,12 +394,18 @@ export function efforts(runtime: string): string[] {
   return reasoning.fallback(runtime);
 }
 
+/// The runtimes a chat can run on, in the order they are offered.
+export const RUNTIMES = ["claude", "codex", "dsh", "grok"];
+
+/// The runtimes by name, the same in every language.
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build" };
+
 export function runtimeLabel(runtime: string): string {
-  return runtime === "codex" ? "Codex" : "Claude Code";
+  return RUNTIME_NAMES[runtime] ?? "Claude Code";
 }
 
 /// A connect's link to Slack in words, and its dot.
-export function connection(state: unknown): [string, string] {
+export function connection(state: unknown, kind?: string | null): [string, string] {
   switch (str(get(state, "state")) ?? "") {
     case "connected":
       return [said("core-logic.format.connection.connected"), "online"];
@@ -331,7 +418,7 @@ export function connection(state: unknown): [string, string] {
     case "disabled":
       return [said("core-logic.format.connection.disabled"), "offline"];
     default:
-      return [said("core-logic.format.connection.no_slack"), "offline"];
+      return [said(kind === "feishu" ? "core-logic.format.connection.no_feishu" : "core-logic.format.connection.no_slack"), "offline"];
   }
 }
 
@@ -350,6 +437,8 @@ export function failureText(detail: string): string {
       return said("core-logic.format.failure.rate_limit");
     case "auth":
       return said("core-logic.format.failure.auth");
+    case "refused":
+      return said("core-logic.format.failure.refused");
     case "model":
       return said("core-logic.format.failure.model");
     case "exited":

@@ -2,9 +2,11 @@
 // chat is kept as it stands (its messages, its execution history, whether its agent is at work); main.tsx turns them
 // into the topics the app reads, and story.ts plays what happens in them.
 import type {
-  ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
+  AgentCardView, ChatAgent, ChatItem, ChatMessage, ChatView, ChatsView, ModelOption, Outgoing, Profile, HistoryGroup, HistoryItem, HistoryStep, HistoryView, Live,
   Maker, Person, RowAgent, RuntimeKind, Session, Stamp,
 } from "../core/shapes.ts";
+// The demo has no core: its agent's words read as the core reads them.
+import { markdown } from "../../../client/core-ts/src/markdown.ts";
 
 const MINUTE = 60_000;
 
@@ -89,7 +91,8 @@ export function message(chat: DemoChat, by: Who, text: string, at?: number): Cha
 }
 
 export function step(name: string, hint: string, call: object, result?: string, meta = "", failed = false): HistoryStep {
-  return { name, hint, meta, failed, call: JSON.stringify(call, null, 2), ...(result === undefined ? {} : { result }) };
+  // Whole: the demo's steps open to what they did at once.
+  return { name, hint, meta, failed, call: JSON.stringify(call, null, 2), ...(result === undefined ? {} : { result }), entries: [], brief: false };
 }
 
 export function groupOf(steps: HistoryStep[], pending: number): HistoryItem["body"] {
@@ -100,17 +103,18 @@ export function groupOf(steps: HistoryStep[], pending: number): HistoryItem["bod
 const placeOf = (chat: DemoChat) => ({ name: chat.title, surface: "ember", session: chat.key });
 
 export function received(chat: DemoChat, from: Person, text: string): HistoryItem["body"] {
-  return { kind: "received", content: { messages: [{ key: `m${chat.items.length}`, from: { name: from.name, bound: false }, text, place: placeOf(chat) }] } };
+  return { kind: "received", content: { tasks: [], messages: [{ key: `m${chat.items.length}`, from: { name: from.name, bound: false }, text, place: placeOf(chat) }] } };
 }
 export function posted(chat: DemoChat, text: string): HistoryItem["body"] {
-  return { kind: "post", content: { text, place: placeOf(chat), block: false, failed: false } };
+  return { kind: "post", content: { text, md: markdown(text), place: placeOf(chat), block: false, failed: false } };
 }
-export const said = (text: string): HistoryItem["body"] => ({ kind: "text", content: { subagent: false, text } });
+export const said = (text: string): HistoryItem["body"] => ({ kind: "text", content: { subagent: false, text, md: markdown(text) } });
 export function outgoing(text: string): Outgoing {
   const at = Date.now();
   return { id: `out-${at}`, text, attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) } };
 }
-export const marked = (text: string): HistoryItem["body"] => ({ kind: "mark", content: { text } });
+/** A state the agent marked; `ends`: done, or waiting on a person (the history colours it so). */
+export const marked = (text: string, ends?: "done" | "human"): HistoryItem["body"] => ({ kind: "mark", content: { text, ...(ends ? { ends } : {}) } });
 
 export function addItem(chat: DemoChat, body: HistoryItem["body"]): void {
   const n = chat.items.length;
@@ -135,7 +139,7 @@ function seed(chat: DemoChat, lines: [Who, string, number][]): DemoChat {
     chat.messages = [...chat.messages, message(chat, by, text, ago(minutes))];
     if (by === "agent") {
       addItem(chat, posted(chat, text));
-      addItem(chat, marked(chat.blocked && chat.messages.length === lines.length ? "等你决定" : "完成"));
+      addItem(chat, chat.blocked && chat.messages.length === lines.length ? marked("待你决定", "human") : marked("完成", "done"));
     } else if (by !== "me" && by !== "ember") addItem(chat, received(chat, by, text));
   }
   return chat;
@@ -175,8 +179,8 @@ function rowAgent(chat: DemoChat): RowAgent {
   const mark = chat.running ? "run" : chat.blocked ? "block" : chat.failed ? "failed" : undefined;
   return {
     key: chat.key, runtime: m.runtime, model: m.model, effort: m.effort, process: chat.running ? "running" : "warm", pending: 0,
-    agentText: `${m.name} · ${m.effort}`, maker: m.maker, statusText: chat.running ? "进行中" : chat.blocked ? "等你决定" : chat.failed ? "出错了" : "已完成",
-    ...(mark ? { mark, badgeText: mark === "run" ? "工作中" : mark === "block" ? "需要你" : "出错了" } : {}),
+    agentText: `${m.name} · ${m.effort}`, maker: m.maker, statusText: chat.running ? "进行中" : chat.blocked ? "待你决定" : chat.failed ? "出错" : "已完成",
+    ...(mark ? { mark, badgeText: mark === "run" ? "工作中" : mark === "block" ? "需要你" : "出错" } : {}),
   };
 }
 
@@ -186,6 +190,7 @@ function session(chat: DemoChat): Session {
     runtimeText: chat.model.runtime === "claude" ? "Claude Code" : "Codex", processText: chat.running ? "运行中" : "待命",
     running: !!chat.running, tone: chat.running ? "accent" : chat.blocked ? "amber" : chat.failed ? "red" : "green", titleText: chat.title,
     efforts: ["low", "medium", "high"], ...(chat.model.runtime === "claude" ? { profile: "machine-claude" } : {}), workspace: `~/.stillfail/sessions/${chat.key.slice(6)}/workspace`,
+    time: { lastActiveAt: stamp(lastActive(chat)) },
   };
 }
 
@@ -229,13 +234,31 @@ export function chatsView(chats: DemoChat[]): ChatsView {
     me: { id: "local" }, stations: [{ id: "local", station: STATION, name: "Studio", state: "online" }], loading: false,
     days: [{ daysAgo: 0, at: Date.now(), label: "今天", items: today }, ...(earlier.length ? [{ daysAgo: 1, at: ago(24 * 60), label: "昨天", items: earlier }] : [])],
     // As the core puts them (client/core-ts/src/looks.ts): the workspace's one station, at work while a chat runs.
-    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 在干活" : "这台机器", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
+    glyph: { online: 1, dim: 0, failing: 0, working, summary: working ? "这台机器 · 运行中" : "本机", label: working ? "1 台 station，1 台在线，1 台在干活" : "1 台 station，1 台在线" },
     note: { reading: false, failing: [], empty: items.length === 0 },
   };
 }
 
 /** What an agent's model control offers, and the account it runs on: the station's (station.ts). */
 export interface Runs { choices: ModelOption[]; profile: Profile }
+
+/** An agent's card as the core words it (views/brief.ts): a turn for each message of a person's, a few minutes and a
+ * few hundred thousand tokens each. */
+export function agentCardView(chat: DemoChat): AgentCardView {
+  const turns = chat.messages.filter((m) => m.authorKind === "person").length;
+  if (turns === 0) return { latest: [], attention: [] };
+  const context = turns * 19;
+  return {
+    work: `${turns} 轮 · 共干了 ${turns * 7} 分钟`, cost: `$${(turns * 0.62).toFixed(2)}`, tokens: `输入 ${turns * 420}K · 输出 ${turns * 11}K`,
+    cache: { percent: 91, text: "91%", level: "ok" },
+    context: { percent: context, text: `${turns * 38}K / 200K`, level: context >= 95 ? "red" : context >= 80 ? "amber" : "ok" },
+    latest: [
+      ...chat.messages.filter((m) => m.authorKind === "agent").map((m) => ({ key: `${m.seq}`, text: m.text.split("\n")[0]!.replace(/`/g, "") })),
+      ...(chat.running ? [{ key: "now", text: chat.running.activity, now: true }] : []),
+    ].slice(-3),
+    attention: [],
+  };
+}
 
 export function chatView(chat: DemoChat, runs?: Runs): ChatView {
   const created = chat.messages[0]?.createdAt ?? Date.now();
@@ -248,7 +271,9 @@ export function chatView(chat: DemoChat, runs?: Runs): ChatView {
       account: { id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const, ...(runs.profile.quota ? { quota: runs.profile.quota } : {}) },
       profiles: [{ id: runs.profile.id, name: runs.profile.name, current: true, kind: runs.profile.access.kind, runtime: "claude" as const }],
     } : { profiles: [], choices: [] }),
-    attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], turns: [], threads: [], jobs: [],
+    // A turn for each message of a person's, as its card counts them (agentCardView).
+    attention: chat.failed ? [{ kind: "account", text: "账号被停用" }] : [], threads: [], jobs: [],
+    turns: chat.messages.filter((m) => m.authorKind === "person").map((m) => ({ id: `t${m.seq}`, kind: "input", startedAt: m.createdAt, endedAt: m.createdAt + 7 * 60_000 })),
   };
   // A chat the visitor started is theirs.
   const creator = chat.people[0] ?? { id: "local", name: "你", via: "local", shown: { name: "你", display: "你", mine: true } };
@@ -268,9 +293,30 @@ export function liveView(chat: DemoChat): Live {
   return { loaded: true, timeline: [], steps: [], ...(chat.running ? { activity: { now: { key: chat.running.activity, text: chat.running.activity } } } : {}) };
 }
 
+/** A chat's history in turns, as the core puts them (client/core-ts/src/history.ts): each message that came in begins
+ * one, saying what it did up to the next. */
+function withTurns(items: HistoryItem[]): HistoryItem[] {
+  const out: HistoryItem[] = [];
+  let begun = -1;
+  let steps = 0;
+  let posts = 0;
+  const close = () => {
+    const first = out[begun];
+    if (first) out[begun] = { ...first, turn: { text: [...(steps ? [`${steps} 步`] : []), posts ? `发出 ${posts} 条` : "未发消息"].join(" · ") } };
+  };
+  for (const item of items) {
+    if (item.body.kind === "received") { close(); begun = out.length; steps = 0; posts = 0; }
+    else if (item.body.kind === "group") steps += item.body.content.rows.filter((r) => r.kind === "step").length;
+    else if (item.body.kind === "post") posts++;
+    out.push(item);
+  }
+  close();
+  return out;
+}
+
 export function historyView(chat: DemoChat): HistoryView {
   return {
-    items: chat.items, live: [], edge: "已到 Session 开始处", empty: chat.items.length === 0, loaded: true,
-    ...(chat.running ? { phase: { phase: "working", text: "执行工具中", since: chat.running.since } } : {}),
+    items: withTurns(chat.items), live: [], edge: "已到会话开头", empty: chat.items.length === 0, loaded: true,
+    ...(chat.running ? { phase: { phase: "working", text: "正在执行工具", since: chat.running.since } } : {}),
   };
 }

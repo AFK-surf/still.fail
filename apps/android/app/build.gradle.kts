@@ -31,7 +31,12 @@ android {
     compileSdk = 36
     // Lint runs in the check, on every branch that changes the app (scripts/check.sh: lintDebug, errors fail it), not
     // in a release build, where it took ~18 s of each (2026-10-04).
-    lint { checkReleaseBuilds = false }
+    // Not its tests' sources: on CI's four cores their analysis took ~95 s of each check (2026-10-17).
+    lint {
+        checkReleaseBuilds = false
+        ignoreTestSources = true
+        lintConfig = rootProject.file("lint.xml")
+    }
 
     defaultConfig {
         applicationId = if (beta) "fail.still.android.beta" else "fail.still.android"
@@ -83,7 +88,7 @@ android {
     packaging { jniLibs { pickFirsts += listOf("**/libc++_shared.so", "**/libhermes.so") } }
     // An inline visualization's page is the web's: its stylesheet and bridge, from web/src/viz (ui/Viz.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../web/src/viz"))
-    // The words, in each language: the catalog the core and the web read too (client/i18n, ui/I18n.kt).
+    // The words, in each language: the catalog the core and the web read too (client/i18n, data/I18n.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../client/i18n/catalog"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -91,9 +96,40 @@ android {
     }
 }
 
+// What Android shows of the app outside it (AdbCodeReader's description in Accessibility's settings) is a resource, not
+// the catalog the app reads its words from: written from the catalog (client/i18n) for each language, English the
+// default as for any locale not Chinese (data/I18n.kt). `words`: a resource's name, the catalog's key.
+abstract class SystemWords : DefaultTask() {
+    @get:InputDirectory abstract val catalog: DirectoryProperty
+    @get:Input abstract val words: MapProperty<String, String>
+    @get:OutputDirectory abstract val out: DirectoryProperty
+
+    @TaskAction fun write() {
+        // As aapt reads a string: XML's escapes, and its own for quotes and backslashes.
+        fun escape(text: String) = text.replace("\\", "\\\\").replace("&", "&amp;").replace("<", "&lt;").replace("'", "\\'").replace("\"", "\\\"")
+        for ((lang, dir) in listOf("en" to "values", "zh" to "values-zh")) {
+            val all = catalog.get().asFile.resolve(lang).listFiles { f -> f.extension == "json" }.orEmpty()
+                .flatMap { (groovy.json.JsonSlurper().parse(it) as Map<*, *>).entries }.associate { it.key as String to it.value }
+            val lines = words.get().entries.joinToString("\n") { (name, key) -> "    <string name=\"$name\">${escape(all[key] as String)}</string>" }
+            out.get().asFile.resolve(dir).apply { mkdirs() }.resolve("strings.xml").writeText("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n$lines\n</resources>\n")
+        }
+    }
+}
+
+val systemWords = tasks.register<SystemWords>("systemWords") {
+    catalog.set(rootProject.file("../../client/i18n/catalog"))
+    words.put("adb_reader_about", "android-misc.adb.reader.about")
+    out.set(layout.buildDirectory.dir("generated/systemWords"))
+}
+androidComponents { onVariants { it.sources.res?.addGeneratedSourceDirectory(systemWords, SystemWords::out) } }
+
 dependencies {
     testImplementation(libs.junit)
     implementation(project(":core"))
+    implementation(project(":shared"))
+    implementation(project(":settings"))
+    implementation(project(":chat"))
+    implementation(project(":drive"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)
@@ -101,17 +137,21 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
-    // Markdown as the web reads it (GFM: tables, strikethrough, autolinks, task lists).
+    // Markdown as the web reads it (GFM: tables, strikethrough, task lists; a bare URL stays text, as on the web).
     implementation(libs.commonmark)
     implementation(libs.commonmark.ext.gfm.tables)
     implementation(libs.commonmark.ext.gfm.strikethrough)
-    implementation(libs.commonmark.ext.autolink)
     implementation(libs.commonmark.ext.task.list.items)
     // Frosted bars: what scrolls under them shows through, blurred (Android 12+; tinted glass before).
     implementation(libs.haze)
     // Pushes while the app is not in front (Push.kt); set up by hand, without the google-services plugin.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // A station's drive played as it streams (drive/Player.kt): ranged reads through the core, never the whole file first.
+    implementation(libs.androidx.media3.exoplayer)
+    // What was played kept on the phone (drive/DriveCache.kt): media3's cache and the index it keeps.
+    implementation(libs.androidx.media3.datasource)
+    implementation(libs.androidx.media3.database)
     // The motion tests: frame by frame on the test clock (src/androidTest).
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

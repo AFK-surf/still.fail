@@ -1,6 +1,6 @@
 // Connecting a Slack connect: create the app from still.fail's manifest, paste the two
 // tokens, and see who they belong to before anything is saved.
-import { CheckCircle, External } from "./icons.tsx";
+import { CheckCircle, External } from "@stillfail/ui/icons.tsx";
 import { useEffect, useState } from "react";
 import { useCall, useTopic } from "./core/react.ts";
 import { useStation } from "./station.tsx";
@@ -8,7 +8,7 @@ import { useDoing } from "./doing.ts";
 import type { SlackTokenForm, SlackTokensView } from "./core/shapes.ts";
 import { useAction, useApi, type SlackIdentity } from "./api.ts";
 import { Button, Field, ICON } from "./ui.tsx";
-import * as controlsCss from "./styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as css from "./slack.css.ts";
 import * as shellCss from "./styles/shell.css.ts";
 

@@ -10,14 +10,14 @@
 // The prices (what a call costs) are the usage page's: src/read/usage.ts.
 import { Clock, Effect, Fiber, Queue } from "effect";
 import { liveClock } from "../ops/fibers.ts";
-import { createReadStream } from "node:fs";
-import { type FileHandle, open, readFile, readdir, realpath, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
-import { promisify } from "node:util";
-import { createZstdDecompress, zstdDecompress } from "node:zlib";
+import { createReadStream, existsSync } from "node:fs";
+import { type FileHandle, open, readdir, realpath, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import { createZstdDecompress } from "node:zlib";
 import { log } from "../ops/log.ts";
-import { parseIso } from "../read/transcript.ts";
+import { parseIso, transcriptPath } from "../read/transcript.ts";
 import type { SessionRow, Store, UsageCall, UsageFile, UsageFor, UsageTurn } from "../store/store.ts";
+import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// Calls a little before a session was made (the runtime's clock against the station's) are still its own.
 export const SKEW_MS = 5_000;
@@ -31,7 +31,7 @@ export const SAFETY_MS = 10 * 60_000;
 /// How much of a transcript is read, parsed and recorded at a time before the event loop is let through.
 const CHUNK = 1 << 20;
 
-type Runtime = "claude" | "codex";
+type Runtime = RuntimeKind;
 
 /// What the counter reads of the station's config: where its data is, and each profile's home (absolute).
 export type UsageConfig = { dataDir: string; profiles: readonly { home: string }[] };
@@ -65,7 +65,11 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
   for (let line of text.split("\n")) {
     if (line.endsWith("\r")) line = line.slice(0, -1);
     // Most lines are something else: only those that may hold usage are parsed.
-    const wanted = runtime === "claude" ? line.includes('"usage"') : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
+    const wanted =
+      runtime === "claude" ? line.includes('"usage"')
+      : runtime === "dsh" ? line.startsWith('{"type":"assistant/message"') && line.includes('"usage"')
+      : runtime === "grok" ? line.startsWith('{"type":"stillfail/usage"')
+      : line.includes("token_count") || line.includes("turn_context") || line.includes("session_meta");
     if (!wanted) continue;
     let r: unknown;
     try {
@@ -75,7 +79,31 @@ export function callsOf(runtime: Runtime, text: string, subagent: boolean, state
     }
     const stamp = str(get(r, "timestamp"));
     const at = (stamp === null ? null : parseIso(stamp)) ?? 0;
-    if (runtime === "claude") {
+    if (runtime === "grok") {
+      // What the station kept of each Grok Build turn (agents/grok.ts usageLine): its counts already apart.
+      const usage = get(r, "usage");
+      const id = str(get(r, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `grok:${id}`, at: typeof time === "number" ? time : 0, model: str(get(r, "model")), subagent, fast: false,
+        input: n(get(usage, "input")), cacheRead: n(get(usage, "cacheRead")), cacheWrite: n(get(usage, "cacheWrite")), cacheWriteLong: 0,
+        output: n(get(usage, "output")),
+      });
+    } else if (runtime === "dsh") {
+      // dsh's counts are apart: input is what was not cached.
+      const data = get(r, "data");
+      const usage = get(data, "usage");
+      const message = get(data, "message");
+      const id = str(get(message, "id"));
+      if (usage === undefined || usage === null || id === null) continue;
+      const time = get(r, "time");
+      out.push({
+        id: `dsh:${id}`, at: typeof time === "number" ? time : 0, model: str(get(get(message, "source"), "model")), subagent, fast: false,
+        input: n(get(usage, "inputTokens")), cacheRead: n(get(usage, "cacheReadTokens")), cacheWrite: n(get(usage, "cacheWriteTokens")), cacheWriteLong: 0,
+        output: n(get(usage, "outputTokens")),
+      });
+    } else if (runtime === "claude") {
       if (str(get(r, "type")) !== "assistant") continue;
       const m = get(r, "message");
       if (m === undefined) continue;
@@ -184,21 +212,55 @@ function* partsOf(bytes: Buffer, from: number): Generator<Part> {
   }
 }
 
-const decompress = promisify(zstdDecompress);
+/// A file put away, past `offset`, as `readFrom` says it: decompressed as it is read, never whole (one is hundreds of MB,
+/// and every one is read again as the station starts). Shorter than `offset`: read again from its start.
+async function* packedFrom(path: string, offset: number): AsyncGenerator<Part> {
+  const raw = createReadStream(packed(path), { highWaterMark: CHUNK });
+  const stream = raw.pipe(createZstdDecompress({ chunkSize: CHUNK }));
+  raw.on("error", (error) => stream.destroy(error));
+  // What is past `offset` and not given yet, from `start`.
+  let held: Buffer[] = [];
+  let heldBytes = 0;
+  let start = offset;
+  let total = 0;
+  const give = function* (): Generator<Part> {
+    const bytes = Buffer.concat(held, heldBytes);
+    const cut = bytes.lastIndexOf(0x0a);
+    if (cut < 0) return;
+    yield* partsOf(bytes.subarray(0, cut + 1), start);
+    const rest = Buffer.from(bytes.subarray(cut + 1));
+    start += cut + 1;
+    held = rest.length === 0 ? [] : [rest];
+    heldBytes = rest.length;
+  };
+  try {
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      const from = Math.max(0, offset - total);
+      total += chunk.length;
+      if (from >= chunk.length) continue;
+      held.push(from === 0 ? chunk : chunk.subarray(from));
+      heldBytes += chunk.length - from;
+      if (heldBytes >= CHUNK) yield* give();
+    }
+  } catch {
+    return;
+  } finally {
+    raw.destroy();
+    stream.destroy();
+  }
+  if (total < offset) {
+    yield* packedFrom(path, 0);
+    return;
+  }
+  yield* give();
+}
 
 /// read_from: what a file holds past `offset`, up to its last whole line, in parts with where each ends. A file now
 /// shorter than `offset` was written anew: it is read from its start (calls already recorded stay once). A file put
 /// away (only its `.zst` there) is read decompressed.
 export async function* readFrom(path: string, offset: number): AsyncGenerator<Part> {
   if (!(await exists(path)) && (await exists(packed(path)))) {
-    let bytes: Buffer;
-    try {
-      bytes = await decompress(await readFile(packed(path)));
-    } catch {
-      return;
-    }
-    const from = offset > bytes.length ? 0 : offset;
-    yield* partsOf(bytes.subarray(from), from);
+    yield* packedFrom(path, offset);
     return;
   }
   let size: number;
@@ -359,6 +421,8 @@ export class UsageCounter {
   #ended = new Map<string, number>();
   #startedAt = 0;
   #wake = Effect.runSync(Queue.dropping<void>(1));
+  /// Asked to read though no turn ended (`soon`).
+  #asked = false;
   #fiber: Fiber.Fiber<void> | null = null;
   #unsubscribe: (() => void) | null = null;
   #abort = new AbortController();
@@ -408,13 +472,20 @@ export class UsageCounter {
         if (woken) {
           yield* Effect.sleep(me.#settleMs);
           yield* Queue.clear(me.#wake);
-          if (!(yield* turnEnded) && (yield* Clock.currentTimeMillis) < due) continue;
+          if (!(yield* turnEnded) && !me.#asked && (yield* Clock.currentTimeMillis) < due) continue;
         }
+        me.#asked = false;
         yield* readNow;
         due = (yield* Clock.currentTimeMillis) + me.#safetyMs;
       }
     });
     this.#fiber = Effect.runFork(loop.pipe(Effect.provideService(Clock.Clock, this.#clock)));
+  }
+
+  /// Reads shortly, though no turn ended: a session someone watches as it works (live.ts).
+  soon(): void {
+    this.#asked = true;
+    Queue.offerUnsafe(this.#wake, undefined);
   }
 
   /// Stops reading: the read under way stops at its next part (what it recorded stays).
@@ -523,6 +594,24 @@ export class UsageCounter {
         let turns = turnsOf.get(session);
         if (turns === undefined) turnsOf.set(session, (turns = { of: null }));
         added += await this.#readFile(path, "codex", false, s, known, turns);
+      }
+    }
+    // DeepSeek Harness: each runtime session's own file, looked for in every profile's home (dsh.ts); Grok Build: what the
+    // station kept of its turns beside each one's transcript (grok.ts).
+    for (const s of sessions) {
+      if ((s.runtime !== "dsh" && s.runtime !== "grok") || (wanted !== null && !wanted.has(s.key))) continue;
+      const runtime = s.runtime;
+      const turns: { of: UsageTurn[] | null } = { of: null };
+      for (const id of store.runtimeSessions(s.key)) {
+        for (const p of config.profiles) {
+          const transcript = transcriptPath(runtime, p.home, id);
+          const path = transcript !== null && runtime === "grok" ? join(dirname(transcript), "stillfail-usage.jsonl") : transcript;
+          if (path === null || (runtime === "grok" && !existsSync(path))) continue;
+          const real = await canonical(path);
+          if (seenFiles.has(real)) continue;
+          seenFiles.add(real);
+          added += await this.#readFile(path, runtime, false, s, known, turns);
+        }
       }
     }
     this.#last = started;

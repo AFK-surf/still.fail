@@ -2,7 +2,10 @@
 // runtime and its loop (tasks posted to it, timers due, microtasks drained after each); the core's script
 // (client/core-ts hosts/hermes.ts, as bytecode) gets `__native`, whose calls go to the Rust shell (client/shell: HTTP,
 // still.fail cloud's socket, files and core.db, TCP, iroh) and whose answers come back as tasks; what the core says to
-// the app goes to Kotlin (HermesEngine.kt) through JNI. A JS error that escapes, or a bug the core reports, ends the
+// the app goes to Kotlin (HermesEngine.kt) through JNI. The calls only the app can do go to Kotlin instead of the shell,
+// answered through `complete`: what is kept sealed (`secure.*`: the Keystore, and the prompt for the person;
+// SecureStore.kt) and a login's loopback listener (`listen.*`: Loopback.kt, the app kept running while it listens). A
+// JS error that escapes, or a bug the core reports, ends the
 // core as a panic ended the Rust one: `{"fatal": …}`, and the app starts another.
 #include <jni.h>
 #include <android/log.h>
@@ -19,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 
 #include <hermes/hermes.h>
@@ -32,6 +36,7 @@ void* sf_shell_start(const char* data_dir, sf_complete complete, void* ctx);
 void sf_shell_call(const void* shell, uint64_t id, const char* op, const uint8_t* json, size_t json_len, const uint8_t* bytes, size_t bytes_len, uint8_t has_bytes);
 uint8_t* sf_shell_call_sync(const void* shell, const char* op, const uint8_t* json, size_t json_len, size_t* out_len);
 void sf_free(uint8_t* ptr, size_t len);
+uint8_t* sf_shell_stats(size_t* out_len);
 void sf_shell_stop(void* shell);
 int32_t sf_utc_offset_min(double at_ms);
 }
@@ -123,6 +128,14 @@ class Engine {
     });
   }
 
+  /// A call from the app with bytes beside its JSON (an upload's part, a preview's request body): the bytes reach the
+  /// core as an ArrayBuffer, never as text.
+  void receiveBytes(int64_t client, std::string json, std::string bytes) {
+    post([client, json = std::move(json), bytes = std::move(bytes)](jsi::Runtime& rt) {
+      stillfail(rt).getPropertyAsFunction(rt, "receiveBytes").callWithThis(rt, stillfail(rt), jsi::Value(double(client)), jsi::String::createFromUtf8(rt, json), arrayBuffer(rt, bytes.data(), bytes.size()));
+    });
+  }
+
   /// Ends the loop and waits for it; the shell's answers still on their way are let go.
   void stop() {
     {
@@ -192,6 +205,52 @@ class Engine {
     if (e->ExceptionCheck()) e->ExceptionClear();
   }
 
+  /// A call only the app does (`secure.*`, `listen.*`), to Kotlin (Engine.kt `onApp`): it answers on its own threads,
+  /// through HermesNative.complete.
+  void toApp(uint64_t id, const std::string& op, const std::string& json, const uint8_t* data, size_t size, bool hasBytes) {
+    JNIEnv* e = env();
+    if (!onApp_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onApp_ = e->GetMethodID(cls, "onApp", "(JLjava/lang/String;[B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jstring name = e->NewStringUTF(op.c_str());
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = nullptr;
+    if (hasBytes) {
+      bytes = e->NewByteArray(jsize(size));
+      if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    }
+    e->CallVoidMethod(listener_, onApp_, jlong(id), name, head, bytes);
+    e->DeleteLocalRef(name);
+    e->DeleteLocalRef(head);
+    if (bytes) e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) {
+      e->ExceptionClear();
+      completed(id, "", "the app did not take " + op, "", false);
+    }
+  }
+
+  /// What the core says to the app with bytes beside it (a screen view's frame: client/core-ts hosts/bridge.ts
+  /// emitBytes): the JSON without them, and the bytes copied once, straight from the JS heap into a Java array.
+  void sayBytes(const std::string& json, const uint8_t* data, size_t size) {
+    JNIEnv* e = env();
+    if (!onFrame_) {
+      jclass cls = e->GetObjectClass(listener_);
+      onFrame_ = e->GetMethodID(cls, "onFrame", "([B[B)V");
+      e->DeleteLocalRef(cls);
+    }
+    jbyteArray head = e->NewByteArray(jsize(json.size()));
+    e->SetByteArrayRegion(head, 0, jsize(json.size()), reinterpret_cast<const jbyte*>(json.data()));
+    jbyteArray bytes = e->NewByteArray(jsize(size));
+    if (size > 0) e->SetByteArrayRegion(bytes, 0, jsize(size), reinterpret_cast<const jbyte*>(data));
+    e->CallVoidMethod(listener_, onFrame_, head, bytes);
+    e->DeleteLocalRef(head);
+    e->DeleteLocalRef(bytes);
+    if (e->ExceptionCheck()) e->ExceptionClear();
+  }
+
   void fatal(const std::string& reason) {
     if (dead_) return;
     dead_ = true;
@@ -208,7 +267,17 @@ class Engine {
       uint64_t id = uint64_t(a[0].asNumber());
       std::string op = a[1].asString(rt).utf8(rt);
       std::string json = a[2].asString(rt).utf8(rt);
-      if (n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt)) {
+      bool hasBytes = n > 3 && a[3].isObject() && a[3].asObject(rt).isArrayBuffer(rt);
+      if (op.rfind("secure.", 0) == 0 || op.rfind("listen.", 0) == 0) {
+        if (hasBytes) {
+          jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
+          toApp(id, op, json, b.data(rt), b.size(rt), true);
+        } else {
+          toApp(id, op, json, nullptr, 0, false);
+        }
+        return jsi::Value::undefined();
+      }
+      if (hasBytes) {
         jsi::ArrayBuffer b = a[3].asObject(rt).getArrayBuffer(rt);
         sf_shell_call(shell_, id, op.c_str(), reinterpret_cast<const uint8_t*>(json.data()), json.size(), b.data(rt), b.size(rt), 1);
       } else {
@@ -227,6 +296,16 @@ class Engine {
     });
     fn("emit", 2, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
       say(a[1].asString(rt).utf8(rt));
+      return jsi::Value::undefined();
+    });
+    fn("emitBytes", 3, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+      std::string json = a[1].asString(rt).utf8(rt);
+      if (n > 2 && a[2].isObject() && a[2].asObject(rt).isArrayBuffer(rt)) {
+        jsi::ArrayBuffer b = a[2].asObject(rt).getArrayBuffer(rt);
+        sayBytes(json, b.data(rt), b.size(rt));
+      } else {
+        sayBytes(json, nullptr, 0);
+      }
       return jsi::Value::undefined();
     });
     fn("fatal", 1, [this](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t) -> jsi::Value {
@@ -283,7 +362,7 @@ class Engine {
       fatal("the core's files cannot be kept: " + dataDir_);
       return;
     }
-    auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).build();
+    auto config = ::hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withEnableBlockScoping(true).withIntl(true).withEnableSampleProfiling(true).build();
     std::unique_ptr<facebook::hermes::HermesRuntime> rt = facebook::hermes::makeHermesRuntime(config);
     try {
       install(*rt);
@@ -347,6 +426,8 @@ class Engine {
   JavaVM* vm_;
   jobject listener_;
   jmethodID onBytes_ = nullptr;
+  jmethodID onFrame_ = nullptr;
+  jmethodID onApp_ = nullptr;
   std::string script_, url_, dataDir_, cloudOrigin_;
   bool beta_;
   void* shell_ = nullptr;
@@ -398,8 +479,52 @@ extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receive(JNIE
   reinterpret_cast<Engine*>(handle)->receive(client, utf8(env, json));
 }
 
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receiveBytes(JNIEnv* env, jobject, jlong handle, jlong client, jstring json, jbyteArray bytes) {
+  jsize n = env->GetArrayLength(bytes);
+  std::string data(size_t(n), '\0');
+  env->GetByteArrayRegion(bytes, 0, n, reinterpret_cast<jbyte*>(data.data()));
+  reinterpret_cast<Engine*>(handle)->receiveBytes(client, utf8(env, json), std::move(data));
+}
+
+/// Kotlin's answer to a call it was handed (`secure.*`, `listen.*`; Engine.kt): `error` null when it succeeded. Never
+/// after `close`.
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_complete(JNIEnv* env, jobject, jlong handle, jlong id, jstring json, jstring error, jbyteArray bytes) {
+  std::string data;
+  if (bytes) {
+    jsize n = env->GetArrayLength(bytes);
+    data.resize(size_t(n));
+    env->GetByteArrayRegion(bytes, 0, n, reinterpret_cast<jbyte*>(data.data()));
+  }
+  reinterpret_cast<Engine*>(handle)->completed(uint64_t(id), json ? utf8(env, json) : std::string(), error ? utf8(env, error) : std::string(), std::move(data), bytes != nullptr);
+}
+
 extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_close(JNIEnv*, jobject, jlong handle) {
   auto* engine = reinterpret_cast<Engine*>(handle);
   engine->stop();
   delete engine;
+}
+
+/// The core's JS sampled for `seconds`, its trace (Chrome's format) written to `path` (CoreProfile.kt): what the core
+/// spends its time on, in a build as it is shipped. The runtime is registered for it as it starts; nothing is sampled
+/// until this is asked.
+extern "C" JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_profile(JNIEnv* env, jobject, jint seconds, jstring path) {
+  auto* root = jsi::castInterface<facebook::hermes::IHermesRootAPI>(facebook::hermes::makeHermesRootAPI());
+  if (!root) return;
+  root->enableSamplingProfiler();
+  std::thread([root, seconds, out = utf8(env, path)] {
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+    root->dumpSampledTraceToFile(out);
+    root->disableSamplingProfiler();
+    __android_log_print(ANDROID_LOG_INFO, TAG, "profile written: %s", out.c_str());
+  }).detach();
+}
+
+/// What the shell has been asked so far, as JSON (client/shell `sf_shell_stats`): for the app's report of its memory
+/// running away (MemoryWatch.kt).
+extern "C" JNIEXPORT jstring JNICALL Java_fail_still_core_HermesNative_shellStats(JNIEnv* env, jobject) {
+  size_t len = 0;
+  uint8_t* out = sf_shell_stats(&len);
+  std::string json(reinterpret_cast<const char*>(out), len);
+  sf_free(out, len);
+  return env->NewStringUTF(json.c_str());
 }

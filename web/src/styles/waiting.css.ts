@@ -1,10 +1,10 @@
 import { style } from "@vanilla-extract/css";
-import { vars } from "./tokens.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 
 export const runtimeTags = style({});
 export const runtimeTag = style({
-  display: "inline-flex", alignItems: "center", gap: "3px", padding: "0 5px", height: "18px", borderRadius: "5px",
-  background: vars.hover, color: vars.muted, fontSize: "11px", fontWeight: "500",
+  display: "inline-flex", alignItems: "center", gap: "3px", padding: "0 5px", height: "18px",
+  borderRadius: `calc(5px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
+  background: vars.hover, color: vars.muted, fontSize: vars.textCaption, fontWeight: "500",
 });
-export const spinner = style({});
 export const runtimeMark = style({ width: "32px", height: "32px", background: vars.paper });

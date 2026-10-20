@@ -1,0 +1,3 @@
+check "the field kept none of the long words" '! grep -q "DRIVE FAIL in the field: 长段落" $OUT/$name.log'
+check "the station has the message with a text file" '[ -n "$(entry_attachments "附上一段长文字 $TAG")" ] && entry_attachments "附上一段长文字 $TAG" | grep -q "\.txt"'
+check "the file is the pasted words, whole (18000 bytes)" 'station_file_size 18000'

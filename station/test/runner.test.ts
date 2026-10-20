@@ -14,7 +14,8 @@ const until = async (f: () => boolean) => {
   while (!f()) await sleep(20);
 };
 
-test("lines in order; a station that lets go and comes back reads on where it acknowledged", async () => {
+// On Windows: runner-windows.test.ts (no fifos, no sh).
+test("lines in order; a station that lets go and comes back reads on where it acknowledged", { skip: process.platform === "win32" && "runner-windows.test.ts" }, async () => {
   const data = mkdtempSync(join(tmpdir(), "runner-test-"));
   // Says two lines; once let go (the fifo written), four more and marks them said; then echoes what it is sent, then
   // exits 3.

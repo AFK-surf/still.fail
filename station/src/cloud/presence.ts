@@ -3,14 +3,15 @@
 // what it takes back. Signed at connect like enrollment. Reconnects with backoff; once removed from its workspace, asks
 // again only now and then, or at once when enrolled anew meanwhile. Which control plane, and how it is spoken to, is
 // the provider's (provider.ts), read anew at every connect.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Clock, Effect, Stream, SubscriptionRef } from "effect";
 import WebSocket from "ws";
 import { log } from "../ops/log.ts";
 import { nowSecs } from "../ops/files.ts";
 import { version } from "../ops/version.ts";
-import type { Cloud as CloudState, Revocation } from "./state.ts";
+import { type Cloud as CloudState, isRevocation, joinedOf, joinedPendingPath, pendingLockPath } from "./state.ts";
+import { type Entry, asEntry, entryHash } from "./lock.ts";
 import type { StationKey } from "./key.ts";
 import { type ProviderSpec, signedHeaders } from "./provider.ts";
 import { wall } from "../ops/fibers.ts";
@@ -90,6 +91,24 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
     const socket = new WebSocket(`${state.origin.replace("http", "ws")}${plane.connectPath}`, { headers, handshakeTimeout: CONNECT_TIMEOUT_MS });
     let ping: (() => void) | undefined;
     let answered = true;
+    // Entries this station took from devices and other stations, given to the plane too (it keeps the lock for whoever
+    // asks it next): the home workspace's, and each joined one's (`workspace` says which).
+    const told = new Map<string, number>();
+    const tell = () => {
+      for (const m of s.memberships()) {
+        const ws = m.home ? null : m.workspace;
+        const seq = s.locked(ws)?.state?.seq;
+        const plane = ws === null ? s.planeLockSeq : (s.planeLockSeqs.get(ws) ?? null);
+        const was = told.get(m.workspace) ?? (s.locked(ws)?.state?.seq ?? -1);
+        if (!told.has(m.workspace)) told.set(m.workspace, was);
+        if (seq === undefined || seq <= was || socket.readyState !== WebSocket.OPEN || plane === null) continue;
+        const entries = s.lockAfter(Math.max(plane, -1), ws);
+        if (entries.length > 0) socket.send(JSON.stringify({ type: "lock.put", entries, ...(ws === null ? {} : { workspace: ws }) }));
+        told.set(m.workspace, seq);
+      }
+    };
+    tell();
+    const unlisten = s.listen(tell);
     let failed: Error | null = null;
     socket.on("unexpected-response", (_, response) => {
       if (response.statusCode === 404) {
@@ -121,15 +140,17 @@ const connect = (s: CloudState, key: StationKey, plane: ProviderSpec) =>
       if (binary) return;
       const text = data.toString();
       if (text === "pong") answered = true;
-      else if (!tool(s, plane, socket, text)) applyState(s, text);
+      else if (!tool(s, plane, socket, text)) applyState(s, text, (frame) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(frame)));
     });
     socket.on("close", (code) => {
       ping?.();
+      unlisten();
       if (code === CLOSE_REMOVED) removed(s, CLOSE_REMOVED);
       resume(failed ? Effect.fail(failed) : Effect.succeed(`${plane.name} closed the presence socket`));
     });
     return Effect.sync(() => {
       ping?.();
+      unlisten();
       socket.close();
     });
   });
@@ -146,7 +167,8 @@ function tool(s: CloudState, plane: ProviderSpec, socket: WebSocket, text: strin
     return false;
   }
   if (body?.type !== "tool" || typeof body.id !== "string") return false;
-  const run = plane.tools ? s.toolCalls : null;
+  // Locked, the control plane pushes no tools: a gateway the lock names calls them itself (mesh/tools.ts).
+  const run = plane.tools && s.locked() === null ? s.toolCalls : null;
   const reply = (response: unknown) => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: "tool_result", id: body.id, response }));
   };
@@ -176,8 +198,10 @@ function takenBack(s: CloudState, plane: ProviderSpec) {
 }
 
 /// What the cloud pushes: where the station is and what it is called, its relays, roster and grant keys, what it
-/// takes back.
-export function applyState(s: CloudState, text: string) {
+/// takes back; the workspace lock's head, and its entries when asked (`send` answers on the socket). Once a lock is
+/// pinned, the station stays in its workspace and at its origin whatever the frame says, and the roster and gateways
+/// are only those the lock names too (cloud/state.ts `filtered`).
+export function applyState(s: CloudState, text: string, send: (frame: unknown) => unknown = () => {}) {
   let body: any;
   try {
     body = JSON.parse(text);
@@ -185,26 +209,98 @@ export function applyState(s: CloudState, text: string) {
     return;
   }
   if (body?.type === "state") {
+    const locked = s.locked() !== null;
+    if (locked && s.state && ((typeof body.workspace === "string" && body.workspace !== s.state.workspace) || (typeof body.origin === "string" && body.origin !== s.state.origin))) {
+      log.warn("lock", "the control plane moves this station; the workspace lock keeps it where it is", { workspace: body.workspace, origin: body.origin });
+    }
+    s.setPlaneLists(Array.isArray(body.peers) ? body.peers : [], Array.isArray(body.gateway_keys) ? body.gateway_keys.filter((k: unknown): k is string => typeof k === "string") : undefined);
     // Current before it is told, so whoever hears of the new roster reads it as current.
     s.peersCurrent = Array.isArray(body.peers);
     s.update((st) => {
       for (const k of ["workspace", "workspace_name", "name", "origin", "relay_url"] as const) {
+        if (locked && (k === "workspace" || k === "origin")) continue;
         if (typeof body[k] === "string") st[k] = body[k];
       }
-      // Missing roster means an old cloud: never keep peers from another binding.
-      st.peers = Array.isArray(body.peers) ? body.peers : [];
       if (Array.isArray(body.relay_urls)) st.relay_urls = body.relay_urls.filter((u: unknown) => typeof u === "string");
+      // Kept as said; once locked, credentials are checked with the lock's keys instead (cloud/state.ts `grantKeys`).
       if (body.grant_keys && typeof body.grant_keys === "object" && !Array.isArray(body.grant_keys)) st.grant_keys = body.grant_keys;
       if (Array.isArray(body.revocations) && body.revocations.every(isRevocation)) st.revocations = body.revocations;
-      // Who may call the device tools (Comma's gateways): only from a control plane that names them.
-      if (Array.isArray(body.gateway_keys)) st.gateway_keys = body.gateway_keys.filter((k: unknown): k is string => typeof k === "string");
+      // The workspaces it joined besides its home one: none from planes of before them. One it is no longer in: its
+      // lock forgotten.
+      const joined = joinedOf(body.workspaces);
+      for (const was of st.joined ?? []) if (!joined.some((j) => j.workspace === was.workspace)) s.forgetJoined(was.workspace);
+      if (joined.length > 0) st.joined = joined;
+      else delete st.joined;
+      // Missing roster means an old cloud: never keep peers from another binding. Who may call the device tools
+      // (Comma's gateways): only from a control plane that names them.
+      const { peers, gateways } = s.filtered(st);
+      st.peers = Array.isArray(body.peers) ? peers : [];
+      if (Array.isArray(body.gateway_keys)) st.gateway_keys = gateways;
     });
+    syncLock(s, body.lock, send);
+    // Each joined workspace's lock too, level with the plane's.
+    if (Array.isArray(body.workspaces)) {
+      for (const j of body.workspaces) if (typeof j?.workspace === "string" && s.state?.joined?.some((x) => x.workspace === j.workspace)) syncLock(s, j.lock, send, j.workspace);
+    }
   } else if (body?.type === "revoke" && isRevocation(body)) {
+    // Of the workspace it names (planes of before say none: the home one's).
+    const named: unknown = (body as any).workspace;
     s.update((st) => {
-      st.revocations = st.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
-      st.revocations.push({ kind: body.kind, id: body.id, at: body.at });
+      const elsewhere = typeof named === "string" && named !== st.workspace;
+      const joined = elsewhere ? st.joined?.find((j) => j.workspace === named) : undefined;
+      if (elsewhere && joined === undefined) return;
+      const of = joined ?? st;
+      of.revocations = of.revocations.filter((r) => !(r.kind === body.kind && r.id === body.id));
+      of.revocations.push({ kind: body.kind, id: body.id, at: body.at });
     });
+  } else if (body?.type === "lock" && Array.isArray(body.entries)) {
+    takeFromPlane(s, body.entries, typeof body.workspace === "string" && body.workspace !== s.state?.workspace ? body.workspace : null);
   }
 }
 
-const isRevocation = (r: any): r is Revocation => typeof r?.kind === "string" && typeof r?.id === "string" && Number.isInteger(r?.at) && r.at >= 0;
+/// The control plane's lock head against this station's, in `ws` (the home workspace when null): asks for what it
+/// lacks, gives what the plane lacks (the plane only keeps and carries the lock: a station brings it back what it
+/// lost). Where none is pinned, it asks only for a lock `enroll --lock` (or joining) named.
+function syncLock(s: CloudState, head: any, send: (frame: unknown) => unknown, ws: string | null = null) {
+  const theirs = head !== null && typeof head === "object" && Number.isSafeInteger(head.seq) ? (head.seq as number) : -1;
+  const which = ws === null ? {} : { workspace: ws };
+  // A cloud from before locks says nothing of one: nothing is given to it.
+  if (ws === null) s.planeLockSeq = head === undefined ? null : theirs;
+  else s.planeLockSeqs.set(ws, head === undefined ? null : theirs);
+  const mine = s.locked(ws)?.state?.seq;
+  if (mine === undefined) {
+    const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+    if (theirs >= 0 && pending !== null) send({ type: "lock.get", after: -1, ...which });
+    return;
+  }
+  if (theirs > mine) send({ type: "lock.get", after: mine, ...which });
+  else if (theirs < mine) send({ type: "lock.put", entries: s.lockAfter(theirs, ws), ...which });
+}
+
+/// Entries the control plane brought, of `ws`'s lock (the home workspace's when null): more of the pinned lock, or the
+/// lock `enroll --lock` (or joining) named (pinned only when its chain holds that entry).
+function takeFromPlane(s: CloudState, raw: unknown[], ws: string | null = null) {
+  const entries = raw.map(asEntry);
+  if (entries.some((e) => e === null)) return log.warn("lock", "the control plane sent a malformed lock entry");
+  try {
+    if (s.locked(ws) === null) {
+      const pending = ws === null ? pendingLock(s.data) : s.pendingLock(ws);
+      if (pending === null) return;
+      if (!entries.some((e) => entryHash(e!) === pending)) return log.warn("lock", "the control plane's lock is not the one this station was enrolled with", ws === null ? {} : { workspace: ws });
+      s.takeLock(entries as Entry[], ws);
+      rmSync(ws === null ? pendingLockPath(s.data) : joinedPendingPath(s.data, ws), { force: true });
+    } else s.takeLock(entries as Entry[], ws);
+  } catch (e) {
+    log.warn("lock", "the control plane's lock entries were refused", { error: (e as Error).message });
+  }
+}
+
+/// The lock hash `enroll --lock` left to pin, if any.
+export function pendingLock(data: string): string | null {
+  try {
+    const hash = JSON.parse(readFileSync(pendingLockPath(data), "utf8"))?.hash;
+    return typeof hash === "string" && /^[0-9a-f]{64}$/.test(hash) ? hash : null;
+  } catch {
+    return null;
+  }
+}

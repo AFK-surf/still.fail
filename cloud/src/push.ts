@@ -1,7 +1,8 @@
 // Push notifications (docs/notifications.md): devices register where they can be pushed to (a browser's Web Push
 // subscription, the Android app's FCM token) with the signed-in account and session; a station sends the notices of
 // its chats, signed with its key, naming who they are for by email; still.fail cloud makes each one's text and pushes it
-// to the devices of those people who are members of the station's workspace, each device once. A device its push
+// to the devices of those people who are members of the station's workspace (the one the notices say, for a station in
+// several), each device once. A device its push
 // service says is gone is dropped (with every account); any other failure is logged and forgotten (the person hears of
 // it the next time a client runs).
 import { clock, readJson, readText, reply } from "./auth";
@@ -86,6 +87,8 @@ interface Notice {
   by?: string;
   text: string;
   at: number;
+  /** The message it is about (its number in the chat), which a notification opens the chat at; older stations give none. */
+  seq?: number;
 }
 
 /** A notice as a station sends it, or null for one that is not (it is skipped). Kinds it does not know read as `done`. */
@@ -97,10 +100,11 @@ function notice(value: unknown): Notice | null {
   if (typeof n.session !== "string" || !n.session || n.session.length > 512) return null;
   if (typeof n.text !== "string" || (n.title !== undefined && typeof n.title !== "string") || (n.by !== undefined && n.by !== null && typeof n.by !== "string")) return null;
   const at = typeof n.at === "number" && Number.isFinite(n.at) ? Math.floor(n.at) : clock.now();
-  return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at };
+  const seq = typeof n.seq === "number" && Number.isSafeInteger(n.seq) && n.seq >= 0 ? n.seq : undefined;
+  return { to, kind: n.kind, session: n.session, title: (n.title as string | undefined) ?? "", by: (n.by as string | null | undefined) || undefined, text: n.text, at, seq };
 }
 
-/** POST /v1/stations/notify: a station's notices, pushed to the members they name → `{ sent }`. */
+/** POST /v1/stations/notify `{ notices, workspace? }`: a station's notices, pushed to the members they name → `{ sent }`. */
 export async function stationNotify(request: Request, env: Env): Promise<Response> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
   let body: string;
@@ -112,16 +116,23 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
   const station = await stationSender(request, env, body, "station-notify-v1");
   if (!station) return reply({ error: "invalid_signature" }, 401);
   let notices: Notice[];
+  let workspace: string | null = null;
   try {
-    const value = JSON.parse(body) as { notices?: unknown };
+    const value = JSON.parse(body) as { notices?: unknown; workspace?: unknown };
     if (!Array.isArray(value.notices)) throw new Error("shape");
     notices = value.notices.slice(0, MAX_NOTICES).map(notice).filter((n): n is Notice => n !== null);
+    // The workspace whose chats they are (a station in several says; its home if it says none).
+    if (value.workspace !== undefined && value.workspace !== null) {
+      if (typeof value.workspace !== "string" || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value.workspace)) throw new Error("shape");
+      workspace = value.workspace;
+    }
   } catch {
     return reply({ error: "invalid_request" }, 400);
   }
   const dir = env.DIRECTORY.getByName("primary");
-  const targets = await dir.pushTargets(station, notices.flatMap((n) => n.to));
-  if (!targets) return reply({ error: "invalid_signature" }, 401);
+  const targets = await dir.pushTargets(station, notices.flatMap((n) => n.to), workspace);
+  // Enrolled (stationSender says so), but not in the workspace it named.
+  if (!targets) return workspace ? reply({ error: "not_in_workspace" }, 403) : reply({ error: "invalid_signature" }, 401);
   const keys = vapid(env);
   const fcm = serviceAccount(env.FCM_SERVICE_ACCOUNT);
   const pushes: Promise<{ device: PushRegistration; outcome: Outcome }>[] = [];
@@ -134,11 +145,12 @@ export async function stationNotify(request: Request, env: Env): Promise<Respons
       title: line(n.title),
       body: noticeBody(n.kind, n.text, n.by, lang),
       tag: `${base}/${n.session}`,
-      url: `/o/${base}/${encodeURIComponent(n.session)}`,
+      url: `/o/${base}/${encodeURIComponent(n.session)}${n.seq === undefined ? "" : `?message=${n.seq}`}`,
       workspace: targets.workspace,
       station,
       session: n.session,
       at: String(n.at),
+      ...(n.seq === undefined ? {} : { seq: String(n.seq) }),
     });
     // A device signed in with several of the people named gets it once.
     const devices = new Map<string, PushRegistration>();

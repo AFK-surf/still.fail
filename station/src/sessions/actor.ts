@@ -5,13 +5,18 @@
 //   tool answers once it is recorded: a turn's end comes after the tool's answer, so nothing a tool said is lost.
 // Its process is a runner's (src/agents/runner.ts): this actor can go (a station stopping or handing over) and the
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
+import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { chars } from "../agents/live.ts";
+import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
 import { unreadableDir, unreadableDirMessage } from "../ops/files.ts";
+import { Places } from "../ops/places.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
+import { runtimeKind, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
 
 /// How an agent ended its turn (chat_post / chat_state `kind`).
 export type DeclaredState = { kind: "all_done" } | { kind: "need_help" } | { kind: "waiting"; seconds: number };
@@ -57,6 +62,7 @@ export type SessionStore = {
   stopWait(key: string): void;
   listJobs(session: string | null): any[];
   latestThread(key: string): any | null;
+  entriesBefore(thread: number, n: number | null, limit: number): any[];
   insertMessage(message: any): unknown;
   notify(key: string): void;
 };
@@ -65,7 +71,8 @@ export type SessionStore = {
 export type Surface = {
   post(thread: { channel: string; threadTs: string }, text: string, files: unknown[]): Promise<string>;
   userName?(user: string): Promise<string | null>;
-  working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string): void;
+  working?(thread: { channel: string; threadTs: string }, messageTs: string | null, status: string, page?: string | null): void;
+  mention?(user: string): string;
   botName?(): string;
   botUserId?(): string;
 };
@@ -74,14 +81,17 @@ export type Surface = {
 export type SessionDeps = {
   store: SessionStore;
   chat(connect: string): Surface | undefined;
-  driver(runtime: "claude" | "codex"): AgentDriver;
+  driver(runtime: RuntimeKind): AgentDriver;
   /// The profile a session's runtime starts on now: its own while usable, else another that can take it on.
   runOn(key: string): Profile & { spelling?(model: string): string | null };
   /// A turn ran into its profile's allowance: the profile left and the one moved to, when it moved.
   spend(key: string): [string, string] | null;
+  /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
+  refillsAt?(key: string): number;
   mcpUrl(): string;
   reposDir(): string;
-  memoryPath(): string;
+  /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
+  memoryPath(key: string): string;
   maxNudges(): number;
   backgroundOnMessage(key: string): boolean;
   /// Where the runtime's live steps go, for whoever watches the session (and that it went on in a new runtime session).
@@ -96,11 +106,23 @@ export type SessionDeps = {
   restoreArchive(key: string): void | Promise<void>;
   /// An archived session's process is gone: its files may go to cold storage now (session.rs `clean_archive`).
   cleanArchive?(key: string): void | Promise<void>;
-  /// Turns are held (the station is about to stop or hand over): none starts, messages stay pending.
-  held(): boolean;
+  /// A turn ended as its opener (an agent that opened its chat) is told: all_done or need_human with its words, or
+  /// failed or stopped.
+  settled?(key: string, state: "all_done" | "need_human" | "failed" | "stopped", words: string | null): void;
+  /// Turns are held (the station is about to stop or hand over, or is out of the session's workspace): none starts,
+  /// messages stay pending.
+  held(key: string): boolean;
   /// Stopped while it waits: ends the session's jobs that would bring it back.
   stopJobs(key: string): Promise<void>;
+  /// Archived: ends every job and service of the session.
+  endJobs(key: string): Promise<void>;
   toolStatus(tool: string): string;
+  /// A session's page in still.fail, when the station is in a workspace: what a platform's status line points to.
+  pageOf?(key: string): string | undefined;
+  /// How a directory it is to run in is looked at (ops/places.ts); default: without still.fail Helper.
+  places?: Places;
+  /// Its runtime was not found on PATH as it started.
+  runtimeMissing?(runtime: RuntimeKind): void;
   nextTs(): string;
   /// Its time (the hub's).
   clock: Clock.Clock;
@@ -115,7 +137,7 @@ type Phase = "idle" | "running" | "waiting" | "closed";
 /// What a next station takes up from this one (session.rs `HandedSession`, without the process: the runner keeps it).
 export type Snapshot = {
   key: string;
-  runtime: "claude" | "codex";
+  runtime: RuntimeKind;
   agent: unknown | null;
   turn: { id: string; authRetried: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
   workingFor: Working[];
@@ -124,13 +146,28 @@ export type Snapshot = {
   waitingSeconds: number;
   nudges: number;
   stopRequested: boolean;
+  /// Its allowance ran out with no account to move to: how long until it goes on (optional: a station from before
+  /// it does not say).
+  refillMs?: number | null;
+  /// Changed while busy (optional: a station from before it does not say).
+  stale?: boolean;
+  /// What it was changed in needs a new process, not one retuned (optional: a station from before it does not say).
+  restart?: boolean;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
 
+let places: Places | null = null;
+const defaultPlaces = () => (places ??= new Places());
+
+/// Times a process that lost the station's tools is started again before the turn is given up on.
+const MAX_TOOLS_RESTARTS = 1;
+/// The most of the agent's last words shown in its place.
+const FALLBACK_MOST = 4000;
+
 export class SessionActor {
   readonly key: string;
-  readonly runtime: "claude" | "codex";
+  readonly runtime: RuntimeKind;
   private deps: SessionDeps;
   private lock = Semaphore.makeUnsafe(1);
   /// Runs an effect as a fiber of this actor's (its tasks, its wait's timer): they end when it closes.
@@ -138,11 +175,25 @@ export class SessionActor {
   private scope: Scope.Closeable;
 
   private agent: { generation: number; session: AgentSession } | null = null;
+  /// How it runs was changed and its process has not caught up: before the next turn it takes the new model and effort
+  /// in place, or ends so the next one starts as changed.
+  private stale = false;
+  /// What changed is not a model or an effort (the station's variables for its agents): no taking it in place.
+  private restart = false;
   private profile: string | null = null;
   private generation = 0;
   private phase: Phase = "idle";
   private turn: Turn | null = null;
   private nudges = 0;
+  /// Its process lost the station's tools during the running turn (why): at the turn's end it starts again.
+  private toolsLost: string | null = null;
+  /// Times it was started again for that since it last ended a turn in a state (or was given something new).
+  private toolsRestarts = 0;
+  /// The agent's last words (a text step of its own) since it was last given something, and whether it posted since:
+  /// what is shown, marked as the station's, when it is given up on without having posted.
+  private saying: { id: string; text: string } | null = null;
+  private lastSaid = "";
+  private posted = false;
   private stopRequested = false;
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
@@ -156,11 +207,17 @@ export class SessionActor {
   private waits = 0;
   private waitingUntil = 0;
   private waitingSeconds = 0;
+  /// Its last turn ran into its account's allowance and no other could take it on: when it goes on by itself, and its
+  /// number (a newer one voids an older one's timer). Till then a job's notice waits with it; a person's message is
+  /// tried at once.
+  private refill: number | null = null;
+  private refills = 0;
+  private refillAt = 0;
   /// Messages given to the running turn while it ran: the runtime may not have read them yet (suspend).
   private steered: [number, number][] = [];
   private queued = 0;
 
-  constructor(key: string, runtime: "claude" | "codex", deps: SessionDeps) {
+  constructor(key: string, runtime: RuntimeKind, deps: SessionDeps) {
     this.key = key;
     this.runtime = runtime;
     this.deps = deps;
@@ -226,7 +283,7 @@ export class SessionActor {
   }
 
   holdsState(): boolean {
-    return this.notices.length > 0 || this.waiting !== null;
+    return this.notices.length > 0 || this.waiting !== null || this.refill !== null;
   }
 
   /// Delivers any pending messages.
@@ -235,10 +292,47 @@ export class SessionActor {
   }
 
   /// A word from the station for the agent outside any conversation (a job's notice): it joins the running turn, or
-  /// runs as a turn of its own; one the running turn cannot take waits for its end.
+  /// runs as a turn of its own; one the running turn cannot take waits for its end. An archived session is not told.
   notify(text: string): Promise<void> {
+    if (this.archived()) return Promise.resolve();
     this.notices.push(text);
     return this.enqueue(() => this.giveNotices());
+  }
+
+  /// Archived (by hand or by the station): its wait ends and so does every job and service of its own; a running turn
+  /// goes on to its end and waits on nothing after. Only a new message brings it back (one archived by hand takes none).
+  putAway(): Promise<void> {
+    return this.enqueue(async () => {
+      this.notices = [];
+      if (!this.turn && !this.agent?.session.busy()) await this.letGo();
+    });
+  }
+
+  /// It posted in a chat (chat_post), in turn order.
+  postedNow(): Promise<void> {
+    return this.enqueue(async () => {
+      this.posted = true;
+    });
+  }
+
+  /// The station's tools are at `url` now. A process told another address (taken up from a station that had its tools
+  /// elsewhere) cannot reach them: idle, it ends (the next turn starts one, resuming); running, it starts again once
+  /// its turn ends.
+  toolsAt(url: string): Promise<void> {
+    return this.enqueue(async () => {
+      const agent = this.agent;
+      const was = agent?.session.mcpUrl?.() ?? null;
+      if (!agent || was === null || was === url) return;
+      if (this.turn || agent.session.busy()) {
+        this.toolsLost ??= `its process was told the station's tools are at ${was}, not ${url}`;
+        log.warn("session", "the process taken up was told another address of the station's tools; it starts again once its turn ends", { session: this.key, was, now: url });
+        return;
+      }
+      this.agent = null;
+      log.warn("session", "the process taken up was told another address of the station's tools; ending it, its next turn resumes in a new one", { session: this.key, was, now: url });
+      await agent.session.dispose();
+      this.deps.store.notify(this.key);
+    });
   }
 
   /// What a tool says of the running turn, recorded in turn order (the tool answers once this resolves).
@@ -274,14 +368,18 @@ export class SessionActor {
         await this.agent.session.abort();
         return;
       }
-      if (!this.turn) await this.stopWaiting();
+      if (this.turn) return;
+      await this.stopWaiting();
+      // Nothing runs: whatever is still said to be under way (a start that failed) is not.
+      this.deps.live?.turnEnded(this.key);
     });
   }
 
   /// Its last turn stopped at its account's allowance and it was changed since: it goes on where it stopped.
   goOn(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.deps.held() || this.turn || this.agent?.session.busy()) return;
+      if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+      this.refill = null;
       if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
       await this.startTurn("resume", GO_ON_AFTER_SPENT);
     });
@@ -292,6 +390,7 @@ export class SessionActor {
     return this.enqueue(async () => {
       const store = this.deps.store;
       store.setRunning(this.key, false);
+      if (this.archived()) return this.letGo();
       const pending = store.pendingMessages(this.key);
       const [said, widgets] = await this.format(pending);
       await this.startTurn("resume", said === "" ? RESUME_AFTER_RESTART : `${RESUME_AFTER_RESTART}\n\n${said}`);
@@ -311,13 +410,23 @@ export class SessionActor {
   /// Starts the runtime process ahead of a message, so its start-up overlaps the typing.
   warm(): Promise<void> {
     return this.enqueue(async () => {
-      if (this.agent || this.deps.held()) return;
+      if (this.agent || this.deps.held(this.key)) return;
       log.info("session", "warming session process", { session: this.key });
       await this.ensureAgent();
       this.idleSince = this.now();
       this.deps.store.notify(this.key);
       this.deps.idle(this.key);
     });
+  }
+
+  /// How it runs (profile, model, effort) changed: its process takes it now if idle, else before its next turn. `restart`:
+  /// what changed is what its process started with (its variables), which only a new one takes.
+  changed(restart = false): Promise<void> {
+    if (this.agent) {
+      this.stale = true;
+      if (restart) this.restart = true;
+    }
+    return this.enqueue(() => this.catchUp(!this.turn && this.waiting === null));
   }
 
   /// Ends the runtime process if it is idle.
@@ -382,6 +491,9 @@ export class SessionActor {
       waitingSeconds: this.waitingSeconds,
       nudges: this.nudges,
       stopRequested: this.stopRequested,
+      refillMs: this.refill !== null ? Math.max(0, this.refillAt - this.now()) : null,
+      stale: this.stale,
+      restart: this.restart,
     };
     agent?.detach();
     this.close();
@@ -392,6 +504,8 @@ export class SessionActor {
   /// as the generation the caller opened it as (`nextGeneration`, whose `listener` the driver was given).
   adopt(snap: Snapshot, agent: AgentSession | null) {
     this.agent = agent ? { generation: this.generation, session: agent } : null;
+    // Taken up on the profile the session has (hub.ts takeUp runs it there).
+    this.profile = agent ? (this.deps.store.getSession(this.key)?.profile ?? null) : null;
     this.turn = snap.turn && {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
@@ -403,8 +517,11 @@ export class SessionActor {
     this.notices = snap.notices;
     this.nudges = snap.nudges;
     this.stopRequested = snap.stopRequested;
+    this.stale = snap.stale ?? false;
+    this.restart = snap.restart ?? false;
     this.idleSince = this.now();
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
+    if (typeof snap.refillMs === "number") this.awaitRefill(this.now() + snap.refillMs);
   }
 
   /// The events of the runtime session opened (or adopted) as `generation`, as a driver gives them.
@@ -442,7 +559,13 @@ export class SessionActor {
   }
 
   private async giveNotices() {
-    if (this.deps.held()) return;
+    if (this.deps.held(this.key)) return;
+    if (this.archived()) {
+      this.notices = [];
+      return;
+    }
+    // Its account spent: a turn for them would run into it again; they wait for the refill.
+    if (this.refill !== null && !this.agent?.session.busy()) return;
     if (this.agent?.session.busy()) {
       const text = this.takeNotices();
       if (text === null) return;
@@ -455,7 +578,7 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held()) return; // they stay pending
+    if (this.deps.held(this.key) || this.archived()) return; // they stay pending
     const store = this.deps.store;
     const pending = store.pendingMessages(this.key);
     if (pending.length === 0) return;
@@ -472,6 +595,7 @@ export class SessionActor {
       return; // otherwise delivered when the turn ends
     }
     this.nudges = 0;
+    this.toolsRestarts = 0;
     this.workFor(pending);
     // The turn is for the first person whose message it takes.
     const first = pending.find((m: any) => m.message.authorKind === "person");
@@ -490,7 +614,8 @@ export class SessionActor {
   }
 
   private say(status: string) {
-    for (const w of this.workingFor) this.deps.chat(w.connect)?.working?.({ channel: w.channel, threadTs: w.threadTs }, w.ts, status);
+    const page = this.deps.pageOf?.(this.key) ?? null;
+    for (const w of this.workingFor) this.deps.chat(w.connect)?.working?.({ channel: w.channel, threadTs: w.threadTs }, w.ts, status, page);
   }
 
   /// A live step of the running turn, for its threads' status line.
@@ -538,7 +663,7 @@ export class SessionActor {
       if (selves.has(m.connect)) continue;
       const chat = this.deps.chat(m.connect);
       const [name, user] = [chat?.botName?.() ?? "", chat?.botUserId?.() ?? ""];
-      if (name !== "") selves.set(m.connect, user === "" ? name : `${name} (<@${user}>)`);
+      if (name !== "") selves.set(m.connect, user === "" ? name : `${name} (${chat?.mention?.(user) ?? `<@${user}>`})`);
     }
     const text = formatInbound(said, newThreads, names, selves);
     const models = store.untoldWidgetModels(this.key);
@@ -558,20 +683,25 @@ export class SessionActor {
       return user === "" ? name : `${name} (<@${user}>)`;
     }
     const row = this.deps.store.getSession(key);
-    return row ? `${row.runtime === "claude" ? "Claude Code" : "Codex"}${row.model ? ` ${row.model}` : ""}` : "another agent";
+    return row ? `${runtimeLabel(runtimeKind(row.runtime) ?? "claude")}${row.model ? ` ${row.model}` : ""}` : "another agent";
   }
 
   /// Starts a turn with `text` for someone. On failure the thread is told and the error thrown, so callers leave their
   /// messages pending for the next attempt.
   private async startTurn(kind: string, text: string, by: TurnFor = nobody): Promise<void> {
     const store = this.deps.store;
+    // Archived: only a new message starts a turn (and has brought it back by then).
+    if (kind !== "input" && this.archived()) {
+      log.info("session", "archived: no turn of its own", { session: this.key, kind });
+      return;
+    }
     try {
       // Until the runtime says it has sent its request, the turn is starting.
       this.deps.live?.event(this.key, { kind: "phase", phase: "starting" });
       let agent = await this.ensureAgent();
       const row = store.getSession(this.key);
       // A session begun in a terminal and continued here: its first turn here says so, with how still.fail works.
-      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath())) : null;
+      const continued = row && row.cwd && !store.hasTurns(this.key) ? continuedHere(sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key))) : null;
       const lost = this.resumeLost;
       this.resumeLost = false;
       let prompt = lost ? `${RESUME_LOST}\n\n${text}` : text;
@@ -582,11 +712,11 @@ export class SessionActor {
       // What changed in how it works since it was last told (migrations): once, before what it is handed.
       const told = store.toldNotes(this.key) ?? latestNote();
       if (told < latestNote()) {
-        const full = row ? `${row.workspace}/.stillfail-instructions.md` : "";
+        const full = row ? join(row.workspace, ".stillfail-instructions.md") : "";
         if (row) {
           const { writeFileSync } = await import("node:fs");
           try {
-            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath()));
+            writeFileSync(full, sessionInstructions(row.workspace, row.cwd ?? null, this.deps.reposDir(), this.deps.memoryPath(this.key)));
           } catch {}
         }
         store.setToldNotes(this.key, latestNote());
@@ -613,13 +743,25 @@ export class SessionActor {
       this.phase = "idle";
       if (turn) store.endTurn(turn.id, "failed", `other: ${message}`, null, null);
       store.setRunning(this.key, false);
+      // It was said to be starting: no turn runs.
+      this.deps.live?.turnEnded(this.key);
       this.doneWorking();
-      await this.notice(`⚠️ ${t("station.notice.cannotStart", { error: message })}`);
+      // Not installed here: said so, about the runtime (the pages offer to install it; once installed, what waits goes
+      // on). Tried again (each restart gives it what waits) and failing the same, it is not said again.
+      const missing = error instanceof CommandMissing && error.command === this.runtime;
+      if (missing) this.deps.runtimeMissing?.(this.runtime);
+      const said = missing ? `⚠️ ${t("station.notice.runtimeMissing", { name: runtimeLabel(this.runtime) })}` : `⚠️ ${t("station.notice.cannotStart", { error: message })}`;
+      if (!this.saidLast(said)) await this.notice(said, null, missing ? this.runtime : null);
       throw error;
     }
   }
 
   private beginTurn(kind: string, by: TurnFor) {
+    // Given something new: what it says from here on is what counts.
+    if (kind === "input" || kind === "job") {
+      this.lastSaid = "";
+      this.posted = false;
+    }
     const id = crypto.randomUUID();
     this.turn = { id, declared: null, authRetried: kind === "auth_retry", by };
     this.phase = "running";
@@ -628,7 +770,40 @@ export class SessionActor {
     this.deps.store.setRunning(this.key, true);
   }
 
+  /// A process idle since the session was changed takes its new model and effort in place, when it runs on the same
+  /// profile and can; otherwise it ends (when `end`: not while a turn or a wait holds on to it), also when no profile
+  /// can run it now (its own deleted, none to take it on).
+  private async catchUp(end: boolean) {
+    const agent = this.agent;
+    if (!agent || !this.stale || agent.session.busy()) return;
+    const row = this.deps.store.getSession(this.key);
+    let profile: ReturnType<SessionDeps["runOn"]> | null = null;
+    try {
+      profile = row ? this.deps.runOn(this.key) : null;
+    } catch {}
+    if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
+      this.stale = false;
+      log.info("session", "session process takes the change in place", { session: this.key, model: row.model ?? "", effort: row.effort ?? "" });
+      return;
+    }
+    if (!end) return;
+    this.stale = false;
+    this.restart = false;
+    this.agent = null;
+    log.info("session", "ending the process from before the session was changed", { session: this.key });
+    await agent.session.dispose();
+    this.deps.store.notify(this.key);
+  }
+
   private async ensureAgent(): Promise<AgentSession> {
+    // Before each turn the account is asked about again: one whose five hours are nearly full is left for one with
+    // room when its context was just compacted or is about to be (accounts.ts runOn), before a turn runs into it.
+    if (this.agent && !this.stale && !this.agent.session.busy()) {
+      try {
+        if (this.deps.runOn(this.key).id !== this.profile) this.stale = true;
+      } catch {}
+    }
+    await this.catchUp(true);
     if (this.agent) return this.agent.session;
     if (this.deps.archiveIsCold(this.key)) await this.deps.restoreArchive(this.key);
     const store = this.deps.store;
@@ -638,8 +813,11 @@ export class SessionActor {
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
-    // on a session continued in ~/Documents): told as it is instead.
-    if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
+    // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
+    // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
+    // asked for it, its window put up for a grant it lacks); the session's own workspace is the station's.
+    if (row.cwd) await (this.deps.places ?? defaultPlaces()).directory(row.cwd, { lang: stationLang() });
+    else if (unreadableDir(base.cwd)) throw new Error(unreadableDirMessage(stationLang(), base.cwd));
     const generation = this.nextGeneration();
     let agent: AgentSession;
     // Recorded before it may be left, so the history reads on from it.
@@ -666,6 +844,8 @@ export class SessionActor {
     }
     this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.agent = { generation, session: agent };
+    this.stale = false;
+    this.restart = false;
     this.profile = profile.id;
     return agent;
   }
@@ -690,7 +870,15 @@ export class SessionActor {
         break;
       case "live":
         this.deps.live?.event(this.key, event.event);
+        if (this.isCurrent(generation)) this.heard(event.event);
         this.onLive(event.event);
+        break;
+      case "toolsLost":
+        void this.enqueue(async () => {
+          if (!this.isCurrent(generation) || this.toolsLost !== null) return;
+          log.warn("session", "the agent cannot reach the station's tools", { session: this.key, why: event.why });
+          this.toolsLost = event.why;
+        });
         break;
       case "closed":
         void this.enqueue(async () => {
@@ -700,6 +888,15 @@ export class SessionActor {
           this.deps.store.notify(this.key);
         });
         break;
+    }
+  }
+
+  /// The agent's own words as they come (not a subagent's, not its thinking).
+  private heard(event: LiveEvent) {
+    if (event.kind === "start" && event.step === "text" && !event.subagent && event.parent === undefined) this.saying = { id: event.id, text: "" };
+    else if (event.kind === "delta" && event.field === "text" && event.id === this.saying?.id) {
+      this.saying.text += event.text;
+      if (this.saying.text.trim() !== "") this.lastSaid = this.saying.text.trim();
     }
   }
 
@@ -718,9 +915,21 @@ export class SessionActor {
       const wait = turn.declared?.kind === "waiting" ? turn.declared.seconds : null;
       store.endTurn(turn.id, outcome.kind, detail, turn.declared?.kind ?? null, wait);
     }
+    // Its process could not reach the station's tools: what it said through them reached nobody, and its next turn
+    // would fare no better. It ends; the next one (resuming) is given the station's tools as they are now.
+    const lost = this.toolsLost;
+    this.toolsLost = null;
+    if (lost !== null) {
+      const agent = this.agent;
+      this.agent = null;
+      log.warn("session", "ending the process that lost the station's tools; the next one resumes it", { session: this.key, why: lost });
+      await agent?.session.dispose();
+      store.notify(this.key);
+    }
+    if (turn?.declared) this.toolsRestarts = 0;
     // Reopen Claude once so it reads the current credentials (and refreshes an expiring machine token). Resume its
     // transcript with a continuation, never replay the original request: it may already have run tools.
-    if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held() && turn && !turn.authRetried && !turn.declared) {
+    if (this.runtime === "claude" && outcome.kind === "failed" && outcome.reason === "auth" && !stopRequested && !this.deps.held(this.key) && turn && !turn.authRetried && !turn.declared) {
       this.nudges = 0;
       const agent = this.agent;
       this.agent = null;
@@ -728,7 +937,9 @@ export class SessionActor {
       log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
     }
-    if (outcome.kind === "failed" && outcome.reason === "rate_limit") {
+    const spent = outcome.kind === "failed" && outcome.reason === "rate_limit";
+    if (!spent) this.refill = null;
+    if (spent) {
       this.nudges = 0;
       // Left to the station, it moves to another account and goes on there; otherwise it waits for a change.
       let moved: [string, string] | null = null;
@@ -743,19 +954,41 @@ export class SessionActor {
         this.agent = null;
         await agent?.session.dispose();
         log.info("session", "allowance ran out; going on on another profile", { session: this.key, from: moved[0], to: moved[1] });
+        this.refill = null;
         if (store.pendingMessages(this.key).length > 0) return this.pump();
         return this.startTurn("resume", GO_ON_AFTER_SPENT);
       }
-      await this.notice(failureNotice(outcome), this.profile);
+      // Said once: what wakes it meanwhile (a job's notice, a wait over) would only run into it again.
+      if (!this.saidLast((said) => said.startsWith(SPENT_NOTICE()))) await this.notice(failureNotice(outcome), this.profile);
+      this.awaitRefill(this.deps.refillsAt?.(this.key) ?? this.now() + REFILL_FALLBACK_MS);
     } else if (outcome.kind === "failed") {
       this.nudges = 0;
-      // A sign-in that failed is its profile's: the notice points there.
-      await this.notice(failureNotice(outcome), outcome.reason === "auth" ? this.profile : null);
+      // A sign-in that failed is its profile's, as is a refused request (its environment is where a proxy goes): the
+      // notice points there.
+      await this.notice(failureNotice(outcome), outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
     } else if (outcome.kind === "aborted") {
       this.nudges = 0;
       if (stopRequested) await this.notice(t("station.notice.stopped"));
     }
 
+    // Told to whoever opened its chat: how the turn ended, when it ended in a state or did not get there.
+    if (turn) {
+      const ended = turn.declared?.kind === "all_done" ? "all_done" : turn.declared?.kind === "need_help" ? "need_human" : outcome.kind === "failed" ? "failed" : outcome.kind === "aborted" && stopRequested ? "stopped" : null;
+      if (ended !== null) {
+        const words = ended === "failed" ? (outcome.kind === "failed" ? outcome.message : null) : (store.lastTurn(this.key)?.need ?? null);
+        try {
+          this.deps.settled?.(this.key, ended, words);
+        } catch (error) {
+          log.warn("session", "the opener of its chat was not told", { session: this.key, error: (error as Error).message });
+        }
+      }
+    }
+    // Archived while it ran: it waits on nothing.
+    if (this.archived()) {
+      await this.letGo();
+      this.deps.idle(this.key);
+      return;
+    }
     if (store.pendingMessages(this.key).length > 0) return this.pump();
     if (this.notices.length > 0) return this.giveNotices();
     const declared = turn?.declared ?? null;
@@ -770,14 +1003,36 @@ export class SessionActor {
       this.nudges = 0;
       return;
     }
-    if (this.deps.held()) return;
+    if (this.deps.held(this.key)) return;
+    // Not nudged (it could not have answered): told to go on in the new process, once; lost again, given up on.
+    if (lost !== null) {
+      this.nudges = 0;
+      if (this.toolsRestarts < MAX_TOOLS_RESTARTS) {
+        this.toolsRestarts++;
+        log.info("session", "the turn reached nobody; going on in a new process", { session: this.key, attempt: this.toolsRestarts });
+        return this.startTurn("resume", TOOLS_LOST);
+      }
+      this.toolsRestarts = 0;
+      return this.giveUp();
+    }
     if (this.nudges < this.deps.maxNudges()) {
       this.nudges++;
       log.info("session", "turn ended without a state; nudging", { session: this.key, attempt: this.nudges });
       return this.startTurn("nudge", NUDGE);
     }
     this.nudges = 0;
-    await this.notice(`⚠️ ${t("station.notice.noResult")}`);
+    await this.giveUp();
+  }
+
+  /// No turn ended in a state, and no more are asked for: the thread is told so, with the agent's last words when it
+  /// posted none (it may have answered where nobody reads: its tools out of reach), marked as the station's.
+  private async giveUp() {
+    const said = this.posted ? "" : this.lastSaid;
+    this.lastSaid = "";
+    if (said === "") return this.notice(`⚠️ ${t("station.notice.noResult")}`);
+    log.info("session", "the turn reached nobody; its last words are shown in its place", { session: this.key });
+    const quoted = chars(said, FALLBACK_MOST).split("\n").map((line) => `> ${line}`).join("\n");
+    await this.notice(`⚠️ ${t("station.notice.noResultSaid")}\n\n${quoted}`);
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
@@ -800,6 +1055,25 @@ export class SessionActor {
     await this.notice(t("station.notice.stopped"));
   }
 
+  /// Archived (by hand or by the station): what would bring it back ends, without a word in its thread.
+  private async letGo() {
+    this.notices = [];
+    this.nudges = 0;
+    const waited = this.waiting !== null;
+    this.waiting = null;
+    if (this.phase === "waiting") this.phase = "idle";
+    const last = this.deps.store.lastTurn(this.key);
+    if (waited || (last && last.endedAt !== null && last.declared === "waiting")) {
+      log.info("session", "archived: its wait ends", { session: this.key });
+      this.deps.store.stopWait(this.key);
+    }
+    await this.deps.endJobs(this.key);
+  }
+
+  private archived(): boolean {
+    return (this.deps.store.getSession(this.key)?.archivedAt ?? null) !== null;
+  }
+
   /// Asks the agent again after `seconds`, unless a turn has started by then.
   private wait(seconds: number) {
     this.waitMs(seconds, seconds * 1000);
@@ -818,7 +1092,8 @@ export class SessionActor {
           Effect.promise(() =>
             this.enqueue(async () => {
               // Held: the wait stays, for the next station to take up.
-              if (this.deps.held() || this.waiting !== wait) return;
+              if (this.deps.held(this.key) || this.waiting !== wait) return;
+              if (this.archived()) return this.letGo();
               this.waiting = null;
               this.phase = "idle";
               // Keeping watch: the watch brings it back (its notices, its end), not the clock; it waits on.
@@ -832,9 +1107,41 @@ export class SessionActor {
     ).catch(() => undefined);
   }
 
+  /// Whether the thread people spoke in last ends with these very words of the station's: nothing said since.
+  private saidLast(text: string | ((said: string) => boolean)): boolean {
+    const latest = this.deps.store.latestThread(this.key);
+    const last = latest ? this.deps.store.entriesBefore(latest.thread.id, null, 1).at(-1) : undefined;
+    return last !== undefined && last.authorKind === "ember" && (typeof text === "string" ? last.text === text : text(last.text));
+  }
+
+  /// Its account spent with none to move to: at `at` it goes on there by itself, with what waited meanwhile.
+  private awaitRefill(at: number) {
+    const refill = ++this.refills;
+    this.refill = refill;
+    this.refillAt = at;
+    void this.run(
+      Effect.sleep(Math.max(0, at - this.now())).pipe(
+        Effect.andThen(
+          Effect.promise(() =>
+            this.enqueue(async () => {
+              if (this.refill !== refill) return;
+              this.refill = null;
+              // Held, it goes on when released (its notices); a running turn ends as it will.
+              if (this.deps.held(this.key) || this.archived() || this.turn || this.agent?.session.busy()) return;
+              log.info("session", "its allowance should have refilled; going on", { session: this.key });
+              if (this.deps.store.pendingMessages(this.key).length > 0) return this.pump();
+              await this.startTurn("resume", GO_ON_AFTER_REFILL);
+            }),
+          ),
+        ),
+      ),
+    ).catch(() => undefined);
+  }
+
   /// The station's own words (not the agent's) go to the thread people spoke in last, and are recorded there; one about
-  /// a profile (`profile`, its id) is linked to that profile's page.
-  private async notice(text: string, profile: string | null = null) {
+  /// a profile (`profile`, its id) is linked to that profile's page, one about a runtime not installed (`runtime`)
+  /// offers to install it.
+  private async notice(text: string, profile: string | null = null, runtime: RuntimeKind | null = null) {
     const store = this.deps.store;
     const latest = store.latestThread(this.key);
     const chat = latest ? this.deps.chat(latest.connect) : undefined;
@@ -844,7 +1151,7 @@ export class SessionActor {
     }
     try {
       const ts = await chat.post({ channel: latest.thread.channel, threadTs: latest.thread.threadTs }, text, []);
-      store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
+      store.insertMessage({ thread: latest.thread.id, ts, authorKind: "ember", author: "ember", text, profile, runtime, attachments: [], quotes: [], declared: null, client: null, card: null, options: null, agentIdentity: null });
     } catch (error) {
       log.warn("session", "notice failed", { session: this.key, error: (error as Error).message });
     }
@@ -863,16 +1170,22 @@ export function openOptions(row: any, profile: Profile & { spelling?(model: stri
     model,
     effort: row.effort ?? undefined,
     // A session continued from a terminal keeps the system prompt it began with (its cache holds).
-    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath()),
+    instructions: row.cwd ? "" : sessionInstructions(row.workspace, null, deps.reposDir(), deps.memoryPath(row.key)),
     mcpToken: row.token,
     mcpUrl: deps.mcpUrl(),
     route: row.key,
   };
 }
 
+/// How long a spent account is waited on when it refills is not known.
+const REFILL_FALLBACK_MS = 60 * 60 * 1000;
+
+/// The start of the notice that its account is spent, whatever the runtime said.
+const SPENT_NOTICE = () => `⚠️ ${t("station.notice.rateLimit", { error: "" })}`;
+
 function failureNotice(outcome: TurnOutcome): string {
   if (outcome.kind !== "failed") return "";
-  const key = outcome.reason === "auth" ? "auth" : outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "exited" ? "exited" : "failed";
+  const key = outcome.reason === "auth" ? "auth" : outcome.reason === "refused" ? "refused" : outcome.reason === "rate_limit" ? "rateLimit" : outcome.reason === "exited" ? "exited" : "failed";
   return `⚠️ ${t(`station.notice.${key}`, { error: outcome.message })}`;
 }
 

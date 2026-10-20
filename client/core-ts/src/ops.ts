@@ -12,13 +12,19 @@ export type Target = { station: string } | { cloud: string };
 export type Effect =
   | { kind: "none" }
   | { kind: "session"; key: string | null }
+  /// What its process does (warm, stopped, let go): its station tells the lists that show it as they change.
+  | { kind: "process"; key: string }
   | { kind: "thread"; archived: boolean }
   | { kind: "connect"; id: string | null }
   | { kind: "overview" }
   | { kind: "footprint" }
   | { kind: "slack" }
   | { kind: "job" }
-  | { kind: "identity" };
+  | { kind: "identity" }
+  /// Folders of the station's drive under `root` (paths relative to it): read again where held or shown.
+  | { kind: "drive"; root: string; paths: string[] }
+  /// A station's logins (docs/remote-login.md): the login answered with is put in place at once.
+  | { kind: "machineLogins" };
 
 /// The request an operation makes.
 export type Request = {
@@ -52,20 +58,28 @@ export const PARAMS: Record<string, string> = {
   "session.stop": "key:string",
   "tools.access": "",
   "tools.setAccess": "access:string",
+  "station.modules": "",
+  "station.module.set": "id:string enabled:boolean",
+  "agentEnv.set": "env?:json text?:string",
+  "search.setPersonal": "personal:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
   "session.delete": "key:string",
   "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
-  "chat.keep": "thread:number",
+  "chat.keep": "kept?:boolean thread:number",
   "chat.rename": "session?:string title?:string thread?:number",
   "chat.pin": "pinned?:boolean session:string",
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
+  "chat.report": "thread:number seq:number",
   "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
+  "session.transcript": "key:string",
+  "file.peek": "key:string path:string line?:number",
+  "link.preview": "url:string",
   "widget.setState": "key:string path?:string state?:json",
   "machineSessions.list": "",
   "machineSessions.read": "runtime:string id:string limit?:number",
@@ -74,12 +88,18 @@ export const PARAMS: Record<string, string> = {
   "automaticDecisions.refresh": "",
   "automaticDecisions.review": "",
   "automaticDecisions.policy": "input:json",
+  "archiving.save": "days:number reviewed:boolean slackDays:number",
   "connect.create": "input?:json id?:string",
   "connect.put": "id:string input?:json",
   "connect.delete": "id:string",
   "connect.reconnect": "id:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json",
+  "feishu.register": "domain?:string name?:string",
+  "feishu.cancelRegistration": "id:string",
+  "feishu.verify": "appId:string appSecret:string domain?:string",
+  "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
+  "feishu.putSecret": "id:string appSecret:string",
   "slack.verify": "connect?:string install?:string appToken?:string botToken?:string",
   "slack.makeApp": "team?:string settings?:json icon?:string",
   "slack.dropApp": "appId:string",
@@ -103,7 +123,7 @@ export const PARAMS: Record<string, string> = {
   "profile.login": "id:string",
   "profile.cancelLogin": "id:string",
   "profile.loginCode": "id:string code?:string",
-  "login.new": "runtime?:string",
+  "login.new": "runtime?:string access?:string",
   "login.code": "id:string code?:string",
   "login.drop": "id:string",
   "job.get": "id:string",
@@ -119,9 +139,19 @@ export const PARAMS: Record<string, string> = {
   "software.updateAll": "",
   "software.check": "",
   "software.channel": "channel?:string",
+  "drive.setRoots": "roots:strings",
+  "permissions.request": "grant:string",
+  "drive.folders": "path?:string",
+  "drive.mkdir": "root:string path:string",
+  "drive.rename": "root:string from:string to:string",
+  "drive.remove": "root:string path:string permanent?:boolean",
+  "drive.zip": "root:string path:string",
+  "drive.stage": "root:string path:string zip?:boolean",
   "software.auto": "on?:boolean",
+  "machineLogin.cancel": "id:string",
+  "machineLogin.answer": "id:string text:string",
   "workspace.create": "name?:string invite_code?:string",
-  "workspace.rename": "workspace:string name?:string",
+  "workspace.rename": "workspace:string name?:string emoji?:string icon?:string",
   "workspace.setRelays": "workspace:string relays?:strings",
   "workspace.delete": "workspace:string",
   "workspace.invite": "workspace:string role?:string email?:string",
@@ -131,19 +161,24 @@ export const PARAMS: Record<string, string> = {
   "workspace.setRole": "workspace:string member:string role?:string",
   "workspace.removeMember": "workspace:string member:string",
   "workspace.enroll": "workspace:string name?:string",
-  "workspace.renameStation": "workspace:string station:string name?:string",
+  "workspace.renameStation": "workspace:string station:string name?:string emoji?:string icon?:string",
   "workspace.removeStation": "workspace:string station:string",
   "invitation.preview": "token?:string",
   "invitation.accept": "id?:string token?:string",
   "invitation.decline": "id:string",
   "loginSession.revoke": "id:string",
   "admin.me": "",
-  "admin.createCode": "note?:string days?:number",
+  "admin.createCode": "note?:string days?:number beta?:boolean",
   "admin.revokeCode": "code:string",
   "admin.setBeta": "user:string on?:boolean",
   "admin.setMayCreate": "user:string on?:boolean",
   "admin.block": "user:string on?:boolean",
+  "admin.setPending": "email:string beta?:boolean may_create?:boolean",
+  "admin.removePending": "email:string",
   "admin.deleteWorkspace": "workspace:string",
+  "admin.createWorkspace": "name:string owners:strings members:number stations:number",
+  "admin.setLimits": "workspace:string members:number stations:number",
+  "admin.enroll": "workspace:string name:string",
   "admin.feedbackStatus": "id:string status?:string",
 };
 
@@ -208,6 +243,11 @@ const NONE: Effect = { kind: "none" };
 const OVERVIEW: Effect = { kind: "overview" };
 const SLACK: Effect = { kind: "slack" };
 const FOOTPRINT: Effect = { kind: "footprint" };
+/// The folders `paths` (under `root`) are in.
+const drive = (root: string, paths: string[]): Effect => ({ kind: "drive", root, paths: paths.map(folderOf) });
+
+/// The folder a path of the drive is in (`a/b/c` → `a/b`; the root's own entries → ``).
+export const folderOf = (path: string) => path.split("/").filter((p) => p !== "" && p !== ".").slice(0, -1).join("/");
 
 function stationOp(name: string, params: unknown): Request | null {
   const p = new P(params);
@@ -217,6 +257,7 @@ function stationOp(name: string, params: unknown): Request | null {
     return { target: { station }, method, path: path(), body, fallback: null, effect };
   };
   const session = (k: string): Effect => ({ kind: "session", key: p.word(k) });
+  const process = (k: string): Effect => ({ kind: "process", key: p.word(k) ?? "" });
   const connect = (k: string): Effect => ({ kind: "connect", id: p.word(k) });
   const optU64 = (k: string) => {
     const v = p.v[k];
@@ -229,12 +270,28 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("GET", () => "/tools/access", null, NONE);
     case "tools.setAccess":
       return op("PUT", () => "/tools/access", p.pick(["access"]), OVERVIEW);
+    // The modules beside the station (docs/station-modules.md): each still.fail makes and each it runs, how it is now;
+    // one turned on (installed as a package and run) or off by the workspace's owners and admins.
+    case "station.modules":
+      return op("GET", () => "/modules", null, NONE);
+    case "station.module.set":
+      return op("PUT", () => `/modules/${encode(p.str("id"))}`, { enabled: p.bool("enabled") }, OVERVIEW);
+    // The variables everything the station starts for its agents runs with (docs/agent-env.md), set by the workspace's
+    // owners and admins: `text`, all of them as `NAME=value` lines; or `env`, a patch (a string sets one, null removes it).
+    case "agentEnv.set":
+      return op("PUT", () => "/agent-env", p.pick(["env", "text"]), OVERVIEW);
+    // Whether the station's search finds its machine's person's own mail, messages and the like too (docs/search.md);
+    // set by the workspace's owners and admins.
+    case "search.setPersonal":
+      return op("PUT", () => "/search/settings", p.pick(["personal"]), OVERVIEW);
     case "session.stop":
-      return op("POST", () => `/sessions/${p.at("key")}/stop`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/stop`, null, process("key"));
     case "session.warm":
-      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, session("key"));
+      // As a person types in its chat (once a minute), nobody waiting on it: its station tells its session's new state.
+      // It read the detail each time, a third of a phone's reads of details.
+      return op("POST", () => `/sessions/${p.at("key")}/warm`, null, NONE);
     case "session.evict":
-      return op("POST", () => `/sessions/${p.at("key")}/evict`, null, session("key"));
+      return op("POST", () => `/sessions/${p.at("key")}/evict`, null, process("key"));
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":
@@ -251,7 +308,8 @@ function stationOp(name: string, params: unknown): Request | null {
     case "chat.keep": {
       // The thread is read before the station here (its `?` is in the closure's arguments).
       const thread = p.u64("thread");
-      return op("PUT", () => `/threads/${thread}/keep`, null, { kind: "thread", archived: false });
+      // Kept (the default), or let go (`kept: false`): offered for archiving again.
+      return op(p.has("kept") && p.value("kept") === false ? "DELETE" : "PUT", () => `/threads/${thread}/keep`, null, { kind: "thread", archived: false });
     }
     case "chat.rename": {
       const thread = optU64("thread");
@@ -270,16 +328,31 @@ function stationOp(name: string, params: unknown): Request | null {
       const body = { n: p.u64("seq"), option: p.str("option") };
       return op("PUT", () => `/threads/${thread}/closed-card`, body, { kind: "session", key: null });
     }
+    // A failure notice (its entry `seq`) sent to the still.fail team as a bug report: answered `{number, duplicate?}`.
+    case "chat.report": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
+    }
     case "session.new":
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast"]), { kind: "session", key: null });
     case "chats.archived":
       return op("GET", () => "/chats?archived=1", null, NONE);
     case "chat.forSession":
       return op("POST", () => "/threads", p.pick(["session"]), { kind: "thread", archived: false });
+    // A file a message names by its path: what it is (a few lines, a thumbnail); all of it is `file.open` (core/calls.ts).
+    case "file.peek":
+      return op("GET", () => `/sessions/${p.at("key")}/peek?path=${p.at("path")}${optU64("line") !== null ? `&line=${optU64("line")}` : ""}`, null, NONE);
+    // A web link in a message: what the station finds it is (its title, a pull request's state).
+    case "link.preview":
+      return op("GET", () => `/link-preview?url=${p.at("url")}`, null, NONE);
+    // Where its runtime keeps the session's transcript on the station's machine (null before it is written).
+    case "session.transcript":
+      return op("GET", () => `/sessions/${p.at("key")}/transcript`, null, NONE);
     case "widget.state":
       return op("GET", () => `/sessions/${p.at("key")}/widget-state?path=${p.at("path")}`, null, NONE);
     case "widget.setState":
-      return op("PUT", () => `/sessions/${p.at("key")}/widget-state`, p.pick(["path", "state"]), session("key"));
+      // A widget's own state: nothing a list shows (its page reads it, `widget.state`).
+      return op("PUT", () => `/sessions/${p.at("key")}/widget-state`, p.pick(["path", "state"]), NONE);
     case "machineSessions.list":
       return op("GET", () => "/machine-sessions", null, NONE);
     case "machineSessions.read":
@@ -292,6 +365,8 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/automatic-decisions/review", {}, OVERVIEW);
     case "automaticDecisions.policy":
       return op("PUT", () => "/automatic-decisions/policy", p.has("input") ? p.v.input : {}, OVERVIEW);
+    case "archiving.save":
+      return op("PUT", () => "/archiving", p.pick(["days", "slackDays", "reviewed"]), OVERVIEW);
     case "automaticDecisions.refresh":
       return op("POST", () => "/automatic-decisions/refresh", {}, OVERVIEW);
     case "connect.create":
@@ -306,6 +381,19 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
     case "connect.putSlackApp":
       return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, p.has("input") ? p.v.input : {}, connect("connect"));
+    // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
+    // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
+    case "feishu.register":
+      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name"]), OVERVIEW);
+    case "feishu.cancelRegistration":
+      return op("DELETE", () => `/feishu/registrations/${p.at("id")}`, null, OVERVIEW);
+    case "feishu.verify":
+      return op("POST", () => "/feishu/verify", p.pick(["appId", "appSecret", "domain"]), NONE);
+    case "feishu.createConnect":
+      return op("POST", () => "/feishu/connects", p.pick(["feishu", "bind", "mode", "requireMention", "owner"]), { kind: "connect", id: null });
+    // A Feishu connect's App Secret replaced (verified there first).
+    case "feishu.putSecret":
+      return op("PUT", () => `/feishu/connects/${p.at("id")}/secret`, p.pick(["appSecret"]), connect("id"));
     case "slack.verify":
       return op("POST", () => "/slack/verify", p.pick(["connect", "install", "appToken", "botToken"]), NONE);
     case "slack.makeApp":
@@ -354,7 +442,7 @@ function stationOp(name: string, params: unknown): Request | null {
     case "profile.loginCode":
       return op("POST", () => `/profiles/${p.at("id")}/login-code`, p.pick(["code"]), OVERVIEW);
     case "login.new":
-      return op("POST", () => "/logins", p.pick(["runtime"]), NONE);
+      return op("POST", () => "/logins", p.pick(["runtime", "access"]), NONE);
     case "login.code":
       return op("POST", () => `/logins/${p.at("id")}/code`, p.pick(["code"]), NONE);
     case "login.drop":
@@ -387,6 +475,36 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/updates/channel", p.pick(["channel"]), OVERVIEW);
     case "software.auto":
       return op("POST", () => "/updates/auto", { on: p.bool("on") }, OVERVIEW);
+    // The station's drive (docs/drive.md): the folders it lends its members, named by the workspace's owners and admins
+    // (their folders to pick from: `drive.folders`), and changes of what is in them. A station in several workspaces keeps a
+    // list for each: the asker's (docs/multi-workspace.md).
+    case "drive.setRoots":
+      return op("PUT", () => "/drive/roots", p.pick(["roots"]), OVERVIEW);
+    // still.fail Helper's window for a grant up on a Mac station (docs/remote-screens.md "Grants"): `{window, screen}`.
+    case "permissions.request":
+      return op("POST", () => "/permissions/request", { grant: p.str("grant") }, OVERVIEW);
+    case "drive.folders":
+      return op("GET", () => `/drive/folders?path=${encode(p.word("path") ?? "")}`, null, NONE);
+    case "drive.mkdir":
+      return op("POST", () => "/drive/mkdir", p.pick(["root", "path"]), drive(p.str("root"), [p.str("path")]));
+    case "drive.rename":
+      return op("POST", () => "/drive/rename", p.pick(["root", "from", "to"]), drive(p.str("root"), [p.str("from"), p.str("to")]));
+    case "drive.remove":
+      return op("POST", () => "/drive/remove", p.pick(["root", "path", "permanent"]), drive(p.str("root"), [p.str("path")]));
+    // A folder zipped on the station to download: where the zip is, read as a file of the drive (`drive.read`).
+    case "drive.zip":
+      return op("POST", () => "/drive/zip", p.pick(["root", "path"]), NONE);
+    // A file of the drive (a folder: zipped there) put among the uploads, as one sent up would be, for a message to send
+    // (the phone's Station 文件 switched to a file; the web's composer stages its own: composer.ts).
+    case "drive.stage":
+      return op("POST", () => "/drive/stage", p.pick(["root", "path", "zip"]), NONE);
+    // A login to one of the station's command-line tools cancelled (docs/remote-login.md): agents start them and drive
+    // their commands; how each stands comes on the station's stream (`machineLogins`).
+    case "machineLogin.cancel":
+      return op("DELETE", () => `/machine-logins/${p.at("id")}`, null, { kind: "machineLogins" });
+    // What a login's page gave (a code), entered by the person from its card: the station types it into the command.
+    case "machineLogin.answer":
+      return op("POST", () => `/machine-logins/${p.at("id")}/answer`, p.pick(["text"]), { kind: "machineLogins" });
     default:
       return null;
   }
@@ -403,7 +521,7 @@ function cloudOp(name: string, params: unknown): Request | null {
     case "workspace.create":
       return op("POST", () => "/v1/workspaces", p.pick(["name", "invite_code"]));
     case "workspace.rename":
-      return op("PATCH", ws, p.pick(["name"]));
+      return op("PATCH", ws, p.pick(["name", "emoji", "icon"]));
     case "workspace.setRelays":
       return op("PUT", () => `${ws()}/relays`, p.pick(["relays"]));
     case "workspace.delete":
@@ -423,7 +541,7 @@ function cloudOp(name: string, params: unknown): Request | null {
     case "workspace.enroll":
       return op("POST", () => `${ws()}/enrollments`, p.pick(["name"]));
     case "workspace.renameStation":
-      return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name"]));
+      return op("PATCH", () => `${ws()}/stations/${p.at("station")}`, p.pick(["name", "emoji", "icon"]));
     case "workspace.removeStation":
       return op("DELETE", () => `${ws()}/stations/${p.at("station")}`, null);
     case "invitation.preview":
@@ -437,7 +555,7 @@ function cloudOp(name: string, params: unknown): Request | null {
     case "admin.me":
       return op("GET", () => "/v1/admin/me", null);
     case "admin.createCode":
-      return op("POST", () => "/v1/admin/invite-codes", p.pick(["note", "days"]));
+      return op("POST", () => "/v1/admin/invite-codes", p.pick(["note", "days", "beta"]));
     case "admin.revokeCode":
       return op("POST", () => `/v1/admin/invite-codes/${p.at("code")}/revoke`, null);
     case "admin.setBeta":
@@ -446,8 +564,18 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/v1/admin/users/${p.at("user")}/may-create`, { on: p.bool("on") });
     case "admin.block":
       return op("POST", () => `/v1/admin/users/${p.at("user")}/block`, { on: p.bool("on") });
+    case "admin.setPending":
+      return op("POST", () => "/v1/admin/pending", p.pick(["email", "beta", "may_create"]));
+    case "admin.removePending":
+      return op("POST", () => "/v1/admin/pending/remove", p.pick(["email"]));
     case "admin.deleteWorkspace":
       return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/delete`, null);
+    case "admin.createWorkspace":
+      return op("POST", () => "/v1/admin/workspaces", p.pick(["name", "owners", "members", "stations"]));
+    case "admin.setLimits":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/limits`, p.pick(["members", "stations"]));
+    case "admin.enroll":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/enrollments`, p.pick(["name"]));
     case "admin.feedbackStatus":
       return op("POST", () => `/v1/admin/feedback/${p.at("id")}/status`, p.pick(["status"]));
     default:

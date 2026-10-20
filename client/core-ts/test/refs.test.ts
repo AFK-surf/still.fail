@@ -57,3 +57,18 @@ test("a_search_finds_titles_first_then_what_else_a_chat_says", () => {
   assert.deepEqual(ids(search(chats, "", "a", "s2", 2)), ["1", "4"]);
   assert.deepEqual(ids(search(chats, "STUDIO", null, null, null)), ["1", "2", "3", "4"]);
 });
+
+test("other_workspaces_chats_are_offered_only_for_what_is_typed_and_never_crowd_this_ones", async () => {
+  const { withOutside, OUTSIDE_SHOWN } = await import("../src/refs.ts");
+  const item = (title: string, more: Record<string, unknown> = {}) => ({ id: title, title, ...more });
+  const local = [item("登录页"), item("别的", { matched: "by its last message" }), item("修登录")];
+  const outside = [item("登录流程 A", { outside: "甲" }), item("登录流程 B", { outside: "甲", xshare: { to: ["ws"], write: false } }), item("无关", { outside: "甲" }), item("登录 C", { outside: "乙" }), item("登录 D", { outside: "乙" })];
+  // Nothing typed: this workspace's only.
+  assert.deepEqual(withOutside(local, outside, " ", "ws", 8).map((i) => i.id), ["登录页", "别的", "修登录"]);
+  // Typed: this workspace's whose title has it, then at most a few of others' whose title has it (one shared with this
+  // workspace first), then the rest of this workspace's.
+  const found = withOutside(local, outside, "登录", "ws", 8).map((i) => i.id);
+  assert.deepEqual(found, ["登录页", "修登录", "登录流程 B", "登录流程 A", "登录 C", "别的"]);
+  assert.equal(found.filter((id) => outside.some((o) => o.id === id)).length, OUTSIDE_SHOWN);
+  assert.deepEqual(withOutside(local, outside, "登录", "ws", 3).map((i) => i.id), ["登录页", "修登录", "登录流程 B"]);
+});

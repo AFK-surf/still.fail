@@ -59,6 +59,8 @@ fn err(e: impl std::fmt::Display) -> String {
 
 /// The two halves of an iroh stream, and the reads waiting on it: a reset wakes them first (as the addon's).
 struct Halves {
+    /// The connection it is on: it goes when that one closes.
+    conn: u64,
     send: tokio::sync::Mutex<Option<SendStream>>,
     recv: tokio::sync::Mutex<Option<RecvStream>>,
     reset: tokio::sync::watch::Sender<bool>,
@@ -67,13 +69,19 @@ struct Halves {
     finished: std::sync::atomic::AtomicBool,
 }
 
+/// The connections coming to an endpoint whose handshakes are done, as each finishes (`iroh.accept`), once one was
+/// first asked for.
+type Accepted = Arc<tokio::sync::Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<Connection>>>>;
+
 #[derive(Clone)]
 enum Handle {
     Response(Arc<tokio::sync::Mutex<reqwest::Response>>),
     Ws { incoming: Arc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Result<String, String>>>>, outgoing: tokio::sync::mpsc::UnboundedSender<String> },
     Tcp { read: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedReadHalf>>, write: Arc<tokio::sync::Mutex<tokio::net::tcp::OwnedWriteHalf>> },
-    Endpoint(Endpoint),
+    Endpoint(Endpoint, Accepted),
     Conn(Connection),
+    /// A connection that closed, let go (its state, its streams), with what the core may still ask of it.
+    Gone { remote: String, reason: Value, stats: Value },
     IStream(Arc<Halves>),
 }
 
@@ -234,6 +242,57 @@ fn close_info(error: &iroh::endpoint::ConnectionError) -> Value {
     }
 }
 
+impl Handle {
+    fn kind(&self) -> &'static str {
+        match self {
+            Handle::Response(_) => "response",
+            Handle::Ws { .. } => "ws",
+            Handle::Tcp { .. } => "tcp",
+            Handle::Endpoint(..) => "endpoint",
+            Handle::Conn(_) => "conn",
+            Handle::Gone { .. } => "gone",
+            Handle::IStream(_) => "stream",
+        }
+    }
+}
+
+/// What the shells have been asked, for when the app's memory runs away (the app's MemoryWatch.kt): the calls by
+/// operation since the process started and those not answered yet, and the shells' handles by kind. A loop between the
+/// core and the shell shows as one operation far ahead of the rest.
+#[derive(Default)]
+struct Stats {
+    calls: HashMap<String, (u64, i64)>,
+    shells: Vec<std::sync::Weak<Inner>>,
+}
+
+static STATS: std::sync::LazyLock<Mutex<Stats>> = std::sync::LazyLock::new(Mutex::default);
+
+fn counted(op: &str, started: bool) {
+    let mut stats = STATS.lock().unwrap();
+    let c = stats.calls.entry(op.to_string()).or_default();
+    if started {
+        c.0 += 1;
+        c.1 += 1;
+    } else {
+        c.1 -= 1;
+    }
+}
+
+fn stats_json() -> Value {
+    let mut stats = STATS.lock().unwrap();
+    stats.shells.retain(|w| w.strong_count() > 0);
+    let calls: serde_json::Map<String, Value> = stats.calls.iter().map(|(op, (n, open))| (op.clone(), json!([n, open]))).collect();
+    let mut handles: HashMap<&'static str, u64> = HashMap::new();
+    let mut sqls = 0;
+    for inner in stats.shells.iter().filter_map(std::sync::Weak::upgrade) {
+        for h in inner.handles.lock().unwrap().values() {
+            *handles.entry(h.kind()).or_default() += 1;
+        }
+        sqls += inner.sqls.lock().unwrap().len();
+    }
+    json!({ "calls": calls, "handles": handles, "sqls": sqls })
+}
+
 impl Inner {
     fn keep(&self, handle: Handle) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
@@ -247,6 +306,39 @@ impl Inner {
 
     fn drop_handle(&self, id: u64) -> Option<Handle> {
         self.handles.lock().unwrap().remove(&id)
+    }
+
+    /// A connection kept for the core, and let go once it closes, however it does (closed here, by the other end, timed
+    /// out): kept, a closed connection and the streams opened on it stayed in memory, iroh's tasks still going over
+    /// them, and a phone whose links were replaced often held hundreds and grew gigabytes a minute (2026-10-19).
+    fn keep_conn(self: &Arc<Self>, conn: Connection) -> u64 {
+        let id = self.keep(Handle::Conn(conn.clone()));
+        let inner = self.clone();
+        tokio::spawn(async move {
+            let reason = conn.closed().await;
+            inner.release_conn(id, &reason);
+        });
+        id
+    }
+
+    /// A closed connection let go: what the core may still ask (`remoteId`, `closeReason`, `stats`) is kept, and its
+    /// streams go, a read still waiting on one woken.
+    fn release_conn(&self, id: u64, reason: &iroh::endpoint::ConnectionError) {
+        let mut handles = self.handles.lock().unwrap();
+        let gone = match handles.get(&id) {
+            Some(Handle::Conn(conn)) => {
+                let s = conn.stats();
+                Handle::Gone { remote: hex::encode(conn.remote_id().as_bytes()), reason: close_info(reason), stats: json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }) }
+            }
+            _ => return,
+        };
+        handles.insert(id, gone);
+        let streams: Vec<u64> = handles.iter().filter_map(|(k, h)| matches!(h, Handle::IStream(halves) if halves.conn == id).then_some(*k)).collect();
+        for k in streams {
+            if let Some(Handle::IStream(halves)) = handles.remove(&k) {
+                let _ = halves.reset.send(true);
+            }
+        }
     }
 
     /// A job for the disk thread, answered when done.
@@ -334,9 +426,12 @@ impl Inner {
                 let value = bytes.unwrap_or_default();
                 self.disk(move || {
                     // Written aside and renamed over: a crash leaves the old value or the new one, never half.
+                    // Synced through the handle it was written with: Windows syncs only a handle that may write (one
+                    // opened again to read, as this did, failed every storage.set there).
                     let partial = path.with_extension("partial");
-                    std::fs::write(&partial, &value).map_err(err)?;
-                    std::fs::File::open(&partial).and_then(|f| f.sync_all()).map_err(err)?;
+                    let mut file = std::fs::File::create(&partial).map_err(err)?;
+                    std::io::Write::write_all(&mut file, &value).and_then(|()| file.sync_all()).map_err(err)?;
+                    drop(file);
                     std::fs::rename(&partial, &path).map_err(err)?;
                     Ok(Answer::json(json!({})))
                 })
@@ -403,27 +498,60 @@ impl Inner {
             }
             "iroh.bind" => self.bind(&a, bytes.unwrap_or_default()).await,
             "iroh.connect" => {
-                let Handle::Endpoint(endpoint) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
                 let additional: Vec<Vec<u8>> = a.get("additional").and_then(Value::as_array).into_iter().flatten().filter_map(|x| hex::decode(x.as_str()?).ok()).collect();
                 let options = iroh::endpoint::ConnectOptions::new().with_additional_alpns(additional);
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
                 let connecting = endpoint.connect_with_opts(addr, &bytes.unwrap_or_default(), options).await.map_err(err)?;
                 let conn = connecting.await.map_err(err)?;
-                Ok(Answer::json(json!({ "id": self.keep(Handle::Conn(conn)) })))
+                Ok(Answer::json(json!({ "id": self.keep_conn(conn) })))
+            }
+            // As the station's addon takes them: handshakes side by side, each on its own, so one never finished (a
+            // device gone half way) holds up no other; one that fails is skipped.
+            "iroh.accept" => {
+                let Handle::Endpoint(endpoint, accepted) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let mut accepted = accepted.lock().await;
+                let done = accepted.get_or_insert_with(|| {
+                    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+                    tokio::spawn(async move {
+                        while let Some(incoming) = endpoint.accept().await {
+                            let tx = tx.clone();
+                            tokio::spawn(async move {
+                                if let Ok(conn) = incoming.await {
+                                    let _ = tx.send(conn);
+                                }
+                            });
+                        }
+                    });
+                    rx
+                });
+                match done.recv().await {
+                    Some(conn) => {
+                        let alpn = hex::encode(conn.alpn());
+                        Ok(Answer::json(json!({ "id": self.keep_conn(conn), "alpn": alpn })))
+                    }
+                    None => Ok(Answer::json(json!({ "end": true }))),
+                }
             }
             "iroh.networkChange" => {
-                let Handle::Endpoint(endpoint) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
+                let Handle::Endpoint(endpoint, _) = self.handle(id_of(&a)?)? else { return Err("not an endpoint".into()) };
                 endpoint.network_change().await;
                 Ok(Answer::json(json!({})))
             }
             "iroh.close" => {
-                if let Some(Handle::Endpoint(endpoint)) = self.drop_handle(id_of(&a)?) {
+                if let Some(Handle::Endpoint(endpoint, _)) = self.drop_handle(id_of(&a)?) {
                     endpoint.close().await;
                 }
                 Ok(Answer::json(json!({})))
             }
             "conn.openBi" | "conn.openUni" | "conn.acceptBi" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
+                let on = id_of(&a)?;
+                let conn = match self.handle(on)? {
+                    Handle::Conn(conn) => conn,
+                    Handle::Gone { .. } if op == "conn.acceptBi" => return Ok(Answer::json(json!({ "end": true }))),
+                    Handle::Gone { reason, .. } => return Err(format!("connection closed: {}", reason["reason"].as_str().unwrap_or(""))),
+                    _ => return Err("not a connection".into()),
+                };
                 let (send, recv) = match op {
                     "conn.openBi" => {
                         let (s, r) = conn.open_bi().await.map_err(err)?;
@@ -436,6 +564,7 @@ impl Inner {
                     },
                 };
                 let halves = Halves {
+                    conn: on,
                     ended: (recv.is_none()).into(),
                     finished: false.into(),
                     send: tokio::sync::Mutex::new(send),
@@ -444,12 +573,17 @@ impl Inner {
                 };
                 Ok(Answer::json(json!({ "id": self.keep(Handle::IStream(Arc::new(halves))) })))
             }
-            "conn.closed" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
-                Ok(Answer::json(close_info(&conn.closed().await)))
-            }
+            "conn.closed" => match self.handle(id_of(&a)?)? {
+                Handle::Conn(conn) => Ok(Answer::json(close_info(&conn.closed().await))),
+                Handle::Gone { reason, .. } => Ok(Answer::json(reason)),
+                _ => Err("not a connection".into()),
+            },
             "conn.close" => {
-                let Handle::Conn(conn) = self.handle(id_of(&a)?)? else { return Err("not a connection".into()) };
+                let conn = match self.handle(id_of(&a)?)? {
+                    Handle::Conn(conn) => conn,
+                    Handle::Gone { .. } => return Ok(Answer::json(json!({}))),
+                    _ => return Err("not a connection".into()),
+                };
                 let code = a.get("code").and_then(Value::as_u64).unwrap_or(0) as u32;
                 conn.close(code.into(), a.get("reason").and_then(Value::as_str).unwrap_or("").as_bytes());
                 Ok(Answer::json(json!({})))
@@ -574,8 +708,10 @@ impl Inner {
         let relays: Vec<RelayUrl> = a.get("relayUrls").and_then(Value::as_array).into_iter().flatten().map(|u| relay_url(u.as_str().unwrap_or_default())).collect::<Result<_, _>>()?;
         let mut cubic = noq_proto::congestion::CubicConfig::default();
         cubic.initial_window(256 * 1024);
+        let alpns: Vec<Vec<u8>> = a.get("alpns").and_then(Value::as_array).into_iter().flatten().map(|x| hex::decode(x.as_str().unwrap_or_default()).map_err(err)).collect::<Result<_, _>>()?;
         let mut builder = Endpoint::builder(Minimal)
             .secret_key(key)
+            .alpns(alpns)
             .relay_mode(if relays.is_empty() { RelayMode::Disabled } else { RelayMode::Custom(iroh::RelayMap::from_iter(relays.clone())) })
             .transport_config(QuicTransportConfig::builder().congestion_controller_factory(Arc::new(cubic)).build());
         if a.get("relayOnly").and_then(Value::as_bool).unwrap_or(false) {
@@ -589,7 +725,7 @@ impl Inner {
                 .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().no_publish());
         }
         let endpoint = builder.bind().await.map_err(err)?;
-        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint)) })))
+        Ok(Answer::json(json!({ "id": self.keep(Handle::Endpoint(endpoint, Accepted::default())) })))
     }
 
     /// An account's database: opened, a statement run, its rows, closed, its file removed.
@@ -677,31 +813,38 @@ impl Inner {
     fn run_sync(&self, op: &str, a: &Value) -> Result<Value, String> {
         let handle = self.handle(id_of(a)?)?;
         match (op, handle) {
-            ("iroh.endpointId", Handle::Endpoint(e)) => Ok(json!(hex::encode(e.id().as_bytes()))),
-            ("iroh.addAddr", Handle::Endpoint(e)) => {
+            ("iroh.endpointId", Handle::Endpoint(e, _)) => Ok(json!(hex::encode(e.id().as_bytes()))),
+            ("iroh.addAddr", Handle::Endpoint(e, _)) => {
                 let addr = endpoint_addr(a.get("addr").ok_or("missing addr")?)?;
                 e.address_lookup().map_err(err)?.add(iroh::address_lookup::MemoryLookup::from_endpoint_info([addr]));
                 Ok(Value::Null)
             }
-            ("iroh.relayStatus", Handle::Endpoint(e)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected() })).collect())),
+            ("iroh.relayStatus", Handle::Endpoint(e, _)) => Ok(Value::Array(e.home_relay_status().get().iter().map(|s| json!({ "url": s.url().to_string(), "connected": s.is_connected() })).collect())),
             ("conn.remoteId", Handle::Conn(c)) => Ok(json!(hex::encode(c.remote_id().as_bytes()))),
             ("conn.closeReason", Handle::Conn(c)) => Ok(c.close_reason().map(|e| close_info(&e)).unwrap_or(Value::Null)),
             ("conn.paths", Handle::Conn(c)) => Ok(Value::Array(
                 c.paths()
                     .iter()
                     .map(|p| {
-                        let relay = match p.remote_addr() {
-                            iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-                            _ => None,
+                        let (relay, ip) = match p.remote_addr() {
+                            iroh::TransportAddr::Relay(url) => (Some(url.to_string()), None),
+                            iroh::TransportAddr::Ip(addr) => (None, Some(addr.to_string())),
+                            _ => (None, None),
                         };
-                        json!({ "selected": p.is_selected(), "relay": relay, "rttMs": p.rtt().as_secs_f64() * 1000.0 })
+                        // Packets sent and lost on this way alone: the connection's counts take in every way it tried.
+                        let stats = p.stats();
+                        json!({ "id": p.id().to_string(), "selected": p.is_selected(), "relay": relay, "ip": ip, "rttMs": stats.rtt.as_secs_f64() * 1000.0, "txPackets": stats.udp_tx.datagrams, "lostPackets": stats.lost_packets })
                     })
                     .collect(),
             )),
             ("conn.stats", Handle::Conn(c)) => {
                 let s = c.stats();
-                Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes, "txPackets": s.udp_tx.datagrams, "lostPackets": s.lost_packets }))
+                Ok(json!({ "rxBytes": s.udp_rx.bytes, "txBytes": s.udp_tx.bytes }))
             }
+            ("conn.remoteId", Handle::Gone { remote, .. }) => Ok(json!(remote)),
+            ("conn.closeReason", Handle::Gone { reason, .. }) => Ok(reason),
+            ("conn.paths", Handle::Gone { .. }) => Ok(json!([])),
+            ("conn.stats", Handle::Gone { stats, .. }) => Ok(stats),
             (op, _) => Err(format!("no operation {op} on that handle")),
         }
     }
@@ -721,14 +864,17 @@ impl Shell {
         let http = Mutex::new(http_client(&tls));
         let db = Arc::new(Mutex::new(DbHandle { path: dir.join("core.db"), conn: None }));
         let inner = Arc::new(Inner { complete, ctx: Ctx(ctx), dir, disk: Mutex::new(jobs), db, tls, http, handles: Mutex::default(), next: AtomicU64::new(1), sqls: Mutex::default() });
+        STATS.lock().unwrap().shells.push(Arc::downgrade(&inner));
         Ok(Shell { runtime, inner })
     }
 
     pub fn call(&self, id: u64, op: String, json: &[u8], bytes: Option<Vec<u8>>) {
         let inner = self.inner.clone();
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
+        counted(&op, true);
         self.runtime.spawn(async move {
             let done = inner.run(&op, args, bytes).await;
+            counted(&op, false);
             let (json, error, bytes) = match done {
                 Ok(answer) => (serde_json::to_vec(&answer.json).unwrap_or_default(), Vec::new(), answer.bytes),
                 Err(e) => (Vec::new(), if e.is_empty() { b"failed".to_vec() } else { e.into_bytes() }, None),
@@ -743,6 +889,8 @@ impl Shell {
 
     pub fn call_sync(&self, op: &str, json: &[u8]) -> Vec<u8> {
         let args: Value = serde_json::from_slice(json).unwrap_or(Value::Null);
+        counted(op, true);
+        counted(op, false);
         let done = if op.starts_with("sql.") { self.inner.sql(op, &args) } else { self.inner.run_sync(op, &args) };
         let out = match done {
             Ok(value) => json!({ "value": value }),
@@ -794,8 +942,22 @@ pub unsafe extern "C" fn sf_shell_call_sync(shell: *const Shell, op: *const c_ch
     ptr
 }
 
+/// What the shells have been asked so far (`{calls: {op: [started, unanswered]}, handles: {kind: n}, sqls}`), as JSON
+/// to be let go with `sf_free`.
+///
 /// # Safety
-/// `ptr`/`len` from `sf_shell_call_sync`.
+/// `out_len` is written.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn sf_shell_stats(out_len: *mut usize) -> *mut u8 {
+    let mut out = serde_json::to_vec(&stats_json()).unwrap_or_default().into_boxed_slice();
+    unsafe { *out_len = out.len() };
+    let ptr = out.as_mut_ptr();
+    std::mem::forget(out);
+    ptr
+}
+
+/// # Safety
+/// `ptr`/`len` from `sf_shell_call_sync` or `sf_shell_stats`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sf_free(ptr: *mut u8, len: usize) {
     if !ptr.is_null() {
@@ -819,6 +981,7 @@ pub unsafe extern "C" fn sf_shell_stop(shell: *mut Shell) {
 
 /// The viewer's time zone at `at_ms` (minutes east of UTC), from the C library, which on Android follows the system's
 /// zone setting and its DST rules (as the Rust core had them).
+#[cfg(not(windows))]
 #[unsafe(no_mangle)]
 pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
     let at = (at_ms / 1000.0).floor() as libc::time_t;
@@ -828,6 +991,29 @@ pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
         return 0;
     }
     (tm.tm_gmtoff / 60) as i32
+}
+
+/// The same on Windows (the mbui app's core), whose C library has neither localtime_r nor tm_gmtoff: the local time the
+/// CRT makes of `at_ms` (the system's zone and its DST rules, or $TZ when set), read back as if it were UTC, less
+/// `at_ms`. 0 where the CRT has no local time (before 1970).
+#[cfg(windows)]
+#[unsafe(no_mangle)]
+pub extern "C" fn sf_utc_offset_min(at_ms: f64) -> i32 {
+    unsafe extern "C" {
+        fn _localtime64_s(tm: *mut libc::tm, time: *const i64) -> i32;
+        fn _mkgmtime64(tm: *mut libc::tm) -> i64;
+    }
+    let at = (at_ms / 1000.0).floor() as i64;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    // SAFETY: both pointers are valid for the calls.
+    if unsafe { _localtime64_s(&mut tm, &at) } != 0 {
+        return 0;
+    }
+    let local_as_utc = unsafe { _mkgmtime64(&mut tm) };
+    if local_as_utc == -1 {
+        return 0;
+    }
+    ((local_as_utc - at) / 60) as i32
 }
 
 #[cfg(test)]
@@ -906,5 +1092,53 @@ mod tests {
         assert!(sync("sql.open", r#"{"name":"../x"}"#)["error"].is_string());
         let memory = sync("sql.open", r#"{"name":":memory:"}"#)["value"]["id"].as_u64().unwrap();
         assert_eq!(sync("sql.all", &format!(r#"{{"id":{memory},"sql":"SELECT 2"}}"#))["value"], json!([[2]]));
+    }
+
+    #[test]
+    fn counts_calls_by_operation() {
+        counted("test.op", true);
+        counted("test.op", true);
+        counted("test.op", false);
+        let stats = stats_json();
+        assert_eq!(stats["calls"]["test.op"], json!([2, 1]));
+    }
+
+    #[test]
+    fn lets_a_closed_connection_and_its_streams_go() {
+        let dir = tempfile::tempdir().unwrap();
+        let shell = Shell::start(dir.path().to_path_buf(), complete, std::ptr::null_mut()).unwrap();
+        let inner = shell.inner.clone();
+        shell.runtime.block_on(async move {
+            let alpn = b"stillfail/test".to_vec();
+            let bind = |alpns: Vec<Vec<u8>>| Endpoint::builder(Minimal).relay_mode(RelayMode::Disabled).alpns(alpns).bind();
+            let (a, b) = (bind(vec![]).await.unwrap(), bind(vec![alpn.clone()]).await.unwrap());
+            let port = b.bound_sockets().iter().find(|s| s.is_ipv4()).unwrap().port();
+            let addr = endpoint_addr(&json!({ "id": hex::encode(b.id().as_bytes()), "ips": [format!("127.0.0.1:{port}")] })).unwrap();
+            // The other end kept, so its close is sent rather than its endpoint gone.
+            let taking = b.clone();
+            let taken = tokio::spawn(async move { taking.accept().await.unwrap().await.unwrap() });
+            let id = inner.keep_conn(a.connect(addr, &alpn).await.unwrap());
+            let theirs = taken.await.unwrap();
+            let opened = inner.run("conn.openBi", json!({ "id": id }), None).await.unwrap();
+            let stream = opened.json["id"].as_u64().unwrap();
+            assert!(matches!(inner.handle(stream), Ok(Handle::IStream(_))));
+            let remote = inner.run_sync("conn.remoteId", &json!({ "id": id })).unwrap();
+            theirs.close(7u32.into(), b"bye");
+            for _ in 0..200 {
+                if matches!(inner.handle(id), Ok(Handle::Gone { .. })) {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+            // Let go, its stream with it; what the core asks after still answers.
+            assert!(matches!(inner.handle(id), Ok(Handle::Gone { .. })));
+            assert!(inner.handle(stream).is_err());
+            assert_eq!(inner.run_sync("conn.closeReason", &json!({ "id": id })).unwrap(), json!({ "kind": "application", "reason": "bye" }));
+            assert_eq!(inner.run_sync("conn.remoteId", &json!({ "id": id })).unwrap(), remote);
+            assert_eq!(inner.run_sync("conn.paths", &json!({ "id": id })).unwrap(), json!([]));
+            assert_eq!(inner.run("conn.closed", json!({ "id": id }), None).await.unwrap().json, json!({ "kind": "application", "reason": "bye" }));
+            assert!(inner.run("conn.openBi", json!({ "id": id }), None).await.is_err());
+            assert_eq!(inner.run("conn.acceptBi", json!({ "id": id }), None).await.unwrap().json, json!({ "end": true }));
+        });
     }
 }

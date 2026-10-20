@@ -123,37 +123,37 @@ export function shown(input: J, c: Clock): J {
   const ended = endedAt !== null ? ago(endedAt, now) : null;
   const saidWord = () => ({ text: w, kind: "word" });
   const plain = (text: string) => ({ text });
-  const then = (parts: J[], text: string | null) => {
-    if (text !== null) parts.push(plain(` · ${text}`));
-  };
   const meta: J[] = [];
+  const then = (text: string | null) => {
+    if (text !== null) meta.push(plain(` · ${text}`));
+  };
   const notices = arr(get(job, "notices"));
   if (service) {
     meta.push(saidWord());
-    if (tn === "up") then(meta, span(now - started));
+    if (tn === "up") then(span(now - started));
     else if (tn === "restart") {
       const r = intOf(get(job, "restarts"));
-      then(meta, r !== null && r > 0 ? t("core-logic.jobs.restart_count", { n: r }) : null);
-    } else then(meta, ended);
+      then(r !== null && r > 0 ? t("core-logic.jobs.restart_count", { n: r }) : null);
+    } else then(ended);
   } else if (tn === "live") {
     const last = notices[0];
     const outputAt = msOf(job, "outputAt");
     if (last !== undefined) {
       meta.push({ text: strOf(last, "text"), kind: "notice" });
-      then(meta, ago(typeof get(last, "at") === "number" ? last.at : now, now));
+      then(ago(typeof get(last, "at") === "number" ? last.at : now, now));
     } else if (outputAt !== null) meta.push(plain(t("core-logic.jobs.no_notice", { ago: ago(outputAt, now) })));
     else {
       meta.push(saidWord());
-      then(meta, span(now - started));
+      then(span(now - started));
     }
   } else if (tn === "fail" && state !== "failed") {
     meta.push(saidWord());
     const code = intOf(get(job, "exitCode"));
-    then(meta, code !== null ? t("core-logic.jobs.exit_code", { code }) : t("core-logic.jobs.signalled"));
-    then(meta, ended);
+    then(code !== null ? t("core-logic.jobs.exit_code", { code }) : t("core-logic.jobs.signalled"));
+    then(ended);
   } else {
     meta.push(saidWord());
-    then(meta, ended);
+    then(ended);
   }
   const when = state === "running" ? span(now - started) : (ended ?? "");
   const told = notices.length === 0 ? "" : ` · ${t("core-logic.jobs.notices", { n: notices.length })}`;
@@ -218,20 +218,39 @@ export function chatJobs(chat: J, c: Clock): [J, number] {
   ];
 }
 
-/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart.
-export function longJobs(stations: [string, string | null, J[]][], c: Clock): J {
+/// Whose a task another station's agent runs here is (station/src/jobs/remote.ts names it
+/// `remote:<workspace>:<station>:<session>`): that station's address and the session there.
+export function remoteOwner(session: string): { station: string; session: string } | null {
+  const m = /^remote:([^:/]+):([^:/]+):(.+)$/.exec(session);
+  return m ? { station: `${m[1]}/${m[2]}`, session: m[3]! } : null;
+}
+
+/// The chat on another station a task runs for (`remoteOwner`): that station's name, and the chat as its sidebar has
+/// it (`station` its address), none when its row is not known here.
+export interface From {
+  name: string;
+  chat: { id: string; title: string | null; archived: boolean; station: string } | null;
+}
+
+/// Those of the stations' open jobs up longer than `LONG`, watches aside, oldest first, services and jobs apart. A task
+/// run for another station's chat (`from`, by its session) is in that chat, and says which station it came from.
+export function longJobs(stations: [string, string | null, J[]][], c: Clock, from: (session: string) => From | null = () => null): J {
   const long: J[] = [];
   for (const [address, name, jobs] of stations) {
     for (const j of jobs) {
       if (isWatch(j) || c.now - (msOf(j, "startedAt") ?? c.now) < LONG) continue;
       const job = shown(j, c);
       const chat = get(j, "chat");
-      const chatObj = chat !== null && typeof chat === "object" && !Array.isArray(chat) ? chat : null;
-      const title = chatObj && strOf(chatObj, "title") !== "" ? strOf(chatObj, "title") : t(chatObj ? "core-logic.jobs.where.chat" : "core-logic.jobs.where.none");
+      let chatObj = chat !== null && typeof chat === "object" && !Array.isArray(chat) ? chat : null;
+      const elsewhere = chatObj === null ? from(strOf(j, "session")) : null;
+      if (elsewhere?.chat) chatObj = job.chat = elsewhere.chat;
+      const title = chatObj && strOf(chatObj, "title") !== "" ? strOf(chatObj, "title")
+        : t(chatObj || elsewhere ? "core-logic.jobs.where.chat" : "core-logic.jobs.where.none");
       const archived = get(chatObj, "archived") === true ? t("core-logic.jobs.where.archived") : null;
+      const origin = elsewhere ? t("core-logic.jobs.where.from", { station: elsewhere.name }) : null;
       job.station = address;
       job.stationName = name;
-      job.whereText = [name, title, archived].filter((x) => x !== null).join(" · ");
+      job.whereText = [name, title, archived, origin].filter((x) => x !== null).join(" · ");
       long.push(job);
     }
   }
@@ -249,10 +268,13 @@ export function longJobs(stations: [string, string | null, J[]][], c: Clock): J 
 }
 
 /// A job's output as read, with its last line and when it grew in words put in (`JobLogView`).
-export function log(value: J, c: Clock): void {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return;
+export function log(value: J, c: Clock): J {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return value;
   const last = strOf(value, "text").trim();
   const at = msOf(value, "outputAt");
-  if (last !== "") value.last = last;
-  if (at !== null || last !== "") value.said = at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) });
+  return {
+    ...value,
+    ...(last !== "" ? { last } : {}),
+    ...(at !== null || last !== "" ? { said: at === null ? t("core-logic.jobs.output") : t("core-logic.jobs.output_at", { ago: ago(at, c.now) }) } : {}),
+  };
 }

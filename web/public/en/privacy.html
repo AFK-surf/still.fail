@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy policy · still.fail</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/legal.css">
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("stillfail.site.theme")||"dark"}catch(e){}</script>
+</head>
+<body>
+<main>
+<nav><a class="home" href="/">still.fail</a><a href="/en/terms">Terms</a><a href="/en/trademark">Trademarks</a><a href="/privacy" lang="zh-CN">中文</a></nav>
+
+<h1>Privacy policy</h1>
+<p class="meta">Effective: October 19, 2026</p>
+<p class="note">This is a translation for convenience. If it differs from the <a href="/privacy">Chinese version</a>, the Chinese version governs.</p>
+
+<p>This policy explains what personal information the still.fail hosted service collects, how it's used, who it's shared with, how long it's kept, and what rights you have. Please read it carefully, especially the parts in bold.</p>
+
+<h2>1. Who processes your information</h2>
+<p>still.fail is run by an individual developer based in mainland China (“we”). For any questions or requests about personal information, email <a href="mailto:hi@still.fail">hi@still.fail</a>.</p>
+
+<h2>2. Which services this policy covers</h2>
+<p>This policy applies to the still.fail hosted service we operate, including the still.fail website, the web app (app.still.fail), public share pages (share.still.fail), preview pages (preview.still.fail), and the desktop and Android apps when they connect to these services (together, the “Service”). It also applies to the beta channel youdid.wtf.</p>
+<p>This policy does not apply to:</p>
+<ul>
+<li><strong>Stations on your own machines</strong>: a station runs on a computer or server belonging to you (or to a member of your workspace). Chat history, files and the agents' work are stored there, under the control of you and your workspace, and we can't access them;</li>
+<li>Services that others deploy themselves from the still.fail open-source code;</li>
+<li>Third-party services you use on your stations, such as Claude, ChatGPT/Codex, Slack and GitHub. Their own privacy policies apply.</li>
+</ul>
+
+<h2>3. The most important point first: your chat content isn't stored with us</h2>
+<p>still.fail's agents run on your own stations. Your devices connect directly to your stations with end-to-end encryption; when a direct connection isn't possible, traffic is forwarded through a relay server, which only passes on encrypted data and can't see the content. <strong>Our servers don't store your chat content, attachments or files.</strong></p>
+<p>There are two exceptions, where content passes through or is stored with us:</p>
+<ul>
+<li><strong>Push notifications</strong>: to show notifications on your devices, your station sends the chat title, the sender's name and the first 140 characters of the message through our servers to Google's Firebase Cloud Messaging (Android) or your browser's push service (web). We only forward this text; we don't store it;</li>
+<li><strong>Issue reports</strong>: issue reports that you or the agents on your station choose to submit (title, description, context and logs) are stored on our servers so we can investigate.</li>
+</ul>
+<p>Publicly shared chats are also stored on the publisher's station; visitors' browsers read them directly from the station over an encrypted connection. The key after the <code>#</code> in a share link is never sent to our servers.</p>
+
+<h2>4. What we collect</h2>
+<ul>
+<li><strong>Account information</strong>: if you sign in with Google, your Google account ID, email address, name and avatar URL; if you sign in with an email code, your email address. We also keep when your account was created and last active, and its plan, eligibility and ban status;</li>
+<li><strong>Sign-in sessions and devices</strong>: device or client names, when sessions were created and when they expire, and when devices were first and last online;</li>
+<li><strong>Workspace information</strong>: workspace names, members and roles, invitations (including invitees' email addresses), invite codes, and the names, icons, versions and online times of stations that have joined;</li>
+<li><strong>Push tokens</strong>: the tokens or push endpoints your devices or browsers register to receive notifications;</li>
+<li><strong>Issue reports</strong>: see section 3;</li>
+<li><strong>Network and log information</strong>: the IP address, request path, time and browser information (User-Agent) when you access the Service, recorded in Cloudflare's request logs; relay servers can see connections' IP addresses, node public keys and traffic volume. To prevent abuse, we rate-limit sign-ins using salted hashes of IP addresses and email addresses;</li>
+<li><strong>Usage statistics and error information</strong>: the web app and the Android app send PostHog action events, counts, durations, program errors and stack traces, and the web app also records session replays (all text, input and images on the page are masked at recording time). This data is tied to your account ID only, without your email address or name. <strong>You can turn off “Send usage statistics and error reports” in the app's settings</strong>; once it's off, that device sends nothing to PostHog. Clients, stations and servers also send request traces to Axiom, including account ID, session ID, request path and duration. <strong>These statistics and traces don't include chat text, file names, prompts, agent output or conversation titles.</strong> Traces are used to diagnose failures and performance problems and aren't affected by that switch. Station error logs are sent only if the station's user turns them on; they're off by default.</li>
+</ul>
+<p>The still.fail website (still.fail) itself doesn't use analytics.</p>
+
+<h2>5. How we use it</h2>
+<ul>
+<li>To sign you in, identify your account, devices and workspaces, and let your devices find and connect to your stations;</li>
+<li>To send sign-in codes and notifications;</li>
+<li>To enforce plan limits, prevent abuse and attacks, and keep accounts secure;</li>
+<li>To troubleshoot problems, understand how features are used, and improve the Service;</li>
+<li>To respond to your questions and requests, and to meet legal obligations.</li>
+</ul>
+<p>We don't sell your personal information, use it for advertising, or use your data to train AI models.</p>
+
+<h2>6. Cookies and local storage</h2>
+<ul>
+<li>Signing in uses a cookie valid for 10 minutes, to complete sign-in securely;</li>
+<li>The web app stores sign-in credentials and app data in your browser's IndexedDB, and interface preferences (theme, sidebar width and so on) in localStorage;</li>
+<li>PostHog analytics in the web app stores its own identifier in your browser, and whether you turned statistics off.</li>
+</ul>
+<p>We don't use third-party advertising cookies.</p>
+
+<h2>7. Who we share it with</h2>
+<p>To provide the Service, we engage the following service providers to process some personal information. They process it only as we instruct, for the purposes listed in the table below:</p>
+<table>
+<tr><th>Provider</th><th>Location</th><th>Purpose</th><th>Information involved</th></tr>
+<tr><td>Cloudflare, Inc.</td><td>United States; global network</td><td>Hosting the website, servers and data storage; request logs; sending verification code emails; relay servers</td><td>All information stored on our servers listed in section 4, request logs, connection metadata</td></tr>
+<tr><td>Google LLC</td><td>United States</td><td>Google sign-in; Android push (Firebase Cloud Messaging)</td><td>Google account information, push tokens and notification text</td></tr>
+<tr><td>Your browser's push service (e.g. Google, Mozilla, Apple)</td><td>Varies by browser</td><td>Web push notifications</td><td>Push endpoints and encrypted notification content</td></tr>
+<tr><td>PostHog, Inc.</td><td>United States</td><td>Usage statistics, error tracking, session replay</td><td>Account ID, usage events, error information, masked session replays</td></tr>
+<tr><td>Axiom, Inc.</td><td>United States</td><td>Request tracing</td><td>Account ID, session ID, request paths and durations</td></tr>
+<tr><td>Alibaba Cloud</td><td>Beijing, China; Hong Kong, China</td><td>Relay servers, to improve connections in mainland China</td><td>Connection metadata (IP addresses, node public keys, traffic volume), no content</td></tr>
+</table>
+<p>Beyond this, we disclose your information only when required by laws and regulations, when lawfully requested by law enforcement or judicial authorities, or when genuinely necessary to protect the life or property of you, other users or the public. Other members of a workspace can see your name, email address and avatar.</p>
+
+<h2>8. Cross-border transfer of personal information</h2>
+<p><strong>Because Cloudflare, Google, PostHog and Axiom in the table above are located outside mainland China, your account information, device and workspace information, push notification text, usage statistics, error information and logs are transferred outside mainland China (mainly to the United States) to be stored and processed for the purposes listed in section 5.</strong> You can exercise your rights against us or these recipients as described in section 10. Contact details for the overseas recipients are on their websites. By signing in to and using the Service, you consent to these cross-border transfers; if you don't agree, don't use the Service.</p>
+
+<h2>9. How long we keep it</h2>
+<ul>
+<li>Sign-in codes: 10 minutes, deleted once used;</li>
+<li>Sign-in sessions: up to 30 days; they expire after 7 days without use;</li>
+<li>Invitations: 7 days;</li>
+<li>Push tokens: deleted when you sign out or the device stops receiving notifications;</li>
+<li>Account, workspace and station information: kept while you use the Service, and deleted as soon as you delete your account or the workspace;</li>
+<li>Issue reports: kept as needed after the issue is resolved, deleted along with your account, and you can ask us to delete them at any time;</li>
+<li>Request logs, usage statistics and traces: kept for the retention periods of Cloudflare, PostHog and Axiom respectively, then deleted automatically.</li>
+</ul>
+<p>Where laws or regulations require a longer retention period, that period applies.</p>
+
+<h2>10. Your rights</h2>
+<p>You have the right to access, copy, correct, supplement and delete your personal information, to ask us to explain our rules for processing personal information, and to withdraw consent and delete your account.</p>
+<ul>
+<li>Workspace owners can delete a workspace in the app;</li>
+<li><strong>Deleting your account</strong>: choose “Delete account” in the app's account settings. Your account information, sign-in sessions, push tokens and issue reports are deleted at once; workspaces with only you in them are deleted too; you're removed from the other workspaces you're in. If you're the only owner of a workspace that has other members, first make someone else an owner or delete that workspace. Deletion can't be undone;</li>
+<li>Turning off usage statistics: turn off “Send usage statistics and error reports” in the app's settings;</li>
+<li>For other requests, also email hi@still.fail. We'll reply within 15 working days.</li>
+</ul>
+<p>Your chat history and files are on your stations, where you can view, export and delete them directly.</p>
+
+<h2>11. Security</h2>
+<p>Communication between devices and stations is end-to-end encrypted, the website uses HTTPS throughout, only hashes of sign-in credentials are stored, and access to servers is tightly restricted. But no system is perfectly secure; if a personal information security incident occurs, we'll notify you and take remedial measures as required by law. If you find a security vulnerability, please report it privately as described in <a href="https://github.com/AFK-surf/still.fail/blob/main/SECURITY.md">SECURITY.md</a>.</p>
+<p>Agents running on a station have the permissions of the corresponding system account on that machine. Run stations on machines and accounts you trust.</p>
+
+<h2>12. Minors</h2>
+<p>The Service is for users aged 16 and over. If you're under 16, please don't use the Service. If we find that we've collected personal information from a child under 14 without a guardian's consent, we'll delete it as soon as possible.</p>
+
+<h2>13. Changes to this policy</h2>
+<p>We may update this policy. Updates will be posted on this page with a revised effective date. We'll tell you in advance, in the app or by email, about material changes (such as adding a new third-party service provider or changing the purposes of use).</p>
+
+<h2>14. Contact</h2>
+<p>Email: <a href="mailto:hi@still.fail">hi@still.fail</a></p>
+</main>
+</body>
+</html>

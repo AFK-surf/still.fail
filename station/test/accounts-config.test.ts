@@ -32,11 +32,11 @@ test("a config is filled in from what it says", () => {
   };
   checkConfig(raw, "/data");
   const config = hubConfig(raw, "/data");
-  assert.equal(config.profiles[0]!.home, "/data/homes/cc");
+  assert.equal(config.profiles[0]!.home, join("/data", "homes", "cc"));
   assert.deepEqual(config.profiles[0]!.runtimes, ["claude"]);
   const og = config.profiles[1]!;
   assert.deepEqual([og.home, og.models], ["/abs/og", ["a", "b"]]);
-  assert.deepEqual(og.runtimes, ["claude", "codex"]);
+  assert.deepEqual(og.runtimes, ["claude", "codex", "dsh"]);
   assert.equal(profileEnv(og, "codex").X, "1");
   assert.equal(profileEnv(og, "codex").OPENCODE_GO_KEY, "k");
   assert.equal(config.warmMs, 300_000);
@@ -44,7 +44,7 @@ test("a config is filled in from what it says", () => {
 
 test("what cannot run is refused in words", () => {
   assert.equal(err({ profiles: [{ id: "A", home: "h" }] }), 'profile id "A": use lowercase letters, digits and dashes');
-  assert.equal(err({ profiles: [{ id: "a", home: "h" }] }), "profile a: env needs a runtime (claude or codex)");
+  assert.equal(err({ profiles: [{ id: "a", home: "h" }] }), "profile a: env needs a runtime (claude, codex or dsh)");
   assert.equal(err({ profiles: [{ id: "a", home: "" , runtime: "claude" }] }), "profile a: home is required");
   assert.equal(err({ profiles: [{ id: "a", home: "h", access: { kind: "opencode-go" } }] }), "profile a: access opencode-go needs a key");
   assert.equal(err({ profiles: [{ id: "a", home: "h", runtime: "codex", access: { kind: "anthropic-api", key: "k" } }] }), "accepted", "an Anthropic key runs Claude Code whatever runtime is named");
@@ -74,13 +74,16 @@ test("a config from before providers loads as it was", () => {
     ],
   };
   checkConfig(raw, "/x");
-  assert.deepEqual(hubConfig(raw, "/x").profiles.map((p) => p.runtimes.length), [2, 1, 1, 0]);
+  // DeepSeek Harness runs every key: DeepSeek's (chat completions only) runs nothing else.
+  assert.deepEqual(hubConfig(raw, "/x").profiles.map((p) => p.runtimes), [["claude", "codex", "dsh"], ["claude", "dsh"], ["codex"], ["dsh"]]);
 });
 
 test("a key runs every runtime it can and a subscription its own", () => {
-  assert.deepEqual(runtimesOf("opencode-go", undefined), ["claude", "codex"]);
-  assert.deepEqual(runtimesOf("anthropic-api", "codex"), ["claude"]);
+  assert.deepEqual(runtimesOf("opencode-go", undefined), ["claude", "codex", "dsh"]);
+  assert.deepEqual(runtimesOf("anthropic-api", "codex"), ["claude", "dsh"]);
   assert.deepEqual(runtimesOf("subscription", "codex"), ["codex"]);
+  assert.deepEqual(runtimesOf("subscription", "dsh"), [], "DeepSeek Harness has no subscription here");
+  assert.deepEqual(runtimesOf("env", "dsh"), ["dsh"]);
   assert.deepEqual(runtimesOf("env", undefined), []);
 });
 
@@ -123,4 +126,14 @@ test("an edit the check refuses is not written", () => {
   assert.equal(readFileSync(file.path, "utf8"), before);
   file.update((raw) => raw.profiles.push({ id: "ok", runtime: "codex", home: "homes/ok" }));
   assert.equal(file.raw().profiles.length, 2);
+});
+
+test("a profile on the machine's login loses the 「本机」 it was named with; another keeps its name as written", () => {
+  const sub = { runtime: "codex", home: "homes/m", access: { kind: "subscription" } };
+  const raw = { profiles: [
+    { ...sub, id: "machine-codex", machine: true, name: "b@x.com（本机）" },
+    { ...sub, id: "machine-claude", machine: true, name: "Local Claude Code" },
+    { ...sub, id: "other", name: "a@x.com（本机）" },
+  ] };
+  assert.deepEqual(hubConfig(raw, "/x").profiles.map((p) => p.name), ["b@x.com", "Claude Code", "a@x.com（本机）"]);
 });

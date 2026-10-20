@@ -28,15 +28,15 @@ export function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/// The whole body; `each` hears each piece as it comes.
-export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => void): Effect.Effect<Uint8Array, CoreError> {
+/// The whole body; `each` hears each piece as it comes. Not `keep`: each piece goes to `each` alone (the body given is empty).
+export function readAll(body: Pull<Uint8Array>, each?: (chunk: Uint8Array) => void, keep = true): Effect.Effect<Uint8Array, CoreError> {
   return Effect.gen(function* () {
     const parts: Uint8Array[] = [];
     for (;;) {
       const chunk = yield* Effect.mapError(body.take, asCoreError);
       if (chunk === null) break;
       each?.(chunk);
-      parts.push(chunk);
+      if (keep) parts.push(chunk);
     }
     return concat(parts);
   });
@@ -51,8 +51,10 @@ export type LinkNet = {
   today: [number, number] | null;
   rxBytes: number;
   txBytes: number;
-  txPackets: number;
-  lostPackets: number;
+  /// Packets sent and lost on the way in use (`path` its id) since it opened.
+  packets: { path: string; sent: number; lost: number } | null;
+  /// Where the station said it is on its LAN (`ip:port`, docs/mesh-lan.md); none from a station that said none.
+  lan?: string[];
 };
 
 /// The client's half of a socket stream.
@@ -67,7 +69,8 @@ export type WireSocket = { reply: WireReply; send: SocketOut };
 /// How requests reach a station. A request for an event stream carries `accept: text/event-stream`. What is open (a
 /// reply's body, a socket) closes with the scope it was asked in.
 export interface StationWire {
-  request(station: StationAddr, head: RequestHead, body: Uint8Array): Effect.Effect<WireReply, CoreError, Scope.Scope>;
+  /// `wrote`: how much of the body has gone out, now and then as it goes (a wire that sends it whole says nothing).
+  request(station: StationAddr, head: RequestHead, body: Uint8Array, wrote?: (sent: number) => void): Effect.Effect<WireReply, CoreError, Scope.Scope>;
   /// The way to the station is taken for gone: what is open to it closes.
   reset?(station: StationAddr): void;
   /// Whether the wire itself finds another way to a station when the UI comes back.
@@ -75,13 +78,24 @@ export interface StationWire {
   /// Succeeds once the way to the station a request would take now is replaced by another (never, for a wire that
   /// does not race).
   replaced?(station: StationAddr): Effect.Effect<void>;
+  /// Whether a way to the station is up now (one open that answered when last asked): a stream gone with its way opens
+  /// again on another, the station not taken for coming back (never, for a wire with one way).
+  standing?(station: StationAddr): boolean;
   /// How the connection to the station runs now; null where there is none of its own.
   net?(station: StationAddr): LinkNet | null;
   /// Measures the ways to the station now.
   measure?(station: StationAddr): Effect.Effect<void, CoreError>;
   /// A preview page's WebSocket. Only the mesh carries one.
   socket?(station: StationAddr, head: RequestHead): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
+  /// A view of one of the station's screens (docs/remote-screens.md): the head line carries `screen`, and the stream
+  /// stays open both ways (the station's answer, then frames each way: screen-frames.ts). Only the mesh carries one.
+  screen?(station: StationAddr, head: RequestHead, screen: ScreenAsk): Effect.Effect<WireSocket, CoreError, Scope.Scope>;
 }
+
+/// What a screen view asks for, as its head line's `screen` has it (docs/remote-screens.md).
+/// `peek`: a preview (a link's card in a chat): it only looks and is not among those on the screen (a station from
+/// before previews would take it for a view; one is asked only of a screen its list says can be previewed).
+export type ScreenAsk = { maxWidth: number; maxHeight: number; codecs: string[]; control: boolean; peek?: boolean };
 
 export function noMeasure(): Effect.Effect<void, CoreError> {
   return Effect.fail(new CoreError("unsupported", t("station.core.oneWay")));

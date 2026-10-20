@@ -12,12 +12,35 @@ export type Stream = {
   stopped(): Promise<void>;
   reset(code: number): Promise<void>;
 };
+/// What went over a connection since it opened (native/mesh `Stats`): bytes; and from the addon of 2026-10-19 on,
+/// packets and the frames in them, those that carry nothing (pings, ACK requests, ACKs) and those that carry data.
+export type Traffic = {
+  rxBytes: number;
+  txBytes: number;
+  rxPackets?: number;
+  txPackets?: number;
+  rxPings?: number;
+  txPings?: number;
+  rxAckRequests?: number;
+  txAckRequests?: number;
+  rxAcks?: number;
+  txAcks?: number;
+  rxData?: number;
+  txData?: number;
+};
 export type Connection = {
   remoteId(): string;
   alpn(): Buffer;
   via(): string | null;
+  /// Every way it can go now (the native connection's; a test's may have none).
+  paths?(): { selected: boolean; relay?: string | null; ip?: string | null; rttMs: number; txPackets: number; lostPackets: number }[];
   acceptBi(): Promise<Stream | null>;
   openBi(): Promise<Stream>;
+  /// Whether the other end is still there: true once anything is heard from it within `withinMs` (superseded.ts).
+  /// A mesh addon from before it has none.
+  answers?(withinMs: number): Promise<boolean>;
+  /// What went over it (a test's may have none).
+  stats?(): Traffic;
   close(code: number, reason: string): void;
   isClosed(): boolean;
   closed(): Promise<string>;
@@ -32,7 +55,8 @@ export type Endpoint = {
   publicRelays(on: boolean): Promise<void>;
   keep(urls: string[]): void;
   accept(): Promise<Connection | null>;
-  connect(addr: Addr, alpn: Buffer): Promise<Connection>;
+  /// `additional`: protocols offered after `alpn` (the connection's `alpn()` says which one it speaks).
+  connect(addr: Addr, alpn: Buffer, additional?: Buffer[]): Promise<Connection>;
   close(): Promise<void>;
 };
 export type Mesh = {
@@ -49,8 +73,14 @@ export type Mesh = {
   prepareLocalLinks(text: string, paths: string[], workspace: string): { text: string; paths: string[] };
 };
 
-/// Loaded once: the mesh (services.ts) and the thumbnails (sessions/thumbs.ts) share it.
+/// Loaded once: the mesh (services.ts) and the thumbnails (drive/thumbs.ts) share it.
 let loaded: Mesh | undefined;
+
+/// A fixed UDP address lets an operator admit LAN connections through an egress firewall. The native bind rejects
+/// invalid or occupied addresses; never fall back to a random port when an address was explicitly configured.
+export function bindStation(mesh: Mesh, options: Parameters<Mesh["bind"]>[0], env: NodeJS.ProcessEnv = process.env): Promise<Endpoint> {
+  return mesh.bind({ ...options, bindAddr: env.STILLFAIL_MESH_BIND_ADDR });
+}
 
 export function loadMesh(): Mesh {
   if (loaded !== undefined) return loaded;

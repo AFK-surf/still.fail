@@ -12,6 +12,9 @@ test("each host serves its own static site, the API and the relay on their paths
     assert.deepEqual(await text(await h.fetch("/")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/w/some-workspace/chats")), [200, "<title>still.fail</title>"]);
     assert.deepEqual(await text(await h.fetch("/assets/app.js")), [200, "// the web app"]);
+    // The app's pages are kept by nothing, its files as their host says (src/web.ts unkept).
+    for (const page of ["/", "/w/some-workspace/chats", "/auth/callback?code=x&state=y"]) assert.equal((await h.fetch(page)).headers.get("cache-control"), "no-store", page);
+    assert.notEqual((await h.fetch("/assets/app.js")).headers.get("cache-control"), "no-store");
     assert.deepEqual(await text(await h.fetchAdmin("/")), [200, "<title>still.fail 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchAdmin("/codes")), [200, "<title>still.fail 管理后台</title>"]);
     assert.deepEqual(await text(await h.fetchAdmin("/auth/callback?code=x&state=y")), [200, "<title>still.fail 管理后台</title>"]);

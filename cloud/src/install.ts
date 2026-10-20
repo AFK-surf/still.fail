@@ -1,7 +1,8 @@
 // The still.fail station's installer, served at /install.sh: `curl -fsSL <origin>/install.sh | sh -s -- <token>` on the
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
 // bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` (and
-// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for, and runs the station as
+// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for (a station already in one
+// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
@@ -9,8 +10,8 @@
 // Without a token, on a station already in a workspace, it updates the station (`stillfail update` runs it so). An update
 // does not stop the agents when it can help it: with the service's definition unchanged, the running station hands
 // over to the new release in its own process (SIGUSR2, the Rust station's main.rs), turns, runtimes and jobs going on;
-// else, or if that fails, the station is first drained (SIGUSR1: no new turns, and it says once none runs), then
-// restarted. A station older than these says neither (no run/station.json): it is restarted as before.
+// else, or if that fails, the station is first drained (SIGUSR1: it says when it may be stopped; the TS station at
+// once, its turns handed over to the next start; the Rust one once no turn runs), then restarted. A station older than these says neither (no run/station.json): it is restarted as before.
 // The service's PATH is the caller's (the agents are found on it), so it is not what makes a definition "changed": an
 // update from another shell (an agent's, the station's own) would never hand over. Started from inside the station (an
 // agent's turn, a job), a restart goes on in the background, apart from the caller: the drain waits for the caller's
@@ -27,23 +28,29 @@ import { tr, type Lang } from "./i18n.ts";
  * test channel's (beta/, scripts/release.sh --beta). STILLFAIL_CHANNEL where it runs says otherwise.
  */
 export function installScript(origin: string, channel: "stable" | "beta" = "stable", lang: Lang = "zh"): string {
-  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel);
+  return script((key, args) => tr(lang, key, args)).replaceAll("__ORIGIN__", origin).replaceAll("__CHANNEL__", channel).replaceAll("__LANG__", lang);
 }
 
 /**
- * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
- * last release from before the rename, which installers from before it still get.
+ * The installer a release carries (bin/install.<lang>.sh, scripts/installers.ts), for the station that runs it to update
+ * itself (station/src/updates/updates.ts): this one, its cloud the one the station names (STILLFAIL_ORIGIN).
  */
-export const RELEASE_FILE = /^(stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const bundledInstallScript = (lang: Lang) => installScript("$STILLFAIL_ORIGIN", "stable", lang).replace('origin="$STILLFAIL_ORIGIN"', 'origin="${STILLFAIL_ORIGIN:?}"');
+
+/**
+ * A release's file, as the bucket keeps it: stillfail-station-<platform>.tar.gz; ember-station-<platform>.tar.gz is the
+ * last release from before the rename, which installers from before it still get. Windows' is a zip (install-windows.ts).
+ */
+export const RELEASE_FILE = /^((stillfail|ember)-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|stillfail-station-win32-x64\.zip)$/;
 
 /** The test channel's release (scripts/release.sh --beta), until promoted to the stable name. */
-export const BETA_RELEASE_FILE = /^beta\/stillfail-station-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz$/;
+export const BETA_RELEASE_FILE = /^beta\/stillfail-station-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win32-x64\.zip)$/;
 
 /**
  * The Node a release runs on (its NODE_VERSION file says the version), kept apart from it, once per version (scripts/node-dist.sh):
  * the installer gets it when the machine has none of that version yet, with its sha256 to check it by.
  */
-export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-(darwin-arm64|linux-x64|linux-arm64)\.tar\.gz(\.sha256)?$/;
+export const NODE_FILE = /^node\/node-v[0-9]+\.[0-9]+\.[0-9]+-((darwin-arm64|linux-x64|linux-arm64)\.tar\.gz|win-x64\.zip)(\.sha256)?$/;
 
 /**
  * The apps' builds, as scripts/release.sh puts them beside the station's: what each app's updater reads for the
@@ -57,20 +64,48 @@ const APP_FILES: [RegExp, string][] = [
   // channel stillfail-beta) and the Android one's, with the builds they name (stillfail-beta-…).
   [/^station-beta\.json$/, "application/json"],
   [/^desktop\/stillfail-beta-mac\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/stillfail-beta\.yml$/, "text/yaml; charset=utf-8"],
   [/^android\/beta\/latest\.json$/, "application/json"],
   [/^desktop\/stillfail-mac\.yml$/, "text/yaml; charset=utf-8"],
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip$/, "application/zip"],
   // Its blockmap, for the updater to download only what changed since the zip it has (releases.ts).
   [/^desktop\/stillfail-(beta-)?[0-9.]+-arm64-mac\.zip\.blockmap$/, "application/octet-stream"],
+  // The Windows app's (apps/desktop/build.sh --win): its feed (electron-updater's, named by the channel alone), its NSIS
+  // installer and that one's blockmap.
+  [/^desktop\/stillfail\.yml$/, "text/yaml; charset=utf-8"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe$/, "application/vnd.microsoft.portable-executable"],
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.blockmap$/, "application/octet-stream"],
+  // Its signature (scripts/release-sign.ts), which the app checks before installing it (docs/release-signing.md).
+  [/^desktop\/stillfail-(beta-)?[0-9.]+-x64-win\.exe\.sig$/, "application/json"],
+  // The web app the beta desktop app takes without a new app (docs/desktop-web-updates.md): its signed feed and the
+  // archives it names.
+  [/^desktop\/web\/stillfail-beta-web\.json$/, "application/json"],
+  [/^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$/, "application/gzip"],
+  // The packages of the modules stations install themselves (scripts/module-bundle.ts, docs/station-modules.md): each
+  // module's signed feeds, stable and beta, and the archives they name (one for every machine, or a platform's).
+  [/^modules\/([a-z][a-z0-9]{0,31})\/\1(-beta)?\.json$/, "application/json"],
+  [/^modules\/([a-z][a-z0-9]{0,31})\/\1-0\.1\.[0-9]+(-(darwin-arm64|linux-x64|linux-arm64|win32-x64))?\.tar\.gz$/, "application/gzip"],
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
+  // its feed and the builds it names.
+  [/^android\/mbui\/latest\.json$/, "application/json"],
+  [/^android\/stillfail-mbui-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
+  [/^mac\/mbui\/latest\.json$/, "application/json"],
+  [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
+  // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
+  // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
+  // there).
+  [/^natives\/[a-z][a-z0-9-]{0,31}-(darwin-arm64|linux-x64|linux-arm64|win32-x64|wasm32|android-arm64)-[0-9a-f]{24}\.tar\.gz$/, "application/gzip"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
 export function releaseType(file: string): string | null {
-  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return "application/gzip";
-  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : "application/gzip";
+  const archive = file.endsWith(".zip") ? "application/zip" : "application/gzip";
+  if (RELEASE_FILE.test(file) || BETA_RELEASE_FILE.test(file)) return archive;
+  if (NODE_FILE.test(file)) return file.endsWith(".sha256") ? "text/plain; charset=utf-8" : archive;
   return APP_FILES.find(([name]) => name.test(file))?.[1] ?? null;
 }
 
@@ -80,13 +115,15 @@ export function releaseType(file: string): string | null {
 // in ($names, $(commands)) given as arguments.
 const script = (say: (key: string, args?: Record<string, string>) => string) => `#!/bin/sh
 # Installs the still.fail station on this machine and joins it to a workspace in still.fail cloud:
-#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token>
+#   curl -fsSL __ORIGIN__/install.sh | sh -s -- <token> [<lock>]
+# <lock>: the workspace lock's hash the station pins (a locked workspace's command gives it).
 # STILLFAIL_CHANNEL=beta gets the test channel's release (stable: the usual one); this copy defaults to __CHANNEL__.
 # The token comes from 「添加 station」 in still.fail. Running it again updates it and keeps its data (~/.stillfail;
 # a station from before the rename has it in ~/.ember, which is moved there).
 set -eu
 origin="__ORIGIN__"
 token="\${1:-}"
+lock="\${2:-}"
 # The data: $STILLFAIL_DATA, else $EMBER_DATA (a shell or service from before the rename), else ~/.stillfail. ~/.ember,
 # the default before the rename, is the default now too: it is moved to ~/.stillfail.
 old_data="$HOME/.ember"
@@ -118,6 +155,10 @@ case "$os-$(uname -m)" in
   Linux-aarch64|Linux-arm64) platform=linux-arm64 ;;
   *) echo "${say("cloud.install.unsupported", { machine: "$(uname -s) $(uname -m)" })}" >&2; exit 1 ;;
 esac
+# Windows' Linux (WSL): its PATH carries Windows' own directories (/mnt/c/…), whose programs are not the agents'; its
+# systemd is off unless /etc/wsl.conf turns it on; and it runs only while Windows keeps it up (keep_wsl).
+wsl=""
+[ "$os" = Linux ] && grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null && wsl=yes
 app="$data/app"
 label="fail.still.station"
 plist="$HOME/Library/LaunchAgents/$label.plist"
@@ -129,17 +170,58 @@ old_plist="$HOME/Library/LaunchAgents/$old_label.plist"
 old_unit="ember-station.service"
 # Whether this Linux has a systemd for the user to run services in (not a container's, not another init).
 user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
+# WSL keeps a distribution up only while something of Windows' holds it (a terminal, a wsl.exe): with none, its
+# services stop with it, and it does not start with Windows. So a wsl.exe that holds it, hidden, started at each
+# Windows sign-in from the user's Startup folder ($keeper, a script for wscript) and now. Through WSL's interop
+# (cmd.exe, wscript.exe on its PATH): none from a station's own update (no terminal of Windows' there; done before).
+keeper_sleep=3153600000
+keep_wsl() {
+  [ -n "\${WSL_DISTRO_NAME:-}" ] && command -v wslpath >/dev/null 2>&1 && command -v cmd.exe >/dev/null 2>&1 || return 1
+  appdata=$(cd / && cmd.exe /c "echo %APPDATA%" 2>/dev/null | tr -d '\\r')
+  case "$appdata" in ?:\\\\*) ;; *) return 1 ;; esac
+  startup="$(wslpath -u "$appdata")/Microsoft/Windows/Start Menu/Programs/Startup"
+  [ -d "$startup" ] || return 1
+  keeper="$startup/stillfail-station-$WSL_DISTRO_NAME.vbs"
+  keeper_win=$(wslpath -w "$keeper")
+  printf 'CreateObject("WScript.Shell").Run "wsl.exe -d ""%s"" --exec sleep %s", 0, False\\r\\n' "$WSL_DISTRO_NAME" "$keeper_sleep" > "$keeper" || return 1
+  pgrep -fx "sleep $keeper_sleep" >/dev/null 2>&1 || (cd / && cmd.exe /c wscript.exe "$keeper_win" >/dev/null 2>&1) || return 1
+}
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 channel="\${STILLFAIL_CHANNEL:-__CHANNEL__}"
+# (Said once: not again by the release's own installer, handed the download below.)
 case "$channel" in
-  beta) release="beta/stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.downloadBeta")}" ;;
-  *) channel=stable; release="stillfail-station-$platform.tar.gz"; echo "${say("cloud.install.download")}" ;;
+  beta) release="beta/stillfail-station-$platform.tar.gz"; [ -n "\${STILLFAIL_INSTALLER_HANDED:-}" ] || echo "${say("cloud.install.downloadBeta")}" ;;
+  *) channel=stable; release="stillfail-station-$platform.tar.gz"; [ -n "\${STILLFAIL_INSTALLER_HANDED:-}" ] || echo "${say("cloud.install.download")}" ;;
 esac
 step download
-curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz"
+sha256_of() { { shasum -a 256 "$1" 2>/dev/null || sha256sum "$1"; } | cut -d' ' -f1; }
+# Handed a release already downloaded (by the installer of the release before, below): taken, its directory removed.
+case "\${STILLFAIL_ARCHIVE:-}" in
+  */stillfail-handed.*/stillfail.tar.gz)
+    mv "$STILLFAIL_ARCHIVE" "$tmp/stillfail.tar.gz"
+    rm -rf "$(dirname "$STILLFAIL_ARCHIVE")" ;;
+  *) curl -fL --progress-bar "$origin/releases/$release" -o "$tmp/stillfail.tar.gz" ;;
+esac
+# A station updating itself says what the release must hash to, as its signed words say (station/src/updates/signed.ts):
+# anything else is not installed.
+if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ "$(sha256_of "$tmp/stillfail.tar.gz")" != "$STILLFAIL_RELEASE_SHA256" ]; then
+  echo "${say("cloud.install.release.mismatch")}" >&2
+  exit 1
+fi
 tar -xzf "$tmp/stillfail.tar.gz" -C "$tmp"
+# The release checked so is installed by its own installer (bin/install.<lang>.sh in it, scripts/installers.ts): what
+# it does from here (its service, its handover) is the new release's, as the cloud's newest installer did it before.
+lang="\${STILLFAIL_INSTALL_LANG:-__LANG__}"
+if [ -n "\${STILLFAIL_RELEASE_SHA256:-}" ] && [ -z "\${STILLFAIL_INSTALLER_HANDED:-}" ] && [ -f "$tmp/stillfail/bin/install.$lang.sh" ]; then
+  keep=$(mktemp -d "\${TMPDIR:-/tmp}/stillfail-handed.XXXXXX")
+  mv "$tmp/stillfail.tar.gz" "$keep/stillfail.tar.gz"
+  cp "$tmp/stillfail/bin/install.$lang.sh" "$keep/install.sh"
+  rm -rf "$tmp"
+  trap - EXIT
+  STILLFAIL_ARCHIVE="$keep/stillfail.tar.gz" STILLFAIL_INSTALLER_HANDED=1 exec sh "$keep/install.sh" "$@"
+fi
 # Which channel the release came from, for the station (the Rust station's updates.rs: where it goes back from the beta).
 printf '%s\n' "$channel" > "$tmp/stillfail/CHANNEL"
 
@@ -155,8 +237,22 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
     rm -rf "$node_dir.part"
     mkdir -p "$node_dir.part/bin"
     own=$(command -v node 2>/dev/null || true)
-    if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ]; then
+    # With the signed hash of the Node binary (STILLFAIL_NODE_SHA256), the machine's own only when it is that very one.
+    if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ] && { [ -z "\${STILLFAIL_NODE_SHA256:-}" ] || [ "$(sha256_of "$own")" = "$STILLFAIL_NODE_SHA256" ]; }; then
       cp "$own" "$node_dir.part/bin/node"
+    elif [ -n "\${STILLFAIL_NODE_SHA256:-}" ]; then
+      node_file="node-v$node_version-$platform.tar.gz"
+      echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
+      if ! curl -fL --progress-bar "$origin/releases/node/$node_file" -o "$tmp/$node_file"; then
+        echo "${say("cloud.install.node.failed", { version: "${node_version}", origin: "${origin}" })}" >&2
+        exit 1
+      fi
+      tar -xzf "$tmp/$node_file" -C "$node_dir.part"
+      if [ "$(sha256_of "$node_dir.part/bin/node")" != "$STILLFAIL_NODE_SHA256" ]; then
+        rm -rf "$node_dir.part"
+        echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
+        exit 1
+      fi
     else
       node_file="node-v$node_version-$platform.tar.gz"
       echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
@@ -165,7 +261,7 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
         exit 1
       fi
       want=$(cut -d' ' -f1 < "$tmp/$node_file.sha256")
-      got=$({ shasum -a 256 "$tmp/$node_file" 2>/dev/null || sha256sum "$tmp/$node_file"; } | cut -d' ' -f1)
+      got=$(sha256_of "$tmp/$node_file")
       if [ -z "$want" ] || [ "$want" != "$got" ]; then
         echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
         exit 1
@@ -187,7 +283,8 @@ prune_node() {
 
 # The agents it starts are found on this PATH (Claude Code, Codex, and what they run). Each directory once: run from
 # the station (whose PATH is this), it would otherwise grow with every update.
-agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk 'NF && !seen[$0]++' | paste -sd: -)
+# In WSL, none of Windows' (a Windows npm's \`claude\` there would run Windows' Node).
+agent_path=$(printf '%s' "$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH:/usr/bin:/bin" | tr ':' '\n' | awk -v wsl="$wsl" 'NF && !(wsl && index($0, "/mnt/") == 1) && !seen[$0]++' | paste -sd: -)
 # The service's definition, as this release has it: written below, and compared with the one running now.
 if [ "$os" = Darwin ]; then
   service_file="$plist"
@@ -296,7 +393,8 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   step handoff
   echo "${say("cloud.install.handoff.start")}"
   kill -USR2 "$pid"
-  for _ in $(seq 1 120); do
+  # The new one's 60 s to be ready and 90 s to take over (launcher/src/lifecycle.rs Times), and some.
+  for _ in $(seq 1 180); do
     sleep 1
     if [ "$(said startedAt)" != "$started" ]; then
       [ "$(said pid)" = "$pid" ] && handed=yes
@@ -307,6 +405,15 @@ if [ -n "$pid" ] && [ -z "$migrate" ] && [ -n "$(said handoff)" ] && same_servic
   if [ -n "$handed" ]; then
     rm -rf "$app.old"
     prune_node
+  elif [ -f "$data/run/handoff-failed" ] && kill -0 "$pid" 2>/dev/null && [ "$(said startedAt)" = "$started" ]; then
+    # The new release did not come up or take over, and the station is the launcher it was: the release before goes
+    # back, for the Node serving on it (one that did not get ready) or the one the launcher starts after a while (one
+    # that did not take over, its old one gone; Times::rollback).
+    rm -rf "$app.failed"
+    mv "$app" "$app.failed" && { mv "$app.old" "$app" || mv "$app.failed" "$app"; }
+    rm -rf "$app.failed"
+    echo "${say("cloud.install.handoff.keptOld", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
+    exit 1
   elif [ -f "$data/run/handoff-failed" ]; then
     echo "${say("cloud.install.handoff.failed", { why: '$(cat "$data/run/handoff-failed")' })}" >&2
   elif [ "$(said startedAt)" != "$started" ]; then
@@ -368,7 +475,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"
-  "$app/bin/stillfail" station enroll "$origin" "$token"
+  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"}
 fi
 
 if [ -n "$handed" ]; then
@@ -409,10 +516,19 @@ echo "  ${say("cloud.install.where.data", { data: "$data" })}"
 echo "  ${say("cloud.install.where.status")}"
 [ "$os" = Linux ] && [ -z "\${no_service:-}" ] && echo "  ${say("cloud.install.where.service", { unit: "$unit" })}"
 [ -n "\${lingering:-}" ] && echo "  ${say("cloud.install.where.linger", { user: "$(id -un)" })}"
-[ -n "\${no_service:-}" ] && echo "  ${say("cloud.install.where.noService")}"
+if [ -n "$wsl" ] && [ -n "\${no_service:-}" ]; then
+  echo "  ${say("cloud.install.where.wslSystemd")}"
+elif [ -n "\${no_service:-}" ]; then
+  echo "  ${say("cloud.install.where.noService")}"
+elif [ -n "$wsl" ]; then
+  # Said when it is set up, or could not be on a machine joining a workspace (an update leaves it as it was).
+  if keep_wsl; then echo "  ${say("cloud.install.where.wslKept", { distro: "\${WSL_DISTRO_NAME}" })}"
+  elif [ -n "$token" ]; then echo "  ${say("cloud.install.where.wslKeep", { distro: "\${WSL_DISTRO_NAME:-<distro>}" })}"; fi
+fi
+# The agents as the station will find them (its PATH).
 missing=""
-command -v claude >/dev/null 2>&1 || missing="$missing Claude Code"
-command -v codex >/dev/null 2>&1 || missing="$missing Codex"
+(PATH="$agent_path"; command -v claude) >/dev/null 2>&1 || missing="$missing Claude Code"
+(PATH="$agent_path"; command -v codex) >/dev/null 2>&1 || missing="$missing Codex"
 if [ -n "$missing" ]; then
   echo
   echo "${say("cloud.install.agents.missing", { missing: "${missing}" })}"

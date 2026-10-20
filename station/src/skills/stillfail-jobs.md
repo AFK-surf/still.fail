@@ -1,6 +1,6 @@
 ---
 name: stillfail-jobs
-description: Run background jobs, long-running watches, web previews or tasks on another still.fail station. Use for work that outlives a turn or a browser service people need to use.
+description: Run background jobs, long-running watches, web previews or tasks on another still.fail station, or reach a service on another station (its HTTP API by URL, or any port forwarded here). Use for work that outlives a turn, a browser service people need to use, or a service (an LLM server, an API, a dev server, a database) another station runs.
 ---
 
 # Jobs and services
@@ -15,7 +15,10 @@ available to workspace members through its returned link.
   is needed before answering, wait for it in the turn.
 - Supply `command` (run by `sh -c`), a short `name`, and optionally `cwd` (defaults to the session workspace).
   Keep clones and outputs in that workspace.
-- Tell people what is running, then end `waiting`; use `need_human` instead if you also need their input.
+- Tell people what is running, carry on with whatever does not depend on it, and end `waiting` only when nothing
+  else is left; use `need_human` instead if you also need their input.
+- To wait on CI or another remote run, start a job (or background command) that polls it and exits on the first
+  failure: its completion wakes you. Do not end `waiting` on a guessed duration with nothing watching.
 - Inside long jobs, `stillfail-job notify "<words>"` reports meaningful milestones or trouble, not every line.
   `ember-job` is an alias. Notices arrive via="ember"; relay only what matters and act on failures.
 - Completion includes the exit code and log tail. `job_log` reads more (up to 1000 lines); `job_list` shows your
@@ -23,7 +26,7 @@ available to workspace members through its returned link.
 
 ## Watches
 
-For an explicitly requested ongoing watch (CI, deployment, metrics, review queue), set `watch: true` and loop,
+For an explicitly requested ongoing watch (CI, deployment, metrics, review queue) that outlives your own work, set `watch: true` and loop,
 notifying on changes. The chat appears under 监控中, does not auto-archive, and asks before manual archiving.
 End `waiting`: its timeout will not wake you while the watch runs; a notice, completion or user message will.
 Give the next post a title naming the watch (e.g. 监控 · PR #482 的 CI); watch chats can be renamed immediately.
@@ -50,8 +53,16 @@ can mark places and comment. Use stillfail-show for evidence to accompany the li
 
 ## Another station
 
-Use `station_list` to discover workspace stations, then `station_list {station}` for capabilities and task access.
-The target administrator controls permission; never enable `remoteTasks.allow` yourself to bypass it.
+Use `station_list` to see the workspace's stations and how busy each is right now (cores, arch/OS, GPU, CPU busy over
+the last minute, load average, free memory and disk where tasks run, what it is running); `station_list {station}`
+gives one in detail with its task capabilities. Any station of the workspace accepts tasks from here; one not updated
+yet may still refuse them, and an older one's load shows as unknown.
+
+Choosing where to run: the right OS and architecture first; then enough free memory and disk for the job (a large
+build needs several GiB of each); then the least busy (low CPU busy and load per core, few running tasks). Heavy
+builds and test suites go to a big machine, not a small VM. Offline stations are skipped. There are no locks: do
+not wait for, ask for or announce a "lock" on a machine, and do not queue behind other agents' claims. Look at the
+load, and if a machine is busy pick another or run anyway when nothing better is free.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
 run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working
@@ -60,6 +71,14 @@ output inside it rather than elsewhere on that machine (or over ssh): it is remo
 this chat is archived or deleted, or after 14 days unused, which is what keeps the target's disk free. Pin inputs and
 versions: clone or fetch the intended revision there, or upload a bundle.
 
+To build or test a local working directory there (a checkout with uncommitted changes), prepare with `dir` (its
+absolute path here) instead of uploading: each start syncs it into a mirror on the target (named in prepare's answer,
+inside the session directory) and runs the command there. Only files Git tracks or would add (all but the usual build
+and dependency directories outside Git) go, and only what changed; the target's build output and dependencies stay
+warm. `back: [paths]` downloads outputs into `station-back/<key>/` here when the task ends. Synced files the command
+changed come back as `station-back/<key>/changes.patch`: review it and `git apply` it in the directory if wanted. One task
+at a time per mirror.
+
 `station_task` lists, inspects, tails or stops your remote tasks. Completion and notices survive reconnects and
 station restarts; no local polling job is needed. End `waiting`, naming the task. Download artifacts with
 `station_file` and post them to the requesting chat. Downloads create new files, never overwrite; inputs may be
@@ -67,3 +86,25 @@ uploaded again before start.
 
 After a timeout, inspect or retry the same key: work may already have run. Lost remote processes are not restarted
 automatically; `failed` without an exit code means the outcome may be uncertain. Inspect before using a new key.
+
+## Another station's services
+
+Services listening on another station's localhost are reachable from here with no port opened anywhere, two ways.
+`<station>` is its name from `station_list` (any case) or, when a name is not unique, its id.
+
+- **A program calling an HTTP API with a base URL** (an LLM server, a REST API, a script): use the path form,
+  `$STILLFAIL_PEER_HTTP/<station>/<port>/<path>` = `http://localhost:<port>/<path>` there (streams, large bodies and
+  WebSockets pass as they come), e.g. `OLLAMA_HOST=$STILLFAIL_PEER_HTTP/studio/11434`. Without the variable, it is
+  your stillfail MCP URL with `/mcp` replaced by `/peer`. Programs only (Host 127.0.0.1, no browser `Origin`). 502
+  "needs an update": that station is from before this; 504: it is offline.
+- **Anything else: a browser, web pages, dev servers (HMR), databases, any TCP protocol**: forward the port with
+  `peer_forward {station, port}`, like `ssh -L`. It listens on 127.0.0.1 here, at the same port when free (the answer
+  gives the address and URL), and passes bytes as they are, so absolute paths, client routing, redirects, cookies and
+  WebSockets work as on that machine, and `psql -h 127.0.0.1 -p <port>`, `redis-cli` and the like too. It closes
+  when this chat is archived, when the `job` you tie it to ends, after 30 minutes with no connection, or when this
+  station restarts (then open it again). `peer_forward {}` lists yours and whether each station is online;
+  `peer_forward {close: <local port>}` closes one. A path prefix breaks web pages, so do not use the path form for them.
+- To drive another station's Chrome over CDP, its DevTools WebSocket works through either: forward its debugging
+  port and use `ws://127.0.0.1:<port>/devtools/...` as `/json/version` gives it, or take that URL's path under
+  `$STILLFAIL_PEER_HTTP/<station>/<port>` (with `ws://`).
+- For people's browsers (a link to post), start a job with a port instead: forwards are this machine's only.

@@ -1,0 +1,866 @@
+// A station's screen in the viewer (remote/ScreenViewer.kt) on a fake core: `screen.view` held open, its states and
+// JPEG frames said as the core would (bytes beside the JSON). Each state is pictured (settled.png under motion/screen-*);
+// a live frame is drawn and acknowledged, a tap is a click at the right place in the frame, a press held a right click,
+// a drag a drag; 只看 sends nothing. Driving it, the clipboard goes both ways and files picked go onto its machine.
+package fail.still.android.motion
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.pm.ActivityInfo
+import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Shader
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.IntSize
+import fail.still.android.data.ScreenAccess
+import fail.still.android.data.ScreenDrop
+import fail.still.android.data.ScreenViewState
+import fail.still.android.data.StillFailJson
+import fail.still.android.remote.ScreenSession
+import fail.still.android.remote.ScreenViewer
+import fail.still.android.remote.STAGE
+import fail.still.android.remote.fitIn
+import fail.still.core.CoreException
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import fail.still.android.ui.StillFailTheme
+import java.io.ByteArrayOutputStream
+import kotlin.math.abs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.put
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+private const val VIEW = "screen.view"
+private const val W = 1280
+private const val H = 720
+
+class ScreenViewerTest {
+    @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
+
+    /** The viewer on the fake core, a session at a time (a state each), in the light or dark theme. */
+    private inner class Viewer(dark: Boolean = false, private val h264: Boolean = false) {
+        val h = Harness(rule)
+        var session by mutableStateOf<ScreenSession?>(null)
+        var exited = false
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+        init {
+            h.fake.streams += VIEW
+            rule.runOnUiThread { rule.activity.enableEdgeToEdge() }
+            rule.setContent {
+                StillFailTheme(dark) {
+                    session?.let { s -> key(s) { ScreenViewer(s, "Chrome", onExit = { exited = true }) } }
+                }
+            }
+        }
+
+        /** A new view opened (the last one closed). */
+        fun open(): ScreenSession {
+            session?.close()
+            val s = ScreenSession(h.fake.core, "ws-1/st-1", "browser:tab-1", scope, IntSize(1920, 1080), h264 = h264)
+            rule.runOnUiThread { session = s; s.open() }
+            rule.waitUntil(5_000) { h.fake.opened(VIEW) }
+            h.settle()
+            return s
+        }
+
+        fun say(value: JsonElement, bytes: ByteArray? = null) { h.fake.say(VIEW, value, bytes); h.deliver() }
+
+        fun state(
+            phase: String, control: Boolean = true, may: Boolean = true, others: List<String> = listOf("李雷"), message: String? = null,
+            access: ScreenAccess? = null, controllers: List<String>? = null, takeOver: Boolean? = null, line: String? = null,
+            clipboard: List<String>? = null, drop: ScreenDrop? = null,
+        ) =
+            say(buildJsonObject {
+                put("state", StillFailJson.encodeToJsonElement(ScreenViewState(
+                    phase = phase, message = message, title = "still.fail — Chrome", kind = "browser", control = control, may = may, others = others,
+                    line = line ?: ((if (control) "控制" else "只看") + (if (others.isEmpty()) "" else " · ${others.joinToString("、")}也在看")),
+                    codec = "jpeg", width = W.toUInt(), height = H.toUInt(), access = access, controllers = controllers, takeOver = takeOver,
+                    clipboard = clipboard, drop = drop,
+                )))
+            })
+
+        fun config() = say(buildJsonObject { put("config", buildJsonObject { put("codec", "jpeg"); put("width", W); put("height", H) }) })
+
+        fun frame(ts: Long, shade: Int = 0) = say(buildJsonObject { put("frame", buildJsonObject { put("key", true); put("ts", ts) }) }, picture(shade))
+
+        /** What it told the core, of one call. */
+        fun told(name: String): List<JsonObject> = h.fake.calls.filter { it.first == name }.map { it.second }
+
+        fun acked(ts: Long) = told("screen.ack").any { it["ts"]!!.jsonPrimitive.long == ts }
+
+        /** The latest timestamp acknowledged (acknowledgements only go up). */
+        fun lastAck(): Long = told("screen.ack").maxOfOrNull { it["ts"]!!.jsonPrimitive.long } ?: Long.MIN_VALUE
+
+        fun inputs(): List<JsonObject> = told("screen.input").map { it["input"]!!.jsonObject }
+
+        fun shot(name: String) { h.record(name).run { frame(); end() } }
+
+        /** A point of the frame (0..1 each way), in the stage's own px. */
+        fun at(x: Float, y: Float): Offset {
+            val node = rule.onNodeWithTag(STAGE).fetchSemanticsNode()
+            val fit = fitIn(Size(node.size.width.toFloat(), node.size.height.toFloat()), Size(W.toFloat(), H.toFloat()))
+            return Offset(fit.left + x * fit.width, fit.top + y * fit.height)
+        }
+    }
+
+    /** A frame as a browser tab looks: a page with a bar and lines, as a JPEG. */
+    private fun picture(shade: Int): ByteArray {
+        val b = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        p.shader = LinearGradient(0f, 0f, W.toFloat(), H.toFloat(), Color.rgb(70 + shade, 110, 190), Color.rgb(160, 90 + shade, 170), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, W.toFloat(), H.toFloat(), p)
+        p.shader = null
+        p.color = Color.WHITE
+        c.drawRoundRect(RectF(90f, 70f, W - 90f, H - 60f), 18f, 18f, p)
+        p.color = Color.rgb(236, 236, 240)
+        c.drawRect(90f, 70f, W - 90f, 130f, p)
+        p.color = Color.rgb(230, 112, 74)
+        c.drawCircle(130f, 100f, 12f, p)
+        p.color = Color.rgb(40, 40, 46)
+        p.textSize = 44f
+        c.drawText("Sign in to continue", 160f, 220f, p)
+        p.color = Color.rgb(200, 200, 206)
+        for (i in 0 until 5) c.drawRoundRect(RectF(160f, 270f + i * 60f, W - 300f - i * 70f, 300f + i * 60f), 10f, 10f, p)
+        p.color = Color.rgb(21, 89, 196)
+        c.drawRoundRect(RectF(160f, 580f, 420f, 630f), 25f, 25f, p)
+        return ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+    }
+
+    private fun close(a: Float, b: Double) = assertTrue("$a vs $b", abs(a - b) < 0.01)
+
+    @Test fun liveJpegFramesAreDrawnAckedAndDriven() {
+        val v = Viewer()
+        val s = v.open()
+        // What it asked for: the view by its name, JPEG only (no H.264 here), at most the phone's screen, driving it.
+        val asked = v.told(VIEW).single()
+        assertEquals("ws-1/st-1", asked["station"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("browser:tab-1", asked["screen"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(listOf("jpeg"), asked["codecs"]!!.jsonArray.map { it.jsonPrimitive.contentOrNull })
+        assertEquals(1920, asked["maxWidth"]!!.jsonPrimitive.int)
+        // Not said: the core decides (only looking while someone else drives it).
+        assertEquals(null, asked["control"])
+        v.shot("screen-connecting")
+        rule.onNodeWithText("正在连接").assertIsDisplayed()
+
+        v.state("live")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.frame(1033, shade = 30)
+        rule.waitUntil(5_000) { v.acked(1033) }
+        assertEquals(s.view, v.told("screen.ack").last()["view"]!!.jsonPrimitive.contentOrNull)
+        v.shot("screen-live")
+        rule.onNodeWithText("控制 · 李雷也在看").assertIsDisplayed()
+
+        // Driven directly (not as a trackpad): a tap is down and up with the primary button, where it was in the frame.
+        rule.runOnUiThread { s.pad = false }
+        v.h.settle()
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.25f, 0.75f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 2 }
+        val (down, up) = v.inputs().take(2)
+        assertEquals(listOf("pointer", "down", 1), listOf(down["t"]!!.jsonPrimitive.contentOrNull, down["kind"]!!.jsonPrimitive.contentOrNull, down["buttons"]!!.jsonPrimitive.int))
+        assertEquals("up", up["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.25f, down["x"]!!.jsonPrimitive.double); close(0.75f, down["y"]!!.jsonPrimitive.double)
+        close(0.25f, up["x"]!!.jsonPrimitive.double); close(0.75f, up["y"]!!.jsonPrimitive.double)
+
+        // Held: a right click.
+        rule.onNodeWithTag(STAGE).performTouchInput { longClick(v.at(0.5f, 0.5f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 4 }
+        val (rDown, rUp) = v.inputs().drop(2).take(2)
+        assertEquals(listOf("down", 2), listOf(rDown["kind"]!!.jsonPrimitive.contentOrNull, rDown["buttons"]!!.jsonPrimitive.int))
+        assertEquals("up", rUp["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.5f, rDown["x"]!!.jsonPrimitive.double)
+
+        // A drag: down where it began, moves, up where it ended.
+        rule.onNodeWithTag(STAGE).performTouchInput { swipe(v.at(0.2f, 0.5f), v.at(0.6f, 0.5f), 400) }
+        rule.waitUntil(5_000) { v.inputs().drop(4).any { it["kind"]!!.jsonPrimitive.contentOrNull == "up" } }
+        val drag = v.inputs().drop(4)
+        assertEquals("down", drag.first()["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.2f, drag.first()["x"]!!.jsonPrimitive.double)
+        assertTrue(drag.count { it["kind"]!!.jsonPrimitive.contentOrNull == "move" } >= 2)
+        assertEquals("up", drag.last()["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.6f, drag.last()["x"]!!.jsonPrimitive.double)
+
+        // Turned sideways: the same view goes on (no new screen.view), the controls down the side.
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width > it.height } }
+        v.h.settle()
+        v.frame(1066)
+        rule.waitUntil(5_000) { v.acked(1066) }
+        v.shot("screen-live-landscape")
+        assertEquals(1, v.told(VIEW).size)
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    /**
+     * Driven as a trackpad (as it is unless chosen otherwise): a finger moves the pointer (no button held) by how far it
+     * went, a tap anywhere clicks where the pointer is, two fingers tapped click the right button; the keys row sends
+     * the keys a phone's keyboard has not, a modifier tapped held for the next key alone.
+     */
+    @Test fun aTrackpadMovesThePointerAndClicksWhereItPoints() {
+        val v = Viewer()
+        val s = v.open()
+        v.state("live", others = emptyList())
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        assertTrue(s.pad)
+
+        // A tap far from the pointer: a click where it points (the middle, before anything moved it).
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.1f, 0.1f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 2 }
+        val (down, up) = v.inputs().take(2)
+        assertEquals(listOf("down", 1), listOf(down["kind"]!!.jsonPrimitive.contentOrNull, down["buttons"]!!.jsonPrimitive.int))
+        assertEquals("up", up["kind"]!!.jsonPrimitive.contentOrNull)
+        close(0.5f, down["x"]!!.jsonPrimitive.double); close(0.5f, down["y"]!!.jsonPrimitive.double)
+
+        // A finger moved right, slowly: the pointer goes right, no button held, and stays in the frame.
+        v.h.settle(); rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { swipe(v.at(0.2f, 0.5f), v.at(0.4f, 0.5f), 600) }
+        v.h.settle()
+        val moves = v.inputs().drop(2)
+        assertTrue(moves.isNotEmpty() && moves.all { it["kind"]!!.jsonPrimitive.contentOrNull == "move" && it["buttons"]!!.jsonPrimitive.int == 0 })
+        val x = moves.last()["x"]!!.jsonPrimitive.double
+        assertTrue("moved right: $x", x > 0.55 && x <= 1.0)
+        close(0.5f, moves.last()["y"]!!.jsonPrimitive.double)
+        v.shot("screen-trackpad")
+
+        // A tap: a click where it points now.
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.9f, 0.9f)) }
+        rule.waitUntil(5_000) { v.inputs().drop(2 + moves.size).size >= 2 }
+        val click = v.inputs().drop(2 + moves.size).first()
+        assertEquals("down", click["kind"]!!.jsonPrimitive.contentOrNull)
+        close(x.toFloat(), click["x"]!!.jsonPrimitive.double)
+
+        // Two fingers tapped: a right click there.
+        val before = v.inputs().size
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithTag(STAGE).performTouchInput { down(0, v.at(0.3f, 0.5f)); down(1, v.at(0.6f, 0.5f)); advanceEventTime(80); up(0); up(1) }
+        rule.waitUntil(5_000) { v.inputs().size >= before + 2 }
+        val right = v.inputs().drop(before)
+        assertEquals(listOf("down", 2), listOf(right[0]["kind"]!!.jsonPrimitive.contentOrNull, right[0]["buttons"]!!.jsonPrimitive.int))
+        close(x.toFloat(), right[0]["x"]!!.jsonPrimitive.double)
+
+        // ⌘ held, then Tab: ⌘Tab; Tab again goes alone.
+        val keysFrom = v.inputs().size
+        rule.onNodeWithContentDescription("Command").performClick()
+        v.h.settle()
+        v.shot("screen-trackpad-command")
+        rule.onNodeWithContentDescription("Tab").performClick()
+        rule.onNodeWithContentDescription("Tab").performClick()
+        rule.waitUntil(5_000) { v.inputs().size >= keysFrom + 4 }
+        val keys = v.inputs().drop(keysFrom)
+        assertEquals(listOf("key", "down", "Tab", 4), listOf(keys[0]["t"]!!.jsonPrimitive.contentOrNull, keys[0]["kind"]!!.jsonPrimitive.contentOrNull, keys[0]["code"]!!.jsonPrimitive.contentOrNull, keys[0]["mods"]!!.jsonPrimitive.int))
+        assertEquals(4, keys[1]["mods"]!!.jsonPrimitive.int)
+        assertEquals(0, keys[2]["mods"]!!.jsonPrimitive.int)
+
+        // Chosen direct: kept on this device.
+        rule.onNodeWithContentDescription("触控板").performClick()
+        rule.waitUntil(5_000) { v.told("prefs.set").isNotEmpty() }
+        assertEquals("direct", v.told("prefs.set").last()["screenTouch"]!!.jsonPrimitive.contentOrNull)
+        assertTrue(!s.pad)
+    }
+
+    /**
+     * 全屏: the screen alone, sideways, edge to edge, its tools folded into one button over the corner; opened, the same
+     * tools; 退出全屏 upright again with the bar.
+     */
+    @Test fun fullScreenShowsTheScreenAlone() {
+        val v = Viewer()
+        v.open()
+        v.state("live", others = emptyList())
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        rule.onNodeWithContentDescription("全屏").performClick()
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width > it.height } }
+        v.h.settle()
+        v.frame(1033)
+        rule.waitUntil(5_000) { v.acked(1033) }
+        // Edge to edge: the stage is the whole window.
+        val stage = rule.onNodeWithTag(STAGE).fetchSemanticsNode().size
+        val window = rule.activity.window.decorView.let { IntSize(it.width, it.height) }
+        assertEquals(window, IntSize(stage.width, stage.height))
+        v.shot("screen-full")
+        rule.onNodeWithContentDescription("工具").performClick()
+        v.h.settle()
+        v.shot("screen-full-tools")
+        rule.onNodeWithContentDescription("退出全屏").performClick()
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width < it.height } }
+        rule.onNodeWithContentDescription("全屏").assertIsDisplayed()
+    }
+
+    /**
+     * The stage made shorter (the keyboard up, sideways): the frame drawn as large as it was, not fitted smaller, the
+     * pointer still in sight; made tall again, fitted as before.
+     */
+    @Test fun theKeyboardUpKeepsTheFrameAsLarge() {
+        val frame = Size(1280f, 720f)
+        val zoom = fail.still.android.remote.ViewZoom()
+        val tall = Size(800f, 360f)
+        val short = Size(800f, 150f)
+        val before = fitIn(tall, frame)
+        val after = fitIn(short, frame)
+        zoom.refit(before, after, short, Offset(0.5f, 0.9f), 40f)
+        val shown = zoom.shown(after)
+        assertTrue("as wide as it was: ${shown.width}", abs(shown.width - before.width) < 1f)
+        val y = shown.top + 0.9f * shown.height
+        assertTrue("the pointer in sight: $y", y in 0f..short.height)
+        zoom.refit(after, before, tall, Offset(0.5f, 0.9f), 40f)
+        assertTrue(!zoom.zoomed)
+        assertEquals(before, zoom.shown(before))
+    }
+
+    /**
+     * H.264 through MediaCodec onto the texture: the androidTest's sample (High profile, B-frames: a decoder that holds
+     * frames back, harder than a station's low-latency stream), as a station sends it: the avcC with the config, each
+     * access unit in AVCC, never more than two ahead of the last acknowledged. All of it goes through (nothing waits
+     * for an acknowledgement that never comes), and the picture is drawn.
+     */
+    @Test fun liveH264IsDecodedOntoTheSurface() {
+        val (avcC, units, size) = sample()
+        val v = Viewer(h264 = true)
+        val asked = v.open().let { v.told(VIEW).single() }
+        assertEquals(listOf("h264", "jpeg"), asked["codecs"]!!.jsonArray.map { it.jsonPrimitive.contentOrNull })
+        v.state("live", others = emptyList())
+        v.say(buildJsonObject { put("config", buildJsonObject { put("codec", "h264"); put("width", size.width); put("height", size.height) }) }, avcC)
+        val sent = ArrayList<Long>()
+        for ((ts, key, data) in units) {
+            rule.waitUntil(5_000) { sent.count { it > v.lastAck() } < 2 }
+            v.h.fake.say(VIEW, buildJsonObject { put("frame", buildJsonObject { put("key", key); put("ts", ts) }) }, data)
+            sent += ts
+        }
+        rule.waitUntil(5_000) { sent.count { it > v.lastAck() } < 2 }
+        v.h.settle()
+        v.shot("screen-live-h264")
+        // Drawn: the frame's middle is not the page's ground.
+        val image = rule.onNodeWithTag(STAGE).captureToImage().asAndroidBitmap()
+        val ground = image.getPixel(2, 2)
+        val middle = (0 until 20).map { image.getPixel(image.width / 2 - 40 + it * 4, image.height / 2) }
+        assertTrue("the decoded frame is drawn", middle.any { abs(Color.red(it) - Color.red(ground)) + abs(Color.green(it) - Color.green(ground)) + abs(Color.blue(it) - Color.blue(ground)) > 30 })
+    }
+
+    /** The sample's avcC, its access units in AVCC (timestamp, key, bytes) and its size, as MediaExtractor reads them. */
+    private fun sample(): Triple<ByteArray, List<Triple<Long, Boolean, ByteArray>>, IntSize> {
+        val ctx = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context
+        val x = android.media.MediaExtractor()
+        ctx.assets.openFd("drive-sample.mp4").use { x.setDataSource(it.fileDescriptor, it.startOffset, it.length) }
+        val track = (0 until x.trackCount).first { x.getTrackFormat(it).getString(android.media.MediaFormat.KEY_MIME) == "video/avc" }
+        val format = x.getTrackFormat(track)
+        x.selectTrack(track)
+        fun unit(name: String): ByteArray = format.getByteBuffer(name)!!.let { b -> ByteArray(b.remaining()).also { b.get(it) } }.let { nals(it).single() }
+        val sps = unit("csd-0")
+        val pps = unit("csd-1")
+        val avcC = byteArrayOf(1, sps[1], sps[2], sps[3], 0xff.toByte(), 0xe1.toByte(), (sps.size shr 8).toByte(), sps.size.toByte()) + sps +
+            byteArrayOf(1, (pps.size shr 8).toByte(), pps.size.toByte()) + pps
+        val units = ArrayList<Triple<Long, Boolean, ByteArray>>()
+        val buffer = java.nio.ByteBuffer.allocate(1 shl 20)
+        while (true) {
+            val n = x.readSampleData(buffer, 0)
+            if (n < 0) break
+            val bytes = ByteArray(n).also { buffer.position(0); buffer.get(it, 0, n) }
+            // Annex B (as the extractor gives it) to AVCC (as the station sends it).
+            val out = java.io.ByteArrayOutputStream()
+            for (nal in nals(bytes)) { out.write(byteArrayOf((nal.size shr 24).toByte(), (nal.size shr 16).toByte(), (nal.size shr 8).toByte(), nal.size.toByte())); out.write(nal) }
+            units += Triple(x.sampleTime, x.sampleFlags and android.media.MediaExtractor.SAMPLE_FLAG_SYNC != 0, out.toByteArray())
+            x.advance()
+        }
+        x.release()
+        return Triple(avcC, units, IntSize(format.getInteger(android.media.MediaFormat.KEY_WIDTH), format.getInteger(android.media.MediaFormat.KEY_HEIGHT)))
+    }
+
+    /** The NALs of an Annex B stream (split at its 3- and 4-byte start codes). */
+    private fun nals(b: ByteArray): List<ByteArray> {
+        val starts = ArrayList<Pair<Int, Int>>()
+        var i = 0
+        while (i + 3 <= b.size) {
+            if (b[i].toInt() == 0 && b[i + 1].toInt() == 0 && b[i + 2].toInt() == 1) { starts += i to i + 3; i += 3 }
+            else if (i + 4 <= b.size && b[i].toInt() == 0 && b[i + 1].toInt() == 0 && b[i + 2].toInt() == 0 && b[i + 3].toInt() == 1) { starts += i to i + 4; i += 4 }
+            else i++
+        }
+        return starts.mapIndexed { k, (_, from) -> b.copyOfRange(from, if (k + 1 < starts.size) starts[k + 1].first else b.size) }
+    }
+
+    /**
+     * An agent drives it as it opens: the core opened it only looking (no `control` asked), who drives it is said with
+     * 接管; 接管 asks for control (`screen.control` true), and the line then says the agent waits. Upright and sideways.
+     */
+    @Test fun anAgentDrivingIsTakenOver() {
+        val v = Viewer()
+        val s = v.open()
+        assertEquals(null, v.told(VIEW).single()["control"])
+        val agent = "Agent「修登录」"
+        v.state("live", control = false, others = listOf(agent, "Bob"), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 正在控制 · Bob 也在查看")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-agent-driving")
+        rule.onNodeWithText("$agent 正在控制").assertIsDisplayed()
+        // Only looking: a tap is not sent.
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        v.h.settle()
+        assertEquals(emptyList<JsonObject>(), v.inputs())
+
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width > it.height } }
+        v.frame(1033)
+        rule.waitUntil(5_000) { v.acked(1033) }
+        v.shot("screen-agent-driving-landscape")
+        rule.onNodeWithText("接管").performTouchInput { click() }
+        v.h.settle()
+        val asked = v.told("screen.control").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["control"]!!.jsonPrimitive.contentOrNull?.toBoolean())
+        // The core opens it again driving; the agent waits.
+        v.state("live", control = true, others = listOf(agent, "Bob"), controllers = emptyList(), takeOver = false, line = "控制 · $agent 已暂停 · Bob 也在查看")
+        v.frame(1066)
+        rule.waitUntil(5_000) { v.acked(1066) }
+        v.shot("screen-agent-paused-landscape")
+        assertEquals(0, rule.onAllNodesWithTextCount("接管"))
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        rule.waitUntil(10_000) { rule.onNodeWithTag(STAGE).fetchSemanticsNode().size.let { it.width < it.height } }
+        v.frame(1100)
+        rule.waitUntil(5_000) { v.acked(1100) }
+        v.shot("screen-agent-paused")
+        rule.onNodeWithText("控制 · $agent 已暂停 · Bob 也在查看").assertIsDisplayed()
+        // Driving now: a tap is a click.
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        rule.waitUntil(5_000) { v.inputs().size >= 2 }
+        rule.runOnUiThread { rule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    /** 接管 in the dark: the main solid button, as the web's primary (light on the dark theme). */
+    @Test fun anAgentDrivingInTheDark() {
+        val v = Viewer(dark = true)
+        v.open()
+        val agent = "Agent「修登录」"
+        v.state("live", control = false, others = listOf(agent), controllers = listOf(agent), takeOver = true, line = "只看 · $agent 正在控制")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-agent-driving-dark")
+    }
+
+    @Test fun liveInTheDark() {
+        val v = Viewer(dark = true)
+        v.open()
+        v.state("live", others = emptyList())
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-live-dark")
+    }
+
+    @Test fun readOnlySendsNothing() {
+        val v = Viewer()
+        v.open()
+        v.state("live", control = false, may = false)
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-read-only")
+        // No 只看/控制 to choose, no keyboard; a tap is not sent.
+        assertEquals(0, rule.onAllNodesWithTextCount("控制"))
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        v.h.settle()
+        assertEquals(emptyList<JsonObject>(), v.inputs())
+    }
+
+    @Test fun liveButNotDrivable() {
+        val v = Viewer()
+        v.open()
+        // 控制 chosen, but the station cannot take input (Accessibility not granted): seen, nothing sent, why said quietly.
+        v.state("live", control = false, others = emptyList(), access = ScreenAccess(capture = true, control = false, message = "在 辅助功能 里打开 stillfail-station", app = "stillfail-station"))
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.shot("screen-not-drivable")
+        rule.onNodeWithText("在 辅助功能 里打开 stillfail-station").assertIsDisplayed()
+        rule.onNodeWithTag(STAGE).performTouchInput { click(v.at(0.5f, 0.5f)) }
+        v.h.settle()
+        assertEquals(emptyList<JsonObject>(), v.inputs())
+    }
+
+    @Test fun reconnectingKeepsTheFrame() {
+        val v = Viewer()
+        v.open()
+        v.state("live")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.state("reconnecting", message = "和 station 的连接断了，正在重新连接…")
+        v.shot("screen-reconnecting")
+        rule.onNodeWithText("和 station 的连接断了，正在重新连接…").assertIsDisplayed()
+    }
+
+    @Test fun overStates() {
+        val v = Viewer()
+        // Ended by the station: the frame kept under it, 再试一次 and 退出.
+        v.open()
+        v.state("live")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.state("ended", message = "agent 关掉了这个标签页")
+        v.h.fake.finish(VIEW)
+        v.h.deliver()
+        v.shot("screen-ended")
+        rule.onNodeWithText("已结束").assertIsDisplayed()
+        rule.onNodeWithText("重试").assertIsDisplayed()
+
+        for ((phase, why) in listOf(
+            "outdated" to "这台 station 的版本还不能共享屏幕，更新后再试",
+            "gone" to "这个标签页已经关了",
+            "denied" to "station 现在录不了屏",
+        )) {
+            v.open()
+            // Denied for a grant the station lacks: what to turn on where, as the station says.
+            val access = if (phase == "denied") ScreenAccess(capture = false, control = false, message = "在 系统设置 › 隐私与安全性 › 屏幕录制 里打开 stillfail-station", app = "stillfail-station") else null
+            v.state(phase, others = emptyList(), message = why, access = access)
+            v.h.fake.finish(VIEW)
+            v.h.deliver()
+            v.shot("screen-$phase")
+            rule.onNodeWithText(why).assertIsDisplayed()
+            access?.message?.let { rule.onNodeWithText(it).assertIsDisplayed() }
+        }
+
+        // The call itself failed (the station unreachable): said with the core's words.
+        v.open()
+        v.h.fake.fail(VIEW, "offline", "station 不在线")
+        v.h.deliver()
+        v.h.settle()
+        v.shot("screen-failed")
+        rule.onNodeWithText("station 不在线").assertIsDisplayed()
+
+        // 退出 leaves.
+        rule.onNodeWithText("退出").performTouchInput { click() }
+        v.h.settle()
+        assertTrue(v.exited)
+    }
+
+    private fun MotionRule.onAllNodesWithTextCount(text: String) =
+        onAllNodes(androidx.compose.ui.test.hasText(text)).fetchSemanticsNodes().size
+
+    private fun MotionRule.countLabelled(label: String) =
+        onAllNodes(androidx.compose.ui.test.hasContentDescription(label)).fetchSemanticsNodes().size
+
+    private val clipboard: ClipboardManager get() = rule.activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    /** The phone's clipboard's text now (read on the main thread, as the app in front). */
+    private fun phoneClip(): String? {
+        var text: String? = null
+        rule.runOnUiThread { text = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString() }
+        return text
+    }
+
+    private val DROP = ScreenDrop(folder = "/Users/alice/Downloads", reveal = true)
+
+    /** Live and driven, a station that carries the clipboard both ways and takes files (or, `old`, one from before them). */
+    private fun driven(v: Viewer, old: Boolean = false): ScreenSession {
+        val s = v.open()
+        if (old) v.state("live", others = emptyList()) else v.state("live", others = emptyList(), clipboard = listOf("text", "png"), drop = DROP)
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        return s
+    }
+
+    /** Driving it: 发送文件 and 粘贴 beside the keyboard; 粘贴 sends the phone's clipboard (`screen.clipboard`, pasted). */
+    @Test fun pastesThePhonesClipboard() {
+        val v = Viewer()
+        val s = driven(v)
+        v.shot("screen-clipboard-driving")
+        rule.onNodeWithContentDescription("发送文件").assertIsDisplayed()
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").assertIsDisplayed()
+        rule.onNodeWithContentDescription("键盘").assertIsDisplayed()
+
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "hello from the phone")) }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        val asked = v.told("screen.clipboard").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("hello from the phone", asked["text"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["paste"]!!.jsonPrimitive.boolean)
+
+        // Refused (the core says why): said.
+        v.h.fake.answer = { name, _ -> if (name == "screen.clipboard") throw CoreException("unsupported", "这个屏幕不支持剪贴板", null) else JsonNull }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("无法粘贴：这个屏幕不支持剪贴板") == 1 }
+        v.h.settle(3000)
+
+        // Nothing on the phone's clipboard: said, nothing sent.
+        rule.runOnUiThread { clipboard.clearPrimaryClip() }
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        v.h.deliver()
+        rule.onNodeWithText("剪贴板是空的").assertIsDisplayed()
+        v.shot("screen-clipboard-empty")
+        assertEquals(2, v.told("screen.clipboard").size)
+    }
+
+    /** The phone's clipboard's picture now: its type and its bytes (read through its URI); null when it holds none. */
+    private fun phoneImage(): Pair<String, ByteArray>? {
+        var got: Pair<String, android.net.Uri>? = null
+        rule.runOnUiThread {
+            val clip = clipboard.primaryClip?.takeIf { it.itemCount > 0 }
+            val uri = clip?.getItemAt(0)?.uri
+            if (clip != null && uri != null) got = clip.description.getMimeType(0) to uri
+        }
+        val (type, uri) = got ?: return null
+        return type to rule.activity.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+    }
+
+    /** A picture as a PNG (or `format`): the frame's picture, scaled. */
+    private fun image(format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG, w: Int = 320, h: Int = 180): ByteArray {
+        val jpeg = picture(0)
+        val b = Bitmap.createScaledBitmap(android.graphics.BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size), w, h, true)
+        return ByteArrayOutputStream().also { b.compress(format, 90, it) }.toByteArray()
+    }
+
+    /**
+     * A copy made on the screen lands on the phone's clipboard: text as it is, a picture as the app's own content URI
+     * (image/png, its bytes as they came, kept in the cache). From a screen that does not say it carries pictures, a
+     * picture is not put there.
+     */
+    @Test fun aCopyOnTheScreenLandsOnThePhone() {
+        clips()
+        val v = Viewer()
+        driven(v)
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "before")) }
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "text"); put("text", "copied on the Mac 复制的") }) })
+        rule.waitUntil(5_000) { phoneClip() == "copied on the Mac 复制的" }
+
+        val png = image()
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", png.size) }) }, png)
+        rule.waitUntil(5_000) { phoneImage() != null }
+        val (type, bytes) = phoneImage()!!
+        assertEquals("image/png", type)
+        assertTrue(bytes.contentEquals(png))
+        val kept = File(rule.activity.cacheDir, "screen-clips").listFiles()!!.toList()
+        assertTrue(kept.any { it.readBytes().contentEquals(png) })
+        v.shot("screen-clipboard-image")
+
+        // More than are kept: only the newest few stay in the cache, the newest on the clipboard.
+        val more = (1..4).map { image(w = 100 + it * 10) }
+        for (m in more) v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", m.size) }) }, m)
+        rule.waitUntil(5_000) { phoneImage()?.second?.contentEquals(more.last()) == true }
+        assertEquals(3, File(rule.activity.cacheDir, "screen-clips").listFiles()!!.size)
+
+        // Not a PNG: not put there.
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", 6) }) }, byteArrayOf(-1, -40, -1, -32, 0, 16))
+        v.h.settle(500)
+        assertTrue(phoneImage()!!.second.contentEquals(more.last()))
+
+        // A screen that carries text only (a station or helper from before pictures): a picture is not put there.
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData.newPlainText("test", "text only")) }
+        v.state("live", others = emptyList(), clipboard = listOf("text"), drop = DROP)
+        v.h.settle()
+        v.say(buildJsonObject { put("clipboard", buildJsonObject { put("type", "png"); put("size", png.size) }) }, png)
+        v.h.settle(500)
+        assertEquals("text only", phoneClip())
+        assertEquals(null, phoneImage())
+    }
+
+    @Test fun pastesThePhonesImage() = pastesThePhonesImage(dark = false)
+
+    @Test fun pastesThePhonesImageInTheDark() = pastesThePhonesImage(dark = true)
+
+    /** The phone's clipboard holding `bytes` (a file of the app's cache, through its FileProvider) as `type`. */
+    private fun onPhone(name: String, bytes: ByteArray, type: String) {
+        val dir = File(rule.activity.cacheDir, "screen-clips").apply { mkdirs() }
+        val file = File(dir, name).apply { writeBytes(bytes) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(rule.activity, rule.activity.packageName + ".files", file)
+        rule.runOnUiThread { clipboard.setPrimaryClip(ClipData("test", arrayOf(type), ClipData.Item(uri))) }
+    }
+
+    /** The PNG of the `i`th `screen.clipboard` asked: `png: true`, the picture beside the call. */
+    private fun pngSent(v: Viewer, i: Int): ByteArray {
+        val at = v.h.fake.calls.withIndex().filter { it.value.first == "screen.clipboard" }[i].index
+        assertEquals(true, v.h.fake.calls[at].second["png"]?.jsonPrimitive?.booleanOrNull)
+        return v.h.fake.carried[at]!!
+    }
+
+    /** The copies kept, none to begin with. */
+    private fun clips() = File(rule.activity.cacheDir, "screen-clips").apply { deleteRecursively() }
+
+    /**
+     * 粘贴 with a picture on the phone's clipboard sends it as PNG (`screen.clipboard` `png`, pasted): a PNG as it is, a
+     * JPEG converted; past 8 MB it is said and not sent; a screen that carries text only is never sent one.
+     */
+    private fun pastesThePhonesImage(dark: Boolean) {
+        clips()
+        val v = Viewer(dark = dark)
+        val s = driven(v)
+        val png = image()
+        onPhone("phone.png", png, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        val asked = v.told("screen.clipboard").single()
+        assertEquals(s.view, asked["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals(true, asked["paste"]!!.jsonPrimitive.boolean)
+        assertEquals(null, asked["text"])
+        assertTrue(pngSent(v, 0).contentEquals(png))
+
+        // Too large: said, not sent.
+        onPhone("huge.png", ByteArray(8 * 1024 * 1024 + 1).also { png.copyInto(it, 0, 0, 8) }, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("图片过大，上限 8 MB") == 1 }
+        v.shot(if (dark) "screen-clipboard-image-too-large-dark" else "screen-clipboard-image-too-large")
+        assertEquals(1, v.told("screen.clipboard").size)
+        if (dark) return
+        v.h.settle(3000)
+
+        // A JPEG: converted to PNG, the same picture.
+        onPhone("photo.jpg", image(Bitmap.CompressFormat.JPEG, 400, 300), "image/jpeg")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").size == 2 }
+        val converted = pngSent(v, 1)
+        assertTrue(fail.still.android.remote.isPng(converted))
+        val decoded = android.graphics.BitmapFactory.decodeByteArray(converted, 0, converted.size)
+        assertEquals(400, decoded.width)
+        assertEquals(300, decoded.height)
+
+        // A screen that carries text only: the picture is not sent, and that is said.
+        v.state("live", others = emptyList(), clipboard = listOf("text"), drop = DROP)
+        v.h.settle()
+        onPhone("phone.png", png, "image/png")
+        rule.onNodeWithContentDescription("粘贴手机剪贴板").performTouchInput { click() }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("此屏幕不支持粘贴图片") == 1 }
+        assertEquals(2, v.told("screen.clipboard").size)
+        clips()
+    }
+
+    /** A station from before the clipboard and files, or only looking: neither offered (the keyboard types, as before). */
+    @Test fun anOldStationOffersNeither() {
+        val v = Viewer()
+        driven(v, old = true)
+        v.shot("screen-clipboard-old-station")
+        rule.onNodeWithContentDescription("键盘").assertIsDisplayed()
+        assertEquals(0, rule.countLabelled("发送文件"))
+        assertEquals(0, rule.countLabelled("粘贴手机剪贴板"))
+
+        // Only looking, the core says neither (they go only to a view that drives it).
+        v.state("live", control = false, others = emptyList())
+        v.h.settle()
+        assertEquals(0, rule.countLabelled("发送文件"))
+        assertEquals(0, rule.countLabelled("粘贴手机剪贴板"))
+        assertEquals(0, rule.countLabelled("键盘"))
+    }
+
+    @Test fun filesGoOntoTheMachine() = filesGoOntoTheMachine(dark = false)
+
+    @Test fun filesGoOntoTheMachineInTheDark() = filesGoOntoTheMachine(dark = true)
+
+    /**
+     * Files picked go up one after another into the state's `drop` folder (the drive's upload, `root` the folder), the
+     * first under a free name as its own is taken there; how far each has got shows over the frame, then where it is,
+     * its path pasted (`screen.clipboard`) or shown in Finder (`screen.input` reveal); let go of, gone.
+     */
+    private fun filesGoOntoTheMachine(dark: Boolean) {
+        val v = Viewer(dark = dark)
+        val s = driven(v)
+        val dir = File(rule.activity.cacheDir, "picked").apply { deleteRecursively(); mkdirs() }
+        val report = File(dir, "季度报告.pdf").apply { writeBytes(ByteArray(1_200_000) { (it % 251).toByte() }) }
+        val notes = File(dir, "notes.txt").apply { writeText("still.fail\n".repeat(400)) }
+        val held = CountDownLatch(1)
+        var parts = 0
+        v.h.fake.answer = { name, p ->
+            if (name != "drive.upload.part") JsonNull
+            else {
+                val path = p["path"]!!.jsonPrimitive.contentOrNull!!
+                val offset = p["offset"]!!.jsonPrimitive.long
+                val total = p["total"]!!.jsonPrimitive.long
+                val got = v.h.fake.carried.last()!!.size
+                assertEquals("/Users/alice/Downloads", p["root"]!!.jsonPrimitive.contentOrNull)
+                // A file of its name there already.
+                if (path == "季度报告.pdf") throw CoreException("exists", "there is already a file by that name", 409)
+                // Its second part waits while it is pictured going.
+                if (path == "季度报告 (1).pdf" && offset > 0 && parts++ == 0) held.await(20, TimeUnit.SECONDS)
+                val have = offset + got
+                buildJsonObject {
+                    put("have", have)
+                    if (have >= total) put("entry", buildJsonObject { put("name", path.substringAfterLast('/')); put("dir", false) })
+                }
+            }
+        }
+        rule.runOnUiThread { s.drops.send(rule.activity.contentResolver, listOf(Uri.fromFile(report), Uri.fromFile(notes)), DROP) }
+        try { rule.waitUntil(10_000) { s.drops.list.size == 2 && s.drops.list[0].state == "going" && s.drops.list[0].sent > 0 } }
+        catch (e: Throwable) { throw AssertionError("drops: " + s.drops.list.map { "${it.name} ${it.state} ${it.sent}/${it.size} ${it.error}" } + " parts: " + v.told("drive.upload.part").map { "${it["path"]} ${it["offset"]}" }, e) }
+        v.h.deliver()
+        rule.onNodeWithText("季度报告 (1).pdf").assertIsDisplayed()
+        rule.onNodeWithText("等待发送").assertIsDisplayed()
+        v.shot(if (dark) "screen-files-going-dark" else "screen-files-going")
+
+        held.countDown()
+        rule.waitUntil(10_000) { s.drops.list.all { it.state == "done" } }
+        v.h.deliver()
+        rule.onNodeWithText("/Users/alice/Downloads/季度报告 (1).pdf").assertIsDisplayed()
+        rule.onNodeWithText("/Users/alice/Downloads/notes.txt").assertIsDisplayed()
+        v.shot(if (dark) "screen-files-done-dark" else "screen-files-done")
+        if (dark) return
+
+        rule.onAllNodes(androidx.compose.ui.test.hasText("粘贴路径"))[0].performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.clipboard").isNotEmpty() }
+        assertEquals("/Users/alice/Downloads/季度报告 (1).pdf", v.told("screen.clipboard").single()["text"]!!.jsonPrimitive.contentOrNull)
+        rule.onAllNodes(androidx.compose.ui.test.hasText("在访达中显示"))[1].performTouchInput { click() }
+        rule.waitUntil(5_000) { v.told("screen.input").isNotEmpty() }
+        val reveal = v.told("screen.input").single()
+        assertEquals(s.view, reveal["view"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("reveal", reveal["input"]!!.jsonObject["t"]!!.jsonPrimitive.contentOrNull)
+        assertEquals("/Users/alice/Downloads/notes.txt", reveal["input"]!!.jsonObject["path"]!!.jsonPrimitive.contentOrNull)
+
+        // Let go of, one and then the other: the panel goes.
+        rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("关闭") and androidx.compose.ui.test.hasClickAction()).fetchSemanticsNodes().size.let { assertEquals(3, it) }
+        repeat(2) { rule.onAllNodes(androidx.compose.ui.test.hasContentDescription("关闭"))[1].performTouchInput { click() }; v.h.deliver() }
+        assertEquals(0, s.drops.list.size)
+        assertEquals(0, rule.onAllNodesWithTextCount("粘贴路径"))
+    }
+}

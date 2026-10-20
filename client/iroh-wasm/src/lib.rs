@@ -170,9 +170,12 @@ fn close_info(error: &iroh::endpoint::ConnectionError) -> CloseInfo {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PathState {
+    id: String,
     selected: bool,
     relay: Option<String>,
     rtt_ms: f64,
+    tx_packets: f64,
+    lost_packets: f64,
 }
 
 #[derive(Serialize)]
@@ -180,8 +183,6 @@ struct PathState {
 struct Stats {
     rx_bytes: f64,
     tx_bytes: f64,
-    tx_packets: f64,
-    lost_packets: f64,
 }
 
 #[wasm_bindgen]
@@ -252,13 +253,19 @@ impl Connection {
             .inner
             .paths()
             .iter()
-            .map(|p| PathState {
-                selected: p.is_selected(),
-                relay: match p.remote_addr() {
-                    iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-                    _ => None,
-                },
-                rtt_ms: p.rtt().as_secs_f64() * 1000.0,
+            .map(|p| {
+                let stats = p.stats();
+                PathState {
+                    id: p.id().to_string(),
+                    selected: p.is_selected(),
+                    relay: match p.remote_addr() {
+                        iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                        _ => None,
+                    },
+                    rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
+                    tx_packets: stats.udp_tx.datagrams as f64,
+                    lost_packets: stats.lost_packets as f64,
+                }
             })
             .collect();
         to_js(&paths)
@@ -266,7 +273,7 @@ impl Connection {
 
     pub fn stats(&self) -> Result<JsValue, JsValue> {
         let s = self.inner.stats();
-        to_js(&Stats { rx_bytes: s.udp_rx.bytes as f64, tx_bytes: s.udp_tx.bytes as f64, tx_packets: s.udp_tx.datagrams as f64, lost_packets: s.lost_packets as f64 })
+        to_js(&Stats { rx_bytes: s.udp_rx.bytes as f64, tx_bytes: s.udp_tx.bytes as f64 })
     }
 }
 

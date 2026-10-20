@@ -15,7 +15,7 @@ import { GRACE, PORTS, SETTLE, Shares, answerAdb, bind, isPackage, text } from "
 import type { Viewer } from "../src/mesh/credential.ts";
 import type { Connection, Stream } from "../src/mesh/native.ts";
 import { Reader, writeLine } from "../src/mesh/serve.ts";
-import { script } from "./accounts-fakes.ts";
+import { exe, script } from "./accounts-fakes.ts";
 
 const FAKE = fileURLToPath(new URL("./fake", import.meta.url));
 process.env.PATH = `${FAKE}${delimiter}${process.env.PATH ?? ""}`;
@@ -42,7 +42,8 @@ function fakeAdb(files: Record<string, string> = {}) {
       return [];
     }
   };
-  return { path, calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed") };
+  const say = (name: string, content: string) => writeFileSync(join(dir, name), content);
+  return { path: exe(path), calls: () => lines("calls").map((l) => JSON.parse(l) as string[]), dialed: () => lines("dialed"), say };
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -145,11 +146,11 @@ test("an ask about no offer, or an unknown one, is answered in the asker's langu
   const shares = new Shares();
   const unknown = new Memory();
   await answerAdb(shares, nowhere, viewer, asking({ op: "what" }), unknown as unknown as Stream);
-  assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "不认识的 adb 请求" }]);
+  assert.deepEqual(unknown.lines(), [{ status: 400, headers: { "content-type": "application/json" } }, { message: "无法识别的 adb 请求" }]);
   assert.ok(unknown.finished);
   const none = new Memory();
   await answerAdb(shares, nowhere, viewer, asking({ op: "pair", code: "123456", phone: PHONE }, { "stillfail-lang": "en" }), none as unknown as Stream);
-  assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This phone isn't sharing for debugging" }]);
+  assert.deepEqual(none.lines(), [{ status: 409, headers: { "content-type": "application/json" } }, { message: "This device isn't sharing debugging" }]);
 });
 
 test("without adb the offer says missing; a phone the station cannot reach says why", async () => {
@@ -159,7 +160,7 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   const offered = answerAdb(missing, nowhere, viewer, asking({ op: "share", phone: PHONE, device: "Pixel 8" }), stream as unknown as Stream);
   const said = await until(() => stream.lines().find((l) => l.adb === "missing"));
   assert.match(said.serial, /^127\.0\.0\.1:\d+$/);
-  assert.equal(said.message, "这台 station 上没有 adb：装上 Android platform-tools（macOS：brew install android-platform-tools），再重新共享");
+  assert.equal(said.message, "此 station 未安装 adb：请安装 Android platform-tools（macOS：brew install android-platform-tools）后重新共享");
   assert.deepEqual(stream.lines()[0], { status: 200, headers: { "content-type": "application/x-ndjson" } });
   assert.deepEqual(missing.list(), [{ serial: said.serial, device: "Pixel 8", android: "", owner: { name: "Pat", email: "pat@example.com" }, adb: "missing", message: said.message }]);
   await stream.reset();
@@ -174,18 +175,16 @@ test("without adb the offer says missing; a phone the station cannot reach says 
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
   const failing = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), failing as unknown as Stream);
-  // Not in yet after `connect`: its state looked at again after 500 ms, and once SETTLE is over taken as it is.
-  await time.asleep(500);
-  assert.equal(failing.lines().find((l) => l.adb === "failed"), undefined);
-  await time.adjust(SETTLE);
+  // The tunnel turned down: no use waiting SETTLE out, and adb is let go of (it would go on dialling).
   const failed = await until(() => failing.lines().find((l) => l.adb === "failed"));
   assert.equal(failed.message, "no streams here");
   assert.ok(adb.calls().some((c) => c[0] === "connect" && c[1] === failed.serial));
+  assert.deepEqual(adb.calls().at(-1), ["disconnect", failed.serial]);
   await failing.reset();
   await time.asleep(GRACE);
   await time.adjust(GRACE);
   await offer;
-  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 2);
+  await until(() => adb.calls().filter((c) => c[0] === "disconnect").length === 3);
   await time.close();
 });
 
@@ -239,6 +238,41 @@ test("a newer offer of the same phone takes the older's place, its port and all"
   await time.close();
 });
 
+test("offers again as the phone's link moves: adb is asked again only when Wireless debugging changes", async () => {
+  const adb = fakeAdb();
+  const time = testClock();
+  const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock });
+  const mesh = await link(shares);
+  const connects = () => adb.calls().filter((c) => c[0] === "connect").length;
+  const reaches = async (reader: { line(): Promise<any> }, adbState: string) => {
+    let state;
+    do state = await reader.line();
+    while (state.adb !== adbState);
+  };
+  try {
+    const first = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(first.reader, "connected");
+    assert.equal(connects(), 1);
+    // Another link, the pairing port opened: adb has the phone already, and reaches it through the new link by itself.
+    const again = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(again.reader, "connected");
+    const pairing = await mesh.ask({ op: "share", phone: PHONE, pair: true });
+    await reaches(pairing.reader, "connected");
+    assert.equal(connects(), 1);
+    // Wireless debugging turned off, then on again: each said to adb.
+    const off = await mesh.ask({ op: "share", phone: PHONE, adbd: false });
+    await reaches(off.reader, "off");
+    const on = await mesh.ask({ op: "share", phone: PHONE });
+    await reaches(on.reader, "connected");
+    assert.equal(connects(), 2);
+    for (const o of [first, again, pairing, off, on]) await o.stream.reset(0);
+  } finally {
+    await shares.close();
+    await mesh.close();
+    await time.close();
+  }
+});
+
 test("the station removed from its workspace ends offers at once", async () => {
   const adb = fakeAdb();
   let removed = false;
@@ -247,8 +281,6 @@ test("the station removed from its workspace ends offers at once", async () => {
   const shares = new Shares({ adb: () => adb.path, limits: UNLIMITED, clock: time.clock, cloud: { removed: () => removed, listen: (f) => (listeners.add(f), () => listeners.delete(f)) } });
   const stream = new Memory();
   const offer = answerAdb(shares, nowhere, viewer, asking({ op: "share", phone: PHONE }), stream as unknown as Stream);
-  await time.asleep(500);
-  await time.adjust(SETTLE);
   await until(() => stream.lines().find((l) => l.adb === "failed"));
   removed = true;
   for (const f of listeners) f();
@@ -440,7 +472,7 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
 
     // Asks: pairing through the phone's pairing port, the grant, in the asker's language.
     const paired = await mesh.answer({ op: "pair", code: "12 34 56", phone: PHONE });
-    assert.deepEqual(paired, { head: { status: 200, headers: { "content-type": "application/json" } }, body: { message: "配对好了" } });
+    assert.deepEqual(paired, { head: { status: 200, headers: { "content-type": "application/json" } }, body: { message: "已配对" } });
     assert.ok(adb.dialed().includes("phone:PAIR 123456"));
     assert.ok(mesh.tunnels.includes("pair"));
     assert.ok(adb.calls().some((c) => c[0] === "pair" && c[2] === "123456"));
@@ -451,8 +483,16 @@ test("a phone offered over the mesh: adb connects through its tunnel, asks reach
     const wrong = await mesh.answer({ op: "pair", code: "12345", phone: PHONE }, { "stillfail-lang": "en" });
     assert.deepEqual(wrong, { head: { status: 422, headers: { "content-type": "application/json" } }, body: { message: "The pairing code is 6 digits" } });
     const granted = await mesh.answer({ op: "grant", phone: PHONE });
-    assert.deepEqual(granted.body, { message: "以后 app 可以自己打开无线调试了" });
+    assert.deepEqual(granted.body, { message: "app 现在可以自行开启无线调试" });
     assert.ok(adb.calls().some((c) => c.join(" ") === `-s ${serial} shell pm grant fail.still.android android.permission.WRITE_SECURE_SETTINGS`));
+    // ColorOS (an OPPO, 2026-10-17) and MIUI refuse the shell's grant with a page of stack: said as the switch to turn
+    // on; anything else by its first line.
+    adb.say("grant-says", "Exception occurred while executing 'grant':\njava.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.\n  at android.app.ContextImpl.enforce(ContextImpl.java:2493)");
+    const refused = await mesh.answer({ op: "grant", phone: PHONE });
+    assert.deepEqual(refused.body, { message: "手机不允许 adb 授权：请在开发者选项中开启「禁止权限监控」（ColorOS）或「USB 调试（安全设置）」（MIUI）后重试" });
+    adb.say("grant-says", "Error: Unknown permission\n  at something");
+    const failed = await mesh.answer({ op: "grant", phone: PHONE });
+    assert.deepEqual(failed.body, { message: "授权失败：Error: Unknown permission" });
 
     // The phone stops reading the offer: the phone is kept for GRACE, then adb lets it go and its port closes.
     const disconnects = () => adb.calls().filter((c) => c[0] === "disconnect").length;
@@ -499,8 +539,6 @@ test("over the mesh: a phone adb is not paired with, or whose adbd turned the tu
     await until(() => shares.list().length === 0);
     mesh.phoneSide.refuse = "connection refused";
     const again = await mesh.ask({ op: "share", phone: PHONE });
-    await time.asleep(500);
-    await time.adjust(SETTLE);
     await again.reader.line();
     do state = await again.reader.line();
     while (state.adb === "connecting");

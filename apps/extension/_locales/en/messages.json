@@ -1,0 +1,14 @@
+{
+  "name": { "message": "still.fail" },
+  "description": { "message": "Send the page, a link, a video or the words you selected to one of your still.fail chats." },
+  "action": { "message": "Send to still.fail" },
+  "menuPage": { "message": "Send this page to still.fail" },
+  "menuLink": { "message": "Send this link to still.fail" },
+  "menuMedia": { "message": "Send this video to still.fail" },
+  "menuSelection": { "message": "Send “%s” to still.fail" },
+  "optionsOrigin": { "message": "Where still.fail is" },
+  "optionsSave": { "message": "Save" },
+  "optionsHint": { "message": "https://app.still.fail unless you run your own (a dev cloud)" },
+  "optionsSaved": { "message": "Saved" },
+  "optionsInvalid": { "message": "Not a web address (https://…)" }
+}

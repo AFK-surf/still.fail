@@ -130,6 +130,30 @@ export function useTopic<T = unknown>(topic: Topic | null): TopicState<T> {
 }
 
 /**
+ * What a component takes from a topic (`select` of its state): drawn again only when that changes (`same`, by default
+ * the same value), not each time anything else in the topic does. `select` may be a new function each render.
+ */
+export function useTopicSelect<T, S>(topic: Topic | null, select: (state: TopicState<T>) => S, same: (a: S, b: S) => boolean = Object.is): S {
+  const key = topic ? topicKey(topic) : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const subscribe = useCallback((listener: () => void) => (topic && key ? listen(key, topic, listener) : () => undefined), [key]);
+  const pick = useRef(select);
+  pick.current = select;
+  // The state last taken from and how, and what was taken: the same while both are (a render's new `select` takes again,
+  // and keeps what it had if that is the same).
+  const last = useRef<{ key: string | null; state: TopicState<unknown> | null; select: unknown; picked: S } | null>(null);
+  const snapshot = () => {
+    const state = (key ? entry(key, topic!).state : IDLE) as TopicState<T>;
+    const was = last.current;
+    if (was && was.key === key && was.state === state && was.select === pick.current) return was.picked;
+    const picked = pick.current(state);
+    last.current = { key, state, select: pick.current, picked: was && was.key === key && same(was.picked, picked) ? was.picked : picked };
+    return last.current.picked;
+  };
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
+}
+
+/**
  * Holds the render back until the topic has its first value, `ms` at most. Rendered as part of a navigation (a
  * transition), the page that was there stays until then instead of an empty one showing first. Once only per topic.
  */
@@ -161,6 +185,11 @@ function waitFor(key: string, topic: Topic, ms: number): Promise<void> | null {
   off = listen(key, topic, () => { if (!e.state.loading) done(); });
   if (over) off();
   return ready;
+}
+
+/** A topic's value as the page has it now, read when asked (a tap), not followed; undefined while none. */
+export function topicNow<T>(topic: Topic): T | undefined {
+  return entries.get(topicKey(topic))?.state.value as T | undefined;
 }
 
 /** Starts reading a topic ahead of a page that will show it (a row hovered), kept a while for it. */

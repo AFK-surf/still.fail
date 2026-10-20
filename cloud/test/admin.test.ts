@@ -350,3 +350,168 @@ test("the admin gives an account the right to create workspaces, or takes it bac
     await h.close();
   }
 });
+
+test("the admin gives an email the test channel and the standard plan before anyone signs in with it; the first to does", async () => {
+  const h = await harness();
+  try {
+    const aliceAdmin = h.as(await h.login("alice"), "admin");
+    const list = async () => (await (await aliceAdmin("GET", "/v1/admin/users")).json()) as any;
+
+    // Dave has never signed in: his email is given both, in any case and with spaces; it is listed as pending, not as a user.
+    const given = await aliceAdmin("POST", "/v1/admin/pending", { email: "  Dave@Example.test ", beta: true, may_create: true });
+    assert.equal(given.status, 200);
+    assert.deepEqual(await given.json(), { email: "dave@example.test", sub: null });
+    // One not given stays as it was.
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "dave@example.test", beta: false });
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "dave@example.test", beta: true });
+    assert.deepEqual((await list()).pending.map((p: any) => [p.email, p.beta, p.may_create]), [["dave@example.test", true, true]]);
+    assert.equal((await list()).users.some((u: any) => u.email === "dave@example.test"), false);
+
+    // He signs in: his account has both, and the email is no longer pending.
+    const dave = h.as(await h.login("dave"));
+    assert.equal(((await (await dave("GET", "/v1/me")).json()) as any).user.beta, true);
+    const user = (await list()).users.find((u: any) => u.email === "dave@example.test");
+    assert.deepEqual([user.beta, user.may_create, user.admission], [true, true, "granted"]);
+    assert.deepEqual((await list()).pending, []);
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "Dave's" })).status, 200);
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "Second" })).status, 200);
+
+    // An email someone has signed in with: theirs at once, and its account said.
+    const bobTokens = await h.login("bob");
+    assert.deepEqual(await (await aliceAdmin("POST", "/v1/admin/pending", { email: "bob@example.test", beta: true })).json(), { email: "bob@example.test", sub: bobTokens.subject });
+    assert.equal(((await (await h.as(bobTokens)("GET", "/v1/me")).json()) as any).user.beta, true);
+    assert.deepEqual((await list()).pending, []);
+
+    // Taken back before anyone signs in: the account that does has none of it.
+    await aliceAdmin("POST", "/v1/admin/pending", { email: "erin@example.test", beta: true });
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending/remove", { email: "Erin@example.test" })).status, 200);
+    assert.deepEqual((await list()).pending, []);
+    assert.equal("beta" in ((await (await h.as(await h.login("erin"))("GET", "/v1/me")).json()) as any).user, false);
+
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending", { email: "nope", beta: true })).status, 400);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/pending", { email: "x@example.test", beta: "yes" })).status, 400);
+    // Only the admin, only on the console's host.
+    assert.equal((await dave("POST", "/v1/admin/pending", { email: "x@example.test", beta: true })).status, 404);
+  } finally {
+    await h.close();
+  }
+});
+
+test("an invite code made with the test channel lets whoever redeems it in too; one without does not", async () => {
+  const h = await harness();
+  try {
+    const aliceAdmin = h.as(await h.login("alice"), "admin");
+    const beta = await (await aliceAdmin("POST", "/v1/admin/invite-codes", { beta: true })).json() as any;
+    const plain = await (await aliceAdmin("POST", "/v1/admin/invite-codes", {})).json() as any;
+    assert.deepEqual([beta.beta, plain.beta], [true, false]);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/invite-codes", { beta: "yes" })).status, 400);
+
+    const dave = h.as(await h.login("dave"));
+    const erin = h.as(await h.login("erin"));
+    const me = async (as: typeof dave) => ((await (await as("GET", "/v1/me")).json()) as any).user;
+    assert.equal((await dave("POST", "/v1/workspaces", { name: "D", invite_code: beta.code })).status, 200);
+    assert.equal((await erin("POST", "/v1/workspaces", { name: "E", invite_code: plain.code })).status, 200);
+    assert.equal((await me(dave)).beta, true);
+    assert.equal("beta" in (await me(erin)), false);
+    const { codes } = await (await aliceAdmin("GET", "/v1/admin/invite-codes")).json() as any;
+    assert.equal(codes.find((c: any) => c.code === beta.code).beta, true);
+  } finally {
+    await h.close();
+  }
+});
+
+test("the admin makes a workspace for a company: its owners by email, limits of its own, stations put in without being in it", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const alice = h.as(aliceTokens);
+    const aliceAdmin = h.as(aliceTokens, "admin");
+    const bob = h.as(await h.login("bob"));
+    const bobAdmin = h.as(await h.login("bob"), "admin");
+    const listed = async (id: string) => ((await (await aliceAdmin("GET", "/v1/admin/workspaces")).json()) as any).workspaces.find((w: any) => w.id === id);
+    const station = async () => {
+      const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
+      return { pair, id: hex((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer) };
+    };
+    const enroll = async (token: string) => {
+      const { pair, id } = await station();
+      const signature = hex(await crypto.subtle.sign("Ed25519", pair.privateKey, new TextEncoder().encode(`stillfail-station-enroll-v1:${h.origin}:${token}:${id}`)));
+      return h.fetch("/v1/stations/enroll", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, station: id, signature, version: "0.3.1" }) });
+    };
+
+    // Only the admin, on the console's host; with a name, owners and whole limits.
+    const acme = { name: "Acme", owners: ["Boss@example.test", " boss@example.test"], members: 3, stations: 1 };
+    assert.equal((await bobAdmin("POST", "/v1/admin/workspaces", acme)).status, 404);
+    assert.equal((await alice("POST", "/v1/admin/workspaces", acme)).status, 404);
+    for (const wrong of [{ name: "" }, { owners: [] }, { owners: ["nobody"] }, { members: 0 }, { members: 1001 }, { members: "3" }, { stations: 257 }, { stations: 1.5 }, { owners: ["a@example.test", "b@example.test", "c@example.test", "d@example.test"] }]) {
+      assert.ok([400, 429].includes((await aliceAdmin("POST", "/v1/admin/workspaces", { ...acme, ...wrong })).status), JSON.stringify(wrong));
+    }
+    const made = await (await aliceAdmin("POST", "/v1/admin/workspaces", acme)).json() as any;
+    assert.deepEqual([made.joined, made.added], [[], ["boss@example.test"]], "the owner has not signed in yet");
+    let w = await listed(made.id);
+    assert.deepEqual([w.plan, w.seats, w.station_seats, w.members, w.added.map((a: any) => [a.email, a.role]), w.enrollable], ["enterprise", 3, 1, [], [["boss@example.test", "owner"]], true]);
+    assert.equal(w.created_by.email, "alice@example.test");
+    // The admin made it, but is not in it.
+    assert.ok(!((await (await alice("GET", "/v1/me")).json()) as any).workspaces.some((x: any) => x.id === made.id));
+    assert.equal((await alice("GET", `/v1/workspaces/${made.id}`)).status, 404);
+
+    // A station, put in by the admin; the second is one more than it holds, until the limit is raised.
+    assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces/nope/enrollments", { name: "Mac mini" })).status, 404);
+    // Not one that is not a company's: its owners put their stations in.
+    const own = await (await bob("POST", "/v1/workspaces", { name: "Bob's" })).json() as any;
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${own.id}/enrollments`, { name: "Mac mini" })).status, 409);
+    assert.equal((await listed(own.id)).enrollable, false);
+    assert.equal((await bobAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Mac mini" })).status, 404);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "" })).status, 400);
+    const first = await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Mac mini" })).json() as any;
+    assert.equal(first.install, `curl -fsSL ${h.origin}/install.sh | sh -s -- ${first.token}`, "the stable channel's installer");
+    assert.equal(first.command, `stillfail station enroll ${h.origin} ${first.token}`);
+    assert.equal((await enroll(first.token)).status, 200);
+    w = await listed(made.id);
+    assert.deepEqual(w.stations.map((s: any) => s.name), ["Mac mini"]);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Second" })).status, 429);
+    for (const wrong of [{ members: 3 }, { members: 3, stations: 0 }]) assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, wrong)).status, 400);
+    assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces/nope/limits", { members: 3, stations: 2 })).status, 404);
+    assert.deepEqual(await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, { members: 3, stations: 2 })).json(), { members: 3, stations: 2 });
+    const second = await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Second" })).json() as any;
+    assert.equal((await enroll(second.token)).status, 200);
+
+    // The owner signs in: an owner of it, who adds people up to its limit (the creator's plan has nothing to do with it).
+    const boss = h.as(await h.login("boss"));
+    const theirs = ((await (await boss("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === made.id);
+    assert.equal(theirs.role, "owner");
+    // From now on its stations are theirs to put in, not the admin's.
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, { members: 3, stations: 3 })).status, 200);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Third" })).status, 409);
+    assert.equal((await listed(made.id)).enrollable, false);
+    assert.equal((await boss("POST", `/v1/workspaces/${made.id}/enrollments`, { name: "Third" })).status, 200);
+    assert.equal((await boss("POST", `/v1/workspaces/${made.id}/members`, { role: "member", emails: ["bob@example.test", "carol@example.test"] })).status, 200);
+    assert.equal((await boss("POST", `/v1/workspaces/${made.id}/members`, { role: "member", emails: ["dave@example.test"] })).status, 429);
+    assert.ok(((await (await bob("GET", "/v1/me")).json()) as any).workspaces.some((x: any) => x.id === made.id));
+    w = await listed(made.id);
+    assert.deepEqual([w.members.length, w.added.map((a: any) => a.email)], [2, ["carol@example.test"]]);
+
+    // One whose owner never signed in is deleted all the same.
+    const other = await (await aliceAdmin("POST", "/v1/admin/workspaces", { name: "Other", owners: ["nobody-yet@example.test"], members: 5, stations: 1 })).json() as any;
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${other.id}/delete`)).status, 200);
+    assert.equal(await listed(other.id), undefined);
+    // Signing in later, the email finds nothing waiting for it.
+    const late = h.as(await h.login("nobody-yet"));
+    assert.deepEqual(((await (await late("GET", "/v1/me")).json()) as any).workspaces, []);
+  } finally {
+    await h.close();
+  }
+});
+
+test("workspaces the admin made for companies do not count against the admin's own", async () => {
+  const h = await harness();
+  try {
+    const aliceTokens = await h.login("alice");
+    const alice = h.as(aliceTokens);
+    const aliceAdmin = h.as(aliceTokens, "admin");
+    for (let i = 0; i < 32; i++) assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces", { name: `Company ${i}`, owners: [`owner${i}@example.test`], members: 2, stations: 1 })).status, 200);
+    assert.equal((await alice("POST", "/v1/workspaces", { name: "Mine" })).status, 200);
+  } finally {
+    await h.close();
+  }
+});

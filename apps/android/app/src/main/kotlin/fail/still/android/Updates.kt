@@ -34,15 +34,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-class Updates(context: Context, private val origin: String, private val core: StillFailCore) {
+class Updates(context: Context, private val origin: String, private val core: StillFailCore) : AppUpdates {
     private val context = context.applicationContext
     /** A build newer than this one, once a check found it. */
-    var available by mutableStateOf<AppRelease?>(null); private set
+    override var available by mutableStateOf<AppRelease?>(null); private set
     /** What an update under way is doing ("下载中 40%"), null when none is. */
-    var progress by mutableStateOf<String?>(null); private set
+    override var progress by mutableStateOf<String?>(null); private set
 
     /** Asks the core for a newer build (it asks still.fail cloud at most once an hour unless `now`); the one it finds, if any. */
-    suspend fun check(now: Boolean = false): AppRelease? = try { ask(now) } catch (_: CoreException) { null }
+    override suspend fun check(now: Boolean): AppRelease? = try { ask(now) } catch (_: CoreException) { null }
 
     private suspend fun ask(now: Boolean): AppRelease? =
         core.call("app.update", buildJsonObject { put("platform", "android"); put("versionCode", BuildConfig.VERSION_CODE.toLong()); put("now", now) })
@@ -50,10 +50,10 @@ class Updates(context: Context, private val origin: String, private val core: St
             .also { available = it }
 
     /** Whether a check the person asked for is under way. */
-    var checking by mutableStateOf(false); private set
+    override var checking by mutableStateOf(false); private set
 
     /** Asks still.fail cloud now, as the person tapped for; what to tell them when no newer build turned up. */
-    suspend fun checkNow(): String? {
+    override suspend fun checkNow(): String? {
         if (checking || progress != null) return null
         checking = true
         return try {
@@ -69,21 +69,16 @@ class Updates(context: Context, private val origin: String, private val core: St
      * Downloads the newer build and hands it to the installer. Installing apps needs the person's leave (安装未知应用):
      * without it the system's page for it opens instead, and they tap 更新 again once it is given. A failure is said.
      */
-    suspend fun install(): String? {
+    override suspend fun install(): String? {
         if (checking || progress != null) return null
-        if (!context.packageManager.canRequestPackageInstalls()) {
-            context.startActivity(
-                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-            return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
-        }
+        if (!mayInstall(context)) return t("android-misc.updates.allowInstall", "app" to BuildConfig.APP_NAME)
         return try {
             progress = t("android-misc.updates.checking")
             val release = ask(true) ?: return t("android-misc.updates.latest")
             progress = t("android-misc.updates.downloading")
             val apk = download(release)
             progress = t("android-misc.updates.installing")
-            withContext(Dispatchers.IO) { commit(apk) }
+            withContext(Dispatchers.IO) { installApk(context, apk, self = true) }
             null
         } catch (e: Exception) {
             t("android-misc.updates.failed", "error" to (e.message ?: e.javaClass.simpleName))
@@ -95,13 +90,18 @@ class Updates(context: Context, private val origin: String, private val core: St
     /**
      * Downloads the build into the cache, picking up where a cut connection (or an earlier tap) left off: the bytes so
      * far stay in `<name>.part` and the rest is asked for as a range, a few times over with a growing pause while each
-     * try gets further. The whole file is then checked against its sha256.
+     * try gets further. The whole file is then checked against its sha256 and kept until a newer build: one already
+     * here whole (its install was cancelled) is handed over again without a download.
      */
     private suspend fun download(release: AppRelease): File = withContext(Dispatchers.IO) {
         val dir = File(context.cacheDir, "updates").apply { mkdirs() }
         val apk = File(dir, "stillfail-${release.versionCode}.apk")
         val part = File(dir, "${apk.name}.part")
-        dir.listFiles()?.forEach { if (it != part) it.delete() }
+        dir.listFiles()?.forEach { if (it != part && it != apk) it.delete() }
+        if (apk.exists()) {
+            if (sha256(apk).equals(release.sha256, ignoreCase = true)) return@withContext apk
+            apk.delete()
+        }
         if (release.size > 0 && part.length() > release.size) part.delete()
         var failures = 0
         while (release.size <= 0 || part.length() < release.size) {
@@ -115,8 +115,17 @@ class Updates(context: Context, private val origin: String, private val core: St
                 delay(1_000L shl (failures - 1))
             }
         }
+        if (!sha256(part).equals(release.sha256, ignoreCase = true)) {
+            part.delete()
+            error(t("android-misc.updates.incomplete"))
+        }
+        if (!part.renameTo(apk)) error(t("android-misc.updates.incomplete"))
+        apk
+    }
+
+    private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        part.inputStream().use { input ->
+        file.inputStream().use { input ->
             val buffer = ByteArray(64 * 1024)
             while (true) {
                 val read = input.read(buffer)
@@ -124,13 +133,7 @@ class Updates(context: Context, private val origin: String, private val core: St
                 digest.update(buffer, 0, read)
             }
         }
-        val sum = digest.digest().joinToString("") { "%02x".format(it) }
-        if (!sum.equals(release.sha256, ignoreCase = true)) {
-            part.delete()
-            error(t("android-misc.updates.incomplete"))
-        }
-        if (!part.renameTo(apk)) error(t("android-misc.updates.incomplete"))
-        apk
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /** One try: appends to `part` from where it ends. Whether the file is whole (the server sent all it had). */
@@ -173,48 +176,9 @@ class Updates(context: Context, private val origin: String, private val core: St
             connection.disconnect()
         }
     }
-
-    private fun commit(apk: File) {
-        val installer = context.packageManager.packageInstaller
-        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
-            setAppPackageName(context.packageName)
-            setSize(apk.length())
-            if (Build.VERSION.SDK_INT >= 31) setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-        }
-        val id = installer.createSession(params)
-        installer.openSession(id).use { session ->
-            session.openWrite("stillfail.apk", 0, apk.length()).use { out ->
-                apk.inputStream().use { it.copyTo(out) }
-                session.fsync(out)
-            }
-            val intent = Intent(context, InstallResult::class.java)
-            // The installer puts its status in the intent: it has to be mutable.
-            val flags = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
-            session.commit(PendingIntent.getBroadcast(context, id, intent, flags).intentSender)
-        }
-    }
 }
 
 /** What the installer says of a commit: it wants the person to confirm (its page is opened), or it failed. */
 /** Tries in a row that got no further before a download gives up (pauses 1, 2, 4, 8, 16 s between them). */
 private const val RETRIES = 6
 
-class InstallResult : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
-            PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                @Suppress("DEPRECATION")
-                val confirm = (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
-                else intent.getParcelableExtra(Intent.EXTRA_INTENT)) ?: return
-                context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
-            PackageInstaller.STATUS_SUCCESS -> Unit
-            PackageInstaller.STATUS_FAILURE_ABORTED -> Unit
-            else -> {
-                Notifier.words(context)
-                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: t("android-misc.updates.installFailed")
-                Toast.makeText(context, t("android-misc.updates.failed", "error" to message), Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-}

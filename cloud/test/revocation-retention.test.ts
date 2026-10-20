@@ -78,7 +78,7 @@ test("revocations: inclusive replay, autonomous schedule, monotonic retries and 
     const later = START + 31 * DAY + 1;
     state = await call({ op: "revoke", sids: ["session-a"], cutoff: later });
     await boundary.ping();
-    assert.deepEqual(boundary.frames.find(f => f.type === "revoke"), { type: "revoke", kind: "sid", id: "session-a", at: later }, "new genuine revocation persists then broadcasts unchanged frame");
+    assert.deepEqual(boundary.frames.find(f => f.type === "revoke"), { type: "revoke", kind: "sid", id: "session-a", at: later, workspace: "a" }, "new genuine revocation persists then broadcasts unchanged frame");
     assert.equal(state.revocations.find((r: any) => r.id === "session-a").at, later);
     state = await call({ op: "disconnect" });
     state = await call({ op: "alarm" });

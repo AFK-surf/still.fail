@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploys still.fail cloud, six Workers (wrangler.jsonc says what each is; they keep their names from before the
+"""Deploys still.fail cloud, seven Workers (wrangler.jsonc says what each is; they keep their names from before the
 rename to still.fail, as do their Durable Objects, bucket and secrets: renaming would make new, empty ones):
   api       stillfail-cloud     the API (wrangler.jsonc)
   relay     stillfail-relay     the relay and its container (wrangler.relay.jsonc)
@@ -7,6 +7,7 @@ rename to still.fail, as do their Durable Objects, bucket and secrets: renaming 
   web-beta  stillfail-web-beta  the same build on app.youdid.wtf, the test channel (wrangler.web-beta.jsonc)
   admin     stillfail-admin     the admin's console, static (wrangler.admin.jsonc)
   preview   stillfail-preview   the preview host, static (wrangler.preview.jsonc)
+  share     stillfail-share     the share host, static (wrangler.share.jsonc): published chats, on share.still.fail
 Each is deployed on its own: deploying the API drops no relay connection and serves no page. (And the official
 site, `site`, still-fail-site; and the test channel's, `site-beta`, youdid-wtf-site on youdid.wtf, only when named.)
 The test channel lives on its own domain, youdid.wtf: until that zone is active on Cloudflare (or with STILLFAIL_BETA=off)
@@ -17,7 +18,7 @@ The web app goes to the test channel first: a deploy without parts deploys web-b
 deployed in <deploy>/builds/<commit>/cloud-web (the newest ten). Once tried there, that very build (not a new one) goes
 to app.still.fail with promote-web. `web` named deploys a new build to app.still.fail straight away.
 
-    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, site
+    python3 deploy.py                   # all but web and site-beta: relay, api, then web-beta, admin, preview, share, site
     python3 deploy.py api web-beta      # only these (the static ones are built first)
     python3 deploy.py web               # a new build to app.still.fail, without the test channel
     python3 deploy.py promote-web <dir> # a build already made (a directory, or a commit kept in <deploy>/builds) to app.still.fail
@@ -36,6 +37,8 @@ like, nothing else changes):
             (docs/telemetry.md). Without it the web app is built without analytics.
   axiom     <deploy>/axiom.json, {"dataset", "token"}: where traces go (docs/telemetry.md).
             Without it the cloud takes no traces.
+  review    <deploy>/review-accounts.json, [{"email", "password", "name"}]: the accounts that sign in with a
+            password (cloud/src/password.ts), App Store review's. Without it nobody signs in that way.
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
@@ -77,6 +80,7 @@ AXIOM = DEPLOY / "axiom.json"
 # Push notifications (docs/notifications.md): the VAPID key ({public, private, subject}) and Firebase's service account.
 VAPID = DEPLOY / "vapid.json"
 FCM = DEPLOY / "fcm-service-account.json"
+REVIEW = DEPLOY / "review-accounts.json"
 
 
 def write_private(path: Path, value) -> None:
@@ -88,7 +92,7 @@ def write_private(path: Path, value) -> None:
     os.replace(tmp, path)
 
 
-PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
+PARTS = {"relay": "wrangler.relay.jsonc", "api": "wrangler.jsonc", "web": "wrangler.web.jsonc", "web-beta": "wrangler.web-beta.jsonc", "admin": "wrangler.admin.jsonc", "preview": "wrangler.preview.jsonc", "share": "wrangler.share.jsonc", "site": "wrangler.site.jsonc", "site-beta": "wrangler.site-beta.jsonc"}
 # What a deploy without parts deploys: the web app only to the test channel (promote-web takes it on); not youdid.wtf's site.
 DEFAULT_PARTS = [p for p in PARTS if p not in ("web", "site-beta")]
 # The test channel's parts, on its own domain (youdid.wtf): deployed only once that zone is on Cloudflare (beta_zone()).
@@ -164,6 +168,16 @@ def push() -> dict:
     else:
         print(f"note: {FCM} is missing; no pushes to Android")
     return value
+
+
+def review() -> dict:
+    if not REVIEW.exists():
+        return {}
+    # Read (and checked) here, so a malformed file stops the deploy rather than letting nobody in.
+    accounts = json.loads(REVIEW.read_text())
+    if not isinstance(accounts, list) or not all(isinstance(a, dict) and "@" in a.get("email", "") and len(a.get("password", "")) >= 12 for a in accounts):
+        sys.exit(f"{REVIEW}: expected a list of {{email, password (12 characters at least), name}}")
+    return {"REVIEW_ACCOUNTS": json.dumps(accounts)}
 
 
 @contextmanager
@@ -329,7 +343,7 @@ def main() -> None:
         if not args.parts and "web-beta" in skipped:
             parts.insert(parts.index("admin"), "web")
             print("note: deploying web (app.still.fail) instead of web-beta", flush=True)
-    if not args.skip_build and {"web", "web-beta", "admin", "preview"} & set(parts):
+    if not args.skip_build and {"web", "web-beta", "admin", "preview", "share"} & set(parts):
         # web/vite.config.ts reads the key from the file STILLFAIL_POSTHOG (EMBER_POSTHOG before the rename) names.
         if not POSTHOG.exists():
             print(f"note: no {POSTHOG}; building the web app without analytics")
@@ -342,7 +356,7 @@ def main() -> None:
     # Read only for the parts that take them: keys() makes keys.json where there is none, which a deploy of the static
     # sites alone (CI's web-beta, on a machine without the deploy directory's keys) must not do.
     secrets_of = {
-        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push()},
+        "api": lambda: {**keys(), "GOOGLE_CLIENT_SECRET": web["client_secret"], **axiom(), **push(), **review()},
         "relay": lambda: {"ADMIN_TOKEN": keys()["ADMIN_TOKEN"]},
     }
     def deploy(part: str, env) -> None:
@@ -394,6 +408,7 @@ def main() -> None:
         "web-beta": [f"{template['vars'].get('BETA_ORIGIN', 'https://app.youdid.wtf')}/"],
         "admin": [f"{admin}/", f"{old_admin}/"],
         "preview": ["https://preview.still.fail/_stillfail/frame", "https://preview.ember.3720.org/_ember/frame"],
+        "share": ["https://share.still.fail/", "https://share.still.fail/frame"],
         "site": ["https://still.fail/"],
         "site-beta": [f"https://{beta_zone()}/"],
     }

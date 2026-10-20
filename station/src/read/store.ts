@@ -3,12 +3,14 @@
 // archive directory (`archive/threads/<id>.jsonl.zst` beside the database) and is read from there, as the Rust does.
 //
 // serde's reading of a stored value is kept where it shows: a list of files or quotes that does not read is none, a
-// card or identity that does not parse is none, an archive file that does not read fails the request.
-import { existsSync, readFileSync } from "node:fs";
+// card or identity that does not parse is none, an archive file that does not read fails the request (one that is not
+// there is a thread with nothing left in it).
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { zstdDecompressSync } from "node:zlib";
 import { wall } from "../ops/fibers.ts";
+import { type InWorkspace, liveShare, sees, toChatShare } from "../store/rows.ts";
 
 export type Json = any;
 
@@ -33,6 +35,8 @@ export type SessionRow = {
   profile: string; profilePinned: boolean; model: string | null; effort: string | null; fast: boolean | null;
   runtimeSessionId: string | null; workspace: string; cwd: string | null; running: boolean; createdAt: number;
   lastActiveAt: number; archivedAt: number | null; archivedBy: string | null; shownAt: number | null;
+  /// Which of the station's workspaces its chat is in (store/rows.ts): null is the home one. Not for the pages.
+  ws: string | null;
 };
 
 export type ThreadRow = {
@@ -49,7 +53,7 @@ export type Membership = { thread: number; session: string; connect: string; joi
 export type EntryRow = {
   agentIdentity: Json | undefined; thread: number; n: number; kind: "message" | "edit"; target: number | null;
   ts: string | null; authorKind: AuthorKind; author: string; text: string | null; attachments: Json[]; quotes: Json[];
-  declared: string | null; client: string | null; profile: string | null; options: Json | undefined; card: Json | undefined;
+  declared: string | null; client: string | null; profile: string | null; runtime: string | null; options: Json | undefined; card: Json | undefined;
   at: number;
 };
 
@@ -166,6 +170,7 @@ function toSession(r: Json): SessionRow {
     fast: r.fast === null || r.fast === undefined ? null : r.fast !== 0, runtimeSessionId: r.runtime_session_id,
     workspace: r.workspace, cwd: r.cwd ?? null, running: r.running === 1, createdAt: r.created_at,
     lastActiveAt: r.last_active_at, archivedAt: r.archived_at, archivedBy: r.archived_by, shownAt: r.shown_at,
+    ws: r.ws ?? null,
   };
 }
 
@@ -195,6 +200,7 @@ function toEntry(r: Json): EntryRow {
     declared: r.declared,
     client: r.client,
     profile: r.profile,
+    runtime: r.runtime ?? null,
     options: parsed(r.options),
     card: parsed(r.card),
     at: r.at,
@@ -228,7 +234,7 @@ function archivedEntry(e: Json): EntryRow {
   return {
     agentIdentity: some(e.agentIdentity), thread: e.thread, n: e.n, kind, target: e.target ?? null, ts: e.ts ?? null,
     authorKind: authorKind(e.authorKind), author: e.author, text: e.text ?? null, attachments: (e.attachments ?? []).map(attachment),
-    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null,
+    quotes: (e.quotes ?? []).map(quote), declared: e.declared ?? null, client: e.client ?? null, profile: e.profile ?? null, runtime: e.runtime ?? null,
     options: some(e.options), card: some(e.card), at: e.at,
   };
 }
@@ -275,8 +281,10 @@ export type Store = {
   dataDir: string;
   /// Where archived threads are (`threads/`): `archive/` in the data directory, as Store::open has it by default.
   archiveDir: string;
-  /// Entries of archived threads read lately, the most recent last.
-  archived: [number, EntryRow[]][];
+  /// Entries of archived threads read lately, the most recent last, by thread and its file as it was (`fileVersion`).
+  archived: [number, string, EntryRow[]][];
+  /// What lists show of each archived thread, read from its file once (archivedSummary).
+  summaries: Map<number, ArchivedSummary>;
   /// People's names by email, as their credentials say them (the admin API's `deps.names`, filled as members ask).
   names: Map<string, string>;
   /// What only the hub knows, as it was when the read was asked: each session's process state (`process_state`;
@@ -287,7 +295,7 @@ export type Store = {
 
 /// The store over an open database, with the data directory its archive is in.
 export function makeStore(db: DatabaseSync, dataDir: string): Store {
-  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], names: new Map(), processes: new Map(), clientKeys: new Map() };
+  return { db, dataDir, archiveDir: join(dataDir, "archive"), archived: [], summaries: new Map(), names: new Map(), processes: new Map(), clientKeys: new Map() };
 }
 
 /// A station's store: `<dataDir>/stillfail.db`, opened read-only.
@@ -303,6 +311,26 @@ const all = (s: Store, sql: string, ...args: Json[]): Json[] => s.db.prepare(sql
 export function getSession(s: Store, key: string): SessionRow | null {
   const r = one(s, "SELECT * FROM sessions WHERE key = ?", key);
   return r ? toSession(r) : null;
+}
+
+/// Which sessions `viewer` sees (docs/multi-workspace.md): those whose chat is in their workspace (one not there: the
+/// home one's). A read made for no one (null) sees every one.
+export function seenBy(s: Store, viewer: InWorkspace | null | undefined): (key: string) => boolean {
+  if (!viewer) return () => true;
+  // `*`: a database from before has no `ws` (every chat its home workspace's).
+  const ws = new Map<string, string | null>(all(s, "SELECT * FROM sessions").map((r) => [r.key, r.ws ?? null]));
+  return (key) => sees(viewer, ws.get(key) ?? null);
+}
+
+/// Whether `viewer` sees a thread: one of its sessions is in their workspace (a thread with none: the home one's).
+export function seesThread(s: Store, viewer: InWorkspace | null | undefined, thread: number): boolean {
+  if (!viewer) return true;
+  const members = threadSessions(s, thread);
+  if (members.length === 0) return sees(viewer, null);
+  return members.some((m) => {
+    const row = getSession(s, m.session);
+    return row !== null && sees(viewer, row.ws);
+  });
 }
 
 /// Every session, most recently active first.
@@ -346,17 +374,20 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
       : session !== null
         ? all(s, `${base} WHERE t.id IN (SELECT thread FROM thread_sessions WHERE session = ?2)`, viewer, session)
         : all(s, base, viewer);
+  // Who the viewer is: themselves, and in a Slack thread the Slack users they are too.
+  const selves = { own: [viewer], slack: [viewer, ...slackIdentities(s, viewer)] };
   const summaries: ThreadSummary[] = rows.map((r) => {
     const t = toThread(r);
     const read: number = r.read_n;
+    const at: number | null = r.archived_at;
     return {
       sessions: threadSessions(s, t.id),
-      last: lastEntry(s, t.id),
-      lastMessage: lastMessage(s, t.id),
+      last: lastEntry(s, t.id, at),
+      lastMessage: lastMessage(s, t.id, at),
       read,
-      unread: unreadCount(s, viewer, t.id, read),
-      people: threadPeople(s, t.id, t.surface),
-      firstText: firstText(s, t.id),
+      unread: unreadOf(s, t.id, read, t.surface !== STILLFAIL_SURFACE ? selves.slack : selves.own, at),
+      people: threadPeople(s, t.id, t.surface, at),
+      firstText: firstText(s, t.id, at),
       thread: t,
     };
   });
@@ -365,9 +396,54 @@ export function listThreads(s: Store, viewer: string, session: string | null, th
   return summaries;
 }
 
+/// What lists show of an archived thread (its last entry, latest message, messages' authors, the first thing a person
+/// said), read from its file once: it does not change while archived, and archived again it is another file
+/// (`fileVersion`). Every list of chats, of sessions and of threads read each archived thread's file, some 400 on a busy
+/// station, past what ARCHIVE_CACHE keeps.
+export type ArchivedSummary = {
+  version: string;
+  last: number;
+  lastMessage: MessageRow | null;
+  messages: { n: number; authorKind: string; author: string }[];
+  /// The people who wrote in it, in the order they first did, and with when they first did.
+  authors: string[];
+  firstAt: [string, number][];
+  firstText: string | null;
+};
+
+/// An archived thread's summary (null for one not archived); `at`: its archived_at, when the caller has it.
+function archivedSummary(s: Store, thread: number, at?: number | null): ArchivedSummary | null {
+  const when: number | null = at === undefined ? (one(s, "SELECT archived_at FROM threads WHERE id = ?", thread)?.archived_at ?? null) : at;
+  if (when === null) return null;
+  const version = fileVersion(threadFile(s, thread));
+  const kept = s.summaries.get(thread);
+  if (kept !== undefined && kept.version === version) return kept;
+  const entries = archivedEntries(s, thread);
+  const merged = mergeEntries(entries);
+  const firstAt = new Map<string, number>();
+  for (const e of entries) {
+    if (e.kind !== "message" || e.authorKind !== "person") continue;
+    const at = firstAt.get(e.author);
+    if (at === undefined || e.at < at) firstAt.set(e.author, e.at);
+  }
+  const first = merged.find((m) => m.authorKind === "person");
+  const made: ArchivedSummary = {
+    version,
+    last: entries.at(-1)?.n ?? 0,
+    lastMessage: merged.at(-1) ?? null,
+    messages: merged.map((m) => ({ n: m.n, authorKind: m.authorKind, author: m.author })),
+    authors: [...firstAt.keys()],
+    firstAt: [...firstAt],
+    firstText: first ? takeChars(first.text, 300) : null,
+  };
+  s.summaries.set(thread, made);
+  return made;
+}
+
 /// The thread's latest message as merged, for lists.
-export function lastMessage(s: Store, thread: number): MessageRow | null {
-  if (isArchived(s, thread)) return mergeEntries(archivedEntries(s, thread)).pop() ?? null;
+export function lastMessage(s: Store, thread: number, at?: number | null): MessageRow | null {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.lastMessage === null ? null : { ...archived.lastMessage };
   const r = one(s, "SELECT * FROM merged WHERE thread = ? ORDER BY n DESC LIMIT 1", thread);
   return r ? toMessage(r) : null;
 }
@@ -378,9 +454,13 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
   const slack = t ? t.surface !== STILLFAIL_SURFACE : true;
   const selves = [viewer];
   if (slack) selves.push(...slackIdentities(s, viewer));
-  if (isArchived(s, thread)) {
-    return mergeEntries(archivedEntries(s, thread)).filter((m) => m.n > read && !(m.authorKind === "person" && selves.includes(m.author))).length;
-  }
+  return unreadOf(s, thread, read, selves);
+}
+
+/// Messages after `read` that are not of `selves`.
+function unreadOf(s: Store, thread: number, read: number, selves: string[], at?: number | null): number {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.messages.filter((m) => m.n > read && !(m.authorKind === "person" && selves.includes(m.author))).length;
   return one(
     s,
     `SELECT COUNT(*) AS c FROM entries WHERE thread = ? AND n > ? AND kind = 'message'
@@ -392,15 +472,12 @@ function unreadCount(s: Store, viewer: string, thread: number, read: number): nu
 }
 
 /// Everyone who wrote in a thread, as creator references (a Slack user through a connect in it), earliest first.
-function threadPeople(s: Store, thread: number, surface: string): string[] {
+function threadPeople(s: Store, thread: number, surface: string, at?: number | null): string[] {
   const connect: string | null = one(s, "SELECT MIN(connect) AS c FROM thread_sessions WHERE thread = ?", thread).c;
   let authors: string[];
-  if (isArchived(s, thread)) {
-    const seen = new Set<string>();
-    authors = archivedEntries(s, thread)
-      .filter((e) => e.kind === "message" && e.authorKind === "person")
-      .map((e) => e.author)
-      .filter((a) => !seen.has(a) && (seen.add(a), true));
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) {
+    authors = archived.authors;
   } else {
     authors = all(
       s,
@@ -413,11 +490,9 @@ function threadPeople(s: Store, thread: number, surface: string): string[] {
 }
 
 /// The first thing a person said in it (up to 300 characters).
-function firstText(s: Store, thread: number): string | null {
-  if (isArchived(s, thread)) {
-    const m = mergeEntries(archivedEntries(s, thread)).find((m) => m.authorKind === "person");
-    return m ? takeChars(m.text, 300) : null;
-  }
+function firstText(s: Store, thread: number, at?: number | null): string | null {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.firstText;
   const r = one(s, "SELECT substr(text, 1, 300) AS t FROM merged WHERE thread = ? AND author_kind = 'person' ORDER BY n LIMIT 1", thread);
   return r ? r.t : null;
 }
@@ -425,8 +500,9 @@ function firstText(s: Store, thread: number): string | null {
 // ── entries ──
 
 /// The thread's last entry number, 0 before anything is said.
-export function lastEntry(s: Store, thread: number): number {
-  if (isArchived(s, thread)) return archivedEntries(s, thread).at(-1)?.n ?? 0;
+export function lastEntry(s: Store, thread: number, at?: number | null): number {
+  const archived = archivedSummary(s, thread, at);
+  if (archived !== null) return archived.last;
   return one(s, "SELECT MAX(n) AS n FROM entries WHERE thread = ?", thread).n ?? 0;
 }
 
@@ -476,6 +552,45 @@ export function archiveVerdict(s: Store, thread: number): Json | null {
   if (!r || r.version !== lastEntry(s, thread)) return null;
   const v = parsed(r.verdict);
   return v && typeof v === "object" ? { ...v, at: r.at } : null;
+}
+
+// ── chats shared with other workspaces (chat_shares) ──
+
+/// What each chat shared with other workspaces is shared with now (its shares not lapsed, store/rows.ts), by the
+/// session key its link names (none on a database from before the table).
+export function chatShares(s: Store): Map<string, { to: { workspace: string; name: string }[]; write: boolean; by: string; at: number }> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT * FROM chat_shares");
+  } catch {
+    return new Map();
+  }
+  const now = nowMs();
+  return new Map(
+    rows.flatMap((r) => {
+      const share = liveShare(toChatShare(r), now);
+      return share === null ? [] : [[r.session, { ...share, to: share.to.map(({ workspace, name }) => ({ workspace, name })) }] as const];
+    }),
+  );
+}
+
+// ── chats published as snapshots (published) ──
+
+/// Each chat's published snapshots, the latest first, by thread (none on a database from before the table).
+export function publishedByThread(s: Store): Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]> {
+  let rows: Json[];
+  try {
+    rows = all(s, "SELECT * FROM published ORDER BY created_at DESC, id");
+  } catch {
+    return new Map();
+  }
+  const out = new Map<number, { id: string; key: string; title: string; by: string; byName: string; at: number; upto: number; size: number }[]>();
+  for (const r of rows) {
+    const list = out.get(r.thread) ?? [];
+    list.push({ id: r.id, key: r.key, title: r.title, by: r.created_by, byName: r.by_name, at: r.created_at, upto: r.upto, size: r.size });
+    out.set(r.thread, list);
+  }
+  return out;
 }
 
 // ── pins, kept chats ──
@@ -603,14 +718,15 @@ function turnSummary(r: Json, startedAt: number): TurnSummary {
   return v;
 }
 
-/// Per session (or for one): turn count, the latest turn, undelivered messages and the first one it heard.
+/// Per session (or for one): turn count, the latest turn (with its id: a client holding the turns puts it in place
+/// rather than read them all again), undelivered messages and the first one it heard.
 export function sessionStats(s: Store, key: string | null): Map<string, SessionStats> {
   const sql = `SELECT s.key,
        (SELECT COUNT(*) FROM turns t WHERE t.session_key = s.key) AS turns,
        (SELECT COUNT(*) FROM deliveries d WHERE d.session = s.key AND d.delivered_at IS NULL) AS pending,
        (SELECT substr(m.text, 1, 300) FROM deliveries d JOIN merged m ON m.thread = d.thread AND m.n = d.n
          WHERE d.session = s.key ORDER BY d.rowid LIMIT 1) AS first_text,
-       l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
+       l.id AS turn_id, l.kind, l.outcome, l.declared, l.wait_seconds, l.wait_for, l.need, l.about_thread, l.about_n, l.about_ts, l.detail, l.started_at, l.ended_at
      FROM sessions s
      LEFT JOIN turns l ON l.id = (SELECT id FROM turns t2 WHERE t2.session_key = s.key ORDER BY t2.started_at DESC LIMIT 1)
      ${key !== null ? "WHERE s.key = ?" : ""}`;
@@ -618,7 +734,7 @@ export function sessionStats(s: Store, key: string | null): Map<string, SessionS
   return new Map(
     rows.map((r) => [
       r.key as string,
-      { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : turnSummary(r, r.started_at) },
+      { turns: r.turns, pending: r.pending, firstText: r.first_text, lastTurn: r.started_at === null ? null : { ...turnSummary(r, r.started_at), id: r.turn_id } },
     ]),
   );
 }
@@ -670,25 +786,41 @@ function threadFile(s: Store, thread: number): string {
 
 /// An archived thread's entries, from its file.
 export function archivedEntries(s: Store, thread: number): EntryRow[] {
-  const at = s.archived.findIndex(([id]) => id === thread);
+  const path = threadFile(s, thread);
+  const version = fileVersion(path);
+  const at = s.archived.findIndex(([id, v]) => id === thread && v === version);
   if (at >= 0) {
     const [cached] = s.archived.splice(at, 1);
     s.archived.push(cached!);
-    return cached![1];
+    return cached![2];
   }
-  const path = threadFile(s, thread);
-  // As anyhow shows std::fs::read failing.
-  if (!existsSync(path)) throw new Error("No such file or directory (os error 2)");
-  const text = zstdDecompressSync(readFileSync(path)).toString("utf8");
+  s.archived = s.archived.filter(([id]) => id !== thread);
+  const text = version === LOST ? "" : zstdDecompressSync(readFileSync(path)).toString("utf8");
   const entries = text
     .split("\n")
     .map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l))
     .filter((l) => l !== "")
     .map((l) => archivedEntry(JSON.parse(l)));
   if (s.archived.length >= ARCHIVE_CACHE) s.archived.shift();
-  s.archived.push([thread, entries]);
+  s.archived.push([thread, version, entries]);
   return entries;
 }
+
+/// An archive file as it is now (its size and when it was written): one written anew (the thread brought back and
+/// archived again) is another. Read from a reader, the writer's moving of threads to and from their files is only seen so.
+/// One that is not there (lost with the disk it was on) is LOST: its thread reads as one with no entries, so the
+/// lists it is in are still read.
+function fileVersion(path: string): string {
+  try {
+    const st = statSync(path);
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return LOST;
+  }
+}
+
+/// The version of an archive file that is not there.
+const LOST = "lost";
 
 // ── usage (store/usage.rs) ──
 
@@ -766,7 +898,7 @@ export function participants(s: Store, session: string | null): Map<string, stri
   for (const r of rows) {
     const authors: [string, number][] =
       r.archived_at !== null
-        ? archivedEntries(s, r.id).filter((e) => e.kind === "message" && e.authorKind === "person").map((e) => [e.author, e.at])
+        ? archivedSummary(s, r.id, r.archived_at)!.firstAt
         : all(s, "SELECT author, MIN(at) AS at FROM entries WHERE thread = ? AND kind = 'message' AND author_kind = 'person' GROUP BY author", r.id).map((a) => [a.author, a.at]);
     const refs = firsts.get(r.session) ?? new Map<string, number>();
     firsts.set(r.session, refs);

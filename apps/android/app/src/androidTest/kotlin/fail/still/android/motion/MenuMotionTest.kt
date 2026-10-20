@@ -7,6 +7,7 @@ import fail.still.android.Screen
 import fail.still.android.ui.Icons
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
+import fail.still.android.screens.Attach
 import fail.still.android.screens.openAttach
 import org.junit.Rule
 import org.junit.Test
@@ -45,7 +46,7 @@ class MenuMotionTest {
         rule.runOnUiThread { h.app.menu = null }
         h.settle()
         val sheet = h.record("$theme-sheet-open")
-        sheet.frame { rule.runOnUiThread { openAttach(h.app, Triple({}, {}, {})) } }
+        sheet.frame { rule.runOnUiThread { openAttach(h.app, Attach({}, {}, {})) } }
         sheet.frames(60)
         sheet.end()
         val down = h.record("$theme-sheet-close")

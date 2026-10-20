@@ -1,6 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
-import { mRiseKeyframes } from "../../styles/keyframes.css.ts";
-import { vars } from "../../styles/tokens.css.ts";
+import { mRiseKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import * as waitCss from "@stillfail/ui/waiting.css.ts";
 
 /** The narrow screen's colours in the dark (root.css.ts m, mDark). */
 const darkVars = {
@@ -10,7 +11,7 @@ const darkVars = {
   "--raised": "#2A2C31",
   "--m-ink": "#ECECED",
   "--m-muted": "#9A9DA3",
-  "--m-subtle": "#6E7177",
+  "--m-subtle": "#84888F",
   "--m-line": "#34353A",
   "--m-accent": "#EF7A55",
   "--m-accent-bg": "#4A2F25",
@@ -29,42 +30,51 @@ const darkVars = {
  */
 export const m = style({
   position: "fixed", inset: "0", overflow: "hidden", background: "var(--m-bg)", color: "var(--m-ink)",
-  fontSize: "15px", lineHeight: "1.4", WebkitTapHighlightColor: "transparent", WebkitTextSizeAdjust: "100%",
+  fontSize: vars.textBody, lineHeight: "1.4", WebkitTapHighlightColor: "transparent", WebkitTextSizeAdjust: "100%",
   colorScheme: "light",
   vars: {
+    // The phone's type, as Android's: a size up from the wide screen's, what is typed 16 (iOS zooms into less).
+    [vars.textCaption]: "12px",
+    [vars.textMeta]: "13px",
+    [vars.textUi]: "15px",
+    [vars.textBody]: "15px",
+    [vars.textInput]: "16px",
+    [vars.textTitle]: "16px",
     "--m-bg": "#F5F3EF",
     "--m-surface": "#FFFFFF",
     "--m-surface2": "#FBFAF7",
     // Its floating capsules white over the warm page (the wide screen's grey showed too little against it); dark as the wide screen's.
     "--raised": "#FFFFFF",
     "--m-ink": "#24272B",
-    "--m-muted": "#7A7D83",
-    "--m-subtle": "#A6A8AC",
+    "--m-muted": "#626469",
+    "--m-subtle": "#7C7E81",
     "--m-line": "#E7E3DC",
     "--m-accent": "#E5704A",
     "--m-accent-bg": "#FBE6DC",
     "--m-accent-ink": "#B9471F",
     "--m-green": "#2F8F5B",
-    "--m-red": "#C9412E",
+    "--m-red": "#BF3E2C",
     "--m-warn": "#D9962B",
     "--m-blue": "#1559C4",
-    "--m-chip": "#EFECE6",
+    "--m-chip": "#E8E4DC",
     // A step darker than the page (the wide screen's grey sat as light as this warm page, and its bubbles barely showed).
     "--m-bubble": "#E8E4DC",
     "--m-thumb": "#FFFFFF",
     "--m-ease": "cubic-bezier(.2, .8, .2, 1)",
     "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
-    "--m-top": "env(safe-area-inset-top, 0px)",
-    "--m-foot": "env(safe-area-inset-bottom, 0px)",
+    "--m-top": "var(--safe-top)",
+    "--m-foot": "var(--safe-bottom)",
   },
   selectors: {
     ":root[data-theme=\"dark\"] &": {
       colorScheme: "dark",
       vars: darkVars,
     },
-    // In the desktop app the window has no title bar: its buttons sit at the top left, over where a phone's status bar is,
-    // and the bars at the top move the window.
-    ":root[data-desktop] &": { vars: { "--m-top": "30px" } },
+    // In the desktop app the window has no title bar: its buttons sit at the top left (macOS) or right (Windows), over
+    // where a phone's status bar is, and the bars at the top move the window.
+    ':root[data-desktop="inset"] &': { vars: { "--m-top": "30px" } },
+    ':root[data-desktop="overlay"] &': { vars: { "--m-top": "env(titlebar-area-height, 44px)" } },
+    ':root[data-desktop="custom"]:not([data-fullscreen]) &': { vars: { "--m-top": "44px" } },
   },
   "@media": {
     "(prefers-color-scheme: dark)": {
@@ -75,13 +85,17 @@ export const m = style({
         },
       },
     },
-    // Wider than a phone (a foldable opened, a phone on its side; ../app.tsx WIDE): the pages keep a column up to 680
-    // wide in the middle, with at least 72 of room either side (the list's button sits in the left's); the page's
-    // colour goes on to the edges.
-    "(min-width: 680px)": {
-      left: "max(72px, calc(50% - 340px))", right: "max(72px, calc(50% - 340px))", boxShadow: "0 0 0 100vmax var(--m-bg)",
-    },
   },
+});
+/**
+ * The page under the narrow screen its paper too: an iPhone's home-screen app paints its status bar from the page's
+ * background (iOS 26 reads html/body, not theme-color), and the wide screen's white canvas there stood as a white band
+ * over the warm top bar.
+ */
+globalStyle(`:root:has(${m}), :root:has(${m}) body`, { background: "#F5F3EF" });
+globalStyle(`:root[data-theme="dark"]:has(${m}), :root[data-theme="dark"]:has(${m}) body`, { background: darkVars["--m-bg"] });
+globalStyle(`:root:not([data-theme="light"]):has(${m}), :root:not([data-theme="light"]):has(${m}) body`, {
+  "@media": { "(prefers-color-scheme: dark)": { background: darkVars["--m-bg"] } },
 });
 /**
  * Where the phone draws what the wide screen draws, with the wide screen's own parts (a chat's messages, its composer):
@@ -96,22 +110,20 @@ export const mDark = style({
   colorScheme: "dark",
   vars: {
     ...darkVars, "--m-ease": "cubic-bezier(.2, .8, .2, 1)", "--m-standard": "cubic-bezier(.4, 0, .2, 1)",
-    "--m-top": "env(safe-area-inset-top, 0px)", "--m-foot": "env(safe-area-inset-bottom, 0px)",
+    "--m-top": "var(--safe-top)", "--m-foot": "var(--safe-bottom)",
   },
 });
 
 export const wide = style({
   color: vars.text, fontSize: vars.textBody, lineHeight: "1.55",
-  vars: { [vars.textXs]: "13px", [vars.textSm]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },
+  vars: { [vars.textMeta]: "13px", [vars.textUi]: "15px", [vars.textBody]: "15px", [vars.neutralBg]: "var(--m-bubble)" },
 });
 globalStyle(`${m} button:not(${wide} *)`, { font: "inherit", color: "inherit" });
 globalStyle(`${m} button`, { WebkitTapHighlightColor: "transparent" });
 globalStyle(`${m} p:not(${wide} *)`, { margin: "0" });
 globalStyle(`${m} [data-enter]:not(${wide} *)`, { animation: `${mRiseKeyframes} 320ms var(--m-standard) both` });
-globalStyle(`${m} [data-enter]`, {
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none !important", transition: "none !important",
-    },
-  },
-});
+
+// Waiting (@stillfail/ui waiting.tsx) on the phone: its placeholders and pill in the phone's grey (as its message bubbles,
+// its placeholders always were), not the wide screen's; a settings page's cards inset as its cards are (parts.css.ts mListCard).
+globalStyle(`${m} ${waitCss.wait}, ${m} ${waitCss.shapes}, ${m} ${waitCss.pill}`, { vars: { [vars.neutralBg]: "var(--m-bubble)" } });
+globalStyle(`${m} ${waitCss.cards}`, { gap: "10px", padding: "0 12px" });

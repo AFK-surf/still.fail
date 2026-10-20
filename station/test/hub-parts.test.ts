@@ -1,11 +1,11 @@
 // The hub's parts that compute (ported with their Rust tests): splitting for Slack, commands, image sizes, local file
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { readTimeline } from "../src/read/transcript.ts";
+import { brief, readTimeline, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
 import { isSlackMethod, isStopCommand, slackWithFiles } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
@@ -13,10 +13,10 @@ import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
 import { sizeOf } from "../src/sessions/image-size.ts";
 import { nextTsAt } from "../src/sessions/internal.ts";
-import { type LiveMessage, LiveHub } from "../src/sessions/live.ts";
+import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
-import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
@@ -87,10 +87,10 @@ test("explicit files are reused, and missing or colliding files are refused", ()
 test("files an app cannot upload stay in still.fail, and the post links there", () => {
   const file = (name: string) => ({ name, path: `/w/uploads/${name}`, size: 1 });
   const [posted, kept] = slackWithFiles("这周的天气", [file("weather.html"), file("shot.png")], "https://e/o/w/s/k");
-  assert.equal(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 里查看图表和附件>", "the link opens the figure");
+  assert.equal(posted, "这周的天气\n\n<https://e/o/w/s/k?file=weather.html|在 still.fail 中查看图表和附件>", "the link opens the figure");
   assert.equal(kept, "这周的天气\n\n[weather.html](weather.html)", "the HTML placed so still.fail draws it");
-  assert.deepEqual(slackWithFiles("看图：[天气](weather.html)", [file("weather.html")], "L"), ["看图：[天气](weather.html)\n\n<L?file=weather.html|在 still.fail 里查看图表>", "看图：[天气](weather.html)"]);
-  assert.deepEqual(slackWithFiles("", [file("a b.pdf")], "L"), ["<L?file=a%20b.pdf|在 still.fail 里查看附件>", ""]);
+  assert.deepEqual(slackWithFiles("看图：[天气](weather.html)", [file("weather.html")], "L"), ["看图：[天气](weather.html)\n\n<L?file=weather.html|在 still.fail 中查看图表>", "看图：[天气](weather.html)"]);
+  assert.deepEqual(slackWithFiles("", [file("a b.pdf")], "L"), ["<L?file=a%20b.pdf|在 still.fail 中查看附件>", ""]);
 });
 
 test("posts show in the history where the agent made them, whole", () => {
@@ -109,6 +109,43 @@ test("posts show in the history where the agent made them, whole", () => {
   assert.deepEqual(entries.map((e) => e.kind), ["thinking", "tool_call", "tool_result", "assistant"]);
   assert.equal(JSON.parse(entries[1]!.text).text, long);
   assert.deepEqual([entries[1]!.callId, entries[2]!.callId, entries[2]!.ok], ["p", "p", true]);
+  rmSync(dir, { recursive: true });
+});
+
+test("in brief, a history's entries say only what names them; what is short, posts, states and Slack whole", () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const command = `cd station && ${"node --test test/account-proxy.test.ts && ".repeat(120)}true`;
+  const record = (content: unknown[]) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { content } })}\n`;
+  const result = (id: string, text: string) => `${JSON.stringify({ type: "user", timestamp: "2026-10-05T00:00:01Z", message: { content: [{ type: "tool_result", tool_use_id: id, content: text }] } })}\n`;
+  writeFileSync(
+    path,
+    record([
+      { type: "thinking", thinking: `${"想".repeat(40)}\n${"细节".repeat(400)}` },
+      { type: "tool_use", id: "b", name: "Bash", input: { command, description: "Run the tests 3 times", timeout: 600000 } },
+    ]) +
+      result("b", "ok\n".repeat(400)) +
+      record([{ type: "tool_use", id: "r", name: "Read", input: { file_path: "/w/a.ts" } }]) +
+      result("r", "short") +
+      record([{ type: "tool_use", id: "s", name: "mcp__stillfail__slack_api", input: { method: "chat.postMessage", params: { channel: "C1", text: "嗨".repeat(400) } } }]) +
+      result("s", JSON.stringify({ ok: true, ts: "1.2", message: { text: "嗨".repeat(800) } })) +
+      record([{ type: "text", text: "说完了".repeat(300) }]),
+  );
+  const whole = readTimeline("claude", path);
+  const short = whole.map(brief);
+  assert.deepEqual(short.map((e) => [e.kind, e.brief === true]), [
+    ["thinking", true], ["tool_call", true], ["tool_result", true], ["tool_call", false], ["tool_result", false],
+    ["tool_call", false], ["tool_result", true], ["assistant", false],
+  ]);
+  // A thought by its first line; a call by what says what it does, the description whole after a long command.
+  assert.equal(short[0]!.text, "想".repeat(40));
+  assert.deepEqual(JSON.parse(short[1]!.text), { command: [...command].slice(0, 300).join(""), description: "Run the tests 3 times" });
+  // A result without what it gave, but Slack's answer: whether it went, and its ts.
+  assert.equal(short[2]!.text, "");
+  assert.deepEqual(JSON.parse(short[6]!.text), { ok: true, ts: "1.2" });
+  // Everything else as it is, and the whole of each as it was read.
+  assert.deepEqual([short[3], short[4], short[5], short[7]], [whole[3], whole[4], whole[5], whole[7]]);
+  assert.deepEqual(short.map((e, i) => ({ ...e, text: whole[i]!.text, brief: undefined })), whole.map((e) => ({ ...e, brief: undefined })));
   rmSync(dir, { recursive: true });
 });
 
@@ -132,6 +169,57 @@ test("steps are numbered and cut", () => {
 });
 
 const line = (text: string, id: string) => `${JSON.stringify({ type: "assistant", timestamp: "2026-09-26T00:00:00Z", message: { id, content: [{ type: "text", text }], usage: { input_tokens: 10, output_tokens: 2 } } })}\n`;
+
+test("a transcript's usage says its context now", () => {
+  const dir = temp();
+  const claude = join(dir, "c.jsonl");
+  const call = (id: string, usage: object, more: object = {}) => `${JSON.stringify({ type: "assistant", ...more, message: { id, model: "claude-opus-5-5", content: [], usage } })}\n`;
+  writeFileSync(claude,
+    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 5 }) +
+    // A response's later line counts its output at its fullest.
+    call("m1", { input_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 1000, output_tokens: 100 }) +
+    call("m2", { input_tokens: 20, cache_read_input_tokens: 1000, cache_creation_input_tokens: 200, output_tokens: 50 }) +
+    // A subagent's prompt is not the session's context.
+    call("m3", { input_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 10 }, { isSidechain: true }));
+  const tail = new TranscriptTail("claude", claude);
+  tail.read();
+  assert.deepEqual([tail.usage.modelCalls, tail.usage.outputTokens, tail.usage.contextTokens, tail.usage.cost], [3, 160, 1220, undefined]);
+  const codex = join(dir, "x.jsonl");
+  const count = (total: number, input: number) => `${JSON.stringify({ type: "event_msg", payload: { type: "token_count", info: { total_token_usage: { total_tokens: total }, last_token_usage: { input_tokens: input, cached_input_tokens: 1000, output_tokens: 10 }, model_context_window: 258000 } } })}\n`;
+  writeFileSync(codex, `${JSON.stringify({ type: "turn_context", payload: { model: "gpt-6-sol" } })}\n` + count(2000, 1500) + count(2000, 1500) + count(5000, 3000));
+  const x = new TranscriptTail("codex", codex);
+  x.read();
+  assert.deepEqual([x.usage.modelCalls, x.usage.contextTokens, x.usage.contextWindow], [2, 3000, 258000], "a repeated count is one call");
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a watched session's usage is the counter's count once it has one, told again when it counts more", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  writeFileSync(path, line("one", "m1"));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  let counted: Counted | null = null;
+  let asked = 0;
+  hub.countWith({ of: () => counted, ask: () => void asked++ });
+  const got: any[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  assert.deepEqual([got[0].usage.modelCalls, got[0].usage.cost], [1, undefined], "not counted yet: the transcript's");
+  counted = { modelCalls: 4, inputTokens: 900, cachedTokens: 800, outputTokens: 40, cost: 1.5, unpricedCalls: 0 };
+  got.length = 0;
+  hub.usageCounted();
+  assert.equal(got.length, 1);
+  assert.deepEqual([got[0].entries, got[0].start, got[0].usage.modelCalls, got[0].usage.cost, got[0].usage.contextTokens], [[], 1, 4, 1.5, 10]);
+  hub.usageCounted();
+  assert.equal(got.length, 1, "told only when it changed");
+  appendFileSync(path, line("two", "m2"));
+  (hub as any).soon("s");
+  await settle();
+  await time.adjust(40);
+  await settle();
+  assert.equal(asked, 1, "working on: the counter is asked to count");
+  rmSync(dir, { recursive: true, force: true });
+});
 
 /// What a LiveHub's watch on a transcript does when the file changes.
 const watched = (hub: LiveHub, key: string) => (hub as any).soon(key);
@@ -170,6 +258,28 @@ test("a watcher gets what it lacks, the steps in flight, then new entries as the
   rmSync(dir, { recursive: true, force: true });
 });
 
+test("a watcher in brief is told the entries in brief, those it lacks and those written since", async () => {
+  const dir = temp();
+  const path = join(dir, "t.jsonl");
+  const bash = (id: string, n: number) => `${JSON.stringify({ type: "assistant", timestamp: "2026-10-05T00:00:00Z", message: { id, content: [{ type: "tool_use", id, name: "Bash", input: { command: "true && ".repeat(n), description: `Step ${id}` } }] } })}\n`;
+  writeFileSync(path, bash("a", 200));
+  const time = testClock();
+  const hub = new LiveHub(() => ({ runtime: "claude", paths: [path] }), time.clock);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, inBrief((m) => void got.push(m)));
+  appendFileSync(path, bash("b", 300));
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
+  const told = got.flatMap((m) => (m.type === "timeline" ? m.entries : []));
+  // Each by what says what it does: the description that came after its long command too.
+  assert.deepEqual(told.map((e) => [e.brief, JSON.parse(e.text).description]), [[true, "Step a"], [true, "Step b"]]);
+  assert.ok(told.every((e) => Array.from(e.text).length < 400));
+  hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test("a watcher can take only the latest entries, and ask for those before", () => {
   const dir = temp();
   const path = join(dir, "t.jsonl");
@@ -195,14 +305,22 @@ test("a session gone on in a new runtime session: its history reads on from the 
   writeFileSync(left, line("one", "m1"));
   let paths = [left];
   const time = testClock();
-  const hub = new LiveHub(() => ({ runtime: "claude", paths }), time.clock);
+  let current = true;
+  const hub = new LiveHub(() => ({ runtime: "claude", paths, current }), time.clock);
   const got: LiveMessage[] = [];
   hub.subscribe("s", 0, null, (m) => void got.push(m));
-  // The one left gets its last words, then the session moves on.
+  // The one left gets its last words, then the session moves on: its new transcript is written only once the
+  // conversation begins, after it moved.
   appendFileSync(left, line("two", "m2"));
+  current = false;
+  hub.moved("s");
   writeFileSync(now, line("three", "m3"));
   paths = [left, now];
-  hub.moved("s");
+  current = true;
+  watched(hub, "s");
+  await settle();
+  await time.adjust(40);
+  await settle();
   appendFileSync(now, line("four", "m4"));
   watched(hub, "s");
   await settle();
@@ -214,6 +332,19 @@ test("a session gone on in a new runtime session: its history reads on from the 
   assert.equal(last.usage.modelCalls, 4, "the usage of both");
   assert.deepEqual(hub.before("s", 10, 10)![1].map((e) => e.text), ["one", "two", "three", "four"]);
   hub.close();
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test("a session's transcripts are found in the home of whichever account wrote them, the current one's once written", () => {
+  const dir = temp();
+  const [a, b] = [join(dir, "a"), join(dir, "b")];
+  mkdirSync(join(a, "projects", "w"), { recursive: true });
+  mkdirSync(join(b, "projects", "w"), { recursive: true });
+  writeFileSync(join(a, "projects", "w", "one.jsonl"), line("one", "m1"));
+  writeFileSync(join(b, "projects", "w", "two.jsonl"), line("two", "m2"));
+  assert.deepEqual(transcriptPaths("claude", [b, a], ["one", "two", "three"]), { paths: [join(a, "projects", "w", "one.jsonl"), join(b, "projects", "w", "two.jsonl")], current: false });
+  writeFileSync(join(b, "projects", "w", "three.jsonl"), line("three", "m3"));
+  assert.equal(transcriptPaths("claude", [b, a], ["one", "two", "three"]).current, true);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -238,6 +369,22 @@ test("how fast the model writes is told once half a second of it has come", asyn
   await settle(1);
 });
 
+// For client cores before 0.1.2301, which say what a running call does by its step (a newer one: by its transcript entry).
+test("a call's step carries what says what it runs, whole, however long the command before it", () => {
+  const description = "Run account-proxy tests 3 times with new mock clock";
+  const command = `cd station && ${"node --test test/account-proxy.test.ts && ".repeat(8)}true`;
+  const hub = new LiveHub(() => null);
+  const got: LiveMessage[] = [];
+  hub.subscribe("s", 0, null, (m) => void got.push(m));
+  hub.event("s", { kind: "start", id: "t", step: "tool", tool: "Bash", input: JSON.stringify({ command, description, timeout: 600000 }) });
+  const told = got.flatMap((m) => (m.type === "step" && m.event.kind === "start" ? [m.event.input] : []));
+  assert.deepEqual(JSON.parse(told[0]!), { command: [...command].slice(0, 300).join(""), description });
+  assert.equal(briefInput("ls -la"), "ls -la", "a runtime's plain input stays as it is");
+  assert.equal(briefInput("x".repeat(400)), "x".repeat(300));
+  assert.equal(briefInput('{"command": "echo hi", "descrip'), '{"command": "echo hi", "descrip', "an input cut short stays cut short");
+  hub.close();
+});
+
 test("profile homes link to the shared memory and skills under their runtimes' names; a hand-written file is left", () => {
   const root = temp();
   const agent = join(root, "agent");
@@ -259,6 +406,37 @@ test("profile homes link to the shared memory and skills under their runtimes' n
   writeFileSync(join(own, "CLAUDE.md"), "mine");
   linkAgentHome(join(root, "agent2"), [{ id: "own", runtimes: ["claude"], home: own }]);
   assert.equal(readFileSync(join(own, "CLAUDE.md"), "utf8"), "mine");
+  // What a runtime made before the link (Claude Code's empty skills/synced/) gives way to it; a skill of its own does not.
+  const [made, kept] = [join(root, "made"), join(root, "kept")];
+  mkdirSync(join(made, "skills", "synced"), { recursive: true });
+  mkdirSync(join(kept, "skills", "mine"), { recursive: true });
+  writeFileSync(join(kept, "skills", "mine", "SKILL.md"), "mine");
+  linkAgentHome(agent, [{ id: "made", runtimes: ["claude"], home: made }, { id: "kept", runtimes: ["claude"], home: kept }]);
+  assert.equal(readlinkSync(join(made, "skills")), join(agent, "skills"));
+  assert.equal(readFileSync(join(kept, "skills", "mine", "SKILL.md"), "utf8"), "mine");
+  // A home whose runtime keeps skills of its own there (Claude Code's synced ones, Codex's .system) takes the shared
+  // ones one by one, and lets go of one gone from the shared.
+  const synced = join(root, "synced");
+  mkdirSync(join(synced, "skills", "synced", "bucket", "pdf"), { recursive: true });
+  writeFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "account's");
+  mkdirSync(join(agent, "skills", "team"), { recursive: true });
+  mkdirSync(join(agent, "skills", "gone"), { recursive: true });
+  const syncedProfile = [{ id: "synced", runtimes: ["claude" as const], home: synced }];
+  linkAgentHome(agent, syncedProfile);
+  assert.equal(readlinkSync(join(synced, "skills", "team")), join(agent, "skills", "team"));
+  assert.equal(readFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "utf8"), "account's");
+  rmSync(join(agent, "skills", "gone"), { recursive: true });
+  linkAgentHome(agent, syncedProfile);
+  assert.ok(!lstatSync(join(synced, "skills")).isSymbolicLink());
+  assert.deepEqual(readdirSync(join(synced, "skills")).sort(), ["synced", "team"]);
+  // The same place under another name (~/.ember is ~/.stillfail) is the link it should be: left, and said nothing of.
+  const alias = join(root, "alias");
+  symlinkSync(agent, alias);
+  const named = join(root, "named");
+  mkdirSync(named);
+  symlinkSync(join(alias, "skills"), join(named, "skills"));
+  linkAgentHome(agent, [{ id: "named", runtimes: ["claude"], home: named }]);
+  assert.equal(readlinkSync(join(named, "skills")), join(alias, "skills"));
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -330,7 +508,7 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
 });
 
-test("the pool spends first what would be lost: a week refilling within a day, then the fastest to spend", () => {
+test("the pool shares sessions by what each account would lose, and keeps them off nearly full five hours", () => {
   const now = 1_791_270_331_000;
   const hours = (h: number) => now + h * 3_600_000;
   const windows = (five: [number, number], week: [number, number]) => ({
@@ -342,46 +520,66 @@ test("the pool spends first what would be lost: a week refilling within a day, t
     detail: null,
     checkedAt: 0,
   });
-  // As the station's accounts were on 2026-10-06: cuesurf3 and cuesurf4 tied on their tightest window (2%), so they
-  // took turns, though cuesurf4's week, nearly all left, refilled within a day.
+  // As the station's accounts were on 2026-10-19 before the evening: cuesurf3 and cuesurf4 had the most of their week
+  // to lose; every session went to one of them in turn, and ran its five hours out.
   const health: Record<string, any> = {
-    machine: { check: ok("ok"), quota: windows([48, 1.1], [38, 100.9]) },
-    s2: { check: ok("ok"), quota: windows([17, 1.1], [41, 127.9]) },
-    s3: { check: ok("ok"), quota: windows([2, 1.7], [0, 39.6]) },
-    s4: { check: ok("ok"), quota: windows([2, 2.4], [1, 22.9]) },
+    s1: { check: ok("ok"), quota: windows([0, 5], [4, 119]) },
+    s2: { check: ok("ok"), quota: windows([0, 5], [1, 146]) },
+    s3: { check: ok("ok"), quota: windows([10, 3], [30, 58]) },
+    s4: { check: ok("ok"), quota: windows([10, 3], [45, 41]) },
+    s5: { check: ok("ok"), quota: windows([0, 5], [0, 167]) },
   };
-  const all = ["machine", "s2", "s3", "s4"].map((id) => profile(id, ["m"]));
+  const all = ["s1", "s2", "s3", "s4", "s5"].map((id) => profile(id, ["m"]));
   const signals = (load: Record<string, number> = {}, picked: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: (id: string) => picked[id] ?? 0, now: () => now });
-  const order = (s = signals()) => {
-    const left = [...all];
-    const out: string[] = [];
-    while (left.length > 0) {
-      const p = pickProfile(left, "m", s, true);
-      out.push(p.id);
-      left.splice(left.indexOf(p), 1);
+  /// Where `n` sessions go, picked one after another as the station does (each counted where it went).
+  const spread = (n: number) => {
+    const load: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const p = pickProfile(all, "m", signals(load), true);
+      load[p.id] = (load[p.id] ?? 0) + 1;
     }
-    return out;
+    return load;
   };
-  assert.deepEqual(order(), ["s4", "s3", "machine", "s2"], "s4's week refills within a day; then left × length ÷ time to refill");
-  assert.equal(pickProfile(all, "m", signals({ s4: 3 }, { s4: now }), true).id, "s4", "more sessions or picked last does not take it off");
-  const s4 = urgency(health.s4.quota, now);
-  assert.deepEqual([s4.crowded, s4.soon], [false, true]);
-  assert.ok(Math.abs(s4.pace - (0.99 * 168) / 22.9) < 1e-9, "left × length ÷ time to refill");
-  // The soon one is preferred even over a faster pace: what is left of it is lost tomorrow.
-  health.s3 = { check: ok("ok"), quota: windows([2, 1.7], [0, 25]) };
-  health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [90, 20]) };
-  assert.ok(urgency(health.s3.quota, now).pace > urgency(health.s4.quota, now).pace);
+  const u = (id: string) => urgency(health[id].quota, now);
+  assert.ok(Math.abs(u("s4").pace - (0.55 * 168) / 41) < 1e-9, "left × length ÷ time to refill");
+  assert.ok(Math.abs(u("s4").weight - u("s4").pace * 0.9) < 1e-9, "times what its five hours have left");
+  // The first goes where the most would be lost; twenty are shared by weight, every account taking some.
   assert.equal(pickProfile(all, "m", signals(), true).id, "s4");
-  // Nearly full five hours: last, whatever its week.
+  const twenty = spread(20);
+  assert.deepEqual(Object.keys(twenty).sort(), ["s1", "s2", "s3", "s4", "s5"]);
+  const weights = Object.fromEntries(all.map((p) => [p.id, u(p.id).weight]));
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  for (const id of Object.keys(weights)) assert.ok(Math.abs(twenty[id]! - (20 * weights[id]!) / total) <= 1, `${id}: ${twenty[id]} of 20`);
+  assert.ok(twenty.s4! > twenty.s5!, "the week that would be lost takes more");
+  // A week refilling within an hour counts as a day away: it takes more, not all.
+  health.s4 = { check: ok("ok"), quota: windows([10, 3], [45, 0.5]) };
+  assert.ok(Math.abs(u("s4").pace - 0.55 * 7) < 1e-9);
+  assert.ok(spread(20).s4! < 12);
+  // Nearly full five hours: last, whatever its week; it takes none while another has room.
   health.s4 = { check: ok("ok"), quota: windows([85, 2.4], [1, 22.9]) };
-  assert.deepEqual(order(), ["s3", "machine", "s2", "s4"]);
-  // Used up this week, refilling soon: nothing left to lose, so not soon.
+  assert.equal(u("s4").crowded, true);
+  assert.equal(spread(20).s4, undefined);
+  // Used up this week: passed over.
   health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [100, 22.9]) };
-  assert.equal(urgency(health.s4.quota, now).soon, false);
+  assert.equal(spread(20).s4, undefined);
   // Equal allowances: fewer sessions, then the one picked least recently.
   for (const id of ["s3", "s4"]) health[id] = { check: ok("ok"), quota: windows([2, 2], [0, 30]) };
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({ s3: 1 }), true).id, "s4");
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({}, { s3: 1, s4: 2 }), true).id, "s3");
+});
+
+test("a session loses little by moving when its context was just compacted, or is about to be", () => {
+  const at = (turn: string, context: number, profile = "p", model: string | null = "m") => ({ turn, profile, model, context });
+  const points = new Map([["m", 200_000]]);
+  assert.equal(cheapToLeave([], points), false, "nothing known");
+  assert.equal(cheapToLeave([at("1", 30_000), at("1", 90_000)], points), false, "growing, far from it");
+  assert.equal(cheapToLeave([at("1", 90_000), at("2", 150_000)], points), true, "three quarters of where m is compacted");
+  assert.equal(cheapToLeave([at("1", 90_000, "p", "other"), at("2", 190_000, "p", "other")], points), false, "where other is compacted is not known");
+  assert.equal(cheapToLeave([at("1", 180_000), at("2", 20_000), at("2", 30_000)], points), true, "compacted in its last turn");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000)], points), true, "or the one before");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000), at("3", 40_000)], points), false, "longer ago");
+  assert.equal(cheapToLeave([at("1", 180_000, "q"), at("2", 20_000)], points), false, "started over on another account, not compacted");
+  assert.equal(cheapToLeave([at("1", 40_000), at("2", 10_000)], points), false, "too little to say");
 });
 
 test("a model is served however a profile spells it", () => {

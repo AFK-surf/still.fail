@@ -7,12 +7,13 @@
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
 import { createHash } from "node:crypto";
-import { closeSync, existsSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
-import { RunnerConnection, existingRunners, leave, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
+import { RunnerConnection, existingRunners, leave, listening, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
+import type { RuntimeKind } from "./runtime.ts";
 
 /// A wait on another process (a grace raced against its exit): the machine's time.
 const sleep = wall.sleep;
@@ -24,7 +25,7 @@ export const debug = (at: string, message: string, fields?: Record<string, unkno
 
 /// A runner id from something of the station's (a session key, a profile id): safe as a file name and short enough for
 /// the socket's path (104 bytes on macOS); a hash keeps two keys that clean up the same apart.
-export function runnerId(kind: "claude" | "codex", key: string): string {
+export function runnerId(kind: RuntimeKind, key: string): string {
   const clean = key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
   if (clean === key) return `${kind}-${clean}`;
   return `${kind}-${clean}-${createHash("sha256").update(key).digest("hex").slice(0, 10)}`;
@@ -57,7 +58,7 @@ const pidAlive = (pid: number) => {
 };
 
 /// A runner of this id that keeps its process still (its socket there: one on its way out has let it go).
-export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && existsSync(r.socket));
+export const findRunner = (data: string, id: string): RunnerInfo | undefined => existingRunners(data).find((r) => r.id === id && listening(r));
 export const outFile = (data: string, id: string) => join(runnersDir(data), `${id}.out`);
 
 /// The connection's socket, which runner.ts keeps to itself: its errors would otherwise go unhandled, and its closing
@@ -144,7 +145,7 @@ export class AgentProcess {
 
   /// Takes up the process a runner keeps: from its first line not acknowledged.
   static adopt(info: RunnerInfo, options: ProcessOptions) {
-    if (!existsSync(info.socket)) throw new Error(`runner ${info.id} has no socket`);
+    if (!listening(info)) throw new Error(`runner ${info.id} has no socket`);
     return new AgentProcess(info, options);
   }
 
@@ -217,7 +218,7 @@ export async function endRunner(data: string, id: string, label: string) {
   const info = findRunner(data, id);
   if (!info) return;
   log.warn("agents::process", "ending a runtime process left by a previous run", { label, runner: info.runner, pgid: info.pgid });
-  if (existsSync(info.socket)) {
+  if (listening(info)) {
     const conn = new RunnerConnection(info, () => {});
     socketOf(conn).on("error", () => {});
     conn.signal("TERM", true);
@@ -271,22 +272,33 @@ export function ackedOffset(info: RunnerInfo, out: string): Promise<number> {
   });
 }
 
-/// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends).
-export function linesBefore(file: string, end: number): string[] {
-  if (end <= 0) return [];
-  const buf = Buffer.alloc(end);
+/// How much of a runner's output `linesBefore` holds at once.
+const READ_CHUNK = 1 << 20;
+
+/// The whole lines of `file` before byte `end` (a line boundary: acknowledgements are at line ends), one at a time: an
+/// app-server's output holds days of its threads (hundreds of MB), more than one string can, so it is never held whole.
+export function* linesBefore(file: string, end: number, chunk = READ_CHUNK): Generator<string> {
+  if (end <= 0) return;
   const fd = openSync(file, "r");
   try {
-    let got = 0;
-    while (got < end) {
-      const n = readSync(fd, buf, got, end - got, got);
+    let carry = Buffer.alloc(0);
+    let at = 0;
+    while (at < end) {
+      const buf = Buffer.allocUnsafe(Math.min(chunk, end - at));
+      const n = readSync(fd, buf, 0, buf.length, at);
       if (n <= 0) break;
-      got += n;
+      at += n;
+      const bytes = carry.length === 0 ? buf.subarray(0, n) : Buffer.concat([carry, buf.subarray(0, n)]);
+      let from = 0;
+      for (let i = bytes.indexOf(0x0a); i >= 0; i = bytes.indexOf(0x0a, from)) {
+        const line = bytes.toString("utf8", from, i);
+        from = i + 1;
+        yield line.endsWith("\r") ? line.slice(0, -1) : line;
+      }
+      // A line longer than a chunk is carried whole into the next read.
+      carry = Buffer.from(bytes.subarray(from));
     }
   } finally {
     closeSync(fd);
   }
-  const lines = buf.toString("utf8").split("\n");
-  lines.pop();
-  return lines.map((l) => (l.endsWith("\r") ? l.slice(0, -1) : l));
 }

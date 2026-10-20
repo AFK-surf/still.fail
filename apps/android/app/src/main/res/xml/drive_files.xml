@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the app hands other apps from the cache: files of a station's drive fetched to open or share
+     (drive/DriveScreen.kt), and pictures copied on a driven screen that the phone's clipboard points at (remote/ScreenClips.kt). -->
+<paths>
+    <cache-path name="drive" path="drive/" />
+    <cache-path name="screen-clips" path="screen-clips/" />
+</paths>

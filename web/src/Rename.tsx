@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { stationApi, useStationCall } from "./api.ts";
 import { doingMatches, failed, useDoingList } from "./doing.ts";
-import { failure, useToast } from "./toast.tsx";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import * as css from "./Rename.css.ts";
 import { t } from "./i18n.ts";
 

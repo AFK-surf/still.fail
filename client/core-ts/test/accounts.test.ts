@@ -128,6 +128,25 @@ test("begin_sign_in_stores_pkce_and_builds_url", async () => {
   assert.equal(q.name, "still.fail 网页版 · Chrome");
 });
 
+test("password_sign_in_keeps_the_account_or_says_the_password_is_wrong", async () => {
+  const host = new FakeHost();
+  const expires = now(host) + 3600;
+  host.onFetch((req) => {
+    if (req.url === "https://stillfail.test/v1/auth/password") return body(req).password === "right" ? jsonResponse(200, tokens("acc", "ref", expires)) : jsonResponse(401, { error: "invalid_credentials" });
+    if (req.url === "https://stillfail.test/v1/me") return jsonResponse(200, { user: {} });
+    throw new Error(`unexpected ${req.url}`);
+  });
+  const accounts = await run(Accounts.load(host));
+  const wrong = await Effect.runPromise(Effect.flip(accounts.passwordSignIn("a@x.com", "wrong", "iPhone")));
+  assert.equal(wrong.code, "login_wrong_password");
+  assert.deepEqual(accounts.list(), []);
+  const v = await run(accounts.passwordSignIn("a@x.com", "right", "iPhone"));
+  assert.deepEqual(v, { sub: "sub1", email: "a@x.com", name: "阿一", picture: "" });
+  assert.deepEqual(body(host.requests[1]), { email: "a@x.com", password: "right", name: "iPhone" });
+  assert.deepEqual(accounts.list(), [v]);
+  assert.equal((stored(host, STORAGE_KEY) as StoredAccount[])[0].refresh, "ref");
+});
+
 test("sign_in_happy_path", async () => {
   const host = new FakeHost();
   const expires = now(host) + 3600;
@@ -190,7 +209,7 @@ test("sign_in_failures", async () => {
   assert.equal((await fails(run(accounts.completeSignIn("error=login_cancelled")))).message, "登录已取消");
   assert.equal(host.stored(LOGIN_KEY), undefined, "a failed login is not retried");
   await begin();
-  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "Google 登录没有成功");
+  assert.equal((await fails(run(accounts.completeSignIn("error=access_denied")))).message, "登录失败");
   await begin();
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
   assert.equal((await fails(run(accounts.completeSignIn("code=c&state=wrong")))).message, "登录状态不匹配，请重新登录");
@@ -250,7 +269,7 @@ test("refused_refresh_forgets_the_account", async () => {
   await assert.rejects(run(accounts.accessToken("s")), (e: { code: string; message: string }) => e.code === "signed_out" && e.message === "s@x.com 的登录已过期，请重新登录");
   assert.deepEqual(accounts.list().map((a) => a.sub), ["t"]);
   assert.equal((stored(host, STORAGE_KEY) as StoredAccount[]).length, 1);
-  await assert.rejects(run(accounts.accessToken("s")), (e: { message: string }) => e.message === "这个账号已退出");
+  await assert.rejects(run(accounts.accessToken("s")), (e: { message: string }) => e.message === "此账号已退出登录");
 });
 
 test("refreshes_are_traced_with_why_they_failed", async () => {

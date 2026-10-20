@@ -2,17 +2,24 @@ import { Popover } from "radix-ui";
 import type { StationUpdateNotice } from "./core/shapes.ts";
 import { core } from "./core/react.ts";
 import { stationApi, useStationCall } from "./api.ts";
-import { useAct } from "./toast.tsx";
+import { useAct } from "@stillfail/ui/toast.tsx";
 import { useDoing } from "./doing.ts";
 import { DoingMark } from "./DoingMark.tsx";
-import { Close } from "./icons.tsx";
+import { Progress } from "@stillfail/ui/waiting.tsx";
+import { Close, Download } from "@stillfail/ui/icons.tsx";
+import { useCommands } from "./commands.ts";
+import { t } from "./i18n.ts";
 import * as css from "./StationUpdate.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 
 export function StationUpdate({ station, notice }: { station: string; notice?: StationUpdateNotice | null | undefined }) {
   const api = stationApi(useStationCall(station));
   const act = useAct();
   const busy = useDoing("software.update", { station, id: "station" });
-  const control = (action: string) => act(core().call("station.updateNotice", { station, action, version: notice?.version }), "设置更新提醒");
+  const update = () => act(api.updateSoftware("station"), t("web-main.stationUpdate.updateAction"));
+  // ⌘K offers it too while its chat is open.
+  useCommands(notice?.canUpdate && !busy ? [{ id: "update.station", group: "update", words: "update station", label: notice.station ? `${t("web-main.stationUpdate.updateAction")} · ${notice.station}` : t("web-main.stationUpdate.updateAction"), icon: Download, run: update }] : []);
+  const control = (action: string) => act(core().call("station.updateNotice", { station, action, version: notice?.version }), t("web-main.stationUpdate.noticeAction"));
   if (!notice) return null;
   return <Popover.Root open={notice.open ?? false} onOpenChange={(open) => control(open ? "open" : "close")}>
     <Popover.Trigger className={css.trigger} data-tone={notice.tone} aria-label={notice.text}>
@@ -20,22 +27,20 @@ export function StationUpdate({ station, notice }: { station: string; notice?: S
     </Popover.Trigger>
     <Popover.Portal>
       <Popover.Content className={css.popover} data-tone={notice.tone} side="bottom" align="center" sideOffset={6} collisionPadding={12} onOpenAutoFocus={(e) => e.preventDefault()}>
-        <div className={css.head}>
+        <div className={`${css.head} ${controlsCss.panelEdge}`}>
           <div className={css.words}>
             {notice.station
               ? <span className={css.title}><span className={css.name}>{notice.station}</span>{notice.label && <span className={css.state}>{notice.label}</span>}</span>
               : <span className={css.name}>{notice.text}</span>}
             {notice.detail && <span className={css.detail}>{notice.detail}</span>}
           </div>
-          <button className={css.dismiss} aria-label={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} title={notice.dismissible ? "不再提醒此版本" : "收起更新详情"} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={14} /></button>
+          <button className={css.dismiss} aria-label={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} title={notice.dismissible ? t("web-main.stationUpdate.dismiss") : t("web-main.stationUpdate.collapse")} onClick={() => control(notice.dismissible ? "dismiss" : "close")}><Close size={14} /></button>
         </div>
-        {notice.tone === "busy" && notice.station && <div className={css.bar}>
-          {notice.percent != null ? <span className={css.fill} style={{ width: `${notice.percent}%` }} /> : <span className={`${css.fill} ${css.sweeping}`} />}
-        </div>}
-        {(notice.from || notice.to || notice.canUpdate) && <div className={css.foot}>
+        {notice.tone === "busy" && notice.station && <Progress part={notice.percent != null ? notice.percent / 100 : null} className={`${css.bar} ${controlsCss.panelEdge}`} />}
+        {(notice.from || notice.to || notice.canUpdate) && <div className={`${css.foot} ${controlsCss.panelEdge}`}>
           {(notice.from || notice.to) && <span className={css.versions}>{[notice.from, notice.to].filter(Boolean).join(" → ")}</span>}
-          {notice.canUpdate && <button className={css.update} disabled={busy} onClick={() => act(api.updateSoftware("station"), "更新 station")}>
-            <DoingMark calls="software.update" on={{ station, id: "station" }} size={12} />{busy ? "更新中" : notice.tone === "trouble" ? "重试" : "现在更新"}
+          {notice.canUpdate && <button className={css.update} data-tone="filled" disabled={busy} onClick={update}>
+            <DoingMark calls="software.update" on={{ station, id: "station" }} inline />{busy ? t("web-main.stationUpdate.updating") : notice.tone === "trouble" ? t("common.retry") : t("web-main.stationUpdate.updateNow")}
           </button>}
         </div>}
       </Popover.Content>

@@ -1,16 +1,18 @@
 // The reads of sessions, threads and jobs (src/api/routes/sessions.ts asks them), each with the request's `lang`.
 import type { ReadOp } from "./ops.ts";
 import { job, jobLog, openJobs } from "./jobs.ts";
-import { session, sessionFile, sessions, summary, thread, threads, timeline, widgetState } from "./sessions.ts";
+import { session, sessionFile, sessionPlace, sessions, summary, thread, threads, timeline, transcriptFile, widgetState } from "./sessions.ts";
 
 export const sessionOps: Record<string, ReadOp> = {
   /// One session as lists and events have it (views.rs `summary`).
   summary: (s, a) => summary(s, a.key),
-  sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang),
+  sessions: (s, a) => sessions(s, a.connect ?? null, a.archived, a.lang, a.viewer ?? null),
   session: (s, a) => session(s, a.key, a.viewer, a.lang),
-  timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang),
+  timeline: (s, a) => timeline(s, a.key, a.before, a.limit, a.lang, a.from, a.to, a.brief),
   sessionFile: (s, a) => sessionFile(s, a.key, a.name, a.thumb, a.lang),
+  transcriptFile: (s, a) => transcriptFile(s, a.key, a.lang),
   widgetState: (s, a) => widgetState(s, a.key, a.path, a.lang),
+  sessionPlace: (s, a) => sessionPlace(s, a.key, a.path ?? "", a.lang),
   threads: (s, a) => threads(s, a.viewer, a.session ?? null, a.lang),
   thread: (s, a) => thread(s, a.viewer, a.id, a.lang),
   openJobs: (s, a) => openJobs(s, a.viewer, a.lang),

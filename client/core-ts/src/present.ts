@@ -6,12 +6,16 @@ import { t } from "./i18n.ts";
 import type { Topic } from "./protocol.ts";
 import * as brand from "./brand.ts";
 import * as decisions from "./decisions.ts";
+import * as drive from "./drive.ts";
+import * as prefsMod from "./prefs.ts";
 import * as footprint from "./footprint.ts";
 import * as jobsMod from "./jobs.ts";
+import { permissionsShown } from "./permissions.ts";
 import * as model from "./shapes/model.ts";
 import * as providers from "./shapes/providers.ts";
 import { arr as arrU, equal, get as getU, isObject, shaped, str, u64 } from "./util.ts";
 import { SHAPES } from "./shapes/schema.ts";
+import { GROUPS as PROFILE_GROUPS, group as profileGroup, groupTitle as profileGroupTitle } from "./views/profiles.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -41,32 +45,33 @@ export function leftLevel(used: number): [number, string] {
   return [format.round(Math.max(100 - used, 0)), used >= 90 ? "red" : used >= 70 ? "amber" : "ok"];
 }
 
-function windows(list: Record<string, unknown>[], c: Clock): void {
-  for (const w of list) {
+function windows(list: Record<string, unknown>[], c: Clock): Record<string, unknown>[] {
+  const out = list.map((w) => {
     const label = str(w.label) ?? "";
     const used = typeof w.usedPercent === "number" ? w.usedPercent : 0;
     const [mark, order] = format.windowMark(label);
-    w.mark = mark;
-    w.order = order;
     const [left, level] = leftLevel(used);
-    w.left = left;
-    w.level = level;
-    w.refills = typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null;
-  }
+    return { ...w, label: format.windowName(label), mark, order, left, level, refills: typeof w.resetsAt === "number" ? format.refillsIn(w.resetsAt, c.now) : null };
+  });
   // A stable sort, as Rust's sort_by_key.
-  list.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
+  return out.sort((a, b) => (u64(a.order) ?? 1) - (u64(b.order) ?? 1));
 }
 
 /// Every time in a value, in words beside it: an object with some gets `time: { <field>: stamp }`; a quota's windows
-/// are put as they are drawn.
-export function times(value: unknown, c: Clock): void {
-  if (value !== null && typeof value === "object" && shaped.has(value)) return;
+/// are put as they are drawn. A new value where anything is put; a part with nothing put is the part as it was.
+export function times(value: unknown, c: Clock): unknown {
+  if (value !== null && typeof value === "object" && shaped.has(value)) return value;
   if (Array.isArray(value)) {
-    for (const v of value) times(v, c);
-    return;
+    let out: unknown[] | null = null;
+    for (let i = 0; i < value.length; i++) {
+      const v = times(value[i], c);
+      if (v !== value[i]) (out ??= [...value])[i] = v;
+    }
+    return out ?? value;
   }
-  if (!isObject(value)) return;
-  const map = value as Record<string, unknown>;
+  if (!isObject(value)) return value;
+  const map: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+  let changed = false;
   const stamps: Record<string, unknown> = {};
   let any = false;
   for (const key of Object.keys(map)) {
@@ -80,9 +85,14 @@ export function times(value: unknown, c: Clock): void {
         any = true;
       }
     } else if (key === "windows" && Array.isArray(v) && v.some((w) => get(w, "usedPercent") !== undefined)) {
-      windows(v as Record<string, unknown>[], c);
+      map[key] = windows(v as Record<string, unknown>[], c);
+      changed = true;
     } else if (key !== "time") {
-      times(v, c);
+      const shown = times(v, c);
+      if (shown !== v) {
+        map[key] = shown;
+        changed = true;
+      }
     }
   }
   if ("windows" in map && "state" in map) {
@@ -92,19 +102,27 @@ export function times(value: unknown, c: Clock): void {
         credits.unlimited === true
           ? t("core-views.present.credits.unlimited")
           : typeof credits.balance === "string"
-            ? t("core-views.present.credits.balance", { balance: credits.balance })
+            ? t("core-views.present.credits.balance", { balance: format.decimal(credits.balance) })
             : credits.hasCredits === false
               ? t("core-views.present.credits.none")
               : t("core-views.present.credits.unknown");
       map.creditsText = text;
+      changed = true;
     }
     const count = u64(map.resetCount);
-    if (count !== undefined) map.resetText = t("core-views.present.resets_left", { n: count });
+    if (count !== undefined) {
+      map.resetText = t("core-views.present.resets_left", { n: count });
+      changed = true;
+    }
   }
-  if (any) map.time = stamps;
+  if (any) {
+    map.time = stamps;
+    changed = true;
+  }
+  return changed ? map : value;
 }
 
-const NO_TICK = new Set(["live", "thread", "history", "host", "net", "status", "notices", "notify", "connection", "draft", "prefs", "doing", "adbShare", "slackTokens"]);
+const NO_TICK = new Set(["live", "thread", "history", "host", "net", "way", "stationNet", "status", "notices", "notify", "connection", "draft", "composer", "prefs", "doing", "adbShare", "slackTokens", "joinable", "memberships", "screens", "screenCard"]);
 
 /// Whether a topic shows times in words, sent again each minute while shown.
 export function ticks(topic: Topic): boolean {
@@ -115,6 +133,7 @@ export function ticks(topic: Topic): boolean {
 const SHAPED: Record<string, Ty> = {
   chats: "ChatsView",
   chatSearch: "ChatSearchView",
+  search: "SearchView",
   chat: "ChatView",
   stations: { vec: "StationView" },
   connects: "ConnectsView",
@@ -133,13 +152,22 @@ const SHAPED: Record<string, Ty> = {
   notify: "NotifyView",
   archive: "ArchiveView",
   newChat: "NewChatView",
+  shareIn: "ShareInView",
   pick: "PickView",
   chatJobs: "ChatJobsView",
+  imageNear: "ImageNear",
+  agentCard: "AgentCardView",
+  stationNet: { opt: "StationNet" },
   longJobs: "LongJobsView",
   profiles: "ProfilesView",
   usage: "UsageView",
   job: "Job",
+  drive: "DriveFolder",
+  drivePlace: { opt: "DrivePlace" },
   jobLog: "JobLogView",
+  machineLogins: "MachineLoginsView",
+  machineLogin: { opt: "MachineLoginShown" },
+  machineLoginScreen: { opt: "MachineLoginScreen" },
   prefs: "PrefsView",
   changelog: "ChangelogView",
   connectFlow: "ConnectFlowView",
@@ -148,6 +176,17 @@ const SHAPED: Record<string, Ty> = {
   adbShare: "AdbShareView",
   workspaceMarks: "WorkspaceMarksView",
   decisions: "DecisionsView",
+  lock: "LockView",
+  lockDraft: "LockDraftView",
+  lockPrompts: "LockPromptsView",
+  vaults: "VaultsView",
+  vaultItems: "VaultItemsView",
+  vaultUses: "VaultUsesView",
+  joinable: "JoinableView",
+  memberships: "MembershipsView",
+  screens: "ScreensView",
+  screenCard: "ScreenCard",
+  adbCard: "AdbCard",
 };
 
 /// A topic's value through the shape the clients are generated from: what it does not declare is dropped, and a value
@@ -174,9 +213,7 @@ export function fieldOf(ty: Ty, field: string): Ty | undefined {
 /// An item of a keyed list as `decorate` would make it inside its whole (output.ts).
 export function decorateItem(topic: Topic, item: unknown, c: Clock): unknown {
   if (!ticks(topic)) return item;
-  if (topic.topic === "sessions") session(item as J);
-  times(item, c);
-  return item;
+  return times(topic.topic === "sessions" ? session(item as J) : item, c);
 }
 
 export function conformTopic(topic: Topic, value: unknown): { ok: unknown } | { error: string } {
@@ -276,11 +313,19 @@ export function settled(row: J): boolean {
   return agents.length > 0 && agents.every((a) => shownStatus(a) === "final") && !decisions.waits(row) && get(row, "unread") !== true;
 }
 
-/// Shown as one to archive (faded, below the rest of its day, archived with one tap): settled, not pinned, not kept by
-/// the viewer; and where its station's archive review is on (`archiveReviewed`), only once the review recommended it.
+/// Archived with one tap (the page's bar, a phone's swipe): settled, not pinned, not kept by the viewer; and where its
+/// station's archive review is on (`archiveReviewed`), only once the review recommended it.
 export function archivable(row: J): boolean {
   if (!settled(row) || pinned(row) || get(row, "archiveReminderDismissed") === true) return false;
   return get(row, "archiveReviewed") !== true || get(row, "archiveRecommended") === true;
+}
+
+/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day, 归档
+/// under its last all-done post. off: never; reviewed: only once its station's archive review recommended it; done: as
+/// it is archivable.
+export function offered(row: J, hint: prefsMod.ArchiveHint): boolean {
+  if (hint === "off" || !archivable(row)) return false;
+  return hint !== "reviewed" || (get(row, "archiveReviewed") === true && get(row, "archiveRecommended") === true);
 }
 
 export function pinned(row: J): boolean {
@@ -297,23 +342,25 @@ export function stateAbout(agent: J, thread: number | null): number | null {
   return u64(about.seq) ?? null;
 }
 
-/// Where a chat stands, in words, and the message that is about.
+/// Where a chat stands, in words, and the message that is about. A line that asks for a decision (奏 · …, 要你帮忙：…)
+/// is about none: the line only says so, and the chat leads to what it asks (`ChatView.asks`).
 export function rowStateLine(row: J): [string, number | null] | null {
   const thread = u64(get(row, "thread")) ?? null;
   const p = decisions.pending(row);
   const card: [string, number | null] | null = p
-    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), u64(p.seq) ?? null]
+    ? [str(p.text) ?? decisions.line(str(get(p.message, "text")) ?? ""), null]
     : null;
   const agents: J[] = arr(get(row, "agents")) ?? [];
   const textOf = (a: J): string | null => str(get(a, "statusText")) ?? null;
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (!atWork) {
-    const blocked = agents.find((a) => shownStatus(a) === "block");
+    // What it asks let go by the viewer (忽略): its agent asking says nothing on their row.
+    const blocked = decisions.letGo(row) ? undefined : agents.find((a) => shownStatus(a) === "block");
     if (blocked) {
       const need = nonEmpty(get(get(blocked, "lastTurn"), "need")) !== null;
       if (card && !need) return card;
       const text = textOf(blocked);
-      return text === null ? null : [text, stateAbout(blocked, thread) ?? card?.[1] ?? null];
+      return text === null ? null : [text, null];
     }
     const failed = agents.find((a) => ["failed", "unexpected", "aborted"].includes(shownStatus(a)));
     if (failed) {
@@ -347,7 +394,7 @@ export function workingLine(row: J): string | null {
   const atWork = agents.some((a) => shownStatus(a) === "queued" || (shownStatus(a) === "running" && waiting(a) === null));
   if (atWork) {
     const text = str(get(get(row, "last"), "text")) ?? "";
-    const last = format.cleanText(lines(text).map((l) => l.trim()).find((l) => l !== "") ?? "");
+    const last = format.cleanText(lines(format.plainText(text)).map((l) => l.trim()).find((l) => l !== "") ?? "");
     return last === "" ? t("core-views.present.working") : t("core-views.present.working.last", { last });
   }
   for (const a of agents) {
@@ -412,8 +459,8 @@ export function botOf(connect: J): [string, string] | null {
 }
 
 /// A person as the clients show them (`shown`).
-export function person(p: J, me: J, members: J[]): void {
-  if (!isObject(p)) return;
+export function person(p: J, me: J, members: J[]): J {
+  if (!isObject(p)) return p;
   const strOf = (k: string): string | null => {
     const v = (p as J)[k];
     return typeof v === "string" && v !== "" ? v : null;
@@ -426,21 +473,16 @@ export function person(p: J, me: J, members: J[]): void {
   const name = id === "local" ? t("core-views.present.local_page") : (mName ?? strOf("name") ?? email ?? id);
   const mine = isViewer(me, id, []) || (email !== null && isViewer(me, email, []));
   const picture = str(get(member, "picture")) || null;
-  (p as J).shown = { name, display: mine ? t("core-views.present.you") : name, picture, mine };
+  return { ...p, shown: { name, display: mine ? t("core-views.present.you") : name, picture, mine } };
 }
 
 /// A row's people as the clients show them.
-export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): void {
-  if (row.people === undefined && row.creator === undefined) return;
+export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): J {
+  if (row.people === undefined && row.creator === undefined) return row;
   const shown = (p: J): J => {
-    const q = structuredClone(p);
-    person(q, me, members);
+    const q = person(p, me, members);
     const id = str(get(q, "id"));
-    if (id !== undefined && isViewer(me, id, slackUsers)) {
-      q.shown.mine = true;
-      q.shown.display = t("core-views.present.you");
-    }
-    return q;
+    return id !== undefined && isViewer(me, id, slackUsers) ? { ...q, shown: { ...q.shown, mine: true, display: t("core-views.present.you") } } : q;
   };
   const creator = isObject(row.creator) ? shown(row.creator) : null;
   const keyOf = (p: J) => (str(get(p, "email")) ?? str(get(p, "id")) ?? "").toLowerCase();
@@ -452,9 +494,7 @@ export function rowPeople(row: J, me: J, slackUsers: string[], members: J[]): vo
   const text: string[] = [];
   if (starter >= 0) text.push(t("core-views.present.started_by", { name: display(people[starter]) }));
   if (rest.length > 0) text.push(rest.join(t("core-views.list_separator")));
-  row.peopleText = text.join(" · ");
-  if (creator) row.creator = creator;
-  row.people = people;
+  return { ...row, peopleText: text.join(" · "), ...(creator ? { creator } : {}), people };
 }
 
 /// Who said a row's last thing, as its line shows them.
@@ -485,8 +525,8 @@ export function lastBy(row: J, me: J, slackUsers: string[], members: J[]): J {
 }
 
 /// A session's summary with what the clients show of it.
-export function session(s: J): void {
-  if (!isObject(s)) return;
+export function session(s: J): J {
+  if (!isObject(s)) return s;
   const status = shownStatus(s);
   let [text, tone] = format.statusText(status);
   const turn = get(s, "lastTurn");
@@ -509,21 +549,24 @@ export function session(s: J): void {
   const runtime = strOf("runtime") ?? "claude";
   const m = strOf("model");
   const first = strOf("firstText");
-  const title = strOf("title") || (first !== null ? format.cleanText(first) : "") || t("core-views.no_messages");
+  const title = strOf("title") || (first !== null ? format.cleanText(first) : "") || t("core-views.new_chat");
   const b = markOf(s);
-  o.statusText = text;
-  o.tone = tone;
-  o.mark = b;
-  o.badgeText = b !== null ? badgeText(b) : null;
-  o.titleText = title;
   const effort = strOf("effort");
   const process = strOf("process");
-  o.agentText = format.agentLabel(m, effort);
-  o.modelName = m ? model.name(m) : null;
-  o.maker = maker(m);
-  o.runtimeText = format.runtimeLabel(runtime);
-  o.processText = process !== null ? format.processText(process) : null;
-  o.efforts = format.efforts(runtime);
+  return {
+    ...o,
+    statusText: text,
+    tone,
+    mark: b,
+    badgeText: b !== null ? badgeText(b) : null,
+    titleText: title,
+    agentText: format.agentLabel(m, effort),
+    modelName: m ? model.name(m) : null,
+    maker: maker(m),
+    runtimeText: format.runtimeLabel(runtime),
+    processText: process !== null ? format.processText(process) : null,
+    efforts: format.efforts(runtime),
+  };
 }
 
 export function badgeText(b: string): string {
@@ -536,35 +579,50 @@ export function maker(m: string | null | undefined): J {
 }
 
 /// A connect with its state and how it runs in words.
-export function connect(c: J): void {
-  if (!isObject(c)) return;
+export function connect(c: J): J {
+  if (!isObject(c)) return c;
   const o = c as J;
-  const [text, presence] = format.connection(o.connection ?? null);
+  const [text, presence] = format.connection(o.connection ?? null, str(o.kind) ?? null);
   const mode = str(o.mode) ?? "multi-session";
   const [modeText, modeShort] = format.modeText(mode, typeof o.requireMention === "boolean" ? o.requireMention : true);
   const bind = o.bind ?? null;
   const runtime = str(get(bind, "runtime")) ?? "claude";
   const label = format.agentLabel(str(get(bind, "model")), str(get(bind, "effort")));
-  o.statusText = text;
-  o.presence = presence;
-  o.modeText = modeText;
-  o.modeShort = modeShort;
-  o.runtimeText = format.runtimeLabel(runtime);
-  o.runText = `${format.runtimeLabel(runtime)} · ${label}`;
   const bm = str(get(bind, "model"));
-  o.modelName = bm ? model.name(bm) : null;
+  return {
+    ...o,
+    statusText: text,
+    presence,
+    modeText,
+    modeShort,
+    runtimeText: format.runtimeLabel(runtime),
+    runText: `${format.runtimeLabel(runtime)} · ${label}`,
+    modelName: bm ? model.name(bm) : null,
+    ...(isObject(o.feishu) ? { feishu: feishuApp(o.feishu) } : {}),
+  };
+}
+
+/// A Feishu connect's app, with its page in the developer console (Lark's on its own domain).
+function feishuApp(f: J): J {
+  const id = str(get(f, "appId")) ?? "";
+  const domain = str(get(f, "domain")) === "lark" ? "lark" : "feishu";
+  const open = domain === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+  return { appSecret: "", ...f, appId: id, domain, console: id !== "" ? `${open}/app/${encodeURIComponent(id)}` : null };
 }
 
 /// A profile with its last check in words, its models' makers and series, what it can do, and its trouble.
-export function profile(p: J): void {
-  if (!isObject(p)) return;
-  const o = p as J;
-  if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access.kind = "api-provider";
+export function profile(p: J): J {
+  if (!isObject(p)) return p;
+  const o: J = { ...p };
+  if (get(o.access, "kind") === "env" && typeof get(o.access, "provider") === "string") o.access = { ...o.access, kind: "api-provider" };
   const blocked = get(o.quota, "state") === "blocked";
   const [text, tone] = blocked ? [t("core-views.present.profile.blocked"), "red"] : format.checkText(o.check ?? null);
   o.checkText = text;
   o.checkTone = tone;
   o.trouble = profileTrouble(o);
+  // The kind of account it is listed under, as the workspace's list has it (views/profiles.ts).
+  o.group = profileGroup(o);
+  o.groupTitle = profileGroupTitle(o.group);
   const found: J[] = [...(arr(get(o.check, "models")) ?? []), ...(arr(o.modelsSaving) ?? [])];
   const strs = (list: J[]) => list.filter((m): m is string => typeof m === "string");
   const models = arr(o.models) ?? [];
@@ -587,7 +645,11 @@ export function profile(p: J): void {
     const f = get(o.check, "decision") ?? null;
     o.decisionOnly = true;
     o.decisionModels = get(f, "state") === "ready" ? (get(f, "models") ?? []) : [];
-    o.decisionText = str(get(f, "detail")) || t("core-views.present.profile.decision_pending");
+    // Said in the viewer's language from what the station names (`reason`); a station from before that, as it said it.
+    const reason = str(get(f, "reason")) ?? "";
+    o.decisionText = DECISION_REASONS.includes(reason)
+      ? t(`core-views.present.profile.decision.${reason}`, { n: o.decisionModels.length })
+      : str(get(f, "detail")) || t("core-views.present.profile.decision_pending");
   }
   o.uses = usesList;
   const kind = get(o.access, "kind");
@@ -602,6 +664,7 @@ export function profile(p: J): void {
   o.series = bySeries;
   o.modelsText = modelsText;
   o.available = available;
+  return o;
 }
 
 const KINDS = new Set(["subscription", "anthropic-api", "opencode-go", "api-provider", "env"]);
@@ -621,13 +684,14 @@ function uses(p: J): [string[], [string, string | null] | null] {
     at = source ? providers.endpoints(source, null, null) : null;
   }
   const decision = (at !== null && at.chat !== null) || get(get(p.check, "decision"), "state") === "ready";
-  const list = ([[runs("claude"), "claude"], [runs("codex"), "codex"], [decision, "decision"]] as [boolean, string][]).filter(([on]) => on).map(([, id]) => id);
+  const list = [...format.RUNTIMES.filter(runs), ...(decision ? ["decision"] : [])];
   const provider: [string, string | null] | null = source && kind === "api-provider" ? [source.name, source.mark ?? null] : null;
   return [list, provider];
 }
 
-function usesText(list: string[]): string {
-  return list.map((u) => (u === "claude" ? t("core-views.present.uses.claude") : u === "codex" ? t("core-views.present.uses.codex") : t("core-views.present.uses.decision"))).join(" · ");
+/// What a profile can do (`claude`, `codex`, `dsh`, `grok`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
+export function usesText(list: string[]): string {
+  return list.map((u) => (u === "decision" ? t("core-views.present.uses.decision") : format.runtimeLabel(u))).join(" · ");
 }
 
 /// Provider/check states to a safe next step.
@@ -648,7 +712,9 @@ export function profileTrouble(p: J): J {
     const machine = get(p, "machine") === true;
     if (machine && state === "login") return issue(title, why, t("core-views.present.trouble.command_next"), "command", t("core-views.present.trouble.command_label"));
     const kind = str(get(get(p, "access"), "kind"));
-    if (kind === "subscription" && !machine && state === "login") return issue(title, why, t("core-views.present.trouble.login_next"), "login", t("core-views.present.trouble.login_label"));
+    // A subscription, or an OpenCode Go profile signed in to the OpenCode Console: signed in again.
+    const signsIn = kind === "subscription" || (kind === "opencode-go" && get(get(p, "access"), "login") === true);
+    if (signsIn && !machine && state === "login") return issue(title, why, t("core-views.present.trouble.login_next"), "login", t("core-views.present.trouble.login_label"));
     if (kind === "anthropic-api" || kind === "opencode-go" || kind === "api-provider") return issue(title, why, t("core-views.present.trouble.key_next"), "key", t("core-views.present.trouble.key_label"));
     if (kind === "env") return issue(title, why, t("core-views.present.trouble.env_next"), "env", t("core-views.present.trouble.env_label"));
     return issue(title, why, t("core-views.present.trouble.check_next"), "check", t("core-views.present.trouble.check_label"));
@@ -674,10 +740,10 @@ export function series(models: string[]): J {
 const GIB = 1024 ** 3;
 
 /// A machine as the clients show it.
-export function host(h: J): void {
-  if (!isObject(h)) return;
-  const o = h as J;
-  const src = structuredClone(o);
+export function host(h: J): J {
+  if (!isObject(h)) return h;
+  const src = h as J;
+  const o: J = { ...src };
   const n = (...path: string[]): number => {
     let v: J = src;
     for (const k of path) v = get(v, k);
@@ -698,17 +764,23 @@ export function host(h: J): void {
   o.summary = summary;
   o.line = `${os} · ${summary} · ${t("core-views.present.host.up_days", { n: days })}`;
   const arch = str(src.arch) ?? "";
-  const meter = (label: string, short: string, percent: number, value: string, note: string | null) => {
+  // Each as the allowances are drawn: how much is left (`left`, its fill and cells) and that in words; on a machine's
+  // own page, that large (`big` `unit`), what it is (`title`) and what it is out of (`total`).
+  const meter = (label: string, short: string, percent: number, value: string, note: string | null, room: { remaining: string; big: string; unit: string; title: string; total: string }) => {
     const p = format.round(Math.min(Math.max(percent, 0), 100));
-    return { label, short, percent: p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note };
+    return { label, short, percent: p, left: 100 - p, level: p >= 90 ? "red" : p >= 75 ? "amber" : "ok", value, note, ...room };
   };
   const swap = n("memory", "swapUsedBytes");
   const cpuModel = str(src.cpuModel) || null;
   const busy = src.cpuBusy;
+  const cpuPercent = typeof busy === "number" ? busy * 100 : load * 100;
+  const idle = format.round(100 - Math.min(Math.max(cpuPercent, 0), 100));
+  const loadText = t("core-views.present.host.load", { load: format.fixed1(load * cpus) });
+  const cpuRoom = { remaining: t("core-views.present.host.idle", { percent: idle }), big: String(idle), unit: "%", title: t("core-views.present.host.cpu_idle"), total: loadText };
   const cpu =
     typeof busy === "number"
-      ? meter("CPU", "CPU", busy * 100, `${format.round(busy * 100)}%`, [t("core-views.present.host.load", { load: format.fixed1(load * cpus) }), cpuModel].filter((x) => x !== null).join(" · "))
-      : meter(t("core-views.present.host.cpu_load"), "CPU", load * 100, `${format.round(load * 100)}%`, cpuModel);
+      ? meter("CPU", "CPU", cpuPercent, `${format.round(cpuPercent)}%`, [loadText, cpuModel].filter((x) => x !== null).join(" · "), cpuRoom)
+      : meter(t("core-views.present.host.cpu_load"), "CPU", cpuPercent, `${format.round(cpuPercent)}%`, cpuModel, cpuRoom);
   o.facts = [
     str(src.hostname) ?? "",
     os,
@@ -716,23 +788,33 @@ export function host(h: J): void {
     days > 0 ? t("core-views.present.host.up_days_hours", { days, hours }) : t("core-views.present.host.up_hours", { hours }),
   ];
   const remaining = (bytes: number) => t("core-views.present.host.remaining", { size: format.fixed1(Math.max(bytes, 0) / GIB) });
-  const memory = {
-    ...meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null),
-    remaining: remaining(memTotal - memUsed),
-  };
-  const disk = {
-    ...meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null),
-    remaining: remaining(diskFree),
-  };
+  // What is left in gigabytes, large: one decimal below 100.
+  const big = (bytes: number) => format.gb1(Math.max(bytes, 0)).replace(/ GB$/, "");
+  const memory = meter(t("core-views.present.host.memory"), t("core-views.present.host.memory_short"), memTotal > 0 ? (memUsed / memTotal) * 100 : 0, `${format.gb1(memUsed)} / ${format.gb1(memTotal)}`, swap > 0 ? `swap ${format.gb1(swap)}` : null, {
+    remaining: remaining(memTotal - memUsed), big: big(memTotal - memUsed), unit: "GB", title: t("core-views.present.host.memory_left"), total: t("core-views.present.host.out_of", { size: format.gb(memTotal) }),
+  });
+  const disk = meter(t("core-views.present.host.disk"), t("core-views.present.host.disk_short"), diskTotal > 0 ? ((diskTotal - diskFree) / diskTotal) * 100 : 0, t("core-views.present.host.disk_value", { free: format.gb1(diskFree), total: format.gb1(diskTotal) }), null, {
+    remaining: remaining(diskFree), big: big(diskFree), unit: "GB", title: t("core-views.present.host.disk_left"), total: t("core-views.present.host.out_of", { size: format.gb(diskTotal) }),
+  });
+  // What the machine is, the same line wherever it is named: its chip, its memory, its system.
+  o.identity = [cpuModel, memTotal > 0 ? format.gb(memTotal) : null, os || null].filter((x) => x !== null).join(" · ");
+  // The rest, a row each, only where the machine is looked at closely.
+  const uptimeText = days > 0 ? t("core-views.present.host.uptime_days_hours", { days, hours }) : t("core-views.present.host.uptime_hours", { hours });
+  o.details = [
+    { label: t("core-views.present.host.hostname"), value: str(src.hostname) ?? "" },
+    { label: t("core-views.present.host.chip"), value: [cpuModel, cpus > 0 ? cores : null, arch || null].filter((x) => x !== null).join(" · ") },
+    { label: t("core-views.present.host.uptime"), value: uptimeText },
+    { label: brand.name(), value: t("core-views.present.host.process", { size: `${format.round(n("emberRssBytes") / 1024 ** 2)} MB` }) },
+  ].filter((d) => d.value !== "");
   o.meters = [cpu, memory, disk];
   o.usage = [memory, disk].map((m) => `${m.label} ${m.value}`).join(" · ");
   o.emberText = `${brand.name()} ${format.round(n("emberRssBytes") / 1024 ** 2)} MB`;
+  return o;
 }
 
-/// A station's connection as its card shows it (`StationNet`).
-export function net(raw: J, relayName: (host: string) => string | null): J {
-  if (!isObject(raw)) return null;
-  const r = raw as J;
+/// How a connection to a station goes, in words (直连, 北京中继) and as a word to tell apart: a reading's (`net`) or
+/// its way alone (`way`), `{ path, relay }`.
+function reached(r: J, relayName: (host: string) => string | null): { path: string; via: string } {
   const relayHost = str(r.relay) || null;
   const path =
     r.path === "direct"
@@ -745,6 +827,20 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
             })()
           : t("core-views.present.net.relay")
         : t("core-views.present.net.choosing");
+  return { path, via: r.path === "direct" ? "direct" : r.path === "relay" ? "relay" : "choosing" };
+}
+
+/// How a station is reached as the places that name it show it (`StationWay`), from its `way`.
+export function way(raw: J, relayName: (host: string) => string | null): J {
+  if (!isObject(raw)) return null;
+  return reached(raw, relayName);
+}
+
+/// A station's connection as its card shows it (`StationNet`).
+export function net(raw: J, relayName: (host: string) => string | null): J {
+  if (!isObject(raw)) return null;
+  const r = raw as J;
+  const { path, via } = reached(r, relayName);
   const samples: J[] = arr(r.samples) ?? [];
   const figure = (ms: number) => ({
     text: ms >= 1000 ? `${format.fixed1(ms / 1000)} s` : `${Math.max(format.round(ms), 1)} ms`,
@@ -752,7 +848,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
   });
   const rtt = typeof r.rttMs === "number" ? figure(r.rttMs) : null;
   const named = (h: string) => relayName(h) ?? h;
-  const via = r.path === "relay" ? (str(r.relay) ?? null) : null;
+  const through = r.path === "relay" ? (str(r.relay) ?? null) : null;
   const m = r.measured;
   const measured = isObject(m)
     ? {
@@ -761,7 +857,9 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
           const h = str(get(x, "relay"));
           if (h === undefined) return [];
           const ms = get(x, "rttMs");
-          return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: via === h }];
+          // "direct": the way that goes straight there, no relay.
+          if (h === "direct") return [{ name: t("core-views.present.net.direct"), rtt: typeof ms === "number" ? figure(ms) : null, current: r.path === "direct" }];
+          return [{ name: named(h), rtt: typeof ms === "number" ? figure(ms) : null, current: through === h }];
         }),
         moved: typeof m.moved === "string" ? named(m.moved) : null,
       }
@@ -781,8 +879,9 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
   }
   const daily = typeof r.todayRxBytes === "number";
   const [rx, tx] = daily ? [num("todayRxBytes"), num("todayTxBytes")] : [num("rxBytes"), num("txBytes")];
+  // Over a minute of a quiet link a lost packet or two is most of what there is to count: shown once enough went.
   const loss =
-    sent >= 20 && lost / sent >= 0.01
+    sent >= 100 && lost / sent >= 0.01
       ? (() => {
           const pct = (lost / sent) * 100;
           return { text: t("core-views.present.net.loss", { percent: format.fixed1(pct) }), level: pct >= 10 ? "red" : "amber" };
@@ -790,6 +889,7 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
       : null;
   return {
     path,
+    via,
     rtt,
     rttHistory: history,
     down: rate("rxBps"),
@@ -801,17 +901,8 @@ export function net(raw: J, relayName: (host: string) => string | null): J {
     upTotal: format.bytes(tx),
     loss,
     measured,
+    lan: (arr(r.lan) ?? []).filter((a: J) => typeof a === "string"),
   };
-}
-
-/// Posts worth concentrating on at the end of a chat.
-export function focusMessage(message: J): boolean {
-  if (get(message, "authorKind") !== "agent" || get(message, "system") === true) return false;
-  const e = str(get(message, "ending")) ?? str(get(message, "declared"));
-  if (e === "all_done" || e === "final") return true;
-  const d = get(message, "decision");
-  if (get(d, "resolved") === true || get(d, "dismissed") === true) return false;
-  return ["need_human", "need_help", "need_decision", "block"].includes(e ?? "") || (d !== undefined && get(d, "resolved") === false);
 }
 
 // ── Decoration ──
@@ -829,51 +920,60 @@ export function decorateWith(topic: string, decorator: Decorator): void {
 export function decorate(topic: Topic, value: unknown, c: Clock): unknown {
   switch (topic.topic) {
     case "host":
-      host(value);
-      return value;
+      return host(value);
     case "footprint":
       return footprint.shown(value, c);
+    case "drive":
+      return drive.shown(value, c);
+    case "prefs":
+      return prefsMod.shown(value);
   }
   if (!ticks(topic)) return value;
   const v = value as J;
   switch (topic.topic) {
     case "sessions":
-      for (const s of arr(v) ?? []) if (!shaped.has(s)) session(s);
+      if (Array.isArray(v)) value = v.map((s) => (shaped.has(s) ? s : session(s)));
       break;
     case "session":
-      if (isObject(v) && v.session !== undefined) session(v.session);
+      if (isObject(v) && v.session !== undefined) value = { ...v, session: session(v.session) };
       break;
     case "overview":
-      if (isObject(v)) overview(v as J, c);
+      if (isObject(v)) value = overview(v as J, c, typeof topic.station === "string" ? topic.station : null);
       break;
-    case "chat":
-      for (const a of arr(get(v, "agents")) ?? []) {
-        const jobs = arr(get(a, "jobs"));
-        if (jobs) for (let i = 0; i < jobs.length; i++) jobs[i] = jobsMod.shown(jobs[i], c);
-      }
+    case "chat": {
+      const agents = arr(get(v, "agents"));
+      if (agents) value = { ...v, agents: agents.map((a) => (Array.isArray(get(a, "jobs")) ? { ...a, jobs: a.jobs.map((j: J) => jobsMod.shown(j, c)) } : a)) };
       break;
+    }
     case "decisions":
-      decisions.today(v, c);
+      value = decisions.today(v, c);
       break;
     case "job":
       value = jobsMod.shown(v, c);
       break;
     case "jobLog":
-      jobsMod.log(v, c);
+      value = jobsMod.log(v, c);
       break;
   }
   const own = DECORATORS[topic.topic];
   if (own) value = own(value, c);
-  times(value, c);
-  return value;
+  return times(value, c);
 }
 
-function overview(v: J, c: Clock): void {
-  for (const row of arr(get(v.automaticDecisions, "recent")) ?? []) {
-    if (typeof get(row, "at") === "number") row.stamp = stamp(row.at, c);
+function overview(value: J, c: Clock, station: string | null): J {
+  const v: J = { ...value };
+  // A Mac station's grants to still.fail Helper, in words (permissions.ts); none said, none shown.
+  const permissions = station === null ? undefined : permissionsShown(v.permissions, station);
+  if (permissions === undefined) delete v.permissions;
+  else v.permissions = permissions;
+  const decided = v.automaticDecisions;
+  if (isObject(decided)) {
+    const shown: J = { ...decided };
+    const recent = arr(decided.recent);
+    if (recent) shown.recent = recent.map((row) => (typeof get(row, "at") === "number" ? { ...row, stamp: stamp(row.at, c) } : row));
+    if (isObject(decided.policy)) shown.policy = archivePolicy(decided.policy as J, c);
+    v.automaticDecisions = shown;
   }
-  const policy = get(v.automaticDecisions, "policy");
-  if (isObject(policy)) archivePolicy(policy as J, c);
   const processes = arr(v.processes);
   if (processes) {
     let mb = 0;
@@ -883,17 +983,16 @@ function overview(v: J, c: Clock): void {
         ? t("core-views.present.processes.none")
         : t("core-views.present.processes.running", { n: processes.length, size: mb >= 1024 ? `${format.fixed1(mb / 1024)} GB` : `${mb} MB` });
   }
-  if (isObject(v.footprint)) footprint.brief(v.footprint);
-  for (const c of arr(v.connects) ?? []) connect(c);
-  const station = (arr(v.updates) ?? []).find((u) => get(u, "id") === "station");
-  if (station) station.name = "Station";
-  const profiles = arr(v.profiles);
-  if (profiles) {
-    for (const p of profiles) profile(p);
-    // A stable sort: those in trouble first.
-    const sortedProfiles = [...profiles].sort((a, b) => Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
-    profiles.splice(0, profiles.length, ...sortedProfiles);
-  }
+  if (isObject(v.footprint)) v.footprint = footprint.brief(v.footprint);
+  const connects = arr(v.connects);
+  if (connects) v.connects = connects.map(connect);
+  const updates = arr(v.updates);
+  if (updates) v.updates = updates.map((u) => (get(u, "id") === "station" ? { ...u, name: "Station" } : u));
+  const listed = arr(v.profiles);
+  // A stable sort: by kind of account (a station's list is a section each), those in trouble first in each.
+  const kindOf = (p: J) => PROFILE_GROUPS.indexOf(get(p, "group"));
+  const profiles = listed?.map(profile).sort((a, b) => kindOf(a) - kindOf(b) || Number(get(a, "trouble") === null) - Number(get(b, "trouble") === null));
+  if (profiles) v.profiles = profiles;
   const subscriptions: [J, string][] = [];
   const taken: J[] = [];
   for (const p of profiles ?? []) {
@@ -904,25 +1003,31 @@ function overview(v: J, c: Clock): void {
     }
     if (get(p, "machine") === true && get(p, "runtime") !== undefined) taken.push(get(p, "runtime"));
   }
-  for (const l of arr(v.machineLogins) ?? []) {
-    const plan = get(l, "plan");
-    const email = str(get(l, "email"));
-    l.offered =
-      get(l, "loggedIn") === true &&
-      typeof plan === "string" &&
-      plan !== "" &&
-      !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
-      !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
+  const logins = arr(v.machineLogins);
+  if (logins) {
+    v.machineLogins = logins.map((l) => {
+      const plan = get(l, "plan");
+      const email = str(get(l, "email"));
+      const offered =
+        get(l, "loggedIn") === true &&
+        typeof plan === "string" &&
+        plan !== "" &&
+        !(get(l, "runtime") !== undefined && taken.some((r) => equal(r, get(l, "runtime")))) &&
+        !(email !== undefined && subscriptions.some(([runtime, bound]) => equal(get(l, "runtime"), runtime) && email.trim().toLowerCase() === bound));
+      return isObject(l) ? { ...l, offered } : l;
+    });
   }
+  return v;
 }
 
 /// The archive policy's lines: the checks it counted, and who changed it last, where, when and what.
-function archivePolicy(p: J, c: Clock): void {
+function archivePolicy(policy: J, c: Clock): J {
+  const p: J = { ...policy };
   const failed = u64(p.failed) ?? 0;
   const counted = t("core-views.policy.checked", { n: u64(p.checked) ?? 0, days: u64(p.days) ?? 7 });
   p.summaryText = failed > 0 ? `${counted} · ${t("core-views.policy.failed", { n: failed })}` : counted;
   const change = p.change;
-  if (!isObject(change)) return;
+  if (!isObject(change)) return p;
   const by: J = change.by ?? {};
   const who =
     by.kind === "agent"
@@ -930,7 +1035,11 @@ function archivePolicy(p: J, c: Clock): void {
       : str(by.name) || str(by.email) || t("core-views.policy.someone");
   const when = typeof change.at === "number" ? format.relativeTime(change.at, c.now, c.offsetMin) : "";
   p.changeText = [t("core-views.policy.changedBy", { who }), when, str(change.summary)].filter((x) => x !== "").join(" · ");
+  return p;
 }
+
+/// The station's reasons for what a profile can decide with (station/src/sessions/decision.ts), each said in words.
+const DECISION_REASONS = ["no_probabilities", "signed_out", "address", "found", "none_verified", "changed"];
 
 /// What the archive check made of a chat (its row's `archiveCheck`), in a line under the agent's all-done post.
 export function archiveCheck(v: J): J | null {
@@ -942,4 +1051,28 @@ export function archiveCheck(v: J): J | null {
   // Counted as archive yet not recommended: the model was not sure enough.
   const what = recommended ? t("core-views.policy.archive") : v.archive === true ? t("core-views.policy.unsure") : t("core-views.policy.keep");
   return { text: `${name} · ${what}`, recommended, failed: false };
+}
+
+/// A runtime the station does not have (a chat's notice says so, or a plan's sign-in runs its command): installing it
+/// there, as the station's updates (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the
+/// workspace's owner or an admin), in a line (`title`: not installed, installing, could not, installed). Nothing offered
+/// by a station older than its updates.
+export function installView(runtime: string, updates: J[], manages: boolean): J | null {
+  const v = updates.find((u) => get(u, "id") === runtime);
+  if (v === undefined) return null;
+  const name = str(v.name) ?? format.runtimeLabel(runtime);
+  if (v.state === "updating") {
+    const percent = u64(v.percent);
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };
+  }
+  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
+  const can = manages && v.updatable === true;
+  if (v.state === "failed") {
+    const why = str(v.message);
+    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
+  }
+  const title = t("core-views.install.missing", { name });
+  if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
+  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
+  return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
 }

@@ -1,22 +1,28 @@
-import { keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { glass } from "./styles/glass.ts";
+import { style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { IN, PANEL_PAD, PANEL_PILL, TEXT_IN, pillInner } from "@stillfail/ui/styles/align.ts";
+import { panelCard, popover as popover0 } from "@stillfail/ui/styles/controls.css.ts";
+import { panelButton, panelIcon } from "@stillfail/ui/parts.css.ts";
 
-const sweep = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
-
-export const trigger = style({ display: "inline-flex", alignItems: "center", gap: "5px", flexShrink: 0, padding: "6px 0", border: 0, background: "none", color: vars.accentText, fontSize: "12px", lineHeight: "18px", cursor: "pointer", whiteSpace: "nowrap", borderRadius: "6px", outline: "none", selectors: { "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` }, '&[data-tone="trouble"]': { color: vars.red } } });
+export const trigger = style({ display: "inline-flex", alignItems: "center", gap: "5px", flexShrink: 0, padding: "6px 0", border: 0, background: "none", color: vars.accentText, fontSize: vars.textMeta, lineHeight: "18px", cursor: "pointer", whiteSpace: "nowrap", borderRadius: `calc(6px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, outline: "none", selectors: { "&:focus-visible": { boxShadow: `0 0 0 2px ${vars.fieldFocus}` }, '&[data-tone="trouble"]': { color: vars.red } } });
 export const dot = style({ width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", flexShrink: 0 });
-export const popover = style({ display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", padding: "12px 10px 12px 14px", zIndex: 100, borderRadius: vars.rCard, ...glass, boxShadow: `0 6px 24px ${vars.shadow}`, color: vars.text, fontSize: "13px", lineHeight: "19px", outline: "none" });
-export const head = style({ display: "flex", alignItems: "flex-start", gap: "8px" });
-export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1 });
+/**
+ * A small panel of words (controls.css.ts popover, panelCard: docs/ui-panels.md); its head and foot at its padding, a close and a button at their corners.
+ * Its corner from those pills (align.ts pillInner): a menu's, for rows taller than they are, would leave a crescent by them.
+ */
+export const popover = style([popover0, panelCard, { vars: { [IN]: pillInner(PANEL_PAD, PANEL_PILL, vars.cornerScale) }, display: "flex", flexDirection: "column", gap: "8px", width: "min(288px, calc(100vw - 24px))", boxSizing: "border-box", zIndex: 100, color: vars.text, fontSize: vars.textUi, lineHeight: "19px", outline: "none", animation: "none" }]);
+/** Its words in by a row's padding and a little down (align.ts panelText); its close in the top right corner, at the padding. */
+export const head = style({ display: "flex", alignItems: "flex-start", gap: "8px", paddingLeft: TEXT_IN });
+export const words = style({ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1, paddingTop: TEXT_IN, selectors: { [`${head}:last-child &`]: { paddingBottom: TEXT_IN } } });
 export const title = style({ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0 });
 export const name = style({ fontWeight: "500", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
-export const state = style({ flexShrink: 0, fontSize: "12px", color: vars.accentText, selectors: { '[data-tone="trouble"] &': { color: vars.red } } });
-export const detail = style({ color: vars.muted, fontSize: "12px", lineHeight: "17px", overflowWrap: "anywhere" });
-export const bar = style({ position: "relative", height: "3px", marginRight: "4px", borderRadius: "2px", overflow: "hidden", background: `color-mix(in srgb, ${vars.accent} 18%, transparent)` });
-export const fill = style({ position: "absolute", inset: "0 auto 0 0", borderRadius: "inherit", background: vars.accent, transition: "width .3s ease" });
-export const sweeping = style({ width: "40%", animation: `${sweep} 1.4s ease-in-out infinite`, "@media": { "(prefers-reduced-motion: reduce)": { animation: "none", width: "100%", opacity: .35 } } });
-export const foot = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "24px", marginRight: "4px" });
-export const versions = style({ color: vars.muted, fontFamily: vars.fontMono, fontSize: "11px", lineHeight: "16px", fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
-export const update = style({ display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "auto", padding: "4px 10px", border: 0, borderRadius: "999px", background: vars.accentBg, font: "inherit", fontSize: "12px", lineHeight: "16px", color: vars.accentText, fontWeight: "500", whiteSpace: "nowrap", cursor: "pointer", flexShrink: 0, selectors: { "&:disabled": { opacity: .6, cursor: "default" } } });
-export const dismiss = style({ display: "grid", placeItems: "center", width: "24px", height: "24px", margin: "-3px 0 -3px 0", padding: 0, border: 0, borderRadius: "6px", background: "none", color: vars.muted, cursor: "pointer", flexShrink: 0, selectors: { "&:hover": { background: vars.fieldHover, color: vars.text } } });
+export const state = style({ flexShrink: 0, fontSize: vars.textMeta, color: vars.accentText, selectors: { '[data-tone="trouble"] &': { color: vars.red } } });
+export const detail = style({ color: vars.muted, fontSize: vars.textMeta, lineHeight: "17px", overflowWrap: "anywhere" });
+/** Its progress (waiting.tsx Progress): a line on the words' line (its fill reaches its box, so it is placed by its margin, not padded). */
+export const bar = style({ marginInline: TEXT_IN });
+export const foot = style({ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", minHeight: "24px", paddingLeft: TEXT_IN });
+export const versions = style({ color: vars.muted, fontFamily: vars.fontMono, fontSize: vars.textCaption, lineHeight: "16px", fontVariantNumeric: "tabular-nums", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 });
+/** Its one thing to do, filled (it must be seen); its close an icon: a small panel's (ui.css.ts). */
+export const update = style([panelButton, { marginLeft: "auto" }]);
+/** In the card's top right corner as its update is in the bottom right: as far from both edges, rounded as the card less that. */
+export const dismiss = panelIcon;

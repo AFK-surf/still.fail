@@ -36,13 +36,13 @@ test("only_the_assignee_gets_a_card_but_anyone_can_answer_in_chat", () => {
   const dismissed = structuredClone(row);
   dismissed.card.dismissed = true;
   assert.equal(d.forViewer(dismissed, { email: "owner@x.com" }), null);
-  const card = structuredClone(c.card);
-  d.labelAssignee(card, { email: "helper@x.com" }, [{ email: "owner@x.com", name: "小王" }], null);
-  assert.equal(card.assigneeText, "需要小王决策");
-  d.labelAssignee(card, { email: "owner@x.com" }, [], null);
-  assert.equal(d.cardShown(card).assigneeText, "需要你决策");
-  const old: J = { type: "text" };
-  d.labelAssignee(old, null, [], null);
+  let card = structuredClone(c.card);
+  card = d.labelAssignee(card, { email: "helper@x.com" }, [{ email: "owner@x.com", name: "小王" }], null);
+  assert.equal(card.assigneeText, "待小王决策");
+  card = d.labelAssignee(card, { email: "owner@x.com" }, [], null);
+  assert.equal(d.cardShown(card).assigneeText, "待你决策");
+  let old: J = { type: "text" };
+  old = d.labelAssignee(old, null, [], null);
   assert.equal(old.assigneeText, "尚未指定决策人");
 });
 
@@ -55,11 +55,11 @@ test("a_card_no_one_was_assigned_is_its_starters", () => {
   assigned.card.card.assignee = "helper@x.com";
   assert.equal(d.forViewer(assigned, { email: "owner@x.com" }), null);
   assert.notEqual(d.forViewer(assigned, { email: "helper@x.com" }), null);
-  const card: J = { type: "text" };
-  d.labelAssignee(card, { email: "helper@x.com" }, [], starter);
-  assert.equal(card.assigneeText, "需要小王决策");
-  d.labelAssignee(card, { email: "owner@x.com" }, [], starter);
-  assert.equal(card.assigneeText, "需要你决策");
+  let card: J = { type: "text" };
+  card = d.labelAssignee(card, { email: "helper@x.com" }, [], starter);
+  assert.equal(card.assigneeText, "待小王决策");
+  card = d.labelAssignee(card, { email: "owner@x.com" }, [], starter);
+  assert.equal(card.assigneeText, "待你决策");
 });
 
 test("a_need_without_a_card_is_asked_as_a_text_card", () => {
@@ -121,7 +121,7 @@ test("a_rows_card_is_read_from_its_card_else_its_decision", () => {
 
 test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   let row: J = { state: "run", unread: true, decision: decision(4, false) };
-  d.presentRow(row);
+  row = d.presentRow(row);
   assert.equal(row.tone, "wait");
   assert.equal(row.decision.text, "奏 · 「共」改成按今天累计吗？");
   assert.equal(row.decision.options[2].label, "按今天累计");
@@ -130,23 +130,29 @@ test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   shape("RowDecision", row.decision);
   assert.equal(d.ofRow(row)?.seq, 4);
   row = { state: null, card: textCard(6) };
-  d.presentRow(row);
+  row = d.presentRow(row);
   assert.deepEqual([row.card, row.decision.options, row.decision.card], [undefined, [], { type: "text", placeholder: "sk_test_…" }]);
   assert.equal(row.tone, "wait");
   row = { state: null, unread: false, decision: decision(4, true) };
-  d.presentRow(row);
+  row = d.presentRow(row);
   assert.deepEqual([row.tone, row.decision.text, row.decision.dismissed], [undefined, undefined, true]);
   row = { state: null, unread: true, decision: decision(4, true) };
-  d.presentRow(row);
+  row = d.presentRow(row);
   assert.equal(row.tone, "done");
   assert.equal(d.tone({ state: "block" }), "wait");
+  // Let go by the viewer (忽略), a card or a need: no mark for its agent asking, and no state of it on the row.
+  assert.equal(d.tone({ state: "block", decision: decision(4, true) }), null);
+  assert.equal(d.tone({ state: "block", unread: true, need: { seq: 9, message: { seq: 9, text: "要 key" }, dismissed: true } }), "done");
+  row = { state: "block", need: { seq: 9, message: { seq: 9, text: "要 key" }, dismissed: true } };
+  row = d.presentRow(row);
+  assert.deepEqual([row.state, row.tone], [undefined, undefined]);
   assert.equal(d.tone({ state: "failed", decision: decision(4, false) }), "alert");
   assert.equal(d.tone({ state: "run", decision: decision(4, false) }), "wait");
   assert.equal(d.tone({ state: "run" }), "busy");
   assert.equal(d.tone({ state: null, unread: true }), "done");
   assert.equal(d.tone({ state: null }), null);
   row = { state: null, decision: null };
-  d.presentRow(row);
+  row = d.presentRow(row);
   assert.deepEqual([row.decision, row.tone], [undefined, undefined]);
 });
 
@@ -156,7 +162,7 @@ const typed = (seq: number): J => ({ ...said(seq, "agent", "key？"), card: { ty
 
 test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   let messages: J[] = [said(1, "person", "做吧"), askedMsg(2), said(3, "agent", "顺便说下进度")];
-  d.inMessages(messages, [2, true]);
+  messages = d.inMessages(messages, [2, true]);
   assert.deepEqual(messages[1].decision, { resolved: false, dismissed: true });
   assert.deepEqual(messages[1].options, [{ label: "B" }, { label: "A", recommended: true }]);
   assert.deepEqual(messages[1].card, { type: "options", options: [{ label: "B" }, { label: "A", recommended: true }] });
@@ -164,40 +170,40 @@ test("cards_in_a_chat_say_whether_they_wait_and_who_answered_how", () => {
   const pick = said(3, "person", " B ");
   pick.quotes = [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }];
   messages = [askedMsg(2), pick];
-  d.inMessages(messages, null);
-  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", chosen: "B", text: "林晓 选了「B」" });
+  messages = d.inMessages(messages, null);
+  assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", chosen: "B", text: "林晓 选择了「B」" });
   shape("MessageDecision", messages[0].decision);
   const mine = said(3, "person", "都不要");
   mine.mine = true;
   messages = [askedMsg(2), mine];
-  d.inMessages(messages, null);
+  messages = d.inMessages(messages, null);
   assert.equal(messages[0].decision.text, "你 回复了");
   messages = [askedMsg(2), said(3, "person", "A")];
-  d.inMessages(messages, null);
+  messages = d.inMessages(messages, null);
   assert.equal(messages[0].decision.chosen, undefined);
   messages = [askedMsg(2), said(3, "agent", "进度"), typed(4)];
-  d.inMessages(messages, undefined);
-  assert.deepEqual(messages[0].decision, { resolved: true, text: "已换成新的问题" });
+  messages = d.inMessages(messages, undefined);
+  assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: false });
   assert.deepEqual([messages[2].card, messages[2].options], [{ type: "text", placeholder: "sk_" }, undefined]);
   messages = [typed(2), said(3, "person", "sk_test_1")];
-  d.inMessages(messages, null);
+  messages = d.inMessages(messages, null);
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "林晓", text: "林晓 回复了" });
 });
 
 test("what_the_viewer_sent_answers_the_last_card_before_the_station_has_it", () => {
   // Written in the composer instead of picking: settled at once, as the viewer's reply.
   let messages: J[] = [askedMsg(2)];
-  d.inMessages(messages, null, [{ text: "都不要，换个做法" }]);
+  messages = d.inMessages(messages, null, [{ text: "都不要，换个做法" }]);
   assert.deepEqual(messages[0].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
   // A picked option on its way says which.
   messages = [askedMsg(2)];
-  d.inMessages(messages, null, [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
-  assert.equal(messages[0].decision.text, "你 选了「B」");
+  messages = d.inMessages(messages, null, [{ text: "B", quotes: [{ author: "Claude", text: "选哪个？", ts: "9.000002", role: "agent" }] }]);
+  assert.equal(messages[0].decision.text, "你 选择了「B」");
   // The row not known yet: what is sent settles it too; an older card stays replaced.
   messages = [askedMsg(2), said(3, "agent", "进度"), typed(4)];
-  d.inMessages(messages, undefined, [{ text: "sk_test_1" }]);
-  assert.deepEqual(messages[0].decision, { resolved: true, text: "已换成新的问题" });
+  messages = d.inMessages(messages, undefined, [{ text: "sk_test_1" }]);
+  assert.deepEqual(messages[0].decision, { resolved: true, text: "已替换为新问题" });
   assert.deepEqual(messages[2].decision, { resolved: true, answeredBy: "你", text: "你 回复了" });
 });
 
@@ -221,10 +227,26 @@ test("a_picked_option_or_a_written_answer_quotes_the_post", () => {
 });
 
 test("the_page_puts_those_set_aside_last", () => {
-  const items: [string, number, number | null][] = [["c", 3, 20], ["a", 5, null], ["d", 1, 10], ["b", 2, null]];
-  d.order(items);
+  let items: [string, number, number | null][] = [["c", 3, 20], ["a", 5, null], ["d", 1, 10], ["b", 2, null]];
+  items = d.order(items);
   assert.deepEqual(items.map((i) => i[0]), ["b", "a", "d", "c"]);
   const prefs = { decisionsDeferred: { [d.deferralKey("w/s", 7, 4)]: 12 } };
   assert.equal(d.deferredAt(prefs, "w/s", 7, 4), 12);
   assert.equal(d.deferredAt(prefs, "w/s", 7, 5), null);
+});
+
+test("what_waits_in_a_chat_says_the_agents_need_else_its_posts_first_line", () => {
+  const me = { id: "u1", email: "me@x.com" };
+  const need = { seq: 9, message: { text: "测试版发好了\n你滑一下看看" } };
+  const row = { creator: me, agents: [{ key: "k", lastTurn: { declared: "block", need: " 要你在手机上确认滑动 " } }], need };
+  assert.deepEqual(d.undecided(row).map((a: J) => d.askOf(row, a, me)), [{ seq: 9, card: false, mine: true, text: "要你在手机上确认滑动" }]);
+  // A card, whoever is to decide it.
+  const card = { seq: 4, card: { type: "options", options: [{ label: "A" }], assignee: "other@x.com" }, message: { text: "选哪个方案？\n细节" } };
+  const carded = { creator: me, agents: [{ key: "k" }], card };
+  const asks = d.undecided(carded).map((a: J) => d.askOf(carded, a, me));
+  assert.deepEqual(asks, [{ seq: 4, card: true, mine: false, text: "选哪个方案？" }]);
+  shape("ChatAsk", asks[0]);
+  // None once the viewer let it go, or with nothing asked.
+  assert.deepEqual(d.undecided({ creator: me, card: { ...card, dismissed: true } }), []);
+  assert.deepEqual(d.undecided({ creator: me }), []);
 });

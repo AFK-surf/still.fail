@@ -36,9 +36,12 @@ Everything Rust that the TypeScript station, the clients, their builds and their
 | `launcher` | `station/native/launcher`: the station's `stillfail-station` | same | the station's bundle (releases, the desktop app), `station/test/e2e.sh` |
 | `runner` | `station/native/runner`: `stillfail-runner` | same | station tests and bundle |
 | `iroh-wasm` | `client/iroh-wasm`: the browser's iroh (`web/src/core/iroh-pkg`) | wasm32 | web build, web typecheck and tests |
-| `shell` | `client/shell`: the Android core's IO (`libstillfail_shell.so`) | android-arm64 | `apps/android/build.py` |
-| `engine` | `apps/android/core/src/main/cpp`: Hermes with its JSI (`libstillfail_hermes.so`, `libjsi.so`, the NDK's `libc++_shared.so`) | android-arm64 | `apps/android/build.py` |
+| `shell` | `client/shell`: the core's IO (`libstillfail_shell.so`; on Windows MSVC's `stillfail_shell.dll` and its import library) | android-arm64, win32-x64 | `apps/android/build.py`, the mbui app on Windows (`apps/mbui/scripts/win.sh`) |
+| `engine` | `apps/android/core/src/main/cpp`: Hermes with its JSI (`libstillfail_hermes.so`, `libjsi.so`, the NDK's `libc++_shared.so`); on Windows `apps/mbui/engine`: Hermes 0.81.4 built from its source with clang-cl, static, with the core's loop in `stillfail_engine.dll` (and that build's `hermesc.exe`) | android-arm64, win32-x64 | `apps/android/build.py`, the mbui app on Windows |
 | `archive-rs`, `station-load` | `station/test/archive-rs` (the Rust station's cold storage, kept for data it left), `station/tools/load`: test tools | darwin-arm64 published | station tests, `e2e.sh`, `compare.sh` |
+| `dock` | `apps/desktop/dock`: the desktop app's dock, SwiftUI (`StillfailDock`; built with the Mac's Xcode, whose SDK must be macOS 26's for Liquid Glass) | darwin-arm64 | the desktop app's bundle (`apps/desktop/build.sh`) |
+| `helper` | `station/native/helper`: still.fail Helper, the station's macOS app for what macOS grants (`still.fail Helper.app`, Swift: the screen with ScreenCaptureKit, VideoToolbox, CGEvent; its permission window with `vendor/PermissionFlow`) | darwin-arm64 | the station's bundle, `station/side/screen-desktop.test.ts`, `station/side/screen-e2e.ts` |
+| `ffmpeg` | `scripts/ffmpeg.ts`: `ffmpeg` and `ffprobe` from FFmpeg's release tarball, LGPL only and minimal, with their license files and `SOURCE` (VideoToolbox's H.264 encoder on macOS; zig-built, with openh264 and zlib, for Linux; NASM built for the x64 one). Its key is that file alone (no Rust toolchain; its own zig pin) | darwin-arm64, linux-x64, linux-arm64 | the media service's package (`scripts/module-bundle.ts`: `bin/`), `native.ts run ffmpeg` (`MEDIA_FFMPEG`) |
 | `iroh-relay` | n0's release v1.1.0, checked against its SHA-256 (not ours to publish) | darwin-arm64, linux | core-ts side run (`side/mesh-real.test.ts`) |
 
 **Keys.** A part's key is the SHA-256 of: the git hash of every file it is made from (its crate, its `Cargo.lock`, the vendored crates it patches in, …: `inputs` in `scripts/native.ts`), as committed or as edited in the worktree; the Rust toolchain (pinned there, `TOOLCHAIN`, and installed by rustup when building); zig's version for Linux; the target; and the build's command, flags, NDK, Hermes and AGP versions. Nothing else changes a key, so a change anywhere else compiles no Rust. `node scripts/native.ts status` lists every part's key and where it is.
@@ -63,6 +66,8 @@ STILLFAIL_NATIVE=build …                         # never download: build what 
 STILLFAIL_NATIVE=offline …                       # neither download nor build
 STILLFAIL_ENGINE=cmake python3 apps/android/build.py  # the engine built by Gradle's CMake (working on engine.cpp)
 ```
+
+**Prebuilt on a development machine: the Windows parts.** `shell` and `engine` for win32-x64 are MSVC's (`msvc` in `scripts/native.ts`): CI never builds them. They are prebuilt ahead of time on a Mac (Studio), cross-built with cargo-xwin (the shell, which carries its tests' executables in `tests/`) and with clang-cl on xwin's Windows SDK (Hermes and the engine; Hermes's own hermesc is built for the Mac first), and put in the releases bucket's `natives/` by their keys: `node scripts/native.ts prebuild` (all of them; or `prebuild shell:win32-x64`), with the bucket's `CLOUDFLARE_API_TOKEN` as `scripts/release-put.sh` takes it, or `--release` to the release `native-artifacts` with gh. It needs Homebrew's `llvm` and `lld`; cargo-xwin, the SDK (1.1 GB), cargo's target and Hermes's builds stay in the cache's `.build/` (`$STILLFAIL_NATIVE_BUILD`), so a change rebuilds only itself. Everyone fetches them from `https://app.still.fail/releases/natives/` (`$STILLFAIL_NATIVE_STORE`; still.fail cloud serves it, `cloud/src/install.ts`), else the release; on CI one that is in neither fails with the command that prebuilds it. The pipeline's `windows-natives` job fetches both on GitHub's Windows for a change to what they are made of and runs the shell's tests there. A Windows machine can still build them natively (MSVC's environment with clang-cl, CMake and Ninja; under Git Bash `CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER` naming MSVC's `link.exe`).
 
 **Publishing** happens only in CI, on main: the pipeline's `natives` job (mini1) runs `node scripts/native.ts ensure --publish`, which builds every part (and target) whose key the release lacks and uploads it with the run's token, then `prune 20` keeps the newest 20 assets of each part and target. A branch publishes nothing: its `natives` job builds what the release lacks of what its checks and builds use, and hands it to its other jobs as the run artifact `natives-<sha>` (`STILLFAIL_NATIVE_INBOX`, `.github/actions/natives`); on mini1 the jobs share the cache anyway. Every job after it (checks, the web build, Android on Blacksmith, the desktop and station on mini1) then compiles no Rust; the station's releases (all three platforms) take the parts main's natives job published. The release is a prerelease, made once by hand (`gh release create native-artifacts --prerelease --target <a main commit> -t "Prebuilt native parts"`): GitHub refuses the run's token a new tag at a commit that changes a workflow.
 
@@ -103,7 +108,8 @@ Where a seed decides what a simulated run leaves open (jitter, how writes are cu
 
 What cannot be made the same every run (real processes and signals, the native addon and iroh-relay over real
 sockets, networks made up at random) is the side run's: `sh scripts/side.sh` (each package's `side/`; Rust's
-`#[ignore = "side: …"]`), every few hours on the Mac Studio, blocking nothing. A side failure goes to an agent, which
+`#[ignore = "side: …"]`), every four hours on main in CI (`.github/workflows/side.yml`, on mini1, each part on a runner of
+its own; run it by hand with `gh workflow run side`), blocking nothing. A side failure goes to an agent, which
 reproduces it as a test CI runs, failing the same way every time, and fixes it; one it cannot reproduce is let be.
 Never a retry, a longer deadline or a looser bound to make a test pass.
 
@@ -116,6 +122,8 @@ ending, against a budget, in the run's summary, with a warning when over. The bu
 |---|---|---|
 | A branch | 180 s | ~100 s with caches warm |
 | main, releasing nothing | 180 s | ~100 s |
+| A branch or main that checked the Android app (`check-android`) | 240 s | ~190 s (2026-10-07) |
+| A branch that tried the Windows app on Windows (`windows-smoke`) | 330 s | ~280 s (2026-10-09) |
 | main, releasing apps or the station | 480 s | — |
 
 `node scripts/ci-time.ts <run id>` prints any run's jobs and longest steps. A run over its budget is a regression to
@@ -174,6 +182,21 @@ export STILLFAIL_DATA="$(mktemp -d)"
 The enrollment token is temporary; do not commit it. Keep `STILLFAIL_DATA` set to the same directory for subsequent station commands. Rebuild the release (the last command above) after changing the station. Configure your agent runtime in the local app when you need real agent execution; that step uses your own runtime account.
 
 The mock login routes are for loopback development only. Restarting the local cloud recreates its test identities and workspace, so enroll a fresh test station again. The station's old local admin URL is a redirect, not a standalone UI.
+
+## A station on Windows (proof of concept)
+
+The station runs natively on Windows x64 from a checkout; there is no Windows installer or release yet (docs/station-ts-native.md, "Windows"). It needs Git for Windows: jobs and device commands run under its `sh`, as Claude Code's own commands do there. From PowerShell (Git Bash's `tar` takes `C:` for a host, so `scripts/native.ts` runs from PowerShell):
+
+```powershell
+corepack pnpm install --frozen-lockfile --ignore-scripts
+cd station; corepack pnpm install --frozen-lockfile --ignore-scripts
+cd native\runner; cargo build --release; cd ..\launcher; cargo build --release; cd ..\..
+$env:STILLFAIL_MESH_NATIVE = node ..\scripts\native.ts file mesh   # win32-x64 is prebuilt for the desktop app
+$env:STILLFAIL_RUNNER = "$PWD\native\runner\target\release\stillfail-runner.exe"
+node src\main.ts run --app $PWD --data $env:TEMP\stillfail-test
+```
+
+`cargo test --release` in `native\runner` runs its Windows tests (`tests\windows.rs`); `node --test test\runner-windows.test.ts test\jobs.test.ts test\device-tools.test.ts test\remote.test.ts` the station's that run there. Most other station tests still assume Unix (fifos, `/tmp`, `sh` scripts as commands).
 
 ## Local desktop packages
 

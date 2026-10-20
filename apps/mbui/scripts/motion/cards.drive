@@ -1,0 +1,13 @@
+# The made-up chat's card answered from it (Decisions.kt DecisionUnder): the options go (to 90%, fading, their room
+# closing 100 ms late) and 你 选择了「一起换」 comes in their place; then 保留 under the last post: the buttons and the
+# bar's 归档 go on ArchiveEase (decide.mbt under_post, chat.mbt chat_bar).
+timeout 20000
+until =一起换
+wait 800
+tap =一起换
+until 选择了「一起换」
+wait 1200
+until =保留
+tap =保留
+gone =归档此对话
+wait 1200

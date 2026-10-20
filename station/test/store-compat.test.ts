@@ -41,6 +41,10 @@ function shape(path: string): string[] {
   }
 }
 
+/// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
+/// (docs/multi-workspace.md).
+const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "runtime"]];
+
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;
   return rest;
@@ -61,8 +65,15 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
     // Opening adds nothing to what the Rust station keeps, beyond the tables and indexes of the Rust SCHEMA a station
     // older than that source had not made yet (CREATE … IF NOT EXISTS, as the Rust's open makes them).
     opened = shape(path);
-    assert.deepEqual(before.filter((l) => !opened.includes(l)), [], "nothing changed or gone");
-    const added = opened.filter((l) => !before.includes(l));
+    // Besides the columns the TS station adds on open itself (schema.ts `add*Columns`), as later ones are: a table's SQL
+    // then says them after its last column (at its end, or before its PRIMARY KEY), and each is a column line of its own.
+    const plain = (l: string) => ADDED.reduce((t, [table, column]) => (t.startsWith(`table ${table}:`) ? t.replace(new RegExp(`, ${column} [A-Z]+(?=\\)$|,\\s*PRIMARY KEY)`), "") : t), l);
+    const mine = (l: string) => ADDED.some(([table, column]) => l.startsWith(`  ${table}.${column} `));
+    const was = before.map(plain);
+    // Ignore only newly added columns; columns already present must still survive opening.
+    const now = opened.filter((l) => !mine(l) || before.includes(l)).map(plain);
+    assert.deepEqual(was.filter((l) => !now.includes(l)), [], "nothing changed or gone");
+    const added = now.filter((l) => !was.includes(l));
     for (const line of added) {
       const name = /^(?:table|index) (\w+):/.exec(line)?.[1] ?? /^  (\w+)\./.exec(line)?.[1];
       assert.ok(name && new RegExp(`CREATE (TABLE|INDEX) IF NOT EXISTS ${name} `).test(SCHEMA), `only the Rust SCHEMA's own: ${line.split("\n")[0]}`);
@@ -82,7 +93,10 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
       const stats = store.sessionStats(null);
       for (const [key, s] of read.sessionStats(r, null)) {
         const mine = stats.get(key)!;
-        assert.deepEqual({ ...mine, lastTurn: mine.lastTurn && turnSummaryJson(mine.lastTurn) }, s, key);
+        // What the pages read names its last turn too (a client holding the turns puts it in place).
+        const { id, ...last } = (s.lastTurn ?? {}) as Record<string, unknown>;
+        assert.deepEqual({ ...mine, lastTurn: mine.lastTurn && turnSummaryJson(mine.lastTurn) }, { ...s, lastTurn: s.lastTurn && last }, key);
+        if (s.lastTurn) assert.equal(typeof id, "string", key);
       }
       for (const s of store.listSessions().slice(0, 30)) {
         assert.deepEqual(store.listTurns(s.key).map((t) => ({ ...turnSummaryJson(t.summary), id: t.id })), read.listTurns(r, s.key));
@@ -104,12 +118,17 @@ test("a copy of a real station's data opens, reads the same, and takes a write c
          WHERE t.archived_at IS NULL AND t.hidden_at IS NULL AND s.archived_at IS NULL ORDER BY t.id DESC LIMIT 1`,
       )
       .get() as any ??
-      // A station whose chats are all in the archive: any thread with a session (writing brings it back).
+      // A station whose chats are all in the archive: any thread with a session.
       (store.db.prepare(`SELECT thread, session FROM thread_sessions ORDER BY thread DESC LIMIT 1`).get() as any);
     if (!live) {
       // A station with no chat yet (a new one): nothing to write a message into.
       t.diagnostic("no thread with a session in this station's data: the write cycle is not run");
       return;
+    }
+    // Archived by hand, it takes no messages: shown again first, as a person would.
+    if (store.manuallyArchived(live.thread)) {
+      store.setArchived(live.session, false, MANUAL);
+      if (store.getThread(live.thread)!.hiddenAt !== null) store.setThreadHidden(live.thread, false, MANUAL);
     }
     {
       const last = store.lastEntry(live.thread);

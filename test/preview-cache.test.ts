@@ -80,14 +80,14 @@ test("entry and byte budgets evict resources", () => {
 test("the real message bridge streams once, reuses immutable bytes, revalidates source, and fetches changed source", async () => {
   const { port1, port2 } = new MessageChannel();
   let calls = 0, version = 1;
-  const stop = bridge(port1, { station: "s", service: 1234, streams: true, call: async (_name, params, progress) => {
+  const stop = bridge(port1, { station: "s", service: 1234, streams: true, call: async (_name, params, _bytes, progress) => {
     calls++;
     const p = params as { path: string; headers: [string, string][] };
     const etag = `"${version}"`;
     const unchanged = new Headers(p.headers).get("if-none-match") === etag;
     progress!({ head: { status: unchanged ? 304 : 200, headers: [["content-type", "text/javascript"], ["cache-control", p.path === "/dep.js" ? "max-age=3600, immutable" : "no-cache"], ["etag", etag]] } });
-    if (!unchanged) progress!({ chunk: btoa(`export default ${version}`) });
-    return {};
+    if (!unchanged) progress!({ chunk: true }, new TextEncoder().encode(`export default ${version}`));
+    return { value: null };
   } });
   const get = (id: number, path: string) => new Promise<{ status: number; body: string }>((resolve, reject) => {
     let status = 0, body = "";

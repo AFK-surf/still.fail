@@ -41,35 +41,42 @@ export function base64url(bytes: Uint8Array): string {
   return encode64(bytes, B64URL, false);
 }
 
-/// Standard base64 with its padding (the `base64` crate's STANDARD): null when it is not that.
+/// Each character's value in standard base64 (-1: not one of its letters), by its char code.
+const B64_VALUE = (() => {
+  const v = new Int8Array(128).fill(-1);
+  for (let i = 0; i < 64; i++) v[B64.charCodeAt(i)] = i;
+  return v;
+})();
+
+/// Standard base64 with its padding (the `base64` crate's STANDARD): null when it is not that. A table lookup per
+/// character straight into the bytes: what Hermes runs a file's parts through (`drive.upload.part`, 4 MB each), where
+/// searching the alphabet for each character and collecting the values in an array took a second a part.
 export function fromBase64(text: string): Uint8Array | null {
-  if (text.length % 4 !== 0) return null;
-  const values: number[] = [];
-  let pad = 0;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === "=") {
-      if (i < text.length - 2) return null;
-      pad++;
-      values.push(0);
-      continue;
-    }
-    if (pad > 0) return null;
-    const v = B64.indexOf(c);
-    if (v < 0) return null;
-    values.push(v);
-  }
-  const out = new Uint8Array((values.length / 4) * 3 - pad);
+  const n = text.length;
+  if (n % 4 !== 0) return null;
+  const pad = n === 0 || text.charCodeAt(n - 1) !== 61 ? 0 : text.charCodeAt(n - 2) === 61 ? 2 : 1;
+  const out = new Uint8Array((n / 4) * 3 - pad);
+  const values = B64_VALUE;
   let o = 0;
-  for (let i = 0; i < values.length; i += 4) {
-    const n = (values[i] << 18) | (values[i + 1] << 12) | (values[i + 2] << 6) | values[i + 3];
-    if (o < out.length) out[o++] = (n >> 16) & 255;
-    if (o < out.length) out[o++] = (n >> 8) & 255;
-    if (o < out.length) out[o++] = n & 255;
+  for (let i = 0; i < n; i += 4) {
+    const tail = i === n - 4 ? pad : 0;
+    const c0 = text.charCodeAt(i);
+    const c1 = text.charCodeAt(i + 1);
+    const c2 = text.charCodeAt(i + 2);
+    const c3 = text.charCodeAt(i + 3);
+    const a = c0 < 128 ? values[c0]! : -1;
+    const b = c1 < 128 ? values[c1]! : -1;
+    const c = tail === 2 ? 0 : c2 < 128 ? values[c2]! : -1;
+    const d = tail >= 1 ? 0 : c3 < 128 ? values[c3]! : -1;
+    // A character not of the alphabet, or "=" anywhere but the padding.
+    if ((a | b | c | d) < 0) return null;
+    const v = (a << 18) | (b << 12) | (c << 6) | d;
+    out[o++] = (v >> 16) & 255;
+    if (tail < 2) out[o++] = (v >> 8) & 255;
+    if (tail < 1) out[o++] = v & 255;
+    // Bits left over in the last character must be zero (the crate refuses the rest).
+    if ((tail === 1 && (c & 3) !== 0) || (tail === 2 && (b & 15) !== 0)) return null;
   }
-  // Bits left over in the last character must be zero (the crate refuses the rest).
-  if (pad === 1 && (values[values.length - 2] & 3) !== 0) return null;
-  if (pad === 2 && (values[values.length - 3] & 15) !== 0) return null;
   return out;
 }
 
@@ -194,6 +201,32 @@ export function compareKeys(a: string, b: string): number {
 
 /// What went out of the store as it is (output.ts): never changed after, so it is shared and not shaped again.
 export const shaped = new WeakSet<object>();
+
+/// Whether what is shared is frozen where it is shared (docs/core-ts.md「谁能改什么」): what the store keeps,
+/// what a view makes and what goes out. On in the core's tests (node --test, or STILLFAIL_CHECK_SHARED=1) and in the
+/// web's development build (`checkShared`); off in what people run, where only what the core freezes anyway is (the
+/// databases' rows, the device's values, a list's rows made).
+let checking = (() => {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return env !== undefined && (env.NODE_TEST_CONTEXT !== undefined || env.STILLFAIL_CHECK_SHARED === "1");
+})();
+
+export function checkShared(on: boolean): void {
+  checking = on;
+}
+
+/// Frozen all through when shared values are checked: whatever writes on it then throws where it writes.
+export function sharedValue<T>(v: T): T {
+  if (checking) deepFreeze(v);
+  return v;
+}
+
+/// Frozen all through (a part already frozen is taken as frozen all through).
+export function deepFreeze(v: unknown): void {
+  if (v === null || typeof v !== "object" || Object.isFrozen(v) || ArrayBuffer.isView(v)) return;
+  Object.freeze(v);
+  for (const k of Object.keys(v)) deepFreeze((v as Record<string, unknown>)[k]);
+}
 
 /// JSON text as serde_json writes it: keys sorted.
 export function toJson(v: unknown): string {

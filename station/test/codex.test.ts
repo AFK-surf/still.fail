@@ -6,20 +6,22 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CodexDriver, classifyCodexError, type CodexDriverOptions } from "../src/agents/codex.ts";
 import { existingRunners } from "../src/agents/runner.ts";
 import type { OpenOptions, Profile, RuntimeEvent } from "../src/agents/runtime.ts";
+import { readAgentEnvFrom } from "../src/ops/agent-env.ts";
 
 const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
-process.env.PATH = `${fake}:${process.env.PATH}`;
+process.env.PATH = `${fake}${delimiter}${process.env.PATH}`;
 // Inherited, and not to reach the agent.
 process.env.OPENAI_API_KEY = "leaked";
 process.env.CODEX_HOME = "/nowhere";
 // Short: the runners' sockets live under it (104 bytes at most on macOS).
-const data = mkdtempSync("/tmp/cx-");
+const data = mkdtempSync(process.platform === "win32" ? join(tmpdir(), "cx-") : "/tmp/cx-");
 const skills = join(data, "skills");
 mkdirSync(join(skills, "mine"), { recursive: true });
 writeFileSync(join(skills, "mine", "SKILL.md"), "");
@@ -34,7 +36,7 @@ async function eventually(done: () => boolean) {
 /// The fifos a `gate:<n>:<k>:<name>` turn waits at (test/fake/codex.mjs): `open(part)` lets it go on.
 function gates(dump: string, name: string) {
   const at = `${dump}.${name}`;
-  for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
+  if (process.platform !== "win32") for (const part of ["a", "b"]) execFileSync("/usr/bin/mkfifo", [`${at}.${part}`]);
   return { open: (part: "a" | "b") => writeFile(`${at}.${part}`, "go"), said: () => existsSync(`${at}.said`) };
 }
 const drivers: CodexDriver[] = [];
@@ -78,6 +80,27 @@ const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().spl
 
 // Each test has its own driver, profile and runners: they run side by side.
 describe("the Codex driver", { concurrency: true }, () => {
+  test("a borrowed login about to run out is lent again under the running app-server, not by starting another", async () => {
+    let until = Date.now() + 3600_000;
+    const writes: number[] = [];
+    const d = driver({ lent: { borrowed: () => true, write: async () => (writes.push(until), until) } });
+    const p = profile();
+    const { events, push, until: wait } = listen();
+    const session = await d.open(options(p), push);
+    assert.equal(writes.length, 1, "lent as it starts");
+    await session.prompt("cmd");
+    await wait(ended(1));
+    assert.equal(writes.length, 2, "lent again before a turn, as it runs out within hours");
+    until = Date.now() + 48 * 3600_000;
+    const other = await d.open(options(p), () => {});
+    assert.equal(writes.length, 3, "and as another session opens on it");
+    await session.prompt("cmd");
+    await wait(ended(2));
+    assert.equal(writes.length, 3, "lasting long enough, it is not lent again");
+    assert.equal(starts(p.dump).length, 1, "one app-server all along");
+    await Promise.all([session.dispose(), other.dispose()]);
+  });
+
   test("a turn completes, on an app-server started with the flags and environment of codex.rs", async () => {
     const d = driver();
     const p = profile();
@@ -142,6 +165,23 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.deepEqual(sent[3], { id: 3, method: "turn/start", params: { threadId: session.id(), input: [{ type: "text", text: "cmd" }] } });
     await session.dispose();
     assert.equal(stdin(p.dump).at(-1).method, "thread/unsubscribe");
+  });
+
+  test("another model and effort go with the next turn/start; back to a default takes a new start", async () => {
+    const d = driver();
+    const p = profile();
+    const { push, until } = listen();
+    const session = await d.open(options(p, { model: "gpt-x", effort: "high" }), push);
+    assert.ok(session.retune!(options(p, { model: "gpt-x", effort: "high" })), "as it runs: nothing to do");
+    await session.prompt("cmd");
+    await until(ended(1));
+    assert.ok(session.retune!(options(p, { model: "gpt-y", effort: "low" })));
+    await session.prompt("cmd");
+    await until(ended(2));
+    const turns = stdin(p.dump).filter((m) => m.method === "turn/start").map((m) => [m.params.model, m.params.effort]);
+    assert.deepEqual(turns, [[undefined, undefined], ["gpt-y", "low"]]);
+    assert.ok(!session.retune!(options(p, { model: "gpt-y" })), "no effort named: the thread's would stay");
+    await session.dispose();
   });
 
   test("a failed turn is told apart by its codexErrorInfo", async () => {
@@ -226,20 +266,87 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(starts(p.dump).length, 2);
   });
 
-  test("a profile edit restarts its app-server only once no thread uses it", async () => {
+  test("a profile edit restarts its app-server once no turn runs on it, its other threads opened again", async () => {
     const d = driver();
     const p = profile();
-    const one = await d.open(options(p), () => {});
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
     const edited = { ...p, env: { ...(p.env as object), EXTRA: "1" } };
     const two = await d.open(options(edited), () => {});
-    assert.equal(starts(p.dump).length, 1, "in use: it keeps serving");
-    await one.dispose();
+    assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    await one.abort();
+    await a.until(ended(1));
+    // A thread opened on it meanwhile does not keep it: its next turn is refused, to be opened again on a new one.
+    await assert.rejects(two.prompt("say:x"), /profile changed/);
     await two.dispose();
     const { push, until } = listen();
     const three = await d.open(options(edited), push);
     assert.equal(starts(p.dump).length, 2);
     assert.equal(starts(p.dump)[1].env.EXTRA, "1");
+    await a.until((e) => e.some((x) => x.type === "closed"));
     await three.prompt("say:x");
+    await until(ended(1));
+  });
+
+  test("codex updated under its app-server: replaced once no turn runs on it, its sessions opened again", async () => {
+    let installed = "1.0.0";
+    const d = driver({ installedVersion: async () => installed });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const a = listen();
+    const b = listen();
+    const one = await d.open(options(p), a.push);
+    const two = await d.open(options(p), b.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
+    // Updated: the files of the one running are gone (its version is not the one installed now).
+    installed = "2.0.0";
+    writeFileSync(`${p.dump}.version`, "2.0.0");
+    await d.runtimeChanged();
+    assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    await one.abort();
+    await a.until(ended(1));
+    // The turn over, it is replaced: its threads closed, to be opened again with their next turn.
+    await a.until((e) => e.some((x) => x.type === "closed"));
+    await b.until((e) => e.some((x) => x.type === "closed"));
+    const c = listen();
+    const three = await d.open(options(p), c.push);
+    assert.equal(starts(p.dump).length, 2);
+    await three.prompt("say:back");
+    await c.until(ended(1));
+  });
+
+  test("an app-server whose output has grown long is replaced once its turn ends, its sessions opened again", async () => {
+    // Every app-server has written more than this by its first turn's end.
+    const d = driver({ outputLimit: 1 });
+    const p = profile();
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("say:x");
+    await a.until(ended(1));
+    await a.until((e) => e.some((x) => x.type === "closed"));
+    const b = listen();
+    const two = await d.open(options(p), b.push);
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:back");
+    await b.until(ended(1));
+  });
+
+  test("a turn asked of an app-server Codex was updated under is refused, so it is opened again on a new one", async () => {
+    // Codex updated from outside the station, while the app-server started: it runs the old one.
+    const d = driver({ installedVersion: async () => "2.0.0" });
+    const p = profile();
+    writeFileSync(`${p.dump}.version`, "1.0.0");
+    const one = await d.open(options(p), () => {});
+    writeFileSync(`${p.dump}.version`, "2.0.0");
+    await assert.rejects(one.prompt("say:x"), /updated/);
+    await one.dispose();
+    const { push, until } = listen();
+    const two = await d.open(options(p), push);
+    assert.equal(starts(p.dump).length, 2);
+    await two.prompt("say:x");
     await until(ended(1));
   });
 
@@ -336,5 +443,30 @@ describe("the Codex driver", { concurrency: true }, () => {
     await eventually(() => !alive() && !existingRunners(data).some((r) => r.pid === pid));
     assert.throws(() => process.kill(pid, 0));
     assert.ok(!existingRunners(data).some((r) => r.pid === pid));
+  });
+});
+
+// Alone: the station's variables are the whole process's, and every app-server above would be out of date under them.
+describe("the Codex driver under the station's variables", () => {
+  test("the station's variables for its agents: an app-server starts with them, again once idle when they change; a profile's own win", async (t) => {
+    t.after(() => readAgentEnvFrom(() => null));
+    let raw: any = {};
+    readAgentEnvFrom(() => raw);
+    const d = driver();
+    const p = profile({ env: { FAKE_DUMP: "", MINE: "profile's" } });
+    (p.env as Record<string, string>).FAKE_DUMP = p.dump;
+    const one = await d.open(options(p), () => {});
+    await one.dispose();
+    assert.equal(starts(p.dump)[0].env.HTTPS_PROXY, undefined);
+    raw = { agentEnv: { HTTPS_PROXY: "http://127.0.0.1:7890", MINE: "station's" } };
+    const { push, until } = listen();
+    const two = await d.open(options(p), push);
+    assert.equal(starts(p.dump).length, 2);
+    const env = starts(p.dump)[1].env;
+    assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:7890");
+    assert.match(env.NO_PROXY, /(^|,)127\.0\.0\.1(,|$)/);
+    assert.equal(env.MINE, "profile's");
+    await two.prompt("say:x");
+    await until(ended(1));
   });
 });

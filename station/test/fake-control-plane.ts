@@ -43,7 +43,9 @@ export class GrantKey {
   }
 }
 
-export type FakeOptions = { provider: "stillfail" | "comma"; gateways?: string[] };
+/// `joins`: a plane that keeps a station in several workspaces (docs/multi-workspace.md): it has the join route and says
+/// `workspaces` in its state frames; one from before has neither.
+export type FakeOptions = { provider: "stillfail" | "comma"; gateways?: string[]; joins?: boolean };
 
 export class FakeControlPlane {
   readonly asked: Asked[] = [];
@@ -52,6 +54,9 @@ export class FakeControlPlane {
   readonly heard: any[] = [];
   readonly grant = new GrantKey();
   gateways: string[];
+  /// The workspaces the station joined besides ws1, as the state frame says them.
+  joined: { workspace: string; workspace_name: string; name: string; peers: unknown[]; revocations: unknown[] }[] = [];
+  readonly joins: boolean;
   origin = "";
   private server: Server;
   private wss = new WebSocketServer({ noServer: true });
@@ -60,6 +65,7 @@ export class FakeControlPlane {
   constructor(options: FakeOptions) {
     this.provider = options.provider;
     this.gateways = options.gateways ?? [];
+    this.joins = options.joins === true;
     this.server = createServer((req, res) => {
       const parts: Buffer[] = [];
       req.on("data", (c) => parts.push(c));
@@ -102,6 +108,7 @@ export class FakeControlPlane {
       origin: this.origin, relay_urls: [], grant_keys: { keys: [this.grant.jwk] }, revocations: [],
     };
     if (this.provider === "comma") state.gateway_keys = this.gateways;
+    if (this.joins) state.workspaces = this.joined;
     return state;
   }
 
@@ -134,6 +141,19 @@ export class FakeControlPlane {
   private answer(a: Asked): [number, unknown] {
     const comma = this.provider === "comma";
     if (a.method === "GET" && a.path.split("?")[0] === (comma ? "/stations/releases/station.json" : "/releases/station.json")) return [200, this.release];
+    // A plane from before several workspaces has no such route.
+    if (!this.joins && a.path.endsWith("/stations/join")) return [404, { error: "not_found" }];
+    if (this.joins && a.path === (comma ? "/v1/comma/stations/join" : "/v1/stations/join")) {
+      const { token, station, signature } = JSON.parse(a.body.toString());
+      const tag = comma ? "comma" : "stillfail";
+      if (!checks(station, `${tag}-station-enroll-v1:${this.origin}:${token}:${station}`, signature)) return [401, { error: "invalid_signature" }];
+      a.verified.push(tag);
+      // The token names the workspace: "join-<id>".
+      const workspace = String(token).replace(/^join-/, "");
+      this.joined = [...this.joined.filter((j) => j.workspace !== workspace), { workspace, workspace_name: `Team ${workspace}`, name: "studio", peers: [{ id: station, name: "studio" }], revocations: [] }];
+      for (const ws of this.sockets) ws.send(JSON.stringify(this.state(station)));
+      return [200, { workspace, workspace_name: `Team ${workspace}`, name: "studio", home: "ws1", station }];
+    }
     if (a.path === (comma ? "/v1/comma/stations/enroll" : "/v1/stations/enroll")) {
       const { token, station, signature } = JSON.parse(a.body.toString());
       const tag = comma ? "comma" : "stillfail";

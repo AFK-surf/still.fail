@@ -67,7 +67,7 @@ test("Web Push encryption gives RFC 8291's example, byte for byte", async () => 
 
 test("a pushed message decrypts with the subscription's keys, and not with another's", async () => {
   const ua = await browser();
-  const message = JSON.stringify({ type: "notice", body: "需要处理 · 看一下 🔥" });
+  const message = JSON.stringify({ type: "notice", body: "需要你处理 · 看一下 🔥" });
   const body = await encrypt(encoder.encode(message), ua.p256dh, ua.auth);
   assert.equal(await decrypt(body, ua), message);
   assert.notEqual(toB64url(await encrypt(encoder.encode(message), ua.p256dh, ua.auth)), toB64url(body), "a fresh key and salt each time");
@@ -106,8 +106,8 @@ test("the VAPID token is ES256 for the endpoint's origin, for at most 12 hours",
 test("a notification's text is one line of at most 140 characters, made by its kind", () => {
   assert.equal(noticeBody("done", "修好了\n\n  部署  完成", "Claude"), "Claude: 修好了 部署 完成");
   assert.equal(noticeBody("message", "hi", "Bob"), "Bob: hi");
-  assert.equal(noticeBody("block", "要你确认", "Claude"), "需要处理 · 要你确认");
-  assert.equal(noticeBody("failed", "token runs out"), "出错了 · token runs out");
+  assert.equal(noticeBody("block", "要你确认", "Claude"), "需要你处理 · 要你确认");
+  assert.equal(noticeBody("failed", "token runs out"), "出错 · token runs out");
   assert.equal(noticeBody("done", "no one said it"), "no one said it");
   // In the language of the device it goes to.
   assert.equal(noticeBody("block", "confirm this", "Claude", "en"), "Needs you · confirm this");
@@ -372,7 +372,7 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     const { id, station, aliceTokens, bobTokens } = await workspace(h);
     assert.equal((await register(h, aliceTokens, "POST", { kind: "fcm", token: "alice-token" })).status, 204);
     assert.equal((await register(h, bobTokens, "POST", { kind: "fcm", token: "gone-token" })).status, 204);
-    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"], { kind: "failed", text: "token runs out" })])).json(), { sent: 1 });
+    assert.deepEqual(await (await notify(h, station, [notice(["alice@example.test", "bob@example.test"], { kind: "failed", text: "token runs out", seq: 12 })])).json(), { sent: 1 });
 
     const token = got.filter((r) => r.url === account.token_uri);
     assert.equal(token.length, 1, "one access token for all the pushes");
@@ -388,8 +388,10 @@ test("Android devices get a high-priority FCM data message; an unregistered toke
     assert.equal(toAlice.headers.authorization, "Bearer fcm-access");
     const tag = `${id}/${station.id}/ember:c-1/x y`;
     assert.deepEqual(toAlice.message.android, { priority: "HIGH" }, "no collapse key: the app replaces a chat's notification by its tag");
-    assert.equal(toAlice.message.data.body, "出错了 · token runs out");
+    assert.equal(toAlice.message.data.body, "出错 · token runs out");
     assert.equal(toAlice.message.data.tag, tag);
+    assert.equal(toAlice.message.data.seq, "12", "the message it is about (none from an older station: above)");
+    assert.equal(toAlice.message.data.url, `/o/${id}/${station.id}/${encodeURIComponent("ember:c-1/x y")}?message=12`, "opened at that message");
     assert.ok(Object.values(toAlice.message.data).every((v) => typeof v === "string"), "every value a string");
 
     // The unregistered token is gone; the access token is kept.

@@ -4,9 +4,10 @@ import { describe, test } from "node:test";
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { claudeOAuthToken, RefreshLock } from "../src/accounts/oauth.ts";
+import { readClaudeCredentials } from "../src/agents/machine-logins.ts";
 import { URLS } from "../src/accounts/profiles.ts";
 import { at, claudeUsage, claudeWithRefresh, codexQuota, codexUsage, codexWindows, windowLabel } from "../src/accounts/quota.ts";
-import { provider, script, temp, until } from "./accounts-fakes.ts";
+import { machine, provider, script, temp, until } from "./accounts-fakes.ts";
 
 describe("allowances and renewing", { concurrency: true }, () => {
   test("an account its provider refuses is blocked, a sign-in no longer good is not", async () => {
@@ -17,7 +18,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
     p = await provider(() => ({ status: 401, body: { error: { message: "OAuth token has expired" } } }));
     const expired = await claudeUsage(p.base, "t", "zh");
-    assert.deepEqual([expired.state, expired.detail], ["unavailable", "登录过期或失效了"]);
+    assert.deepEqual([expired.state, expired.detail], ["unavailable", "登录已过期或失效"]);
     await p.close();
     p = await provider(() => ({ status: 401, body: { detail: "Your account has been deactivated" } }));
     assert.equal((await claudeUsage(p.base, "t", "zh")).state, "blocked");
@@ -120,7 +121,7 @@ describe("allowances and renewing", { concurrency: true }, () => {
     assert.equal(stored.claudeAiOauth.refreshToken, "refresh-new");
     assert.equal(stored.claudeAiOauth.subscriptionType, "max");
     assert.equal(stored.otherCredential.keep, true);
-    assert.equal(statSync(path).mode & 0o777, 0o600);
+    if (process.platform !== "win32") assert.equal(statSync(path).mode & 0o777, 0o600);
     assert.ok(!existsSync(join(home, ".oauth_refresh.lock")));
     await p.close();
   });
@@ -153,6 +154,20 @@ describe("allowances and renewing", { concurrency: true }, () => {
     await p.close();
   });
 
+  test("a token handed out is renewed while it still lasts the usual margin, and given as it is when that fails", async () => {
+    const home = temp("handed");
+    const path = join(home, ".credentials.json");
+    writeFileSync(path, JSON.stringify(credentials(Date.now() + 1_800_000)));
+    let p = await oauthProvider(503);
+    const [kept] = await claudeOAuthToken({}, home, null, p.base, "en", 3_600_000);
+    assert.notEqual(kept, "new", "renewing failed: the token lasting half an hour is given");
+    assert.ok(p.asked.some((r) => r.method === "POST"), "it was renewed first");
+    await p.close();
+    p = await oauthProvider(200);
+    assert.equal((await claudeOAuthToken({}, home, null, p.base, "en", 3_600_000))[0], "new");
+    await p.close();
+  });
+
   test("the CLI's legacy lock is waited for, and the token it saved is read again", async () => {
     const home = temp("legacy");
     const path = join(home, ".credentials.json");
@@ -168,6 +183,63 @@ describe("allowances and renewing", { concurrency: true }, () => {
     rmdirSync(lock);
     const [token] = await renewed;
     assert.equal(token, "cli-won");
+  });
+
+  test("a keychain read failure never replays a stale file's refresh token", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine({ security: "exit 36" }); // errSecInteractionNotAllowed, not errSecItemNotFound (44)
+    mkdirSync(join(m.home, ".claude"));
+    const file = join(m.home, ".claude", ".credentials.json");
+    const stale = JSON.stringify(credentials(1));
+    writeFileSync(file, stale);
+    const p = await oauthProvider(200);
+    try {
+      await assert.rejects(claudeOAuthToken(m.env, null, null, p.base, "en"), /keychain/i);
+      assert.equal(p.asked.length, 0, "no stale refresh token leaves the machine");
+      assert.equal(readFileSync(file, "utf8"), stale);
+    } finally {
+      await p.close();
+    }
+  });
+
+  test("a keychain failure on the locked reread cannot switch to the file", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine({ security: `if [ -f "$HOME/read-once" ]; then exit 36; fi
+: > "$HOME/read-once"
+/bin/cat "$HOME/keychain"` });
+    mkdirSync(join(m.home, ".claude"));
+    const original = JSON.stringify(credentials(1));
+    writeFileSync(join(m.home, "keychain"), original);
+    const file = join(m.home, ".claude", ".credentials.json");
+    writeFileSync(file, original);
+    const p = await oauthProvider(200);
+    try {
+      await assert.rejects(claudeOAuthToken(m.env, null, null, p.base, "en"), /keychain/i);
+      assert.equal(p.asked.length, 0);
+      assert.equal(readFileSync(file, "utf8"), original);
+      assert.equal(readFileSync(join(m.home, "keychain"), "utf8"), original);
+      assert.equal(existsSync(join(m.home, ".claude", ".oauth_refresh.lock")), false);
+      assert.equal(existsSync(`${realpathSync(join(m.home, ".claude"))}.lock`), false);
+    } finally {
+      await p.close();
+    }
+  });
+
+  test("machine credential discovery does not fall back on keychain errors or malformed entries", { skip: process.platform !== "darwin" }, async () => {
+    for (const security of ["exit 36", "printf 'not-json'", "printf '{}'", "kill -TERM $$", "missing-executable"]) {
+      const m = machine({ security });
+      if (security === "missing-executable") m.env.PATH = join(m.home, "missing-bin");
+      mkdirSync(join(m.home, ".claude"));
+      writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(credentials(Date.now() + 3_600_000)));
+      assert.equal(await readClaudeCredentials(m.env), undefined, security);
+    }
+  });
+
+  test("a missing keychain item still permits a file-only machine login", { skip: process.platform !== "darwin" }, async () => {
+    const m = machine(); // security exits 44: item not found
+    mkdirSync(join(m.home, ".claude"));
+    const data = credentials(Date.now() + 3_600_000);
+    writeFileSync(join(m.home, ".claude", ".credentials.json"), JSON.stringify(data));
+    assert.equal((await readClaudeCredentials(m.env))?.token, "old");
+    assert.equal((await claudeOAuthToken(m.env, null, null, "http://127.0.0.1:1"))[0], "old");
   });
 
   test("the machine's login renews in the keychain and never uses the stale file", { skip: process.platform !== "darwin" }, async () => {

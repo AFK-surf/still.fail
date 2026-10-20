@@ -10,6 +10,7 @@ mod local;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use iroh::endpoint::{Connection as IrohConnection, QuicTransportConfig, RecvStream, SendStream, presets::Minimal};
 use iroh::{Endpoint as IrohEndpoint, EndpointAddr, EndpointId, RelayMode, RelayUrl, SecretKey, Watcher};
@@ -52,6 +53,8 @@ pub struct Endpoint {
     keepers: Arc<StdMutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     /// Connections coming that are held unanswered, not even their handshake (`hold_incoming`), and those held.
     held: Arc<StdMutex<(u32, Vec<iroh::endpoint::Incoming>)>>,
+    /// The connections whose handshakes are done, as each finishes (`accept`), once one was first asked for.
+    accepted: Arc<Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<IrohConnection>>>>,
 }
 
 #[napi]
@@ -83,7 +86,7 @@ pub async fn bind(options: Options) -> napi::Result<Endpoint> {
             .address_lookup(iroh_mdns_address_lookup::MdnsAddressLookup::builder().service_name(FORMER_MDNS_SERVICE))
             .address_lookup(iroh_mainline_address_lookup::DhtAddressLookup::builder().secret_key(key));
     }
-    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), held: Arc::default() })
+    Ok(Endpoint { inner: builder.bind().await.map_err(failed)?, keepers: Arc::default(), held: Arc::default(), accepted: Arc::default() })
 }
 
 #[napi(object)]
@@ -188,23 +191,38 @@ impl Endpoint {
     }
 
     /// The next connection, its handshake done; null once the endpoint is closed. One that fails its handshake is
-    /// skipped.
+    /// skipped. Handshakes go on side by side, each on its own: one that is never finished (its device gone half way,
+    /// as an app updating, a phone out of signal) holds up no other. Taken one at a time, every connection behind it
+    /// waited until it timed out, half a minute in which the station took no one (2026-10-08: with devices dialling
+    /// every way at once, stations were out of everyone's reach a minute or two at a time).
     #[napi]
     pub async fn accept(&self) -> Option<Connection> {
-        while let Some(incoming) = self.inner.accept().await {
-            {
-                let mut held = self.held.lock().unwrap();
-                if held.0 > 0 {
-                    held.0 -= 1;
-                    held.1.push(incoming);
-                    continue;
+        let mut accepted = self.accepted.lock().await;
+        let done = accepted.get_or_insert_with(|| {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            let endpoint = self.inner.clone();
+            let held = self.held.clone();
+            napi::bindgen_prelude::spawn(async move {
+                while let Some(incoming) = endpoint.accept().await {
+                    {
+                        let mut held = held.lock().unwrap();
+                        if held.0 > 0 {
+                            held.0 -= 1;
+                            held.1.push(incoming);
+                            continue;
+                        }
+                    }
+                    let tx = tx.clone();
+                    napi::bindgen_prelude::spawn(async move {
+                        if let Ok(conn) = incoming.await {
+                            let _ = tx.send(conn);
+                        }
+                    });
                 }
-            }
-            if let Ok(conn) = incoming.await {
-                return Some(Connection { inner: conn });
-            }
-        }
-        None
+            });
+            rx
+        });
+        done.recv().await.map(|inner| Connection { inner })
     }
 
     /// A connection to another endpoint (a peer station; a station, from a client), offering `alpn` and, for one from
@@ -253,21 +271,37 @@ pub struct RelayState {
     pub connected: bool,
 }
 
-/// One way a connection can go: through a relay (its URL) or direct; the one chosen now, and its round trip.
+/// One way a connection can go: through a relay (its URL) or direct; the one chosen now, its round trip, and the
+/// packets sent and lost on it alone (the connection's own counts take in every way it tried and dropped too).
 #[napi(object)]
 pub struct PathState {
+    pub id: String,
     pub selected: bool,
     pub relay: Option<String>,
+    /// A direct way's address at the other end (`ip:port`).
+    pub ip: Option<String>,
     pub rtt_ms: f64,
+    pub tx_packets: f64,
+    pub lost_packets: f64,
 }
 
-/// What went over a connection since it opened, both ways.
+/// What went over a connection since it opened, both ways: bytes, packets, and of the frames in them those that
+/// carry nothing (pings, ACK requests, ACKs) and those that carry something (stream data, datagrams, the handshake's).
+/// A connection that only trades the first kind, thousands of packets a second, is a storm (mesh/storms.ts).
 #[napi(object)]
 pub struct Stats {
     pub rx_bytes: f64,
     pub tx_bytes: f64,
+    pub rx_packets: f64,
     pub tx_packets: f64,
-    pub lost_packets: f64,
+    pub rx_pings: f64,
+    pub tx_pings: f64,
+    pub rx_ack_requests: f64,
+    pub tx_ack_requests: f64,
+    pub rx_acks: f64,
+    pub tx_acks: f64,
+    pub rx_data: f64,
+    pub tx_data: f64,
 }
 
 /// Why a connection went: `application` (the other end closed it, saying `reason`), `local`, `timeout`, or `other`
@@ -357,20 +391,77 @@ impl Connection {
     /// Every way it can go now.
     #[napi]
     pub fn paths(&self) -> Vec<PathState> {
-        self.inner.paths().iter().map(|p| PathState {
-            selected: p.is_selected(),
-            relay: match p.remote_addr() {
-                iroh::TransportAddr::Relay(url) => Some(url.to_string()),
-                _ => None,
-            },
-            rtt_ms: p.rtt().as_secs_f64() * 1000.0,
+        self.inner.paths().iter().map(|p| {
+            let stats = p.stats();
+            PathState {
+                id: p.id().to_string(),
+                selected: p.is_selected(),
+                relay: match p.remote_addr() {
+                    iroh::TransportAddr::Relay(url) => Some(url.to_string()),
+                    _ => None,
+                },
+                ip: match p.remote_addr() {
+                    iroh::TransportAddr::Ip(addr) => Some(addr.to_string()),
+                    _ => None,
+                },
+                rtt_ms: stats.rtt.as_secs_f64() * 1000.0,
+                tx_packets: stats.udp_tx.datagrams as f64,
+                lost_packets: stats.lost_packets as f64,
+            }
         }).collect()
+    }
+
+    /// Whether the other end is still there: asked with a datagram (which a live end acknowledges at once) a few times
+    /// within `within_ms`, true as soon as anything is heard from it. A process killed with the connection open says
+    /// nothing, and the connection would only go at QUIC's idle timeout, half a minute on. An end that takes no
+    /// datagrams is not asked, and counts as there.
+    #[napi]
+    pub async fn answers(&self, within_ms: u32) -> bool {
+        let heard = self.inner.stats().udp_rx.datagrams;
+        let within = Duration::from_millis(within_ms.into());
+        let deadline = Instant::now() + within;
+        let mut ask = Instant::now();
+        loop {
+            if self.inner.close_reason().is_some() {
+                return false;
+            }
+            if self.inner.stats().udp_rx.datagrams > heard {
+                return true;
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            if now >= ask {
+                match self.inner.send_datagram(bytes::Bytes::from_static(&[0])) {
+                    Ok(()) => {}
+                    Err(iroh::endpoint::SendDatagramError::ConnectionLost(_)) => return false,
+                    Err(_) => return true,
+                }
+                ask = now + within / 3;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
     }
 
     #[napi]
     pub fn stats(&self) -> Stats {
         let stats = self.inner.stats();
-        Stats { rx_bytes: stats.udp_rx.bytes as f64, tx_bytes: stats.udp_tx.bytes as f64, tx_packets: stats.udp_tx.datagrams as f64, lost_packets: stats.lost_packets as f64 }
+        let data = |f: &iroh::endpoint::FrameStats| (f.stream + f.datagram + f.crypto) as f64;
+        Stats {
+            rx_bytes: stats.udp_rx.bytes as f64,
+            tx_bytes: stats.udp_tx.bytes as f64,
+            rx_packets: stats.udp_rx.datagrams as f64,
+            tx_packets: stats.udp_tx.datagrams as f64,
+            rx_pings: stats.frame_rx.ping as f64,
+            tx_pings: stats.frame_tx.ping as f64,
+            rx_ack_requests: stats.frame_rx.immediate_ack as f64,
+            tx_ack_requests: stats.frame_tx.immediate_ack as f64,
+            rx_acks: (stats.frame_rx.acks + stats.frame_rx.path_acks) as f64,
+            tx_acks: (stats.frame_tx.acks + stats.frame_tx.path_acks) as f64,
+            rx_data: data(&stats.frame_rx),
+            tx_data: data(&stats.frame_tx),
+        }
     }
 
     /// A stream one way: what measures a round trip sends a byte on it (mesh.rs `sample_relay_rtt`).

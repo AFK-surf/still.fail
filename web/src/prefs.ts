@@ -13,14 +13,20 @@ import { legacyPrefs } from "./core/migrate.ts";
 const COPY = "stillfail.prefs";
 /** The appearance's own copy, read by index.html before the first paint (and by pages from before prefs). */
 const APPEARANCE = "stillfail.appearance";
+/** The motion's own copy, read by index.html before the first paint, as the appearance's. */
+const MOTION = "stillfail.motion";
 
 /** The prefs with what the core fills in when nothing was chosen (its shape leaves them optional). */
-export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
+export type Prefs = Required<Omit<PrefsView, "workspace" | "invite" | "device" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "motion" | "screenTouch">> & Pick<PrefsView, "workspace" | "invite" | "language" | "lang" | "badge" | "badgeKinds" | "rail" | "dropAs" | "archiveHint" | "motion" | "screenTouch"> & { device: Required<Omit<DeviceView, "locale">> & Pick<DeviceView, "locale"> };
 /** What `prefs.set` takes: a field, or a map's entries (null: gone). */
 export type PrefsPatch = { [K in keyof Omit<Prefs, "device">]?: NonNullable<Prefs[K]> extends Record<string, infer V> ? Record<string, V | null> : Prefs[K] | null };
 
 const DEFAULTS: Prefs = {
-  onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, resume: {}, stationUpdatesDismissed: {},
+  onlyMine: false, onlyWatching: false, onlyDecisions: false, listFilter: {}, appearance: "system", rowPicture: "auto", absoluteTime: false, keys: {}, lastChat: {}, openChat: {}, chatTabs: {}, dropFiles: {}, driveViews: {}, resume: {}, stationUpdatesDismissed: {}, rails: {}, barsBy: {},
+  // As the core fills it in (prefs.ts readerOf), before it has answered.
+  reader: { size: 18, line: 1.7, margin: 22, face: "sans", indent: true, paper: "follow" },
+  // As the core fills it in (prefs.ts barsOf).
+  bars: { sets: [["chats", "files", "profiles", "stations"], ["decisions", "usage", "connects", "archive"]], current: 0 },
   device: { app: "", phone: false, handoff: false },
 };
 
@@ -50,6 +56,7 @@ function keep(next: Prefs): void {
   try {
     s?.setItem(COPY, JSON.stringify(next));
     if (next.appearance === "system") s?.removeItem(APPEARANCE); else s?.setItem(APPEARANCE, next.appearance);
+    if (next.motion === "reduce" || next.motion === "full") s?.setItem(MOTION, next.motion); else s?.removeItem(MOTION);
   } catch { /* private mode: not copied */ }
   for (const f of watchers) f();
 }
@@ -101,7 +108,11 @@ const watch = (f: () => void) => { watchers.add(f); listen(); return () => { wat
 /** Calls `f` whenever the prefs change; returns how to stop. */
 export const onPrefs = watch;
 
-/** The prefs, redrawn when they change. */
-export function usePrefs(): Prefs {
-  return useSyncExternalStore(watch, prefs, () => DEFAULTS);
+/**
+ * What `pick` reads of the prefs, redrawn only when that changes: any change of them (a chat's tabs kept as its panel
+ * opens, the chat last open, the core's echo of each) would otherwise redraw everything that reads one of them, the app
+ * whole from its root. `pick` returns a value or one of the prefs' own fields, not a new object or array.
+ */
+export function usePrefs<T>(pick: (p: Prefs) => T): T {
+  return useSyncExternalStore(watch, () => pick(prefs()), () => pick(DEFAULTS));
 }

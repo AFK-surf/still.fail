@@ -14,6 +14,7 @@ import type { Source, Value } from "../store.ts";
 export interface Owner {
   owns(topic: Topic): boolean;
   start?(topic: Topic): void;
+  resume?(topic: Topic): void;
   stop?(topic: Topic): void;
   compute?(topic: Topic): Value | undefined;
 }
@@ -33,6 +34,10 @@ export class Router implements Source {
     if (owner?.start) owner.start(topic);
     // Computed when it goes out: its first value now.
     this.#core.store.invalidate(topic);
+  }
+
+  resume(topic: Topic): void {
+    this.owners.find((o) => o.owns(topic))?.resume?.(topic);
   }
 
   stop(topic: Topic): void {
@@ -71,18 +76,25 @@ export class Router implements Source {
       }
       case "draft":
         return { ok: { text: "", quotes: [], files: [] } };
+      case "composer":
+        return { ok: core.composers.value(String(topic.key)) };
       case "adbShare":
         return { ok: core.adb.value() };
+      case "adbCard":
+        return { ok: core.adb.card(String(topic.station)) };
       case "previewLoad":
         return { ok: core.workspaces.ofStation(topic.station as string).part("previewLoad", () => new Loads()).value(topic) };
       case "prefs":
         return { ok: {} };
+      case "drivePlace":
+        return { ok: null };
     }
     return this.after(topic, this.owners.find((o) => o.owns(topic))?.compute?.(topic));
   }
 
   /// What is waited on: of a workspace, its own waits, its account's socket and the relay opened for no station; of
-  /// none, every workspace's and all the device's.
+  /// none, every workspace's and all the device's, each station said with its workspace's name when there are several
+  /// (one station may be in several workspaces).
   statusValue(workspace: string | null): unknown {
     const core = this.#core;
     if (workspace !== null) {
@@ -92,8 +104,9 @@ export class Router implements Source {
         [core.status, { for: of.owner !== null ? [of.owner] : [] }],
       ]);
     }
-    const parts: [status.Status, status.Take][] = core.workspaces.all().map((w) => [w.status, "all"]);
-    parts.push([core.status, "all"]);
+    const all = core.workspaces.all();
+    const parts: [status.Status, status.Take, string | null][] = all.map((w) => [w.status, "all", all.length > 1 ? (core.cloudSync.workspaceName(w.id) ?? w.id) : null]);
+    parts.push([core.status, "all", null]);
     return status.value(parts);
   }
 }

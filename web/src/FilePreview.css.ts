@@ -1,22 +1,18 @@
-import { globalStyle, keyframes, style } from "@vanilla-extract/css";
-import { vars } from "./styles/tokens.css.ts";
-import { fadeInKeyframes } from "./styles/keyframes.css.ts";
-import { iconBtn } from "./styles/pages.css.ts";
-import { spinner } from "./styles/waiting.css.ts";
-import { segmented, segmentedOption } from "./ui.css.ts";
-import { btn } from "./styles/controls.css.ts";
+import { globalStyle, style } from "@vanilla-extract/css";
+import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
+import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
 import { avatarTile, tokenGuide } from "./pages/SlackApp.css.ts";
 import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
+import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
+import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
+import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
 
-/** Dark whatever the theme, as a viewer of pictures (images, video): the page's colours, redefined within it. */
-export const dark = {
-  [vars.canvas]: "#111113", [vars.text]: "#f4f4f5", [vars.muted]: "rgba(255, 255, 255, .6)",
-  [vars.subtle]: "rgba(255, 255, 255, .35)", [vars.hover]: "rgba(255, 255, 255, .12)", [vars.selected]: "rgba(255, 255, 255, .16)",
-  [vars.line]: "rgba(255, 255, 255, .1)", [vars.accent]: "#f4f4f5",
-};
-/** Frosted glass over a picture. */
-export const glass = {
+/** Frosted glass over a picture (@stillfail/ui's, as its viewers have it). */
+export const glass = pictureGlass;
+/** Dark glass whatever the theme: notes written on a picture (annotate/), read over any of it. */
+export const darkGlass = {
   background: "rgba(18, 18, 20, .62)", backdropFilter: "blur(24px) saturate(1.6)", WebkitBackdropFilter: "blur(24px) saturate(1.6)",
 };
 /** The same over a page of the theme's colours (a document). */
@@ -29,13 +25,7 @@ const pageGlass = {
 export const fp = style({
   position: "fixed", inset: "0", zIndex: "61", display: "grid", gridTemplateRows: "minmax(0, 1fr)",
   background: vars.canvas, color: vars.text, outline: "none", animation: `${fadeInKeyframes} 140ms ${vars.easeOut}`,
-  "@media": {
-    "(prefers-reduced-motion: reduce)": {
-      animation: "none",
-    },
-  },
 });
-globalStyle(`${fp}[data-kind="image"]`, { vars: dark, background: "#000" });
 // The page bars under it drag the desktop window whatever lies over them: without this, the top of its bar takes no pointer.
 globalStyle(`[data-desktop] ${fp}`, { WebkitAppRegion: "no-drag" });
 /** What floats: shown while the pointer moves, and whenever it or focus is on it (faded, it stays where it is to be clicked). */
@@ -48,19 +38,22 @@ const floating = {
 /** One bar at the top, as wide as what it holds: the file's name, its own tools (zoom, source or rendered), how far it has come, download and close. */
 export const fpHead = style({
   ...floating,
-  top: "max(16px, env(safe-area-inset-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
+  top: "max(16px, var(--safe-top))", width: "max-content", maxWidth: "min(100% - 32px, 1080px)", height: "44px", gap: "12px",
   padding: "0 6px 0 16px",
+  // Under the Windows app's window buttons, which the system draws over the page's top right (styles/global.css.ts).
+  selectors: { ':is([data-desktop="overlay"], [data-desktop="custom"]):not([data-fullscreen]) &': { top: "calc(env(titlebar-area-height, 44px) + 8px)" } },
   "@media": {
-    "(max-width: 640px)": { top: "max(8px, env(safe-area-inset-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 2px 0 12px" },
-    "(prefers-reduced-motion: reduce)": { transition: "none" },
+    "(max-width: 640px)": { top: "max(8px, var(--safe-top))", maxWidth: "calc(100% - 16px)", gap: "4px", padding: "0 6px 0 12px" },
   },
 });
 globalStyle(`${fp}[data-kind="image"] ${fpHead}`, glass);
+/** A dialog's name for the reader and the player, which show it on their own bars. */
+export const fpHiddenTitle = style({ position: "absolute", width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)", whiteSpace: "nowrap" });
 globalStyle(`${fp}[data-awake] ${fpHead}, ${fpHead}:hover, ${fpHead}:has(:focus-visible)`, {
   opacity: "1", transitionDuration: "120ms",
 });
 export const fpHeadProgress = style({
-  display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textXs,
+  display: "flex", alignItems: "center", gap: "10px", padding: "0 8px", color: vars.muted, fontSize: vars.textMeta,
   fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap",
 });
 globalStyle(`${fpHeadProgress} b`, { color: vars.text, fontWeight: "600" });
@@ -70,7 +63,7 @@ export const fpName = style({
   fontSize: vars.textBody, fontWeight: "600",
 });
 export const fpMeta = style({
-  flex: "none", color: vars.muted, fontSize: vars.textXs,
+  flex: "none", color: vars.muted, fontSize: vars.textMeta,
   "@media": {
     "(max-width: 640px)": {
       display: "none",
@@ -80,7 +73,7 @@ export const fpMeta = style({
 export const fpZoom = style({ display: "flex", alignItems: "center", gap: "2px" });
 export const fpToolText = style({
   height: "32px", minWidth: "36px", padding: "0 8px", border: "0", borderRadius: `calc(12px * ${vars.cornerScale})`,
-  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textXs, fontVariantNumeric: "tabular-nums",
+  background: "none", color: vars.muted, font: "inherit", fontSize: vars.textMeta, fontVariantNumeric: "tabular-nums",
   cursor: "pointer", cornerShape: vars.cornerShape,
   selectors: {
     "&:hover": { background: vars.hover, color: vars.text },
@@ -140,29 +133,23 @@ export const fpImage = style({
   position: "absolute", left: "50%", top: "50%", maxWidth: "none", transformOrigin: "center",
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)", WebkitUserDrag: "none",
 });
+// Around an image, a click closes it (`data-closes`): the image zooms, not what is around it.
+globalStyle(`${fpStage}[data-closes]:not([data-pan])`, { cursor: "default" });
+globalStyle(`${fpStage}[data-closes]:not([data-pan]) ${fpImage}`, { cursor: "zoom-in" });
+globalStyle(`${fpStage}[data-closes][data-zoomed]:not([data-pan]) ${fpImage}`, { cursor: "zoom-out" });
 export const fpProgress = style({
   display: "grid", gap: "8px", width: "220px", padding: "12px 14px", borderRadius: `calc(14px * ${vars.cornerScale})`,
   cornerShape: vars.cornerShape, background: `color-mix(in srgb, ${vars.raised} 72%, transparent)`,
-  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textSm,
+  WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", color: vars.muted, fontSize: vars.textUi,
   fontVariantNumeric: "tabular-nums", textAlign: "center", animation: `${fadeInKeyframes} 200ms ${vars.easeOut}`,
 });
 export const fpProgressText = style({});
 globalStyle(`${fpProgressText} b`, { color: vars.text, fontWeight: "600" });
-export const fpProgressTrack = style({
-  position: "relative", flex: "none", height: "4px", borderRadius: "999px", overflow: "hidden",
-  background: `color-mix(in srgb, ${vars.text} 12%, transparent)`,
-});
-const sweepKeyframes = keyframes({ from: { transform: "translateX(-100%)" }, to: { transform: "translateX(250%)" } });
-export const fpProgressBar = style({
-  position: "absolute", left: "0", top: "0", bottom: "0", width: "0", borderRadius: "999px", background: vars.accent,
-  transition: `width 200ms ${vars.easeOut}`,
-  selectors: {
-    "&[data-unknown]": { width: "40%", animation: `${sweepKeyframes} 1.2s ease-in-out infinite` },
-  },
-});
+/** Its bar (waiting.tsx Progress), as long as the box in the middle, a set length in the bar. */
+export const fpProgressTrack = style({});
 export const fpAudio = style({ display: "grid", gap: "14px", justifyItems: "center", width: "min(100% - 48px, 480px)" });
 export const fpAudioName = style({
-  maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textSm,
+  maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: vars.textUi,
   color: vars.muted,
 });
 export const fpFrame = style({ width: "100%", height: "100%", border: "0", background: "#fff" });
@@ -180,7 +167,7 @@ export const fpMarkdown = style({
     },
   },
 });
-export const fpCode = style({ padding: "64px 12px 48px", fontSize: "12.5px" });
+export const fpCode = style({ padding: "64px 12px 48px", fontSize: vars.textMeta });
 export const fpPdf = style({
   display: "grid", justifyItems: "center", alignContent: "start", gap: "20px", padding: "76px 28px 28px",
   selectors: {
@@ -197,7 +184,7 @@ export const fpPdfPage = style({
   boxShadow: "0 1px 3px rgba(0, 0, 0, .08), 0 8px 28px rgba(0, 0, 0, .10)",
 });
 export const fpPlain = style({
-  margin: "0", padding: "76px 32px 64px", fontSize: "12.5px", lineHeight: "1.65", whiteSpace: "pre-wrap",
+  margin: "0", padding: "76px 32px 64px", fontSize: vars.textMeta, lineHeight: "1.65", whiteSpace: "pre-wrap",
   overflowWrap: "anywhere",
   "@media": {
     "(max-width: 640px)": {
@@ -207,11 +194,11 @@ export const fpPlain = style({
 });
 export const fpCut = style({
   position: "sticky", top: "0", zIndex: "2", padding: "8px 20px", background: vars.amberBg, color: vars.amber,
-  fontSize: vars.textXs,
+  fontSize: vars.textMeta,
 });
 export const fpTableWrap = style({ overflow: "visible", padding: "68px 0 48px" });
 export const fpTable = style({
-  borderCollapse: "collapse", minWidth: "100%", fontSize: vars.textSm, fontVariantNumeric: "tabular-nums",
+  borderCollapse: "collapse", minWidth: "100%", fontSize: vars.textUi, fontVariantNumeric: "tabular-nums",
 });
 export const fpRow = style({
   selectors: {
@@ -219,14 +206,20 @@ export const fpRow = style({
   },
 });
 export const fpNote = style({
-  display: "grid", justifyItems: "center", gap: "14px", color: vars.muted, fontSize: vars.textSm,
+  display: "grid", justifyItems: "center", gap: "14px", color: vars.muted, fontSize: vars.textUi,
 });
+/** A file not shown here, told of: its kind's mark, its name and what it is, then what can be done with it. */
+export const fpFactsMark = style({ color: vars.muted });
+export const fpFactsName = style({
+  maxWidth: "min(480px, 100%)", color: vars.text, fontSize: vars.textBody, fontWeight: "600", textAlign: "center", overflowWrap: "anywhere",
+});
+export const fpFactsFailed = style({ color: vars.red, textAlign: "center" });
 globalStyle(`${fpHeadProgress} ${fpProgressTrack}`, { width: "120px" });
 globalStyle(`${fpHead} ${segmented}`, {
   width: "120px",
   vars: { "--pad": "2px" },
 });
-globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", fontSize: vars.textXs });
+globalStyle(`${fpHead} ${segmentedOption}`, { height: "26px", padding: "0", fontSize: vars.textMeta });
 globalStyle(`${fpZoom} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default", background: "none" });
 globalStyle(`${fpAudio} audio`, { width: "100%" });
 globalStyle(`${fpCode} ${codeBlock}`, { margin: "0", border: "0", borderRadius: "0", background: "none" });
@@ -243,15 +236,14 @@ globalStyle(`${fpTable} tbody tr:hover`, { background: vars.hover });
 globalStyle(`${fpTable} th:first-child`, { width: "1%", paddingLeft: "20px", color: vars.muted, textAlign: "right" });
 globalStyle(`${fpTable} td:last-child, ${fpTable} th:last-child`, { width: "100%" });
 globalStyle(`${fpNote} ${btn}`, { display: "inline-flex", alignItems: "center", gap: "6px" });
-globalStyle(`${fpNote} ${spinner}`, { width: "16px", height: "16px" });
 /** Here rather than with its class: it comes after .fp-table th:first-child, and wins over it. */
 globalStyle(`${tokenGuide} li > ${btn}`, { marginTop: "6px" });
 /** Here rather than with its class: it comes after .fp-table th:first-child, and wins over it. */
 globalStyle(`${tokenGuide} li > ${btn}`, { width: "max-content" });
 /** Here rather than with its class: it comes after .token-guide li > .btn, and wins over it. */
 globalStyle(`${avatarTile} img[data-maker]`, { width: "55%", height: "55%", transform: "none" });
-/** Here rather than with its class: it comes after .fp-note .spinner, and wins over it. */
-globalStyle(`${enrollWait} ${spinner}`, { width: "18px", height: "18px", borderTopColor: vars.accent });
 
 /** Room for the widest it says ("15.0 MB / 15.0 MB"), so the bar does not grow as the numbers do. */
 globalStyle(`${fpHeadProgress} ${fpProgressText}`, { minWidth: "172px", textAlign: "right" });
+/** The bar's buttons (its close in its right end): 6 in from its edges, rounded as the bar less that (concentric). */
+globalStyle(`${fpHead} ${iconBtn}`, { borderRadius: `calc(14px * ${vars.cornerScale} - 6px)`, cornerShape: vars.cornerShape });

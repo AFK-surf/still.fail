@@ -3,6 +3,41 @@ import { test } from "node:test";
 import { CoreClient, CoreError, WAKE_ANSWER_MS, desktopOpener, type Channel, type Opener } from "../web/src/core/client.ts";
 import { migrateLegacy, migratePrefs } from "../web/src/core/migrate.ts";
 import { carryOver } from "../web/src/renamed.ts";
+import { CoreFiles } from "../client/core-ts/src/hosts/file-port.ts";
+import { FileSource } from "../client/core-ts/src/file-source.ts";
+
+test("desktop: a file queued before its port opens is read through the channel without a DOM Blob", async () => {
+  const globals = globalThis as unknown as Record<string, unknown>;
+  const before = ["window", "addEventListener", "removeEventListener"].map((key) => [key, globals[key]] as const);
+  const page = new EventTarget();
+  Object.assign(globalThis, { window: page, addEventListener: page.addEventListener.bind(page), removeEventListener: page.removeEventListener.bind(page) });
+  let asked = 0;
+  const client = new CoreClient(desktopOpener({ openCore: (id) => { asked = id; }, previewHost: async () => null, inWorkspace: () => {} }));
+  const ports = new MessageChannel();
+  const files = new CoreFiles((m) => ports.port2.postMessage(m));
+  ports.port2.onmessage = async ({ data }) => {
+    if (files.receive(data)) return;
+    try {
+      assert.equal(data.params.files[0].blob instanceof Blob, false);
+      const restored = files.prepare(data) as { params: { files: { blob: FileSource }[] } };
+      const blob = restored.params.files[0]!.blob;
+      assert.ok(blob instanceof FileSource);
+      const bytes = new Uint8Array(await blob.slice(0, blob.size).arrayBuffer());
+      blob.close();
+      ports.port2.postMessage(JSON.stringify({ id: data.id, ok: [...bytes] }));
+    } catch (error) {
+      ports.port2.postMessage(JSON.stringify({ id: data.id, error: { code: "test", message: String(error) } }));
+    }
+  };
+  const uploaded = client.call("composer.add", { key: "ws/st:k", station: "ws/st", files: [{ id: "f1", name: "paste.png", size: 3, blob: new File([new Uint8Array([0, 127, 255])], "paste.png", { type: "image/png" }) }] });
+  page.dispatchEvent(Object.assign(new Event("message"), { data: { stillfailCore: "port", id: asked }, source: page, ports: [ports.port1] }));
+  try { assert.deepEqual(await uploaded, [0, 127, 255]); }
+  finally {
+    delete globals.window;
+    client.close(); files.close(); ports.port2.close();
+    for (const [key, value] of before) { if (value === undefined) delete globals[key]; else globals[key] = value; }
+  }
+});
 
 /** A worker stand-in: records what the client posts and answers on demand. */
 class FakeWorkers {
@@ -127,6 +162,32 @@ test("back from the back/forward cache: bye, then everything subscribed again", 
   client.resume();
   await assert.rejects(pending);
   assert.deepEqual(workers.last.sent.slice(2), [{ bye: true }, { id: 1, subscribe: { topic: "session", station: "local", key: "k" }, keyed: true }]);
+});
+
+test("a worker of the page's own ends as the page leaves, and a new one starts when it is back", async () => {
+  const workers = new FakeWorkers();
+  const client = new CoreClient(workers.opener, { schedule: (_ms, run) => run(), endWithPage: true });
+  client.subscribe({ topic: "accounts" }, () => undefined, () => undefined);
+  client.focus({ visible: true }).catch(() => undefined);
+  const pending = client.call("auth.complete", { query: "?code=c" });
+  client.suspend();
+  const old = workers.last;
+  assert.equal(old.closed, true, "not kept frozen with the page, holding the core's lock");
+  assert.deepEqual(old.sent.at(-1), { bye: true });
+  // Back from the cache: what the old one was asked is lost; a new one hears the subscriptions and where the page is.
+  client.resume();
+  await assert.rejects(pending);
+  assert.equal(workers.opened.length, 2);
+  assert.deepEqual(workers.last.sent, [
+    { id: 1, subscribe: { topic: "accounts" }, keyed: true },
+    { id: 4, call: "client.focus", params: { visible: true } },
+  ]);
+  // Shown again with no pageshow saying it came back: the same.
+  client.suspend();
+  client.wake(1000);
+  assert.equal(workers.opened.length, 3);
+  assert.deepEqual(workers.last.sent.slice(0, 2), [{ id: 1, subscribe: { topic: "accounts" }, keyed: true }, { id: 5, call: "client.focus", params: { visible: true } }]);
+  assert.deepEqual(workers.last.sent.at(-1), { id: 6, call: "client.wake", params: { away: 1000 } });
 });
 
 test("back after being away: the core is told, and a worker that was up and now says nothing is replaced", () => {

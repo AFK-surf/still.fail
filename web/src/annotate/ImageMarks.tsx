@@ -4,17 +4,17 @@
 // bubble beside it. Done, the image with its marks (and their pins) goes into the chat's draft as a new file, with a
 // quote per numbered mark saying where it is and what was said about it (or, outside a chat, is downloaded).
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpRight, Cursor, Download, Edit, Redo, Retry, Scribble, Send, Square, Text, Trash } from "../icons.tsx";
+import { ArrowUpRight, Cursor, Download, Edit, Redo, Retry, Scribble, Send, Square, Text, Trash } from "@stillfail/ui/icons.tsx";
 import { DraftKey, offerToDraft, type DraftQuote } from "../draft.ts";
 import { Tip } from "../ui.tsx";
-import * as pagesCss from "../styles/pages.css.ts";
 import * as css from "./ImageMarks.css.ts";
 import * as marksCss from "./Marks.css.ts";
 import { useNarrow } from "../mobile/app.tsx";
 import { NoteBox, NoteCard, type NoteView } from "../mobile/Notes.tsx";
-import * as annotateCss from "../mobile/Annotate.css.ts";
+import * as notesCss from "../mobile/Notes.css.ts";
 import * as rootCss from "../mobile/styles/root.css.ts";
 import { t } from "../i18n.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
 type Tool = "select" | "rect" | "arrow" | "pen" | "text";
 interface P { x: number; y: number }
@@ -500,7 +500,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     const a = () => act.current;
     if (!on) {
       return url ? (
-        <Tip label={t("web-main.annotate.image")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.image")} onClick={() => { setOn(true); setError(null); }}>
+        <Tip label={t("web-main.annotate.image")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.annotate.image")} onClick={() => { setOn(true); setError(null); }}>
           <Edit size={18} />
         </button></Tip>
       ) : null;
@@ -509,7 +509,7 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
       <span className={css.actions}>
         {error && <span className={css.error}>{error}</span>}
         <button type="button" className={css.cancel} onClick={() => a().leave()}>{t("common.cancel")}</button>
-        <Tip label={t("web-main.annotate.download")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.download")} disabled={busy || !any}
+        <Tip label={t("web-main.annotate.download")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.annotate.download")} disabled={busy || !any}
           onClick={() => void a().finish("download")}><Download size={18} /></button></Tip>
         {canDraft && (
           <button type="button" className={css.done} disabled={busy || !any} onClick={() => void a().finish("draft")}>
@@ -525,12 +525,12 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
   const toolbar = on ? (
     <div className={css.toolbar} data-floats={phone ? undefined : true} data-in-foot={phone || undefined} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       {TOOLS.map((x) => (
-        <Tip key={x.tool} label={t("web-main.annotate.toolKey", { tool: t(`web-main.annotate.tool.${x.tool}`), key: x.key })}><button type="button" className={pagesCss.iconBtn} aria-label={t(`web-main.annotate.tool.${x.tool}`)}
+        <Tip key={x.tool} label={t("web-main.annotate.toolKey", { tool: t(`web-main.annotate.tool.${x.tool}`), key: x.key })}><button type="button" className={pageCss.iconBtn} aria-label={t(`web-main.annotate.tool.${x.tool}`)}
           aria-pressed={tool === x.tool} onClick={() => pickTool(x.tool)}>{x.icon}</button></Tip>
       ))}
       <span className={css.gap} aria-hidden="true" />
       <div className={css.swatchWrap}>
-        <Tip label={t("web-main.annotate.color")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.color")} aria-expanded={palette} onClick={() => setPalette(!palette)}>
+        <Tip label={t("web-main.annotate.color")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.annotate.color")} aria-expanded={palette} onClick={() => setPalette(!palette)}>
           <span className={css.swatch} style={{ background: shownColor }} />
         </button></Tip>
         {palette && (
@@ -543,15 +543,15 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
         )}
       </div>
       {pickedShape && (
-        <Tip label={t("web-main.annotate.deleteKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("common.delete")} onClick={() => remove(pickedShape.id)}>
+        <Tip label={t("web-main.annotate.deleteKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("common.delete")} onClick={() => remove(pickedShape.id)}>
           <Trash size={18} />
         </button></Tip>
       )}
       <span className={css.gap} aria-hidden="true" />
-      <Tip label={t("web-main.annotate.undoKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.undo")} disabled={!doc.past.length} onClick={undo}>
+      <Tip label={t("web-main.annotate.undoKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.annotate.undo")} disabled={!doc.past.length} onClick={undo}>
         <Retry size={18} />
       </button></Tip>
-      <Tip label={t("web-main.annotate.redoKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.annotate.redo")} disabled={!doc.future.length} onClick={redo}>
+      <Tip label={t("web-main.annotate.redoKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.annotate.redo")} disabled={!doc.future.length} onClick={redo}>
         <Redo size={18} />
       </button></Tip>
     </div>
@@ -650,8 +650,8 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     {pins(place)}
   </>) : null;
 
-  // On a phone, the foot as a message's notes page has it (../mobile/Annotate.tsx): the note being written in its box
-  // over the keyboard, else the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
+  // On a phone, the notes at the foot (../mobile/Notes.tsx): the note being written in its box over the keyboard, else
+  // the notes as cards over the tools (a tap opens one again). In the narrow screen's dark.
   const notes: (NoteView & { id: number })[] = shapes.flatMap((s) => {
     const n = numbers.get(s.id);
     return n === undefined ? [] : [{ id: s.id, n, text: s.tool === "rect" ? t("web-main.annotate.tool.rect") : t("web-main.annotate.tool.arrow"), comment: comments.get(s.id) ?? "", color: s.color }];
@@ -662,12 +662,12 @@ export function useImageMarks({ url, name, natural, scale, pass, onDone }:
     <div className={`${css.foot} ${rootCss.mDark}`} data-floats style={{ bottom: keyboard ? keyboard + 8 : undefined }}
       onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
       {openNote
-        ? <NoteBox key={openNote.id} note={openNote} className={annotateCss.mNoteBox} reveal={false}
+        ? <NoteBox key={openNote.id} note={openNote} className={notesCss.mNoteBox} reveal={false}
             onComment={(comment) => setComments((all) => new Map(all).set(openNote.id, comment))}
             onDone={() => setNote(null)} onRemove={() => remove(openNote.id)} />
         : <>
             {notes.length > 0 && (
-              <ol className={annotateCss.mTray}>
+              <ol className={notesCss.mTray}>
                 {notes.map((x) => <li key={x.id}><NoteCard note={x} open={false} onClick={() => { putDown(); setPicked(null); setNote(x.id); }} /></li>)}
               </ol>
             )}

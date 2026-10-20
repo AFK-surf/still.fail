@@ -22,7 +22,7 @@ function part(id: string): [string, string, string] {
 }
 
 function elsewhere(id: string): string {
-  return ["claude", "codex", "playwright", "pnpm", "npm", "cargo"].includes(id) ? t(`core-logic.footprint.elsewhere.${id}`) : t("core-logic.footprint.part.other");
+  return ["claude", "codex", "dsh", "grok", "playwright", "pnpm", "npm", "cargo"].includes(id) ? t(`core-logic.footprint.elsewhere.${id}`) : t("core-logic.footprint.part.other");
 }
 
 const n = (v: J, key: string): number => (typeof get(v, key) === "number" ? v[key] : 0);
@@ -39,8 +39,8 @@ function deleteConfirms(what: string, count: number, bytes: number): J[] {
 }
 
 /// The line that opens the page: how much it takes, or that it is being measured.
-export function brief(u: J): void {
-  u.text = typeof get(u, "bytes") === "number" ? size(u.bytes) : t("core-logic.footprint.measuring");
+export function brief(u: J): J {
+  return { ...u, text: typeof get(u, "bytes") === "number" ? size(u.bytes) : t("core-logic.footprint.measuring") };
 }
 
 export function shown(raw: J, c: Clock): J {

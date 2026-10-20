@@ -5,6 +5,8 @@ import { chats, entries } from "./views.ts";
 import { usageOps } from "./ops-usage.ts";
 import { sessionOps } from "./ops-sessions.ts";
 import { saidNotices, turnNotices } from "./notices.ts";
+import { changedOf } from "./digest.ts";
+import { publishDraft } from "./publish.ts";
 
 export type ReadOp = (store: Store, args: any) => unknown;
 
@@ -15,4 +17,8 @@ export const ops: Record<string, ReadOp> = {
   ...sessionOps,
   turnNotices: (store, a) => turnNotices(store, a.key, a.since, a.ended, a.lang),
   saidNotices: (store, a) => saidNotices(store, a.thread, a.entries, a.since, a.lang),
+  /// A chat as a published snapshot would show it (api/routes/publish.ts).
+  publishDraft: (store, a) => publishDraft(store, a, a.lang),
+  /// What of a list (the read `op` with `args`) a client holding `held` does not hold as it is (POST /changed/<list>).
+  changed: (store, a) => changedOf(ops[a.op]!(store, a.args), a.id, a.held),
 };

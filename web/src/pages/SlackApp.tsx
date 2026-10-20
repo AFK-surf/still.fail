@@ -4,15 +4,15 @@ import type { useConnectFlow } from "../connect-flow.ts";
 // configuration token. When permissions change, Slack asks a person to approve
 // them; that is the only step left in Slack.
 import { useStation } from "../station.tsx";
-import { Check, External, ImageUpload, ShieldCheck } from "../icons.tsx";
+import { Check, External, ImageUpload, ShieldCheck } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
 import { core, useTopic } from "../core/react.ts";
 import { useAction, useApi, type Buddy, type Connect, type SlackAppLinks, type SlackAppSettings, type SlackAppView, type SlackGroup } from "../api.ts";
-import { useToast } from "../toast.tsx";
+import { useToast } from "@stillfail/ui/toast.tsx";
 import { Button, Dialog, Field, ICON, Section, Tip } from "../ui.tsx";
 import * as css from "./SlackApp.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
-import * as controlsCss from "../styles/controls.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as chatCss from "../styles/chat.css.ts";
 import * as modelCss from "../ModelTriple.css.ts";
@@ -43,6 +43,12 @@ const GROUPS: Record<SlackGroup, { label: string; description: string }> = {
   search: group("search"),
   connect: group("connect"),
   more: group("more"),
+};
+
+/** Groups that only work as Slack's admins allow (who installs the app, or the workspace's settings): marked so. */
+const ADMIN: Partial<Record<SlackGroup, () => string>> = {
+  connect: () => t("web-pages.slackApp.group.connect.admin"),
+  usergroups: () => t("web-pages.slackApp.group.usergroups.admin"),
 };
 
 /** The groups in sections, as the form shows them. */
@@ -396,10 +402,11 @@ export function AppFields({ settings, onChange, icon, onIcon, fresh }: {
                           <span>{GROUPS[g].label}</span>
                         </span></Tip>
                       ) : (
-                        <Tip label={GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
+                        <Tip label={ADMIN[g] ? `${GROUPS[g].description} ${ADMIN[g]()}` : GROUPS[g].description}><label className={chatCss.modelPoolItem} data-on={settings.groups[g] || undefined}>
                           <input type="checkbox" checked={settings.groups[g] ?? false}
                             onChange={(e) => set("groups", { ...settings.groups, [g]: e.target.checked })} />
-                          <span>{GROUPS[g].label}</span>
+                          <span className={css.permLabel}>{GROUPS[g].label}</span>
+                          {ADMIN[g] && <span className={css.permAdmin}>{t("web-pages.slackApp.admin")}</span>}
                         </label></Tip>
                       )}
                     </li>

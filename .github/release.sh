@@ -1,10 +1,10 @@
 #!/bin/sh
-# scripts/release.sh --beta in CI (.github/workflows/pipeline.yml): the test channel's station release (its three
+# scripts/release.sh --beta in CI (.github/workflows/pipeline.yml): the test channel's station release (its four
 # platforms) or test app (android), uploaded to the releases bucket. What it needs comes from the environment's secrets
 # and is removed after: POSTHOG_JSON (the key the station and the Android app report errors with), ANDROID_DEBUG_KEYSTORE_B64 (the key
 # every Android release is signed with: studio's ~/.android/debug.keystore; another would stop installed apps updating),
 # CLOUDFLARE_API_TOKEN (the bucket; without it, the machine's own `wrangler login`).
-#   sh .github/release.sh [--stable] station|android
+#   sh .github/release.sh [--stable] station|android|modules
 set -eu
 beta=--beta
 if [ "${1:-}" = --stable ]; then beta=""; shift; fi
@@ -16,10 +16,10 @@ trap 'rm -rf "$dir"' EXIT
 [ -n "${CLOUDFLARE_API_TOKEN:-}" ] || unset CLOUDFLARE_API_TOKEN
 if [ -n "${POSTHOG_JSON:-}" ]; then (umask 077 && printf '%s' "$POSTHOG_JSON" > "$dir/posthog.json"); export STILLFAIL_POSTHOG="$dir/posthog.json"; fi
 
-case "${1:?usage: release.sh station|android}" in
+case "${1:?usage: release.sh station|android|modules}" in
   station)
     # The station in TypeScript, bundled for each platform (scripts/station-bundle.sh) with its native parts prebuilt:
-    # the natives job before this one built and published those of this commit (all three platforms).
+    # the natives job before this one built and published those of this commit (all four platforms).
     (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
     # The native parts signed with the desktop app's certificate (.github/sign-station.sh): macOS keeps the launcher's
     # Local Network grant across releases. Without the certificate, a warning and ad hoc parts.
@@ -37,6 +37,12 @@ case "${1:?usage: release.sh station|android}" in
     apk=apps/android/app/build/outputs/apk/release/app-release.apk
     # The certificate it was signed with: the same SHA-256 every time (studio's key).
     "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner" verify --print-certs "$apk" | grep -i "SHA-256" || true
+    ;;
+  modules)
+    # The modules' packages (scripts/module-bundle.ts): plain files, signed; nothing of the machine's in them. Each
+    # entry bundled by the station's esbuild (its packages installed for it).
+    (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+    sh scripts/release.sh ${beta:+$beta} modules
     ;;
   *) echo "no such release: $1"; exit 2 ;;
 esac

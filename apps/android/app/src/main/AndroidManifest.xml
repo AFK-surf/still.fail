@@ -14,6 +14,10 @@
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <!-- Notices of the chats one takes part in (Notices.kt). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ＋'s recent photos (screens/Attach.kt): the gallery, or on Android 14 and later the photos chosen for the app. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <application
         android:label="@string/app_name"
@@ -60,7 +64,9 @@
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
             </intent-filter>
             <!-- An invitation's link (/invite#<token>), a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>),
-                 and a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb; AdbShare.kt). -->
+                 a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb; AdbShare.kt), one of its screens an agent
+                 asks a person to take over (/w/<ws>/s/<station>/screen/<id>; remote/ScreenActivity.kt), and a login an agent
+                 started there (/w/<ws>/s/<station>/login/<id>; screens/LoginCards.kt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -68,15 +74,59 @@
                 <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
                 <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/screen/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/login/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
                 <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/screen/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/login/.*" />
+            </intent-filter>
+        </activity>
+        <!-- A station's screen, seen and driven (remote/ScreenActivity.kt): opened by the app only (its links come to
+             MainActivity, which asks the core what they open). Turning the phone keeps it, and the view with it. -->
+        <activity
+            android:name=".remote.ScreenActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode" />
+        <!-- A link or some text another app shares (share/ShareActivity.kt; docs/share-in.md): a sheet over that app, in a
+             task of its own and out of the recent apps, so going back lands where the person was. -->
+        <activity
+            android:name=".share.ShareActivity"
+            android:exported="true"
+            android:theme="@style/Theme.StillFail.Share"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
         <!-- What the installer says of an update (Updates.kt). -->
         <receiver android:name=".InstallResult" android:exported="false" />
+        <!-- The core's JS sampled for a while, asked from adb (CoreProfileReceiver.kt): the shell holds DUMP, apps do not. -->
+        <receiver android:name=".CoreProfileReceiver" android:exported="true" android:permission="android.permission.DUMP" />
         <service android:name=".AdbShareService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Lends this phone's own adb (Wireless debugging) to the user's coding agents over the app's connection, while the user shares it." />
+        </service>
+        <!-- A login's browser step (LoginRelay.kt): the app held up while it listens on loopback for the browser to come back. -->
+        <service android:name=".LoginRelayService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in to a command-line tool in their browser, so the browser's OAuth redirect to localhost reaches the app and is relayed to the user's own machine." />
+        </service>
+        <!-- Reads the Wireless debugging pairing dialog's code off Settings while 共享调试 pairs (AdbCodeReader.kt), once the
+             person turns it on in Accessibility; only the system binds it. -->
+        <service
+            android:name=".AdbCodeReader"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/adb_code_reader" />
         </service>
         <!-- FCM's pushes (Push.kt). Firebase is set up by hand from BuildConfig (no google-services.json): its own
              start-up provider is taken out, and no token is made before Push.sync asks for one. -->
@@ -86,6 +136,15 @@
             </intent-filter>
         </service>
         <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+        <!-- A file of a station's drive handed to another app to open or share (drive/DriveScreen.kt), and a picture copied
+             on a driven screen put on the phone's clipboard (remote/ScreenClips.kt): from the cache. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/drive_files" />
+        </provider>
         <provider
             android:name="com.google.firebase.provider.FirebaseInitProvider"
             android:authorities="${applicationId}.firebaseinitprovider"

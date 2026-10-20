@@ -7,6 +7,7 @@ import { realpathSync, statSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Mesh, loadMesh } from "../mesh/native.ts";
+import { platform } from "../platform/index.ts";
 
 type Found = { inline: boolean; destination: string; start: number; end: number };
 
@@ -52,6 +53,9 @@ function localPath(destination: string): string | null {
     } catch {
       throw new Error(`invalid local file link: ${destination}; use an absolute path in files`);
     }
+  } else if (platform.paths.isDrivePath(decoded)) {
+    // A drive's path (`C:\…`, `C:/…`, on Windows) is a local one, as a familiar root's is on Unix.
+    path = decoded;
   } else {
     if (!decoded.startsWith("/") || decoded.startsWith("//")) return null;
     const known = ["/Users/", "/home/", "/tmp/", "/private/", "/var/", "/Volumes/", "/mnt/", "/workspace/", "/etc/", "/opt/"];
@@ -239,6 +243,25 @@ function links(text: string): Found[] {
     if (!inCode(m.index!) && !found.some((f) => m.index! >= f.start && m.index! < f.end)) found.push({ inline: false, destination: m[1]!, start: m.index!, end: m.index! + m[0].length });
   }
   return found.sort((a, b) => a.start - b.start);
+}
+
+/// The local paths `text`'s links name (file URLs, absolute paths), read by name only: nothing on disk is looked at.
+/// Each with its destination as the link has it (escapes resolved).
+export function namedLocalPaths(text: string): { destination: string; path: string }[] {
+  const named: { destination: string; path: string }[] = [];
+  for (const link of links(text)) {
+    let path: string | null = null;
+    if (link.destination.startsWith("file:")) {
+      try {
+        path = fileURLToPath(new URL(link.destination));
+      } catch {}
+    } else {
+      const decoded = percentDecode(link.destination);
+      if (decoded.startsWith("/") && !decoded.startsWith("//")) path = decoded;
+    }
+    if (path !== null) named.push({ destination: link.destination, path });
+  }
+  return named;
 }
 
 const canonical = (path: string) => {

@@ -22,17 +22,25 @@
       if (kind === "open") on.open(a);
       else if (kind === "text") on.message(a);
       else if (kind === "binary") on.message(Uint8Array.from(atob(a), (ch) => ch.charCodeAt(0)));
+      else if (kind === "bytes") on.message(a);
       else if (kind === "close") { open.delete(sid); on.close(a, b, c); }
     };
   }
   const base64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  // Where the top page's port carries bytes as they are (__stillfailSocketPort, set by its script below), a socket says
+  // and hears everything on it, in order, its frames never base64; else through StillFailPreviewNative. It opens once
+  // it is known which (a few seconds at most): nothing is sent on a socket before it is open.
   return (path, protocols, on) => {
     const sid = top.crypto.randomUUID();
     top.__stillfailSockets.set(sid, on);
-    native.open(sid, path, protocols.join(","));
+    let port = null;
+    const opened = Promise.resolve(top.__stillfailSocketPort).then((got) => {
+      port = got || null;
+      native.open(sid, path, protocols.join(","), port !== null);
+    });
     return {
-      send: (data) => (typeof data === "string" ? native.send(sid, data) : native.sendBinary(sid, base64(data))),
-      close: (code, reason) => native.close(sid, code, reason),
+      send: (data) => (port ? port.send(sid, data) : typeof data === "string" ? native.send(sid, data) : native.sendBinary(sid, base64(data))),
+      close: (code, reason) => opened.then(() => (port ? port.close(sid, code, reason) : native.close(sid, code, reason))),
     };
   };
 })();
@@ -188,8 +196,9 @@
   };
   // The top page's fetch() of its own host goes through the app instead (PreviewWeb.kt fetchSaid), over a message port
   // the app gives it: a WebView hands the page what the app answers only 2 KB at a time, and this way each piece of a
-  // body comes as the service sends it (a log, a streamed answer). Without the port (a file's page, an app from
-  // before), as below.
+  // body comes as the service sends it (a log, a streamed answer). Bytes go on it as they are where the app says it can
+  // (fetchBytes: an ArrayBuffer, the length of the fetch's id, the id, then the bytes), else as base64 in JSON. Without
+  // the port (a file's page, an app from before), as below.
   const bridge = (() => {
     if (window !== window.top || typeof native.fetchPort !== "function") return null;
     const token = "stillfail-fetch-" + crypto.randomUUID();
@@ -202,8 +211,21 @@
         removeEventListener("message", take, true);
         const got = event.ports[0];
         got.onmessage = ({ data }) => {
+          if (data instanceof ArrayBuffer) {
+            const all = new Uint8Array(data);
+            const n = all[0];
+            if (!n || all.length < 1 + n) return;
+            const id = String.fromCharCode(...all.subarray(1, 1 + n));
+            const bytes = all.subarray(1 + n);
+            const fetching = waiting.get(id);
+            // Else a binary frame of a socket's.
+            if (fetching) fetching({ t: "chunk", bytes });
+            else window.__stillfailSocketEvent?.(id, "bytes", bytes);
+            return;
+          }
           let said;
           try { said = JSON.parse(data); } catch { return; }
+          if (said && said.t === "socket") return void window.__stillfailSocketEvent?.(said.id, said.kind, said.a, said.b, said.c);
           waiting.get(said && said.id)?.(said);
         };
         resolve(got);
@@ -214,6 +236,23 @@
     let asking = false;
     try { asking = native.fetchPort(token) === true; } catch {}
     if (!asking) return null;
+    let binary = false;
+    try { binary = native.fetchBytes() === true; } catch {}
+    const frame = (id, bytes) => {
+      const out = new Uint8Array(1 + id.length + bytes.length);
+      out[0] = id.length;
+      for (let i = 0; i < id.length; i++) out[1 + i] = id.charCodeAt(i);
+      out.set(bytes, 1 + id.length);
+      return out.buffer;
+    };
+    // The page's WebSockets (above) on the port too, where it carries bytes: a text frame and a close as JSON, a
+    // binary frame as it is, framed with its socket's id.
+    if (binary) {
+      window.__stillfailSocketPort = port.then((to) => to && {
+        send: (sid, data) => to.postMessage(typeof data === "string" ? JSON.stringify({ t: "socket", id: sid, text: data }) : frame(sid, data)),
+        close: (sid, code, reason) => to.postMessage(JSON.stringify({ t: "socket", id: sid, close: [code, reason] })),
+      });
+    }
     const bytesOf = (text) => { const s = atob(text); const out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; };
     const define = (answer, props) => { for (const [k, v] of Object.entries(props)) Object.defineProperty(answer, k, { value: v }); return answer; };
     const go = (to, asked, bytes) => new Promise((resolve, reject) => {
@@ -247,7 +286,7 @@
           resolve(define(answer, { url, redirected: said.redirected === true, type: "basic" }));
         } else if (said.t === "chunk") {
           if (!stream) return;
-          stream.enqueue(bytesOf(said.b));
+          stream.enqueue(said.bytes || bytesOf(said.b));
           // Read too slowly (as in PreviewWeb.kt's Chunks): given up rather than kept here without end.
           if (stream.desiredSize < -(32 << 20)) { stream.error(new TypeError(en ? "The page read too slowly and was stopped" : "网页读得太慢，已停止")); stop(); }
         } else if (said.t === "end") {
@@ -267,9 +306,12 @@
       headers.set("user-agent", navigator.userAgent);
       if (asked.referrer && asked.referrer !== "no-referrer") headers.set("referer", asked.referrer === "about:client" ? location.href : asked.referrer);
       if (asked.method !== "GET" && asked.method !== "HEAD") headers.set("origin", location.origin);
+      const sent = bytes && bytes.length ? bytes : null;
+      // Its body first, as it is, where the port carries bytes.
+      if (sent && binary) to.postMessage(frame(id, sent));
       to.postMessage(JSON.stringify({
         t: "go", id, method: asked.method, path: to_.pathname + to_.search, headers: [...headers], redirect: asked.redirect,
-        cookies: asked.credentials !== "omit", body: bytes && bytes.length ? base64(bytes) : "",
+        cookies: asked.credentials !== "omit", body: sent && !binary ? base64(sent) : "",
       }));
     });
     const through = async (asked, bytes) => {

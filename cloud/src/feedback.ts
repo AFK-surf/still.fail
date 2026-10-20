@@ -19,6 +19,8 @@ export interface FeedbackInput {
   channel: "stable" | "beta";
   sender: string;
   station: string | null;
+  /** The workspace a station says the report is of (one it is in; its home when it says none). */
+  workspace: string | null;
   account: string | null;
   title: string;
   body: string;
@@ -30,7 +32,7 @@ export interface FeedbackInput {
 
 const text = (value: unknown, max: number): string => (typeof value === "string" ? value.trim().slice(0, max) : "");
 
-/** POST /v1/feedback: { key, title, body, area?, reporter?, context?, logs? } → { id, number, duplicate }. */
+/** POST /v1/feedback: { key, title, body, area?, reporter?, context?, logs?, workspace? } → { id, number, duplicate }. */
 export async function receiveFeedback(request: Request, env: Env, account: string | null): Promise<Response> {
   if (request.headers.get("content-type")?.split(";")[0] !== "application/json") return reply({ error: "invalid_request" }, 400);
   let raw: string;
@@ -52,6 +54,7 @@ export async function receiveFeedback(request: Request, env: Env, account: strin
   const title = text(value.title, FEEDBACK_LIMITS.title);
   const body = text(value.body, FEEDBACK_LIMITS.body);
   if (!/^[A-Za-z0-9_.:-]{1,64}$/.test(key) || !title || !body) return reply({ error: "invalid_request" }, 400);
+  if (value.workspace !== undefined && value.workspace !== null && !(typeof value.workspace === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$/.test(value.workspace))) return reply({ error: "invalid_request" }, 400);
   const area = FEEDBACK_AREAS.includes(value.area as FeedbackArea) ? (value.area as FeedbackArea) : "unknown";
   const context = value.context && typeof value.context === "object" && !Array.isArray(value.context) ? JSON.stringify(value.context).slice(0, FEEDBACK_LIMITS.context) : null;
   const logs = text(value.logs, FEEDBACK_LIMITS.logs) || null;
@@ -61,6 +64,7 @@ export async function receiveFeedback(request: Request, env: Env, account: strin
     channel: beta ? "beta" : "stable",
     sender: account ? `account:${account}` : `station:${station}`,
     station,
+    workspace: station && typeof value.workspace === "string" ? value.workspace : null,
     account,
     title,
     body,
@@ -69,7 +73,14 @@ export async function receiveFeedback(request: Request, env: Env, account: strin
     context,
     logs,
   };
-  const made = await env.DIRECTORY.getByName("primary").addFeedback(input);
+  let made: { id: string; number: number; duplicate: boolean } | null;
+  try {
+    made = await env.DIRECTORY.getByName("primary").addFeedback(input);
+  } catch (error) {
+    // A workspace the station is not in.
+    if (error instanceof Error && error.message === "not_in_workspace") return reply({ error: "not_in_workspace" }, 403);
+    throw error;
+  }
   if (!made) return reply({ error: "rate_limited" }, 429, { "retry-after": "3600" });
   return reply(made, made.duplicate ? 200 : 201);
 }

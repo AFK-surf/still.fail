@@ -1,11 +1,13 @@
 // The account on a narrow screen, as the Android app has it (apps/android/…/screens/Me.kt), from the card atop settings
-// (./Settings.tsx): who is signed in, the accounts on this device, and where it is signed in.
+// (./Settings.tsx): who is signed in, the accounts on this device, where it is signed in, and deleting it at the bottom.
 import { useState } from "react";
-import { signIn, signOut, useAccounts, type Account } from "../cloud/accounts.ts";
+import { deleteAccount, signIn, signOut, useAccounts, type Account } from "../cloud/accounts.ts";
 import { useDoing } from "../doing.ts";
 import { useApp } from "./app.tsx";
-import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Spinner, TopBack } from "./parts.tsx";
+import { Avatar, LargeTitle, ListCard, ListRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { Devices } from "./WorkspacePage.tsx";
+import { confirm } from "./sheets.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./Me.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -22,42 +24,55 @@ export function MeScreen() {
     setSigningIn(true);
     signIn().catch((e: unknown) => { setSigningIn(false); app.toast(t("web-mobile.me.signInFailed", { error: e instanceof Error ? e.message : String(e) })); });
   };
+  // Asked again; the sheet goes as it is answered and the row turns until still.fail cloud has it (it may refuse: the
+  // only owner of a workspace others are in, said by toast). Then away as after signing out, the account gone from here.
+  const deleting = useDoing("auth.deleteAccount", { account: me.sub });
+  const remove = () => confirm(app, {
+    title: t("web-pages.settings.account.delete"), text: t("web-pages.settings.account.deleteConfirmBody", { email: me.email }),
+    action: t("web-pages.settings.account.deleteAction"), danger: true, atOnce: "web-pages.accounts.deleteFailed",
+    run: () => deleteAccount(me.sub).then(() => { app.replace("/", { signingOut: me.sub }); app.toast(t("web-pages.settings.account.deleted", { email: me.email })); }),
+  });
   return (
     <div className={`${pagesCss.mScreen} ${pagesCss.mScroll}`}>
       <TopBack label={t("web-mobile.settings.title")} onBack={app.pop} />
       <LargeTitle small="" big={t("web-mobile.me.title")} />
-      <Card>
-        <span className={css.mMe}>
-          <Avatar id={me.email} name={me.name || me.email} size={46} picture={me.picture} />
-          <span><b>{me.name || me.email}</b><span className={listsCss.mRowNote}>{me.email} · Google</span></span>
-        </span>
-      </Card>
-      {/* Accounts: signing out is per account, as on the web (with one account it is just 退出登录), and another can be added. */}
-      <SectionHeader title={t("web-mobile.me.accounts")} start={24} />
+      {/* The accounts on this device, on one card: the one in view first, with who it is, then the others; each signed out
+          of by itself, as on the web (with one account it is just 退出登录), and another can be added. */}
       <ListCard>
-        {accounts.map((a) => <AccountRow key={a.sub} a={a} only={accounts.length === 1} />)}
+        {[...accounts.filter((a) => a.sub === me.sub), ...accounts.filter((a) => a.sub !== me.sub)].map((a) => <AccountRow key={a.sub} a={a} only={accounts.length === 1} head={a.sub === me.sub} />)}
         <ListRow onClick={signingIn ? undefined : another}>
-          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>{t("web-mobile.me.addAccount")}</span>{signingIn && <Spinner size={14} />}
+          <span className={`${partsCss.mAccent} ${listsCss.mRowTitle} ${partsCss.mGrow}`}>{t("web-mobile.me.addAccount")}</span>{signingIn && <Spinner inline />}
         </ListRow>
       </ListCard>
       <SectionHeader title={t("web-mobile.me.devices")} start={24} />
       <Devices />
+      <div className={css.mGap} />
+      <ListCard>
+        <ListRow onClick={deleting ? undefined : remove}>
+          <span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mRed}`}>{t("web-pages.settings.account.delete")}</span>{deleting && <Spinner inline />}
+        </ListRow>
+      </ListCard>
       <div style={{ height: 30 }} />
     </div>
   );
 }
 
-/** An account on this device, signed out from its row (退出登录 when it is the only one); its spinner while that goes on. */
-function AccountRow({ a, only }: { a: Account; only: boolean }) {
+/** An account on this device (`head`: the one in view, with its picture and name), signed out from its row (退出登录 when it is the only one); its spinner while that goes on. */
+function AccountRow({ a, only, head }: { a: Account; only: boolean; head: boolean }) {
   const app = useApp();
   const out = useDoing("auth.signOut", { account: a.sub });
   return (
     <ListRow>
-      <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{a.email}</span>
+      {head ? (
+        <span className={`${css.mMe} ${partsCss.mGrow}`}>
+          <Avatar id={a.email} name={a.name || a.email} size={46} picture={a.picture} />
+          <span><b>{a.name || a.email}</b><span className={listsCss.mRowNote}>{a.email} · Google</span></span>
+        </span>
+      ) : <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{a.email}</span>}
       <button type="button" className={css.mSignOut} disabled={out} aria-busy={out || undefined} onClick={() => {
         app.home();
         signOut(a.sub).then(() => { if (!only) app.toast(t("web-mobile.me.signedOut", { email: a.email })); }, (e: unknown) => app.toast(t("web-mobile.me.signOutFailed", { error: e instanceof Error ? e.message : String(e) })));
-      }}>{out && <Spinner size={13} />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
+      }}>{out && <Spinner inline />}{only ? t("web-mobile.me.signOut") : t("web-mobile.me.signOutOne")}</button>
     </ListRow>
   );
 }

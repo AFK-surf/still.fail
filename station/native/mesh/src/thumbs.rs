@@ -1,4 +1,4 @@
-//! Thumbnails and ThumbHashes of the images sent in chats, for the station in TypeScript (src/sessions/thumbs.ts): the
+//! Thumbnails and ThumbHashes of the images sent in chats, for the station in TypeScript (src/drive/thumbs.ts): the
 //! Rust station's mesh/app/src/thumbs.rs as it is (the same `image` and `thumbhash` crates, at the versions mesh/ is
 //! built with, so both stations make the same bytes), its decoding and encoding off Node's thread. Which files, when,
 //! and what is kept with a message: the TypeScript's.

@@ -8,20 +8,36 @@ import { CoreError } from "../error.ts";
 import { nOf } from "../entries.ts";
 import { t } from "../i18n.ts";
 import { topicKey, topicStation, type Topic } from "../protocol.ts";
+import { terms } from "../refs.ts";
 import type { Owner } from "../core/routing.ts";
 import type { Value } from "../store.ts";
 import { Priority } from "../sync/scheduler.ts";
 import { equal, get, isObject, parseJson } from "../util.ts";
+import { ofAddress } from "../workspace.ts";
 import { StationAddr } from "./addr.ts";
-import { PAGE, TRANSCRIPT_PAGE, type StationsSync } from "./sync.ts";
+import { PAGE, TRANSCRIPT_PAGE, entriesOf, transcriptOf } from "./channel-kinds.ts";
+import type { StationsSync } from "./sync.ts";
+import type { LinkNet } from "./wire.ts";
+import { screenCard, screensChanged, screensView } from "../screens.ts";
+import type { Link } from "./link.ts";
+import * as logins from "./machine-logins.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
+/// How many entries a message found is to have on either side of it in the window, for the window to be left as it is.
+const AROUND = 10;
 /// How often a station's connection is sampled while its card shows it, and how many samples are kept.
 export const NET_EVERY_MS = 2_000;
 const NET_KEPT = 30;
 
-const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job"]);
+/// Packets sent and lost between two samples, on the way in use: none counted across a change of way (or of
+/// connection), whose counts are another way's.
+export function packetsSince(was: LinkNet["packets"], now: LinkNet["packets"]): { sent: number; lost: number } {
+  if (was === null || now === null || was.path !== now.path || now.sent < was.sent || now.lost < was.lost) return { sent: 0, lost: 0 };
+  return { sent: now.sent - was.sent, lost: now.lost - was.lost };
+}
+
+const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "job", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
 
 const u64 = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
 
@@ -48,10 +64,13 @@ export class StationTopics implements Owner {
   readonly #oldPlaces = new Set<string>();
   /// Entries told as they were said (an event), by thread: they come in with a motion; the rest is caught up on.
   readonly told = new Map<string, Set<number>>();
-  /// Connection samplers, by topic.
+  /// What runs for a topic while it is started (a drive folder kept as it is), by topic.
   readonly #samplers = new Map<string, Fiber.Fiber<void, never>>();
-  /// The net topics' readings.
+  /// Each station's connection sampler, while its `net` or `way` is started (which of the two are).
+  readonly #sampling = new Map<string, { fiber: Fiber.Fiber<void, never>; by: Set<string> }>();
+  /// Each station's last reading (its `net`), and how it is reached by it (its `way`).
   readonly #nets = new Map<string, unknown>();
+  readonly #ways = new Map<string, unknown>();
 
   constructor(core: Inner, sync: StationsSync) {
     this.#core = core;
@@ -70,22 +89,29 @@ export class StationTopics implements Owner {
   }
 
   /// What the station topics shown want of each station's stream: host samples, the sessions shown, the logs shown.
-  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][] } {
+  #wanted(address: string): { host: boolean; live: string[]; logs: [string, number][]; logins: string[] } {
     const topics = this.#core.store.liveTopics().filter((t) => t.station === address);
     return {
       host: topics.some((t) => t.topic === "host"),
       live: topics.filter((t) => t.topic === "live").map((t) => t.key as string),
       logs: topics.filter((t) => t.topic === "jobLog").map((t) => [t.job as string, t.lines as number] as [string, number]),
+      logins: [...new Set(topics.filter((t) => t.topic === "machineLoginScreen").map((t) => t.id as string))],
     };
   }
 
   #changed(address: string, what: string, key?: string): void {
     const store = this.#core.store;
     const of = (pick: (t: Topic) => boolean) => store.invalidateAll((t) => t.station === address && pick(t));
-    if (what === "link") of((t) => t.topic === "link" || t.topic === "live");
+    if (what === "link") of((t) => t.topic === "link" || t.topic === "live" || t.topic === "screens" || t.topic === "screenCard");
     else if (what === "live") of((t) => t.topic === "live" && (key === undefined || t.key === key));
     else if (what === "host") of((t) => t.topic === "host");
+    else if (what === "screens") {
+      of((t) => t.topic === "screens" || t.topic === "screenCard");
+      screensChanged(this.#core, address);
+    }
     else if (what === "log" || what === "errors") of((t) => key === undefined || topicKey(t) === key);
+    else if (what === "logins") of((t) => t.topic === "machineLogins" || t.topic === "machineLogin");
+    else if (what === "loginScreen") of((t) => t.topic === "machineLoginScreen" && (key === undefined || t.id === key));
   }
 
   /// What a topic shown makes urgent in the sync.
@@ -111,21 +137,45 @@ export class StationTopics implements Owner {
     } catch {
       return;
     }
+    // What a UI has open (a chat's messages, its agent, a history): ahead of what is kept current around it, and in the
+    // room a station's lane keeps for the urgent (scheduler.ts URGENT_ROOM), so a slow read of a list never holds it up.
     const urgent = this.#urgent(topic);
-    if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.shown);
+    if (urgent) this.#core.scheduler.prioritize(topicKey(topic), urgent, Priority.focused);
     if (topic.topic === "thread") {
       const id = topic.thread as number;
       // Opened: the most recently used, kept while shown. Let go for room before, or a chat no list has (opened from an
       // old notification's link): the sync brings it.
       const evicted = this.#core.data.opened("entry", station, String(id), true);
-      if (evicted || this.summary(station, id) === null) this.#sync.syncEntries(station, id, Priority.shown);
+      const entries = entriesOf(station, id);
+      if (evicted || this.summary(station, id) === null) this.#sync.channels.bring(entries, Priority.shown);
+      // Its latest not on the device yet: that page alone, at once. What is before it comes with the station's history,
+      // in batches behind (sync.ts #history), or as it is scrolled back to.
+      else if (this.#sync.channels.latestMissing(entries)) this.#sync.channels.bring(entries, Priority.shown, "latest");
       this.#moveOldPlace(station, id);
     }
-    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.syncTranscript(station, topic.key as string, Priority.shown);
-    if (topic.topic === "net") this.#sampleNet(topic);
+    if (topic.topic === "live" && this.#core.data.opened("transcript", station, topic.key as string, true)) this.#sync.channels.bring(transcriptOf(station, topic.key as string), Priority.shown);
+    if (topic.topic === "net" || topic.topic === "way") this.#sampleNet(station, topic.topic);
+    // A folder of the drive: kept as it is on the station's disk while shown.
+    if (topic.topic === "drive") this.#samplers.set(topicKey(topic), this.#core.runner.fork(this.#sync.driveWatch(station, topic.root as string, topic.path as string)));
+    this.resume(topic);
     // A job's log: what it is now read once; from then on the station says how it grows, on its stream.
     if (topic.topic === "jobLog") this.#sync.readLog(station, topic.job as string, topic.lines as number);
-    if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);
+    if (["host", "live", "jobLog", "machineLoginScreen"].includes(topic.topic)) this.#sync.openEvents(station, false);
+  }
+
+  /// Shown, as it starts or again while kept after the last showed it: what is read only while shown is brought up to
+  /// date.
+  resume(topic: Topic): void {
+    const station = topicStation(topic);
+    if (station === null) return;
+    // What the agents spent, and the archive: read as a page shows them, not with each change while none does.
+    if (topic.topic === "stationUsage") this.#sync.usageShown(station);
+    if (topic.topic === "archivedRows") this.#sync.archivedShown(station);
+    // A folder of the drive: read again each time it is shown (what is held is shown meanwhile); while shown, the station
+    // says when something in it changes (sync.ts `driveWatch`).
+    if (topic.topic === "drive") this.#sync.driveShown(station, topic.root as string, topic.path as string);
+    // What a search finds there: asked once its words settle, while shown (sync.ts `searchShown`).
+    if (topic.topic === "stationSearch") this.#sync.searchShown(topic);
   }
 
   stop(topic: Topic): void {
@@ -134,6 +184,8 @@ export class StationTopics implements Owner {
     const key = topicKey(topic);
     if (topic.topic === "thread") this.#core.data.opened("entry", station, String(topic.thread), false);
     if (topic.topic === "live") this.#core.data.opened("transcript", station, topic.key as string, false);
+    if (topic.topic === "stationSearch") this.#sync.searchHidden(topic);
+    if (topic.topic === "net" || topic.topic === "way") this.#unsampleNet(station, topic.topic);
     this.#core.scheduler.prioritize(key, null);
     this.#windows.delete(key);
     this.#firsts.delete(key);
@@ -142,7 +194,7 @@ export class StationTopics implements Owner {
       this.#core.runner.interrupt(sampler as Fiber.Fiber<unknown, unknown>);
       this.#samplers.delete(key);
     }
-    if (["host", "live", "jobLog"].includes(topic.topic)) this.#sync.openEvents(station, false);
+    if (["host", "live", "jobLog", "machineLoginScreen"].includes(topic.topic)) this.#sync.openEvents(station, false);
   }
 
   compute(topic: Topic): Value | undefined {
@@ -161,14 +213,36 @@ export class StationTopics implements Owner {
         const v = link?.memory.get("host");
         return v === undefined ? undefined : { ok: v };
       }
+      case "screens":
+        return { ok: screensView(this.#core, station, this.#sync.screens(station), link?.state.state === "online") };
+      case "screenCard": {
+        if (typeof topic.screen !== "string" || topic.screen === "") return { err: CoreError.invalid(t("core-misc.params.missing", { field: "screen" })) };
+        return { ok: screenCard(this.#core, station, topic.screen, this.#sync.screens(station), link?.state.state === "online") };
+      }
       case "jobLog": {
         const v = link?.memory.get(topicKey(topic));
         return v === undefined ? undefined : { ok: v };
       }
+      case "stationSearch": {
+        if (error) return { err: error };
+        const v = link?.memory.get(topicKey(topic));
+        return v === undefined ? undefined : { ok: v };
+      }
       case "net":
-        return this.#nets.has(topicKey(topic)) ? { ok: this.#nets.get(topicKey(topic)) } : undefined;
+        return this.#nets.has(station) ? { ok: this.#nets.get(station) } : undefined;
+      case "way":
+        return this.#ways.has(station) ? { ok: this.#ways.get(station) } : undefined;
       case "live":
         return this.#live(topic);
+      case "machineLogins":
+      case "machineLogin":
+        return this.#logins(topic, link);
+      case "machineLoginScreen": {
+        const held = logins.held(link);
+        const screen = link?.memory.get(logins.screenKey(topic.id as string));
+        if (screen !== undefined) return { ok: screen };
+        return held.supported === null ? undefined : { ok: null };
+      }
       case "thread":
         if (error) return { err: error };
         return this.#thread(topic);
@@ -176,6 +250,39 @@ export class StationTopics implements Owner {
         // Held: what is held goes out (the store reads it); with nothing held, why not, once known.
         return error ? { err: error } : undefined;
     }
+  }
+
+  // ── logins ──
+
+  /// A station's logins (`machineLogins`), or one of them (`machineLogin`), as shown: none while never read.
+  #logins(topic: Topic, link: Link | undefined): Value | undefined {
+    const station = topic.station as string;
+    const held = logins.held(link);
+    const now = this.#core.host.nowMs();
+    const offset = this.#core.host.utcOffsetMin(now);
+    const name = this.#core.views.stationName(station);
+    const shown = (l: unknown) => {
+      const id = String(get(l, "id"));
+      return logins.loginShown(l, station, name, now, offset, this.#sync.relays.listening(station, id), this.#sync.relays.refused(station, id));
+    };
+    if (topic.topic === "machineLogin") {
+      const found = held.logins.find((l) => l.id === topic.id);
+      if (found !== undefined) return { ok: shown(found) };
+      return held.supported === null ? undefined : { ok: null };
+    }
+    const ws = station.slice(0, Math.max(0, station.indexOf("/")));
+    const role = get(this.#core.data.shared({ topic: "workspace", workspace: ws }), "role");
+    const active = (l: unknown) => (typeof get(l, "endedAt") === "number" ? 1 : 0);
+    const started = (l: unknown) => (typeof get(l, "startedAt") === "number" ? (get(l, "startedAt") as number) : 0);
+    return {
+      ok: {
+        supported: held.supported !== false,
+        loaded: held.supported !== null,
+        canLogin: role !== "viewer",
+        canRelay: this.#core.host.listen !== undefined,
+        logins: [...held.logins].sort((a, b) => active(a) - active(b) || started(b) - started(a)).map(shown),
+      },
+    };
   }
 
   // ── live ──
@@ -211,7 +318,7 @@ export class StationTopics implements Owner {
       phase: view?.phase ?? null,
     };
     if (view?.rate !== null && view?.rate !== undefined) value.rate = view.rate;
-    if (view) value.activity = this.#sync.activity(value);
+    if (view) value.activity = this.#sync.activity(value, this.#core.views.stationNames(ofAddress(station)));
     // Offline, what is held is all there is: it is loaded, and says why it ends there.
     if (!this.#sync.reachable(station) || !link || link.state.state !== "online") {
       if (!view?.loaded) {
@@ -231,7 +338,8 @@ export class StationTopics implements Owner {
       if (before === undefined || before === 0) return false;
       const data = this.#core.data;
       const from = Math.max(0, before - TRANSCRIPT_PAGE);
-      if (data.logCount("transcript", station, key, from, before - 1) !== before - from) yield* this.#sync.transcript(station, key, before);
+      // Read now unless held, while its station is reached (else what is held is all there is).
+      if (this.#sync.link(station) && this.#sync.reachable(station)) yield* this.#sync.channels.older(transcriptOf(station, key), before, { quiet: false });
       const items = data.logRange("transcript", station, key, from, before - 1);
       if (!items.has(before - 1)) return false;
       let first = before;
@@ -240,6 +348,12 @@ export class StationTopics implements Owner {
       this.#core.store.invalidate(topic);
       return first > 0;
     });
+  }
+
+  /// A history's entries `from` to `to` whole (`history.detail`), for what it shows of them in brief: read behind what is
+  /// shown in brief, and in their place, the topic showing them as they come.
+  historyDetail(station: string, key: string, from: number, to: number): Effect.Effect<void, CoreError> {
+    return this.#sync.detail(station, key, from, to);
   }
 
   // ── threads ──
@@ -328,7 +442,7 @@ export class StationTopics implements Owner {
           // Not all on the device yet: brought. What is held from where it opens on (the sync brings the latest first)
           // opens it now, what is before it coming in as it does when read back; only with that not held either does
           // it wait.
-          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.range(station, id, from, to, null))));
+          this.#core.runner.fork(Effect.ignore(this.#sync.ask(station, `range/${id}/${from}`, this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false }))));
           const held = data.logRange("entry", station, String(id), from, to);
           for (let n = at; n <= to; n++) if (!held.has(n)) return undefined;
           first = at;
@@ -390,7 +504,7 @@ export class StationTopics implements Owner {
       const [, window] = found;
       const before = window.first;
       if (before <= 1) return false;
-      yield* this.#sync.older(station, id, before, null);
+      yield* this.#sync.channels.older(entriesOf(station, id), before, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, before - PAGE), before - 1);
       let first = before;
       while (first > Math.max(1, before - PAGE) && held.has(first - 1)) first--;
@@ -414,7 +528,7 @@ export class StationTopics implements Owner {
       const after = window.last!;
       const latest = this.#latest(station, id);
       const to = Math.min(after + PAGE, latest);
-      yield* this.#sync.range(station, id, after + 1, to, null);
+      yield* this.#sync.channels.range(entriesOf(station, id), after + 1, to, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), after + 1, to);
       let last = after;
       while (last < to && held.has(last + 1)) last++;
@@ -433,7 +547,7 @@ export class StationTopics implements Owner {
       const found = this.#window(station, id);
       if (!found || found[1].last === null) return;
       const latest = this.#latest(station, id);
-      yield* this.#sync.range(station, id, Math.max(1, latest - PAGE + 1), latest, null);
+      yield* this.#sync.channels.range(entriesOf(station, id), Math.max(1, latest - PAGE + 1), latest, { quiet: false });
       const held = this.#core.data.logRange("entry", station, String(id), Math.max(1, latest - PAGE), latest);
       let first = latest;
       while (first > 1 && held.has(first - 1) && first > latest - PAGE + 1) first--;
@@ -446,6 +560,61 @@ export class StationTopics implements Owner {
     });
   }
 
+  /// The window of a chat about its entry `seq` (`chat.around`: a message found in it, to be shown): a page before it
+  /// and one after, read now where not held. The chat's list goes to it by itself (the UI's to do).
+  around(station: string, id: number, seq: number): Effect.Effect<void, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const found = this.#window(station, id);
+      const latest = this.#latest(station, id);
+      if (!found || seq < 1 || seq > latest) return;
+      const window = found[1];
+      // Already in it, and not at its edge: left as it is (what is around it is on the page).
+      const end = window.last ?? latest;
+      if (seq >= window.first && seq <= end && (seq - window.first >= AROUND || window.first === 1) && (end - seq >= AROUND || window.last === null)) return;
+      const from = Math.max(seq - PAGE, 1);
+      const to = Math.min(seq + PAGE - 1, latest);
+      yield* this.#sync.channels.range(entriesOf(station, id), from, to, { quiet: false });
+      const held = this.#core.data.logRange("entry", station, String(id), from, to);
+      if (!held.has(seq)) return;
+      let first = seq;
+      while (first > from && held.has(first - 1)) first--;
+      let last = seq;
+      while (last < to && held.has(last + 1)) last++;
+      window.first = first;
+      window.last = last >= latest ? null : last;
+      window.at = null;
+      window.atOffset = null;
+      window.caught = Math.max(window.caught, last);
+      this.#core.store.invalidate({ topic: "thread", station, thread: id });
+    });
+  }
+
+  /// The messages of a chat that have every word of `query` (`chat.find`), oldest first, each with how many times the
+  /// words are in its text; and whether all the chat was looked in (`whole`: all of it is on the device), with how
+  /// many of its entries were (`held` of `of`). `bring`: what is not on the device is read first, while its station
+  /// answers.
+  find(station: string, id: number, query: string, bring: boolean): Effect.Effect<{ words: string[]; hits: { seq: number; count: number }[]; held: number; of: number; whole: boolean }, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const channel = entriesOf(station, id);
+      const data = this.#core.data;
+      const whole = () => !data.evicted("entry", station, String(id)) && this.#sync.channels.next(channel) === null;
+      if (bring && this.#sync.link(station) && this.#sync.reachable(station)) {
+        for (let read = this.#sync.channels.next(channel); read !== null; read = this.#sync.channels.next(channel)) {
+          const came = yield* Effect.result(this.#sync.channels.read(channel, read, { quiet: true }));
+          if (came._tag === "Failure" || came.success === 0) break;
+        }
+      }
+      const words = terms(query);
+      const hits = data.findInThread(station, id, words).map(({ seq, text }) => {
+        const lower = text.toLowerCase();
+        let count = 0;
+        for (const w of words) for (let i = lower.indexOf(w); i >= 0; i = lower.indexOf(w, i + w.length)) count++;
+        return { seq, count };
+      });
+      return { words, hits, held: data.logSpan("entry", station, String(id))?.count ?? 0, of: this.#latest(station, id), whole: whole() };
+    });
+  }
+
   /// Whether a thread topic's window reaches its end.
   atEnd(station: string, id: number): boolean {
     return this.#window(station, id)?.[1].last === null;
@@ -453,40 +622,67 @@ export class StationTopics implements Owner {
 
   // ── a station's connection, sampled while shown ──
 
-  #sampleNet(topic: Topic): void {
-    const station = topic.station as string;
-    const key = topicKey(topic);
+  /// Samples the station's connection for its `net` (every figure) or its `way` (how it is reached), one sampler for
+  /// both: `way` goes out only when that changes, so what shows only how a station is reached (the stations' list) is
+  /// not put out again with each reading.
+  #sampleNet(station: string, by: string): void {
+    const running = this.#sampling.get(station);
+    if (running) {
+      running.by.add(by);
+      return;
+    }
     const core = this.#core;
+    const net: Topic = { topic: "net", station };
+    const way: Topic = { topic: "way", station };
     let last: [number, NonNullable<ReturnType<NonNullable<StationsSync["wire"]["net"]>>>] | null = null;
     let samples: unknown[] = [];
     const sample = Effect.sync(() => {
       const link = this.#sync.link(station);
-      const net = link ? (this.#sync.wire.net?.(link.addr) ?? null) : null;
+      const reading = link ? (this.#sync.wire.net?.(link.addr) ?? null) : null;
       const now = core.host.nowMs();
       let value: unknown = null;
-      if (net === null) {
+      if (reading === null) {
         // No connection now (coming back): how it went last is kept, the station's card saying it is reconnecting.
         last = null;
         samples = [];
-        value = this.#nets.get(key) ?? null;
+        value = this.#nets.get(station) ?? null;
       } else {
-        const since = last !== null && net.rxBytes >= last[1].rxBytes && net.txBytes >= last[1].txBytes ? last : null;
+        const since = last !== null && reading.rxBytes >= last[1].rxBytes && reading.txBytes >= last[1].txBytes ? last : null;
         if (since) {
           const secs = Math.max((now - since[0]) / 1000, 0.001);
-          samples.push({ at: Math.round(now), rttMs: net.rttMs, rxBps: Math.round((net.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((net.txBytes - since[1].txBytes) / secs), sent: Math.max(net.txPackets - since[1].txPackets, 0), lost: Math.max(net.lostPackets - since[1].lostPackets, 0) });
+          samples.push({ at: Math.round(now), rttMs: reading.rttMs, rxBps: Math.round((reading.rxBytes - since[1].rxBytes) / secs), txBps: Math.round((reading.txBytes - since[1].txBytes) / secs), ...packetsSince(since[1].packets, reading.packets) });
         } else samples = [];
         while (samples.length > NET_KEPT) samples.shift();
-        const measured = net.measured ? { measuring: net.measured.measuring, relays: net.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: net.measured.moved } : null;
-        value = { path: net.path, relay: net.relay, rttMs: net.rttMs, rxBytes: net.rxBytes, txBytes: net.txBytes, samples: [...samples], measured, todayRxBytes: net.today?.[0] ?? null, todayTxBytes: net.today?.[1] ?? null };
-        last = [now, net];
+        const measured = reading.measured ? { measuring: reading.measured.measuring, relays: reading.measured.relays.map(([relay, ms]) => ({ relay, rttMs: ms })), moved: reading.measured.moved } : null;
+        value = { path: reading.path, relay: reading.relay, rttMs: reading.rttMs, rxBytes: reading.rxBytes, txBytes: reading.txBytes, samples: [...samples], measured, todayRxBytes: reading.today?.[0] ?? null, todayTxBytes: reading.today?.[1] ?? null, lan: reading.lan ?? [] };
+        last = [now, reading];
       }
-      if (!this.#nets.has(key) || !equal(this.#nets.get(key), value)) {
-        this.#nets.set(key, value);
-        core.store.invalidate(topic);
+      if (!this.#nets.has(station) || !equal(this.#nets.get(station), value)) {
+        this.#nets.set(station, value);
+        core.store.invalidate(net);
+      }
+      // How it is reached: what changes seldom, apart from its figures.
+      const reached = isObject(value) ? { path: value.path ?? null, relay: value.relay ?? null } : null;
+      if (!this.#ways.has(station) || !equal(this.#ways.get(station), reached)) {
+        this.#ways.set(station, reached);
+        core.store.invalidate(way);
       }
     });
-    // A measurement shown on screen: sampled while it is shown, never kept.
-    this.#samplers.set(key, core.runner.fork(Effect.forever(Effect.andThen(sample, Effect.sleep(NET_EVERY_MS)))));
+    // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: a phone
+    // in a pocket samples nothing (it was most of what the core did there, 2026-10-19).
+    const inView = Effect.suspend(() => core.attention?.attend.untilShown() ?? Effect.void);
+    const fiber = core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, Effect.sleep(NET_EVERY_MS)))));
+    this.#sampling.set(station, { fiber, by: new Set([by]) });
+  }
+
+  /// The station's `net` or `way` stopped: its sampler goes once neither is started.
+  #unsampleNet(station: string, by: string): void {
+    const running = this.#sampling.get(station);
+    if (!running) return;
+    running.by.delete(by);
+    if (running.by.size > 0) return;
+    this.#core.runner.interrupt(running.fiber as Fiber.Fiber<unknown, unknown>);
+    this.#sampling.delete(station);
   }
 
   /// Told entries (an event) of a thread: they come in with a motion.

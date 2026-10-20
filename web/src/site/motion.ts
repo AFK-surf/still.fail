@@ -3,7 +3,7 @@
 // out of them; and the two domains lean after the pointer at their own depths. Nothing here when the system asks for
 // less motion; the page built to HTML shows everything where it rests.
 import { animate } from "motion";
-import { follower, reducedMotion } from "../motion.ts";
+import { follower, reducedMotion } from "@stillfail/ui/motion.ts";
 import * as css from "./site.css.ts";
 
 /** A spring with some give, for what lands or is let go of. */

@@ -28,6 +28,7 @@ const rows: Spec = { key: ["station", "id"] };
 const SPECS: Record<string, Spec> = {
   chats: { fields: { days: { key: ["daysAgo"], item: { fields: { items: rows } } } } },
   chatSearch: { fields: { items: rows, messages: { key: ["station", "thread", "seq"] } } },
+  search: { fields: { items: rows, messages: { key: ["station", "thread", "seq"] }, groups: { key: ["kind"], item: { fields: { items: items("key") } } } } },
   chat: { fields: { messages: { key: ["seq", "outgoing"] }, outbox: items("id") } },
   decisions: { fields: { items: { key: ["station", "session", "seq"] } } },
   archive: { fields: { days: { key: ["label"], item: { fields: { items: rows } } } } },
@@ -36,10 +37,21 @@ const SPECS: Record<string, Spec> = {
   threads: items("id"),
   sessions: items("key"),
   jobs: items("id"),
+  history: { fields: { items: items("key") } },
+  vaults: { fields: { vaults: items("id"), requests: items("id") } },
+  vaultItems: { fields: { items: items("id") } },
 };
 
 export function specOf(topic: Topic): Spec | null {
-  return SPECS[topic.topic] ?? null;
+  return SPECS[topic.topic] ?? MODULES.get(topic.topic) ?? null;
+}
+
+/// Modules' topics' keyed lists (module.ts), by topic name: each under its module's name, so none is the core's.
+const MODULES = new Map<string, Spec>();
+
+export function addSpec(topic: string, spec: Spec): void {
+  if (topic in SPECS) throw new Error(`the core's own topic: ${topic}`);
+  MODULES.set(topic, spec);
 }
 
 /// An item's key: the fields' values (a field missing is null).
@@ -61,13 +73,19 @@ function at(path: Segment[], old: unknown, next: unknown, spec: Spec | null, ops
   if (old === next) return;
   if (spec?.key && Array.isArray(old) && Array.isArray(next) && list(path, old, next, spec, ops)) return;
   if (isObject(old) && isObject(next)) {
-    for (const key of Object.keys(next).sort(compareKeys)) {
-      if (Object.prototype.hasOwnProperty.call(old, key)) at([...path, key], old[key], next[key], spec?.fields?.[key] ?? null, ops);
+    // Only the keys that may differ are put in order, as delta.ts diffAt.
+    const has = Object.prototype.hasOwnProperty;
+    const changed: string[] = [];
+    for (const key of Object.keys(next)) if (!has.call(old, key) || old[key] !== next[key]) changed.push(key);
+    if (changed.length > 1) changed.sort(compareKeys);
+    for (const key of changed) {
+      if (has.call(old, key)) at([...path, key], old[key], next[key], spec?.fields?.[key] ?? null, ops);
       else ops.push({ path: [...path, key], set: next[key] });
     }
-    for (const key of Object.keys(old).sort(compareKeys)) {
-      if (!Object.prototype.hasOwnProperty.call(next, key)) ops.push({ path: [...path, key], remove: true });
-    }
+    const gone: string[] = [];
+    for (const key of Object.keys(old)) if (!has.call(next, key)) gone.push(key);
+    if (gone.length > 1) gone.sort(compareKeys);
+    for (const key of gone) ops.push({ path: [...path, key], remove: true });
     return;
   }
   if (Array.isArray(old) && Array.isArray(next)) {

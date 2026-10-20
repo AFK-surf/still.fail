@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { Notifier } from "../src/cloud/notify.ts";
+import { Cloud } from "../src/cloud/state.ts";
 import { ops } from "../src/read/ops.ts";
 import { openStore } from "../src/read/store.ts";
 import { turnNotice, wentWrong } from "../src/read/notices.ts";
@@ -48,14 +49,19 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
       }
     },
   };
-  const cloud: any = { state: { origin: "http://x", station: "s" }, removed: () => false };
+  // In its home workspace "ws", and in "w2" it joined (docs/multi-workspace.md).
+  const cloud: any = Object.assign(Object.create(Cloud.prototype), {
+    state: { origin: "http://x", station: "s", workspace: "ws", workspace_name: "ws", name: "s", peers: [], revocations: [], joined: [{ workspace: "w2", workspace_name: "W2", name: "s", peers: [], revocations: [] }] },
+    lock: null,
+  });
   // Its gathering second, on a clock of the test's.
   const scope = Effect.runSync(Scope.make());
   t.after(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   const clock = Effect.runSync(Scope.provide(TestClock.make(), scope));
   const notifier = new Notifier(store, readers, cloud, null as any, { clock });
   const posted: any[][] = [];
-  notifier.post = async (n) => void posted.push(n);
+  const workspaces: (string | undefined)[] = [];
+  notifier.post = async (n, ws) => void (posted.push(n), workspaces.push(ws));
   store.insertSession({ key: "k", connect: "ember", runtime: "claude", profile: "cc", workspace: "/w", token: "t", createdAt: 1, lastActiveAt: 1, createdBy: "ada@x.com" } as any);
   const chat = store.openThread("ember", "EMBER", "1.1", null, "ada@x.com");
   store.joinThread(chat.id, "k", "ember");
@@ -72,12 +78,32 @@ test("a chat's people hear of its turns and of each other, once, gathered", asyn
     await Effect.runPromise(clock.adjust("1 second"));
     for (let j = 0; j < 5; j++) await settle();
   }
-  const all = posted.flat().map((n) => [n.kind, n.to.join(","), n.text]);
+  // Each about its message (what a notification opens the chat at).
+  const all = posted.flat().map((n) => [n.kind, n.to.join(","), n.text, n.seq]);
   assert.equal(posted.length, 1, "gathered into one post");
   assert.deepEqual(all.sort(), [
-    ["done", "ada@x.com,bob@x.com", "好了"],
-    ["failed", "ada@x.com,bob@x.com", "没能启动"],
-    ["message", "ada@x.com", "看一下"],
+    ["done", "ada@x.com,bob@x.com", "好了", 2],
+    ["failed", "ada@x.com,bob@x.com", "没能启动", 3],
+    ["message", "ada@x.com", "看一下", 1],
   ]);
+  // The home workspace's: posted as before, without naming it.
+  assert.deepEqual(workspaces, [undefined]);
+
+  // A chat of the joined workspace: its own post, naming it; one of a workspace the station is not in: none.
+  store.insertSession({ key: "j", connect: "ember", runtime: "claude", profile: "cc", workspace: "/j", token: "tj", createdAt: 1, lastActiveAt: 1, createdBy: "cy@x.com", ws: "w2" } as any);
+  const theirs = store.openThread("ember", "EMBER", "2.1", null, "cy@x.com");
+  store.joinThread(theirs.id, "j", "ember");
+  store.insertSession({ key: "g", connect: "ember", runtime: "claude", profile: "cc", workspace: "/g", token: "tg", createdAt: 1, lastActiveAt: 1, createdBy: "dee@x.com", ws: "gone" } as any);
+  const gone = store.openThread("ember", "EMBER", "3.1", null, "dee@x.com");
+  store.joinThread(gone.id, "g", "ember");
+  store.insertMessage(newMessage(theirs.id, "2.2", "person", "eve@x.com", "在吗"));
+  store.insertMessage(newMessage(gone.id, "3.2", "person", "fay@x.com", "在吗"));
+  for (let i = 0; i < 5 || asking > 0; i++) await settle();
+  for (let i = 0; i < 100 && posted.length === 1; i++) {
+    await Effect.runPromise(clock.adjust("1 second"));
+    for (let j = 0; j < 5; j++) await settle();
+  }
+  assert.deepEqual(workspaces, [undefined, "w2"]);
+  assert.deepEqual(posted[1]!.map((n) => [n.session, n.text]), [["j", "在吗"]]);
   notifier.close();
 });

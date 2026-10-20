@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 //! The launcher run as launchd runs it, with a stand-in for the station's Node side (fixtures/main.js) on a real Node
 //! ($STILLFAIL_NODE, else the build machine's). Each test has its own data directory; the launcher binds its ports
 //! where it finds them free (port 0), so no other program can take them first.
@@ -399,6 +401,33 @@ fn a_handover_whose_new_node_is_never_ready_fails_and_the_old_one_serves_on() {
     station.signal(libc::SIGUSR2);
     until("station.json of the new version", || station.station_json().filter(|s| s["version"] == "0.2.0"));
     assert_ne!(answered_by(mcp), old);
+    station.signal(libc::SIGTERM);
+    assert!(station.wait().success());
+}
+
+#[test]
+fn a_handover_whose_new_node_does_not_take_over_fails_and_a_node_is_started_again_after_the_rollback_wait() {
+    let mut station = Station::new("nottaken");
+    station.start("rollback=500");
+    let first = station.up();
+    let (mcp, _) = station.ports();
+    let old = answered_by(mcp);
+    // Ready, so the old one hands over and goes; then its agents' side does not start.
+    station.conf("version=0.2.0\ntake=failed\n");
+    station.signal(libc::SIGUSR2);
+    let why = until("handoff-failed", || station.file("handoff-failed"));
+    assert!(why.contains("did not take over") && why.contains("a test's"), "{why}");
+    let new = *station.started().last().unwrap();
+    assert!(station.said(old, "got handover") && station.said(new, "take failed"));
+    until("the new Node ended", || (!alive(new)).then_some(()));
+    assert_eq!(station.station_json().unwrap(), first, "not said handed over");
+    // The installer puts the release before back meanwhile; the Node started again is that one, and serves.
+    station.conf("version=0.1.0\n");
+    let again = until("station.json of a new start", || station.station_json().filter(|s| *s != first));
+    assert_eq!(again["version"], "0.1.0");
+    let node = *station.started().last().unwrap();
+    assert!(node != new && node != old);
+    assert_eq!(answered_by(mcp), node);
     station.signal(libc::SIGTERM);
     assert!(station.wait().success());
 }

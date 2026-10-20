@@ -3,40 +3,42 @@
 // highlighted, Markdown rendered, CSV as a table, HTML in a sandbox. Anything
 // else says it cannot be shown and offers the download.
 import { Dialog as RDialog } from "radix-ui";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, type ComponentType, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { BIG_FILE, useApi, type Api, type Attachment, type FileProgress } from "./api.ts";
-import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, Minus, Plus } from "./icons.tsx";
-import { placeFiles, Prose } from "./Prose.tsx";
-import { isFragment, vizDocument } from "./Viz.tsx";
+import { useTopic, useTopicSelect } from "./core/react.ts";
+import { useNarrow } from "./mobile/narrow.ts";
+import { useBarOnScroll, ViewerBar, ViewerDownload } from "@stillfail/ui/viewer/ViewerBar.tsx";
+import type { ChatView, DriveEntry, ImageNear } from "./core/shapes.ts";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Download, File as FileMark, Minus, Plus } from "@stillfail/ui/icons.tsx";
+import { Prose } from "./Prose.tsx";
+import { FrameHost, isFragment, vizDocument } from "./Viz.tsx";
 import { fileLink } from "./Prose.css.ts";
 import { useStation } from "./station.tsx";
-import { Segmented, Tip } from "./ui.tsx";
+import { Segmented, Tip, Progress, Spinner, WaitLine } from "./ui.tsx";
 import { VideoViewer } from "./VideoViewer.tsx";
 import { useImageMarks } from "./annotate/ImageMarks.tsx";
-import { useBackClose } from "./backClose.ts";
+import { useBackClose } from "@stillfail/ui/backClose.ts";
 import { thumbId, viewerFlight } from "./viewerFlight.ts";
 import { asPng, standIn } from "./wholeImages.ts";
-import { failure, useToast } from "./toast.tsx";
-import { animate, reducedMotion, type AnimationPlaybackControls } from "./motion.ts";
+import { failure, useToast } from "@stillfail/ui/toast.tsx";
+import { animate, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import * as css2 from "./FilePreview.css.ts";
-import * as waitingCss from "./styles/waiting.css.ts";
-import * as controlsCss from "./styles/controls.css.ts";
-import * as pagesCss from "./styles/pages.css.ts";
+import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
 import { t } from "./i18n.ts";
+import { fileSize } from "@stillfail/ui/fileSize.ts";
+import * as pageCss from "@stillfail/ui/styles/page.css.ts";
 
-export function fileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
+export { fileSize };
+import { REST_MS, TAP_REST_MS } from "@stillfail/ui/viewer/rest.ts";
+import { blobFile } from "@stillfail/ui/viewer/file.ts";
+import type { Reader as ReaderOf } from "@stillfail/ui/viewer/Reader.tsx";
+import type { Player as PlayerOf } from "@stillfail/ui/viewer/Player.tsx";
 
-/** The bars over a file (and a video's controls) fade out after the pointer has rested this long. */
-export const REST_MS = 2000;
-/** A finger has no hover to keep them: they stay longer after a tap. */
-export const TAP_REST_MS = 4000;
+/** The bars over a file (and a video's controls) fade out after the pointer has rested this long; after a tap, longer
+ * (a finger has no hover to keep them): @stillfail/ui's viewers' own. */
+export { REST_MS, TAP_REST_MS };
 
 // ── what a file is ─────────────────────────────────────────────────────
 
@@ -91,12 +93,67 @@ const storedName = (a: Attachment) => a.path.split("/").at(-1)!;
 const blobs = new Map<string, Promise<Blob>>();
 const KEEP_BLOBS = 100;
 
+/**
+ * Each file's blob once here, and the one URL every look at it draws from (`users` of it now): one drawn again (its
+ * row made anew as a chat is opened again or scrolled back to) is the same picture, already decoded, from its first
+ * frame, not a placeholder until a new URL loads. Kept as many as the blobs; one in use is not let go.
+ */
+const urls = new Map<string, { blob: Blob; url: string; users: number; unstand: (() => void) | null }>();
+
+/** The URL of `id`'s blob (made the first time), taken by one more user; `whole`: the image a thumbnail stands in for. */
+function takeUrl(id: string, blob: Blob, whole: (() => Promise<Blob>) | null): string {
+  let kept = urls.get(id);
+  if (kept?.blob !== blob) {
+    if (kept) letGo(id, kept);
+    const url = URL.createObjectURL(blob);
+    kept = { blob, url, users: 0, unstand: whole ? standIn(url, whole) : null };
+  }
+  urls.delete(id);
+  urls.set(id, kept);
+  kept.users++;
+  for (const [other, k] of urls) {
+    if (urls.size <= KEEP_BLOBS) break;
+    if (k.users === 0) letGo(other, k);
+  }
+  return kept.url;
+}
+
+function letGo(id: string, kept: { url: string; unstand: (() => void) | null }) {
+  urls.delete(id);
+  kept.unstand?.();
+  URL.revokeObjectURL(kept.url);
+}
+
+/** One user of `url` gone: it stays for the next look (as long as it is among the kept). */
+function dropUrl(id: string, url: string) {
+  const kept = urls.get(id);
+  if (kept?.url === url) kept.users--;
+}
+
+/** Whether `file` is here already, to be drawn at once (as its thumbnail, `thumb`). */
+export function fileHere(station: string, sessionKey: string, file: Attachment, thumb: boolean): boolean {
+  return urls.has(fileId(station, sessionKey, file, thumb));
+}
+
 // How far each whole file on its way has come, and who is watching it.
 const coming = new Map<string, { got: FileProgress | null; watchers: Set<(got: FileProgress) => void> }>();
 
 const fileId = (station: string, sessionKey: string, file: Attachment, thumb: boolean) => `${station}/${sessionKey}/${file.path}${thumb ? "#thumb" : ""}`;
 
-function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false): Promise<Blob> {
+/**
+ * Where the files a preview shows come from when they are not a chat's (a station's drive, drive/; a published chat,
+ * share/): `file` reads one whole (`thumb`: as a list would show it; the same is fine), saying how far it has come.
+ * `save`, if given, is how one is downloaded (else a link to its blob: the share page never has one opened as a page).
+ */
+export interface FileSourceOf {
+  file(sessionKey: string, file: Attachment, thumb: boolean, onProgress?: (got: FileProgress) => void): Promise<Blob>;
+  save?(file: Attachment, blob: Blob): void;
+  /** Its first `length` bytes, where the source can read a part (else the whole is fetched to tell what it is). */
+  head?(sessionKey: string, file: Attachment, length: number): Promise<Blob>;
+}
+export const FileSource = createContext<FileSourceOf | null>(null);
+
+function fetchFile(api: Api, station: string, sessionKey: string, file: Attachment, thumb = false, source: FileSourceOf | null = null): Promise<Blob> {
   const id = fileId(station, sessionKey, file, thumb);
   let blob = blobs.get(id);
   if (!blob) {
@@ -106,7 +163,8 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
     // A whole file may be big: how far it has come is kept for whoever shows it (thumbnails are small).
     const on = thumb ? null : { got: null as FileProgress | null, watchers: new Set<(got: FileProgress) => void>() };
     if (on) coming.set(id, on);
-    blob = api.file(sessionKey, storedName(file), thumb, on ? (got) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined, file.size)
+    const progress = on ? (got: FileProgress) => { on.got = got; on.watchers.forEach((w) => w(got)); } : undefined;
+    blob = (source ? source.file(sessionKey, file, thumb, progress) : api.file(sessionKey, storedName(file), thumb, progress, file.size))
       .then((b) => (!thumb && type !== "application/octet-stream" && b.type !== type ? b.slice(0, b.size, type) : b));
     if (on) void blob.finally(() => coming.delete(id)).catch(() => {});
     // A failure is not kept: the next look tries again.
@@ -119,41 +177,84 @@ function fetchFile(api: Api, station: string, sessionKey: string, file: Attachme
 
 type Loaded = { state: "loading"; got?: FileProgress | null } | { state: "error"; message: string } | { state: "ready"; blob: Blob; url: string };
 
-/** A file as a blob and its URL, fetched from the station once and kept while shown. */
-function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false): Loaded {
+/** A file as a blob and its URL, fetched from the station once and kept; `again`: asked again after it failed. */
+function useFile(sessionKey: string, file: Attachment, enabled: boolean, thumb = false, again = 0): Loaded {
   const api = useApi();
   const station = useStation();
-  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  const source = useContext(FileSource);
+  // Here already: ready from the first frame.
+  const [loaded, setLoaded] = useState<Loaded>(() => {
+    const kept = enabled ? urls.get(fileId(station.address, sessionKey, file, thumb)) : undefined;
+    return kept ? { state: "ready", blob: kept.blob, url: kept.url } : { state: "loading" };
+  });
   useEffect(() => {
     if (!enabled) return;
+    const id = fileId(station.address, sessionKey, file, thumb);
     let u: string | null = null;
-    let unstand: (() => void) | null = null;
     let current = true;
+    // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
+    const whole = thumb ? () => fetchFile(api, station.address, sessionKey, file, false, source) : null;
+    const take = (blob: Blob) => {
+      u = takeUrl(id, blob, whole);
+      const url = u;
+      setLoaded((l) => (l.state === "ready" && l.url === url ? l : { state: "ready", blob, url }));
+    };
+    const kept = urls.get(id);
+    if (kept) {
+      take(kept.blob);
+      return () => { if (u) dropUrl(id, u); };
+    }
     setLoaded({ state: "loading" });
-    const promise = fetchFile(api, station.address, sessionKey, file, thumb);
-    const on = coming.get(fileId(station.address, sessionKey, file, thumb));
+    const promise = fetchFile(api, station.address, sessionKey, file, thumb, source);
+    const on = coming.get(id);
     const watch = (got: FileProgress) => { if (current) setLoaded((l) => (l.state === "loading" ? { state: "loading", got } : l)); };
     if (on) {
       on.watchers.add(watch);
       if (on.got) watch(on.got);
     }
-    promise.then((blob) => {
-      if (!current) return;
-      u = URL.createObjectURL(blob);
-      // A thumbnail stands in for the image: copied in the desktop app, the image itself is (wholeImages.ts).
-      if (thumb) unstand = standIn(u, () => fetchFile(api, station.address, sessionKey, file));
-      setLoaded({ state: "ready", blob, url: u });
-    }, (error: unknown) => {
+    promise.then((blob) => { if (current) take(blob); }, (error: unknown) => {
       if (current) setLoaded({ state: "error", message: error instanceof Error ? error.message : String(error) });
     });
     return () => {
       current = false;
       on?.watchers.delete(watch);
-      unstand?.();
-      if (u) URL.revokeObjectURL(u);
+      if (u) dropUrl(id, u);
     };
-  }, [api, station.address, sessionKey, file.path, enabled, thumb]);
+  }, [api, station.address, sessionKey, file.path, enabled, thumb, source, again]);
   return loaded;
+}
+
+/** How many of a file's first bytes tell whether it is text. */
+const SNIFF_BYTES = 8192;
+
+/**
+ * What a file of no known kind is, by its first bytes only: text, or not (`binary`; also from a station from before
+ * parts, which cannot say); `whole` where its source reads no parts (the whole of it is looked at once it comes);
+ * null while it is asked.
+ */
+function useHead(sessionKey: string, file: Attachment, enabled: boolean): "text" | "binary" | "whole" | null {
+  const api = useApi();
+  const station = useStation();
+  const source = useContext(FileSource);
+  const [head, setHead] = useState<{ path: string; is: "text" | "binary" | "whole" } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const kept = blobs.get(fileId(station.address, sessionKey, file, false));
+    const read = kept ?? (source ? source.head?.(sessionKey, file, SNIFF_BYTES) : api.fileHead(sessionKey, storedName(file), SNIFF_BYTES));
+    if (!read) { setHead({ path: file.path, is: "whole" }); return; }
+    let live = true;
+    void read.then((blob) => looksLikeText(blob), () => false).then((text) => { if (live) setHead({ path: file.path, is: text ? "text" : "binary" }); });
+    return () => { live = false; };
+  }, [api, station.address, sessionKey, file.path, enabled, source]); // eslint-disable-line react-hooks/exhaustive-deps
+  return enabled && head?.path === file.path ? head.is : null;
+}
+
+/** A blob handed to the browser to download, as the bar's link would. */
+function saveBlob(url: string, name: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
 }
 
 /** A text file's content, fetched from the station once. */
@@ -241,24 +342,31 @@ export function useNear(ref: RefObject<HTMLElement | null>, watch: boolean): boo
 export interface Shown { sessionKey: string; file: Attachment }
 
 /**
- * The images of the chat a preview is opened from, in the order it shows them (read when needed, so the messages
- * need not be drawn again as it grows): an image opened steps to the one before or after (arrows, ← →, a swipe).
+ * What an image opened in a preview steps through (arrows, ← →, a swipe): the images of the chat it is opened from (as
+ * its `chat` topic names it), of which the core tells those beside the one open (`imageNear`), not the chat's every
+ * image; or a folder's (Drive.tsx), read when needed.
  */
-export const Gallery = createContext<(() => Shown[]) | null>(null);
+export type GalleryOf = { chat: { thread: number } | { session: string } } | { list: () => Shown[] };
+export const Gallery = createContext<GalleryOf | null>(null);
 
-/** A chat's images for its Gallery, as its messages show them: an agent's named in its text first, then those below it. */
-export function chatImages(messages: { authorKind?: string; text: string; attachments?: Attachment[] | undefined }[], owner: (file: Attachment) => string | null): Shown[] {
-  return messages.flatMap((m) => {
-    const { placed, rest } = m.authorKind === "person" ? { placed: new Map<string, Attachment>(), rest: m.attachments ?? [] } : placeFiles(m.text, m.attachments);
-    return [...placed.values(), ...rest].flatMap((file) => {
-      const sessionKey = isImage(file.name) ? owner(file) : null;
-      return sessionKey === null ? [] : [{ sessionKey, file }];
-    });
-  });
-}
+/**
+ * The reader and the player a text and a sound open in (@stillfail/ui viewer/Reader.tsx, viewer/Player.tsx), as the
+ * app has them: told here by the app as it starts (viewer/whole.ts, with what they ask of the page), not imported, so
+ * a page that tells none (a published chat's, share/) keeps its own plain viewers.
+ */
+type Whole = { Reader: typeof ReaderOf; Player: typeof PlayerOf };
+let whole: Whole | null = null;
+export const setWholeViewers = (viewers: Whole) => { whole = viewers; };
+
+/** Where closing a preview goes back to, by name (a drive's folder: mobile/Drive.tsx DrivePreview); a chat's file's is
+ * its chat's title, else 关闭. */
+export const PreviewBack = createContext<string | null>(null);
+
+/** A file already on this device (one in the draft, not sent yet): shown as it is, not fetched from the station. */
+export interface LocalFile { blob: Blob; url: string }
 
 /** A file over the whole window, a bar with its name and tools on top; Esc closes it. */
-export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment }) {
+export function FilePreview({ open, onClose, sessionKey, file, local }: { open: boolean; onClose(): void; sessionKey: string; file: Attachment; local?: LocalFile | undefined }) {
   // Closed by hand (its button, Esc, back), it goes back into the chat's thumbnail first (viewerFlight.ts).
   const closing = useRef<((done: () => void) => void) | null>(null);
   const close = () => { const c = closing.current; if (c) c(onClose); else onClose(); };
@@ -266,7 +374,7 @@ export function FilePreview({ open, onClose, sessionKey, file }: { open: boolean
   return (
     <RDialog.Root open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <RDialog.Portal>
-        {open && <Viewer onClose={close} closing={closing} sessionKey={sessionKey} file={file} />}
+        {open && <Viewer onClose={close} closing={closing} sessionKey={sessionKey} file={file} local={local} />}
       </RDialog.Portal>
     </RDialog.Root>
   );
@@ -284,15 +392,22 @@ export function FileLink({ sessionKey, file, children }: { sessionKey: string | 
   );
 }
 
-function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment }) {
+function Viewer({ onClose, closing, local, ...opened }: { onClose(): void; closing: RefObject<((done: () => void) => void) | null>; sessionKey: string; file: Attachment; local?: LocalFile | undefined }) {
   const [{ sessionKey, file }, setShown] = useState<Shown>(opened);
   const gallery = useContext(Gallery);
-  const images = isImage(file.name) ? gallery?.() ?? [] : [];
-  const at = images.findIndex((i) => i.file.path === file.path);
-  const before = at > 0 ? images[at - 1] : undefined;
-  const after = at >= 0 ? images[at + 1] : undefined;
   const api = useApi();
   const station = useStation();
+  // One in the draft is not among the chat's: it shows alone.
+  const steps = isImage(file.name) && !local ? gallery : null;
+  const chat = steps && "chat" in steps ? steps.chat : null;
+  const told = useTopic<ImageNear>(chat ? { topic: "imageNear", station: station.address, ...chat, path: file.path } : null).value;
+  // Each through the session that keeps it (the core says which, `owner`).
+  const shown = (f: Attachment | undefined): Shown | undefined => (f?.owner ? { sessionKey: f.owner, file: f } : undefined);
+  const list = steps && "list" in steps ? steps.list() : [];
+  const listAt = list.findIndex((i) => i.file.path === file.path);
+  const { before, after, at, count } = chat
+    ? { before: shown(told?.before), after: shown(told?.after), at: told?.index ?? -1, count: told?.count ?? 0 }
+    : { before: listAt > 0 ? list[listAt - 1] : undefined, after: listAt >= 0 ? list[listAt + 1] : undefined, at: listAt, count: list.length };
   // The one shown and those beside it move as one strip (GAP apart): a step slides it out to one side and the next in
   // from the other, a swipe carries it under the finger first. The one going is a copy: the real one is the next already.
   const slide = useRef<HTMLDivElement>(null);
@@ -325,7 +440,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   const back = useCallback((v = 0) => {
     const from = settle();
     const el = slide.current;
-    if (el && from && !reducedMotion()) run(from, 0, v, (x) => { el.style.transform = `translateX(${x}px)`; });
+    if (el && from) run(from, 0, v, (x) => { el.style.transform = `translateX(${x}px)`; });
     else if (el) el.style.transform = "";
   }, [settle, run]);
   /** To the one before (-1) or after (1), going on from where a swipe left it (at `v` px/ms). */
@@ -334,7 +449,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     if (!to) return back(v);
     const from = settle();
     const el = slide.current;
-    if (el && !reducedMotion()) {
+    if (el) {
       const copy = el.cloneNode(true) as HTMLElement;
       // Only drawn: what finds the picture and the bars finds the real ones.
       for (const n of copy.querySelectorAll("[data-peek]")) n.remove();
@@ -378,9 +493,10 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   // An image being marked: its bar stays, and it stays the one shown.
   const [marking, setMarking] = useState(false);
   // The neighbours are fetched ahead, so a step shows the next one at once.
+  const source = useContext(FileSource);
   useEffect(() => {
-    for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file).catch(() => {});
-  }, [api, station.address, before?.file.path, after?.file.path]);
+    for (const n of [before, after]) if (n) fetchFile(api, station.address, n.sessionKey, n.file, false, source).catch(() => {});
+  }, [api, station.address, before?.file.path, after?.file.path, source]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || marking) return;
@@ -402,12 +518,32 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     closing.current = (done) => flight.close(showing.current, done);
     return () => { closing.current = null; flight.stop(); };
   }, [flight, closing]);
-  const loaded = useFile(sessionKey, file, true);
   const known = kindOf(file.name);
+  // A file of no known kind is not fetched to tell what it is: its first bytes are. One that is not text is told of
+  // (its name, size and kind) and fetched only when asked to be downloaded.
+  const front = useHead(sessionKey, file, known.kind === null && !local);
+  const toldOf = !local && known.kind === null && front === "binary";
+  const [asked, setAsked] = useState<{ path: string; tries: number; save: boolean } | null>(null);
+  const askedNow = asked?.path === file.path ? asked : null;
+  const fetched = useFile(sessionKey, file, !local && (known.kind !== null || front === "text" || front === "whole" || askedNow !== null), false, askedNow?.tries ?? 0);
+  const loaded: Loaded = local ? { state: "ready", ...local } : fetched;
+  const save = (l: Extract<Loaded, { state: "ready" }>) => { if (source?.save) source.save(file, l.blob); else saveBlob(l.url, file.name); };
+  // Asked for and come: downloaded.
+  useEffect(() => {
+    if (!askedNow?.save || loaded.state !== "ready") return;
+    setAsked({ ...askedNow, save: false });
+    save(loaded);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const ask = () => {
+    if (loaded.state === "ready") save(loaded);
+    else setAsked({ path: file.path, tries: (askedNow?.tries ?? 0) + (loaded.state === "error" ? 1 : 0), save: true });
+  };
   // An image stands in as the chat showed it (its thumbnail, kept) while the whole of it comes.
   const thumb = useFileUrl(sessionKey, file, known.kind === "image" && loaded.state === "loading", true);
   const [sniffed, setSniffed] = useState<PreviewKind | "binary" | null>(null);
   const [controls, setControls] = useState<ReactNode>(null);
+  // A video's own facts (VideoViewer: its size in pixels, how long, its rate), after the file's in the bar.
+  const [videoMeta, setVideoMeta] = useState<string | null>(null);
   const blob = loaded.state === "ready" ? loaded.blob : null;
   useEffect(() => {
     if (known.kind || !blob) return;
@@ -415,7 +551,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     void looksLikeText(blob).then((text) => { if (live) setSniffed(text ? "text" : "binary"); });
     return () => { live = false; };
   }, [blob, known.kind]);
-  const kind = known.kind ?? sniffed;
+  const kind = known.kind ?? (front === "text" ? "text" : front === "binary" ? null : sniffed);
   // An image on its way: its thumbnail stands in, and how far the whole of it has come shows in the bar.
   const coming = known.kind === "image" && loaded.state === "loading" && thumb ? loaded.got : undefined;
   // The bar is as wide as what it holds, and once open it only grows: its buttons stay where they are to be clicked.
@@ -427,6 +563,13 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
     const w = el.getBoundingClientRect().width;
     if (w > widest.current) { widest.current = w; el.style.minWidth = `min(${w}px, 100% - 32px)`; }
   });
+  // With a mouse on a wide screen, the bar every file opened has (viewer/ViewerBar.tsx), along the top and always there:
+  // the way back named by where it goes. On a phone, the bar floats over the file.
+  const docked = !useNarrow();
+  const backTo = useContext(PreviewBack);
+  const chatTitle = useTopicSelect<ChatView, string | null>(docked && !backTo && sessionKey && !sessionKey.startsWith("drive:") ? { topic: "chat", station: station.address, session: sessionKey } : null, (s) => s.value?.title ?? null);
+  const backLabel = backTo ?? chatTitle ?? t("common.close");
+  const barOnScroll = useBarOnScroll();
   // The bar floats over the file, and fades when the pointer leaves it or rests a while (not over it, not while it comes).
   const [awake, setAwake] = useState(true);
   const resting = useRef(0);
@@ -439,29 +582,68 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
   }, []);
   useEffect(() => { wake(); return () => clearTimeout(resting.current); }, [wake, file.path]);
   let body: ReactNode;
-  if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
+  if (toldOf) {
+    const ext = file.name.includes(".") ? file.name.split(".").at(-1)!.toUpperCase() : "";
+    body = <div className={css2.fpNote}>
+      <FileMark size={44} className={css2.fpFactsMark} />
+      <div className={css2.fpFactsName}>{file.name}</div>
+      <div>{[fileSize(file.size), ext && ext.length <= 12 ? ext : ""].filter(Boolean).join(" · ")}</div>
+      <div>{t("web-main.preview.unsupported")}</div>
+      {askedNow && loaded.state === "loading"
+        ? (loaded.got ? <FileComing got={loaded.got} size={file.size} /> : <Spinner />)
+        : <>
+          {loaded.state === "error" && <div className={css2.fpFactsFailed}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>}
+          <button type="button" className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} onClick={ask}><Download size={16} />{t("web-main.preview.download")}</button>
+        </>}
+    </div>;
+  } else if (known.kind === "image" && (loaded.state === "ready" || (loaded.state === "loading" && thumb))) {
     body = <ImageViewer key={file.path} url={loaded.state === "ready" ? loaded.url : thumb!} file={file} setControls={setControls} swipe={swipe}
       waiting={loaded.state === "loading"} onMarking={setMarking} onClose={onClose} />;
-  } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready")) {
-    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <Progress got={loaded.got} size={file.size} /> : <><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</>}</div>;
+  } else if (loaded.state === "loading" || (kind === null && loaded.state === "ready") || (known.kind === null && !local && front === null)) {
+    body = <div className={css2.fpNote}>{loaded.state === "loading" && loaded.got ? <FileComing got={loaded.got} size={file.size} /> : <WaitLine text={t("common.opening")} />}</div>;
   }
   else if (loaded.state === "error") body = <div className={css2.fpNote}>{t("web-main.preview.loadFailed", { error: loaded.message })}</div>;
   else {
     const { url, blob } = loaded;
     switch (kind) {
       case "image": body = <ImageViewer key={file.path} url={url} file={file} setControls={setControls} swipe={swipe} onMarking={setMarking} onClose={onClose} />; break;
-      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} />; break;
+      case "video": body = <VideoViewer key={file.path} url={url} blob={blob} name={file.name} onMeta={setVideoMeta} />; break;
       case "audio": body = <div className={css2.fpAudio}><span className={css2.fpAudioName}>{file.name}</span><audio src={url} controls autoPlay /></div>; break;
       case "pdf": body = <PdfViewer blob={blob} />; break;
       case "markdown": case "csv": case "html": case "code": case "text":
-        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} />; break;
-      default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}<a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a></div>;
+        body = <TextViewer blob={blob} kind={kind} language={known.language} name={file.name} setControls={setControls} onMove={wake} onEscape={onClose} />; break;
+      default: body = <div className={css2.fpNote}>{t("web-main.preview.unsupported")}{source?.save
+        ? <button type="button" className={controlsCss.btn} onClick={() => source.save?.(file, blob)}><Download size={16} />{t("web-main.preview.download")}</button>
+        : <a className={controlsCss.btn} href={url} download={file.name}><Download size={16} />{t("web-main.preview.download")}</a>}</div>;
     }
   }
+  // A text and a sound open in the reader and the player, as a station's file does (viewer/Reader.tsx, viewer/Player.tsx),
+  // each with the same bar; here they read what this has fetched. A video stays in VideoViewer: a chat's video is looked
+  // at closely (frame by frame, zoomed, a pixel's colour, a frame saved), which the player made to watch a film has not.
+  const saveShown = useRef<(() => void) | undefined>(undefined);
+  saveShown.current = loaded.state === "ready" ? () => save(loaded) : undefined;
+  const shownFile = useMemo(() => blob && blobFile(blob, { name: file.name, size: file.size, type: blob.type, kind: kind ?? "" }, () => saveShown.current?.()), [blob, file.name, file.size, kind]);
+  const Reader = whole?.Reader, Player = whole?.Player;
+  const viewer = loaded.state !== "ready" || !shownFile ? null
+    : (kind === "markdown" || kind === "text") && Reader
+      ? <Reader key={file.path} file={shownFile} markdown={kind === "markdown"} backLabel={backLabel} onBack={onClose} />
+      : kind === "audio" && Player
+        ? <Player key={file.path} file={shownFile} backLabel={backLabel} onBack={onClose} />
+        : null;
+  if (viewer) {
+    return (
+      <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined}
+        onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
+        <RDialog.Title className={css2.fpHiddenTitle}>{file.name}</RDialog.Title>
+        {viewer}
+      </RDialog.Content>
+    );
+  }
   return (
-    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
+    <RDialog.Content ref={content} className={css2.fp} data-kind={kind ?? undefined} data-docked={docked || undefined} aria-describedby={undefined} data-awake={awake || coming !== undefined || marking || undefined}
       // A mouse wakes the bars by moving; a finger has no hover, and a tap on the file shows or hides them.
-      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); }}
+      onPointerMove={(e) => { if (e.pointerType === "mouse") wake(); barOnScroll.onPointerMove(e); }}
+      onScrollCapture={barOnScroll.onScroll}
       onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; clearTimeout(resting.current); if (!onBar.current) setAwake(false); }}
       onPointerDown={(e) => { tapAt.current = { x: e.clientX, y: e.clientY }; }}
       onPointerUp={(e) => {
@@ -471,24 +653,43 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
       }}
       // The page itself takes focus, not its first button: no ring on the close button for a tap or click.
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.focus(); }}>
-      <header ref={head} className={css2.fpHead} data-floats
+      {docked ? (
+        <ViewerBar back={{ label: backLabel, onClick: onClose }} title={file.path}
+          onHeld={(on) => { onBar.current = on; if (on) { clearTimeout(resting.current); setAwake(true); } else wake(); }}
+          // A picture: gone with the rest as the pointer rests (back as it moves); what is read down: as it is read down.
+          hidden={kind === "image" ? !(awake || coming !== undefined || marking) : barOnScroll.hidden}
+          name={<RDialog.Title asChild><span>{file.name}</span></RDialog.Title>}
+          meta={`${count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}${fileSize(file.size)}${kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}${kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}`}
+          tools={<>
+            {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
+            {controls}
+            {kind === "image" && !marking && loaded.state === "ready" && <CopyImage key={file.path} image={loaded.blob} />}
+            {/* One told of (not fetched to be shown): fetched as it is asked to be downloaded. */}
+            {!marking && (toldOf && loaded.state !== "ready" ? <ViewerDownload name={file.name} onSave={ask} />
+              : loaded.state === "ready" && <ViewerDownload name={file.name} href={source?.save ? undefined : loaded.url} onSave={source?.save ? () => source.save?.(file, loaded.blob) : undefined} />)}
+          </>} />
+      ) : <header ref={head} className={css2.fpHead} data-floats
         onPointerEnter={(e) => { if (e.pointerType !== "mouse") return; onBar.current = true; clearTimeout(resting.current); setAwake(true); }}
         onPointerLeave={(e) => { if (e.pointerType !== "mouse") return; onBar.current = false; wake(); }}>
         <div className={css2.fpTitle}>
           <Tip label={file.path}><RDialog.Title className={css2.fpName}>{file.name}</RDialog.Title></Tip>
-          <span className={css2.fpMeta}>{images.length > 1 && at >= 0 ? `${at + 1} / ${images.length} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}</span>
+          <span className={css2.fpMeta}>{count > 1 && at >= 0 ? `${at + 1} / ${count} · ` : ""}{fileSize(file.size)}{kind && KIND_LABEL[kind as PreviewKind] ? ` · ${kindLabel(kind as PreviewKind)}` : ""}{kind === "video" && videoMeta ? ` · ${videoMeta}` : ""}</span>
         </div>
-        {coming !== undefined && <Progress got={coming} size={file.size} inBar />}
+        {coming !== undefined && <FileComing got={coming} size={file.size} inBar />}
         {controls}
         {kind === "image" && !marking && (loaded.state === "ready"
           ? <CopyImage key={file.path} image={loaded.blob} />
-          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
-        {marking ? null : loaded.state === "ready"
-          ? <Tip label={t("web-main.preview.download")}><a className={pagesCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a></Tip>
+          : <span className={pageCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Copy size={18} /></span>)}
+        {marking ? null : toldOf && loaded.state !== "ready"
+          ? <Tip label={t("web-main.preview.download")}><button type="button" className={pageCss.iconBtn} onClick={ask} disabled={askedNow !== null && loaded.state === "loading"} aria-label={t("web-main.preview.download")}><Download size={18} /></button></Tip>
+          : loaded.state === "ready"
+          ? <Tip label={t("web-main.preview.download")}>{source?.save
+            ? <button type="button" className={pageCss.iconBtn} onClick={() => source.save?.(file, loaded.blob)} aria-label={t("web-main.preview.download")}><Download size={18} /></button>
+            : <a className={pageCss.iconBtn} href={loaded.url} download={file.name} aria-label={t("web-main.preview.download")}><Download size={18} /></a>}</Tip>
           // Its place kept until it comes.
-          : <span className={pagesCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
-        <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pagesCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
-      </header>
+          : <span className={pageCss.iconBtn} aria-hidden="true" style={{ visibility: "hidden" }}><Download size={18} /></span>}
+        <Tip label={t("web-main.preview.closeKey")}><RDialog.Close className={pageCss.iconBtn} aria-label={t("common.close")}><Close size={18} /></RDialog.Close></Tip>
+      </header>}
       <div className={css2.fpBody}>
         <div ref={slide} className={css2.fpSlide}>
           {body}
@@ -496,7 +697,7 @@ function Viewer({ onClose, closing, ...opened }: { onClose(): void; closing: Ref
           {known.kind === "image" && !marking && before && <Peek key={before.file.path} shown={before} side={-1} />}
           {known.kind === "image" && !marking && after && <Peek key={after.file.path} shown={after} side={1} />}
         </div>
-        {images.length > 1 && at >= 0 && !marking && <>
+        {count > 1 && at >= 0 && !marking && <>
           <Tip label={t("web-main.preview.prevKey")}><button type="button" className={css2.fpStep} data-side="before" aria-label={t("web-main.preview.prev")} disabled={!before} onClick={() => go(-1)}><ChevronLeft size={22} /></button></Tip>
           <Tip label={t("web-main.preview.nextKey")}><button type="button" className={css2.fpStep} data-side="after" aria-label={t("web-main.preview.next")} disabled={!after} onClick={() => go(1)}><ChevronRight size={22} /></button></Tip>
         </>}
@@ -515,7 +716,7 @@ function CopyImage({ image }: { image: Blob }) {
     void navigator.clipboard.write([new ClipboardItem({ "image/png": asPng(image) })])
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   };
-  return <Tip label={label}><button type="button" className={pagesCss.iconBtn} aria-label={label} onClick={copy}>{copied ? <Check size={18} /> : <Copy size={18} />}</button></Tip>;
+  return <Tip label={label}><button type="button" className={pageCss.iconBtn} aria-label={label} onClick={copy}>{copied ? <Check size={18} /> : <Copy size={18} />}</button></Tip>;
 }
 
 /** Text, when its first bytes decode as UTF-8 with no NULs. */
@@ -567,8 +768,20 @@ function ImageViewer({ url, file, setControls, swipe, waiting = false, onMarking
   useEffect(() => () => onMarking(false), [onMarking]);
   useEffect(() => { setControls(marks.on ? marks.bar : <>{zoomControls}{marks.bar}</>); }, [marks.on, marks.bar, zoomControls, setControls]);
   useEffect(() => () => setControls(null), [setControls]);
+  // A click with the mouse around the image (not a drag, not while marking) closes the preview; a finger's tap there
+  // shows or hides the bars instead (Viewer).
+  const pressed = useRef<{ x: number; y: number } | null>(null);
+  const onPointerDown = (e: React.PointerEvent) => {
+    pressed.current = e.pointerType === "mouse" && e.button === 0 && e.target === e.currentTarget ? { x: e.clientX, y: e.clientY } : null;
+    zoom.stageProps.onPointerDown(e);
+  };
+  const onClick = (e: React.MouseEvent) => {
+    const p = pressed.current;
+    pressed.current = null;
+    if (p && !marks.on && Math.hypot(e.clientX - p.x, e.clientY - p.y) < 4) onClose();
+  };
   return (
-    <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps}>
+    <div ref={zoom.stage} className={css2.fpStage} {...zoom.stageProps} data-closes={marks.on ? undefined : ""} onPointerDown={onPointerDown} onClick={onClick}>
       <img className={css2.fpImage} src={url} alt={file.name} draggable={false} data-waiting={waiting || undefined} data-viewer-picture=""
         // A thumbnail's own size is not the image's: it only stands in the image's place.
         onLoad={(e) => { const img = e.currentTarget; if (img.naturalWidth && img.naturalHeight && (!waiting || !natural)) setNatural({ w: img.naturalWidth, h: img.naturalHeight }); }}
@@ -597,13 +810,13 @@ function Peek({ shown: { sessionKey, file }, side }: { shown: Shown; side: -1 | 
 const noControls = () => {};
 
 /** How much of a file has come, out of its size (the station's, else the one sent with it); a bar that sweeps when neither is known. */
-function Progress({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
+function FileComing({ got, size, inBar = false }: { got: FileProgress | null | undefined; size: number; inBar?: boolean }) {
   const total = got?.total ?? (size > 0 ? size : null);
   const part = got && total ? Math.min(1, got.loaded / total) : null;
   return (
-    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress} role="progressbar" aria-label={t("web-main.preview.loadingLabel")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={part === null ? undefined : Math.round(part * 100)}>
-      <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("web-main.preview.loading")}</span>
-      <span className={css2.fpProgressTrack}><span className={css2.fpProgressBar} style={part === null ? undefined : { width: `${part * 100}%` }} data-unknown={part === null || undefined} /></span>
+    <div className={inBar ? css2.fpHeadProgress : css2.fpProgress}>
+      <span className={css2.fpProgressText}>{got && total ? <>{t("web-main.preview.loadingLabel")} <b>{fileSize(got.loaded)}</b> / {fileSize(total)}</> : t("common.opening")}</span>
+      <Progress part={part} label={t("web-main.preview.loadingLabel")} className={css2.fpProgressTrack} />
     </div>
   );
 }
@@ -805,9 +1018,9 @@ export function useZoom(natural: { w: number; h: number } | null, setControls: (
   useEffect(() => {
     setControls(
       <span className={css2.fpZoom}>
-        <Tip label={t("web-main.preview.zoomOutKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomOut")} disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.zoomOutKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.preview.zoomOut")} disabled={scale <= minScale + 1e-6} onClick={() => zoomTo(scale / 1.25)}><Minus size={18} /></button></Tip>
         <Tip label={t("web-main.preview.fitKey")}><button type="button" className={`${css2.fpToolText} ${css2.fpPercent}`} onClick={reset}>{Math.round(scale * 100)}%</button></Tip>
-        <Tip label={t("web-main.preview.zoomInKey")}><button type="button" className={pagesCss.iconBtn} aria-label={t("web-main.preview.zoomIn")} disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
+        <Tip label={t("web-main.preview.zoomInKey")}><button type="button" className={pageCss.iconBtn} aria-label={t("web-main.preview.zoomIn")} disabled={scale >= MAX_SCALE - 1e-6} onClick={() => zoomTo(scale * 1.25)}><Plus size={18} /></button></Tip>
         <Tip label={t("web-main.preview.actualKey")}><button type="button" className={css2.fpToolText} onClick={() => zoomTo(1)}>1:1</button></Tip>
       </span>,
     );
@@ -859,7 +1072,7 @@ function PdfViewer({ blob }: { blob: Blob }) {
   return (
     <div ref={page} className={`${css2.fpPage} ${css2.fpPdf}`}>
       {error ? <div className={css2.fpPlain}>{t("web-main.preview.pdfFailed", { error })}</div>
-        : !doc || width <= 0 ? <div className={css2.fpPlain}><span className={waitingCss.spinner} aria-hidden="true" /></div>
+        : !doc || width <= 0 ? <div className={css2.fpPlain}><Spinner /></div>
         : Array.from({ length: doc.numPages }, (_, i) => <PdfPage key={i} doc={doc} number={i + 1} width={width} />)}
     </div>
   );
@@ -907,23 +1120,31 @@ function PdfPage({ doc, number, width }: { doc: PDFDocumentProxy; number: number
 
 // ── text ───────────────────────────────────────────────────────────────
 
-/** Put at the end of a previewed HTML file: its frame tells the preview when a mouse moves over it (at most a few times a second). */
-const TELL_MOVES = `<script>{let t=0;addEventListener("pointermove",(e)=>{if(e.pointerType!=="mouse"||e.timeStamp-t<200)return;t=e.timeStamp;parent.postMessage({stillfailPreview:"move"},"*")},{capture:true,passive:true})}</script>`;
+/**
+ * Put at the end of a previewed HTML file: its frame tells the preview when a mouse moves over it (at most a few times a
+ * second), and Esc pressed in it that the page itself did nothing with (the keys go to the frame once it is clicked in,
+ * not to the preview, which would not close).
+ */
+const TELL = `<script>{let t=0;addEventListener("pointermove",(e)=>{if(e.pointerType!=="mouse"||e.timeStamp-t<200)return;t=e.timeStamp;parent.postMessage({stillfailPreview:"move"},"*")},{capture:true,passive:true});addEventListener("keydown",(e)=>{if(e.key==="Escape"&&!e.defaultPrevented&&!e.isComposing)parent.postMessage({stillfailPreview:"escape"},"*")})}</script>`;
 
 /** Above this a file shows as plain text, unhighlighted; above the next, only its start. */
 const HIGHLIGHT_LIMIT = 256 * 1024;
 const SHOW_LIMIT = 2 * 1024 * 1024;
 const TABLE_ROWS = 2000;
 
-function TextViewer({ blob, kind, language, name, setControls, onMove }: {
-  blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void;
+function TextViewer({ blob, kind, language, name, setControls, onMove, onEscape }: {
+  blob: Blob; kind: PreviewKind; language: string | undefined; name: string; setControls(c: ReactNode): void; onMove(): void; onEscape(): void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const moved = useRef(onMove);
-  moved.current = onMove;
+  const host = useContext(FrameHost);
+  const told = useRef({ move: onMove, escape: onEscape });
+  told.current = { move: onMove, escape: onEscape };
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      if (e.source === frame.current?.contentWindow && (e.data as { stillfailPreview?: string } | null)?.stillfailPreview === "move") moved.current();
+      if (e.source !== frame.current?.contentWindow) return;
+      const what = (e.data as { stillfailPreview?: string } | null)?.stillfailPreview;
+      if (what === "move") told.current.move();
+      else if (what === "escape") told.current.escape();
     };
     addEventListener("message", onMessage);
     return () => removeEventListener("message", onMessage);
@@ -945,13 +1166,16 @@ function TextViewer({ blob, kind, language, name, setControls, onMove }: {
     );
     return () => setControls(null);
   }, [rendered, source, setControls]);
-  if (text === null) return <div className={css2.fpNote}><span className={waitingCss.spinner} aria-hidden="true" />{t("web-main.preview.loading")}</div>;
+  if (text === null) return <div className={css2.fpNote}><WaitLine text={t("common.opening")} /></div>;
   let content: ReactNode;
   if (kind === "html" && !source) {
     // Its scripts run, but in an origin of its own: nothing of still.fail's is reachable from it.
     // A fragment an agent wrote to be drawn in a message (Viz.tsx) is shown the same way, in still.fail's stylesheet.
     // A mouse moving over it is the frame's, not the preview's: the frame tells, so the bars wake as they do over an image.
-    content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" srcDoc={(isFragment(text) ? vizDocument(text) : text) + TELL_MOVES} title={name} />;
+    // On a page whose CSP its frames would inherit, from the page's frame host, sandboxed the same (Viz.tsx FrameHost).
+    const doc = (isFragment(text) ? vizDocument(text) : text) + TELL;
+    const from = host === null ? { srcDoc: doc } : { src: host, onLoad: () => frame.current?.contentWindow?.postMessage({ stillfailVizDocument: doc }, "*") };
+    content = <iframe ref={frame} className={`${css2.fpFrame} fp-html`} sandbox="allow-scripts" {...from} title={name} />;
     return <div className={`${css2.fpPage} ${css2.fpPageFrame}`}>{content}</div>;
   }
   if (kind === "markdown" && !source) content = <div className={`${conversationCss.markdown} ${css2.fpMarkdown}`}><Prose>{text}</Prose></div>;

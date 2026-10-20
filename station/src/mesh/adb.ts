@@ -19,6 +19,7 @@ import { langOfCore } from "../api/request.ts";
 import { wall } from "../ops/fibers.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
+import { platform } from "../platform/index.ts";
 import type { Viewer } from "./credential.ts";
 import type { Connection, Stream } from "./native.ts";
 import { Reader, writeLine } from "./serve.ts";
@@ -74,6 +75,10 @@ export class Share {
   version = 0;
   /// Why the phone last turned a tunnel down (its adbd not there, say): what adb not getting in is put down to.
   refused: string | null = null;
+  private refusalWaiters: (() => void)[] = [];
+  /// The `adb connect` under way, if one is; `again`: an offer came meanwhile, so it is done once more after.
+  connecting: Promise<void> | null = null;
+  again = false;
   readonly server: net.Server;
   private waiters: (() => void)[] = [];
 
@@ -98,6 +103,18 @@ export class Share {
     const waiters = this.waiters;
     this.waiters = [];
     for (const f of waiters) f();
+  }
+
+  /// The phone turned a tunnel down, saying why.
+  refuse(why: string) {
+    this.refused = why;
+    for (const f of this.refusalWaiters.splice(0)) f();
+  }
+
+  /// Resolves once a tunnel is turned down (at once if one was since `refused` was cleared).
+  refusal(): Promise<void> {
+    if (this.refused !== null) return Promise.resolve();
+    return new Promise((resolve) => this.refusalWaiters.push(resolve));
   }
 
   /// Resolves at the next `set`.
@@ -218,6 +235,10 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
   };
   const number = nextOffer++;
   let share = shares.byKey.get(device);
+  // What adb is asked again on: only what changes how it reaches the phone. Offers come again and again as the phone's
+  // link moves (relay, LAN, main endpoint: twenty in five minutes, 2026-10-17), and adb, once it has the phone, reaches
+  // it again through the new link by itself; connecting anew each time held the page at 正在连接 adb for up to 100 s.
+  const before = share?.info.adbd;
   if (share) {
     share.info = info;
     share.conn = conn;
@@ -243,7 +264,8 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
     }
   }
   await writeLine(stream, { status: 200, headers: { "content-type": "application/x-ndjson" } });
-  void connect(shares, share).catch(() => {});
+  log.info("adb", "adb offer", { offer: number, ...about(conn), main: conn.remoteId() === ask.phone, adbd: info.adbd, pair: info.pair });
+  if (before === undefined || before !== info.adbd || share.state.adb === "failed" || share.state.adb === "missing") void connect(shares, share).catch(() => {});
 
   let unlisten = () => {};
   const removed = new Promise<"removed">((resolve) => {
@@ -297,11 +319,23 @@ async function offer(shares: Shares, conn: Connection, viewer: Viewer, device: s
 /// Each TCP connection to the phone's port, a tunnel on its offer's connection.
 function listen(share: Share) {
   share.server.on("connection", (socket) => {
-    tunnel(share.conn, "connect", socket).catch((error) => {
-      log.info("adb", "adb tunnel ended", { error: (error as Error).message });
-      share.refused = (error as Error).message;
+    const conn = share.conn;
+    tunnel(conn, "connect", socket).catch((error) => {
+      log.info("adb", "adb tunnel ended", { error: (error as Error).message, offer: share.offer, ...about(conn) });
+      share.refuse((error as Error).message);
     });
   });
+}
+
+/// Which of the phone's connections it is and the ways it has, for the log: a tunnel goes on its offer's.
+/// Never fails: what is not known is left out.
+function about(conn: Connection): Record<string, string> {
+  try {
+    const ways = (conn.paths?.() ?? []).map((p) => `${p.selected ? "*" : ""}${p.relay ?? p.ip ?? "?"} ${Math.round(p.rttMs)}ms ${p.txPackets}/${p.lostPackets}`);
+    return { device: conn.remoteId().slice(0, 12), via: conn.via?.() ?? "none", ways: ways.join("; ") };
+  } catch {
+    return {};
+  }
 }
 
 /// A port of the phone's own: its usual one if free, else any.
@@ -390,8 +424,31 @@ function toSocket(socket: net.Socket, bytes: Buffer): Promise<void> {
   });
 }
 
+/// `adb connect` to the phone, one at a time: offers come a few at once as the phone finds its ports (three within 60 ms,
+/// 2026-10-17), and each connect begins by disconnecting, so side by side they undid each other. One that comes while
+/// another is under way has it done once more after, with what the phone said last.
+function connect(shares: Shares, share: Share): Promise<void> {
+  if (share.connecting !== null) {
+    share.again = true;
+    return share.connecting;
+  }
+  const started = wall.now();
+  share.connecting = (async () => {
+    try {
+      do {
+        share.again = false;
+        await connectOnce(shares, share);
+      } while (share.again && !shares.isStopping);
+    } finally {
+      share.connecting = null;
+      log.info("adb", "adb holds the phone", { adb: share.state.adb, ms: wall.now() - started });
+    }
+  })();
+  return share.connecting;
+}
+
 /// `adb connect` to the phone (unless adb holds it already), and how adb holds it then.
-async function connect(shares: Shares, share: Share) {
+async function connectOnce(shares: Shares, share: Share) {
   const speaks = share.lang;
   const adb = shares.adb();
   if (adb === null) return share.set("missing", tr(speaks, "station.adb.install"));
@@ -414,14 +471,15 @@ async function connect(shares: Shares, share: Share) {
     return share.set("failed", (error as Error).message);
   }
   // adb says `connected to …` for a TLS port it is not paired with too; only its state says whether it got in: looked
-  // at every 500 ms until it is `device` or SETTLE is over.
+  // at every 500 ms until it is `device`, the phone turned its tunnel down (nothing listens there: no use waiting), or
+  // SETTLE is over.
   const now = await shares.run(
     Effect.gen(function* () {
       const started = yield* Clock.currentTimeMillis;
       for (;;) {
         const now = yield* Effect.promise(state);
-        if (now === "device" || (yield* Clock.currentTimeMillis) - started >= SETTLE) return now;
-        yield* Effect.sleep(500);
+        if (now === "device" || share.refused !== null || (yield* Clock.currentTimeMillis) - started >= SETTLE) return now;
+        yield* Effect.raceFirst(Effect.sleep(500), Effect.promise(() => share.refusal()));
       }
     }),
   );
@@ -429,8 +487,11 @@ async function connect(shares: Shares, share: Share) {
   share.refused = null;
   if (now === "device") share.set("connected");
   else if (now === "unauthorized") share.set("unauthorized", tr(speaks, "station.adb.allowPrompt"));
-  else if (refused !== null) share.set("failed", refused);
-  else share.set("unpaired", tr(speaks, "station.adb.unpaired"));
+  else if (refused !== null) {
+    // adb would go on dialling it a few times a second (260 refusals in 12 s): let go until the next offer.
+    await run(adb, ["disconnect", serial], shares.limits.quick).catch(() => {});
+    share.set("failed", refused);
+  } else share.set("unpaired", tr(speaks, "station.adb.unpaired"));
 }
 
 /// `adb pair` through the phone's pairing port (open while its 使用配对码配对设备 dialog is), then connected anew.
@@ -449,7 +510,7 @@ async function pair(shares: Shares, share: Share, typed: string, lang: Lang): Pr
   server.once("connection", (socket) => {
     timer();
     server.close();
-    tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message }));
+    tunnel(conn, "pair", socket, done.signal).catch((error) => log.info("adb", "adb pairing tunnel ended", { error: (error as Error).message, ...about(conn) }));
   });
   let said: string;
   try {
@@ -471,8 +532,10 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
   const adb = shares.adb();
   if (adb === null) throw new Error(tr(lang, "station.adb.noAdb"));
   const said = await run(adb, ["-s", share.serial(), "shell", "pm", "grant", pkg, "android.permission.WRITE_SECURE_SETTINGS"], shares.limits.long);
-  // Quiet is granted; a refusal says why (MIUI and ColorOS want 「USB 调试（安全设置）」 on).
-  if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said }));
+  // Quiet is granted. MIUI and ColorOS refuse the shell's grant (a SecurityException, a page of stack) until a switch in
+  // Developer options is on: said as which one; anything else, by its first line.
+  if (/GRANT_RUNTIME_PERMISSIONS/.test(said)) throw new Error(tr(lang, "station.adb.grantRefused"));
+  if (said !== "") throw new Error(tr(lang, "station.adb.grantFailed", { said: said.split("\n")[0]!.trim() }));
   return tr(lang, "station.adb.granted");
 }
 
@@ -481,10 +544,16 @@ async function grant(shares: Shares, share: Share, lang: Lang): Promise<string> 
 /// short `PATH`).
 export function adbPath(): string | null {
   const env = process.env;
+  // adb.exe on Windows, and the SDK where Android Studio puts it there (%LOCALAPPDATA%\Android\Sdk).
+  const adb = platform.exe("adb");
+  // On PATH as a shell finds it (on Windows, with PATHEXT's extensions).
+  const onPath = platform.findCommand("adb", env)?.onPath;
   const candidates = [
-    ...(env.PATH ?? "").split(delimiter).filter(Boolean).map((d) => join(d, "adb")),
-    ...[env.ANDROID_HOME, env.ANDROID_SDK_ROOT].filter((d): d is string => !!d).map((d) => join(d, "platform-tools/adb")),
+    ...(onPath ? [onPath] : []),
+    ...(env.PATH ?? "").split(delimiter).filter(Boolean).map((d) => join(d, adb)),
+    ...[env.ANDROID_HOME, env.ANDROID_SDK_ROOT].filter((d): d is string => !!d).map((d) => join(d, "platform-tools", adb)),
     ...(env.HOME ? [join(env.HOME, "Library/Android/sdk/platform-tools/adb"), join(env.HOME, "Android/Sdk/platform-tools/adb")] : []),
+    ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, "Android", "Sdk", "platform-tools", adb)] : []),
     "/opt/homebrew/bin/adb",
     "/usr/local/bin/adb",
     "/usr/bin/adb",
@@ -496,7 +565,9 @@ export function adbPath(): string | null {
 /// started or did not answer in time.
 export function run(adb: string, args: string[], timeout: number | null): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(adb, args, { stdio: ["ignore", "pipe", "pipe"] });
+    // A .cmd (a shim) runs through its script or cmd: Node starts none by itself.
+    const r = platform.runnable(adb, args, process.env);
+    const child = spawn(r.file, r.args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, windowsVerbatimArguments: r.windowsVerbatimArguments });
     const out: Buffer[] = [];
     const err: Buffer[] = [];
     child.stdout.on("data", (b) => out.push(b));

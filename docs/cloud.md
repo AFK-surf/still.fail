@@ -22,10 +22,10 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 | 对象 | 是什么 | 标识 |
 |---|---|---|
-| 账号 | 一个 Google 身份 | Google `sub` |
+| 账号 | 一个邮箱：用 Google 登录，或用发到邮箱的验证码登录（同一个邮箱两种方式进的是同一个账号） | Google `sub`；只用邮箱注册的是 `em-…` |
 | 客户端 | 一个浏览器或 App 安装，持有一把 iroh 设备密钥；可以同时登录多个账号 | 设备公钥 |
 | workspace | 一组人和一组 station；账号在其中的角色是 owner / admin / member | ULID |
-| station | 一台 still.fail 节点，属于一个 workspace | station 的 iroh 公钥 |
+| station | 一台 still.fail 节点，属于一个或几个 workspace（第一个加入的是它的**主 workspace**） | station 的 iroh 公钥 |
 
 - 一个账号可以创建多个 workspace（成为 owner），也可以接受邀请加入别人的。
 - owner / admin 可以邀请成员、登记 station、移除成员和 station；owner 还可以改角色、删除 workspace。workspace 至少保留一个 owner。
@@ -35,15 +35,37 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 ## 登录
 
-Google OAuth（`openid email profile`），access token 5 分钟，refresh token 轮换、闲置 7 天 / 最长 30 天过期，重放旧 refresh token 会吊销整个会话。
+两种方式：Google OAuth（`openid email profile`），或邮箱验证码。之后都一样：access token 5 分钟，refresh token 轮换、闲置 7 天 / 最长 30 天过期，重放旧 refresh token 会吊销整个会话。
 
 网页版在同一域名下走标准的授权码 + PKCE：页面生成 verifier，跳到 `/v1/auth/google/start`，回到 `/auth/callback?code=…`，再用 verifier 换 token。回调地址只允许本域的 `/auth/callback`（网页）和 `127.0.0.1` 回环地址（命令行）。token 不出现在 URL 里。
+
+`/v1/auth/google/start`（名字是历史原因）和设备登录页先出一个选择页：「使用 Google 账号继续」或输入邮箱（`cloud/src/login.ts`，表单都 POST 到 `/v1/auth/login/<id>`，带发起登录的那个浏览器的 cookie 和 csrf）。选邮箱就发一封 6 位验证码（Cloudflare Email Service，`cloud/src/mail.ts`），10 分钟有效，错 5 次这次登录就结束；同一邮箱每小时最多 5 封、每天 10 封，按 IP 的登录限流照旧。验证码只能在发起登录的浏览器里填，邮件里不放直接登录的链接：设备登录时，一点就登录的链接会让「替别人的设备填了邮箱」的人一下拿到账号，所以设备登录的邮件里写明是在给哪台设备登录。
+
+账号按邮箱合并（Directory `accountFor`）：验证码登录时，这个邮箱已有账号（包括 Google 的）就登进那个；Google 登录时，Google `sub` 还没有账号而这个邮箱已有（先用邮箱注册的），也进那个。App Store 审核账号（`pw-`）不参与。没有 `EMAIL` 绑定或 `EMAIL_FROM` 时不出选择页，直接去 Google，和以前一样。
+
+## 企业 workspace
+
+给企业预先建好 workspace 和专属 station（比如一台为它准备的 Mac mini），由管理后台（admin.still.fail）做，不需要运维账号加入那个 workspace：
+
+- **新建**：`POST /v1/admin/workspaces {name, owners: [email], members, stations}`。owner 按邮箱加：已有账号的立刻成为 owner，没有的进 `added`，首次用这个邮箱登录时成为 owner。创建人记为管理员，但管理员不是成员；这类 workspace 不计入管理员自己的 workspace 数。
+- **自己的上限**：`workspaces.max_members` / `max_stations`（两个一起设，1–1000 人、1–256 台），有值就用它，不看创建人的套餐（`#limits`）；没有的照旧按创建人的套餐。`POST /v1/admin/workspaces/:id/limits {members, stations}` 修改：已超出的保留，只是不能再加入新的。后台列表里标「企业版」（`plan: "enterprise"`，带 `seats`、`station_seats` 和还没登录的 `added`）。
+- **装 station**：`POST /v1/admin/workspaces/:id/enrollments {name}` 出一条一次性登记命令（正式版安装器，1 小时有效），在那台机器上执行即加入。只给企业 workspace、并且还没有 owner 登录进来的时候（否则 `409 not_before_owner`，列表里 `enrollable` 说能不能）：owner 一进来，加 station 就是他们自己的事。
+- owner 一直没登录的，管理后台也能删除（`/v1/admin/workspaces/:id/delete` 不再要求有 owner 成员）。
+- 企业 owner 开了安全模式之后，cloud 不能再往里加人、加 station，预建要在开之前做完。
 
 ## station 登记
 
 1. admin 在 workspace 里点「添加 station」，得到一条一次性、1 小时有效的登记命令。
 2. 在要当 station 的机器上运行它。station 用自己的 iroh 密钥签名证明持有这把密钥，控制面把这个公钥记入 workspace。
-3. station 保存控制面的签名公钥（Ed25519），之后校验成员凭证不需要在线访问控制面。
+3. station 用控制面在 state 帧里给的签名公钥（Ed25519）校验成员凭证，不需要在线访问控制面。这把公钥、名单、station 属于哪个 workspace 都以 cloud 说的为准；workspace 开了安全模式（锁）后改以锁里签过的为准，见 [workspace-lock.md](workspace-lock.md)。
+
+一台 station 可以在几个 workspace 里（设计见 [multi-workspace.md](multi-workspace.md)）。cloud 把机器和 membership 分开存：`stations (id, last_seen, version)` 和 `station_members (workspace, station, name, emoji, icon, enrolled_at, enrolled_by)`，名字和图标按 workspace 各起各的；`enrolled_at` 最早的那条是主 workspace。旧的一张 `stations` 表在 Directory 打开时拆成这两张（`migrateStationMembers`，拆过的不再动）。
+
+- `POST /v1/stations/enroll`：和以前一样**搬家**，删掉它在别的 workspace 的 membership，只留这一条。
+- `POST /v1/stations/join`：同样的请求体和签名，**加入**：加一条 membership（套餐上限按这个 workspace 算；已经在里面就只改名字）。station 的主 workspace 开着锁，或这个 workspace 开着锁而 station 已在别处，回 `409 locked_workspace`。单独一个路由，旧 cloud 就会拒绝而不是把 station 搬走。
+- 两者的回应都带 `workspace`、`workspace_name`、`name` 和 `home`（主 workspace）。
+- presence socket 的 `state` 帧：顶层字段（`workspace`、`workspace_name`、`name`、`peers`、`revocations`、`lock`）说的是主 workspace，和以前一样；`workspaces: [{workspace, workspace_name, name, peers, revocations}]` 是其余每个 membership，总是带着（只有一个就是空数组）；`relay_urls` 是 still.fail 的 relay 加上所有 membership 的 workspace 自带 relay（去重）。`revoke` 帧带 `workspace`，发给这个 workspace 里的每台 station。`lock.get` / `lock.put` 只针对主 workspace。
+- 移除 station、删除 workspace 只删那一条 membership：一条都不剩就像以前那样以 4004 断开，否则重发 `state`（主 workspace 没了，加入最早的那个接任）。workspace 的 station 列表里，不是这台 station 主 workspace 的那条带 `joined: true`。
 
 ## 连接 station 与成员凭证
 
@@ -54,7 +76,7 @@ Google OAuth（`openid email profile`），access token 5 分钟，refresh token
 - **吊销**：成员被移除或改角色（`sub`）、登录会话被注销（`sid`）时，still.fail cloud 通过 station 的控制通道推一条吊销（`revoke` 帧，`state` 帧里也带着最近 31 天的吊销）；station 拒绝签发时间不晚于吊销时间的凭证，已连着的最迟 5 秒内断开。station 不在线时错过的吊销，下次连上 still.fail cloud 时从 `state` 里补上。
 - still.fail cloud 下线时：已登录过的设备凭缓存的凭证照常连 station（局域网直连或 relay）；只有新登录、新成员需要它。
 
-连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。
+连接上优先用 ALPN `stillfail/admin/1`，兼容旧版 `ember/admin/1`。第一个流交换凭证；之后每个流承载一个管理 API 请求：请求头是一行 JSON（method、path、headers），随后是请求体；回应头是一行 JSON（status、headers），随后是回应体，流结束即回应结束（SSE 就是一直不结束的回应）。请求带 `accept-encoding: zstd` 时，512 字节以上的 JSON 和文本回应用 zstd 压缩，回应头带 `content-encoding: zstd`，SSE 每个事件后 flush 一次、窗口 1 MB（station/src/mesh/compress.ts）；preview 的回应原样转发。
 
 station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在它的 Node 插件 station/native/mesh 里）：把 mesh 上来的请求交给 station 的管理 API，带上已验证的用户身份；station 据此记录「谁」做了操作、在管理页对话里说了话。
 
@@ -63,7 +85,7 @@ station 端由 station 自己负责（station/src/mesh/serve.ts，iroh 1.0.3 在
 A station and the client core talk to "the control plane" through one interface, so the same station and core can be enrolled in still.fail cloud or, experimentally, in Comma (AFK-surf/Cue). still.fail cloud stays the default; nothing changes for a station or client that does not choose Comma.
 
 - **Station** (`station/src/cloud/plane.ts`, the `ControlPlane` service in `station/src/services.ts`): cloud.json, the presence socket, notices, traces, where releases are, and which member credentials are accepted. `cloud/provider.ts` holds what differs per provider: paths, signing tags, header names, credential `iss`/`typ`. `cloud.json` has `provider` (absent means `"stillfail"`, and a still.fail station's file is unchanged); the service reads it at each use, so a station enrolled elsewhere follows without a restart. Feedback (`/v1/feedback`) and session page links stay still.fail-only.
-- **Enrolling in Comma**: `stillfail station enroll <origin> <token> --provider comma` posts to `/v1/comma/stations/enroll` (`comma-station-enroll-v1` proof). Presence is `/v1/comma/stations/connect` (`comma-station-connect-v1`, `x-stillfail-*` headers only); its `state` frames also carry `gateway_keys`, kept in cloud.json. Notices go to `/v1/comma/stations/notify` (`comma-station-notify-v1`). Comma takes no traces yet. Releases and the installer are under `<origin>/stations` (`releases/station.json`, `install.sh`); `stillfail update` follows cloud.json's provider.
+- **Enrolling in Comma**: `stillfail station enroll <origin> <token> --provider comma` posts to `/v1/comma/stations/enroll` (`comma-station-enroll-v1` proof). Presence is `/v1/comma/stations/connect` (`comma-station-connect-v1`, `x-stillfail-*` headers only); its `state` frames also carry `gateway_keys`, kept in cloud.json. Notices go to `/v1/comma/stations/notify` (`comma-station-notify-v1`). Comma takes no traces yet. Releases and the installer are under `<origin>/stations` (`releases/station.json`, `install.sh`); `stillfail update` follows cloud.json's provider. The feed there must be signed with still.fail's release key like ours ([release-signing.md](release-signing.md)): a station updates only to a release whose signature verifies, so Comma serves the signed feed as it is.
 - **Credentials**: Comma's are `typ: comma-member+jwt`, `iss: comma`, checked exactly like still.fail's. Role `viewer` is read-only on every station: reads (GET/HEAD) and the viewer's own read/dismissed marks only; other requests and phone sharing answer 403.
 - **Device tools** (`station/src/mesh/tools.ts`, `station/src/device/tools.ts`) reach the station two ways, with the same requests and answers. Comma pushes them on the presence socket by default: `{type: "tool", id, request}`, answered on the socket with `{type: "tool_result", id, response}`; being on the socket the station signed into is the admission. Or a gateway calls `comma/tools/1`, an iroh ALPN on the station's existing endpoint, admitted only for ids in `gateway_keys` (rechecked per request). Either way only requests whose `context.workspace` is the station's are taken. On the ALPN, one request per stream: a JSON line `{op, id, context, args}`, answered by `{ok, result}` or `{ok: false, error: {code, message}}`. The station's `tools.access` (config.json, `off` | `read` | `full`, default `off`: an owner or admin turns it on with `PUT /tools/access`; `GET` says it, with what each level means, to any member) decides what runs: `read` means every file this machine's user can read except the station's own data (and the logins below), plus processes, runtimes and chat states — it allows `fs.read`, `fs.list`, `fs.stat`, `runtime.probe`, `process.list`, `process.tail`, `session.status`; `full` also `exec`, `fs.write`, the other `process.*` and `session.*` ops. A request line may be up to 12 MiB (arguments carry file contents); the admin API keeps its 16 KiB heads. At every level the file ops and working directories refuse the station's data directory (its key, cloud.json, the profiles' homes), its config and the machine's Claude/Codex logins, also through symlinks; `exec` and `process.*` under `full` run as the station's user and can reach what that user can, which is why they need `full`. `session.start`/`session.say` create and drive normal station chats through the admin API as the requester (`requester_email`).
 - **Client core**: see [core-ts.md](core-ts.md), "Account providers and embedding".
@@ -100,11 +122,13 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 - 网页版要求 relay 用公开签发的证书（如 Let's Encrypt，iroh-relay 自带 ACME，也可以给裸 IP 签短期证书）。
 - 不做访问控制：relay 只转发端到端加密的 QUIC，看不到内容；谁能用它由部署者自己在 iroh-relay 里配。
 
+**中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数和负载 `POST /v1/relays/load`（中继以 IP 为名，cloud 只认 Cloudflare 看到的来源地址就是那个 IP 的；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
+
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 
 ## 推送通知
 
-设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`，still.fail cloud 只推给通知里点名、并且是这台 station 所在 workspace 成员的人。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
+设备（浏览器的 Web Push 订阅、安卓的 FCM token）登记在登录的账号和会话下（`POST/DELETE /v1/push`，会话退出时一起删掉）；station 把自己 chat 的通知签名后发到 `POST /v1/stations/notify`（在几个 workspace 里的 station 用 `workspace` 说是哪个的，缺省为主 workspace，不在那个 workspace 回 403），still.fail cloud 只推给通知里点名、并且是那个 workspace 成员的人。bug 报告（`/v1/feedback`）同样可以带 `workspace`。接口、签名和推送内容见 [notifications.md](notifications.md)，代码在 `cloud/src/push.ts`、`webpush.ts`、`fcm.ts`。
 
 API Worker 的密钥（都可以不设：没有 VAPID 就没有 Web Push，`/v1/push/key` 回 404；没有服务账号就不推安卓）：
 

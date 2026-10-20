@@ -46,7 +46,7 @@
 
 ## station 之间：`share.*` 方法
 
-走现有的 `stillfail/station/1`（`station/src/mesh/peer.ts` → `jobs/remote.ts` 的 `handle`），加一组方法。跟 `session.message` 一样，只要求对方是当前 roster 里同 workspace 的 station，不需要 `remoteTasks.allow`。另外再检查一条：对方在这个分享项的 `allow` 名单里，或者名单为空；以 cloud 推来的为准。
+走现有的 `stillfail/station/1`（`station/src/mesh/peer.ts` → `jobs/remote.ts` 的 `handle`），加一组方法。跟 `session.message` 一样，只要求对方是当前 roster 里同 workspace 的 station。另外再检查一条：对方在这个分享项的 `allow` 名单里，或者名单为空；以 cloud 推来的为准。
 
 | 方法 | 谁问谁 | 做什么 |
 |---|---|---|

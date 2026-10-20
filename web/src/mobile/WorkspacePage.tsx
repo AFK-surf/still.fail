@@ -9,10 +9,13 @@ import { cloud, errorText, useWorkspace, type LoginSession, type MemberView, typ
 import { useTopic } from "../core/react.ts";
 import { ROLE_HINT, ROLE_LABEL } from "../cloud/settings.tsx";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { Check, UserPlus } from "../icons.tsx";
-import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, Loading, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Check, UserPlus } from "@stillfail/ui/icons.tsx";
+import { Avatar, Button, failedIn, Field, LargeTitle, LinkButton, ListCard, ListRow, NavButton, PickRow, SectionHeader, TopBack } from "./parts.tsx";
+import { Waiting, WaitLine } from "@stillfail/ui/waiting.tsx";
 import { doingMatches, failed, useDoingList } from "../doing.ts";
 import { ask, confirm } from "./sheets.tsx";
+import { MarkSheet } from "./Stations.tsx";
+import { WorkspaceMark } from "../WorkspaceMark.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as partsCss from "./styles/parts.css.ts";
 import * as listsCss from "./styles/lists.css.ts";
@@ -29,7 +32,7 @@ export function WorkspaceScreen() {
   const me = app.entry.account;
   // Before the early return below: the same hooks on every render, read or not yet.
   const doing = useDoingList();
-  if (!view) return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} /><Loading text={t("web-mobile.workspace.reading")} /></div>;
+  if (!view) return <div className={pagesCss.mScreen}><TopBack label={t("web-mobile.settings.title")} onBack={app.pop} /><Waiting fill shape="cards" text={t("web-mobile.workspace.reading")} /></div>;
   const manager = view.role === "owner" || view.role === "admin";
   const leave = () => confirm(app, {
     title: t("web-mobile.workspace.leaveAsk", { name: view.name }), text: t("web-mobile.workspace.leaveText"), action: t("web-mobile.workspace.leaveAction"), danger: true, atOnce: "web-mobile.workspace.leaveFailed",
@@ -56,6 +59,15 @@ export function WorkspaceScreen() {
         <LargeTitle small="" big={view.name} />
       </div>
       <p className={css.mLead}>{t(manager ? "web-mobile.workspace.leadManager" : "web-mobile.workspace.lead", { role: ROLE_LABEL[view.role], members: t("web-mobile.settings.members", { n: view.members.length }), stations: t("web-mobile.workspaces.stations", { n: view.stations.length }) })}</p>
+      {/* Its mark, where it is switched to (its letter till it has one): picked in the stations' sheet. */}
+      {manager && (
+        <ListCard>
+          <ListRow onClick={() => app.sheet({ height: 0.78, content: () => <MarkSheet s={view} set={(m) => cloud.setWorkspaceMark(me.sub, view.id, m)} /> })}>
+            <span className={`${partsCss.mGrow} ${listsCss.mRowTitle}`}>{t("web-mobile.stations.emoji")}</span>
+            <span className={css.mMark}><WorkspaceMark w={view} size={20} picture={28} /></span>
+          </ListRow>
+        </ListCard>
+      )}
       {/* Its people in one list: those in it, then those added who have not signed in yet, then the invitations out; which is which on each row's second line. */}
       <SectionHeader title={t("web-mobile.workspace.members")} trailing={waiting ? t("web-mobile.settings.membersWaiting", { n: view.members.length, waiting }) : t("web-mobile.settings.members", { n: view.members.length })} start={24} />
       <ListCard>
@@ -110,7 +122,7 @@ function Relays({ view, manager }: { view: WorkspaceView; manager: boolean }) {
             {manager && <LinkButton label={t("web-mobile.workspace.remove")} enabled={!busy} onClick={() => remove(url)} />}
           </ListRow>
         ))}
-        {manager && <ListRow onClick={busy ? undefined : add}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mLink}`}>{busy ? t("web-mobile.workspace.relaySaving") : t("web-mobile.workspace.relayAdd")}</span></ListRow>}
+        {manager && <ListRow onClick={busy ? undefined : add}><span className={`${partsCss.mGrow} ${listsCss.mRowTitle} ${partsCss.mLink}`}>{busy ? t("common.saving") : t("web-mobile.workspace.relayAdd")}</span></ListRow>}
       </ListCard>
       <p className={css.mLead}>{t("web-mobile.workspace.relayLead", { name: NAME })}</p>
     </>
@@ -255,7 +267,7 @@ export function Devices() {
   const devices = useTopic<LoginSession[]>({ topic: "loginSessions", account: me.sub });
   const doing = useDoingList();
   const revoking = (id: string) => doing.some((d) => !failed(d) && doingMatches(d, "loginSession.revoke", { account: me.sub, id }));
-  if (!devices.value) return <p className={homeCss.mNote}>{devices.error ? t("web-mobile.workspace.devicesFailed", { error: devices.error.message }) : t("web-mobile.reading")}</p>;
+  if (!devices.value) return <WaitLine className={homeCss.mNote} text={devices.error ? t("web-mobile.workspace.devicesFailed", { error: devices.error.message }) : t("common.reading")} error={!!devices.error} />;
   return (
     <ListCard>
       {devices.value.map((s) => (

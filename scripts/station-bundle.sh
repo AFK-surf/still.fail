@@ -5,10 +5,14 @@
 # (scripts/node-dist.sh, cloud/src/install.ts) and links it at stillfail/node; the desktop app runs it on Electron's. scripts/release.sh packs it for install.sh; the desktop app (apps/desktop/build.sh) carries
 # it and runs it itself. The layout:
 #   stillfail/bin/stillfail                               (the command people and services run; bin/ember beside it)
+#   stillfail/bin/install.{zh,en}.sh                      (the installer the station updates itself by, verified with
+#                                                          the release: scripts/installers.ts, docs/release-signing.md)
 #   stillfail/mesh/target/release/stillfail-station       (the launcher, with the Rust station's command line and path,
 #                                                          ember-station beside it: what the installer, bin/stillfail,
 #                                                          the desktop app and services written by older releases run)
-#   stillfail/station/{main.js, read/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#   stillfail/station/{main.js, read/worker.js, search/worker.js, skills/, mesh.node, stillfail-runner, package.json}
+#                                                         (and on darwin-arm64 "still.fail Helper.app": the station's
+#                                                          macOS app for what macOS grants, docs/station-ts-native.md §4)
 #   stillfail/NODE_VERSION                                (the version of the Node it runs on: .node-version's)
 #   stillfail/dist/admin/posthog.json                     (only the PostHog key the station reports errors with, when
 #                                                          $STILLFAIL_POSTHOG names one: scripts/posthog-key.ts; the
@@ -16,44 +20,62 @@
 #   stillfail/VERSION, BUILD                              (the commit; the commits in its history: version 0.1.<BUILD>)
 # On darwin-arm64 the native parts are signed when $STILLFAIL_SIGN_STATION is set (the station release job).
 # Its Node is the station's own: the agents' PATH never has it (a runtime installed with it would land there).
-#   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64]
+# On win32-x64 the executables are .exe, and the command is bin/stillfail.cmd (bin/stillfail.ps1 behind it): no links
+# there (they take a privilege on Windows), so no ember beside them; its installers are bin/install.{zh,en}.ps1.
+#   station-bundle.sh DIR [darwin-arm64|linux-x64|linux-arm64|win32-x64]
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 out=${1:?usage: station-bundle.sh DIR [PLATFORM]}
 platform=${2:-darwin-arm64}
 case "$platform" in
-  darwin-arm64|linux-x64|linux-arm64) ;;
+  darwin-arm64|linux-x64|linux-arm64|win32-x64) ;;
   *) echo "no such platform: $platform" >&2; exit 1 ;;
 esac
 # Written afresh here, so a release never carries what an older build left in dist/admin (its page), nor an old key.
 node "$root/scripts/posthog-key.ts" >&2
 native() { node "$root/scripts/native.ts" file "$1" "$platform"; }
+x=; [ "$platform" = win32-x64 ] && x=.exe
 launcher="$(native launcher)"
 mesh="$(native mesh)"
 runner="$(native runner)"
+helper=; [ "$platform" = darwin-arm64 ] && helper="$(native helper)"
 (cd "$root/station" && pnpm run build >&2)
 app="$out/stillfail"
 rm -rf "$app"
-mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read"
-cp "$root/bin/stillfail" "$app/bin/"
-ln -s stillfail "$app/bin/ember"
+mkdir -p "$app/bin" "$app/mesh/target/release" "$app/dist" "$app/station/read" "$app/station/search"
+if [ "$platform" = win32-x64 ]; then
+  cp "$root/bin/stillfail.cmd" "$root/bin/stillfail.ps1" "$app/bin/"
+else
+  cp "$root/bin/stillfail" "$app/bin/"
+  ln -s stillfail "$app/bin/ember"
+fi
+node "$root/scripts/installers.ts" "$app/bin" "$platform"
 cp -R "$root/dist/admin" "$app/dist/admin"
-cp "$launcher" "$app/mesh/target/release/stillfail-station"
+cp "$launcher" "$app/mesh/target/release/stillfail-station$x"
+# And on Windows the launcher with no window beside it (what install.ps1's scheduled task runs; scripts/native.ts keeps
+# it in the launcher's artifact).
+[ "$platform" = win32-x64 ] && cp "$(dirname "$launcher")/stillfail-station-w.exe" "$app/mesh/target/release/"
 cp "$mesh" "$runner" "$app/station/"
+[ -z "$helper" ] || cp -R "$helper" "$app/station/"
 # macOS asks "find devices on local networks?" (the mesh's mDNS) for the launcher: Node and everything it starts are
 # its. Ad hoc, the grant was its hash's: each new launcher asked again, and every Node it started while unanswered put
 # up one more. The station release job signs the native parts ($STILLFAIL_SIGN_STATION: .github/sign-station.sh), so
 # a grant stays. Not signed is a warning, not a release missed: they are put again as they were (ad hoc), which works.
 if [ "$platform" = darwin-arm64 ] && [ -n "${STILLFAIL_SIGN_STATION:-}" ]; then
   sh "$root/.github/sign-station.sh" "$app/mesh/target/release/stillfail-station" fail.still.station \
-    "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh >&2 ||
+    "$app/station/$(basename "$runner")" fail.still.runner "$app/station/$(basename "$mesh")" fail.still.mesh \
+    "$app/station/still.fail Helper.app" fail.still.helper >&2 ||
     { echo "::warning::the station's native parts were not signed (.github/sign-station.sh): ad hoc" >&2
-      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"; }
+      cp "$launcher" "$app/mesh/target/release/stillfail-station"; cp "$mesh" "$runner" "$app/station/"
+      rm -rf "$app/station/still.fail Helper.app"; cp -R "$helper" "$app/station/"; }
 fi
-ln -s stillfail-station "$app/mesh/target/release/ember-station"
+[ "$platform" = win32-x64 ] || ln -s stillfail-station "$app/mesh/target/release/ember-station"
 cp "$root/station/dist/main.js" "$app/station/"
 cp "$root/station/dist/read/worker.js" "$app/station/read/"
+cp "$root/station/dist/search/worker.js" "$app/station/search/"
 cp -R "$root/station/dist/skills" "$app/station/skills"
+# DeepSeek Harness loads the station's driver from here (agents/dsh.ts).
+cp "$root/station/dist/dsh-bridge.mjs" "$app/station/"
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the desktop app built in apps/desktop has one: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"

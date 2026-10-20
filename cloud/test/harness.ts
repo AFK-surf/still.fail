@@ -3,6 +3,8 @@ import { Miniflare, convertV4MiniflareOptions, Response as MFResponse, Log, LogL
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { ulid } from "ulid";
 import { digest, randomSecret, type Tokens } from "../src/auth.ts";
+import { shareFiles } from "../src/share.ts";
+import type { MailMessage } from "../src/mail.ts";
 import { createRequire } from "node:module";
 
 // workerd keeps a WebSocket's TCP connection open some ten seconds after a close the Worker began (Cloudflare does
@@ -43,12 +45,19 @@ export async function harness(
     port?: number;
     signingKey?: string;
     noGoogle?: boolean;
+    /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
+    reviewAccounts?: string;
     relayUrl?: string;
+    /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
+    relayUrls?: string;
+    relayNames?: Record<string, string>;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
     adminOrigin?: string;
     previewOrigin?: string;
+    /** The share host (src/share.ts): published chats. */
+    shareOrigin?: string;
     /** The test channel's host (BETA_ORIGIN): the web app and the API, for accounts let in. */
     betaOrigin?: string;
     /** The hosts' old names (before the rename to still.fail), bound to the same Workers: PUBLIC_ORIGIN_ALIASES and so on. */
@@ -64,6 +73,11 @@ export async function harness(
     fcm?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
+    /** The grant key (its private JWK, kid "test-grant"): one made now unless given (dev.ts's RESUME keeps it). */
+    grantJwk?: JsonWebKey & { kid?: string };
+    /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
+     * error code, and the binding throws as Cloudflare's would). */
+    mail?: true | ((message: MailMessage) => boolean | string);
     /** Push services, FCM and its token endpoint: a stand-in answering every other outbound request. */
     push?: (request: OutboundRequest) => Promise<{ status: number; body?: string }> | { status: number; body?: string };
   } = {},
@@ -71,6 +85,7 @@ export async function harness(
   const origin = options.origin ?? "https://relay.example";
   const adminOrigin = options.adminOrigin ?? "https://admin.relay.example";
   const previewOrigin = options.previewOrigin ?? "https://preview.relay.example";
+  const shareOrigin = options.shareOrigin ?? "https://share.relay.example";
   const betaOrigin = options.betaOrigin ?? "https://app.beta-domain.example";
   const oldOrigin = options.oldOrigin ?? "https://old.relay.example";
   const oldAdminOrigin = options.oldAdminOrigin ?? "https://admin.old.relay.example";
@@ -87,9 +102,11 @@ export async function harness(
     use: "sig",
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
-  const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
-  const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
-  const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
+  const mails: MailMessage[] = [];
+  const grantPair = options.grantJwk ? null : await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+  const grantJwk = options.grantJwk ? { ...options.grantJwk, kid: "test-grant" } : { ...(await exportJWK(grantPair!.privateKey)), kid: "test-grant" };
+  const { d: _d, ...grantPublicFields } = grantJwk as JsonWebKey & { kid: string };
+  const grantPublicJwk = options.grantJwk ? { ...grantPublicFields, kid: "test-grant" } : { ...(await exportJWK(grantPair!.publicKey)), kid: "test-grant" };
   const bundle = async (entry: string) => (await build({
     entryPoints: [entry],
     bundle: true,
@@ -118,7 +135,7 @@ export async function harness(
         ...common,
         name: "static",
         script: await bundle("test/static-worker.ts"),
-        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin },
+        bindings: { PUBLIC_ORIGIN: origin, ADMIN_ORIGIN: adminOrigin, PREVIEW_ORIGIN: previewOrigin, PUBLIC_ORIGIN_ALIASES: oldOrigin, ADMIN_ORIGIN_ALIASES: oldAdminOrigin, PREVIEW_ORIGIN_ALIASES: oldPreviewOrigin, BETA_ORIGIN: betaOrigin, SHARE_ORIGIN: shareOrigin },
         serviceBindings: { ASSETS: (options.assets ?? standInAssets) as any },
       }, {
         ...common,
@@ -132,7 +149,7 @@ export async function harness(
         ...common,
         name: "api",
         script: await bundle("test/worker.ts"),
-        routes: [...[...hosts, betaHost].flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
+        routes: [...[...hosts, betaHost].flatMap((host) => [`${host}/v1/*`, `${host}/healthz*`, `${host}/install.sh*`, `${host}/install.ps1*`, `${host}/releases/*`, `${host}/.well-known/*`, `${host}/__test/*`]), ...adminHosts.map((host) => `${host}/v1/*`)],
         bindings: {
         PUBLIC_ORIGIN: origin,
         PUBLIC_ORIGIN_ALIASES: oldOrigin,
@@ -146,12 +163,19 @@ export async function harness(
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
+        ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
+        ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
+        ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
+        ...(options.mail ? { TEST_MAIL: "1" } : {}),
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
-      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
+      durableObjects: {
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
+      },
       outboundService: async (request) => {
         const url = new URL(request.url);
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
@@ -177,6 +201,13 @@ export async function harness(
             .setAudience(code.invalid === "aud" ? "wrong" : "test-google-client")
             .sign(privateKey);
           return MFResponse.json({ id_token: idToken });
+        }
+        if (url.href === "https://mail.test/send" && options.mail) {
+          const message = JSON.parse(await request.text()) as MailMessage;
+          const sent = options.mail === true ? true : options.mail(message);
+          if (sent !== true) return new MFResponse(sent || "E_INTERNAL_SERVER_ERROR", { status: 500 });
+          mails.push(message);
+          return new MFResponse(null, { status: 200 });
         }
         if (url.origin === "https://api.axiom.co" && options.axiom) {
           if (options.axiom !== "real") return options.axiom(request as unknown as Request) as any;
@@ -207,6 +238,7 @@ export async function harness(
   /** A request to the console's host. */
   const fetchAdmin = (path: string, init?: RequestInit) => mf.dispatchFetch(adminOrigin + path, init as any);
   const fetchPreview = (path: string, init?: RequestInit) => mf.dispatchFetch(previewOrigin + path, init as any);
+  const fetchShare = (path: string, init?: RequestInit) => mf.dispatchFetch(shareOrigin + path, init as any);
   /** A request to the test channel's host. */
   const fetchBeta = (path: string, init?: RequestInit) => mf.dispatchFetch(betaOrigin + path, init as any);
   /** A request to a host's old name (before the rename): "main", "admin" or "preview". */
@@ -222,7 +254,13 @@ export async function harness(
       code_challenge: await digest(verifier),
       code_challenge_method: "S256",
     });
-    const response = await fetch("/v1/auth/google/start?" + start, { redirect: "manual" });
+    let response = await fetch("/v1/auth/google/start?" + start, { redirect: "manual" });
+    // With signing in by email offered (`mail`), the page that asks how comes first: Google, as a browser chooses it.
+    if (response.status === 200 && options.mail) {
+      const id = /action="\/v1\/auth\/login\/([A-Za-z0-9_-]{43})"/.exec(await response.text())?.[1];
+      const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
+      response = await fetch(`/v1/auth/login/${id}`, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", origin, cookie }, body: new URLSearchParams({ csrf: cookie.split("=")[1] ?? "", via: "google" }).toString() });
+    }
     if (response.status !== 302) throw new Error("login start: " + response.status);
     const google = new URL(response.headers.get("location")!);
     const googleCode = ulid();
@@ -284,13 +322,16 @@ export async function harness(
     oldOrigin,
     oldAdminOrigin,
     as,
+    grantJwk,
     grantPublicJwk,
     adminToken,
     signingKey,
     codes,
+    mails,
     fetch,
     fetchAdmin,
     fetchPreview,
+    fetchShare,
     fetchBeta,
     fetchOld,
     fetchWorker,
@@ -302,7 +343,7 @@ export async function harness(
   };
 }
 
-/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`: see test/static-worker.ts). */
+/** The static sites' files, by site (`/web/…`, `/admin/…`, `/preview/…`, `/share/…`: see test/static-worker.ts). */
 export const STAND_IN_FILES: Record<string, string> = {
   "/web/index.html": "<title>still.fail</title>",
   "/web/assets/app.js": "// the web app",
@@ -314,6 +355,9 @@ export const STAND_IN_FILES: Record<string, string> = {
   "/preview/_ember/frame.html": "<title>still.fail preview (old path)</title>",
   "/preview/_ember/sw.js": "// the preview's service worker (old path)",
   "/preview/404.html": "这是 still.fail 的预览地址",
+  "/share/index.html": "<title>still.fail 分享</title>",
+  "/share/assets/share.js": "// the share page",
+  ...Object.fromEntries(Object.entries(shareFiles({ cloud: "https://relay.example", relays: ["https://relay.example", "https://39.105.157.122"] })).map(([path, text]) => [`/share/${path}`, text])),
 };
 
 function standInAssets(request: Request): Response {

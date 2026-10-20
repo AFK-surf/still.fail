@@ -10,10 +10,12 @@
 #   sh scripts/check.sh full <range>  full, on what the range changed
 #   sh scripts/check.sh all           full, as if every file changed
 #
-# STILLFAIL_CHECK_PART="<part> …" (ts, station, core, android) runs only those parts of it: ts the icons, the clients' types and
-# bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts); station
-# the station (station/, its typecheck and tests) and its native parts' own tests (station/native); core client/'s Rust
-# (the core's native shells: iroh for the web and Android's IO); android the app. Unset: all of them.
+# STILLFAIL_CHECK_PART="<part> …" (ts, browser, station, core, android) runs only those parts of it: ts the icons, the clients'
+# types and bindings, TypeScript, release notes and the tests run by node (web, scripts, cloud, the core: client/core-ts);
+# browser the web in Chrome (its stories measured, the message list's motion watched; STILLFAIL_BROWSER="stories <i>/<n>"
+# or "motion <i>/<n>" one share of it); station the station (station/, its typecheck and tests) and its native parts' own tests
+# (station/native); core client/'s Rust (the core's native shells: iroh for the web and Android's IO); android the app.
+# Unset: all of them.
 #
 # The steps run side by side, each as soon as what it needs is there (a directory's node_modules: `prep`); each one's
 # output is kept to itself, and they are reported in the order they are listed here, as each is done, with the seconds
@@ -32,8 +34,8 @@ mode=${1:-commit}
 full=0
 case "$mode" in
   commit) changed=$(git diff --cached --name-only --diff-filter=ACMRD) ;;
-  push) changed=$(git diff --name-only "${2:?push needs a range}") ;;
-  full) full=1; changed=$(git diff --name-only "${2:?full needs a range}") ;;
+  push) range=${2:?push needs a range}; changed=$(git diff --name-only "$range") ;;
+  full) full=1; range=${2:?full needs a range}; changed=$(git diff --name-only "$range") ;;
   all) full=1; changed=$(git ls-files) ;;
   *) echo "usage: sh scripts/check.sh commit | push <range> | full <range> | all" >&2; exit 2 ;;
 esac
@@ -41,6 +43,17 @@ esac
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 touches() { printf '%s\n' "$changed" | grep -qE "$1"; }
+# The lines this run's change adds to the files given (none for `all`, which checks what is, not what changed). A line
+# it only moves (taken out of one of them, put in another as it was: a part moved into web/ui) is not added.
+added() {
+  case "$mode" in
+    commit) git diff --cached -U0 -- "$@" ;;
+    push|full) git diff -U0 "$range" -- "$@" ;;
+    *) ;;
+  esac > "$tmp/diff"
+  grep -E '^-[^-]' "$tmp/diff" | cut -c2- > "$tmp/taken" || true
+  grep -E '^\+[^+]' "$tmp/diff" | cut -c2- | grep -vxF -f "$tmp/taken" | sed 's/^/+/' || true
+}
 # Whether this run does a part (STILLFAIL_CHECK_PART): any when it says none.
 part() { [ -z "${STILLFAIL_CHECK_PART:-}" ] || case " $STILLFAIL_CHECK_PART " in *" $1 "*) true ;; *) false ;; esac; }
 
@@ -188,18 +201,74 @@ if part ts; then
     step "operation bindings" after core node client/core-ts/scripts/operations.ts --check
   fi
 
-  if touches '^design/icons/|^scripts/icons\.py$|^web/src/icons\.tsx$|/ui/Icons\.kt$'; then
+  if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/ui/src/icons\.tsx$|/ui/Icons\.kt$'; then
     step icons python3 scripts/icons.py --check
   fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
-  if touches '^(web/src|apps/desktop/src|apps/android)/'; then
-    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src apps/desktop/src apps/android'
+  # The phone's corners are Smooth (ui/Corners.kt: the web's superellipse), not RoundedCornerShape, in what a change adds
+  # (a capsule's 50%, or a line that says why with "own corner:", aside).
+  if touches '^apps/android/'; then
+    added 'apps/android/*.kt' | grep 'RoundedCornerShape(' | grep -vE 'RoundedCornerShape\(50\)|own corner:' > "$tmp/android-corners" || true
+    step "phone corners smooth (in what this adds)" sh -c "! grep . '$tmp/android-corners'"
+    # Its lazy lists are ui/ListKeys.kt's, whose keys cannot crash it (a key used twice is told and keyed apart).
+    step "phone lists keyed safely" sh -c "! git grep -nE 'androidx\\.compose\\.foundation\\.lazy\\.(\\*|LazyColumn|LazyRow)\\b' -- 'apps/android/**/src/main/**' ':!apps/android/shared/src/main/kotlin/fail/still/android/ui/ListKeys.kt'"
+  fi
+  # The pages' modules keep their order themselves (docs/client-core.md: :settings, :chat on it, :drive on both); in
+  # :app, the remote screens (remote/) and the share sheet (share/) are on none of the drive, and the remote screens on
+  # no page either. What they share is in :shared.
+  if touches '^apps/android/app/'; then
+    k=apps/android/app/src/main/kotlin/fail/still/android
+    step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
+  fi
+  # The mbui app's determinism (mbui's docs/detlint.md): nothing waits on a guessed time or on settling, the app asks
+  # for no frame and reads no clock of its own; each file's count of each rule only goes down (apps/mbui/detlint.json).
+  if touches '^apps/mbui/'; then
+    # (the lint is mbui's, of the commit apps/mbui/mbui.rev pins: scripts/mbui.sh links it)
+    step "mbui app determinism (detlint)" sh -c 'd=$(sh apps/mbui/scripts/mbui.sh) && python3 "$d/scripts/detlint.py" apps/mbui'
+  fi
+  if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
+    step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
+  fi
+  # The design system (web/ui, @stillfail/ui) stands on its own: nothing of the app's (web/src: its core, station,
+  # cloud, preferences), so the share page and anything else can draw with it. The app gives it what it needs (words,
+  # language, shortcut keys) through its setters.
+  if touches '^web/ui/'; then
+    step "the design system on its own" sh -c '! git grep -nE "(from|import) +\"(\.\./)+(src|client|station|cloud)/|@stillfail/core-ts" -- web/ui'
   fi
   # Colours mixed in sRGB: Chromium leaves an OKLCH mix of near greys with its hue unset but a little chroma, and draws
   # it at hue 0, so the grey grounds (code, tables, tool steps) turned pink.
-  if touches '^(web/src|apps/desktop/src)/'; then
-    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src apps/desktop/src'
+  if touches '^(web/src|web/ui|apps/desktop/src)/'; then
+    step "colours mixed in sRGB" sh -c '! git grep -n "in oklch" -- web/src web/ui apps/desktop/src'
+  fi
+  # Type sizes are the tokens' (web/ui/src/styles/tokens.css.ts: text-micro … text-display), never a style's own (an em, relative to its text, may be).
+  if touches '^web/(src|ui)/'; then
+    step "type sizes from tokens" sh -c '! git grep -nE "fontSize: *(\"[0-9.]+(px|rem)|[0-9])|font: *\"[^\"]*[0-9.]+px" -- "web/src/*.css.ts" "web/ui/*.css.ts"'
+    # Three weights: 400, 500 to stand out, 600 for titles (the official site's hero aside).
+    step "three type weights" sh -c '! git grep -nE "fontWeight: *\"?(100|200|300|[5-6][1-9]0|[5-6][0-9][1-9]|7[0-9]{2}|8[0-9]{2}|9[0-9]{2}|bold|bolder|lighter)\b" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/src/site/"'
+    # The safe area is read through --safe-top … (styles/global.css.ts), never env() itself: the stories put the page on
+    # each phone's by setting those.
+    step "safe area through its vars" sh -c '! git grep -n "env(safe-area-inset" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/src/styles/global.css.ts"'
+    # Motion reduced is read from the page's root (@stillfail/ui styles/still.ts STILL, motion.ts reducedMotion), which
+    # the 外观 page's setting decides when it says so; a media query of its own would not hear the setting. The official
+    # site's own motion, before its script runs, goes by the query.
+    step "reduced motion from the root" sh -c '! git grep -n "prefers-reduced-motion" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/ui/src/styles/still.ts" ":!web/src/site/"'
+    # Motion reduced is one clock, not a way of its own (motion.ts reducedMotion): a script plays through it (Motion's
+    # animate, play, motionMs, glideShare) and does what it does as ever, its motion only taking no time. What loops
+    # (motion.ts restingLoop), the phone's bar on its own springs and the official site's pointer play are all that ask.
+    step "reduced motion as one clock" sh -c '! git grep -nE "reducedMotion\(\)|\.animate\(" -- "web/src/*.ts" "web/src/*.tsx" "web/ui/*.ts" "web/ui/*.tsx" ":!web/ui/src/motion.ts" ":!web/src/mobile/Bar.tsx" ":!web/src/site/motion.ts"'
+    # No corner of its own in what a change adds: a corner is a token (vars.r*) or follows what it sits in (align.ts
+    # surface/inner, docs/ui-panels.md); circles, capsules and marks of 4 or less may say theirs, as may a line that says
+    # why with "own corner:".
+    added 'web/src/*.css.ts' 'web/ui/*.css.ts' | grep -E '[bB]order[A-Za-z]*Radius: *([`"][^`"]*([5-9]|[1-9][0-9]+)(\.[0-9]+)?px|([5-9]|[1-9][0-9]+)\b)' \
+      | grep -vE 'Radius: *("999px"|999\b)|own corner:' > "$tmp/corners" || true
+    step "no corner of its own (in what this adds)" sh -c "! grep . '$tmp/corners'"
+    # No margin taken back by hand: a ground reaching past its words, a corner, a column, a centring is one of
+    # styles/align.ts's (bleedX, surface, columns, centred…), so its numbers are said once (a var's own negative may be).
+    step "no hand-written negative margins" sh -c '! git grep -nE "margin[A-Za-z]*: *(-[0-9]|[\"\`][^\"\`]*[ (]-[0-9]|[\"\`]-[0-9])" -- "web/src/*.css.ts" "web/ui/*.css.ts" | grep -v "calc(-1 \* var("'
+    # A small panel stands on controls.css.ts popover (docs/ui-panels.md): surface() only for it and the three that are not
+    # popovers (a notice, ⌘K, the composer's list of chats).
+    step "small panels on one ground" sh -c '! git grep -n "\.\.\.surface(" -- "web/src/*.css.ts" "web/ui/*.css.ts" ":!web/ui/src/styles/controls.css.ts" ":!web/src/SystemBubbles.css.ts" ":!web/src/Switcher.css.ts" ":!web/src/ChatRef.css.ts"'
   fi
   # Core tests also run for Rust-only client changes. A fresh CI checkout needs both
   # their JS dependencies and the real wasm package even when no TS file changed.
@@ -211,32 +280,72 @@ if part ts; then
   if touches '^docs/releases/|^scripts/changelog\.ts$'; then step "release notes" sh -c 'node scripts/changelog.ts --stable > /dev/null'; fi
   if touches "$ts_root"; then step "typecheck: scripts and tests" after root pnpm exec tsgo -p tsconfig.json; fi
   if touches "$ts_web"; then
-    step "typecheck: web" after root pnpm exec tsgo -p web/tsconfig.json
+    # The web reads the core's own files (its Markdown, client/core-ts/src/markdown.ts), which read the core's packages.
+    prep core deps client/core-ts
+    step "typecheck: web" after root after core pnpm exec tsgo -p web/tsconfig.json
     [ -f web/src/core/iroh-pkg/.stand-in ] && later "web against the real iroh wasm"
+    # The web in Chrome (its stories, its message list's motion): the browser part, with the full check's steps below.
   fi
   if touches "$ts_cloud"; then
     prep cloud deps cloud
     prep cloud-types after_cloud_types
     step "typecheck: cloud" after cloud after cloud-types sh -c 'cd cloud && pnpm run check'
   fi
-  if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'; fi
+  if touches "$ts_desktop"; then prep desktop deps apps/desktop; step "typecheck: desktop" after desktop sh -c 'cd apps/desktop && pnpm run typecheck'
+    # What the app's bundles take from the repository is its shell's (scripts/desktop-web.ts SHELL): a change to one of
+    # them is a new app, not a web release alone. Its esbuild reads the core's sources too, which read the core's packages.
+    prep core deps client/core-ts
+    step "desktop: its shell's files" after root after desktop after core node scripts/desktop-web.ts check
+    step "desktop: what it keeps sealed" node --test apps/desktop/test/secure.test.ts
+    step "desktop: its station's PATH" node --test apps/desktop/test/station-path.test.ts
+    step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
-  # The domain-free base of a client core (client/core-kernel), a package other apps (Cue) pin by version.
-  if touches '^client/core-kernel/'; then prep kernel deps client/core-kernel; step "typecheck: core-kernel" after kernel sh -c 'cd client/core-kernel && pnpm exec tsgo --noEmit'; fi
+  # What makes the views writes only on what it made, never on what it was given (docs/core-ts.md「谁能改什么」).
+  if touches '^client/core-ts/(src|scripts)/'; then prep core deps client/core-ts; step "core writes on its own" after core node client/core-ts/scripts/writes.ts --check; fi
+  # The media app's service and its module of the core (media/, docs/media-service.md, docs/core-modules.md).
+  if touches '^media/'; then
+    prep root deps .
+    prep core deps client/core-ts
+    prep media-core deps media/core
+    step "typecheck: media" after root after core after media-core sh -c 'pnpm exec tsgo -p media/service/tsconfig.json && cd media/core && ../../node_modules/.bin/tsgo -p tsconfig.json'
+  fi
 
 fi
 
 if [ $full = 1 ]; then
+  # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
+  # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
+  # docs/list-motion.md), and a viewer's bar dragging the window only while pointed at (test/browser/viewer-bar.mjs, the motion's last share):
+  # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
+  # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar)\.mjs$'; }; then
+    if command -v google-chrome >/dev/null 2>&1; then
+      prep root deps .
+      wasm_pkg
+      prep core deps client/core-ts
+      chrome='export PLAYWRIGHT_MODULE=playwright-core PLAYWRIGHT_CHANNEL=chrome'
+      # Its share: "<part> <i>/<n>" (none said: all of it).
+      share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
+      case "${STILLFAIL_BROWSER:-}" in
+        stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
+        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || node test/browser/viewer-bar.mjs; }" ;;
+        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs" ;;
+      esac
+    else
+      later "web: stories measured, the message list's motion watched (no Chrome here)"
+    fi
+  fi
   # The tests drive the web core itself (test/core-client.test.ts): only with a real build of it.
   if part ts && [ $core_tests = 1 ]; then
     if [ -f web/src/core/iroh-pkg/.stand-in ] || [ ! -f web/src/core/iroh-pkg/built.js ]; then later "tests (need the iroh wasm)"; else step "tests" after root pnpm test; fi
   fi
   # The TypeScript core's own tests; its mesh tests on a simulated network, a few over the station's addon, prebuilt (its
   # package.json). Its side run's (real relays, networks made up at random) are scripts/side.sh's.
-  if part ts && touches "$ts_core|^station/native/mesh/|^vendor/"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
+  # Run whenever one of what they read changed (the list `remembered` keys them by): a change to the words alone
+  # (client/i18n) broke them on main unseen (2026-10-17, a28f78496).
+  if part ts && touches "$ts_core|^client/i18n/|^web/src/core/|^web/public/avatars/|^station/native/mesh/|^vendor/|^scripts/native\.ts$"; then prep core deps client/core-ts; remembered "tests: core-ts" "client/core-ts client/i18n web/src/core web/public/avatars station/native/mesh vendor scripts/native.ts" after core sh -c 'cd client/core-ts && pnpm test'; fi
   if part ts && touches "$ts_cloud"; then remembered "tests: cloud" "cloud client/i18n" after cloud sh -c 'cd cloud && pnpm test'; fi
-  if part ts && touches '^client/core-kernel/'; then prep kernel deps client/core-kernel; remembered "tests: core-kernel" "client/core-kernel" after kernel sh -c 'cd client/core-kernel && pnpm test'; fi
   # The station, with its native parts prebuilt (mesh addon, runner, the Rust station's archive for the compatibility
   # tests): its tests run whenever it, one of them or the words it says changed.
   if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
@@ -246,6 +355,15 @@ if [ $full = 1 ]; then
     step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts"'
     remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
   fi
+  # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module
+  # layer (media/test): whenever it, the core or the station changed.
+  if part station && touches '^media/|^client/core-ts/src/|^station/src/|^scripts/native\.ts$'; then
+    prep station deps station
+    prep core deps client/core-ts
+    prep media-core deps media/core
+    prep media-test deps media/test
+    remembered "tests: media" "media client/core-ts station/src scripts/native.ts" after station after core after media-core after media-test sh -c 'cd media/service && node --test --test-timeout=120000 test/*.test.ts && cd ../core && pnpm test && cd ../test && pnpm test'
+  fi
   # The native parts' own tests, where their Rust changed (the mesh addon's: the vendored crates it patches in, too).
   for crate in launcher runner mesh; do
     also='^$'; [ $crate = mesh ] && also='^vendor/'
@@ -254,17 +372,40 @@ if [ $full = 1 ]; then
       if has cargo; then remembered "Rust: station/native/$crate" "$inputs" heavy cargo_test "station/native/$crate" --locked -q; else later "Rust: station/native/$crate"; fi
     fi
   done
+  # still.fail Helper (Swift, station/native/helper and the PermissionFlow it uses): built where it changed, on a Mac.
+  if part station && touches '^station/native/helper/|^vendor/PermissionFlow/' && has swift; then step "Swift: station/native/helper" node scripts/native.ts path helper; fi
   # The core's native shells (client/shell for Android, client/iroh-wasm for the web).
   if part core && touches '^client/(shell|iroh-wasm)/|^client/Cargo\.(toml|lock)$|^vendor/'; then
     if has cargo; then remembered "Rust: client" "client vendor" heavy cargo_test client --workspace -q; else later "Rust: client"; fi
   fi
-  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed.
+  # Its shell and engine prebuilt (apps/android/build.py): only a JDK and the SDK needed. Built as build 1, not the
+  # commits' count: a number new each commit is in its BuildConfig and manifest, and with it everything was compiled and
+  # linted anew, where the build CI keeps of it (pipeline.yml) leaves all but what changed up to date.
   # What it is built from, and so what runs it: apps/android/carries.sh. STILLFAIL_CHECK_APK=1 (a branch's CI)
-  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again.
+  # makes the debug app in the same Gradle run, as evidence it builds: one build, not a second job doing it again;
+  # only for a change to how it is put together (its Gradle files, manifests, resources, prebuilt parts), as code that
+  # compiles packs the same way: dexing its libraries anew took ~2 of a check's 5 minutes on CI's four cores (2026-10-17).
+  if [ -n "${STILLFAIL_CHECK_APK:-}" ] && ! touches '^apps/android/(.*\.gradle\.kts|gradle/|gradle\.properties|.*/AndroidManifest\.xml|.*/res/|.*/jniLibs/)|^client/(shell|engine)/|^scripts/native\.ts$'; then STILLFAIL_CHECK_APK=; fi
   if part android && printf '%s\n' "$changed" | sh apps/android/carries.sh; then
     sdk=${ANDROID_HOME:-$HOME/Library/Android/sdk}
     if [ -d "$sdk/platforms" ]; then
-      remembered "Android${STILLFAIL_CHECK_APK:+ (and the debug app)}" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons package.json pnpm-lock.yaml" heavy python3 apps/android/build.py --tasks :app:compileDebugKotlin :app:testDebugUnitTest :core:testDebugUnitTest :app:lintDebug :core:lintDebug ${STILLFAIL_CHECK_APK:+:app:assembleDebug}
+      # STILLFAIL_ANDROID=build (its Kotlin, its instrumented tests' Kotlin too, so a part they use moved or hidden is
+      # caught here and not when someone next runs them; unit tests and the debug app) or lint: one share of it (CI's two jobs side
+      # by side, lint the longest part); unset, all of it.
+      # Lint only for a change it can find anything in (apps/android/lints.sh): not the core's or the shell's alone.
+      build=":app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest :core:testDebugUnitTest :shared:testDebugUnitTest :chat:testDebugUnitTest :drive:testDebugUnitTest ${STILLFAIL_CHECK_APK:+:app:assembleDebug}"
+      lint=""
+      if printf '%s\n' "$changed" | sh apps/android/lints.sh; then lint=":app:lintDebug :core:lintDebug :shared:lintDebug :settings:lintDebug :chat:lintDebug :drive:lintDebug"; fi
+      case "${STILLFAIL_ANDROID:-}" in
+        build) what="Android: build and tests${STILLFAIL_CHECK_APK:+, the debug app}"; tasks=$build ;;
+        lint) what="Android: lint"; tasks=$lint ;;
+        *) what="Android${lint:+ (and lint)}${STILLFAIL_CHECK_APK:+ (and the debug app)}"; tasks="$build $lint" ;;
+      esac
+      if [ -z "$lint" ] && [ "${STILLFAIL_ANDROID:-}" = lint ]; then step "Android: lint (nothing it reads changed)" true
+      else
+        # shellcheck disable=SC2086 # the tasks are words
+        remembered "$what" "apps/android client web/src/viz web/public/avatars scripts/native.ts scripts/icons.py design/icons design/station-icons package.json pnpm-lock.yaml" heavy env ORG_GRADLE_PROJECT_stillfailBuild=1 python3 apps/android/build.py --tasks $tasks
+      fi
     else later "Android"; fi
   fi
 fi
