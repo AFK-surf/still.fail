@@ -549,7 +549,8 @@ fn BarModel::sample(self : BarModel) -> Unit {
 
 ///|
 /// When all of the bar is at rest (the frames' clock, ms; before now: it is), as its springs and glides said as they
-/// set out.
+/// set out. Only for a test's end, before its assert_idle (idle is after all it said has ended); never a point a test
+/// waits for midway: there a test asks the end of the one path it looks at, not of the whole bar.
 fn BarModel::rest(self : BarModel) -> Double {
   let mut e = -1.0
   for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
