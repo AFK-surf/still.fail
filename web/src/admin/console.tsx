@@ -692,7 +692,7 @@ function EnrollDialog({ account, workspace, onClose }: { account: Account; works
         <Button variant="primary" busy={make.busy} disabled={!ready} onClick={() => make.run()}>{t("web-pages.admin.ws.makeCommand")}</Button>
       </>}>
       {made ? (
-        <Field label={t("web-pages.settings.enroll.run")}><CopyCommand text={made.install} /></Field>
+        <Field label={t("web-pages.settings.enroll.run")}><div className={css.command}><CopyCommand text={made.install} /></div></Field>
       ) : (
         <Field label={t("web-pages.admin.ws.stationName")} htmlFor="station-name">
           <input id="station-name" className={controlsCss.input} value={name} autoFocus maxLength={80} placeholder="Mac mini" onChange={(e) => setName(e.target.value)}
