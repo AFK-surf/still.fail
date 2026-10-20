@@ -234,6 +234,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
               c,
               tr("android-misc.memory.global"),
               trailing=join([tr("web-main.memory.global.when"), text(field(m, "global"), "size")], " · "),
+              start=S6,
             )
           },
           fn() {
@@ -250,7 +251,12 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
             }
           },
           fn() {
-            section_header(c, tr("android-misc.memory.projects"), trailing=tr("web-main.memory.projects.when"))
+            section_header(
+              c,
+              tr("android-misc.memory.projects"),
+              trailing=tr("web-main.memory.projects.when"),
+              start=S6,
+            )
           },
           fn() {
             if projects.length() == 0 {
@@ -266,7 +272,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
         ]
         if others.length() > 0 || builtin.length() > 0 {
           blocks.append([
-            fn() { section_header(c, tr("android-misc.memory.skills")) },
+            fn() { section_header(c, tr("android-misc.memory.skills"), start=S6) },
             fn() {
               list_card(c, fn() {
                 for k in others {

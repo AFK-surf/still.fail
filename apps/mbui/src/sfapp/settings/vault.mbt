@@ -132,7 +132,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
   let blocks : Array[() -> Unit] = []
   if requests.length() > 0 {
     blocks.push(fn() {
-      section_header(c, tr("android-settings.vault.waitingTitle") + " · " + requests.length().to_string())
+      section_header(c, tr("android-settings.vault.waitingTitle") + " · " + requests.length().to_string(), start=S6)
     })
     for r in requests {
       blocks.push(fn() { request_card(c, core, ws, v, r) })
@@ -166,7 +166,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
   let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
   for g in profile_groups(items(profiles, "items")) {
     blocks.append([
-      fn() { section_header(c, g.0) },
+      fn() { section_header(c, g.0, start=S6) },
       fn() {
         list_card(c, fn() {
           for e in g.1 {
@@ -219,7 +219,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
   }
   if !plain && vaults.length() > 0 {
     blocks.append([
-      fn() { section_header(c, tr("android-settings.vault.devices")) },
+      fn() { section_header(c, tr("android-settings.vault.devices"), start=S6) },
       fn() {
         list_card(c, fn() {
           for row in vaults {
@@ -440,7 +440,7 @@ fn vault_section(c : @ui.Ctx, core : Core, ws : String, row : Json) -> Array[() 
   let rv = Some(row)
   let topic = (core.topic)("vaultItems", { "workspace": str(ws), "vault": str(text(rv, "id")) })
   let list = items(topic.value, "items")
-  let blocks : Array[() -> Unit] = [fn() { section_header(c, text(rv, "name")) }]
+  let blocks : Array[() -> Unit] = [fn() { section_header(c, text(rv, "name"), start=S6) }]
   if flag((core.topic)("vaults", { "workspace": str(ws) }).value, "available") && !flag(rv, "keyed") {
     blocks.push(fn() {
       list_card(c, fn() {
@@ -525,7 +525,7 @@ fn library_vault(c : @ui.Ctx, core : Core, ws : String, row : Json, plain : Bool
       continue
     }
     blocks.append([
-      fn() { section_header(c, tr("android-settings.vault.kind." + kind)) },
+      fn() { section_header(c, tr("android-settings.vault.kind." + kind), start=S6) },
       fn() {
         list_card(c, fn() {
           for it in rows {

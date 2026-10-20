@@ -127,7 +127,7 @@ fn lock_off(c : @ui.Ctx, lock : Json?) -> Array[() -> Unit] {
         })
       })
     },
-    fn() { section_header(c, tr("web-pages.security.signing")) },
+    fn() { section_header(c, tr("web-pages.security.signing"), start=S6) },
     fn() { list_card(c, fn() { body(c, fn() { note(c, tr("web-pages.security.signingWho")) }) }) },
   ]
 }
@@ -190,7 +190,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
   ]
   if requests.length() > 0 {
     blocks.append([
-      fn() { section_header(c, tr("web-pages.security.waiting") + " · " + requests.length().to_string()) },
+      fn() { section_header(c, tr("web-pages.security.waiting") + " · " + requests.length().to_string(), start=S6) },
       fn() {
         list_card(c, fn() {
           for r in requests {
@@ -220,7 +220,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
     ])
   }
   blocks.append([
-    fn() { section_header(c, tr("web-pages.security.people")) },
+    fn() { section_header(c, tr("web-pages.security.people"), start=S6) },
     fn() {
       list_card(c, fn() {
         for m in items(lock, "members") {
@@ -242,7 +242,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
         }
       })
     },
-    fn() { section_header(c, "Station") },
+    fn() { section_header(c, "Station", start=S6) },
     fn() {
       list_card(c, fn() {
         let stations = items(lock, "stations")
@@ -282,7 +282,7 @@ fn lock_on(c : @ui.Ctx, core : Core, here : Here, lock : Json?) -> Array[() -> U
         }
       })
     },
-    fn() { section_header(c, tr("web-pages.security.webTitle")) },
+    fn() { section_header(c, tr("web-pages.security.webTitle"), start=S6) },
     fn() { list_card(c, fn() { body(c, fn() { note(c, tr("web-pages.security.webRisk")) }) }) },
   ])
   if flag(lock, "owner") && signs {
@@ -559,7 +559,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       } else {
         blocks.append([
           fn() { page_note(c, tr("web-pages.security.openLead")) },
-          fn() { section_header(c, tr("web-pages.security.members")) },
+          fn() { section_header(c, tr("web-pages.security.members"), start=S6) },
           fn() {
             list_card(c, fn() {
               for m in items(draft, "members") {
@@ -579,7 +579,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
               }
             })
           },
-          fn() { section_header(c, tr("web-pages.security.devices")) },
+          fn() { section_header(c, tr("web-pages.security.devices"), start=S6) },
           fn() {
             list_card(c, fn() {
               for d in items(draft, "devices") {
@@ -610,7 +610,7 @@ fn security_open_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
               }
             })
           },
-          fn() { section_header(c, "Station") },
+          fn() { section_header(c, "Station", start=S6) },
           fn() {
             list_card(c, fn() {
               for st in items(draft, "stations") {

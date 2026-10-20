@@ -123,6 +123,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         } else {
           fill("android-settings.members.count", [("n", n)])
         },
+        start=S6,
       )
     },
     fn() {
@@ -203,7 +204,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
   // the workspace's own relays (Settings.kt Relays): a row each, the way to add one
   if manager || relays.length() > 0 {
     blocks.append([
-      fn() { section_header(c, tr("android-settings.relays.title")) },
+      fn() { section_header(c, tr("android-settings.relays.title"), start=S6) },
       fn() {
         list_card(c, fn() {
           let busy = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])

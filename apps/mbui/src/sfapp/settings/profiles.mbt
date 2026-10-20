@@ -113,7 +113,7 @@ fn profiles_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
           } else {
             for g in group_by(list) {
               blocks.append([
-                fn() { section_header(c, g.0) },
+                fn() { section_header(c, g.0, start=S6) },
                 fn() {
                   list_card(c, fn() {
                     for p in g.1 {
@@ -183,7 +183,7 @@ fn workspace_profiles(c : @ui.Ctx, core : Core, here : Here) -> Array[() -> Unit
   }
   for g in profile_groups(list) {
     blocks.append([
-      fn() { section_header(c, g.0) },
+      fn() { section_header(c, g.0, start=S6) },
       fn() {
         list_card(c, fn() {
           for e in g.1 {
@@ -407,7 +407,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
           blocks.append(models_section(c, core, address, pv))
         }
         blocks.append([
-          fn() { section_header(c, tr("android-settings.profile.users")) },
+          fn() { section_header(c, tr("android-settings.profile.users"), start=S6) },
           fn() {
             list_card(c, fn() {
               if users.length() == 0 {
@@ -449,7 +449,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         if !copy && (kind == "opencode-go" || kind == "anthropic-api" || kind == "api-provider") &&
           !flag(field(pv, "access"), "login") {
           blocks.append([
-            fn() { section_header(c, tr("android-settings.run.account")) },
+            fn() { section_header(c, tr("android-settings.run.account"), start=S6) },
             fn() {
               list_card(c, fn() {
                 list_row(c, fn() {
@@ -488,7 +488,7 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
         }
         if kind == "env" && !copy {
           blocks.append([
-            fn() { section_header(c, tr("android-settings.env.title")) },
+            fn() { section_header(c, tr("android-settings.env.title"), start=S6) },
             fn() {
               list_card(c, fn() {
                 for e in items(pv, "env") {
@@ -705,7 +705,7 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
   let id = text(pv, "id")
   let on = [("station", station), ("id", id)]
   if flag(pv, "decisionOnly") {
-    let blocks : Array[() -> Unit] = [fn() { section_header(c, tr("web-mobile.profiles.decisionModels")) }]
+    let blocks : Array[() -> Unit] = [fn() { section_header(c, tr("web-mobile.profiles.decisionModels"), start=S6) }]
     blocks.push(fn() {
       for m in strings(pv, "decisionModels") {
         c.box(w=Fill(1.0), padx=24.0, pady=6.0, fn() {
@@ -769,6 +769,7 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
           },
           [("on", models.length().to_string()), ("n", all.length().to_string())],
         ),
+        start=S6,
       )
       c.box(w=Fill(1.0), padx=24.0, pb=6.0, fn() {
         c.text(

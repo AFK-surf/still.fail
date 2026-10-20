@@ -159,6 +159,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
             fill("android-settings.home.workspace", [("name", text(v, "name")), ("role", role_label(text(v, "role")))])
           None => here.name
         },
+        start=S6,
       )
     },
     fn() {
@@ -276,7 +277,7 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
       })
     },
-    fn() { section_header(c, tr("android-settings.home.device")) },
+    fn() { section_header(c, tr("android-settings.home.device"), start=S6) },
     fn() {
       list_card(c, fn() {
         let theme = appearance((core.topic)("prefs", Map::new()).value)
@@ -400,7 +401,7 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     note : String,
   ) {
     [
-      fn() { section_header(c, title) },
+      fn() { section_header(c, title, start=S6) },
       fn() {
         let mut at = fallback
         for i, o in options {
@@ -504,7 +505,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
       })
       |> ignore
     },
-    fn() { section_header(c, tr("android-settings.me.accounts")) },
+    fn() { section_header(c, tr("android-settings.me.accounts"), start=S6) },
     fn() {
       list_card(c, fn() {
         for a in accounts {
@@ -548,7 +549,7 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }
       })
     },
-    fn() { section_header(c, tr("android-settings.me.devices")) },
+    fn() { section_header(c, tr("android-settings.me.devices"), start=S6) },
     fn() { devices(c, core, here) },
     fn() { gap(c, 30.0) },
   ])
