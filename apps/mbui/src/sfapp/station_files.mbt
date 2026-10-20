@@ -481,7 +481,7 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
   }
   let t = @sf.theme()
   // (as the files' row: as far from the capsule's left edge as from its top)
-  c.box(dir=Row, w=Fill(1.0), pl=composer_files_in - composer_inset, pr=2.0, pt=files_row_top, gap=11.0, align=AEnd, clip=true, fn() {
+  c.box(style=composer_files_row, fn() {
     for r in refs {
       let remove = c.id("composer/unref/" + r.station + "|" + r.path)
       let card = c.id("composer/ref/" + r.station + "|" + r.path)
@@ -525,7 +525,7 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
         padx=10.0,
         pady=8.0,
         gap=10.0,
-        radius=files_corner(),
+        style=files_card(),
         border=if named { 1.0 } else { 0.0 },
         border_color=@sf.alpha(t.p.text, 0.22),
         bg=if named { 0L } else { ink().neutral },

@@ -92,17 +92,25 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
       out.write_string("settings" + dark + " " + name + " " + fnv(home) + "\n")
       let station = screen_drawlist("settings" + dark, w, h, page="station:ws1/st1")
       out.write_string("station" + dark + " " + name + " " + fnv(station) + "\n")
+      // a settings page's wait line, in its list's rows (built as the list is laid out: still.fail#791)
+      let reading = screen_drawlist("settings-me-reading" + dark, w, h, page="me")
+      out.write_string("me-reading" + dark + " " + name + " " + fnv(reading) + "\n")
     }
   }
   inspect(out.to_string(), content=(
     #|settings narrow 17260:4646cb7b
     #|station narrow 31484:b094a1e1
+    #|me-reading narrow 9873:82e96fc0
     #|settings wide 35318:a381ea59
     #|station wide 38432:1371a32a
+    #|me-reading wide 20365:7930275e
     #|settings-dark narrow 17246:9104c939
     #|station-dark narrow 31170:c5363af2
+    #|me-reading-dark narrow 9865:e7138d48
     #|settings-dark wide 35296:ce5431c1
     #|station-dark wide 38353:a123ae9a
+    #|me-reading-dark wide 20249:7f6d45c8
     #|
+
   ))
 }

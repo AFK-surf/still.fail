@@ -131,6 +131,11 @@
       "src/sfapp/service.mbt": 1
     },
     "host-read": {},
+    "builtin-hash": {
+      "src/books/library.mbt": 1,
+      "src/sfapp/composer.mbt": 2
+    },
+    "hash-order": {},
     "globals": {},
     "style-literal": {
       "src/coredemo/main.mbt": 39,
@@ -144,7 +149,7 @@
       "src/sfapp/app.mbt": 47,
       "src/sfapp/bar.mbt": 38,
       "src/sfapp/chat.mbt": 151,
-      "src/sfapp/composer.mbt": 130,
+      "src/sfapp/composer.mbt": 126,
       "src/sfapp/decide.mbt": 53,
       "src/sfapp/decisions.mbt": 139,
       "src/sfapp/drive.mbt": 158,
@@ -170,7 +175,7 @@
       "src/sfapp/settings/connects.mbt": 33,
       "src/sfapp/settings/home.mbt": 50,
       "src/sfapp/settings/memory.mbt": 56,
-      "src/sfapp/settings/parts.mbt": 265,
+      "src/sfapp/settings/parts.mbt": 258,
       "src/sfapp/settings/profiles.mbt": 143,
       "src/sfapp/settings/security.mbt": 80,
       "src/sfapp/settings/sheet.mbt": 63,
@@ -180,7 +185,7 @@
       "src/sfapp/settings/workspace.mbt": 30,
       "src/sfapp/share.mbt": 90,
       "src/sfapp/sheets.mbt": 329,
-      "src/sfapp/station_files.mbt": 77,
+      "src/sfapp/station_files.mbt": 74,
       "src/sfapp/updates.mbt": 10,
       "src/sfapp/wide.mbt": 73,
       "src/sfapp/wide_chat.mbt": 35,
@@ -206,7 +211,7 @@
       "src/sfapp/app.mbt": 18,
       "src/sfapp/bar.mbt": 18,
       "src/sfapp/chat.mbt": 58,
-      "src/sfapp/composer.mbt": 53,
+      "src/sfapp/composer.mbt": 52,
       "src/sfapp/decide.mbt": 18,
       "src/sfapp/decisions.mbt": 53,
       "src/sfapp/drive.mbt": 63,
@@ -232,7 +237,7 @@
       "src/sfapp/settings/connects.mbt": 17,
       "src/sfapp/settings/home.mbt": 22,
       "src/sfapp/settings/memory.mbt": 24,
-      "src/sfapp/settings/parts.mbt": 98,
+      "src/sfapp/settings/parts.mbt": 96,
       "src/sfapp/settings/profiles.mbt": 61,
       "src/sfapp/settings/security.mbt": 39,
       "src/sfapp/settings/sheet.mbt": 18,
@@ -242,7 +247,7 @@
       "src/sfapp/settings/workspace.mbt": 14,
       "src/sfapp/share.mbt": 37,
       "src/sfapp/sheets.mbt": 138,
-      "src/sfapp/station_files.mbt": 28,
+      "src/sfapp/station_files.mbt": 27,
       "src/sfapp/updates.mbt": 5,
       "src/sfapp/wide.mbt": 30,
       "src/sfapp/wide_chat.mbt": 14,
@@ -257,7 +262,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 2
+      "src/sf/tokens.mbt": 5
     },
     "unsettled-ok": {
       "src/sfreplay/flows/chat/offline_retry_test.mbt": 1,
@@ -280,6 +285,8 @@
     "wall-clock": {},
     "poll": {},
     "host-read": {},
+    "builtin-hash": {},
+    "hash-order": {},
     "globals": {},
     "style-literal": {},
     "box-loose": {},

@@ -141,6 +141,7 @@ fn init {
 /// of this package is put back here (or in what this calls) as its `let` has it, or says why it is kept across runs
 /// (scripts/check.sh checks).
 fn reset() -> Unit {
+  files_cornered.val = false
   attention.told = false
   attention.visible = false
   attention.focused = false
