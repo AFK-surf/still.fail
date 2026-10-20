@@ -588,6 +588,22 @@ fn Ctx::place_list(
       st.vis_last = rn.item
     }
   }
+  // held at its end: where its first row in view stands said from the end (the view's bottom less the rows from it
+  // down), the same however it got there, not by the float error of laying from where it was and moving back
+  if pinned_end && st.vis_first >= 0 {
+    let mut below_top = 0.0
+    let mut from = false
+    for r in order {
+      let rn = self.nodes[r]
+      if rn.item == st.vis_first {
+        from = true
+      }
+      if from {
+        below_top = below_top + rn.fh
+      }
+    }
+    st.anchor_off = iy - (bottom_edge - below_top)
+  }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
   // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told):

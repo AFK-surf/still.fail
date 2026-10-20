@@ -14,6 +14,8 @@ pub struct Tester {
   /// at its display's vsync (Tester::set_frame_period)
   mut origin : Double
   mut period : Double
+  /// the display's frames to come, as a run's tape had them (Tester::set_frame_times): after the last, on its period
+  mut times : Array[Double]
 }
 
 ///|
@@ -232,7 +234,7 @@ pub fn Tester::new(
   }
   fx_reset(seed)
   g_view.val = view
-  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default }
+  let t = { fake: f, w, h, frames: 0, seed, origin: time, period: frame_period_default, times: [] }
   // a host's run replayed: its first frame where the host drew it (its first DRAWHASH), the display's frames from
   // there; else the display's first frame after `time`
   match run.bind(run_first_frame) {
@@ -333,26 +335,37 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 }
 
 ///|
-/// Draws one frame, at the display's first frame `ms` or more on (the next one at the least): frames come only at the
-/// display's vsync (Tester::set_frame_period), as on a host.
-pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
+/// Draws one frame, at the display's first frame `ms` or more on (by default, and at the least, the next one): frames
+/// come only at the display's vsync (Tester::set_frame_period, set_frame_times), as on a host.
+pub fn Tester::frame(self : Tester, ms? : Double = 0.0) -> Unit {
   let next = self.tick_after(self.fake.time)
   let want = self.fake.time + ms
   self.frame_at(if want > next { self.tick_at(want) } else { next })
 }
 
 ///|
-/// The display's first frame after `t` (Tester::frame).
+/// The display's first frame after `t` (Tester::frame): of its frames' times (set_frame_times) while they last, else on
+/// its period.
 fn Tester::tick_after(self : Tester, t : Double) -> Double {
-  let k = ((t - self.origin) / self.period + 1.0e-9).floor() + 1.0
-  self.origin + k * self.period
+  match self.times.search_by(fn(f) { f > t }) {
+    Some(i) => self.times[i]
+    None => {
+      let k = ((t - self.origin) / self.period + 1.0e-9).floor() + 1.0
+      self.origin + k * self.period
+    }
+  }
 }
 
 ///|
 /// The display's first frame at or after `t`.
 fn Tester::tick_at(self : Tester, t : Double) -> Double {
-  let k = ((t - self.origin) / self.period - 1.0e-9).ceil()
-  self.origin + k * self.period
+  match self.times.search_by(fn(f) { f >= t }) {
+    Some(i) => self.times[i]
+    None => {
+      let k = ((t - self.origin) / self.period - 1.0e-9).ceil()
+      self.origin + k * self.period
+    }
+  }
 }
 
 ///|
@@ -375,10 +388,33 @@ pub fn Tester::display_frame(self : Tester, t : Double) -> Double {
 }
 
 ///|
-/// The display's frame period from now on (ms; a run's own, as its tape says it), its frames counted from now.
+/// The display's frame period from now on (ms; a run's own, as its tape says it), its frames counted from now (frames'
+/// times set before let go).
 pub fn Tester::set_frame_period(self : Tester, ms : Double) -> Unit {
   self.origin = self.fake.time
   self.period = ms
+  self.times = []
+}
+
+///|
+/// The display's frames from now on at `times` (ms on the frames' clock, each later than the one before and than now):
+/// a run's own, as its tape had them, where every frame the Tester draws comes (an input's, run_for's, draw's); after
+/// the last, on the frame period from it. Grid and tape are one: the period's frames a table of times evenly apart.
+pub fn Tester::set_frame_times(self : Tester, times : Array[Double]) -> Unit {
+  let mut before = self.fake.time
+  for i, at in times {
+    if !(at > before) {
+      let s = "Tester::set_frame_times: time \{i} (\{at}) is not later than " +
+        (if i == 0 { "now (\{before})" } else { "the one before it (\{before})" })
+      println(s)
+      abort(s)
+    }
+    before = at
+  }
+  self.times = times.copy()
+  if times.length() > 0 {
+    self.origin = times[times.length() - 1]
+  }
 }
 
 ///|

@@ -555,3 +555,50 @@ test "a motion going on owes no frame at a moment: draw draws one, run_for draws
   t.assert_idle()
 }
 
+
+///|
+test "set_frame_times: every frame at the times given (an input's, run_for's, draw's), then on the period from the last" {
+  let taps : Array[Double] = []
+  let t = @ui.Tester::new(fn(c) { if c.button("Go") { taps.push(c.now()) } }, w=200.0, h=200.0)
+  let now = t.time()
+  // a run's own frames: not evenly apart
+  let times = Array::makei(12, fn(k) { now + 15.0 * (k + 1).to_double() + (if k % 3 == 0 { 1.5 } else { 0.0 }) })
+  t.set_frame_times(times)
+  assert_eq(t.next_frame_time(), times[0])
+  assert_eq(t.display_frame(times[0] + 0.5), times[1])
+  assert_eq(t.display_frame(times[1]), times[1])
+  // a frame: the first of them
+  t.frame()
+  assert_eq(t.time(), times[0])
+  // a tap: taken at the next of them, the frames it causes each one of them
+  t.tap_text("Go")
+  assert_eq(taps, [times[1]])
+  let k = times.search(t.time()).unwrap()
+  // run_for: to the first of them at or past its end
+  t.run_for(times[k + 2] - 1.0 - t.time())
+  assert_eq(t.time(), times[k + 2])
+  t.frame()
+  assert_eq(t.time(), times[k + 3])
+  // past the last: on the period from it
+  t.run_for(times[11] - t.time())
+  t.frame()
+  assert_eq(t.time(), times[11] + t.frame_period())
+  // the period set again: no times left
+  t.set_frame_times([t.time() + 5.0])
+  t.set_frame_period(10.0)
+  let from = t.time()
+  t.frame()
+  assert_eq(t.time(), from + 10.0)
+}
+
+///|
+test "panic set_frame_times: a time not later than the one before is said, and which" {
+  let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
+  t.set_frame_times([t.time() + 10.0, t.time() + 10.0])
+}
+
+///|
+test "panic set_frame_times: a time not later than now is said" {
+  let t = @ui.Tester::new(fn(c) { c.text("x") |> ignore }, w=100.0, h=100.0)
+  t.set_frame_times([t.time()])
+}

@@ -378,3 +378,39 @@ test "the desktop: a mouse drag coasts (v (0.997^t - 1) / ln 0.997) and stops at
   approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
   approx(t.list_overscroll(), 0.0, 0.0)
 }
+
+///|
+/// A list of rows whose heights are no binary fractions, dragged by `drags` (each a way up, in its steps) and let come
+/// to rest after each: where it stands (its first row in view, how far past it, the offset).
+fn rested_after(drags : Array[(Double, Int)]) -> (Int, Double, Double) {
+  let t = Tester::new(
+    fn(c) {
+      c.list("l", 30, 35.0, fn(i) {
+        c.box(h=Px(33.3 + (i % 7).to_double() * 0.71), fn() { c.text("row \{i}") |> ignore }) |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=400.0,
+  )
+  for d in drags {
+    let (dy, steps) = d
+    t.drag(150.0, 380.0, 150.0, 380.0 - dy, steps~)
+    let r = t.rest_of("a list")
+    if r > t.time() {
+      t.run_for(r - t.time())
+    }
+    t.draw()
+  }
+  let st = t.list_state()
+  (st.anchor, st.anchor_off, st.offset())
+}
+
+///|
+test "a list at its end stands the same however it got there: to the float, its first row in view and its offset" {
+  let one = rested_after([(3000.0, 5)])
+  let two = rested_after([(700.0, 9), (2600.0, 4)])
+  let three = rested_after([(250.0, 3), (250.0, 3), (2900.0, 7)])
+  assert_eq(two, one)
+  assert_eq(three, one)
+}
