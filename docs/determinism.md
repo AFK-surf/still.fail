@@ -156,6 +156,15 @@ Only for these, which the framework knows by itself:
   its tape (ENV lines, #50) and given again by `replay_frames`: each host's run is recorded as its machine is set
   (Windows' runner has "Show animations" off: its run is drawn with motion reduced, and so is its replay). The kitdemo pages' own
   state, which a kept run's test starts from, is put back by `reset` (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
+- **The marks' contract** (`scripts/host_contract.sh HOST marks`, in the same workflows as a step of its own, run
+  when the host's marks code, src/host/marks.mbt, test/marks or the reference change): `@host.draw_marks` draws
+  test/marks/marks.json (a box, an arrow, two hand-drawn lines, words, three numbered pins) onto test/marks/base.png
+  (made by test/marks/base.py, flat colours), kitdemo's MBUI_MARKS, twice on the host; the two PNGs the same to the
+  byte, and the same as goldens/marks/`<host>`.png, made on what goldens/marks/`<host>`.txt says (checked: `system`,
+  the system's build that draws it, and `fonts`, the system font's bytes; the rest only said). Either another: the
+  reference made again from the workflow's artifact (out/host/`<host>`/marks.png, marks.txt). macOS (Mini1, Core
+  Graphics), iOS (Mini1's simulator) and Android (the emulator's Canvas) draw marks; Windows and the web draw none
+  (`draw_marks` is None there), so they have no such contract.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
   placed is checked (a Tester's `views`).

@@ -28,4 +28,6 @@ fn reset() -> Unit {
   toasts_made.val = 0
   opened_env.val = false
   text_checked.val = false
+  marks_job.val = None
+  marks_started.val = false
 }

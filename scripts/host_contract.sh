@@ -8,6 +8,10 @@
 #        NAME=HOST_controls keeps the tape as the one committed (src/kitdemo/textrec_HOST_controls*.mbt)
 #   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
 #        text system again (MBUI_TEXTCHECK, src/kitdemo/textcheck.mbt): each answer the same, or it fails
+#   scripts/host_contract.sh HOST marks         (mac, ios, android) test/marks/marks.json drawn by the host onto
+#        test/marks/base.png (@host.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
+#        the same to the byte (out/host/HOST/marks.png), and the same as goldens/marks/HOST.png, on what drew it
+#        (goldens/marks/HOST.txt's checked lines: the system's build, its fonts; out/host/HOST/marks.txt this run's)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -58,6 +62,53 @@ ios_apps() {
     | awk '$1 != "-" && index($3, "UIKitApplication:") == 1 && index($3, "UIKitApplication:com.apple.") != 1 { print $3 }'
 }
 
+# (marks) what drew this run's PNG, a line each: the checked ones (`system`: the system's build, whose Core Graphics,
+# Core Text and ImageIO, or Skia, drew it; `fonts`: the system font's bytes, md5) and the ones only said
+marks_machine() {
+  case $H in
+    mac)
+      echo "system $(sw_vers -productVersion) $(sw_vers -buildVersion)"
+      echo "fonts $(cat /System/Library/Fonts/SFNS.ttf /System/Library/Fonts/SFNSMono.ttf 2>/dev/null | md5 -q)"
+      echo "cpu $(sysctl -n machdep.cpu.brand_string)" ;;
+    ios)
+      local id rt root
+      read -r id _ <<< "$(ios_device)"
+      rt=$(xcrun simctl list devices -j | "$PY" -c "
+import json,sys
+for r, ds in json.load(sys.stdin)['devices'].items():
+  for x in ds:
+    if x['udid']=='$id': print(r)
+")
+      read -r ver build root <<< "$(xcrun simctl list runtimes -j | "$PY" -c "
+import json,sys
+for r in json.load(sys.stdin)['runtimes']:
+  if r['identifier']=='$rt': print(r['version'], r['buildversion'], r.get('runtimeRoot','').replace(' ','%20'))
+")"
+      root=${root//%20/ }
+      echo "system iOS $ver $build"
+      echo "fonts $(cat "$root"/System/Library/Fonts/Core/SFUI.ttf "$root"/System/Library/Fonts/Core/SFUIMono.ttf 2>/dev/null | md5 -q)"
+      echo "device $(xcrun simctl list devices -j | "$PY" -c "
+import json,sys
+for ds in json.load(sys.stdin)['devices'].values():
+  for x in ds:
+    if x['udid']=='$id': print(x.get('deviceTypeIdentifier','').split('.')[-1])
+")"
+      echo "host macOS $(sw_vers -productVersion) $(sw_vers -buildVersion), $(sysctl -n machdep.cpu.brand_string)" ;;
+    android)
+      echo "system $($ADB shell getprop ro.build.fingerprint | tr -d '\r')"
+      echo "fonts $($ADB shell 'cat /system/etc/font_fallback.xml /system/fonts/Roboto-Regular.ttf' | md5sum | cut -c1-32)"
+      echo "emulator $(sed -n 's/^Pkg.Revision=//p' $SDK/emulator/source.properties)"
+      # (the CPU features the emulator shows: what Skia's raster code picks its SIMD path by)
+      local flags simd= f
+      flags=$($ADB shell cat /proc/cpuinfo | tr -d '\r' | awk -F': ' '/^flags/ { print $2; exit }')
+      for f in sse4_2 avx avx2 fma avx512f avx512bw; do
+        case " $flags " in *" $f "*) simd="$simd $f" ;; esac
+      done
+      echo "simd ${simd# }"
+      echo "cpu $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo 2>/dev/null | head -1)" ;;
+  esac
+}
+
 # One run of kitdemo on the host with the environment $1 (K=V words), its log into $2; the app's end is its own.
 run() {
   case $H in
@@ -72,7 +123,7 @@ run() {
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="$(echo "$1" | tr ' ' ';');MBUI_LOG_FILE=run.log" \
         bash scripts/android.sh run
       # the app's own named end (or its crash) as logcat has it; its whole log is the file it wrote (Host.log)
-      $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -82,7 +133,7 @@ run() {
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
       # own, @host.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
-      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)" --pid $pid \
+      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       "$PY" scripts/logwait.py --pid $pid ;;
   esac
@@ -162,5 +213,49 @@ case $CMD in
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text; ios: free, done)" >&2; exit 1 ;;
+  marks)
+    # (Windows and the web draw no marks: @host.draw_marks is None there)
+    case $H in mac|ios|android) ;; *) echo "marks contract: $H draws no marks (@host.draw_marks is None there)"; exit 1 ;; esac
+    MK="MBUI_MARKS=$(base64 < test/marks/marks.json | tr -d '\n\r') MBUI_MARKS_IMAGE=$(base64 < test/marks/base.png | tr -d '\n\r')"
+    rm -f $O/marks*.png $O/marks*.log $O/marks.txt
+    for n in 1 2; do
+      run "$MK" $O/marks-$n.log || true
+      if ! grep -aqE "MARKS (done|none|failed)" $O/marks-$n.log; then
+        echo "marks contract ($H): run $n said nothing of the marks"; tail -20 $O/marks-$n.log; exit 1
+      fi
+      grep -aE "MARKS (done|none|failed)" $O/marks-$n.log | tr -d '\r'
+      grep -aq "MARKS done" $O/marks-$n.log || exit 1
+      "$PY" -c "
+import base64,sys
+parts=[l.split('MARKS png ',1)[1].strip() for l in open(sys.argv[1],encoding='utf-8',errors='replace') if 'MARKS png ' in l]
+open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
+" $O/marks-$n.log $O/marks-$n.png
+    done
+    if ! cmp -s $O/marks-1.png $O/marks-2.png; then
+      echo "marks contract ($H): the two runs' PNGs differ ($O/marks-1.png, marks-2.png)"
+      exit 1
+    fi
+    cp $O/marks-1.png $O/marks.png
+    { echo "png $("$PY" -c "import hashlib,sys; print(hashlib.md5(open(sys.argv[1],'rb').read()).hexdigest())" $O/marks.png)"; marks_machine; } | tee $O/marks.txt
+    REF=goldens/marks/$H
+    if [ ! -f $REF.png ] || [ ! -f $REF.txt ]; then
+      echo "marks contract ($H): no reference yet: commit this run's $O/marks.png as $REF.png, marks.txt as $REF.txt (the host-$H artifact)"
+      exit 1
+    fi
+    bad=0
+    for k in system fonts; do
+      want=$(sed -n "s/^$k //p" $REF.txt); have=$(sed -n "s/^$k //p" $O/marks.txt)
+      if [ "$want" != "$have" ]; then
+        echo "marks contract ($H): $k is \"$have\" here, $REF.png was made on \"$want\": make it again from this run's artifact ($O/marks.png, marks.txt), saying so"
+        bad=1
+      fi
+    done
+    [ $bad = 0 ] || exit 1
+    if cmp -s $O/marks.png $REF.png; then
+      echo "marks contract ($H): the host's PNG is $REF.png, to the byte"
+    else
+      echo "marks contract ($H): the host's PNG is not $REF.png (this run's artifact has it: $O/marks.png)"
+      exit 1
+    fi ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks; ios: free, done)" >&2; exit 1 ;;
 esac

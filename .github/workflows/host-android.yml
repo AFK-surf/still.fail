@@ -15,6 +15,13 @@ on:
       - "src/kitdemo/textcheck.mbt"
       - "src/kitdemo/textrec_android_*"
       - ".github/workflows/host-android.yml"
+      - "src/host/marks.mbt"
+      - "src/host/host_native.mbt"
+      - "src/kitdemo/markscheck.mbt"
+      - "src/kitdemo/main.mbt"
+      - "test/marks/**"
+      - "goldens/marks/android*"
+      - "src/host/moon.pkg"
   push:
     branches: [main]
     paths: *paths
@@ -29,6 +36,40 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - name: What changed (a pull request runs the contracts its files touch)
+        id: f
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            host:
+              - "src/host/android_host.c"
+              - "android/**"
+              - "scripts/android.sh"
+              - "scripts/host_contract.sh"
+              - "scripts/textrec_test.py"
+              - "test/host/**"
+              - "src/kitdemo/textcheck.mbt"
+              - "src/kitdemo/textrec_android_*"
+              - ".github/workflows/host-android.yml"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/main.mbt"
+              - "src/host/moon.pkg"
+            marks:
+              - "src/host/android_host.c"
+              - "android/app/src/main/java/dev/mbui/Marks.java"
+              - "android/app/src/main/java/dev/mbui/Host.java"
+              - "android/app/build.gradle.kts"
+              - "src/host/marks.mbt"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/markscheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "test/marks/**"
+              - "goldens/marks/android*"
+              - "scripts/android.sh"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/host-android.yml"
+              - "src/host/moon.pkg"
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: gradle/actions/setup-gradle@v4
@@ -43,8 +84,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: "The host's contract (a run's tape = a Tester's frames), then the text's (android_controls = the system's)"
+      - name: "The host's contract (a run's tape = a Tester's frames), the text's (android_controls = the system's), the marks' (= goldens/marks/android.png)"
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          HOST: ${{ steps.f.outputs.host }}
+          MARKS: ${{ steps.f.outputs.marks }}
         with:
           api-level: 34
           arch: x86_64
@@ -53,7 +97,8 @@ jobs:
           # the system's animations as a phone has them (off, motion would be reduced: not what a Tester plays)
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text
+          # (each when a pull request's files touch it: HOST, MARKS as the filter said; everything else, all)
+          script: if [ "$HOST" != false ]; then bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text; fi; h=$?; m=0; if [ "$MARKS" != false ]; then bash scripts/host_contract.sh android marks || m=1; fi; [ $h = 0 ] && [ $m = 0 ]
       - uses: actions/upload-artifact@v4
         if: always()
         with:

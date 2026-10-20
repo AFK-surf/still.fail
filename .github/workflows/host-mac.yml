@@ -16,6 +16,13 @@ on:
       - "src/kitdemo/textcheck.mbt"
       - "src/kitdemo/textrec_mini1_*"
       - ".github/workflows/host-mac.yml"
+      - "src/host/marks.mbt"
+      - "src/host/host_native.mbt"
+      - "src/kitdemo/markscheck.mbt"
+      - "src/kitdemo/main.mbt"
+      - "test/marks/**"
+      - "goldens/marks/mac*"
+      - "src/host/moon.pkg"
   push:
     branches: [main]
     paths: *paths
@@ -33,6 +40,40 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: What changed (a pull request runs the contracts its files touch)
+        id: f
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            host:
+              - "src/host/apple_*"
+              - "src/host/apple.h"
+              - "src/host/mac_app.m"
+              - "scripts/mac.sh"
+              - "scripts/host_contract.sh"
+              - "scripts/textrec_test.py"
+              - "test/host/**"
+              - "src/kitdemo/textcheck.mbt"
+              - "src/kitdemo/textrec_mini1_*"
+              - ".github/workflows/host-mac.yml"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/main.mbt"
+              - "src/host/moon.pkg"
+            marks:
+              - "src/host/apple_views.m"
+              - "src/host/apple.h"
+              - "src/host/mac_app.m"
+              - "src/host/marks.mbt"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/markscheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "test/marks/**"
+              - "goldens/marks/mac*"
+              - "scripts/mac.sh"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/host-mac.yml"
+              - "src/host/moon.pkg"
       - name: Install MoonBit (the latest, as the other jobs)
         run: |
           export MOON_HOME=$RUNNER_TEMP/moon
@@ -42,9 +83,14 @@ jobs:
       - name: kitdemo
         run: scripts/host_contract.sh mac build
       - name: "The host's contract: a run's tape = a Tester's frames"
+        if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac record
       - name: "The text's contract: mini1_controls = Core Text's"
+        if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac text
+      - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
+        if: (success() || failure()) && steps.f.outputs.marks != 'false'
+        run: scripts/host_contract.sh mac marks
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -9,8 +9,12 @@ fn main {
   let page = @ui.env("MBUI_SCREEN")
   // MBUI_TEXTCHECK=NAME: the kept run NAME's text asked of this host again (textcheck.mbt), in place of the gallery
   let check = @ui.env("MBUI_TEXTCHECK")
+  // MBUI_MARKS (with MBUI_MARKS_IMAGE): marks drawn by the host onto a picture, the PNG on the log (markscheck.mbt)
+  let marked = @ui.env("MBUI_MARKS")
   @ui.run("mbui kit", fn(c) {
-    if check != "" {
+    if marked != "" {
+      marks_run(c, marked, @ui.env("MBUI_MARKS_IMAGE"))
+    } else if check != "" {
       text_check_run(c, check)
     } else {
       gallery(c, if page == "" { "foundation" } else { page })

@@ -19,6 +19,13 @@ on:
       - "src/kitdemo/textcheck.mbt"
       - "src/kitdemo/textrec_ios_*"
       - ".github/workflows/host-ios.yml"
+      - "src/host/marks.mbt"
+      - "src/host/host_native.mbt"
+      - "src/kitdemo/markscheck.mbt"
+      - "src/kitdemo/main.mbt"
+      - "test/marks/**"
+      - "goldens/marks/ios*"
+      - "src/host/moon.pkg"
   push:
     branches: [main]
     paths: *paths
@@ -36,6 +43,44 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: What changed (a pull request runs the contracts its files touch)
+        id: f
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            host:
+              - "src/host/apple_*"
+              - "src/host/apple.h"
+              - "src/host/ios_app.m"
+              - "ios/**"
+              - "scripts/ios.sh"
+              - "scripts/mbc.py"
+              - "scripts/host_contract.sh"
+              - "scripts/textrec_test.py"
+              - "test/host/**"
+              - "src/kitdemo/textcheck.mbt"
+              - "src/kitdemo/textrec_ios_*"
+              - ".github/workflows/host-ios.yml"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/main.mbt"
+              - "src/host/moon.pkg"
+            marks:
+              - "src/host/apple_views.m"
+              - "src/host/apple.h"
+              - "src/host/ios_app.m"
+              - "src/host/marks.mbt"
+              - "src/host/host_native.mbt"
+              - "ios/**"
+              - "src/kitdemo/markscheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "test/marks/**"
+              - "goldens/marks/ios*"
+              - "scripts/ios.sh"
+              - "scripts/mbc.py"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/host-ios.yml"
+              - "src/host/moon.pkg"
       - name: The simulator free (no other run's app on it)
         run: scripts/host_contract.sh ios free
       - name: Install MoonBit (the latest, as the other jobs)
@@ -47,9 +92,14 @@ jobs:
       - name: kitdemo for the simulator
         run: scripts/host_contract.sh ios build
       - name: "The host's contract: a run's tape = a Tester's frames"
+        if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh ios record
       - name: "The text's contract: ios_controls = Core Text's"
+        if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh ios text
+      - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/ios.png"
+        if: (success() || failure()) && steps.f.outputs.marks != 'false'
+        run: scripts/host_contract.sh ios marks
       - name: The simulator shut down again (when these runs booted it)
         if: always()
         run: scripts/host_contract.sh ios done
