@@ -15,8 +15,8 @@ defaults:
     shell: bash
 env:
   # the compiled units by content (scripts/mbc.py's store), kept between runs by actions/cache
-  MBC_STORE: ${{ github.workspace }}/../mbc-store
-  HBC_CACHE: ${{ github.workspace }}/../hbc
+  MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+  HBC_CACHE: ${{ github.workspace }}/.ci/hbc
 jobs:
   android:
     runs-on: ubuntu-24.04
@@ -36,8 +36,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/../mbc-store
-            ${{ github.workspace }}/../hbc
+            ${{ github.workspace }}/.ci/mbc-store
+            ${{ github.workspace }}/.ci/hbc
           key: mbui-fast-${{ runner.os }}-${{ github.sha }}
           restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
@@ -70,8 +70,8 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: |
-            ${{ github.workspace }}/../mbc-store
-            ${{ github.workspace }}/../hbc
+            ${{ github.workspace }}/.ci/mbc-store
+            ${{ github.workspace }}/.ci/hbc
           key: mbui-fast-${{ runner.os }}-${{ github.sha }}
           restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
@@ -83,7 +83,11 @@ jobs:
       # the core's parts (its Rust shell, the engine, Hermes): by what they are made of
       - uses: actions/cache@v4
         with:
-          path: apps/mbui/out/core
+          # (_build/.macos-min: mac-app.sh's word that what is built is for this macOS, else it starts over)
+          path: |
+            apps/mbui/out/core
+            apps/mbui/_build/.macos-min
+            ~/Library/Caches/stillfail-build
           key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/core/**') }}
       - name: The macOS app (built, ad hoc signed)
         run: |
