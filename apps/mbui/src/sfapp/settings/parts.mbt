@@ -823,7 +823,7 @@ fn wait_pills(c : @ui.Ctx, pills : Array[String]) -> Unit {
     for f in pills {
       // (the chip's grey: the wide frame's light one is not mbui's Faint)
       c.box(style=wait_pill, bg=t.p.chip, fn() {
-        // Waiting.kt:119 (13sp, line 18)
+        // Waiting.kt:119 (13sp, line 18; its maxLines = 2 not here: mbui's words have no most lines, they run on)
         c.text(f, style=wait_pill_words) |> ignore
       })
       |> ignore
