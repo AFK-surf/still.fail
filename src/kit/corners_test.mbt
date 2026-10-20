@@ -251,3 +251,42 @@ test "corners: a round thing centred in a capsule sits in its round end" {
   t.draw()
   assert_eq(t.corner_faults(), [])
 }
+
+///|
+test "corners: flush in the corner of what cuts with a rounded corner shows the cut's corner" {
+  // a diff row's ground flush at the bottom of a card that cuts what it holds (clip, corner 12): drawn round by the
+  // cut, no fault
+  let card = fn(c : @ui.Ctx, clip : Bool) {
+    c.column(pad=20.0, fn() {
+      c.box(w=Px(300.0), h=Px(80.0), bg=0xEEEEEEFFL, radius=12.0, clip~, fn() {
+        c.box(h=Px(56.0), fn() {  }) |> ignore
+        c.box(w=Fill(1.0), h=Px(24.0), bg=0xDDF4DDFFL, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(fn(c) { card(c, true) })
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // the same card not cutting: the row's square corners show past the card's, both corners fault
+  let t = @ui.Tester::new(fn(c) { card(c, false) })
+  t.draw()
+  assert_eq(t.corner_faults().length(), 2)
+  // flush in a cut with no corner (a square clip inside the card): a square cut, the row's corners still square
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=20.0, fn() {
+      c.box(w=Px(300.0), h=Px(80.0), bg=0xEEEEEEFFL, radius=12.0, fn() {
+        c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+          c.box(h=Px(56.0), fn() {  }) |> ignore
+          c.box(w=Fill(1.0), h=Px(24.0), bg=0xDDF4DDFFL, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(t.corner_faults().length(), 2)
+}

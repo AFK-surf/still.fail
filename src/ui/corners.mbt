@@ -66,8 +66,11 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       if dx < -0.5 || dy < -0.5 || dx >= ra || dy >= ra {
         continue
       }
-      // (flush in the corner of what cuts it is still a fault: a cut is a rectangle, the container's corner does not
-      // round what lies in it; it is let be once the cut follows the corner, mbui#42)
+      // flush in the corner of something between it and the container that cuts with a rounded corner (a clip=true
+      // box with a corner, cut along it since mbui#42): what shows of it there is the cut's corner, not its own
+      if c.cut_round_at(i, p, k) {
+        continue
+      }
       let even = (dx - dy).abs() <= 0.5
       // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高), the
       // fault the container's when it does not
@@ -264,4 +267,29 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
     }
     n.radius = dmax(ra - d, 0.0)
   }
+}
+
+///|
+/// Whether node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) lies in the same corner of a
+/// box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner
+/// of its own), flush along one of its edges: what is drawn there is bounded by the cut's arc, not its own corner.
+fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
+  let b = self.nodes[i]
+  let mut q = b.parent
+  while q >= 0 {
+    let n = self.nodes[q]
+    if n.clip && n.corner() >= 0.5 {
+      let dx = if k == 0 || k == 2 { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }
+      let dy = if k < 2 { b.y - n.y } else { n.y + n.fh - (b.y + b.fh) }
+      // flush along either edge there, within the cut's corner on the other: the cut's arc bounds what shows
+      if (dx.abs() <= 0.5 && dy < n.corner()) || (dy.abs() <= 0.5 && dx < n.corner()) {
+        return true
+      }
+    }
+    if q == p {
+      break
+    }
+    q = n.parent
+  }
+  false
 }
