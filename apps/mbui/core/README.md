@@ -61,7 +61,7 @@ TARGET is aarch64-apple-darwin (the default), aarch64-apple-ios-sim or aarch64-a
   -frtti`) against the tarball's headers into `libmbui_core.a`. moon does not see it: `scripts/mac.sh` touches the
   app's `core_engine.m` when it is made again, so the app is linked again.
 - The macOS apps find the framework where it is (`-rpath` to `out/core/hermes/…/macosx` from the executable, and
-  `@executable_path/../Frameworks` for an app bundle); an iOS app would carry it in its `Frameworks`.
+  `@executable_path/../Frameworks` for an app bundle); the iOS app carries it in `MBUI.app/Frameworks`.
 
 The smoke test starts the core with a temporary data directory and cloud `https://app.still.fail`, sends
 `{"id":1,"subscribe":{"topic":"accounts"}}`, then `{"id":2,"call":"auth.begin","params":{"redirect_uri":
@@ -147,15 +147,29 @@ Still to do: a macOS app bundle (`Contents/Resources/core.hbc`, `Contents/Framew
 
 ## iOS
 
-The same `apple_core.mm` (it names the OS `ios` under `TARGET_OS_IPHONE`), built for the simulator or the device
-(`scripts/core.sh engine aarch64-apple-ios-sim`, `… aarch64-apple-ios`), linked with Hermes's xcframework slice, the
-shell built for the same target (`scripts/core.sh shell aarch64-apple-ios-sim`) and `core.hbc` as a resource of the app.
+`APP=stillfail scripts/ios.sh build | run` (or `APP=coredemo`): mbui's scripts/ios.sh on this module's app, with
+`scripts/ios-core.sh` as its hook, on a simulator of its own (`MBUI_IOS_DEVICE`, default `ios-mbui-sf`):
+
+- The same `apple_core.mm` (it names the OS `ios` under `TARGET_OS_IPHONE`), built for the simulator (`scripts/core.sh
+  apple aarch64-apple-ios-sim`: the engine, the shell built for aarch64-apple-ios-sim, `core.hbc`; the device's target
+  is aarch64-apple-ios), linked with Hermes's xcframework slice, the app's `core_engine.m` (src/sfcore/apple_engine.m)
+  and `src/core/core_native.c`. The app carries `core.hbc` and `Frameworks/hermes.framework` (React Native 0.81.4's,
+  the simulator's slice; `@executable_path/Frameworks`), signed ad hoc.
+- `secure.*`: the Keychain (`kSecClassGenericPassword`, `AfterFirstUnlockThisDeviceOnly`), as on macOS; no file stand-in
+  (MBUI_KEYS_IN_FILES is a macOS development build's).
+- Sign-in: ASWebAuthenticationSession (`apple_auth.m`) with the `stillfail` scheme, as on macOS: the cloud's callback
+  comes back to the session's handler, nothing registered.
+- The core's files: `Library/Application Support/<bundle id>/core` in the app's container (`MBUI_CORE_DATA` elsewhere:
+  the e2e gives it a path of the Mac's, which a simulator's app reads and writes as it is).
+- `ENV="K=V;…" scripts/ios.sh run` gives the app its environment (simctl's `SIMCTL_CHILD_*`); its log (stderr: the
+  host's lines, the core's) is `out/ios/app.log`.
 
 What differs from macOS:
 - Hermes runs bytecode, so there is no JIT to miss on iOS (JavaScriptCore would have run without one there).
 - Lifecycle: a suspended app's timers and sockets stop. On becoming active again, the core's cloud socket notices on
   its own ping; a `mb_core_reset` sending the shell's `reset` (BridgeHost.resetConnections) would make it immediate.
-- `secure.*` → the Keychain (below).
+- Not yet: pushes (APNs), a share extension (sharing in), a signed build for a device or TestFlight (docs/stillfail-port.md,
+  "iOS").
 
 ## Android
 
