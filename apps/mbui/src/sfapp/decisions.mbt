@@ -416,61 +416,55 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
       call("decision.answer", tr("android-misc.decisions.answerWhat"), { "option": Json::string(o.label) })
     })
   }
-  // the finger: across first, it is the swipe (and what it pressed lets go); up or down first, the messages'
-  let (px, py, down) = c.pointer()
+  // the finger on the card: its own box a drag area across (no node of its own); past the slop across first it is the
+  // swipe, and what it pressed lets go; up or down first, the messages' (mbui's claim by way); not from the reply's
+  // field. Its speed as let go is the input's own.
+  let swipe_area = frame
+  c.drag_on(swipe_area, axis=Horizontal)
   let field_rect = c.rect_of(c.id("deck/composer"))
-  let in_field = match field_rect {
-    Some((x, y, w, h)) => px >= x && px < x + w && py >= y && py < y + h
-    None => false
+  let in_field = fn(x : Double, y : Double) {
+    match field_rect {
+      Some((fx, fy, fw, fh)) => x >= fx && x < fx + fw && y >= fy && y < fy + fh
+      None => false
+    }
   }
-  if down && !dui.held && dui.going == 0 {
-    if px >= fx && px < fx + fw && py >= fy && py < fy + fh && !in_field {
-      dui.held = true
-      dui.swiping = false
-      dui.from_x = px
-      dui.from_y = py
-      dui.base = dui.drag
-      dui.last_x = px
-      dui.last_t = c.now()
-      dui.speed = 0.0
-    }
-  } else if dui.held && down {
-    let dx = px - dui.from_x
-    let dy = py - dui.from_y
-    if !dui.swiping {
-      if dabs(dy) > 8.0 && dabs(dy) > dabs(dx) {
-        dui.held = false
-      } else if dabs(dx) > 8.0 {
+  match c.drag_of(swipe_area) {
+    Some(d) => {
+      if d.down && !dui.held && dui.going == 0 && !in_field(d.x0, d.y0) {
+        dui.held = true
+        dui.swiping = false
+      }
+      // past the slop across: the card follows the finger from there (the drag's own moves, as mbui's drag_value)
+      let (dx, _) = d.take_move()
+      if dui.held && d.down && d.moving {
         dui.swiping = true
-        dui.from_x = px
+        dui.drag = dui.drag + dx
+      }
+      if dui.held && !d.down {
+        dui.held = false
+        if dui.swiping && d.take_end() {
+          let at = dui.drag
+          // its speed as the finger left it (px/s), the input's own
+          let v = d.vx * 1000.0
+          let fling = dabs(v) > 900.0 && dabs(at) > 16.0 && (v > 0.0) == (at > 0.0)
+          if at > width * 0.35 || (fling && at > 0.0) {
+            dismiss()
+          } else if at < -width * 0.35 || (fling && at < 0.0) {
+            set_aside()
+          } else {
+            // back where it rests
+            dui.going = 3
+            dui.going_from = at
+            card_go(card_back(c), card_back_ms, 0.2, 0.0, 0.0, 1.0)
+          }
+        }
       }
     }
-    if dui.swiping {
-      dui.drag = dui.base + (px - dui.from_x)
-      let dt = c.now() - dui.last_t
-      if dt > 0.0 {
-        dui.speed = (px - dui.last_x) / dt * 1000.0
-      }
-      dui.last_x = px
-      dui.last_t = c.now()
-    }
-  } else if dui.held && !down {
-    dui.held = false
-    if dui.swiping {
-      let at = dui.drag
-      let v = dui.speed
-      let fling = dabs(v) > 900.0 && dabs(at) > 16.0 && (v > 0.0) == (at > 0.0)
-      if at > width * 0.35 || (fling && at > 0.0) {
-        dismiss()
-      } else if at < -width * 0.35 || (fling && at < 0.0) {
-        set_aside()
-      } else {
-        // back where it rests
-        dui.going = 3
-        dui.going_from = at
-        card_go(card_back(c), card_back_ms, 0.2, 0.0, 0.0, 1.0)
-      }
-    }
+    None => ()
+  }
+  let down = match c.drag_of(swipe_area) {
+    Some(d) => d.down
+    None => false
   }
   let swiped = dui.swiping
   if !down {
