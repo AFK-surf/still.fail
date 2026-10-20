@@ -59,13 +59,13 @@ struct ListState {
   // past an end: how far (Android: in the view's heights; iOS: points,
   // pulled while held, shown while springing back), at which end (1 the
   // top, -1 the bottom, 0 none), held (1) or springing back (2), its
-  // velocity outward (Android: pixels per second; iOS: points per ms), the
-  // spring's last step
+  // velocity outward (Android: pixels per second; iOS: points per ms); going
+  // back, its path (scroll_path.mbt)
   mut over : Double
   mut over_edge : Int
   mut over_state : Int
   mut over_v : Double
-  mut over_t : Double
+  mut back : BackPath
   // a wheel's notches eased in (Ctx::ease_list): what they come to all told (0 none), from when, how much of it has
   // come by the last frame, and what it is said to move by (Ctx::moving)
   mut ease : Double

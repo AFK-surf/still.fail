@@ -151,15 +151,26 @@ fn rows_view(n : Int) -> (Ctx) -> Unit {
 }
 
 ///|
-/// A finger down at (200, y0), moved `dy` every 8 ms `steps` times, let go
+/// A finger down at (200, y0), moved `dy` every half a drag step (8 ms) `steps` times, let go
 /// with the last move.
 fn swipe(t : Tester, y0 : Double, dy : Double, steps : Int) -> Unit {
   t.touch(0, 200.0, y0)
   for k in 1..=steps {
-    t.advance(8.0)
+    t.advance(drag_step_ms / 2.0)
     t.touch(1, 200.0, y0 + dy * k.to_double())
   }
   t.touch(2, 200.0, y0 + dy * steps.to_double())
+}
+
+///|
+/// The list's own motion run to its end (its fling, its overscroll going back, its scroll bar faded: what it said as
+/// it set out, scroll_path.mbt), and nothing after.
+fn run_to_rest(t : Tester) -> Unit {
+  let r = t.rest_of("a list")
+  if r > t.time() {
+    t.run_for(r - t.time())
+  }
+  t.assert_idle()
 }
 
 ///|
@@ -192,20 +203,20 @@ test "Android: a fling follows Compose's spline frame by frame, from the velocit
 test "Android: the drag starts where the slop ends, nothing jumps or is lost" {
   let t = Tester::new(rows_view(100), platform=2)
   t.touch(0, 200.0, 500.0)
-  t.advance(8.0)
+  t.advance(drag_step_ms / 2.0)
   t.touch(1, 200.0, 495.0)
   t.frame(ms=0.0)
   approx(t.list_offset(), 0.0, 0.0)
-  t.advance(8.0)
+  t.advance(drag_step_ms / 2.0)
   t.touch(1, 200.0, 490.0)
   t.frame(ms=0.0)
   approx(t.list_offset(), 2.0, 1.0e-9)
-  t.advance(8.0)
+  t.advance(drag_step_ms / 2.0)
   t.touch(1, 200.0, 480.0)
   t.frame(ms=0.0)
   approx(t.list_offset(), 12.0, 1.0e-9)
-  // held still before letting go: no fling
-  t.advance(60.0)
+  // held still before letting go, longer than the velocity tracker looks back: no fling
+  t.advance(tracker_horizon_ms)
   t.touch(1, 200.0, 480.0)
   t.touch(2, 200.0, 480.0)
   t.frame()
@@ -214,7 +225,7 @@ test "Android: the drag starts where the slop ends, nothing jumps or is lost" {
   // elsewhere the slop is 6
   let m = Tester::new(rows_view(100))
   m.touch(0, 200.0, 500.0)
-  m.advance(8.0)
+  m.advance(drag_step_ms / 2.0)
   m.touch(1, 200.0, 490.0)
   m.frame(ms=0.0)
   approx(m.list_offset(), 4.0, 1.0e-9)
@@ -226,9 +237,9 @@ test "Android: pulled past the top it stretches, the rows drawn stretched, and g
   let row1 = t.row(1).unwrap().1
   t.touch(0, 200.0, 300.0)
   for k in 1..=10 {
-    t.advance(16.0)
+    t.advance(drag_step_ms)
     t.touch(1, 200.0, 300.0 + 10.0 * k.to_double())
-    t.frame(ms=0.0)
+    t.draw()
   }
   // nothing scrolled; the pull past the slop, in the list's heights
   approx(t.list_offset(), 0.0, 0.0)
@@ -238,11 +249,11 @@ test "Android: pulled past the top it stretches, the rows drawn stretched, and g
   let drawn = t.drawn_rects().filter(fn(r) { r.4 == 0xEEEEEEFFL })
   assert_true(drawn[1].1 > row1 + 0.5)
   // held still, then let go: it springs back, the list where it was
-  t.advance(100.0)
+  t.advance(tracker_horizon_ms)
   t.touch(2, 200.0, 400.0)
   t.frame()
-  // (kept: a stretch going back is stepped frame by frame (edge_spring), its end not said: no rest to run to)
-  t.settle() |> ignore
+  assert_true(t.list_moving())
+  run_to_rest(t)
   approx(t.list_overscroll(), 0.0, 0.0)
   approx(t.list_offset(), 0.0, 0.0)
   assert_false(t.list_moving())
@@ -252,16 +263,16 @@ test "Android: pulled past the top it stretches, the rows drawn stretched, and g
 test "Android: scrolling back first undoes the stretch" {
   let t = Tester::new(rows_view(100), platform=2)
   t.touch(0, 200.0, 300.0)
-  t.advance(16.0)
+  t.advance(drag_step_ms)
   t.touch(1, 200.0, 408.0)
   t.frame(ms=0.0)
   approx(t.list_overscroll(), 100.0 / 844.0, 1.0e-9)
-  t.advance(16.0)
+  t.advance(drag_step_ms)
   t.touch(1, 200.0, 358.0)
   t.frame(ms=0.0)
   approx(t.list_overscroll(), 50.0 / 844.0, 1.0e-9)
   approx(t.list_offset(), 0.0, 0.0)
-  t.advance(16.0)
+  t.advance(drag_step_ms)
   t.touch(1, 200.0, 288.0)
   t.frame(ms=0.0)
   approx(t.list_overscroll(), 0.0, 0.0)
@@ -295,9 +306,7 @@ test "Android: a finger on a flinging list stops it and taps nothing" {
   clicks.clear()
   let t = Tester::new(rows_view(500), platform=2)
   swipe(t, 700.0, -24.0, 12)
-  for _ in 0..<5 {
-    t.frame()
-  }
+  t.run_for(5.0 * drag_step_ms)
   assert_true(t.list_moving())
   let at = t.list_offset()
   t.touch(0, 200.0, 400.0)
@@ -314,51 +323,56 @@ test "Android: a finger on a flinging list stops it and taps nothing" {
 }
 
 ///|
-test "iOS: decelerates as UIScrollView, and pulls past the top on a rubber band" {
+test "iOS: decelerates as UIScrollView" {
   let t = Tester::new(rows_view(500), platform=1)
   swipe(t, 700.0, -24.0, 12)
   t.frame()
   let start = t.list_offset()
   approx(start, 12.0 * 24.0 - 6.0, 1.0e-9)
-  // (kept: a deceleration is stepped frame by frame, its end not said: no rest to run to)
-  t.settle() |> ignore
-  // v (0.998^t - 1) / ln 0.998 until under 0.02 px/ms
+  run_to_rest(t)
+  // v (0.998^t - 1) / ln 0.998 until under 0.02 px/ms: there, at its end, at whatever rate it was drawn
   let k = 0.998
   let t_end = @math.ln(0.02 / 3.0) / @math.ln(k)
   let want = 3.0 * (@math.pow(k, t_end) - 1.0) / @math.ln(k)
-  approx(t.list_offset() - start, want, 3.0 * 16.0)
+  approx(t.list_offset() - start, want, 3.0 * 1.0e-6)
+}
+
+///|
+test "iOS: pulled past the top on a rubber band, and back" {
   // the rubber band: at the top, pulled 94 points it shows 48.7
   let r = Tester::new(rows_view(100), platform=1)
   r.touch(0, 200.0, 300.0)
   for k in 1..=10 {
-    r.advance(16.0)
+    r.advance(drag_step_ms)
     r.touch(1, 200.0, 300.0 + 10.0 * k.to_double())
-    r.frame(ms=0.0)
+    r.draw()
   }
   approx(r.list_offset(), 0.0, 0.0)
   approx(r.row(0).unwrap().1, rubber(94.0, 844.0), 1.0e-9)
   approx(rubber(94.0, 844.0), 48.7, 0.1)
   r.touch(2, 200.0, 400.0)
   r.frame()
-  // (kept: a rubber band going back is stepped frame by frame, its end not said: no rest to run to)
-  r.settle() |> ignore
+  run_to_rest(r)
   approx(r.row(0).unwrap().1, 0.0, 0.0)
   approx(r.list_overscroll(), 0.0, 0.0)
 }
 
 ///|
-test "the desktop: a mouse drag coasts as before and stops at the ends, nothing stretches" {
+test "the desktop: a mouse drag past the top coasts into it and stops there, nothing stretches" {
   let t = Tester::new(rows_view(40))
   swipe(t, 300.0, 20.0, 10)
   t.frame()
-  // (kept: a coast is stepped frame by frame, its end not said: no rest to run to)
-  t.settle() |> ignore
+  run_to_rest(t)
   approx(t.list_offset(), 0.0, 0.0)
   approx(t.list_overscroll(), 0.0, 0.0)
+}
+
+///|
+test "the desktop: a mouse drag coasts (v (0.997^t - 1) / ln 0.997) and stops at the end, nothing stretches" {
+  let t = Tester::new(rows_view(40))
   swipe(t, 700.0, -24.0, 12)
   t.frame()
-  // (kept: a coast is stepped frame by frame, its end not said: no rest to run to)
-  t.settle() |> ignore
+  run_to_rest(t)
   approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
   approx(t.list_overscroll(), 0.0, 0.0)
 }

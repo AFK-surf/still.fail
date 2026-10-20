@@ -18,6 +18,14 @@
 //   trackpad's momentum comes from the system as wheel events).
 
 ///|
+/// How far back the velocity tracker looks (ms; Compose's HorizonMilliseconds), and the pause after which it takes the
+/// pointer to have stopped (AssumePointerMoveStoppedMilliseconds).
+pub let tracker_horizon_ms : Double = 100.0
+
+///|
+pub let tracker_gap_ms : Double = 40.0
+
+///|
 /// How lists scroll here: 0 the desktop's, 1 iOS's, 2 Android's.
 fn scroll_kind() -> Int {
   match h_platform() {
@@ -103,7 +111,7 @@ fn Tracker::velocity(self : Tracker) -> Double {
     let age = newest - t
     let gap = (t - prev).abs()
     prev = t
-    if age > 100.0 || gap > 40.0 {
+    if age > tracker_horizon_ms || gap > tracker_gap_ms {
       break
     }
     ys[count] = self.vals[idx]
@@ -396,8 +404,8 @@ fn Ctx::feed(self : Ctx, st : ListState, d : Double, source : Int) -> Unit {
     }
   }
   st.pending = st.pending + d
-  self.scrolled(st)
   if source == 1 {
+    self.scrolled(st)
     // a finger takes over from a glide to the end (Ctx::list_to_end)
     st.glide = false
     st.drag_pending = st.drag_pending + d
@@ -440,21 +448,92 @@ fn Ctx::absorb(self : Ctx, st : ListState, edge : Int, vel : Double) -> Unit {
     st.over = 0.0
   }
   st.over_edge = edge
-  st.over_state = 2
-  st.over_t = self.now
-  st.over_v = if kind == 2 {
+  // the fling ends here, now; what it took springs out and back from now
+  st.last_scroll = self.now
+  let v = if kind == 2 {
     // pixels per second, times EdgeEffect's ON_ABSORB_VELOCITY_ADJUSTMENT
     (speed * 1000.0 * self.scale).round() * 13.0
   } else {
     speed
   }
-  self.request_frame()
+  self.spring_back(st, v, self.now)
 }
 
 ///|
+/// What is past an end springs back from where it is at `v` outward, from `t0` (-1: its next frame), said once as it
+/// sets out (Ctx::moving: its path's end is when it is at rest).
+fn Ctx::spring_back(self : Ctx, st : ListState, v : Double, t0 : Double) -> Unit {
+  st.over_state = 2
+  st.over_v = v
+  let p = BackPath::new()
+  p.x0 = st.over
+  p.v0 = v
+  st.back = p
+  if t0 >= 0.0 {
+    self.plan_back(st, t0)
+  }
+  self.moving(st.ease_mover, st as &Moving, what="a list's overscroll going back")
+}
+
+///|
+/// The way back worked out, set out at `t0`.
+fn Ctx::plan_back(self : Ctx, st : ListState, t0 : Double) -> Unit {
+  let p = st.back
+  p.t0 = t0
+  if scroll_kind() == 2 {
+    p.plan_edge(dmax(st.vp_h * self.scale, 1.0))
+  } else {
+    p.plan_rubber()
+  }
+}
+
+///|
+/// A fling's end, as it was said (the frames' clock): -1 none, +inf not started (it starts at its next frame).
+fn ListState::fling_rest(self : ListState) -> Double {
+  if self.fling == 0 || self.vel == 0.0 {
+    return -1.0
+  }
+  if self.fling_t0 < 0.0 {
+    return @double.infinity
+  }
+  self.fling_t0 + self.fling_length()
+}
+
+///|
+/// How long a fling runs from its start (ms): Android's spline its duration in whole ms played (Compose's playtime);
+/// iOS's deceleration and the desktop's coast until under 0.02 px per ms.
+fn ListState::fling_length(self : ListState) -> Double {
+  match self.fling {
+    1 => self.fling_dur.ceil()
+    2 => dmax(0.0, @math.ln(0.02 / self.fling_v.abs()) / @math.ln(ios_decel))
+    _ => dmax(0.0, @math.ln(0.02 / self.fling_v.abs()) / @math.ln(coast_decel))
+  }
+}
+
+///|
+/// The overscroll's way back's end (the frames' clock): -1 none, +inf not started.
+fn ListState::back_rest(self : ListState) -> Double {
+  if self.over_state != 2 {
+    -1.0
+  } else if self.back.t0 < 0.0 {
+    @double.infinity
+  } else {
+    self.back.rest
+  }
+}
+
+///|
+/// UIScrollView's normal deceleration rate (per ms).
+let ios_decel : Double = 0.998
+
+///|
+/// The desktop's coast after a drag let go (per ms).
+let coast_decel : Double = 0.997
+
+///|
 /// The finger left the list at `v` (logical pixels per ms, positive down
-/// the list): it flings, or what it pulled past an end goes back.
-fn Ctx::release(self : Ctx, st : ListState, v : Double) -> Unit {
+/// the list) at `at` (the input's time): it flings, or what it pulled past an end goes back.
+fn Ctx::release(self : Ctx, st : ListState, v : Double, at : Double) -> Unit {
   st.held = false
   if scroll_logging() {
     let (dist, dur) = spline_fling(v * 1000.0 * self.scale, self.scale)
@@ -468,9 +547,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double) -> Unit {
       let away = (st.over_edge > 0 && v > 0.0) || (st.over_edge < 0 && v < 0.0)
       if away &&
         fling_distance(v, self.scale) <= st.over * dmax(st.vp_h, 1.0) {
-        st.over_state = 2
-        st.over_t = -1.0
-        st.over_v = -(v.abs() * 1000.0 * self.scale).round() * 13.0
+        self.spring_back(st, -(v.abs() * 1000.0 * self.scale).round() * 13.0, -1.0)
         return
       }
     }
@@ -484,79 +561,71 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double) -> Unit {
       st.fling_dur = dur
       st.fling_done = 0.0
       st.vel = v
+      self.moving(st.ease_mover, st as &Moving, what="a list's fling")
     }
     // a stretch left as it is goes back once the fling is over (step)
   } else if kind == 1 {
     if st.over_state == 1 && st.over > 0.0 {
       st.over = rubber(st.over, st.vp_h)
-      st.over_state = 2
-      st.over_t = -1.0
       // moving away from the content is outward
-      st.over_v = if st.over_edge > 0 { -v } else { v }
-    } else if v != 0.0 {
+      self.spring_back(st, if st.over_edge > 0 { -v } else { v }, -1.0)
+    } else if v.abs() >= 0.02 {
       st.fling = 2
       st.fling_v = v
       st.fling_t0 = -1.0
       st.fling_done = 0.0
       st.vel = v
+      self.moving(st.ease_mover, st as &Moving, what="a list's fling")
     }
-  } else {
-    st.fling = 0
+  } else if v.abs() >= 0.02 {
+    // the desktop's coast sets out as the finger lets go
+    st.fling = 3
+    st.fling_v = v
+    st.fling_t0 = at
+    st.fling_done = 0.0
     st.vel = v
+    self.moving(st.ease_mover, st as &Moving, what="a list's coast")
   }
-  self.request_frame()
 }
 
 ///|
-/// A frame of the list's own motion: its fling, and its overscroll going
-/// back.
+/// A frame of the list's own motion: its fling, and its overscroll going back, where each is at this frame's time by
+/// what was said as it set out (scroll_path.mbt).
 fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
-  if st.vel != 0.0 {
-    self.scrolled(st)
-    if st.fling == 1 {
-      // Compose's decay animation: playtime 0 at its first frame, in whole ms
-      if st.fling_t0 < 0.0 {
-        st.fling_t0 = self.now
+  if st.vel != 0.0 && st.fling != 0 {
+    // Android's and iOS's start at their first frame (Compose's playtime 0); the desktop's coast as it was let go
+    if st.fling_t0 < 0.0 {
+      st.fling_t0 = self.now
+    }
+    let end = st.fling_t0 + st.fling_length()
+    let t = dmin(self.now, end) - st.fling_t0
+    let sign = if st.fling_v < 0.0 { -1.0 } else { 1.0 }
+    let (pos, vel) = match st.fling {
+      1 => {
+        // Compose's decay animation: in whole ms played
+        let (share, vc) = spline_at(t.floor(), st.fling_dur)
+        (sign * st.fling_dist * share, sign * vc * st.fling_dist / dmax(st.fling_dur, 1.0))
       }
-      let t = (self.now - st.fling_t0).floor()
-      let (share, vc) = spline_at(t, st.fling_dur)
-      let sign = if st.fling_v < 0.0 { -1.0 } else { 1.0 }
-      let pos = sign * st.fling_dist * share
-      let d = pos - st.fling_done
-      st.fling_done = pos
-      self.feed(st, d, 2)
-      if t >= st.fling_dur {
-        st.stop()
-      } else {
-        let v = sign * vc * st.fling_dist / dmax(st.fling_dur, 1.0)
-        st.vel = if v == 0.0 { sign * 1.0e-9 } else { v }
-        self.request_frame()
+      2 => {
+        // UIScrollView's normal deceleration
+        let k = ios_decel
+        (st.fling_v * (@math.pow(k, t) - 1.0) / @math.ln(k), st.fling_v * @math.pow(k, t))
       }
-    } else if st.fling == 2 {
-      // UIScrollView's normal deceleration
-      if st.fling_t0 < 0.0 {
-        st.fling_t0 = self.now
+      _ => {
+        // the desktop's coast
+        let k = coast_decel
+        (st.fling_v * (@math.pow(k, t) - 1.0) / @math.ln(k), st.fling_v * @math.pow(k, t))
       }
-      let t = self.now - st.fling_t0
-      let k = 0.998
-      let pos = st.fling_v * (@math.pow(k, t) - 1.0) / @math.ln(k)
-      let d = pos - st.fling_done
-      st.fling_done = pos
-      self.feed(st, d, 2)
-      st.vel = st.fling_v * @math.pow(k, t)
-      if st.vel.abs() < 0.02 {
-        st.stop()
-      } else {
-        self.request_frame()
-      }
+    }
+    let d = pos - st.fling_done
+    st.fling_done = pos
+    self.feed(st, d, 2)
+    if self.now >= end {
+      st.stop()
+      // its scroll bar fades from the fling's end
+      st.last_scroll = end
     } else {
-      st.pending = st.pending + st.vel * self.dt
-      st.vel = st.vel * @math.pow(0.997, self.dt)
-      if st.vel.abs() < 0.02 {
-        st.vel = 0.0
-      } else {
-        self.request_frame()
-      }
+      st.vel = if vel == 0.0 { sign * 1.0e-9 } else { vel }
     }
   }
   // a stretch held by nothing (the finger gone, its fling over) goes back
@@ -564,97 +633,28 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
     if scroll_kind() == 1 {
       st.over = rubber(st.over, st.vp_h)
     }
-    st.over_state = 2
-    st.over_v = 0.0
-    st.over_t = self.now
+    self.spring_back(st, 0.0, self.now)
   }
   if st.over_state == 2 {
-    self.scrolled(st)
-    if st.over_t < 0.0 {
-      st.over_t = self.now
+    if st.back.t0 < 0.0 {
+      self.plan_back(st, self.now)
     }
-    if scroll_kind() == 2 {
-      self.edge_spring(st)
+    let p = st.back
+    if self.now >= p.rest {
+      st.over = 0.0
+      st.over_v = 0.0
+      st.over_state = 0
+      st.over_edge = 0
+      st.last_scroll = p.rest
+    } else if scroll_kind() == 2 {
+      let (x, v) = p.edge_now(dmax(st.vp_h * self.scale, 1.0), self.now)
+      st.over = x
+      st.over_v = v
     } else {
-      self.rubber_spring(st)
+      let (x, v) = rubber_at(p.x0, p.v0, self.now - p.t0)
+      st.over = x
+      st.over_v = v
     }
-    if st.over_state == 2 {
-      self.request_frame()
-    }
-  }
-}
-
-///|
-/// Android's stretch going back: EdgeEffect.updateSpring, in physical
-/// pixels and seconds.
-fn Ctx::edge_spring(self : Ctx, st : ListState) -> Unit {
-  let dt = (self.now - st.over_t) / 1000.0
-  if dt < 0.001 {
-    return
-  }
-  st.over_t = self.now
-  let h = dmax(st.vp_h * self.scale, 1.0)
-  let dist = st.over
-  let vel = st.over_v
-  let settle = fn() {
-    st.over = 0.0
-    st.over_v = 0.0
-    st.over_state = 0
-    st.over_edge = 0
-  }
-  if vel.abs() <= 200.0 && (dist * h).abs() < 8.0 && vel < 0.0 && dist > 0.0 {
-    // close: straight there, faster than the spring would
-    let target = dist + -200.0 * dt / h
-    if target <= 0.0 {
-      settle()
-    } else {
-      st.over = target
-      st.over_v = -200.0
-    }
-    return
-  }
-  let w = 24.657
-  let z = 0.98
-  let wd = w * (1.0 - z * z).sqrt()
-  let cos_c = dist * h
-  let sin_c = 1.0 / wd * (z * w * dist * h + vel)
-  let e = @math.exp(-z * w * dt)
-  let x = e * (cos_c * @math.cos(wd * dt) + sin_c * @math.sin(wd * dt))
-  let v = x * -w * z +
-    e * (-wd * cos_c * @math.sin(wd * dt) + wd * sin_c * @math.cos(wd * dt))
-  st.over = x / h
-  st.over_v = v
-  if st.over > 1.0 {
-    st.over = 1.0
-    st.over_v = 0.0
-  }
-  if x < 0.0 || (v.abs() < 0.01 && x < 0.001) {
-    settle()
-  }
-}
-
-///|
-/// The rubber band going back to the end: critically damped, `over` as it
-/// shows, its velocity outward.
-fn Ctx::rubber_spring(self : Ctx, st : ListState) -> Unit {
-  let t = self.now - st.over_t
-  if t < 0.5 {
-    return
-  }
-  st.over_t = self.now
-  let w = rubber_omega
-  let x0 = st.over
-  let v0 = st.over_v
-  let e = @math.exp(-w * t)
-  let x = (x0 + (v0 + w * x0) * t) * e
-  let v = (v0 - w * (v0 + w * x0) * t) * e
-  st.over = x
-  st.over_v = v
-  if x <= 0.0 || (x < 0.1 && v.abs() < 0.01) {
-    st.over = 0.0
-    st.over_v = 0.0
-    st.over_state = 0
-    st.over_edge = 0
   }
 }
 

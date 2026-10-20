@@ -162,8 +162,8 @@ pub let scrollbar_hold_ms : Double = 600.0
 pub let scrollbar_fade_ms : Double = 300.0
 
 ///|
-/// When list `key` (asked where it is built) is at rest: its wheel's ease come and its scroll bar gone (the frames'
-/// clock; before now: it is).
+/// When list `key` (asked where it is built) is at rest: its wheel's ease come, its fling and its overscroll over and
+/// its scroll bar gone (the frames' clock; before now: it is).
 pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
   match self.lists.get(self.id(key)) {
     Some(st) => st.rest_at(self.now, self.frame_no)
@@ -179,7 +179,8 @@ fn Ctx::scrolled(self : Ctx, st : ListState) -> Unit {
 }
 
 ///|
-/// What moves of a list by itself: a wheel's ease (at rest at its end) and its scroll bar (gone once faded).
+/// What moves of a list by itself: a wheel's ease (at rest at its end), its fling and its overscroll going back (at
+/// their ends: scroll_path.mbt) and its scroll bar (gone once faded).
 impl Moving for ListState with rest_at(self, now, frame) {
   ignore(now)
   // not built this frame: nothing shows it, at rest (shown again, it says so again: Ctx::list)
@@ -189,10 +190,24 @@ impl Moving for ListState with rest_at(self, now, frame) {
   if self.glide && self.glide_t0 == @double.infinity {
     return @double.infinity
   }
-  let bar = self.last_scroll + scrollbar_hold_ms + scrollbar_fade_ms
+  let bar = self.shown_until() + scrollbar_hold_ms + scrollbar_fade_ms
   let eased = if self.ease == 0.0 { -1.0 } else { self.ease_t0 + ease_end(self.ease) }
   let glided = if self.glide { self.glide_rest } else { -1.0 }
   dmax(bar, dmax(eased, glided))
+}
+
+///|
+/// Until when the list is scrolled, its scroll bar shown before it fades: its last scroll, the end of its fling or of
+/// its overscroll going back while one goes on.
+fn ListState::shown_until(self : ListState) -> Double {
+  let mut t = self.last_scroll
+  if self.fling != 0 && self.vel != 0.0 {
+    t = dmax(t, self.fling_rest())
+  }
+  if self.over_state == 2 {
+    t = dmax(t, self.back_rest())
+  }
+  t
 }
 
 ///|
@@ -300,7 +315,7 @@ pub fn Ctx::list(
         over_edge: 0,
         over_state: 0,
         over_v: 0.0,
-        over_t: -1.0,
+        back: BackPath::new(),
         ease: 0.0,
         ease_t0: 0.0,
         ease_done: 0.0,
@@ -628,7 +643,7 @@ fn Ctx::place_list(
 fn Ctx::paint_scrollbar(self : Ctx, n : Node, alpha : Double) -> Unit {
   match self.lists.get(n.id) {
     Some(st) => {
-      let age = self.now - st.last_scroll
+      let age = self.now - st.shown_until()
       if age > scrollbar_hold_ms + scrollbar_fade_ms || st.count == 0 {
         return
       }

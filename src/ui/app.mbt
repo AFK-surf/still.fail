@@ -600,7 +600,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
         Some(st) =>
-          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling))
+          c.release(st, dclamp(-track_y.velocity(), -max_fling, max_fling), t)
         None => ()
       }
       sideways_up(
@@ -632,7 +632,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     }
     if c.dragging {
       match c.lists.get(c.drag_scroll) {
-        Some(st) => c.release(st, 0.0)
+        Some(st) => c.release(st, 0.0, t)
         None => ()
       }
       sideways_up(c, c.drag_scroll, 0.0, 0.0)
