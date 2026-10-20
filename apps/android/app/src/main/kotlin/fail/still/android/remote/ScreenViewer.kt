@@ -4,7 +4,7 @@
 // 只看/控制, sending a file, pasting, the keyboard); sideways, a rail beside it. While driving it, a copy made on the
 // screen (text or a picture) lands on the phone's clipboard, the phone's clipboard is pasted into it (ScreenClips.kt),
 // and files picked go onto its machine (how far they have got, then where they are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is
-// the core's, said over the frame, which stays as it was last shown.
+// the core's: on its way, said over the frame as it was last shown; over (ended, gone…), said on the page alone.
 package fail.still.android.remote
 
 import android.content.ClipData
@@ -660,8 +660,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = zoom.scale; scaleY = zoom.scale
                         translationX = zoom.x; translationY = zoom.y
-                        // Over (ended, gone…): only a trace of it under what the page says; on its way back, as it was, faded.
-                        alpha = if (!still) 1f else if (phase in OVER) 0.12f else 0.4f
+                        // Over (ended, gone…): not drawn, the page saying what happened alone; on its way back, as it was, faded.
+                        alpha = if (!still) 1f else if (phase in OVER) 0f else 0.4f
                     },
             ) {
                 if (session.codec == "h264") Texture(session)
@@ -672,7 +672,7 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                 }
             }
             // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
-            Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
+            if (phase !in OVER) Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
         Over(session, phase, Modifier.align(Alignment.Center), onExit)
         Column(

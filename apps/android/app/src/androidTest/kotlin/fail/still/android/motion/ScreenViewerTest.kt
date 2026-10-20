@@ -544,7 +544,7 @@ class ScreenViewerTest {
 
     @Test fun overStates() {
         val v = Viewer()
-        // Ended by the station: the frame kept under it, 返回 and 重新打开.
+        // Ended by the station: the frame put away, 返回 and 重新打开.
         v.open()
         v.state("live")
         v.config()
