@@ -77,6 +77,8 @@ pub fn Flow::core(self : Flow) -> Unit {
     self.r.deliver(to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
     self.t.draw()
   }
+  // (in a scripted run, the step waits for what the core answered it here: answered NAME)
+  emit_answered(self.r.take_answered())
 }
 
 ///|
@@ -160,7 +162,8 @@ pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
 ///|
 /// The lowest `what` pressed for `ms` (a declared length: a long press's), then let go.
 pub fn Flow::hold(self : Flow, what : String, ms : Double) -> Unit {
-  emit("hold \{ms.to_int()} " + what)
+  // (a host's long press is held past its threshold: as long again, not to the frame)
+  emit("hold \{(ms * 2.0).to_int()} " + what)
   let at = self.spots(what)
   if at.length() == 0 {
     self.fail("nothing to hold: " + what)
