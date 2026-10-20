@@ -466,5 +466,9 @@
   "station.login.cursorKeyFailed": "已登录 Cursor，但无法生成 station 的 key：{error}",
   "station.profile.cursorSubscription": "Cursor 账号",
   "station.profile.cursorKeyRevoked": "station 的 Cursor key 已被撤销，请重新登录",
-  "station.quota.cursorUnsupported": "Cursor 不向 station 提供套餐用量"
+  "station.quota.cursorUnsupported": "Cursor 不向 station 提供套餐用量",
+  "station.profile.devinSubscription": "Devin 账号",
+  "station.quota.devinUnsupported": "Devin 不向 station 提供套餐用量，请在 app.devin.ai 的 Usage 页查看",
+  "station.updates.devinElsewhere": "安装在 {path}，不是用 Devin 的安装脚本装的，需在该机器上手动更新",
+  "station.login.devinNoTerminal": "Devin 登录需要终端，这台机器提供不了，请在别的 station 上登录"
 }

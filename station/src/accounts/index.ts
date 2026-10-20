@@ -45,7 +45,7 @@ import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
 import { claudeOAuthToken } from "./oauth.ts";
-import { accessKinds, checkProfile, cursorEmail, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
+import { accessKinds, checkProfile, cursorEmail, devinEmail, grokEmail, keyed, loginCommand, needsKey, type ProfileCheck, type ProfileQuota, runtimesFor, runtimesOf, URLS, type Urls } from "./profiles.ts";
 import { checkQuota, machineUsage } from "./quota.ts";
 
 export { checkConfig } from "./check.ts";
@@ -603,7 +603,7 @@ export class Accounts {
       log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
       return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
     }
-    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : "station.profile.chatgptSubscription"));
+    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : p.runtime === "devin" ? "station.profile.devinSubscription" : "station.profile.chatgptSubscription"));
     try {
       this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
         // An OpenCode Go one runs every runtime its key does (it has none of its own).
@@ -1185,6 +1185,7 @@ function lastOfRuntime(raw: Json, runtime: Runtime, id: string, lang: Lang) {
 export function accountEmail(runtime: Runtime, home: string): string | null {
   if (runtime === "grok") return grokEmail(home);
   if (runtime === "cursor") return cursorEmail(home);
+  if (runtime === "devin") return devinEmail(home);
   if (runtime === "codex") {
     const claims = codexClaims(home);
     const email = claims?.email ?? claims?.["https://api.openai.com/profile"]?.email;

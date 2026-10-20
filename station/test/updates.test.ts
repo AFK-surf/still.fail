@@ -11,7 +11,7 @@ import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
 import { type Env, type Found, howToInstall, howToUpdate, findCommand, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
-import { WINDOWS } from "../src/platform/index.ts";
+import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript } from "../src/platform/windows.ts";
 import {
   channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, versionIn,
@@ -46,7 +46,7 @@ function installed(data: string, build: string, channel: string | null, more: Pa
   if (channel !== null) writeFileSync(join(app, "CHANNEL"), channel);
   if (installer !== undefined) writeFileSync(join(app, "bin", "install.zh.sh"), installer);
   const updates = new Updates({
-    app, data, config: new ConfigFile(data), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", env: { PATH: "/nowhere" },
+    app, data, config: new ConfigFile(data), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", devinManifest: "http://127.0.0.1:1", env: { PATH: "/nowhere" },
     timing: { followLook: 200 }, trusted, ...more,
   });
   return updates;
@@ -522,7 +522,7 @@ describe("updates", { concurrency: true }, () => {
     const app = join(dir, "elsewhere");
     mkdirSync(app);
     writeFileSync(join(app, "BUILD"), "1300");
-    const updates = new Updates({ app, data: dir, config: new ConfigFile(dir), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", env: { PATH: "/nowhere" } });
+    const updates = new Updates({ app, data: dir, config: new ConfigFile(dir), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", devinManifest: "http://127.0.0.1:1", env: { PATH: "/nowhere" } });
     t.after(() => updates.close());
     await updates.check();
     let line = station(updates);
@@ -601,6 +601,31 @@ esac
     await until("installed", () => grok().state !== "updating");
     assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
     assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
+  });
+
+  test("Devin's latest is its installer's manifest's, and Devin as its installer put it is updated by `devin update`", { skip: WINDOWS && "a link to the version the installer keeps" }, async (t) => {
+    const [manifest, server] = await serve((path) => (path === "/cli/current/manifest.json" ? { body: JSON.stringify({ version: "3000.12.0", platforms: {} }) } : null));
+    t.after(() => server.close());
+    // As the installer leaves it: the versions in its data directory, the command on PATH a link to the current one.
+    const dir = temp();
+    const [versions, bin] = [join(dir, "share", "devin", "cli", "_versions", "3000.11.92"), join(dir, "bin")];
+    const now = join(dir, "now");
+    script(join(versions, "devin"), `#!/bin/sh
+case "$1" in
+  update) echo 3000.12.0 > "${now}"; echo "Updated to 3000.12.0" ;;
+  --version) if [ -f "${now}" ]; then echo "devin $(cat "${now}")"; else echo "devin 3000.11.92"; fi ;;
+esac
+`);
+    mkdirSync(bin);
+    symlinkSync(join(versions, "devin"), join(bin, "devin"));
+    const updates = installed(dir, "1300", null, { devinManifest: `${manifest}/cli/current/manifest.json`, env: { PATH: withSystem(bin), HOME: dir } });
+    t.after(() => updates.close());
+    await updates.check();
+    const devin = () => updates.get("zh").find((v) => v.id === "devin")!;
+    assert.deepEqual([devin().installed, devin().version, devin().latest, devin().newer, devin().updatable], [true, "3000.11.92", "3000.12.0", true, true]);
+    await updates.update("devin", "zh");
+    await until("updated", () => devin().state !== "updating");
+    assert.deepEqual([devin().version, devin().newer, devin().state, devin().message], ["3000.12.0", false, "idle", undefined]);
   });
 
   test("on Windows a command beside vp.exe is Vite+'s, updated with it; one in npm's prefix with that npm", { skip: !WINDOWS && "Windows'" }, () => {
@@ -691,5 +716,15 @@ INSTALLER
     const bare: Env = { PATH: "/nowhere" };
     assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
     assert.equal((howToInstall("claude", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
+    // Devin by its own installer: `devin update` where it put it, by hand anywhere else; installed by its installer.
+    assert.deepEqual(howToUpdate("devin", found("/Users/a/.local/share/devin/cli/_versions/3000.11.92/devin"), env), { program: "/nowhere/bin/x", args: ["update"] });
+    if (WINDOWS) assert.deepEqual(howToUpdate("devin", found("C:\\Users\\a\\AppData\\Local\\devin\\cli\\_versions\\3000.11.92\\devin.exe"), env), { program: "/nowhere/bin/x", args: ["update"] });
+    const elsewhere = howToUpdate("devin", found("/opt/homebrew/bin/devin"), env);
+    assert.ok(elsewhere instanceof Unable);
+    assert.deepEqual([elsewhere.key, elsewhere.args], ["station.updates.devinElsewhere", { path: "/opt/homebrew/bin/devin" }]);
+    assert.ok(say_(elsewhere).includes("/opt/homebrew/bin/devin"));
+    assert.deepEqual(howToInstall("devin", bare), machine.devinInstall);
+    assert.equal((howToInstall("devin", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
+    assert.equal(kindPackage("devin"), "", "no npm package");
   });
 });

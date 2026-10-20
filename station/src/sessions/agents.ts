@@ -14,6 +14,7 @@ import { CodexDriver } from "../agents/codex.ts";
 import { DshDriver } from "../agents/dsh.ts";
 import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
+import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
@@ -197,6 +198,7 @@ export const AgentsLive = (control: Control) =>
           new DshDriver({ data }),
           new GrokDriver({ data }),
           new CursorDriver({ data }),
+          new DevinDriver({ data }),
         ],
         mcpUrl: () => door?.url ?? "",
         internal: new InternalChat(),

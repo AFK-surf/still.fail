@@ -22,7 +22,7 @@ function installed(data: string, channel: string | null): Updates {
   mkdirSync(app, { recursive: true });
   writeFileSync(join(app, "BUILD"), "1300");
   if (channel !== null) writeFileSync(join(app, "CHANNEL"), channel);
-  return new Updates({ app, data, config: new ConfigFile(data), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", env: { PATH: "/nowhere" } });
+  return new Updates({ app, data, config: new ConfigFile(data), origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", devinManifest: "http://127.0.0.1:1", env: { PATH: "/nowhere" } });
 }
 
 function rig(updates: Updates | null) {
@@ -54,7 +54,7 @@ test("the update channel is said with the versions and set by an admin", async (
   const [status, lines] = await ask("POST", "/updates/check");
   assert.equal(status, 200);
   assert.equal(stationOf(lines).channel, "beta", "installed from the beta, on it");
-  assert.deepEqual(lines.map((l: any) => l.id), ["station", "claude", "codex", "dsh", "grok", "cursor"]);
+  assert.deepEqual(lines.map((l: any) => l.id), ["station", "claude", "codex", "dsh", "grok", "cursor", "devin"]);
   assert.equal(stationOf(lines).idleOnly, undefined, "automatic updates wait for nothing");
   assert.equal(typeof stationOf(lines).checkedAt, "number");
 

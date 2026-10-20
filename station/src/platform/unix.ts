@@ -383,6 +383,7 @@ export const unix: Platform = {
     process.kill(pid, ({ handover: "SIGUSR2", drain: "SIGUSR1", hup: "SIGHUP" } as const)[op]);
   },
   claudeInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] },
+  devinInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://cli.devin.ai/install.sh | bash"] },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",

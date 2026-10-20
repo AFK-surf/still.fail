@@ -867,6 +867,8 @@ export class Sharing {
     if (on && p.access?.kind === "subscription" && p.runtime === "grok") throw new Error("a SuperGrok subscription cannot be shared with other stations yet");
     // Nor Cursor's (its key stays where it was minted).
     if (on && p.access?.kind === "subscription" && p.runtime === "cursor") throw new Error("a Cursor account cannot be shared with other stations yet");
+    // Nor Devin's.
+    if (on && p.access?.kind === "subscription" && p.runtime === "devin") throw new Error("a Devin account cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
     this.deps.config.update((raw) => {
       for (const x of raw.profiles ?? []) {

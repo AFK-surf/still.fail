@@ -421,7 +421,8 @@ export class LiveFromAcp {
       this.to("working", out);
       if (!this.open.has(id)) {
         this.open.add(id);
-        const [name, input] = acpCall(str(update._meta?.["x.ai/tool"]?.name) ?? str(update.title) ?? "", update.rawInput ?? null);
+        // Grok Build names a call in its own _meta, Devin in its own (an MCP tool's as mcp__<server>__<tool>); else its title.
+        const [name, input] = acpCall(str(update._meta?.["x.ai/tool"]?.name) ?? str(update._meta?.["cognition.ai/inferenceToolName"]) ?? str(update.title) ?? "", update.rawInput ?? null);
         out.push(start(id, "tool", name, chars(pretty(input), INPUT_MOST)));
       }
       this.result(id, update, out);
