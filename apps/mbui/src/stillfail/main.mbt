@@ -220,7 +220,9 @@ fn main {
   let cloud = @ui.env("MBUI_CLOUD")
   if @ui.env("MBUI_CORE_TRACE") == "1" &&
     (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
-    @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
+    // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace.py's MAX_BYTES, kept as their length alone)
+    let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
+    @core.trace_to(fn(line) { @host.log("CORETRACE " + line) }, bytes_max~)
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = {}

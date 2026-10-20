@@ -91,7 +91,7 @@ fi
 echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # (each step once the app is settled, as the Tester's steps are taken: what came of the last one in, its page loaded;
 # until drive's named events take its place)
-export E2E_STATION=${station:-${E2E_STATION:-}} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_DRIVE_SETTLED=1
+export E2E_STATION=${station:-${E2E_STATION:-}} E2E_TAG=$tag E2E_FLOWS=$TMP MBUI_CORE_TRACE=1 MBUI_DRIVE_SETTLED=1 MBUI_CORE_TRACE_BYTES=$MAX_BYTES
 [ -n "$E2E_STATION" ] || unset E2E_STATION
 bash scripts/e2e-local.sh down > /dev/null 2>&1
 bash scripts/e2e-local.sh up > "$TMP/up.log" 2>&1 || { tail -30 "$TMP/up.log"; die "the local still.fail did not come up"; }

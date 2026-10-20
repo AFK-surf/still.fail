@@ -8,14 +8,33 @@
 //                                     the last thing before it, in or out: replay.mbt), the bytes beside it if any (a
 //                                     part going up: a test gives the same again, Replay::sent_bytes)
 //   {"in":MSG,"w":WALL,"b":"HEX"}     what came, the wall clock (wall_ms) as it came, the bytes beside it if any
+//   …,"bn":N                          bytes over trace_bytes_max: their length alone (as scripts/trace.py keeps them),
+//                                     not written out in hex as they come (a drive's 4 MB part: seconds of the run's
+//                                     UI thread, its next ask that much later)
 
 ///|
 let tracer : Ref[((String) -> Unit)?] = { val: None }
 
 ///|
-/// Every message out and in from now on given to `line`, as one line of JSON each.
-pub fn trace_to(line : (String) -> Unit) -> Unit {
+/// The most bytes beside a message written out (in hex); more: their length alone.
+let trace_bytes_max : Ref[Int] = { val: 16384 }
+
+///|
+/// Every message out and in from now on given to `line`, as one line of JSON each; bytes beside a message over
+/// `bytes_max` kept as their length alone.
+pub fn trace_to(line : (String) -> Unit, bytes_max? : Int = 16384) -> Unit {
   tracer.val = Some(line)
+  trace_bytes_max.val = bytes_max
+}
+
+///|
+/// The bytes beside a message as the trace keeps them: in hex ("b"), or over trace_bytes_max their length ("bn").
+fn trace_bytes(m : Map[String, Json], b : Bytes) -> Unit {
+  if b.length() > trace_bytes_max.val {
+    m["bn"] = Json::number(b.length().to_double())
+  } else {
+    m["b"] = Json::string(hex(b))
+  }
 }
 
 ///|
@@ -44,7 +63,7 @@ fn trace_out(text : String, wall : Double, bytes? : Bytes) -> Unit {
       let msg = @json.parse(text) catch { _ => Json::string(text) }
       let m : Map[String, Json] = { "out": msg, "w": Json::number(wall) }
       match bytes {
-        Some(b) => m["b"] = Json::string(hex(b))
+        Some(b) => trace_bytes(m, b)
         None => ()
       }
       f(Json::object(m).stringify())
@@ -59,7 +78,7 @@ fn trace_in(msg : Json, bytes : Bytes?, wall : Double) -> Unit {
     Some(f) => {
       let m : Map[String, Json] = { "in": msg, "w": Json::number(wall) }
       match bytes {
-        Some(b) => m["b"] = Json::string(hex(b))
+        Some(b) => trace_bytes(m, b)
         None => ()
       }
       f(Json::object(m).stringify())

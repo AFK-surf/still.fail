@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/string",
   "stillfail/core",
   "mbui/host",
   "mbui/ui",
