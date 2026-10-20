@@ -21,6 +21,8 @@ struct FakeHost {
   platform : Int
   // the system asks for less transparency (glass drawn solid)
   mut reduce_transparency : Bool
+  // the person's setting for motion: reduced (Tester::set_reduce_motion; or the environment's MBUI_REDUCE_MOTION=1)
+  mut reduce_motion : Bool
   logs : Array[String]
   // images: sources the test made up, with their size in pixels; loads
   // asked for (source, max_px); decodes, ready from the next frame on

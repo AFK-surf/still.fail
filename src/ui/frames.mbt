@@ -140,6 +140,10 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
   for v in log.split("\n") {
     let line = v.to_owned()
     // what the host gave between two frames, handed on at its place (inputrec.mbt)
+    if line.find("ENV ") is Some(_) {
+      replay_env(self.fake, line)
+      continue
+    }
     if line.find("INPUT ") is Some(_) {
       replay_input(self.fake, line)
       continue

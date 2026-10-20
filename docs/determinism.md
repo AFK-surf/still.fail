@@ -17,7 +17,8 @@ ever asserted (`Tester::assert_idle`), never waited for.
    | the system's text: font metrics, shaping, glyph keys and boxes | `TEXTREC` lines (MBUI_TEXT_RECORD=1) | `Tester::new(text=)` |
    | messages from outside: a core's answers, posted on a channel (`mb_post` from any thread, web/host.js `post`) and handed to the channel's handler (`@ui.on_message`) as the next frame begins | `MSG` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames`; a test posts its own (`Tester::post`) |
    | the host's work for the app (images decoded, native views ready) | effect.mb outside tickets end on the host's event | a Tester's fake host (`finish`) |
-   | the environment, the platform, the system's dark, the window's inset, the notifications shown | fixed under a Tester (`Tester::new` parameters, `notices`) | — |
+   | the system's settings: motion reduced, transparency reduced, dark, the window's inset | `ENV` lines, at the first frame and where one changed (MBUI_DRAW_LOG=1, src/ui/envrec.mbt) | `Tester::replay_frames`; set by `Tester::set_reduce_motion`, `set_reduce_transparency`, `set_dark`, `set_window_inset` |
+| the environment, the platform, the notifications shown | fixed under a Tester (`Tester::new` parameters, `notices`) | — |
 
 2. **Nothing else is read.** No wall clock, no real time in a Tester, no randomness but a seeded one, no state that
    outlives a Tester (every table outside the context is emptied by `reset_globals` and the packages' `on_reset`), no

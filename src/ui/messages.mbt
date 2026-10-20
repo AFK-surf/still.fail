@@ -227,6 +227,7 @@ pub fn Tester::start_tape(self : Tester) -> Unit {
   ignore(self)
   tape.val = Some([])
   draw_frames.val = 0
+  env_kept.val = ""
 }
 
 ///|

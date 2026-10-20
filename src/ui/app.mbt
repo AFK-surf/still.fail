@@ -64,6 +64,8 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let fed = inputs_since.val
   inputs_since.val = false
   in_frame.val = true
+  // (the system's settings it is drawn by, kept with the run's input: envrec.mbt)
+  env_at_frame()
   let t0 = frame_body(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)

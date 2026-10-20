@@ -762,7 +762,7 @@ pub fn Ctx::list_scrolled(self : Ctx, li : Int) -> Double {
 /// Whether motion is reduced (the host's setting, or MBUI_REDUCE_MOTION=1): every motion at its end at once.
 pub fn reduced_motion() -> Bool {
   if fake.val is Some(f) {
-    return f.env.get("MBUI_REDUCE_MOTION") == Some("1")
+    return f.reduce_motion || f.env.get("MBUI_REDUCE_MOTION") == Some("1")
   }
   if reduce_env.val < 0 {
     reduce_env.val = if @host.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }

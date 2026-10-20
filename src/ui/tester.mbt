@@ -21,6 +21,7 @@ fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
   desk_reset()
   tester_size.val = None
+  env_kept.val = ""
   app_state.val = 3
   driver.val = None
   track_x.reset()
@@ -139,6 +140,7 @@ pub fn Tester::new(
     back_on: false,
     platform,
     reduce_transparency: false,
+    reduce_motion: false,
     logs: [],
     image_sizes: {},
     image_loads: [],
