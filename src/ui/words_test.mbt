@@ -201,3 +201,17 @@ test "a URL handed to the system (the fake host keeps it)" {
   assert_true(t.ctx().open_url("https://still.fail/x"))
   assert_eq(t.opened(), ["https://still.fail/x"])
 }
+
+///|
+test "words: under a Tester over a host's kept text, the host's own word as it said it; one it did not say is told" {
+  // the host found 中文分词 a word of four (a dictionary's), where this one's own takes a Han character alone
+  let kept = "TEXTREC {\"wa\":[\"中文分词很好\",1],\"r\":[0,4]}"
+  // (a page of no words: what is asked of the host's text is the word alone)
+  let t = @ui.Tester::new(fn(c) { c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore }, text=kept)
+  t.draw()
+  assert_eq(@ui.word_at("中文分词很好", 1), (0, 4))
+  assert_eq(t.text_missing(), [])
+  // not kept: none made up in its place, and the test is told what its host was not asked
+  ignore(@ui.word_at("中文分词很好", 5))
+  assert_true(t.text_missing().iter().any(fn(m) { m.contains("wa|") }))
+}

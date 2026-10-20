@@ -153,6 +153,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.wake_by = None
   c.cycling = false
   c.cycles.clear()
+  c.periodic.clear()
   c.nav_rest = -1.0
   c.read_back_moved = false
   check_atlas()

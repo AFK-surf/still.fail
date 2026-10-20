@@ -73,6 +73,24 @@ fn Ctx::moving_now(self : Ctx) -> Array[String] {
 }
 
 ///|
+/// How many whole periods of `period` ms the frames' clock has passed: what changes every so often while shown (a
+/// run's time said each second, a clock's minute), and a frame at the next period's start, none between. A test's idle
+/// is not broken by it: it is said (Tester::periodic), as what comes again for as long as it is shown.
+#callsite(autofill(loc))
+pub fn Ctx::every(self : Ctx, period : Double, loc~ : SourceLoc) -> Int {
+  if period <= 0.0 {
+    return 0
+  }
+  if !self.periodic.iter().any(fn(p) { p.1.to_string() == loc.to_string() }) {
+    self.periodic.push((period, loc))
+  }
+  let n = (self.now / period).floor()
+  // the next period's start: a wake the test's idle does not wait for (it comes for as long as it is shown)
+  self.wake_at_time((n + 1.0) * period, later=true)
+  n.to_int()
+}
+
+///|
 /// Where a cycle of `period` ms is now, from 0 to 1 (a spinner's turn, a breath): read by what shows it, a frame each
 /// frame while it is shown. A test's idle is not broken by it: it is said (Tester::cycles), as what never ends.
 #callsite(autofill(loc))

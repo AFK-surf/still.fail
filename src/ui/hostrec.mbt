@@ -8,6 +8,7 @@
 //   {"pn":[bytes,length],"r":pages}                a PDF's pages
 //   {"ps":[bytes,length,page],"r":[w,h]}           a page's size (points)
 //   {"pi":[bytes,length,page,px],"r":[w,h,ow,oh]}  a page drawn at px
+//   {"wa":[text,offset],"r":[start,end]}           the system's word of `text` around `offset` (UTF-16; -1 -1: none)
 
 ///|
 /// What is being recorded of the host's answers, by its ids: what each picture asked is (its line's head), each PDF.
@@ -81,7 +82,7 @@ fn host_answers_of(lines : String) -> Map[String, Json] {
       _ => continue
     }
     guard j is Object(m) else { continue }
-    for kind in ["ib", "is", "pn", "ps", "pi"] {
+    for kind in ["ib", "is", "pn", "ps", "pi", "wa"] {
       match (m.get(kind), m.get("r")) {
         (Some(head), Some(r)) => out[kind + "|" + head.stringify()] = r
         _ => ()

@@ -133,6 +133,17 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   if cycles.length() > 0 {
     println("Tester::assert_idle: idle, but for what never ends while shown: " + cycles.join("; "))
   }
+  let periodic = self.periodic()
+  if periodic.length() > 0 {
+    println("Tester::assert_idle: idle, but for what comes again while shown: " + periodic.join("; "))
+  }
+}
+
+///|
+/// What comes again every so often while shown in the last frame (Ctx::every): its period and who reads it, a line each.
+pub fn Tester::periodic(self : Tester) -> Array[String] {
+  ignore(self)
+  g().periodic.map(fn(p) { "every \{p.0.to_int()} ms by \{p.1}" })
 }
 
 ///|

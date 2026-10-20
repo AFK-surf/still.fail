@@ -249,3 +249,21 @@ test "a scripted run finds what it waits for however many others end before it l
   let log = t.drive("decoded p0.jpg\nexit")
   assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded p0.jpg") }), msg=log.join("\n"))
 }
+
+///|
+test "what comes again every so often while shown (a run's time each second) is said, and idle is not broken by it" {
+  let second = 1000.0
+  let t = @ui.Tester::new(fn(c) {
+    let n = c.every(second)
+    c.text("\{n} s", wrap=false) |> ignore
+  })
+  t.draw()
+  let at = t.time()
+  let n0 = (at / second).floor().to_int()
+  assert_true(t.find("\{n0} s") is Some(_))
+  t.run_for(second)
+  assert_true(t.find("\{n0 + 1} s") is Some(_))
+  assert_eq(t.periodic().length(), 1)
+  assert_true(t.periodic()[0].has_prefix("every 1000 ms by "))
+  t.assert_idle()
+}

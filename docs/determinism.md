@@ -14,7 +14,7 @@ ever asserted (`Tester::assert_idle`), never waited for.
    |---|---|---|
    | the frame's time, the window's size and scale, stable output (MBUI_BENCH=-1) | `DRAWHASH` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames` |
    | the user's input: pointer, wheel, keys, the input method, the system's back, the app shown or hidden | `INPUT` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames` |
-   | the system's text: font metrics, shaping, glyph keys and boxes | `TEXTREC` lines (MBUI_TEXT_RECORD=1) | `Tester::new(text=)` |
+   | the system's text: font metrics, shaping, glyph keys and boxes, its word boundaries (a word picked) | `TEXTREC` lines (MBUI_TEXT_RECORD=1) | `Tester::new(text=)` |
    | messages from outside: a core's answers, posted on a channel (`mb_post` from any thread, web/host.js `post`) and handed to the channel's handler (`@ui.on_message`) as the next frame begins | `MSG` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames`; a test posts its own (`Tester::post`) |
    | the host's work for the app (images decoded, native views ready) | effect.mb outside tickets end on the host's event | a Tester's fake host (`finish`) |
    | the system's settings: motion reduced, transparency reduced, dark, the window's inset | `ENV` lines, at the first frame and where one changed (MBUI_DRAW_LOG=1, src/ui/envrec.mbt) | `Tester::replay_frames`; set by `Tester::set_reduce_motion`, `set_reduce_transparency`, `set_dark`, `set_window_inset` |
@@ -48,6 +48,9 @@ of a test (src/ui/motion_data.mbt).
   frame. Only another item chosen is a motion, between the items' places as laid out at each frame.
 - What never ends while shown (a spinner, a band of unknown progress, a breath) is a cycle: its phase is a function
   of the frames' clock (`Ctx::cycle`), drawn a frame each frame while something shown reads it.
+- What changes every so often while shown (a run's time said each second) is periodic: `Ctx::every(period)` gives the
+  periods passed and a frame at the next one's start, none between; a test's idle lists it (`Tester::periodic`), as it
+  does a cycle, and is not broken by it.
 
 ## A test's time
 

@@ -345,9 +345,27 @@ fn h_clipboard_set(s : String) -> Unit {
 /// The word of `text` around `off` as the host's word boundaries have it, (-1, -1) where it has none (the fake host:
 /// words.mbt's own).
 fn h_word_at(text : String, off : Int) -> (Int, Int) {
+  let head : Json = [Json::string(text), Json::number(off.to_double())]
   match fake.val {
-    Some(_) => (-1, -1)
-    None => @host.word_at(text, off)
+    // under a Tester over a host's kept text: the host's word, as it said it (a word it did not say: the test is told,
+    // Tester::text_missing, and gets none of its own made up in its place); with no kept text: this one's own
+    Some(_) =>
+      match text_table.val {
+        Some(_) =>
+          match kept_answer("wa", head) {
+            Some(Array([Number(s, ..), Number(e, ..), ..])) => (s.to_int(), e.to_int())
+            _ => (-1, -1)
+          }
+        None => (-1, -1)
+      }
+    None => {
+      let (s, e) = @host.word_at(text, off)
+      if text_recording() {
+        let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
+        text_say("wa|" + head.stringify(), line)
+      }
+      (s, e)
+    }
   }
 }
 

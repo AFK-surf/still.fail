@@ -177,6 +177,8 @@ pub struct Ctx {
   /// the cycles read this frame (their periods, who reads them), whether a motion said was not at rest at its end, and
   /// the latest rest of the stacks (Ctx::nav) built this frame: what a test asks (Tester::assert_idle, nav_rest)
   cycles : Array[(Double, SourceLoc)]
+  /// what comes again every so often while shown this frame (Ctx::every): its period, who reads it
+  periodic : Array[(Double, SourceLoc)]
   mut motion_left : Bool
   /// a motion said that has not started yet (its rest +inf: it starts at its first step, a frame to come)
   mut motion_unstarted : Bool
@@ -306,6 +308,7 @@ fn Ctx::new() -> Ctx {
     movers: [],
     cycling: false,
     cycles: [],
+    periodic: [],
     motion_left: false,
     motion_unstarted: false,
     took_input: false,
