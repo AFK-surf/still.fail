@@ -36,8 +36,17 @@ fn emit_start(seed : UInt, w : Double, h : Double, env : Array[(String, String)]
 }
 
 ///|
+/// What the flow does as each step is said (its replay told it: Replay::step_taken).
+// kept across runs: Flow::start sets it for each flow
+let step_hook : Ref[((String) -> Unit)?] = Ref::new(None)
+
+///|
 /// A line of the script (a header, `#…`, as it is; a step after a run_for, `now` first).
 fn emit(line : String) -> Unit {
+  match step_hook.val {
+    Some(take) => take(line)
+    None => ()
+  }
   match script.val {
     Some(s) => {
       if line.has_prefix("#") || line.has_prefix("wait ") || line.has_prefix("log ") {

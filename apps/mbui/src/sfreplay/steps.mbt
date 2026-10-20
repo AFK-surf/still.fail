@@ -57,6 +57,13 @@ pub fn Flow::start(
     None => ()
   }
   let f = { r, t }
+  // each step the test says lets what came after it in the run come (Replay::step_taken)
+  // (a step that waits for what came after it in the run, `until X`, has it given before it looks)
+  step_hook.val = Some(fn(line) {
+    if r.step_taken(line) && waits(line) {
+      f.core()
+    }
+  })
   f.core()
   f
 }
@@ -69,6 +76,12 @@ fn notice_permission_of(trace : String) -> String? {
   let rest = trace.view(start_offset=i + key.length())
   guard rest.find("\"") is Some(j) else { return None }
   Some(rest.view(end_offset=j).to_owned())
+}
+
+///|
+/// Whether a step's line waits for something to be so (what came for it in the run given first: Flow::start).
+fn waits(line : String) -> Bool {
+  ["until ", "untiln ", "gone ", "noticed ", "nonotice ", "field ", "empty"].iter().any(fn(p) { line.has_prefix(p) })
 }
 
 ///|
@@ -95,8 +108,16 @@ fn Flow::spots(self : Flow, what : String) -> Array[(Double, Double)] {
 ///|
 /// The test fails, saying what was not so and what is on screen.
 fn Flow::fail(self : Flow, why : String) -> Unit {
-  let s = "flow: " + why + "\n" + self.t.dump()
+  // (and where the conversation stood: what the app asked that the run did not, what the next message waits for)
+  let r = self.r
+  let talk = "replay: \{r.left()} messages in not given, waiting for \{r.waiting().unwrap_or("-")}; diverged: \{r.diverged().join(", ")}; fuzzy: \{r.fuzzy().join(", ")}"
+  let s = "flow: " + why + "\n" + talk + "\n" + self.t.dump()
   println(s)
+  // (writing the steps as a scripted run, FLOW_EMIT, over a trace the app has outgrown: said, and the steps after it
+  // written all the same, for the run to record the trace they need)
+  if script.val is Some(_) {
+    return
+  }
   abort(s)
 }
 
@@ -268,6 +289,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = [], unsettled_ok? : Stri
   let sum = screen_sum(self.t)
   @core.Replay::detach()
   emit_end()
+  step_hook.val = None
   if why.length() > 0 {
     self.fail(why.join("; "))
   }
