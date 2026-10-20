@@ -126,13 +126,16 @@ case $CMD in
     fi
     rm -f $O/booted-here ;;
   record)
+    # a NAME given: a run to commit (listed in textrec_runs.txt); else this run's own ci_HOST, never listed
+    KEEP=
+    if [ -n "${NAME:-}" ]; then KEEP=--keep; fi
     NAME=${NAME:-ci_$H}
     run "$REC" $O/run.log || true
     grep -q "DRIVE PASS" $O/run.log || { echo "host_contract: the run did not pass its script"; grep -a "DRIVE" $O/run.log | tail -5; exit 1; }
     # the system's settings the run was drawn by (ENV: motion reduced, glass, dark, inset), which the Tester is given
     grep -a "ENV {" $O/run.log | tr -d '\r' || { echo "host_contract: the run kept no ENV line (the system's settings)"; exit 1; }
     echo "the run: $(grep -c DRAWHASH $O/run.log) frames, $(grep -c 'INPUT ' $O/run.log) inputs, $(grep -c TEXTREC $O/run.log) text answers"
-    "$PY" scripts/textrec_test.py $O/run.log $NAME $PAGE - - $PLATFORM
+    "$PY" scripts/textrec_test.py $KEEP $O/run.log $NAME $PAGE - - $PLATFORM
     set -o pipefail
     { moon test --target js src/kitdemo/textrec_${NAME}_wbtest.mbt 2>&1 || true; } | tr -d '\r' | grep -v '^TDUMP' | tail -20 | tee $O/test.txt
     if ! grep -q "passed: 1, failed: 0" $O/test.txt; then
@@ -155,7 +158,7 @@ case $CMD in
     run "MBUI_TEXTCHECK=$NAME" $O/text.log || code=$?
     tr -d '\r' < $O/text.log | grep -a "TEXTCHECK" | head -40
     if [ $code != 0 ] || ! grep -aq "TEXTCHECK done $NAME: [1-9][0-9]* answers, 0 differ" $O/text.log; then
-      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：python3 scripts/textrec_test.py run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/textrec_${NAME}*.mbt 与 textrec_runs.mbt"
+      echo "text contract ($H): the host's text is not what $NAME kept. 重录：scripts/host_contract.sh $H build && NAME=$NAME scripts/host_contract.sh $H record（或从 CI 的 host-$H 产物：python3 scripts/textrec_test.py --keep run.log $NAME $PAGE - - $PLATFORM），提交 src/kitdemo/textrec_${NAME}*.mbt、textrec_runs.txt 与 textrec_runs.mbt"
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;

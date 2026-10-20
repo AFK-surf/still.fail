@@ -31,7 +31,8 @@ The rules (see RULES below for each one's words):
     app-clock      the app reads the clock (c.now(), @ui.now(), @host.now()) to work out where an animation is or
                    whether a time has passed: motion / wake_at do that from what they declared
     wall-clock     the machine's own clock or randomness (Date.now, performance.now, Math.random, an unseeded
-                   @random) outside the host that provides them
+                   @random, a random id: uuid() / random_id() called with nothing, the system's uuid or random
+                   bytes) outside the host that provides them
     poll           a frame or a wake asked for under a condition that reads the host or the layout (a frame each
                    until it says yes): the host's answer, or the layout, is an event
     host-read      the app reads where it runs from @host (now, wake_after, platform, system_dark, window_inset, env),
@@ -550,7 +551,15 @@ HOST_READS = {"now", "wake_after", "platform", "system_dark", "window_inset", "e
 QUERY_DEFAULT = ["pressed", "list_row_height", "list_place", "rect_of", "row_height", "image_info", "view_info", "view_site_state",
                  "update_state", "shared_in", "made", "grabbed", "photos", "kept", "files"]
 WALL_WORDS = re.compile(r"\b(Date\.now|performance\.now|Math\.random|crypto\.getRandomValues|clock_gettime|"
-                        r"gettimeofday|mach_absolute_time|CFAbsoluteTimeGetCurrent|arc4random)\b")
+                        r"gettimeofday|mach_absolute_time|CFAbsoluteTimeGetCurrent|arc4random|"
+                        # the system's random ids and bytes (a uuid made new each run)
+                        r"crypto\.randomUUID|randomUUID|NSUUID|uuid_generate|SecRandomCopyBytes|getrandom|"
+                        r"BCryptGenRandom|SecureRandom|rand|srand|random)\b(?=\s*\()|"
+                        r"\b(Date\.now|performance\.now|Math\.random|NSUUID|SecureRandom|randomUUID)\b|/dev/u?random")
+# a function that makes a random id when called with nothing (a uuid, a random id); given something, it only shapes
+# what it is given (`uuid(hash)`: the same each run)
+RANDOM_IDS = {"uuid", "uuid4", "uuid_v4", "new_uuid", "random_uuid", "random_id", "rand_id", "random_hex",
+              "random_string", "random_bytes"}
 PLAIN_TYPES = {"Int", "Int64", "UInt", "UInt64", "Int16", "UInt16", "Double", "Float", "String", "Bool", "Char", "Byte",
                "Bytes", "Json", "Unit"}
 
@@ -640,6 +649,10 @@ def lint_mbt(f, cfg, out, returns, readers):
             add("app-clock", c.at, line_text)
         # wall clock through a provider's function outside it
         if c.name in ("wall_ms", "ffi_wall_ms") and not under(f.rel, cfg.clock_sources) and not test:
+            add("wall-clock", c.at, line_text)
+        # a random id made new each run (uuid(), random_id()): an id the app needs is drawn from what the run gives
+        # it (a seed, a counter, the frames' clock), so the same run makes the same one
+        if c.name in RANDOM_IDS and not c.args and not under(f.rel, cfg.clock_sources) and not test:
             add("wall-clock", c.at, line_text)
         # 6. a frame asked under a condition that reads the host or the layout
         if c.name in FRAME_ASK and c.kind in ("method", "pkg") and not test and not under(f.rel, cfg.host_dirs()):

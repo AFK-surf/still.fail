@@ -141,7 +141,7 @@ Only for these, which the framework knows by itself:
   atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
   to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
   `src/kitdemo/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
-  `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.mbt` names them all.
+  `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.txt` lists the runs kept (an explicit list: what a working directory happens to hold, a CI run's own `ci_HOST`, is never listed), `textrec_runs.mbt` is made from it, and CI checks the two and the runs git keeps agree (`scripts/textrec_test.py --check`).
 
   | host | where | host's contract | text's contract | kept run |
   |---|---|---|---|---|

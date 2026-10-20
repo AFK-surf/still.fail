@@ -5,7 +5,9 @@ docs/determinism.md): the run kept as src/kitdemo/textrec_NAME.mbt, its test src
 src/kitdemo/textrec_runs.mbt naming every kept run (what MBUI_TEXTCHECK=NAME asks the host's text system again: the
 text's contract, src/kitdemo/textcheck.mbt).
 
-  scripts/textrec_test.py LOG NAME PAGE W H [PLATFORM]
+  scripts/textrec_test.py [--keep] LOG NAME PAGE W H [PLATFORM]    --keep: listed in textrec_runs.txt (to be committed)
+  scripts/textrec_test.py --runs        textrec_runs.mbt made again from textrec_runs.txt
+  scripts/textrec_test.py --check       CI: textrec_runs.mbt, the list and the runs git keeps agree
 
 W H "-": the window's size at the run's first frame (its DRAWHASH line).
 
@@ -19,18 +21,64 @@ import sys
 KIT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "kitdemo")
 
 
-def runs_file():
-    """src/kitdemo/textrec_runs.mbt: every run kept in src/kitdemo (textrec_NAME.mbt), by its name."""
-    names = sorted(
-        os.path.basename(p)[len("textrec_"):-len(".mbt")]
-        for p in glob.glob(os.path.join(KIT, "textrec_*.mbt"))
-        if not p.endswith("_wbtest.mbt") and not p.endswith("textrec_runs.mbt"))
-    out = ["// Every run kept in this package (textrec_NAME.mbt), by its name: what MBUI_TEXTCHECK=NAME asks the host's",
-           "// text system again (textcheck.mbt). Made by scripts/textrec_test.py: not edited by hand.", "", "///|",
+RUNS_LIST = os.path.join(KIT, "textrec_runs.txt")
+
+
+def kept_names():
+    """The runs kept in the repository: src/kitdemo/textrec_runs.txt, a name a line (an explicit list, not whatever
+    textrec_*.mbt a working directory happens to hold: a CI run's own ci_HOST, another machine's leftovers)."""
+    if not os.path.exists(RUNS_LIST):
+        return []
+    return sorted({l.strip() for l in open(RUNS_LIST, encoding="utf-8") if l.strip() and not l.startswith("#")})
+
+
+def runs_text(names):
+    out = ["// Every run kept in this package (textrec_NAME.mbt, listed in textrec_runs.txt), by its name: what",
+           "// MBUI_TEXTCHECK=NAME asks the host's text system again (textcheck.mbt). Made by scripts/textrec_test.py: not",
+           "// edited by hand.", "", "///|",
            "fn kept_run(name : String) -> String? {", "  match name {"]
     out += [f'    "{n}" => Some(run_{n})' for n in names]
     out += ["    _ => None", "  }", "}"]
-    open(os.path.join(KIT, "textrec_runs.mbt"), "w", encoding="utf-8", newline="\n").write("\n".join(out) + "\n")
+    return "\n".join(out) + "\n"
+
+
+def runs_file(add=None):
+    """src/kitdemo/textrec_runs.mbt from the list, `add` put in the list first (a run kept to be committed)."""
+    names = kept_names()
+    if add and add not in names:
+        names = sorted(names + [add])
+        head = "# The runs kept in src/kitdemo (textrec_NAME.mbt), a name a line: scripts/textrec_test.py --keep adds one.\n"
+        open(RUNS_LIST, "w", encoding="utf-8", newline="\n").write(head + "".join(n + "\n" for n in names))
+    open(os.path.join(KIT, "textrec_runs.mbt"), "w", encoding="utf-8", newline="\n").write(runs_text(names))
+
+
+def check():
+    """CI: textrec_runs.mbt is what the list makes, each listed run's files are there, and (in a git checkout) each
+    run git keeps is listed. Fails saying which."""
+    faults = []
+    names = kept_names()
+    if open(os.path.join(KIT, "textrec_runs.mbt"), encoding="utf-8").read() != runs_text(names):
+        faults.append("src/kitdemo/textrec_runs.mbt is not what textrec_runs.txt makes (scripts/textrec_test.py --runs)")
+    for n in names:
+        for f in (f"textrec_{n}.mbt", f"textrec_{n}_wbtest.mbt"):
+            if not os.path.exists(os.path.join(KIT, f)):
+                faults.append(f"textrec_runs.txt lists {n}, but src/kitdemo/{f} is not there")
+    try:
+        import subprocess
+        tracked = subprocess.run(["git", "ls-files", "src/kitdemo/textrec_*.mbt"], cwd=os.path.join(KIT, "..", ".."),
+                                 capture_output=True, text=True, check=True).stdout.split()
+        for f in tracked:
+            b = os.path.basename(f)
+            if b.endswith("_wbtest.mbt") or b == "textrec_runs.mbt":
+                continue
+            n = b[len("textrec_"):-len(".mbt")]
+            if n not in names:
+                faults.append(f"{f} is kept in git but not listed in textrec_runs.txt")
+    except Exception:
+        pass
+    for f in faults:
+        print("textrec runs: " + f)
+    sys.exit(1 if faults else 0)
 
 
 def num(x):
@@ -87,12 +135,16 @@ def main():
             "}"]
     open(os.path.join(KIT, f"textrec_{name}.mbt"), "w", encoding="utf-8", newline="\n").write("\n".join(data) + "\n")
     open(os.path.join(KIT, f"textrec_{name}_wbtest.mbt"), "w", encoding="utf-8", newline="\n").write("\n".join(test) + "\n")
-    runs_file()
+    runs_file(add=name if keep_it else None)
     print(f"{len(keep)} lines")
 
 
 if __name__ == "__main__":
+    keep_it = "--keep" in sys.argv
+    sys.argv = [a for a in sys.argv if a != "--keep"]
     if sys.argv[1:] == ["--runs"]:
         runs_file()
+    elif sys.argv[1:] == ["--check"]:
+        check()
     else:
         main()

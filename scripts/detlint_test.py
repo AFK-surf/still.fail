@@ -216,6 +216,26 @@ class Rules(unittest.TestCase):
         }
         found(self, good, "wall-clock", 0)
 
+    def test_wall_clock_random_ids(self):
+        bad = {
+            "src/app/name.mbt": "fn name() -> String {\n  \"pasted-text-\" + uuid() + \".txt\"\n}\n",
+            "src/app/id.mbt": "fn id() -> String {\n  @util.random_id()\n}\n",
+            "src/app/js.mbt": "extern \"js\" fn u() -> String =\n  #|() => crypto.randomUUID()\n",
+            "src/app/c.mbt": "extern \"c\" fn r() -> Int =\n  #|int r(void) { return rand(); }\n",
+        }
+        found(self, bad, "wall-clock", 4)
+        good = {
+            # shaping a hash it is given: the same each run
+            "src/app/name.mbt": "fn name(h : String) -> String {\n  \"pasted-text-\" + uuid(h) + \".txt\"\n}\n",
+            # a test may make one
+            "src/app/id_test.mbt": "test \"x\" {\n  let id = random_id()\n}\n",
+            # the host that provides randomness
+            "src/host/host_js.mbt": "extern \"js\" fn u() -> String =\n  #|() => crypto.randomUUID()\n",
+            # words that only look alike
+            "src/app/w.mbt": "fn w() -> String {\n  let operand = 1\n  \"brand(new)\"\n}\n",
+        }
+        found(self, good, "wall-clock", 0)
+
     def test_poll(self):
         bad = {"src/app/view.mbt": """
             fn ready() -> Bool {
