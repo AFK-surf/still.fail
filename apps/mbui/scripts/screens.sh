@@ -66,9 +66,13 @@ case "${1:-test}" in
     APP=sffix MODE=release bash scripts/mac.sh build >/dev/null || exit 1
     mkdir -p out/screens
     fail=0
+    # the moment each screen's picture is of, on the run's own clock: past what every screen opens with (a page
+    # sliding in, a sheet rising, a flash), as each screen's test checks (screens_wbtest.mbt `opening`; it fails, not
+    # waits, where one would still move); the Mac takes it there (MBUI_SHOT_MS), never on its being settled
+    shot_ms=3000
     for m in $modes; do
       log=out/screens/$m.log
-      MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot \
+      MBUI_TEXT_RECORD=1 MBUI_DRAW_LOG=1 MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_MS=$shot_ms \
         MBUI_SHOT_NAME=$m MBUI_SHOT_DIR=$PWD/out/screens ./_build/native/release/build/stillfail/sffix/sffix.exe > $log 2>&1 \
         || { echo "$m: sffix failed ($?): $log"; fail=1; continue; }
       python3 scripts/screens.py keep $m $log || fail=1
