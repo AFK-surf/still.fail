@@ -994,7 +994,7 @@ fn reader_hairline(
 let reader_bar_radius : Double = 20.0
 
 ///|
-let reader_bar_inset : Double = 10.0
+let reader_bar_inset : Double = 14.0
 
 ///|
 /// A small key on the bar (上一章, 下一章): faded and inert when there is nowhere to go.
