@@ -40,9 +40,24 @@ pub fn Flow::start(
   let t = @ui.Tester::new(app, w~, h~, env~)
   // the run's core answering as soon as asked: what may come is posted as each frame ends, taken by the next
   t.between_frames(fn() { r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore })
+  // what the system lets the app show as the run's host said it (its app's notify.permission): a Tester's own lets it
+  match notice_permission_of(trace) {
+    Some(state) => t.set_notice_permission(state)
+    None => ()
+  }
   let f = { r, t }
   f.core()
   f
+}
+
+///|
+/// The notifications' permission the run's app told its core (`notify.permission`'s state), if it did.
+fn notice_permission_of(trace : String) -> String? {
+  let key = "\"call\":\"notify.permission\",\"params\":{\"state\":\""
+  guard trace.find(key) is Some(i) else { return None }
+  let rest = trace.view(start_offset=i + key.length())
+  guard rest.find("\"") is Some(j) else { return None }
+  Some(rest.view(end_offset=j).to_owned())
 }
 
 ///|

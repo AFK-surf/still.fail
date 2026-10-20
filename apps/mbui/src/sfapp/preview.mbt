@@ -1312,7 +1312,7 @@ fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
   }
   marks_put_down(c)
   let z = self.zoom
-  match @host.draw_marks(bytes, marks_json(z.nw, z.nh)) {
+  match @ui.draw_marks(bytes, marks_json(z.nw, z.nh)) {
     Some(j) => {
       marking.job = Some(j)
       marking.busy = true

@@ -19,7 +19,7 @@
 // Nothing of it with Source.read_only (a run on a real account changes nothing in it).
 
 ///|
-/// What the system is asked through (@host's; tests put their own).
+/// What the system is asked through (@ui's, the host's on a device and a Tester's own under one; tests put their own).
 priv struct NoticeHost {
   show : (String, String, String, String) -> Unit
   cancel : (String) -> Unit
@@ -35,13 +35,13 @@ priv struct NoticeHost {
 fn host_notices() -> NoticeHost {
   {
     show: fn(tag, title, body, opens) {
-      @host.notice_show(channel=tr("android-misc.notify.channel"), tag~, title~, body~, opens~)
+      @ui.notice_show(channel=tr("android-misc.notify.channel"), tag~, title~, body~, opens~)
     },
-    cancel: fn(tag) { @host.notice_cancel(tag) },
-    permission: fn() { @host.notice_permission() },
-    ask: fn() { @host.notice_ask() },
-    answer: fn() { @host.notice_answer() },
-    opened: fn() { @host.notice_opened() },
+    cancel: fn(tag) { @ui.notice_cancel(tag) },
+    permission: fn() { @ui.notice_permission() },
+    ask: fn() { @ui.notice_ask() },
+    answer: fn() { @ui.notice_answer() },
+    opened: fn() { @ui.notice_opened() },
     token: fn() { @host.push_token() },
     pushed: fn() { @host.push_next() },
   }
