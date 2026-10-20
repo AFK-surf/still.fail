@@ -5,12 +5,8 @@
 ///|
 test "41-notice-failed" {
   @sfreplay.orders(fn(seed) raise {
-    // (the run's app had the local cloud: the notice's link read against it, link.parse)
-    let f = @sfreplay.Flow::start(
-      @sfreplay.trace_notice_failed,
-      seed~,
-      env=[("MBUI_CLOUD", "http://127.0.0.1:19100")],
-    )
+    // (the run's app had the local cloud, its trace's env says which: the notice's link read against it, link.parse)
+    let f = @sfreplay.Flow::start(@sfreplay.trace_notice_failed, seed~)
     f.see("端到端测试")
     // (a live run's step beside the app, the trace has what came of it)
     f.peer("peer send 这一条不会有回复 083209")
