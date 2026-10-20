@@ -14,6 +14,10 @@
 #   apps/mbui/scripts/beta.sh win        the Windows app (scripts/win.sh's build, its engine, shell and core.hbc beside it),
 #                                        zipped into $RELEASE_DIR as win/stillfail-mbui-<n>-x64-win.zip and
 #                                        win/mbui/latest.json
+#   apps/mbui/scripts/beta.sh changed android|mac|win
+#                                        yes when what the app is made of (APP_SRC: its code, not its tests, docs,
+#                                        scripts or CI) changed since the build that feed names now (or it has none),
+#                                        else no: main's push makes and puts a package only then
 #   apps/mbui/scripts/beta.sh publish android|mac|win
 #                                        what `build` or `mac` made put (scripts/release-put.sh), fetched back from where
 #                                        it is served and checked (size, SHA-256), then its feed: https://app.still.fail/
@@ -37,8 +41,25 @@ secs() { python3 -c "print(f'{$(now)-$1:.1f}')"; }
 summary() { [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "$*" >> "$GITHUB_STEP_SUMMARY"; echo "$*"; }
 setenv() { export "$1=$2"; [ -z "${GITHUB_ENV:-}" ] || echo "$1=$2" >> "$GITHUB_ENV"; }
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
-BT=$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1)
+BT=$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1 || true)
 build_number() { git -C "$REPO" rev-list --count HEAD; }
+# What the app is made of: its code, what it is built with (mbui at mbui.rev, the core, the client's packages, media's,
+# vendor's crates), not their tests, docs, the scripts or CI (a push of those alone is no new package: 2026-10-21)
+APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/engine apps/mbui/mbui.rev
+  apps/mbui/moon.mod apps/mbui/moon.work client media vendor
+  ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/*_test.mbt' ':(exclude,glob)**/*_wbtest.mbt' ':(exclude,glob)**/*.test.*'
+  ':(exclude,glob)**/*.md')
+# the commit PART's feed names now (versionCode n is main's nth commit); nothing when it has none
+released() {
+  local n
+  n=$(curl -fsS --max-time 10 "$ORIGIN/releases/$1/mbui/latest.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])' 2>/dev/null || true)
+  [ -z "$n" ] || git -C "$REPO" rev-list --reverse HEAD | sed -n "${n}p"
+}
+changed() {
+  local prev
+  prev=$(released "$1")
+  if [ -n "$prev" ] && git -C "$REPO" diff --quiet --no-renames "$prev" HEAD -- "${APP_SRC[@]}"; then echo no; else echo yes; fi
+}
 
 # The latest MoonBit, in $C/moon/<its ETag's hash>, MBUI_TOOLS=$C/tools (tools/moon: that one) for mbui's env.sh: the
 # ETags of the release's two downloads (the binaries and the core) asked each run (a HEAD each), the install only when
@@ -117,12 +138,10 @@ for root, dirs, names in os.walk(dst):
 # feed PART N NAME FILE: $RELEASE_DIR/PART/PART/mbui/latest.json (still.fail's AppRelease) for FILE, put as NAME; news:
 # what came since the build the feed names now (versionCode n is main's nth commit), of what the app is made of
 feed() {
-  local part=$1 n=$2 name=$3 file=$4 prev prev_sha
-  prev=$(curl -fsS --max-time 10 "$ORIGIN/releases/$part/mbui/latest.json" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["versionCode"])' 2>/dev/null || true)
-  prev_sha=
-  [ -z "$prev" ] || prev_sha=$(git -C "$REPO" rev-list --reverse HEAD | sed -n "${prev}p")
+  local part=$1 n=$2 name=$3 file=$4 prev_sha
+  prev_sha=$(released "$part")
   mkdir -p "$RELEASE_DIR/$part/$part/mbui"
-  git -C "$REPO" log --format=%s ${prev_sha:+$prev_sha..}HEAD -n 30 -- apps/mbui client media \
+  git -C "$REPO" log --format=%s ${prev_sha:+$prev_sha..}HEAD -n 30 -- "${APP_SRC[@]}" \
     | python3 -c '
 import json, sys
 n, name, sha, size, out = sys.argv[1:6]
@@ -248,6 +267,7 @@ case "${1:-}" in
   build) build ;;
   mac) mac ;;
   win) win ;;
+  changed) changed "${2:-android}" ;;
   publish) publish "${2:-android}" ;;
   *) sed -n '2,20p' "$0"; exit 1 ;;
 esac

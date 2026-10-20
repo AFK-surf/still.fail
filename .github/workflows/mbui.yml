@@ -33,8 +33,32 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  android:
+  # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
+  # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21); iOS as Android
+  # (no feed of its own yet). A branch's push, or a run by hand, builds them all.
+  what:
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.what.outputs.android }}
+      mac: ${{ steps.what.outputs.mac }}
+      win: ${{ steps.what.outputs.win }}
+    steps:
+      # (the history's commits and trees, the files' contents only for beta.sh: what changed is told by the trees)
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none", sparse-checkout: apps/mbui/scripts }
+      - id: what
+        run: |
+          for p in android mac win; do
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed $p); else v=yes; fi
+            echo "$p=$v" >> "$GITHUB_OUTPUT"
+            echo "$p: $v"
+          done
+
+  android:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.android == 'yes'
     runs-on: ubuntu-24.04
     # production's secrets (the key, the bucket's token) on main only: a branch's run builds, unsigned, and puts nothing
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
@@ -88,7 +112,8 @@ jobs:
           key: mbui-android-${{ github.sha }}
 
   mac:
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
     runs-on: macos-15
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 20
@@ -153,7 +178,8 @@ jobs:
           key: mbui-mac-${{ github.sha }}
 
   ios:
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.android == 'yes'
     runs-on: macos-15
     timeout-minutes: 20
     env:
@@ -202,7 +228,8 @@ jobs:
           key: mbui-ios-${{ github.sha }}
 
   windows:
-    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.win == 'yes'
     runs-on: windows-2025
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
     timeout-minutes: 10
