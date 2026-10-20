@@ -212,6 +212,7 @@ pub struct Ctx {
   /// lists' places, rows' heights, whether words are laid out; the boxes whose laid rect is read, and when last, with
   /// their rects as last laid out
   laid_reads : Map[Int, ((Double, Double, Double, Double)?, SourceLoc)]
+  size_reads : Map[Int, ((Double, Double)?, SourceLoc)]
   place_reads : Map[Int, (String, (Int, Double, Double)?)]
   row_reads : Map[(Int, Int), (String, Double?)]
   words_reads : Map[String, Bool]
@@ -364,6 +365,7 @@ fn Ctx::new() -> Ctx {
     read_back_moved: false,
     read_back_key: "",
     laid_reads: Map::new(),
+    size_reads: Map::new(),
     place_reads: Map::new(),
     row_reads: Map::new(),
     words_reads: Map::new(),
