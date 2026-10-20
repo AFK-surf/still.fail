@@ -270,20 +270,39 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
 }
 
 ///|
-/// Whether node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) lies in the same corner of a
-/// box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner
-/// of its own), flush along one of its edges: what is drawn there is bounded by the cut's arc, not its own corner.
+/// Whether what shows at node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is the arc of a
+/// box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
+/// its own): the node's own arc there lies wholly outside the cut's circle (within half a pixel), so the cut's arc
+/// bounds it (a square corner flush along its edge, a capsule's fill as round as it). Its arc measured at 16 fixed
+/// directions over the quarter toward the corner; one point inside the cut's circle and its own arc shows: checked as
+/// any other.
 fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
   let b = self.nodes[i]
+  let rb = b.corner()
   let mut q = b.parent
   while q >= 0 {
     let n = self.nodes[q]
-    if n.clip && n.corner() >= 0.5 {
+    let r = n.corner()
+    if n.clip && r >= 0.5 {
+      // the corner's own frame: the cut's corner at the origin, inward positive; the cut's circle about (r, r)
       let dx = if k == 0 || k == 2 { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }
       let dy = if k < 2 { b.y - n.y } else { n.y + n.fh - (b.y + b.fh) }
-      // flush along either edge there, within the cut's corner on the other: the cut's arc bounds what shows
-      if (dx.abs() <= 0.5 && dy < n.corner()) || (dy.abs() <= 0.5 && dx < n.corner()) {
-        return true
+      if dx >= -0.5 && dy >= -0.5 && dx < r && dy < r {
+        let mut outside = true
+        for j in 0..<cut_arc_steps {
+          let a = half_pi * j.to_double() / (cut_arc_steps - 1).to_double()
+          let px = dx + rb - rb * @math.cos(a)
+          let py = dy + rb - rb * @math.sin(a)
+          let ex = px - r
+          let ey = py - r
+          if (ex * ex + ey * ey).sqrt() < r - 0.5 {
+            outside = false
+            break
+          }
+        }
+        if outside {
+          return true
+        }
       }
     }
     if q == p {
@@ -293,3 +312,11 @@ fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
   }
   false
 }
+
+///|
+/// How many directions a node's corner arc is measured at against a cut's circle (cut_round_at): fixed, so the answer is
+/// the same every run.
+let cut_arc_steps : Int = 16
+
+///|
+let half_pi : Double = 1.5707963267948966

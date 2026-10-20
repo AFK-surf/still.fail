@@ -252,6 +252,38 @@ test "style: radius=Inner in a container whose corner is a ground laid beside it
 }
 
 ///|
+/// A card rounded 24 that cuts, padded 8 at its sides and `pt` at its top, holding a row 40 high rounded `row`.
+fn clip_card_row(row : Radius, pt : Double) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(200.0), h=Px(120.0), radius=24.0, bg=0xD0D4DAFFL, clip=true, padx=8.0, pt~, fn() {
+        c.box(style=style(w=Full, h=S10, radius=row, bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "corners: flush against a rounded clip's edge, whose arc shows decides" {
+  // a: square, flush along the top: the cut's arc is what shows there (Inner says it cannot be concentric: its own fault)
+  let t = Tester::new(clip_card_row(Sharp, 0.0))
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // b: its own arc (16) inside the cut's circle: its arc shows, not concentric with the card's
+  let t = Tester::new(clip_card_row(Exact(16.0), 0.0))
+  t.draw()
+  let faults = t.corner_faults()
+  assert_true(faults.length() == 2, msg=faults.join("\n"))
+  // c: as far from the top as from the sides, Inner: concentric
+  let t = Tester::new(clip_card_row(Inner, 8.0))
+  t.draw()
+  assert_eq(g().nodes[g().count - 1].radius, 16.0)
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
 test "style: radius=Inner that cannot be concentric is drawn square and said, not stopped" {
   // nearer its container's top than its sides
   let t = Tester::new(inner_card(style(px=S2, pt=S4)))
