@@ -1,4 +1,4 @@
-// A headless run of the core (src/host/apple_core.m) against still.fail cloud: subscribe to the accounts, ask for a
+// A headless run of the core (src/host/apple_core.mm) against still.fail cloud: subscribe to the accounts, ask for a
 // login URL (printed, never opened: nobody logs in), stop. Built and run by `scripts/core.sh smoke`.
 //   smoke <data dir> [cloud origin]        (MB_CORE_BUNDLE: the core's script)
 // Exit 0 when the accounts came and auth.begin answered with a URL.

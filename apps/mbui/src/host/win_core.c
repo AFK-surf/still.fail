@@ -3,7 +3,7 @@
 // parts `engine` and `shell`, win32-x64), the core as Hermes bytecode (core.hbc beside the app, or $MB_CORE_BUNDLE:
 // scripts/core.sh hermes). What the core says comes back through the engine's `say`, into core_native.c's queue, and a
 // frame is asked for (mb_app_wake), in which the host drains it (mbc_frame, win_app.c); the calls only the app does are
-// answered here, as android_core.c's CoreHost and apple_core.m do:
+// answered here, as android_core.c's CoreHost and apple_core.mm do:
 //   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), sealed with DPAPI for this Windows user (CryptProtectData, no prompt ever) in files of <data>\secure, one a
 //     key (its UTF-8 in hex). secure.get {key, user} -> {} + the bytes, or {none: true}; secure.set {key, user} + the
