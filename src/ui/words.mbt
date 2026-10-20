@@ -61,10 +61,15 @@ pub fn Ctx::words(
 }
 
 ///|
-/// The words of the box marked `key` as they were last laid out (None when it was not built the last frame).
+/// The words of the box marked `key` as they were last laid out (None when it was not built the last frame). Read as
+/// the view builds, whether there are any is read back (readback.mbt): laid out this frame where there were none (or
+/// gone), the frame is built again; where they lie, read back as they move (words_after_layout).
 pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
-  ignore(self)
-  words_kept.get(key)
+  let v = words_kept.get(key)
+  if building.val && !self.words_reads.contains(key) {
+    self.words_reads[key] = v is Some(_)
+  }
+  v
 }
 
 ///|

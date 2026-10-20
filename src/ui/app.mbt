@@ -200,6 +200,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.drawing_after_layout()
     // what words marked as selectable hold, as laid out (words.mbt)
     c.words_after_layout()
+    // what the view read of the layout as it built (a box's laid rect, a list's place), looked at again (readback.mbt)
+    c.reads_after_layout()
     // how far what scrolls sideways can (sideways.mbt)
     c.sideways_after_layout()
     // the focus into the layers that opened, back from those that went (overlay.mbt)
