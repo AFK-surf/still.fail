@@ -7,8 +7,6 @@
 // the core's, said over the frame, which stays as it was last shown.
 package fail.still.android.remote
 
-import fail.still.android.ui.BUTTON_HEIGHT
-import fail.still.android.ui.CARD_PAD
 import android.content.ClipData
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitPill
@@ -662,7 +660,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = zoom.scale; scaleY = zoom.scale
                         translationX = zoom.x; translationY = zoom.y
-                        alpha = if (still) 0.4f else 1f
+                        // Over (ended, gone…): only a trace of it under what the page says; on its way back, as it was, faded.
+                        alpha = if (!still) 1f else if (phase in OVER) 0.12f else 0.4f
                     },
             ) {
                 if (session.codec == "h264") Texture(session)
@@ -794,6 +793,9 @@ private fun Pointer(at: () -> Offset?, shown: () -> Rect) {
     }
 }
 
+/** The phases a view is over in (Over says what happened and the ways on). */
+private val OVER = setOf("ended", "outdated", "gone", "denied", "failed")
+
 /** How the view is, when it is not simply live: on its way, back on its way, or over (why, and what can be done). */
 @Composable
 private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onExit: () -> Unit) {
@@ -803,19 +805,20 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
         "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
         else -> Column(
-            // The web's note (ScreenViewer.css.ts): as wide as it can be up to 320, its words from its start, its buttons
-            // at the foot's end, the last in the corner: 20 from every edge, its corner theirs and that, concentric.
-            modifier.padding(16.dp).widthIn(max = 320.dp).fillMaxWidth().floatingStill(Smooth(CARD_PAD + BUTTON_HEIGHT / 2)).padding(CARD_PAD),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            // Said on the page itself (nothing left on it to float over): the screen's sign, what happened and why, the
+            // ways on under them, all in the middle.
+            modifier.padding(32.dp).widthIn(max = 320.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            IconIn(if (session.state?.kind == "browser") Icons.Web else Icons.Monitor, 32.dp, C.subtle)
             val headline = t("android-misc.screen.$phase")
-            Text(headline, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+            Text(headline, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 14.dp))
             // Why, as the core says it (and what to turn on where, macOS's grants), each once and not the headline again.
             listOfNotNull(message, session.state?.access?.message).filter { it.isNotEmpty() && it != headline }.distinct().forEach {
-                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
+                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             }
             val again = phase in setOf("ended", "denied", "failed")
-            Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(t("common.back"), primary = !again, onClick = onExit)
                 if (again) Button(t("web-pages.screen.again"), primary = true) { session.open() }
             }
