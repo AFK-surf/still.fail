@@ -67,7 +67,7 @@ priv struct Emits {
   /// the flight as last worked out: how far through its pose, from where (y) to where (y), for the motion log
   mut trace : (Double, Double, Double)
   /// what it is said to move by (Ctx::moving): its turns, each pose's end known as it starts
-  mover : Int
+  mover : @ui.Mover
 }
 
 ///|
@@ -89,7 +89,7 @@ fn emits_of(key : String) -> Emits {
         watched: false,
         copied: "",
         trace: (0.0, 0.0, 0.0),
-        mover: @ui.current().mover_id(),
+        mover: @ui.Mover::new(),
       }
       emits[key] = e
       e

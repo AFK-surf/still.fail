@@ -1,8 +1,8 @@
 // The still.fail client core on Windows (core_api.h), as Android runs it: Hermes 0.81.4 in-process on the Rust shell, in
 // the engine prebuilt for Windows (apps/mbui/engine as stillfail_engine.dll, beside stillfail_shell.dll: scripts/native.ts
 // parts `engine` and `shell`, win32-x64), the core as Hermes bytecode (core.hbc beside the app, or $MB_CORE_BUNDLE:
-// scripts/core.sh hermes). What the core says comes back through the engine's `say`, into core_native.c's queue, and a
-// frame is asked for (mb_app_wake), in which the host drains it (mbc_frame, win_app.c); the calls only the app does are
+// scripts/core.sh hermes). What the core says comes back through the engine's `say`, through core_native.c into mbui's
+// queue (mb_post), which asks for the frame that takes it (win_app.c); the calls only the app does are
 // answered here, as android_core.c's CoreHost and apple_core.m do:
 //   secure.* (ember hosts/bridge.ts): what the core keeps out of the files it syncs (the lock's signing seed, a vault's
 //     key), sealed with DPAPI for this Windows user (CryptProtectData, no prompt ever) in files of <data>\secure, one a
@@ -37,7 +37,6 @@
 #pragma comment(lib, "uuid.lib")
 #pragma comment(lib, "stillfail_engine.lib")
 
-void mb_app_wake(void);  // win_app.c: a frame, from any thread
 
 static struct {
   sf_engine *engine;  // under `gate`: answers from other threads look at it there
@@ -72,7 +71,6 @@ static void say_fatal(const char *why) {
   int n = snprintf(buf, sizeof buf, "{\"fatal\":\"%s\"}", why);
   fprintf(stderr, "[core] %s\n", why);
   if (W.on_message) W.on_message(buf, (size_t)n, NULL, 0, W.ctx);
-  mb_app_wake();
 }
 
 // ── answers, from any thread ──
@@ -517,7 +515,6 @@ static void on_say(void *ctx, const char *json, size_t len, const uint8_t *bytes
   (void)ctx;
   if (tracing()) fprintf(stderr, "[core trace] says %.*s%s\n", (int)(len < 300 ? len : 300), json, len > 300 ? "..." : "");
   if (W.on_message) W.on_message(json, len, bytes, blen, W.ctx);
-  mb_app_wake();
 }
 
 static void on_app_call(void *ctx, uint64_t id, const char *op, const char *json, size_t len, const uint8_t *bytes, size_t blen) {
