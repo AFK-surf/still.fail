@@ -711,12 +711,15 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
     } else {
       true
     })
-  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=12.0, clip=true, fn() {
+  // the copy key in the block's top right corner: as far from both edges, concentric with it
+  let block_radius = 12.0
+  let key_inset = 4.0
+  c.box(w=Fill(1.0), bg=t.p.code_ground, radius=block_radius, clip=true, fn() {
     c.box(
       dir=Row,
-      pl=4.0,
-      pr=4.0,
-      pt=4.0,
+      pl=key_inset,
+      pr=key_inset,
+      pt=key_inset,
       h=Px(28.0),
       align=ACenter,
       justify=JEnd,
@@ -737,7 +740,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
           padx=7.0,
           gap=4.0,
           align=ACenter,
-          radius=6.0,
+          radius=concentric(block_radius, key_inset),
           bg=alpha(t.p.canvas, if c.pressed(id) { 1.0 } else { 0.8 }),
           id~,
           fn() {

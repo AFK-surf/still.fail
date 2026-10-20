@@ -218,6 +218,11 @@ fn level_color(level : String) -> Int64 {
 }
 
 ///|
+/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill, flush with
+/// the chip's edges, is concentric with it (the chip's clip does not round what is in it until mbui#42).
+let fill_chip_radius : Double = 6.0
+
+///|
 /// A rounded box with a figure in it, its mark before it, its ground filled from the left as far as `fill` (0–100):
 /// grey while it is ok, faintly the level's colour once it is not, the figure then in that colour (Parts.kt FillChip).
 fn fill_chip(c : @ui.Ctx, fill : Int, level : String, mark : String, words : String, small? : Bool = false) -> Unit {
@@ -226,11 +231,11 @@ fn fill_chip(c : @ui.Ctx, fill : Int, level : String, mark : String, words : Str
   let low = level == "amber" || level == "red"
   let ground = if low || level == "progress" { @sf.alpha(tone, 0.2) } else { @sf.alpha(t.p.muted, 0.22) }
   let fs = if small { 10.0 } else { 11.0 }
-  c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=6.0, bg=t.p.chip, clip=true, justify=JCenter, fn() {
+  c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=fill_chip_radius, bg=t.p.chip, clip=true, justify=JCenter, fn() {
     if fill > 0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(fill.to_double()), h=Fill(1.0), bg=ground, fn() {  }) |> ignore
+          c.box(w=Fill(fill.to_double()), h=Fill(1.0), radius=@sf.concentric(fill_chip_radius, 0.0), bg=ground, fn() {  }) |> ignore
           if fill < 100 {
             c.box(w=Fill((100 - fill).to_double()), h=Fill(1.0), fn() {  }) |> ignore
           }
