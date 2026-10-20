@@ -162,9 +162,43 @@ fn imin(a : Int, b : Int) -> Int {
 // frames come until it is at rest and none after. The bar reads where its numbers are once a frame (BarModel::sample).
 
 ///|
-/// The frames' clock now (ms): when what the bar is told sets out, and where it is read.
-fn bar_now() -> Double {
-  @ui.current().now()
+/// The bar's springs said to move as one (Ctx::set_out): handed each frame's time while any of them moves, the frame
+/// they are at rest too (Moving::sample), so the bar reads where they are from it, not the clock.
+priv struct BarClock {
+  mover : @ui.Mover
+  /// the time last handed to it, or of the frame it last set out in
+  mut now : Double
+}
+
+///|
+let bar_clock : BarClock = { mover: @ui.Mover::new(), now: 0.0 }
+
+///|
+impl @ui.Moving for BarClock with rest_at(self, now, frame) {
+  ignore(self)
+  ignore(now)
+  ignore(frame)
+  let mut e = -1.0
+  for s in [bar.o, bar.k, bar.held, bar.ball_x, bar.ball_y] {
+    e = dmax(e, s.end())
+  }
+  e
+}
+
+///|
+impl @ui.Moving for BarClock with sample(self, now) {
+  self.now = now
+}
+
+///|
+/// A spring of the bar sets out: when (this frame's time; told between frames, the last frame's, where the bar last
+/// was), the bar's springs said to move from it on.
+fn bar_set_out() -> Double {
+  let at = @ui.current().set_out(bar_clock.mover, bar_clock as &@ui.Moving, what="the bar's springs")
+  if at != @double.infinity {
+    bar_clock.now = at
+  }
+  bar_clock.now
 }
 
 ///|
@@ -243,7 +277,7 @@ fn Spr::sample(self : Spr, now : Double) -> Unit {
 /// so already.
 fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit {
   let same = tension == self.tension && friction == self.friction
-  let now = bar_now()
+  let now = bar_set_out()
   // riding: where it rides to by the ride's spring is nothing new; anything else sets out from where the ride has it
   let rode = match self.ride {
     Some(r) => {
@@ -459,7 +493,7 @@ fn Spr::ride_on(self : Spr, tension : Double, anchor : (Double) -> Double, still
     Some(r) if r.from.same(from) && r.k == tension => return
     _ => ()
   }
-  let now = bar_now()
+  let now = bar_set_out()
   let (x, v) = match (self.ride, self.path) {
     (Some(r), _) => r.at(now)
     (None, Some(p)) => p.at(now)
@@ -706,6 +740,7 @@ fn bar_reset() -> Unit {
   back_glide(bar.icon_swap, 1.0)
   m_face.val = ""
   bars_picked.val = None
+  bar_clock.now = 0.0
 }
 
 ///|
@@ -727,7 +762,7 @@ fn BarModel::k_now(self : BarModel) -> Double {
 ///|
 /// Where everything is this frame, by what it was told before (Bar.kt: told as it is composed, it moves from there).
 fn BarModel::sample(self : BarModel) -> Unit {
-  let now = bar_now()
+  let now = bar_clock.now
   for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
     s.sample(now)
   }
