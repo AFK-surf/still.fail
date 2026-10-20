@@ -7,15 +7,14 @@ timeout 60000
 tap 端到端测试
 until =studio
 until 发消息
-wait 1000
 tap icon:plus
 until =文件
-wait 1500
+# the gallery's latest across the top, drawn
+decoded e2e-photo.jpg
 shot 1-strip
 tapxy 150 -180
 timeout 120000
 gone 正在上传
-wait 2000
 shot 2-picked
 tap 发消息
 type 最近的照片 {T}

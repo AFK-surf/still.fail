@@ -11,7 +11,6 @@ shot 2-picker
 tap e2e-{T}
 until 子文件夹
 until =选择此文件夹
-wait 500
 tap =选择此文件夹
 until 已开放「e2e-{T}」
 until =e2e-{T}

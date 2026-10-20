@@ -9,8 +9,9 @@ until 端到端测试
 tap icon:settings
 until 更新到 0.1.1
 drag 195 700 0 -500 400
-wait 1000
+until 更新到 0.1.1
 shot 1-settings
-# (the last step: the download and the installer's confirmation go on after it, over the app; the check looks)
 tap 更新到 0.1.1
-linger 60000
+# downloaded, checked and handed to the system's installer: the version row says so (updates.mbt: installing); the
+# installer's confirmation, over the app, is the check's
+until 正在安装

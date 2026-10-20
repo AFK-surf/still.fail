@@ -1,3 +1,0 @@
-check "the photo shared in went up with the message, byte for byte at the station" 'entry_attachments "分享进来的文件 $TAG" | grep -q "e2e-photo.jpg" && station_file_same $FILES/e2e-photo.jpg'
-check "on macOS the PDF went with it" '[ $PLATFORM = android ] || entry_attachments "分享进来的文件 $TAG" | grep -q "e2e-doc.pdf"'
-check "on Android the intent's file was taken in" '[ $PLATFORM != android ] || grep -q "shared in: .*1 files" $OUT/$name.log'

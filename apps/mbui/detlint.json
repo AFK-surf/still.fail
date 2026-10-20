@@ -46,24 +46,10 @@
   "counts": {
     "frame-request": {},
     "settle": {},
-    "flow-wait": {
-      "e2e/flows/09-paste-long.drive": 1,
-      "e2e/flows/15-drive-lend.drive": 1,
-      "e2e/flows/22-answer-option.drive": 2,
-      "e2e/flows/41-notice-failed.drive": 1,
-      "e2e/flows/42-notice-looking.drive": 3,
-      "e2e/flows/47-service-page.drive": 7,
-      "e2e/flows/49-update.drive": 2,
-      "e2e/flows/70-card-motion.drive": 3,
-      "e2e/flows/73-pick-words.drive": 2,
-      "e2e/flows/93-share-files.drive": 4,
-      "e2e/flows/95-recent-photos.drive": 3,
-      "e2e/flows/96-viewer.drive": 8,
-      "e2e/flows/97-video-frames.drive": 4
-    },
+    "flow-wait": {},
     "script-wait": {
       "e2e/android-flow.sh": 7,
-      "e2e/flows/49-update.check": 2,
+      "e2e/flows/49-update.check": 1,
       "e2e/peer.ts": 1,
       "e2e/win.sh": 2,
       "scripts/android-core.sh": 3,

@@ -78,7 +78,11 @@ pub fn Flow::start(
       "flow: this test's trace has no {\"env\":…} head, what its run's app was started with (src/stillfail: CORETRACE env): record it again (scripts/rerecord.sh)",
     )
   }
-  let t = @ui.Tester::new(app, w~, h~, env=r.env() + env)
+  // (and its host's answers as the run's gave them, where it kept them: a word's bounds as the system splits words)
+  let t = match r.text() {
+    Some(text) => @ui.Tester::new(app, w~, h~, env=r.env() + env, text~)
+    None => @ui.Tester::new(app, w~, h~, env=r.env() + env)
+  }
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
   match r.first_happened() {
@@ -203,6 +207,15 @@ fn Flow::take_step(self : Flow, line : String) -> Unit {
       if at > now && at < @double.infinity {
         self.t.run_for(at - now)
       }
+      // (the time of day the run's as it took the step: what the app names by it, a picture marked, the same)
+      // (as when the run's clock frames went on from where the run took it: later here, later in the day by as much)
+      match self.r.step_wall(line) {
+        Some(wall) =>
+          self.t.set_wall(
+            wall + (if at > -@double.infinity && at < @double.infinity { self.t.time() - at } else { 0.0 }),
+          )
+        None => ()
+      }
       // (a step that acts begins what a later run_to_rest may wait for: what was said before it is not)
       if self.r.step_taken(line) && !waiting_step(line) {
         self.said.clear()
@@ -255,6 +268,16 @@ fn Flow::spots(self : Flow, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
+/// What the test says must hold here, `why` said when it does not: the test fails, as an assert would; but while it
+/// writes the steps as a scripted run over a trace the app has outgrown (FLOW_EMIT), said and the steps after it
+/// written all the same (Flow::fail).
+pub fn Flow::check(self : Flow, so : Bool, why : String) -> Unit {
+  if !so {
+    self.fail(why)
+  }
+}
+
+///|
 /// The test fails, saying what was not so and what is on screen.
 fn Flow::fail(self : Flow, why : String) -> Unit {
   // (and where the conversation stood: what the app asked that the run did not, what the next message waits for)
@@ -276,7 +299,13 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
 /// not past it (a player's place told after the script saw 0:02 is not given before it looks).
 pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
   self.one_by_one.val = true
+  let began = self.t.time()
   while !so() {
+    // (bounded on the run's clock: an app never at rest, or what it waits for never coming, said, not run on)
+    if self.t.time() - began > until_most_ms {
+      self.fail("not so after \{until_most_ms.to_int()} ms; the app not at rest for: \{self.t.rest_why()}")
+      break
+    }
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     if n > 0 || self.t.posted() > 0 {
       self.t.draw()
@@ -286,18 +315,22 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
     // moves has an end, as the run's step waited on through it: a page pushed when its answer came, sliding in)
     match self.r.next_due() {
       Some(_) => self.t.run_for(frame_ms)
-      None => {
-        let rest = self.t.rest_of("")
-        if rest > self.t.time() && rest < @double.infinity {
+      // (nothing more to come: on a frame at a time while the app is not at its rest, what it owes still to come (a
+      // motion with an end, a wake, a frame asked for between frames: what the host said taken by the next frame))
+      None =>
+        if !self.t.at_rest() {
           self.t.run_for(frame_ms)
         } else {
           break
         }
-      }
     }
   }
   self.one_by_one.val = false
 }
+
+///|
+/// The most a step waits on the run's clock (Flow::until) for what it waits for, or for the app to come to its rest.
+let until_most_ms : Double = 60000.0
 
 ///|
 /// `what` is on screen now.
@@ -408,6 +441,31 @@ pub fn Flow::compose(self : Flow, s : String) -> Unit {
 pub fn Flow::paste(self : Flow, s : String) -> Unit {
   emit("paste " + s)
   self.t.paste(s)
+  self.core()
+}
+
+///|
+/// The run's `n`-th answer to a call `call` (counted from its start) given: a scripted run's `answered CALL`, what a
+/// step waits for when what it waits on is what the app asked of the core and nothing on screen says it (a site view's
+/// page loaded, its requests through the core answered).
+pub fn Flow::answered(self : Flow, call : String, n : Int) -> Unit {
+  emit_answered_to(call, n)
+  self.until(fn() { self.r.answers_given(call) >= n })
+  if self.r.answers_given(call) < n {
+    self.fail("\{call} answered \{self.r.answers_given(call)} times, not \{n}")
+  }
+}
+
+///|
+/// `s` again and again to `n` characters, pasted (as a flow's `pasten N TEXT`: a paste too long to write out).
+pub fn Flow::paste_n(self : Flow, n : Int, s : String) -> Unit {
+  emit("pasten \{n} " + s)
+  let words = StringBuilder::new()
+  let chars = s.to_array()
+  for i in 0..<n {
+    words.write_char(chars[i % chars.length()])
+  }
+  self.t.paste(words.to_string())
   self.core()
 }
 
@@ -523,6 +581,8 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
+  // (in the script written, on until the app is at its rest, as the end ran here to it: not ended mid-motion)
+  emit_rest()
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
   // written waits for its answers too, so the run keeps them)
   emit_answered(self.r.take_asked())
@@ -582,7 +642,8 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
   if end > now {
     // (in a scripted run, the same time on: a step that does not wait for words, a tap at a place, comes after the
     // motion as here)
-    emit_wait(end - now)
+    // (in a scripted run, until the app is at its rest: the motion's end there as here, the run's frames its own)
+    emit_rest()
     self.t.run_for(end - now)
   }
   self.core()
@@ -860,6 +921,29 @@ pub fn Flow::shrinks(
       self.fail("\{what} at rest drawn at \{sx} × \{sy}")
     _ => ()
   }
+}
+
+///|
+/// Files shared in from another app before anything else (macOS: MBUI_SHARE_FILES, the run's files dir's; Android:
+/// the first staged in the app's own provider and sent as ACTION_SEND), their bytes the run's (what it sent of each:
+/// Replay::sent_bytes), as Tester::share_in gives them.
+pub fn Flow::share_files(self : Flow, names : Array[String]) -> Unit raise {
+  emit("#before android-stage " + names[0])
+  emit(
+    "#android-intent -a android.intent.action.SEND -t " + (if names[0].has_suffix(".pdf") { "application/pdf" } else { "image/jpeg" }) +
+    " --eu android.intent.extra.STREAM content://{PKG}.shared/" + names[0],
+  )
+  emit("#env MBUI_SHARE_FILES=" + names.map(fn(n) { "{FILES}/" + n }).join("|"))
+  let files = []
+  for n in names {
+    match self.r.sent_bytes("station.upload.part", "name", n) {
+      Some(b) => files.push((n, b))
+      None => fail("flow: the trace has none of " + n + "'s bytes (over trace.py's MAX_BYTES?)")
+    }
+  }
+  self.t.share_in("", files~)
+  self.t.draw()
+  self.core()
 }
 
 ///|

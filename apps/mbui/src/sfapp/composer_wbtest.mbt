@@ -581,3 +581,51 @@ test "the list keeps clear the room the composer takes in the very frame it grow
   t.run_for(draft_keep_ms)
   t.assert_idle()
 }
+
+///|
+test "at its end, rows that come (the message sent, the agent's answer) leave the core told the end is seen" {
+  reset()
+  let clock : Ref[Double] = { val: 0.0 }
+  fix_clock.val = Some(fn() { clock.val })
+  let base = fixture("chat")
+  // what the page tells the core of the chat shown: its `end` each time
+  let ends : Array[Bool] = []
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      if name == "client.focus" {
+        match field(Some(params), "chat") {
+          Some(chat) =>
+            match field(Some(chat), "end") {
+              Some(True) => ends.push(true)
+              Some(False) => ends.push(false)
+              _ => ()
+            }
+          None => ()
+        }
+      }
+      (base.call)(name, params, done)
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(ends, [true])
+  t.tap_text("发消息")
+  t.type_text("测试一下")
+  tap_send(t)
+  // its row, then the agent's answer: each comes at the end, the list gliding to it (list_to_end, the frame it comes)
+  clock.val = clock.val + fix_deliver_ms
+  t.draw()
+  clock.val = clock.val + fix_answer_ms
+  t.draw()
+  t.run_for(Fold.ms() + Float.ms())
+  assert_true(t.find("收到：「测试一下」") is Some(_))
+  let rest = t.rest_of("a list")
+  if rest > t.time() && rest < @double.infinity {
+    t.run_for(rest - t.time())
+  }
+  // never told it left the end: the list going to its end on its own is at its end, as a reader sees it
+  assert_true(!ends.contains(false))
+  fix_clock.val = None
+}

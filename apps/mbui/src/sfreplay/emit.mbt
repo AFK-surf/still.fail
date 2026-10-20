@@ -148,3 +148,31 @@ fn emit_answered(names : Array[String]) -> Unit {
     None => ()
   }
 }
+
+///|
+/// The script written's `answered CALL` lines up to `n` of them (the run's n-th answer: drive counts them from the
+/// start, those written after the steps that asked included).
+fn emit_answered_to(call : String, n : Int) -> Unit {
+  match script.val {
+    Some(s) => {
+      let had = s.iter().filter(fn(l) { l == "answered " + call }).count()
+      for _ in had..<n {
+        emit("answered " + call)
+      }
+    }
+    None => ()
+  }
+}
+
+///|
+/// A scripted run's `rest`: on until the app is at its rest (mbui's drive: a frame drawn since the step began left
+/// nothing that ends to come).
+fn emit_rest() -> Unit {
+  match script.val {
+    Some(_) => {
+      emit("rest")
+      now_next.val = true
+    }
+    None => ()
+  }
+}

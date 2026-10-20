@@ -15,7 +15,9 @@ fn init {
 }
 
 ///|
-fn image(call : String, params : Json, key : String) -> String {
+/// `name`: the image's as src/stillfail names it (its key), so a scripted run's `img:NAME` and the host's answers kept
+/// with the run's text (a picture's sizes, by its source) are the same here.
+fn image(call : String, params : Json, key : String, name : String) -> String {
   match images.get(key) {
     Some(k) => k
     None => {
@@ -23,9 +25,8 @@ fn image(call : String, params : Json, key : String) -> String {
       @core.call_bytes(call, params~, on_done=fn(r) {
         match r {
           Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let k = "mem:replay/\{@ui.stable_hash(key)}/\{key.length()}"
-            @ui.add_image(k, bytes)
-            images[key] = k
+            @ui.add_image(name, bytes)
+            images[key] = name
           }
           _ => images[key] = "!"
         }
@@ -59,7 +60,7 @@ pub fn source() -> @sfapp.Source {
     sign_in: fn() { @sfcore.sign_in() },
     signing_in: fn() { @sfcore.state.busy },
     picture: fn(url) {
-      image("picture", Json::object({ "url": Json::string(url) }), "picture " + url)
+      image("picture", Json::object({ "url": Json::string(url) }), "picture " + url, "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}")
     },
     fatal: fn() { @core.fatal() },
     file: fn(station, key, name) {
@@ -69,7 +70,8 @@ pub fn source() -> @sfapp.Source {
         "name": Json::string(name),
         "thumb": Json::boolean(true),
       }
-      image("station.file", Json::object(params), "file " + station + "\u{1}" + key + "\u{1}" + name)
+      let id = station + "\u{1}" + key + "\u{1}" + name
+      image("station.file", Json::object(params), "file " + id, "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}")
     },
     now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },

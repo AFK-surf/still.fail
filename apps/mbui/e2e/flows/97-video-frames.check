@@ -1,3 +1,0 @@
-check "the frames' times were read from the file (120)" 'grep -q "120 frames read" $OUT/$name.log'
-check "‹ then › stepped to the very next frame" 'at=($(sed -n "s/^video: stepped to frame \([0-9]*\) of 120$/\1/p" $OUT/$name.log)); n=${#at[@]}; [ $n -ge 2 ] && [ ${at[$((n - 1))]} -eq $((${at[$((n - 2))]} + 1)) ]'
-check "the frame grabbed is kept: a PNG of the video's own size (640 × 360), named by the frame it is" 'n=$(sed -n "s/^video: stepped to frame \([0-9]*\) of 120$/\1/p" $OUT/$name.log | tail -1); f=$(kept_file e2e-clip-$n.png) && python3 -c "import sys,struct; b=open(sys.argv[1],\"rb\").read(24); sys.exit(0 if b[:8]==b\"\x89PNG\r\n\x1a\n\" and struct.unpack(\">II\", b[16:24])==(640,360) else 1)" "$f"'

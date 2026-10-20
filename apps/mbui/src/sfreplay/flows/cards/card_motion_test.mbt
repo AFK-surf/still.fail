@@ -42,10 +42,13 @@ test "70-card-motion" {
     // let go (decision.dismiss): 忽略 goes from the frame after the one that took the tap (decide.mbt ask_dismiss), on
     // ArchiveEase's 280 ms, to 85% from its top left, its room closing
     let end = f.until_moving("under/dismiss/")
-    assert_eq(end, after + @sfapp.archive_ms)
+    f.check(end == after + @sfapp.archive_ms, "忽略 at rest at \{end}, not \{after + @sfapp.archive_ms}")
     f.gone("=忽略")
-    // to 85% on ArchiveEase, its room closing with it: gone at rest
-    f.shrinks("忽略", to=@sfapp.archive_scale, ease=@sfapp.archive_ease, ms=@sfapp.archive_ms, rest=end)
+    // to 85% on ArchiveEase, its room closing with it: gone at rest (while a script is written over a trace the app
+    // has outgrown, no motion to check: said above, the steps after written all the same)
+    if end >= 0.0 {
+      f.shrinks("忽略", to=@sfapp.archive_scale, ease=@sfapp.archive_ease, ms=@sfapp.archive_ms, rest=end)
+    }
     // the card's options going with it, their room closing on the rows' spring after
     f.run_to_rest("under/")
     f.gone("=设置页 083209")
