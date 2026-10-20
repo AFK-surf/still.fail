@@ -53,9 +53,11 @@ export const LoginsLive = Layer.effectDiscard(
         const login = logins.get(change.login);
         if (!login) return;
         events.machineLogins({ login }, { login: Logins.limited(login) }, readOnly, `login\0${login.id}`);
-        // Asking something again after its person's browser step (az picking a subscription, say): its agent answers.
+        // Asking something again after its person's browser step (az picking a subscription, say): its agent answers. An
+        // agent whose call waits on it is told by that call.
         const asks = login.waiting && login.paste !== true && login.endedAt === undefined && logins.hadBrowserStep(login.id);
-        if (asks && !asking.has(login.id) && login.chat) {
+        const tell = asks && !asking.has(login.id) && !logins.heard(login.id);
+        if (tell && login.chat) {
           try {
             hub.notify(login.chat, promptNotice(logins, login, loginLink(login.chat, login.id)));
           } catch (error) {
@@ -63,7 +65,7 @@ export const LoginsLive = Layer.effectDiscard(
           }
         }
         const starter = logins.starterOf(login.id);
-        if (asks && !asking.has(login.id) && starter?.peer) tellPeer(starter, login.id, promptNotice(logins, login, loginLink(null, login.id), here()), false);
+        if (tell && starter?.peer) tellPeer(starter, login.id, promptNotice(logins, login, loginLink(null, login.id), here()), false);
         if (asks) asking.add(login.id);
         else asking.delete(login.id);
       }),
