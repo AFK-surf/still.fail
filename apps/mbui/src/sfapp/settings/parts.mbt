@@ -830,7 +830,7 @@ fn wait_pills(c : @ui.Ctx, pills : Array[String]) -> Unit {
     for f in pills {
       // (the chip's grey: the wide frame's light one is not mbui's Faint)
       c.box(style=wait_pill, bg=t.p.chip, fn() {
-        // Waiting.kt:119 (13sp, line 18; its maxLines = 2 not here: mbui's words have no most lines, they run on)
+        // Waiting.kt:119 (13sp, line 18, two lines at most, the second ending in an ellipsis)
         c.text(f, style=wait_pill_words) |> ignore
       })
       |> ignore
@@ -849,7 +849,7 @@ let wait_pill : @ui.Style = @ui.style(px=S3, py=S1_5, radius=Full)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_pill_words : @ui.TextStyle = @sf.meta.then(@sf.bad).then(@ui.text_style(center=true))
+let wait_pill_words : @ui.TextStyle = @sf.meta.then(@sf.bad).then(@ui.text_style(center=true, max_lines=2))
 
 ///|
 /// The cards to come: 12 from the page's sides, 16 apart, each a card's corner on the placeholders' grey.
