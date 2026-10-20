@@ -26,6 +26,7 @@ fi
 pnpm --dir "$ROOT/client/core-ts" install --frozen-lockfile --prefer-offline
 node "$ROOT/client/core-ts/scripts/ios-bundle.ts" "$GENERATED/stillfail-core.js"
 node "$ROOT/client/core-ts/scripts/ios-bundle.ts" "$GENERATED/stillfail-widget.js" widget
-"$CARGO" build --manifest-path "$ROOT/client/Cargo.toml" --locked -p stillfail-shell --lib --release --target "$TARGET"
+# A static library for iOS without making it every shell's crate type (that would change the prebuilt shells' inputs).
+"$CARGO" rustc --manifest-path "$ROOT/client/Cargo.toml" --locked -p stillfail-shell --lib --release --target "$TARGET" --crate-type staticlib
 cp "$CARGO_TARGET_DIR/$TARGET/release/libstillfail_shell.a" "$GENERATED/libstillfail_shell.a"
 printf '%s\n' "$TARGET" > "$GENERATED/rust-target.txt"
