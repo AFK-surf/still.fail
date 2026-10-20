@@ -346,7 +346,7 @@ pub fn fixture(mode : String) -> Source {
   let f : Fixture = {
     mode: if mode == "" { "home" } else { mode },
     workspace: "ws1",
-    appearance: if mode.has_suffix("-dark") || @host.env("MBUI_DARK") == "1" {
+    appearance: if mode.has_suffix("-dark") || @ui.env("MBUI_DARK") == "1" {
       "dark"
     } else {
       "light"
@@ -361,7 +361,7 @@ pub fn fixture(mode : String) -> Source {
     // the list changing on its own, a step every 1.6 s from MBUI_MOTION_AT ms (2000) after it starts: rows moving,
     // coming, going (ListMotion.kt), for the recordings of the Home rows' motion
     let at = {
-      let w = @host.env("MBUI_MOTION_AT")
+      let w = @ui.env("MBUI_MOTION_AT")
       let mut v = 0
       for ch in w {
         let d = ch.to_int() - 48

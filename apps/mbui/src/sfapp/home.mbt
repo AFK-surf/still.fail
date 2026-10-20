@@ -725,12 +725,12 @@ fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   if pop != "" {
     let k = "mark-pop/" + pop + "/" + tone
     let fresh = match marks_seen.get(pop) {
-      Some((was, at)) => was == tone && c.now() - at <= 300.0
+      Some((was, at)) => was == tone && c.now() - at <= mark_pop_window_ms
       None => false
     }
     let p = @motion.anim(c, k, if fresh { 0.0 } else { 1.0 }, global=true)
     if fresh && !p.moving() && p.get() == 0.0 {
-      p.animate(1.0, @motion.tween(320.0, ease=CssOut))
+      p.animate(1.0, @motion.tween(mark_pop_ms, ease=CssOut))
     }
     let v = p.get()
     if v < 1.0 {
@@ -739,6 +739,13 @@ fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
     }
   }
 }
+
+///|
+/// A mark that came this recently pops in as its row is drawn; the pop's length.
+let mark_pop_window_ms : Double = 300.0
+
+///|
+let mark_pop_ms : Double = 320.0
 
 ///|
 /// How long a row is held before its time shows (a long press).

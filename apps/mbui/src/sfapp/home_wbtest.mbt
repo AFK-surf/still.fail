@@ -9,16 +9,16 @@ fn tester(mode : String) -> @ui.Tester {
 ///|
 test "signed out: the sign-in page" {
   let t = tester("signin")
-  t.settle() |> ignore
   assert_true(t.find("让 agent 持续工作") is Some(_))
   assert_true(t.find("登录或注册") is Some(_))
   assert_true(t.find("可同时登录多个账号，随时切换 workspace。") is Some(_))
+  t.assert_idle()
 }
 
 ///|
 test "Home: the workspace's name, the search, the days and their rows" {
   let t = tester("home")
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   assert_true(t.find("星火工作室") is Some(_))
   assert_true(t.find("搜索全部内容") is Some(_))
   assert_true(t.find("今天") is Some(_))
@@ -40,31 +40,30 @@ test "Home: the workspace's name, the search, the days and their rows" {
 ///|
 test "a row tapped pushes its chat, its title in the bar; back comes home" {
   let t = tester("home")
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   t.tap_text("夜里的构建又失败了")
-  t.settle() |> ignore
   assert_eq(app.nav.depth(), 2)
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("搜索全部内容") is None)
   assert_true(t.find("夜里的构建又失败了") is Some(_))
   assert_true(t.takes_back())
   t.back()
-  t.settle(unsettled_ok=true) |> ignore
   assert_eq(app.nav.depth(), 1)
+  t.run_for(@ui.nav_push_ms)
   assert_true(t.find("搜索全部内容") is Some(_))
 }
 
 ///|
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   t.tap_text("星火工作室")
-  t.settle(unsettled_ok=true) |> ignore
+  assert_true(sheet_open())
   assert_true(t.find("切换 workspace") is Some(_))
   assert_true(t.find("当前使用") is Some(_))
   assert_true(t.find("其他 workspace") is Some(_))
   t.tap_text("个人")
-  t.settle() |> ignore
-  assert_true(t.find("切换 workspace") is None)
+  assert_true(!sheet_open())
   assert_true(t.find("个人") is Some(_))
   // no station there yet: adding the first one is the page
   assert_true(t.find("添加第一台 station") is Some(_))
@@ -73,17 +72,15 @@ test "the workspaces' sheet: another workspace tapped is the one in view" {
 ///|
 test "the filter: 我参与的 shows only the chats the viewer is in" {
   let t = tester("home")
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   match t.rect_of("星火工作室") {
     Some(_) => ()
     None => fail("no title")
   }
   // the filter's button, at the bar's right
   t.tap(390.0 - 16.0 - 17.0, 25.0)
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("监控中") is Some(_))
   t.tap_text("我参与的")
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("首页的列表改成按天分组") is Some(_))
   assert_true(t.find("夜里的构建又失败了") is Some(_))
   assert_true(t.find("和 Ana 一起看新版的引导页") is Some(_))
@@ -92,12 +89,11 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 ///|
 test "归档 at a row's start archives its chat" {
   let t = tester("home")
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   t.scroll_to(12)
-  t.settle(unsettled_ok=true) |> ignore
+  t.draw()
   assert_true(t.find("把旧的截图都换成新的") is Some(_))
   t.tap_text("归档")
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("把旧的截图都换成新的") is None)
 }
 

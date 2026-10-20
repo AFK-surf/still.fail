@@ -205,6 +205,17 @@ fn Spr::step(self : Spr, dt : Double) -> Unit {
 }
 
 ///|
+/// How long the bar takes to come back (a page it shows on), and to go (a page pushed over it).
+let bar_show_ms : Double = 380.0
+
+///|
+let bar_hide_ms : Double = 300.0
+
+///|
+/// How long the notch's icon takes to swap for another.
+let icon_swap_ms : Double = 300.0
+
+///|
 /// One number gliding to where it is sent over a time on a curve (Bar.kt Glide).
 priv struct Glide {
   mut value : Double
@@ -838,7 +849,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     m.step(c.frame_dt() / 1000.0)
   }
   // told each frame: shown or not, the notch as the place has it
-  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { 380.0 } else { 300.0 }, 1)
+  m.vis.go(if shown { 1.0 } else { 0.0 }, if shown { bar_show_ms } else { bar_hide_ms }, 1)
   if !shown {
     if m.mode {
       m.open_panel(false)
@@ -1189,7 +1200,7 @@ fn show_icon(c : @ui.Ctx, next : String, out : Bool) -> Double {
       m_face.val = next
       sw.value = 0.0
       sw.target = 0.0
-      sw.go(1.0, 300.0, 2)
+      sw.go(1.0, icon_swap_ms, 2)
     }
   }
   if sw.value != sw.target {
@@ -1320,7 +1331,6 @@ fn bar_gesture(
           on_tab(items[j])
         }
       }
-      c.request_frame()
     }
     return
   }
@@ -1374,7 +1384,6 @@ fn bar_gesture(
     } else {
       -1.0
     }
-    c.request_frame()
   }
   if d.take_end() {
     m.was_down = false
@@ -1407,7 +1416,6 @@ fn bar_gesture(
       }
       on_tab(items[j])
     }
-    c.request_frame()
   }
   if d.take_tap() {
     m.was_down = false
@@ -1436,7 +1444,6 @@ fn bar_gesture(
         on_tab(items[j])
       }
     }
-    c.request_frame()
   }
   if !d.down {
     m.was_down = false

@@ -325,7 +325,7 @@ fn keys_dialog(c : @ui.Ctx) -> Unit {
     return
   }
   let t = @sf.theme()
-  let mac = @host.platform() == 0
+  let mac = @ui.platform() == 0
   let cmd = if mac { "⌘" } else { "Ctrl+" }
   let alt = if mac { "⌥" } else { "Alt+" }
   let shift = if mac { "⇧" } else { "Shift+" }
