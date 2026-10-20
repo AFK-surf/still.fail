@@ -10,7 +10,7 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
       match dv.closing {
         NoSheet => return
         x =>
-          if c.now() - dv.closed_at < 300.0 && !c.stable() {
+          if c.now() - dv.closed_at < 300.0 {
             c.request_frame()
             (x, true)
           } else {

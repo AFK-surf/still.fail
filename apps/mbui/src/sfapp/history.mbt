@@ -431,10 +431,10 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
             if field(wait, "until") is None || field(wait, "until") == Some(Json::null()) {
               // still waiting: it counts on here
               let since = number(wait, "since")
-              let now = if c.stable() { since } else { (src.now)() }
+              let now = (src.now)()
               let most = opt_number(wait, "seconds")
               // (at its most it stands still)
-              if !c.stable() && (most is None || now - since < most.unwrap_or(0.0) * second_ms) {
+              if most is None || now - since < most.unwrap_or(0.0) * second_ms {
                 wake_next_second(c, now - since)
               }
               let waited = dmax((now - since) / second_ms, 0.0)
@@ -835,7 +835,7 @@ fn whole(c : @ui.Ctx, src : Source, r : ChatRef, key : String, content : Json?, 
     _ => ()
   }
   let at = dui.detail_at.get(ekey).unwrap_or(-1.0)
-  let settled = at >= 0.0 && ((src.now)() - at >= detail_settle_ms || c.stable())
+  let settled = at >= 0.0 && (src.now)() - at >= detail_settle_ms
   if settled {
     body()
   } else {
@@ -875,13 +875,9 @@ fn wake_next_second(c : @ui.Ctx, ms : Double) -> Unit {
 /// The turn's state with the model (History.kt PhaseLine): a dot in the accent, its words, a clock running.
 fn phase_line(c : @ui.Ctx, src : Source, p : Json?) -> Unit {
   let t = @sf.theme()
-  let secs = if c.stable() {
-    0
-  } else {
-    let ran = (src.now)() - number(p, "since")
-    wake_next_second(c, ran)
-    dmax(ran / second_ms, 0.0).to_int()
-  }
+  let ran = (src.now)() - number(p, "since")
+  wake_next_second(c, ran)
+  let secs = dmax(ran / second_ms, 0.0).to_int()
   c.box(dir=Row, gap=8.0, align=ACenter, fn() {
     c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  }) |> ignore
     c.text(text(p, "text"), size=13.0, color=t.p.text, wrap=false) |> ignore

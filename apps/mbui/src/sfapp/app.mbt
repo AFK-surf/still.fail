@@ -721,13 +721,9 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
     align=ACenter,
     justify=JCenter,
     fn() {
-      let lift = if c.stable() {
-        0.0
-      } else {
-        c.request_frame()
-        // 900 ms up, 900 down, eased
-        let k = c.now() / splash_float_ms
-        let f = k - k.floor()
+      // up for half of splash_float_ms, down the other half, eased: a cycle while it shows
+      let lift = {
+        let f = c.cycle(splash_float_ms)
         let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
         p * p * (3.0 - 2.0 * p)
       }

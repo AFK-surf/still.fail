@@ -551,9 +551,7 @@ fn reader_book(
   })
   |> ignore
   // the bars
-  let k = if c.stable() {
-    if r.chrome { 1.0 } else { 0.0 }
-  } else {
+  let k = {
     let e = dmin(1.0, (c.now() - r.chrome_at) / reader_bars_ms)
     if e < 1.0 {
       c.request_frame()
@@ -1072,7 +1070,7 @@ fn reader_panels(
 ) -> Unit {
   let (panel, closing) = match r.panel {
     NoPanel =>
-      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 && !c.stable() {
+      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 {
         c.request_frame()
         (r.closing, true)
       } else {
