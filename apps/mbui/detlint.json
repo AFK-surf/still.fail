@@ -112,15 +112,12 @@
       "src/sfapp/bar.mbt": 1,
       "src/sfapp/chat.mbt": 5,
       "src/sfapp/chat_fixture.mbt": 1,
-      "src/sfapp/composer.mbt": 4,
+      "src/sfapp/composer.mbt": 2,
       "src/sfapp/decide.mbt": 3,
       "src/sfapp/decisions.mbt": 3,
-      "src/sfapp/drive_parts.mbt": 1,
-      "src/sfapp/drive_reader.mbt": 13,
+      "src/sfapp/drive_reader.mbt": 7,
       "src/sfapp/emit.mbt": 5,
-      "src/sfapp/home.mbt": 7,
-      "src/sfapp/pick.mbt": 1,
-      "src/sfapp/play.mbt": 1,
+      "src/sfapp/home.mbt": 2,
       "src/sfapp/preview.mbt": 9
     },
     "wall-clock": {

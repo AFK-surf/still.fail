@@ -26,7 +26,7 @@ priv struct Pick {
   mut grab_x : Double
   mut grab_y : Double
   /// the press that picked it (its lifting is not a tap that lets go)
-  mut picked_at : Double
+  mut picked_frame : Int
   /// frames its words were not laid out
   mut missing : Int
 }
@@ -45,7 +45,7 @@ let pk : Pick = {
   handle: 0,
   grab_x: 0.0,
   grab_y: 0.0,
-  picked_at: -1.0,
+  picked_frame: -1,
   missing: 0,
 }
 
@@ -71,12 +71,12 @@ fn pick_reset() -> Unit {
   pk.from_b = 0
   pk.grab_x = 0.0
   pk.grab_y = 0.0
-  pk.picked_at = -1.0
+  pk.picked_frame = -1
   link_menu.href = ""
   link_menu.x = 0.0
   link_menu.top = 0.0
   link_menu.bottom = 0.0
-  link_menu.at = -1.0
+  link_menu.at = -1
   link_menu.open = false
 }
 
@@ -128,38 +128,36 @@ fn pickable(
   }
   let mine = pk.ts == ts
   // the press went down in it and holds still: a long press's time on, the word under the finger picked
-  if down &&
+  let holding = down &&
     pressed_in &&
     !cui.moved &&
     pk.handle == 0 &&
     !(mine && pk.widening) &&
-    pk.picked_at != cui.down_at &&
-    link_menu.at != cui.down_at &&
-    words.trim(chars=" \n\t") != "" {
-    let held = c.now() - cui.down_at
-    if held >= long_press_ms {
-      match c.words_of(key) {
-        Some(w) if w.text != "" => {
-          let (s, e) = w.word_at(w.offset_at(cui.down_x, cui.down_y))
-          pk.ts = ts
-          pk.key = key
-          pk.author = author
-          pk.role = role
-          pk.a = s
-          pk.b = e
-          pk.from_a = s
-          pk.from_b = e
-          pk.widening = true
-          pk.handle = 0
-          pk.picked_at = cui.down_at
-          // the press is the pick's: the list holds still, lifting it taps nothing
-          c.take_press()
-          c.request_frame()
-        }
-        _ => ()
+    pk.picked_frame != cui.down_frame &&
+    link_menu.at != cui.down_frame &&
+    words.trim(chars=" \n\t") != ""
+  // (asked each frame, so that a press let go starts again from nothing; a frame asked for when it will have)
+  let held = @kit.after(c, key + "/hold", holding, long_press_ms)
+  if held {
+    match c.words_of(key) {
+      Some(w) if w.text != "" => {
+        let (s, e) = w.word_at(w.offset_at(cui.down_x, cui.down_y))
+        pk.ts = ts
+        pk.key = key
+        pk.author = author
+        pk.role = role
+        pk.a = s
+        pk.b = e
+        pk.from_a = s
+        pk.from_b = e
+        pk.widening = true
+        pk.handle = 0
+        pk.picked_frame = cui.down_frame
+        // the press is the pick's: the list holds still, lifting it taps nothing
+        c.take_press()
+        c.request_frame()
       }
-    } else {
-      c.wake_in(long_press_ms - held)
+      _ => ()
     }
   }
   // sliding on: widened by words from the word first held
