@@ -14,7 +14,7 @@ import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript } from "../src/platform/windows.ts";
 import {
-  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, versionIn,
+  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
@@ -603,7 +603,7 @@ esac
     assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
   });
 
-  test("Devin's latest is its installer's manifest's, and Devin as its installer put it is updated by `devin update`", { skip: WINDOWS && "a link to the version the installer keeps" }, async (t) => {
+  test("Devin's latest is its installer's manifest's, and Devin as its installer put it is updated by its installer again, without the `devin setup` it ends with", { skip: WINDOWS && "a link to the version the installer keeps" }, async (t) => {
     const [manifest, server] = await serve((path) => (path === "/cli/current/manifest.json" ? { body: JSON.stringify({ version: "3000.12.0", platforms: {} }) } : null));
     t.after(() => server.close());
     // As the installer leaves it: the versions in its data directory, the command on PATH a link to the current one.
@@ -612,12 +612,21 @@ esac
     const now = join(dir, "now");
     script(join(versions, "devin"), `#!/bin/sh
 case "$1" in
-  update) echo 3000.12.0 > "${now}"; echo "Updated to 3000.12.0" ;;
+  setup) echo "Error: Login canceled" >&2; exit 1 ;;
   --version) if [ -f "${now}" ]; then echo "devin $(cat "${now}")"; else echo "devin 3000.11.92"; fi ;;
 esac
 `);
     mkdirSync(bin);
     symlinkSync(join(versions, "devin"), join(bin, "devin"));
+    // The installer as curl fetches it: the latest put in place, then the setup it ends with (a sign-in that wants a
+    // terminal).
+    script(join(bin, "curl"), `#!/bin/sh
+cat <<'END'
+echo 3000.12.0 > "${now}"
+echo "Installed devin v3000.12.0"
+"${join(versions, "devin")}" setup
+END
+`);
     const updates = installed(dir, "1300", null, { devinManifest: `${manifest}/cli/current/manifest.json`, env: { PATH: withSystem(bin), HOME: dir } });
     t.after(() => updates.close());
     await updates.check();
@@ -716,9 +725,10 @@ INSTALLER
     const bare: Env = { PATH: "/nowhere" };
     assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
     assert.equal((howToInstall("claude", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
-    // Devin by its own installer: `devin update` where it put it, by hand anywhere else; installed by its installer.
-    assert.deepEqual(howToUpdate("devin", found("/Users/a/.local/share/devin/cli/_versions/3000.11.92/devin"), env), { program: "/nowhere/bin/x", args: ["update"] });
-    if (WINDOWS) assert.deepEqual(howToUpdate("devin", found("C:\\Users\\a\\AppData\\Local\\devin\\cli\\_versions\\3000.11.92\\devin.exe"), env), { program: "/nowhere/bin/x", args: ["update"] });
+    // Devin by its own installer: run again where it put it (`devin update` wants a terminal), by hand anywhere else;
+    // installed by its installer.
+    assert.deepEqual(howToUpdate("devin", found("/Users/a/.local/share/devin/cli/_versions/3000.11.92/devin"), env), machine.devinInstall);
+    if (WINDOWS) assert.deepEqual(howToUpdate("devin", found("C:\\Users\\a\\AppData\\Local\\devin\\cli\\_versions\\3000.11.92\\devin.exe"), env), machine.devinInstall);
     const elsewhere = howToUpdate("devin", found("/opt/homebrew/bin/devin"), env);
     assert.ok(elsewhere instanceof Unable);
     assert.deepEqual([elsewhere.key, elsewhere.args], ["station.updates.devinElsewhere", { path: "/opt/homebrew/bin/devin" }]);
@@ -726,5 +736,10 @@ INSTALLER
     assert.deepEqual(howToInstall("devin", bare), machine.devinInstall);
     assert.equal((howToInstall("devin", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
     assert.equal(kindPackage("devin"), "", "no npm package");
+  });
+
+  test("a command's failure shown as its last lines, without a terminal's escapes and a progress bar's returns", () => {
+    const said = "\u001b[0;32m✓\u001b[0m Installed devin\n##   44.4%\r####   95.5%\r#####  100.0%\n\u001b[1A\u001b[2KError: Login canceled\n\u001b[?2004l";
+    assert.equal(tail(said, "en"), "✓ Installed devin\n#####  100.0%\nError: Login canceled");
   });
 });
