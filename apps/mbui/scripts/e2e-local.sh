@@ -91,6 +91,9 @@ native() { (cd $E && node scripts/native.ts file $1); }
 # the cloud (cloud/test/dev.ts) over what it holds in $RUN/cloud-state; RESUME=1 (a starting point put back): the same
 # cloud again, nothing made anew
 start_cloud() {
+  # (emptied here, before the wait reads it: the background start's own `>` comes when that process gets to it, and a
+  # wait that reads first saw the last run's READY, under load on Mini1, 2026-10-20)
+  : > $RUN/cloud.log
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
     AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
   wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
