@@ -798,10 +798,10 @@ const usesTextOf = present.usesText;
 const runtimeName = format.runtimeLabel;
 
 /// The runtimes a station runs only where its overview's `updates` lists them.
-const LISTED = ["dsh", "grok"];
+const LISTED = ["dsh", "grok", "cursor"];
 
-/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness and Grok Build each on one that lists its
-/// version (a station from before it does not, and is not offered it).
+/// The runtimes a station can run: Claude Code and Codex on any; DeepSeek Harness, Grok Build and Cursor each on one that
+/// lists its version (a station from before it does not, and is not offered it).
 export function stationRuntimes(overview: J): string[] {
   const listed = (id: string) => arr(get(overview, "updates")).some((u) => get(u, "id") === id);
   return format.RUNTIMES.filter((r) => !LISTED.includes(r) || listed(r));
@@ -812,6 +812,7 @@ const PLANS: Record<string, { plan: string; provider: string }> = {
   claude: { plan: "Claude", provider: "Claude" },
   codex: { plan: "ChatGPT", provider: "ChatGPT" },
   grok: { plan: "SuperGrok", provider: "Grok" },
+  cursor: { plan: "Cursor", provider: "Cursor" },
 };
 const planOf = (runtime: string) => PLANS[runtime] ?? PLANS.claude!;
 
@@ -847,9 +848,15 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, run
   };
 }
 
+/// Cursor's tile: its account is its plan, and the only way it runs (it takes no provider's key).
+function cursorTile(): J {
+  const uses = ["cursor"];
+  return { id: "cursor", name: "Cursor", group: "labs", mark: "cursor", kind: "api-provider", hasKey: false, hasPlan: true, runtime: "cursor", endpointRequired: false, protocols: [], keyOptional: false, uses, usesText: usesTextOf(uses), regions: [] };
+}
+
 /// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
 /// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan). xAI
-/// has a plan (SuperGrok) where the station runs Grok Build.
+/// has a plan (SuperGrok) where the station runs Grok Build; Cursor, last of the makers, where it runs Cursor.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
@@ -859,6 +866,7 @@ export function groups(supported: string[] | null, runtimes: string[] = format.R
       const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "xai" && runtimes.includes("grok"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
+    if (group === "labs" && runtimes.includes("cursor")) tiles.push(cursorTile());
     if (group === "local") {
       for (const runtime of runtimes) {
         const uses = [runtime];
