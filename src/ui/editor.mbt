@@ -481,6 +481,22 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
 /// Tells the host where the caret is, so the input method's candidate
 /// window follows it, and what text surrounds it.
 fn Ctx::sync_ime(self : Ctx) -> Unit {
+  // a key catcher's focus (device.mbt): the host told so before its input method is, with no text
+  let catching = self.dev.catchers.contains(self.focus)
+  if catching != self.ime_sig.has_prefix("catch ") {
+    h_key_catch(catching)
+    if !catching {
+      self.ime_sig = "-"
+    }
+  }
+  if catching {
+    let sig = "catch \{self.focus}"
+    if sig != self.ime_sig {
+      self.ime_sig = sig
+      h_set_ime(true, 0.0, self.height, 1.0, 1.0, "", 0, 0)
+    }
+    return
+  }
   match self.editors.get(self.focus) {
     Some(st) =>
       match st.tl {

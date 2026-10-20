@@ -50,6 +50,8 @@ jobs:
         if: always()
         with:
           name: render-web-${{ matrix.run }}
+          # (a rerun's own: the attempt before's put by, so `same` compares this attempt's pictures)
+          overwrite: true
           path: out/render/
       - name: Against the reference, on the machine it was made on
         run: scripts/render_web.sh against

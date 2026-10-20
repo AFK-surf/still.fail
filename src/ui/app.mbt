@@ -72,7 +72,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let fed = inputs_since.val
   inputs_since.val = false
   in_frame.val = true
-  // (the system's settings it is drawn by, kept with the run's input: envrec.mbt)
+  // (the soft keyboard's height as the frame begins: device.mbt; the system's settings it is drawn by, kept with the
+  // run's input: envrec.mbt)
+  c.device_frame_start()
   env_at_frame()
   let t0 = frame_body(c, w, h, scale, t)
   in_frame.val = false
@@ -870,7 +872,17 @@ fn on_wheel(x : Double, y : Double, dx : Double, dy : Double, phase : Int) -> Un
 ///|
 fn on_key(code : Int, mods : Int) -> Unit {
   took_input("key", h_now(), [code.to_double(), mods.to_double()])
+  key_in(code, mods)
+}
+
+///|
+/// A key, taken as it came (on_key) or as the input method's deleting stands for it (on_text).
+fn key_in(code : Int, mods : Int) -> Unit {
   let c = g()
+  // a key catcher's while it has the focus: all of it (device.mbt)
+  if catcher_key(c, code, mods) {
+    return
+  }
   // every key the app may read (Ctx::key_pressed), and whether the focused field takes it (the editor's own keys)
   desk_key(code, mods, c.editors.contains(c.focus) && code < key_escape)
   // ⌘C with no field focused: the words picked with the pointer
@@ -903,6 +915,21 @@ fn on_key(code : Int, mods : Int) -> Unit {
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   let c = g()
+  // a key catcher's while it has the focus (device.mbt)
+  if catcher_text(c, kind, s, a, b) {
+    return
+  }
+  // the input method deleting around the caret (`a` before, `b` after: Android's deleteSurroundingText): a field's
+  // Backspace, its Delete
+  if kind == text_delete_around {
+    if a > 0 {
+      key_in(key_backspace, 0)
+    }
+    if b > 0 {
+      key_in(key_delete, 0)
+    }
+    return
+  }
   match c.editors.get(c.focus) {
     Some(st) => {
       st.text_input(kind, s, a, b, h_now())

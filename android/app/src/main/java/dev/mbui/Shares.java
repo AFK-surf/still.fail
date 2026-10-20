@@ -39,6 +39,8 @@ final class Shares {
     static volatile String sharedIn;
     /** The files of what was shared in, by their place in its `files`, until each is taken. */
     static volatile byte[][] sharedFiles = new byte[0][];
+    /** The cache's directory of the pictures put on the clipboard (Device.clipSet), read through Files too. */
+    static final String CLIPS = "screen-clips";
     /** A file shared in is read whole, at most this much (the composer takes up to 1 GB). */
     private static final long MAX = 1L << 30;
 
@@ -199,7 +201,8 @@ final class Shares {
         }
     }
 
-    /** The files handed to another app: read only, only what is in the cache's shared/ (one file at a time). */
+    /** The files handed to another app: read only, only what is in the cache's shared/ (one file at a time), and the
+     * pictures put on the clipboard (the cache's screen-clips/). */
     public static final class Files extends ContentProvider {
         @Override
         public boolean onCreate() {
@@ -210,7 +213,11 @@ final class Shares {
             Context c = getContext();
             String name = uri.getLastPathSegment();
             if (c == null || name == null || name.contains("/") || name.startsWith(".")) throw new FileNotFoundException();
-            File f = new File(new File(c.getCacheDir(), "shared"), name);
+            // a picture put on the clipboard (Device.clipSet): <authority>/screen-clips/<name>
+            List<String> path = uri.getPathSegments();
+            boolean clip = path.size() == 2 && CLIPS.equals(path.get(0));
+            if (!clip && path.size() != 1) throw new FileNotFoundException();
+            File f = new File(new File(c.getCacheDir(), clip ? CLIPS : "shared"), name);
             if (!f.isFile()) throw new FileNotFoundException(name);
             return f;
         }

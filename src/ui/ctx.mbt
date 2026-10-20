@@ -206,6 +206,8 @@ pub struct Ctx {
   // persistent widget state
   lists : Map[Int, ListState]
   editors : Map[Int, EditorState]
+  /// key catchers and the soft keyboard's height (device.mbt)
+  dev : DeviceState
   springs : Map[Int, SpringPath]
   /// what is said to move (motion_data.mbt), the last id given to one, and whether a cycle was read this frame
   movers : Array[MoverEntry]
@@ -382,6 +384,7 @@ fn Ctx::new() -> Ctx {
     editor_drag: false,
     lists: Map::new(),
     editors: Map::new(),
+    dev: DeviceState::new(),
     springs: Map::new(),
     movers: [],
     cycling: false,

@@ -595,7 +595,9 @@ BUILD_EFFECT_CALLS = ["@host.share", "@host.open_url", "@host.notice_show", "@ho
                       "@host.update_install", "@host.push_token", "@host.gallery_ask", "@host.exit", "@host.keep",
                       "@host.save_file", "@host.clipboard_set", "@ui.share", "@ui.open_url", "@ui.notice_show",
                       "@ui.notice_ask", "@ui.keep", "@ui.keep_bytes", "@ui.clipboard_set", "@ui.save_file",
-                      "@ui.pick", "@ui.set_sideways", "@ui.exit"]
+                      "@ui.pick", "@ui.set_sideways", "@ui.exit", "@ui.clipboard_set_png", "@ui.clipboard_read",
+                      "@ui.keep_awake", "@ui.haptic", "@host.clip_set_text", "@host.clip_set_png", "@host.clip_read",
+                      "@host.keep_awake", "@host.haptic"]
 # a native view's (a page, a site, a video), a PDF's and a keep's own that tell its host (NativeView::reload, …):
 # by their names, whatever they are called on but the Ctx (an app's own of the same name, a player's seek, tells it on)
 BUILD_EFFECT_METHODS = ["go_back", "go_forward", "reload", "load", "set_scale", "close", "play", "pause", "seek",

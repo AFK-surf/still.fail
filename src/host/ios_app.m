@@ -75,6 +75,9 @@ static void send_text(int kind, NSString *s, int a, int b) {
   mb_cb.text(kind, mb_string_from_ns(s ?: @""), a, b);
 }
 
+// the device beyond the window (device.mbt): a key catcher's keys, the soft keyboard, the clipboard, awake, haptics
+#include "apple_device.h"
+
 static void run_script_step(int step);
 
 @implementation MBView
@@ -197,6 +200,11 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
   BOOL handled = NO;
   for (UIPress *p in presses) {
     if (!p.key || !self.imeActive || self.marked.location != NSNotFound) continue;
+    // a key catcher's focus (apple_device.h): its keys
+    if (key_catching) {
+      if (catch_press(p)) handled = YES;
+      continue;
+    }
     int mods = (p.key.modifierFlags & UIKeyModifierShift) ? 1 : 0;
     int code = 0;
     switch (p.key.keyCode) {
@@ -217,7 +225,8 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 // ---- UITextInput ----
 
 - (BOOL)canBecomeFirstResponder { return YES; }
-- (BOOL)hasText { return self.doc.length > 0; }
+// (a key catcher has none, but says it has: the keyboard's delete then deletes, as Backspace, on the screen it types into)
+- (BOOL)hasText { return key_catching || self.doc.length > 0; }
 
 - (void)insertText:(NSString *)text {
   if ([text isEqualToString:@"\n"]) {

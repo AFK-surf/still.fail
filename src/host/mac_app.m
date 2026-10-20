@@ -93,6 +93,9 @@ static void send_text(int kind, NSString *s, int a, int b) {
 
 static void run_script_step(int step);
 
+// the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake, haptics
+#include "apple_device.h"
+
 @implementation MBView
 
 - (instancetype)initWithFrame:(NSRect)f {
@@ -345,6 +348,8 @@ static NSCursor *cursor_of(int kind) {
 // ---- keys ----
 
 - (void)keyDown:(NSEvent *)e {
+  // a key catcher's focus (apple_device.h): its keys (a composition under way keeps them)
+  if (key_catching && self.imeActive && self.markedLen == 0 && catch_key_down(e)) return;
   NSEventModifierFlags m = e.modifierFlags;
   int mods = ((m & NSEventModifierFlagShift) ? 1 : 0) | ((m & NSEventModifierFlagControl) ? 2 : 0) |
              ((m & NSEventModifierFlagOption) ? 4 : 0) | ((m & NSEventModifierFlagCommand) ? 8 : 0);

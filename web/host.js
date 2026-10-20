@@ -109,7 +109,7 @@
   // moment (shot_at) keeps its clock still while any is.
   // its kinds, named as src/ui/hostcall.mbt's outside_* (this host has no picker, gallery, marks or update; a frame
   // grab asked of a video fails at once, told so)
-  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6;
+  const OUTSIDE_IMAGE = 1, OUTSIDE_VIEW = 2, OUTSIDE_GRAB = 6, OUTSIDE_CLIP = 9;
   let outside = null, awaiting = 0, why = '';
   const told = new Set();
   H.setOutside = (f) => { outside = f; return true; };
@@ -1338,6 +1338,12 @@
     ta.addEventListener('keydown', (e) => {
       if (e.isComposing || e.keyCode === 229) return;
       const mods = modsOf(e);
+      // a key catcher's focus (device, below): Alt too makes a shortcut; select all, copy, cut are its keys
+      if (catching && (e.metaKey || e.ctrlKey || e.altKey) && !keymap[e.key]) {
+        const c = e.key.length === 1 ? e.key.toLowerCase() : '';
+        if (c && !browsers.has(c)) { cb.key(1000 + c.charCodeAt(0), mods); e.preventDefault(); }
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && !keymap[e.key]) {
         const c = e.key.toLowerCase();
         if (c === 'a') { cb.key(12, mods); e.preventDefault(); }
@@ -1464,6 +1470,101 @@
     const x = gl.getExtension('WEBGL_debug_renderer_info');
     return x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   };
+
+  // ---- the device beyond the window (src/host/device.mbt) ----
+  // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height as the visual viewport
+  // leaves it (a phone's browser); the clipboard read and written where the page may (navigator.clipboard: a picture
+  // of another kind made a PNG through a canvas; refused or absent, read as empty); the screen kept on (a wake lock);
+  // no haptics.
+  let catching = false;
+  H.keyCatch = (on) => { catching = !!on; };
+  H.imeInset = () => {
+    const v = window.visualViewport;
+    return v ? Math.max(0, window.innerHeight - v.height - v.offsetTop) : 0;
+  };
+  const PNG_MAX = 8 << 20, SOURCE_MAX = 32 << 20, PIXELS_MAX = 16 * 1024 * 1024;
+  const clips = new Map();
+  let clipNext = 1;
+  async function asPng(blob) {
+    if (blob.type === 'image/png') return blob.size <= PNG_MAX ? [1, new Uint8Array(await blob.arrayBuffer())] : [2, null];
+    if (blob.size > SOURCE_MAX) return [2, null];
+    const bmp = await createImageBitmap(blob);
+    if (bmp.width * bmp.height > PIXELS_MAX) return [2, null];
+    const c = document.createElement('canvas');
+    c.width = bmp.width;
+    c.height = bmp.height;
+    c.getContext('2d').drawImage(bmp, 0, 0);
+    const png = await new Promise((r) => c.toBlob(r, 'image/png'));
+    if (!png) return [3, null];
+    return png.size <= PNG_MAX ? [1, new Uint8Array(await png.arrayBuffer())] : [2, null];
+  }
+  H.clipRead = () => {
+    const id = clipNext++;
+    const r = { state: 0, text: '', picture: 0, png: new Uint8Array(0) };
+    clips.set(id, r);
+    (async () => {
+      const cl = navigator.clipboard;
+      try {
+        if (cl && cl.read) {
+          for (const item of await cl.read()) {
+            if (item.types.includes('text/plain')) r.text = await (await item.getType('text/plain')).text();
+            const t = item.types.find((x) => x.startsWith('image/'));
+            if (t) {
+              try {
+                const [k, b] = await asPng(await item.getType(t));
+                r.picture = k;
+                if (b) r.png = b;
+              } catch (e) {
+                r.picture = 3;
+              }
+            }
+            break;
+          }
+        } else if (cl && cl.readText) {
+          r.text = await cl.readText();
+        }
+      } catch (e) {
+        // not allowed (no permission, the page not focused): read as empty
+      }
+      r.state = 1;
+      tell(OUTSIDE_CLIP, id, 1);
+      H.requestFrame();
+    })();
+    return id;
+  };
+  H.clipState = (id) => (clips.has(id) ? clips.get(id).state : -1);
+  H.clipPicture = (id) => (clips.get(id) || {}).picture || 0;
+  H.clipText = (id) => (clips.get(id) || {}).text || '';
+  H.clipPng = (id) => (clips.get(id) || {}).png || new Uint8Array(0);
+  H.clipEnd = (id) => { clips.delete(id); };
+  H.clipSet = (text, png, label) => {
+    const cl = navigator.clipboard;
+    if (!cl) return;
+    if (png && png.length && typeof ClipboardItem !== 'undefined') {
+      cl.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]).catch(() => {});
+    } else {
+      cl.writeText(text).catch(() => {});
+    }
+  };
+  let wake = null, wakeWanted = false;
+  H.keepAwake = (on) => {
+    wakeWanted = !!on;
+    if (on && !wake && navigator.wakeLock) {
+      navigator.wakeLock.request('screen').then((w) => {
+        if (!wakeWanted) { w.release(); return; }
+        wake = w;
+        w.addEventListener('release', () => { if (wake === w) wake = null; });
+      }).catch(() => {});
+    } else if (!on && wake) {
+      wake.release().catch(() => {});
+      wake = null;
+    }
+  };
+  // (a page lets its wake lock go when hidden: taken again as it is shown)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && wakeWanted && !wake) H.keepAwake(true);
+  });
+  H.haptic = () => {};
 
   globalThis.__mbhost = H;
 })();

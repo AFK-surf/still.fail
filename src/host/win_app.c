@@ -77,6 +77,7 @@ double mb_host_mem_bytes(void);
 
 
 static mb_outside_fn outside_cb;  // who is told as what the host does for the app is done (mb_host_set_outside)
+static void device_tell(mb_outside_fn tell);  // win_device.h: the clipboard's reads done
 
 static void draw_frame(void) {
   RECT rc;
@@ -84,6 +85,7 @@ static void draw_frame(void) {
   want_frame = 0;
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
+  device_tell(outside_cb);
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
   double was = scale;
   scale = GetDpiForWindow(hwnd) / 96.0;
@@ -188,7 +190,12 @@ static int mods_now(void) {
          ((GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) ? 8 : 0);
 }
 
+// the device beyond the window (device.mbt): a key catcher's keys, the clipboard, awake
+#include "win_device.h"
+
 static void key_down(WPARAM vk) {
+  // a key catcher's focus (win_device.h): its keys (a composition under way keeps them)
+  if (key_catching && ime_active && marked_len == 0 && catch_vk(vk)) return;
   int mods = mods_now(), code = 0;
   if (mods & 2) {
     switch (vk) {
@@ -371,6 +378,8 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_MOUSEHWHEEL: wheel(wp, lp, 1); return 0;
     case WM_KEYDOWN: key_down(wp); return 0;
     case WM_SYSKEYDOWN:
+      // Alt with a key: a key catcher's shortcut (win_device.h)
+      if (key_catching && ime_active && catch_vk(wp)) return 0;
       if (wp == VK_LEFT && go_back()) return 0;
       break;
     case WM_XBUTTONUP:

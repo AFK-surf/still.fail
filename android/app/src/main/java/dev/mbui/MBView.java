@@ -249,8 +249,25 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         toGL(() -> Native.text(0, s, 0, 0));
     }
 
+    /** A key with the focus a key catcher's (Device.catching): its named keys and shortcuts as keys, a character as
+     * text; false for what is not the catcher's (Back). */
+    boolean catchKey(KeyEvent e) {
+        if (e.getKeyCode() == KeyEvent.KEYCODE_BACK) return false;
+        int[] k = Device.catchKey(e);
+        if (k != null) {
+            toGL(() -> Native.key(k[0], k[1]));
+            return true;
+        }
+        int ch = e.getUnicodeChar();
+        if (ch <= 0) return false;
+        String s = new String(Character.toChars(ch));
+        toGL(() -> Native.text(0, s, 0, 0));
+        return true;
+    }
+
     @Override
     public boolean onKeyDown(int code, KeyEvent e) {
+        if (Device.catching && Host.imeActive && catchKey(e)) return true;
         if (code == KeyEvent.KEYCODE_PASTE || (code == KeyEvent.KEYCODE_V && e.isCtrlPressed())) {
             if (Host.imeActive) paste();
             return true;
@@ -294,6 +311,16 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo out) {
+        if (Device.catching) {
+            // a key catcher's (Device): no text of its own, no suggestions, the keyboard's Enter a key (as still.fail's
+            // KeyCatcher)
+            out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
+            out.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_ACTION_NONE;
+            out.initialSelStart = 0;
+            out.initialSelEnd = 0;
+            input = new MBInput(this);
+            return input;
+        }
         // multi-line, with no action of the keyboard's own: its Enter is a key the field decides on (a new line in
         // still.fail's composer, as its Android app's field does; the demo sends)
         out.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE;
@@ -364,14 +391,18 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean deleteSurroundingText(int before, int after) {
-            if (before > 0) view.toGL(() -> Native.key(1, 0));
-            if (after > 0) view.toGL(() -> Native.key(2, 0));
+            // (a field takes it as its Backspace, its Delete; a key catcher as that many: src/ui/device.mbt)
+            if (before > 0 || after > 0) view.toGL(() -> Native.text(4, "", before, after));
             return true;
         }
 
         @Override
         public boolean sendKeyEvent(KeyEvent e) {
             if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+            if (Device.catching) {
+                view.catchKey(e);
+                return true;
+            }
             if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
             int k = keyCode(e.getKeyCode());
             if (k != 0) {
@@ -389,6 +420,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
         @Override
         public boolean performContextMenuAction(int id) {
+            // a key catcher has no text to select, copy or paste into
+            if (Device.catching) return false;
             if (id == android.R.id.paste || id == android.R.id.pasteAsPlainText) view.paste();
             else if (id == android.R.id.selectAll) view.toGL(() -> Native.key(12, 0));
             else if (id == android.R.id.copy) view.toGL(() -> Native.key(13, 0));

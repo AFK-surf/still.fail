@@ -27,6 +27,8 @@
 #        moment (1000 ms on that clock): both taken ("SHOT n t"), both of the page, and the same to the byte in the
 #        window's rows (out/host/HOST/rest-*.png; a phone's status bar, its clock, is the system's), or it fails: the
 #        moment the app's rest is found at is not too early
+#   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
+#        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/outside_kinds.py)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -519,5 +521,7 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
       echo "rest contract ($H): the picture at its rest is not the one at $at_ms ms ($O/rest-rest.png, rest-$at_ms.png)"
       exit 1
     fi ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, rest; ios: free, done)" >&2; exit 1 ;;
+  kinds)
+    "$PY" scripts/outside_kinds.py $H ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, rest, kinds; ios: free, done)" >&2; exit 1 ;;
 esac

@@ -395,7 +395,7 @@ fn Ctx::focus_on_press(self : Ctx, target : Int) -> Unit {
       return
     }
   }
-  if self.focus != target && !self.editors.contains(self.focus) {
+  if self.focus != target && !self.editors.contains(self.focus) && !self.dev.catchers.contains(self.focus) {
     self.focus = 0
   }
 }

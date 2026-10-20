@@ -6,6 +6,8 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.InputMethodManager;
 
 /** What the C host calls back into Java for (from the GL thread). */
@@ -91,6 +93,50 @@ final class Host {
         });
     }
 
+    // The soft keyboard asked for and not shown yet (main thread). A show asked before the window has the focus, or
+    // before the keyboard's window can be moved by this one (its insets control: the IME's window made, as after the
+    // system's boot), is let go by the system; owed until both, each told as it comes (windowFocused, and the insets
+    // controller's controllable types), then asked.
+    private static boolean imeOwed;
+    private static boolean imeControllable;
+    private static android.view.View imeWatched;  // the view whose controller tells them (an activity made anew: anew)
+
+    /** The window has the focus or lost it (MainActivity.onWindowFocusChanged): what is owed asked for, and said
+     * ("IME owed: show" asked now, "waiting" on the keyboard's window, "none"; scripts/android-keyboard.sh's word). */
+    static void windowFocused(boolean has) {
+        if (!has) return;
+        boolean owed = imeOwed;
+        showOwedIme();
+        log("IME owed: " + (!owed ? "none" : imeOwed ? "waiting" : "show"));
+    }
+
+    private static void showOwedIme() {
+        if (!imeOwed || view == null) return;
+        if (android.os.Build.VERSION.SDK_INT < 30) {
+            if (!view.hasWindowFocus()) return;
+            imeOwed = false;
+            ((InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(view, 0);
+            return;
+        }
+        WindowInsetsController c = view.getWindowInsetsController();
+        if (c == null) return;
+        if (imeWatched != view) {
+            imeWatched = view;
+            imeControllable = false;
+            c.addOnControllableInsetsChangedListener((ctl, types) -> {
+                imeControllable = (types & WindowInsets.Type.ime()) != 0;
+                boolean owed = imeOwed;
+                showOwedIme();
+                if (owed && !imeOwed) log("IME owed: show");
+            });
+        }
+        if (!view.hasWindowFocus()) return;
+        // (the controllable types told as they change: none told yet, the listener's first call, at once, says them)
+        if (!imeControllable) return;
+        imeOwed = false;
+        c.show(WindowInsets.Type.ime());
+    }
+
     static void requestFrame() {
         if (view != null) view.wantFrame();
     }
@@ -129,8 +175,10 @@ final class Host {
             if (active && !was) {
                 view.requestFocus();
                 imm.restartInput(view);
-                imm.showSoftInput(view, 0);
+                imeOwed = true;
+                showOwedIme();
             } else if (!active && was) {
+                imeOwed = false;
                 imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             } else if (active) {
                 if (cleared && (view.input == null || !view.input.composing)) {

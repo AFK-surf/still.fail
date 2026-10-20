@@ -146,6 +146,7 @@ fn leaked_state() -> Array[String] {
 /// stays undone until the test says (Tester::finish, finish_all), so the test
 /// decides when and in what order it comes in.
 /// `h264`: whether its host decodes H.264 (@ui.h264_here: a stream's frames, stream.mbt).
+/// `copy_shown`: the system says itself that something was put on the clipboard (Android 13 and later: @ui.copy_shown).
 pub fn Tester::new(
   view : (Ctx) -> Unit,
   w? : Double = 390.0,
@@ -164,6 +165,7 @@ pub fn Tester::new(
   finish? : Bool = true,
   run? : String,
   h264? : Bool = false,
+  copy_shown? : Bool = false,
 ) -> Tester {
   let f = {
     time,
@@ -244,6 +246,7 @@ pub fn Tester::new(
     stream_ids: 0,
     streams_fed: {},
     stream_said: {},
+    dev: FakeDevice::new(copy_shown),
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

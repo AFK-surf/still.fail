@@ -46,6 +46,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
+static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
@@ -191,6 +192,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_nt_text = (*env)->GetStaticMethodID(env, notices_cls, "text", "(I)Ljava/lang/String;");
   shape_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 4 * 8192));
   small_buf = (*env)->NewGlobalRef(env, (*env)->NewDoubleArray(env, 16));
+  device_init(env);
   return JNI_VERSION_1_6;
 }
 
@@ -2069,3 +2071,6 @@ int32_t mb_host_h264_here(void) {
   jboolean here = (*env)->CallStaticBooleanMethod(env, streams_cls, m_st_here);
   return !streams_threw(env) && here ? 1 : 0;
 }
+
+// The device beyond the window (device.mbt): a key catcher, the soft keyboard, the clipboard, awake, haptics.
+#include "android_device.h"

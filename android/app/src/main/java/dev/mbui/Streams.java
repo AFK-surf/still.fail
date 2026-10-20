@@ -144,14 +144,22 @@ final class Streams {
         if (s != null) s.close();
     }
 
+    // MBUI_STREAM_HOLD_DECODER=MS (a test's, android-streams.sh anew): as the context is lost each decoder's thread held
+    // that long first, as on a CPU it does not get, so the GL thread's frames after the new context come before
+    // anything the decoder does about it
+    private static final int hold = holdDecoder();
+
+    private static int holdDecoder() {
+        try {
+            return Integer.parseInt(System.getenv("MBUI_STREAM_HOLD_DECODER"));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     /** The GL context was lost (android_host.c images_lost): every stream's textures made anew in the new one. */
     static void lost() {
         blit = 0;
-        // MBUI_STREAM_HOLD_DECODER=MS (a test's, android-streams.sh anew): each decoder's thread held that long first,
-        // as on a CPU it does not get, so the GL thread's frames after the new context come before anything the
-        // decoder does about it
-        int hold = 0;
-        try { hold = Integer.parseInt(System.getenv("MBUI_STREAM_HOLD_DECODER")); } catch (Exception e) {}
         for (Stream s : streams.values()) {
             if (hold > 0 && s.video != null) s.video.hold(hold);
             s.lost();

@@ -208,6 +208,14 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       }
       None => ()
     }
+    // the clipboard as the app took it, given again at its place: the frame after it takes it (device.mbt)
+    match clip_of_line(line) {
+      Some(clip) => {
+        fake_clip_give(self.fake, clip)
+        continue
+      }
+      None => ()
+    }
     // what came from outside, posted again at its place: the frame after it takes it (messages.mbt)
     if is_message_line(line) {
       replay_message(self.fake, line)
