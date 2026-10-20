@@ -47,6 +47,7 @@ pub(all) struct FormWords {
 }
 
 ///|
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let form_words : FormWords = { missing: "请填写此项", email: "请输入有效的邮箱地址", number: "请输入数字" }
 
 ///|

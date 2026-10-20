@@ -83,6 +83,7 @@ fn pointer_moved(c : @ui.Ctx) -> Bool {
 let kit : Ref[KitState] = Ref(KitState::new())
 
 ///|
+// kept across runs: the hooks it guards are kept too (installed once in the process, by the packages over ui)
 let installed : Ref[Bool] = Ref(false)
 
 ///|

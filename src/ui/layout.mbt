@@ -505,6 +505,7 @@ let commit_counts : FixedArray[Int] = FixedArray::make(3, 0)
 ///|
 /// Off (tests only): every frame laid out from nothing, as before layouts
 /// were kept, to compare with.
+// kept across runs: a test sets it around the Testers it makes, and puts it back (layout_wbtest's same_both_ways)
 let layout_reuse : Ref[Bool] = Ref::new(true)
 
 ///|

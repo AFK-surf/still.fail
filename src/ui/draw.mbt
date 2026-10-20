@@ -24,6 +24,7 @@ pub(all) struct Look {
 
 ///|
 /// As laid out.
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let still_look : Look = {
   alpha: 1.0,
   dx: 0.0,
@@ -153,10 +154,12 @@ let mode_draw : Int = 2
 
 ///|
 /// What runs once a frame is laid out, before it is painted (the motion package: where things are drawn this frame).
+// kept across runs: installed once in the process by the packages over ui (their `installed`)
 let after_layout_hooks : Array[(Ctx) -> Unit] = []
 
 ///|
 /// What is drawn under a list's rows (its node), before them.
+// kept across runs: installed once in the process by the packages over ui (their `installed`)
 let underlay_hooks : Array[(Ctx, Int) -> Unit] = []
 
 ///|

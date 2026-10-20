@@ -166,22 +166,26 @@ let pi : Double = 3.141592653589793
 /// Motion.kt MoveSpring (the web's motion.ts MOVE): what follows another
 /// thing's place, a list's rows; stiffness (2π / .336)² ≈ 350, critically
 /// damped, at rest within half a pixel.
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let move_spring : Spec = motion_spring(0.28, threshold=0.5)
 
 ///|
 /// ListMotion.kt's rows' placement: the MOVE spring as it writes it out
 /// (stiffness 350, critically damped), at rest within a pixel
 /// (IntOffset.VisibilityThreshold).
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let row_spring : Spec = Spring(1.0, 350.0, 1.0, 0.0)
 
 ///|
 /// Motion.kt SheetSpring: a sheet let go, opened or closed (motionSpring(.32),
 /// at rest within half a pixel); `v` from the finger's speed.
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let sheet_spring : Spec = motion_spring(0.32, threshold=0.5)
 
 ///|
 /// Sheet.kt MenuSpring: the long-press menu's scale (motionSpring(.24,
 /// bounce .08), at rest within .001).
+// kept across runs: a constant: its fields are not mut, nothing changes it
 pub let menu_spring : Spec = motion_spring(0.24, bounce=0.08, threshold=0.001)
 
 ///|

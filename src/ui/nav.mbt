@@ -26,6 +26,7 @@ struct NavPage[P] {
 ///|
 /// Pages' serials, unique across every Nav: a page's scope and its state's
 /// owner.
+// kept across runs: it goes on counting: a Nav made before its Tester holds pages numbered already
 let nav_serial : Ref[Int] = { val: 0 }
 
 ///|

@@ -127,6 +127,7 @@ pub fn frame_offscreen(
 
 ///|
 /// Called at the end of every frame (tests).
+// kept across runs: a test sets it around the Testers it makes, and puts it back (layout_wbtest's same_both_ways)
 let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|

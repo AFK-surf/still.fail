@@ -209,6 +209,7 @@ let mo : MotionState = {
 }
 
 ///|
+// kept across runs: the hooks it guards are kept too (installed once in the process, by the packages over ui)
 let installed : Ref[Bool] = { val: false }
 
 ///|
@@ -237,6 +238,7 @@ fn reset() -> Unit {
   mo.ghosts.clear()
   anims.clear()
   reset_fx()
+  motion_log.val = -1
 }
 
 ///|

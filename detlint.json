@@ -132,23 +132,7 @@
     "builtin-hash": {},
     "hash-order": {},
     "globals": {
-      "src/kit/form.mbt": 1,
-      "src/kit/time.mbt": 1,
-      "src/motion/layer.mbt": 2,
-      "src/motion/spec.mbt": 4,
-      "src/ui/app.mbt": 3,
-      "src/ui/draw.mbt": 4,
-      "src/ui/frames.mbt": 2,
-      "src/ui/fx.mbt": 2,
-      "src/ui/hostcall.mbt": 3,
-      "src/ui/image.mbt": 2,
-      "src/ui/layout.mbt": 2,
-      "src/ui/native.mbt": 2,
-      "src/ui/nav.mbt": 1,
-      "src/ui/scene.mbt": 1,
-      "src/ui/scroll.mbt": 3,
-      "src/ui/sideways.mbt": 1,
-      "src/ui/textrec.mbt": 2
+      "src/ui/scene.mbt": 1
     },
     "style-literal": {
       "src/demo/main.mbt": 47,

@@ -123,6 +123,7 @@ fn fake_image(f : FakeHost, ow : Int, oh : Int, max_px : Int) -> Int {
 }
 
 ///|
+// kept across runs: each Tester::new sets its own fake host, before it resets the rest
 let fake : Ref[FakeHost?] = { val: None }
 
 ///|
@@ -164,6 +165,7 @@ fn h_platform() -> Int {
 
 ///|
 /// The host's system, asked once.
+// kept across runs: the real host's system (asked once): a Tester never reads it (h_platform answers its fake's)
 let host_platform : Ref[Int] = { val: -1 }
 
 ///|

@@ -181,6 +181,7 @@ fn lsq_slope(x : FixedArray[Double], y : FixedArray[Double], m : Int) -> Double 
 
 ///|
 /// The spline's distance at 101 evenly spaced times (computeSplineInfo).
+// kept across runs: a constant, computed once: nothing writes it after
 let spline_positions : FixedArray[Double] = compute_spline()
 
 ///|

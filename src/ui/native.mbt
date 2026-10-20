@@ -115,6 +115,7 @@ pub fn SiteReply::when_gone(self : SiteReply, f : () -> Unit) -> Unit {
 let open_views : Array[NativeView] = []
 
 ///|
+// kept across runs: scratch the host writes into before each read, read at once: nothing is carried in it
 let read_out : FixedArray[Double] = FixedArray::make(2, 0.0)
 
 ///|
@@ -685,6 +686,7 @@ pub struct Pdf {
 }
 
 ///|
+// kept across runs: scratch the host writes into before each read, read at once: nothing is carried in it
 let pdf_out : FixedArray[Double] = FixedArray::make(2, 0.0)
 
 ///|

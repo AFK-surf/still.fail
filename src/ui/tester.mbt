@@ -54,9 +54,23 @@ fn reset_globals() -> Unit {
   words_kept.clear()
   words_sel.clear()
   list_counts.clear()
-  // (nav_serial goes on counting: a Nav made before its Tester holds pages numbered already)
   second_ptr[2] = 0.0
   bench.mode = 0
+  g_view.val = fn(_c) { () }
+  app_change.val = None
+  reduce_env.val = -1
+  draw_log.val = -1
+  draw_frames.val = 0
+  fx_reset(None)
+  outside_told.val = false
+  commit_counts[0] = 0
+  commit_counts[1] = 0
+  commit_counts[2] = 0
+  scroll_log.val = -1
+  last_logged.val = -1.0e9
+  sideways_log.val = -1
+  text_rec.val = -1
+  text_said.clear()
   reset_drawing()
   let left = leaked_state()
   if left.length() > 0 {

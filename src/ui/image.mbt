@@ -36,9 +36,10 @@ let image_data : Map[String, Bytes] = {}
 
 ///|
 /// Decoded bytes kept before unused images are dropped.
-let image_budget : Ref[Double] = { val: 192.0 * 1024.0 * 1024.0 }
+let image_budget : Double = 192.0 * 1024.0 * 1024.0
 
 ///|
+// kept across runs: scratch the host writes into before each read, read at once: nothing is carried in it
 let image_info_out : FixedArray[Double] = FixedArray::make(4, 0.0)
 
 ///|
@@ -186,7 +187,7 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
       total = total + e.w * e.h * 4.0
     }
   }
-  if total <= image_budget.val {
+  if total <= image_budget {
     return
   }
   let all : Array[(String, ImageEntry)] = []
@@ -199,7 +200,7 @@ fn Ctx::trim_images(self : Ctx) -> Unit {
   }
   all.sort_by(fn(a, b) { a.1.used.compare(b.1.used) })
   for item in all {
-    if total <= image_budget.val {
+    if total <= image_budget {
       break
     }
     let (src, e) = item
