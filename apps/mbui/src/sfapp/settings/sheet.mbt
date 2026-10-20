@@ -37,14 +37,12 @@ fn open_sheet(height : Double, draw : (@ui.Ctx, Core) -> Unit, on_close? : () ->
   sheet.height = height
   sheet.on_close = on_close
   sheet.serial += 1
-  wake()
 }
 
 ///|
 /// Takes the sheet away.
 fn close_sheet() -> Unit {
   sheet.draw = None
-  wake()
 }
 
 ///|
@@ -66,7 +64,6 @@ pub fn close() -> Unit {
 ///|
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
-  frame_ctx.val = Some(c)
   menu_overlay(c)
   let up = sheet.draw is Some(_)
   if up {

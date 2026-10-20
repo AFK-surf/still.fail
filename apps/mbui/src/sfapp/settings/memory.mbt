@@ -30,7 +30,6 @@ fn memory_of(core : Core, address : String) -> MemoryRead {
   if !m.asked {
     m.asked = true
     (core.call)("memory.get", obj([("station", str(address))]), fn(r) {
-      wake()
       match r {
         Ok(v) => {
           m.value = Some(v)

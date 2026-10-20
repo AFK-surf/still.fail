@@ -3,5 +3,4 @@ import {
   "mbui/kit",
   "mbui/motion",
   "stillfail/sf",
-  "mbui/host",
 }

@@ -204,7 +204,6 @@ fn seg(
   for i, _ in labels {
     if c.clicked(c.id(key + "/" + i.to_string())) && i != sel {
       sel = i
-      c.request_frame()
     }
   }
   c.box(
@@ -269,17 +268,29 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
   if c.stable() {
     return ""
   }
-  c.wake_in(1000.0)
   let now = (src.now)()
   match wait {
     Some(Object(_)) => {
       let from = number(wait, "since")
       match opt_number(wait, "seconds") {
-        Some(sec) => elapsed(dmin(now, from + sec * 1000.0) - from) + " / " + elapsed(sec * 1000.0)
-        None => elapsed(now - from)
+        Some(sec) => {
+          // at its most it stands still
+          if now - from < sec * second_ms {
+            wake_next_second(c, now - from)
+          }
+          elapsed(dmin(now, from + sec * second_ms) - from) + " / " + elapsed(sec * second_ms)
+        }
+        None => {
+          wake_next_second(c, now - from)
+          elapsed(now - from)
+        }
       }
     }
-    _ => elapsed(now - since.unwrap_or(now))
+    _ => {
+      let from = since.unwrap_or(now)
+      wake_next_second(c, now - from)
+      elapsed(now - from)
+    }
   }
 }
 
@@ -309,7 +320,7 @@ fn agent_status(c : @ui.Ctx, src : Source, a : Json?) -> Unit {
 ///|
 /// The cloud's address, for a chat's link (the app's MBUI_CLOUD, else still.fail's own).
 fn cloud_origin() -> String {
-  match @host.env("MBUI_CLOUD") {
+  match @ui.env("MBUI_CLOUD") {
     "" => "https://app.still.fail"
     o => o
   }
@@ -1158,7 +1169,6 @@ fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
             }
           }) {
           dui.jobs_all = !dui.jobs_all
-          c.request_frame()
         }
       })
     }
@@ -1471,7 +1481,6 @@ fn open_jobs(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           let id = c.id(gkey + "/more")
           if c.clicked(id) {
             dui.opened[gkey] = true
-            c.request_frame()
           }
           c.box(padx=10.0, pady=3.0, radius=8.0, id~, fn() {
             c.text(
