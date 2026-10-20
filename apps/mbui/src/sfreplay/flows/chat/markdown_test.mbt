@@ -16,8 +16,12 @@ test "74-markdown" {
     f.gone("正在发送")
     f.see("聊天页的列表和输入框")
     f.see("placeRows")
-    // (the post all done: its 归档 under it coming in, its room opening: at rest before where the rows are is taken)
-    f.run_to_rest("under/")
+    // (the post all done: its 归档 under it coming in, its room opening, the list gliding to its end after what came:
+    // all at rest before the code is dragged)
+    let rest = [f.t.rest_of("under/"), f.t.rest_of("glide")].fold(init=-1.0, fn(a, b) { if b > a { b } else { a } })
+    if rest > f.t.time() {
+      f.run_to(rest)
+    }
     let x0 = f.t.locate("placeRows")[0].0
     assert_true(f.t.at_end())
     f.drag("placeRows", -220.0, 0.0, steps=30)
