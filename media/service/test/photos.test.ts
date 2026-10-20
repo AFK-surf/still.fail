@@ -205,9 +205,10 @@ test("changes followed through drive/watch: a file added, a folder moved in, fil
   });
   const has = async (id: string) => (await s.call("GET", `/photos/items/${id}`, MEMBER)).status === 200;
   // The watches asked for (each folder the library knows).
-  await until(() => s.station.seen.asked.some((a) => a.route === "/drive/watch" && a.path === "lib/2024"), "watching");
+  await until(() => ["lib", "lib/2024"].every((p) => s.station.seen.asked.some((a) => a.route === "/drive/watch" && a.path === p)), "watching");
 
   write(join(lib, "new.png"), png(4, 4), at(2023, 7, 7));
+  s.station.changed(lib);
   const added = photoId(s.dir, "lib/new.png");
   await until(() => has(added), "the new file");
   await until(() => member.events.some((e) => e.event === "photos"), "the event");
@@ -216,14 +217,18 @@ test("changes followed through drive/watch: a file added, a folder moved in, fil
   const staging = join(s.dir, "staging");
   write(join(staging, "trip", "day1", "x.png"), png(2, 2), at(2023, 8, 8));
   renameSync(join(staging, "trip"), join(lib, "trip"));
+  s.station.changed(lib);
   const deep = photoId(s.dir, "lib/trip/day1/x.png");
   await until(() => has(deep), "the folder moved in, walked");
 
   rmSync(join(lib, "new.png"));
+  s.station.changed(lib);
   await until(async () => !(await has(added)), "the file gone");
   rmSync(join(lib, "trip"), { recursive: true });
+  s.station.changed(lib);
   await until(async () => !(await has(deep)), "the folder gone");
   rmSync(join(lib, "2024", "a.jpg"));
+  s.station.changed(join(lib, "2024"));
   await until(async () => !(await has(photoId(s.dir, "lib/2024/a.jpg"))), "a file in a folder below gone");
   assert.ok(await has(photoId(s.dir, "lib/2024/b.HEIC")));
   await wait(1200);
