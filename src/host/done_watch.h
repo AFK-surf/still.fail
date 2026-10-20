@@ -10,6 +10,7 @@
 //   mb_done_watch(text)   the watch begun on the directory `text` (a MoonBit string), made when it is not there; 1
 //                         when it watches (or did already), 0 when it cannot
 #pragma once
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,11 +71,31 @@ static void done_post(const char *dir, const char *name) {
   snprintf(path, sizeof path, "%s/%s", dir, name);
   char said[4096];
   size_t n = 0;
+#if defined(_WIN32)
+  // (opened sharing everything: another process holding it a moment after it came, an indexer's or a scanner's, does
+  // not keep it from being read)
+  wchar_t wpath[4096];
+  MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, 4096);
+  HANDLE fh = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                          OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (fh != INVALID_HANDLE_VALUE) {
+    DWORD got = 0;
+    if (ReadFile(fh, said, (DWORD)(sizeof said - 1), &got, NULL)) n = got;
+    else n = (size_t)snprintf(said, sizeof said, "(the host could not read %s: error %lu)", name, GetLastError());
+    CloseHandle(fh);
+  } else {
+    n = (size_t)snprintf(said, sizeof said, "(the host could not open %s: error %lu)", name, GetLastError());
+  }
+#else
   FILE *f = fopen(path, "rb");
   if (f) {
     n = fread(said, 1, sizeof said - 1, f);
     fclose(f);
+  } else {
+    n = (size_t)snprintf(said, sizeof said, "(the host could not open %s: errno %d)", name, errno);
   }
+#endif
+  // (what could not be read says so: never taken for a runner's empty word, "ok")
   said[n] = 0;
   // (a NUL in it ends its words there)
   char json[12288];
