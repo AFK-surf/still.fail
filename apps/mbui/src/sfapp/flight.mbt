@@ -203,6 +203,9 @@ fn flight_takes(chat : String, key : String, mine : Bool) -> Bool {
 fn flight_placed(c : @ui.Ctx, f : SendFlight) -> Unit {
   if !f.placed {
     f.placed = true
+    // the message sent is in the list, its row by its key (its outbox entry's id, or the message's): what a run waits
+    // for (`said`), not the words' way there
+    c.say("sent row in the list \{f.key}")
     f.placed_frame = c.frame_number()
     f.way.animate(1.0, @motion.tween(flight_ms, ease=Linear))
     composer_hold(f.chat, f.room, flight_settle * flight_ms)
