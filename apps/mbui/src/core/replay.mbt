@@ -112,6 +112,33 @@ pub fn Replay::skip(self : Replay, call : String) -> Unit {
 }
 
 ///|
+/// The run's asks whose message holds `text`, and what came for them, left out: an ask the run's timing made (a list
+/// off its end for a frame: `client.focus` with `"end":false`) that a test's frames need not make again. How many.
+pub fn Replay::drop(self : Replay, text : String) -> Int {
+  let gone : Array[Int] = []
+  for e in self.evs {
+    if e.out && !e.done && e.msg.stringify().contains(text) {
+      e.done = true
+      match e.msg {
+        Object(m) =>
+          match id_of(m) {
+            Some(id) => gone.push(id)
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
+  for e in self.evs {
+    if !e.out && !e.done && e.msg is Object(m) && id_of(m) is Some(id) && gone.contains(id) {
+      e.done = true
+    }
+  }
+  self.advance()
+  gone.length()
+}
+
+///|
 /// A client of its own over this conversation (a test of the client alone).
 pub fn Replay::client(self : Replay) -> Client {
   let c = Client::new(fn(s) { self.out(s) }, send_bytes=fn(s, _) { self.out(s) })
