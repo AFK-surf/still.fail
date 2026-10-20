@@ -1,7 +1,8 @@
 // A login an agent started (docs/remote-login.md), on the phone (screens/LoginCards.kt): the same card as the web's in a
 // chat under the agent's message, on 奏, and on the station page's 登录, in each of its states (a device code, its code
 // copied on a tap and 复制并打开; 在浏览器里登录 for a loopback login, which listens before the page opens, and says so
-// when this phone's port is taken; a page to open; its agent answering the command; ended, a line), 取消 beside; a
+// when this phone's port is taken; a page to open; a page whose code is pasted back, its one button opening the page
+// then sending the code, checked in place; its agent answering the command; ended, a line), 取消 as its ×; a
 // read-only member only sees how it stands. Pictured as login-cards(-older)-light|dark, login-station-light|dark,
 // login-decision-light|dark (settled.png).
 package fail.still.android.motion
@@ -10,6 +11,9 @@ import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToNode
@@ -53,11 +57,11 @@ class LoginCardTest {
 
     /** A login in one state or another, as the core shows it (web/stories/data.ts LOGINS). */
     private fun login(id: String, command: String, state: String = "browser", active: Boolean = true, step: String? = null, url: String? = null, domain: String? = null,
-                      code: String? = null, codeUrl: String? = null, waiting: Boolean = false, listening: Boolean = false, relayText: String? = null, statusText: String = "",
+                      code: String? = null, codeUrl: String? = null, waiting: Boolean = false, paste: Boolean? = null, listening: Boolean = false, relayText: String? = null, statusText: String = "",
                       endedText: String? = null, doneByText: String? = null, chatTitle: String? = "发布 0.4 版", whenText: String = "16:00") = MachineLoginShown(
         id = id, station = st, stationName = "studio", name = command.substringBefore(' '), title = "在 studio 上登录 ${command.substringBefore(' ')}", command = command,
         state = state, step = step, active = active, url = url, domain = domain, code = code, codeUrl = codeUrl, port = if (step == "loopback") 8085u else null,
-        waiting = waiting, listening = listening, relayText = relayText, statusText = statusText, byText = "林", chat = "ember:c-demo", chatTitle = chatTitle,
+        waiting = waiting, paste = paste, listening = listening, relayText = relayText, statusText = statusText, byText = "林", chat = "ember:c-demo", chatTitle = chatTitle,
         doneByText = doneByText, endedText = endedText, whenText = whenText, startedAt = at, expiresAt = at + 900_000, endedAt = if (active) null else at + 60_000,
     )
 
@@ -70,7 +74,11 @@ class LoginCardTest {
     private val done = login("done", "gh auth login", state = "done", active = false, statusText = "登录完成", endedText = "已在 studio 上登录 gh", doneByText = "林 完成", chatTitle = "修 CI 的 token", whenText = "10/16 11:20")
     private val failed = login("failed", "gcloud auth login", state = "failed", active = false, statusText = "登录失败", endedText = "在 studio 上登录 gcloud 失败：ERROR: (gcloud.auth.login) There was a problem with web authentication.", whenText = "10/15 09:05")
     private val cancelled = login("cancelled", "npm login", state = "cancelled", active = false, statusText = "已取消", endedText = "Ada 取消了在 studio 上登录 npm", doneByText = "Ada 取消", chatTitle = "npm 发包", whenText = "10/14 18:42")
-    private val all = listOf(device, loopback, listening, taken, open, question, done, failed, cancelled)
+    private val devinUrl = "https://app.devin.ai/auth/cli/continue?state=ddafd5fe&code_challenge=RDAYQuhl&code_challenge_method=S256"
+    private val paste = login("paste", "devin auth login --force-manual-token-flow", step = "open", url = devinUrl, domain = "app.devin.ai", paste = true,
+        statusText = "在浏览器里登录，再把页面给出的码贴回来")
+    private val checking = paste.copy(id = "checking", state = "verifying", statusText = "正在确认登录")
+    private val all = listOf(device, loopback, listening, taken, open, paste, checking, question, done, failed, cancelled)
 
     private val opened = CopyOnWriteArrayList<String>()
     private val relaying = CopyOnWriteArrayList<String>()
@@ -217,9 +225,50 @@ class LoginCardTest {
         rule.onNodeWithText("在浏览器里登录").assertIsDisplayed()
     }
 
+    /** A code pasted back, in its moments: its page to open first, opened, a code typed (完成), sent and checked. */
+    private fun pasting(dark: Boolean) {
+        val h = chat(listOf(open, paste), dark)
+        val theme = if (dark) "dark" else "light"
+        rule.onNodeWithText("打开登录页").assertIsDisplayed()
+        h.record("login-paste-empty-$theme").run { frame(); end() }
+        // Its page opened: the eye goes on to the field.
+        rule.onNodeWithTag("login-paste-open").performClick()
+        h.settle()
+        h.record("login-paste-opened-$theme").run { frame(); end() }
+        rule.onNodeWithTag("login-paste").performTextInput("6AuuirX4wG9FNCjrRlvQlPN6gyYKIQb8YSWr4m8ZY2Q")
+        h.settle()
+        rule.onNodeWithText("完成").assertIsDisplayed()
+        h.record("login-paste-typed-$theme").run { frame(); end() }
+        // Sent: the station says it is being checked; the code stays, the row as it was.
+        h.fake.put(Topics.machineLogin(st, "paste"), checking.copy(id = "paste"))
+        h.settle()
+        rule.onNodeWithText("正在确认登录").assertIsDisplayed()
+        h.record("login-paste-checking-$theme").run { frame(); end() }
+    }
+
+    @Test fun pastingACodeLight() = pasting(false)
+    @Test fun pastingACodeDark() = pasting(true)
+
+    @Test fun aPastedCodesButtonOpensThePageThenSendsTheWholeCode() {
+        val h = chat(listOf(paste))
+        val code = "6AuuirX4wG9FNCjrRlvQlPN6gyYKIQb8YSWr4m8ZY2Q"
+        // Empty: its one button opens the page.
+        rule.onNodeWithText("打开登录页").performClick()
+        h.settle()
+        assertEquals(listOf(devinUrl), opened.toList())
+        // A code in it (all 43 of Devin's, not cut short): 完成 sends it, nothing else opened.
+        rule.onNodeWithTag("login-paste").performTextInput(code)
+        h.settle()
+        rule.onNodeWithText("完成").performClick()
+        h.settle()
+        val call = h.fake.calls.single { it.first == "machineLogin.answer" }.second
+        assertEquals(listOf(st, "paste", code), listOf(call["station"]!!.jsonPrimitive.content, call["id"]!!.jsonPrimitive.content, call["text"]!!.jsonPrimitive.content))
+        assertEquals(1, opened.size)
+    }
+
     @Test fun cancelEndsIt() {
         val h = chat(listOf(open))
-        rule.onNodeWithText("取消").performClick()
+        rule.onNodeWithTag("login-cancel").performClick()
         h.settle()
         val call = h.fake.calls.single { it.first == "machineLogin.cancel" }.second
         assertEquals(listOf(st, "open"), listOf(call["station"]!!.jsonPrimitive.content, call["id"]!!.jsonPrimitive.content))
@@ -229,7 +278,7 @@ class LoginCardTest {
         chat(listOf(device), canLogin = false)
         rule.onNodeWithText("验证码 ABCD-1234").assertIsDisplayed()
         rule.onNodeWithText("复制并打开").assertDoesNotExist()
-        rule.onNodeWithText("取消").assertDoesNotExist()
+        rule.onAllNodesWithTag("login-cancel").assertCountEquals(0)
     }
 
     @Test fun endedItIsOneLine() {

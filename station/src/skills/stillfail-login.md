@@ -1,6 +1,6 @@
 ---
 name: stillfail-login
-description: Which login command to give the login tool for common CLIs (gh, gcloud, aws, az, npm, docker, vercel, wrangler, firebase) so the person can finish it from the login card, and which flags lead to steps the card cannot take.
+description: Which login command to give the login tool for common CLIs (gh, gcloud, aws, az, npm, docker, vercel, wrangler, firebase, devin) so the person can finish it from the login card, and which flags lead to steps the card cannot take.
 ---
 
 # Logging this station in to a CLI
@@ -32,6 +32,7 @@ Which command, as tested (docs/remote-login.md):
 | vercel | `vercel login` | device code | – |
 | wrangler | `wrangler login --device` | device code (8 characters, 5 minutes) | plain `wrangler login` (loopback, fails if 8976 is taken) |
 | firebase | `firebase login` | loopback; first asks two Y/n questions (answer them) | – |
+| devin | `devin auth login --force-manual-token-flow` | page, then the code pasted on the card (`paste: true`) | plain `devin auth login` (opens a browser on the station itself and waits there) |
 
 Before starting:
 

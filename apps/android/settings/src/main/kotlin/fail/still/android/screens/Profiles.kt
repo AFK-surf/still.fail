@@ -801,7 +801,7 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         var typed by remember { mutableStateOf("") }
         val adding = app.isDoing("profile.addModel", "station" to station, "id" to p.id)
         Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f))
+            Field(typed, { typed = it }, t("web-mobile.profiles.addModelPlaceholder"), mono = true, modifier = Modifier.weight(1f), max = 200)
             if (adding) Spinner()
             else Text(t("web-mobile.profiles.addModel"), fontSize = 14.sp, color = if (typed.isBlank()) C.muted else C.link, modifier = Modifier.pressText(enabled = typed.isNotBlank()) {
                 val model = typed.trim(); typed = ""
@@ -913,17 +913,6 @@ private fun InstallStep(install: RuntimeInstall, station: String) {
  */
 private val CODE_BOX_CORNER = concentric(CARD_PAD + BUTTON_HEIGHT / 2, CARD_PAD)
 
-/** A step of a sign-in: its number in a small round, its words beside it. */
-@Composable
-private fun Step(n: Int, words: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.padding(top = 1.dp).size(20.dp).clip(CircleShape).background(C.chip), contentAlignment = Alignment.Center) {
-            Text("$n", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        }
-        Text(words, fontSize = 14.sp, lineHeight = 20.sp, color = C.ink, modifier = Modifier.weight(1f))
-    }
-}
-
 /**
  * What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude, Devin), copy
  * the code and open the page (Codex, Grok), or only open the page and confirm there (Cursor).
@@ -932,12 +921,11 @@ private fun Step(n: Int, words: String) {
 private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) -> Unit) {
     val context = LocalContext.current
     val app = LocalApp.current
-    val scope = rememberCoroutineScope()
-    var code by remember { mutableStateOf("") }
     val operation = remember(app) { Action(app) }
     val busy = operation.busy
     val error = operation.error?.message
     var copied by remember { mutableStateOf(false) }
+    var typed by remember { mutableStateOf(false) }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     val waiting = @Composable { text: String -> WaitLine(text) }
     val url = job?.url
@@ -949,7 +937,8 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
         // No code: the page only asks to confirm (Cursor's).
         job.state == "needs_approval" && url != null && userCode.isNullOrEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(t("android-settings.login.cursorNote"), fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
-            Button(t("android-settings.login.openPage"), primary = true) { open(url) }
+            // As the login cards' steps (LoginCards.kt StepButton): solid until pressed.
+            StepButton(t("android-settings.login.openPage"), solid = !copied, external = true, corner = CODE_BOX_CORNER) { copied = true; open(url) }
         }
         job.state == "needs_approval" && url != null && !userCode.isNullOrEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.fillMaxWidth().clip(Smooth(CODE_BOX_CORNER)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
@@ -958,27 +947,23 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
             Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
             // OpenCode's page has the code in its address: only compared there, not copied.
             val filled = provider == "OpenCode"
-            Button(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), primary = true) {
-                if (!filled) {
-                    (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
-                    copied = true
-                }
+            StepButton(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), solid = !copied, external = filled, corner = CODE_BOX_CORNER) {
+                if (!filled) (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
+                copied = true
                 open(url)
             }
         }
-        // Two steps, each said once: what to do on the page (its button under it), then the code it gives, pasted beside
-        // what sends it.
-        job.state == "needs_code" && url != null -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Step(1, if (provider == "Devin") t("android-settings.login.step1ShortDevin", "app" to BuildConfig.APP_NAME) else t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME))
-            Button(t("android-settings.login.openPage"), primary = code.isBlank(), modifier = Modifier.padding(start = 30.dp)) { open(url) }
-            Step(2, t("android-settings.login.step2Short"))
-            error?.let { Text(it, fontSize = 13.sp, color = C.red) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field(code, { code = it }, t("android-settings.login.pasteCode"), mono = true, modifier = Modifier.weight(1f), corner = CODE_BOX_CORNER)
-                Button(t("android-settings.login.finishShort"), primary = true, busy = busy, enabled = code.isNotBlank()) {
-                    operation.run { send(code.trim()); code = "" }
-                }
-            }
+        // As a login card's pasted code (LoginCards.kt): what to do said once, then its two steps in the order they are
+        // done, the next one solid: its page, then the code it gives in the field (完成 in its end; as long as the page's
+        // code is, Devin's 43 and Claude's longer, not a mono field's 32 that cut it short).
+        job.state == "needs_code" && url != null -> Column {
+            Text(if (provider == "Devin") t("android-settings.login.step1ShortDevin", "app" to BuildConfig.APP_NAME) else t("android-settings.login.step1Short", "app" to BuildConfig.APP_NAME),
+                fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
+            StepButton(t("android-settings.login.openPage"), solid = !copied && !typed, external = true, corner = CODE_BOX_CORNER) { copied = true; open(url) }
+            // On the sign-in's white card: grey, and its corner the card's (it sits in its bottom corners).
+            CodeField(t("android-settings.login.pasteCode"), busy = busy, finish = t("android-settings.login.finishShort"), ground = C.chip, corner = CODE_BOX_CORNER,
+                onTyped = { typed = it }) { text -> operation.run { send(text) } }
+            error?.let { Text(it, fontSize = 13.sp, color = C.red, modifier = Modifier.padding(top = 6.dp)) }
         }
     }
 }
@@ -1023,7 +1008,7 @@ private fun ColumnScope.EnvSheet(station: String, p: Profile) {
                 }
                 val placeholder = if (r.masked != null) t("android-settings.tokens.kept", "token" to r.masked) else t("android-settings.env.value")
                 if (r.masked != null || Regex("KEY|TOKEN|SECRET|PASSWORD|AUTH", RegexOption.IGNORE_CASE).containsMatchIn(r.key)) SecretField(r.value, { r.value = it }, placeholder)
-                else Field(r.value, { r.value = it }, placeholder, mono = true)
+                else Field(r.value, { r.value = it }, placeholder, mono = true, max = 10_000)
             }
         }
         Text(t("android-settings.env.add"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { rows = rows + EnvRow(next++, "", "", null, null) })

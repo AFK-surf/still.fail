@@ -215,10 +215,16 @@ export const LOGINS: Record<string, MachineLoginShown> = {
     statusText: "等你打开浏览器",
   }),
   open: login("open", "npm login", { step: "open", url: "https://www.npmjs.com/login?next=/login/cli/6f1c2b", domain: "www.npmjs.com", statusText: "在浏览器里完成登录" }),
-  paste: login("paste", "gcloud auth login --no-launch-browser", {
-    step: "open", domain: "accounts.google.com", waiting: false, paste: true,
-    url: "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=32555940559.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fsdk.cloud.google.com%2Fauthcode.html",
+  paste: login("paste", "devin auth login --force-manual-token-flow", {
+    step: "open", domain: "app.devin.ai", waiting: false, paste: true,
+    url: "https://app.devin.ai/auth/cli/continue?state=ddafd5fe&code_challenge=RDAYQuhl&code_challenge_method=S256",
     statusText: "在浏览器里登录，再把页面给出的码贴回来",
+  }),
+  // Its code entered, Devin trading it for its sign-in: checked in place, the card's field kept.
+  checking: login("checking", "devin auth login --force-manual-token-flow", {
+    state: "verifying", step: "open", domain: "app.devin.ai", waiting: false, paste: true,
+    url: "https://app.devin.ai/auth/cli/continue?state=ddafd5fe&code_challenge=RDAYQuhl&code_challenge_method=S256",
+    statusText: "正在确认登录",
   }),
   question: login("question", "gh auth login", { state: "input", step: "terminal", waiting: true, statusText: "等 agent 回答命令的问题" }),
   done: login("done", "gh auth login", { state: "done", active: false, statusText: "登录完成", endedText: "已在 Studio 上登录 gh", doneByText: "林 完成", chatTitle: "修 CI 的 token", whenText: "10/16 11:20", startedAt: LOGIN_AT - 86_400_000, endedAt: LOGIN_AT - 86_400_000 + 60_000 }),

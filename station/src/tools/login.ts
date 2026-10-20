@@ -111,6 +111,8 @@ export function told(logins: Logins, login: Login, link: string | null, where: W
     ? login.state === "done" ? "It finished (its command exited 0)." : login.state === "cancelled" ? "It was cancelled." : `It failed${login.timedOut ? " (out of time)" : ""}${login.error ? `: ${hidden(login, login.error)}` : "."}`
     : logins.screen(login.id)?.echo === false && login.waiting
       ? "It asks for a secret (read without echo): do not type it, nothing is sent to such a prompt. Cancel it, and use the tool's browser or device-code login, or tell the person it cannot be logged in this way."
+      : login.state === "verifying"
+        ? "What came back (the code the person entered, or the browser's callback) is being checked: you get a station notice when it ends."
       : login.paste
         ? `The person's browser step is ready: they open the page and enter what it gives (a code) in the login card's field, which types it here; do not answer its prompt yourself. chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone and have the person send the code in the thread, then type it with login {id${where ? ", station" : ""}, input, key: "enter"}. You get a station notice when it ends.`
       : login.waiting

@@ -69,7 +69,7 @@ export class LoginRun {
   waiting = false;
   /// Its agent saw it wait for what its page gives (gcloud --no-launch-browser's "enter the verification code", Devin's
   /// "copy the code and paste it below"): the person's to enter, from their card, not its agent's. Not told from its
-  /// words here (用户定: 不自动判断); over once the person has entered it, or it ends.
+  /// words here (用户定: 不自动判断); kept while what they entered is checked (verifying), over once it ends.
   paste = false;
   echo = true;
   error: string | null = null;
@@ -363,11 +363,23 @@ export class LoginRun {
   /// open, and never at a prompt that reads a secret.
   askPaste(on: boolean): boolean {
     if (!this.active || (on && (this.step !== "open" || this.url === null || this.secret))) return false;
-    if (on !== this.paste) {
+    // Asked again (what was entered was refused): it waits on the person once more, no longer finishing.
+    const again = on && this.state === "verifying";
+    if (again) this.state = "browser";
+    if (on !== this.paste || again) {
       this.paste = on;
       this.#o.changed();
     }
     return true;
+  }
+
+  /// The person entered what its page gave, and Enter: it finishes by itself now (or asks again, its agent says so). Its
+  /// card keeps the field, what was entered checked in place.
+  answeredNow(): void {
+    if (!this.active) return;
+    this.state = "verifying";
+    this.waiting = false;
+    this.#o.changed();
   }
 
   /// Its browser came back and the callback went to it: it finishes by itself now.

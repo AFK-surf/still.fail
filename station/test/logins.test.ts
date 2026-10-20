@@ -224,7 +224,8 @@ echo "You are now logged in as [a@x.com]."
     assert.throws(() => m.logins.answer(id, "  "), /text/);
     assert.throws(() => m.logins.answer(id, "a\nb"), /one line/);
     const answered = m.logins.answer(id, " 4/0AXlq-code ", { email: "b@x.com", name: "李四" });
-    assert.deepEqual([answered.doneBy?.name, answered.paste], ["李四", undefined], "entered: the field goes");
+    assert.deepEqual([answered.doneBy?.name, answered.paste, answered.state], ["李四", true, "verifying"], "entered: the field stays, what was entered checked in place");
+    assert.throws(() => m.logins.answer(id, "4/again"), /being checked/);
     await m.until(id, (l) => l.state === "done", "done");
     assert.ok(m.screen(id).includes("got [4/0AXlq-code]"), m.screen(id));
   } finally {
@@ -273,7 +274,7 @@ process.stdin.on("data", (d) => {
     assert.match(await tool!.run("ember:c-1", { id, paste: true }), /in the login card's field/);
     assert.equal(m.logins.get(id)!.paste, true);
     const answered = m.logins.answer(id, "dvn_code-123", { email: "b@x.com", name: "李四" });
-    assert.equal(answered.paste, undefined);
+    assert.deepEqual([answered.paste, answered.state], [true, "verifying"]);
     await m.until(id, (l) => l.state === "done", "done");
     assert.ok(m.screen(id).includes(`got [dvn_code-123] for ${home}/.config`), m.screen(id));
   } finally {

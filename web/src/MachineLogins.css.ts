@@ -2,7 +2,6 @@ import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { settledLine } from "./Decisions.css.ts";
 import { pillInner, surfaceCorner, TEXT_IN, PANEL_PILL } from "@stillfail/ui/styles/align.ts";
-import { input } from "@stillfail/ui/styles/controls.css.ts";
 
 // A station's logins (MachineLogins.tsx, docs/remote-login.md): the login card (a chat's, 奏's, and the station page's
 // for one under way) and the station page's rows of those ended. Grey but for what is off, and the code.
@@ -52,6 +51,12 @@ const cardText = {
   selectors: { "&:first-child": { paddingTop: TEXT_IN }, "&:last-child": { paddingBottom: TEXT_IN } },
 } as const;
 export const cardTitle = style({ ...cardText, fontSize: vars.textUi, lineHeight: "20px", fontWeight: "500" });
+/**
+ * Its title, with 取消 as its × in the card's top corner (on the card's padding, concentric with its corner): the title
+ * takes the row, the × its own pill's width.
+ */
+export const cardHead = style({ display: "flex", alignItems: "flex-start", gap: "4px", width: "100%", minWidth: 0 });
+globalStyle(`${cardHead} > ${cardTitle}`, { flex: "1", minWidth: 0 });
 export const cardStatus = style({ ...cardText, display: "inline-flex", alignItems: "center", gap: "6px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted });
 /** What kept this device from taking the browser's callback (its port taken): the one line in red. */
 export const cardStatusFailed = style([cardStatus, { color: vars.red }]);
@@ -71,20 +76,46 @@ export const cardCode = style({
 export const cardCodeText = style({
   fontFamily: vars.fontMono, fontSize: vars.textHeading, fontWeight: "600", letterSpacing: "0.08em", lineHeight: "1.3",
 });
-/**
- * One row of buttons at its foot: what is to be done first, then 取消 (they fit a phone's width side by side). The pills'
- * grounds on the card's padding, concentric with its corner; their words in by 10 more, in line with the title's.
- */
-export const cardActions = style({ display: "flex", flexWrap: "nowrap", alignItems: "center", gap: "4px", marginTop: "6px" });
 globalStyle(`${card} :focus-visible`, { outlineOffset: "-2px" });
+/** A pasted-back code's two steps (its page's button, its field): taller than the pills, a finger's row on a phone. */
+const STEP = 32;
+/** Their corners: the card's less its padding (the field at its foot concentric with it), the button above as round. */
+const stepCorner = pillInner(CARD_PAD, PANEL_PILL, vars.cornerScale);
 /**
- * What the page gave (a code), pasted back: a field as wide as the card allows, its 完成 beside it, under the card's
- * buttons (the page is opened first); in from the card's edge as the pills are.
+ * The first step, its page: the card's width, solid (as a primary button) while it is the next thing to do, then a
+ * plain grey one once pressed (the eye on to the field, 完成 the solid one then).
  */
-export const cardPaste = style({ display: "flex", alignItems: "center", gap: "4px", width: "100%", minWidth: "min(100%, 344px)", marginTop: "6px" });
-export const cardPasteInput = style([input, {
-  // As tall as the pills: the row's foot as far from the card's as its side.
-  flex: "1", minWidth: 0, minHeight: PANEL_PILL, height: PANEL_PILL, paddingBlock: "0", boxSizing: "border-box", fontSize: vars.textMeta,
+export const cardStep = style({
+  display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", width: "100%", height: STEP, marginTop: "8px",
+  padding: "0 12px", boxSizing: "border-box", border: 0, borderRadius: stepCorner, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.text} 7%, transparent)`, color: vars.text, font: "inherit", fontSize: vars.textUi, fontWeight: 500,
+  cursor: "pointer",
+  selectors: {
+    "&:hover": { background: `color-mix(in srgb, ${vars.text} 11%, transparent)` },
+    "&[data-next]": { background: vars.primary, color: vars.onPrimary },
+    "&[data-next]:hover": { background: vars.primaryHover },
+  },
+});
+/**
+ * The second, what the page gave (a code): a field the card's width at its foot, 完成 in its end once a code is in
+ * (concentric with it, solid: the next thing to do then).
+ */
+export const cardPaste = style({
+  display: "flex", alignItems: "center", gap: "4px", width: "100%", minWidth: "min(100%, 344px)", height: STEP, marginTop: "6px",
+  padding: "0 4px 0 12px", boxSizing: "border-box", borderRadius: stepCorner, cornerShape: vars.cornerShape, background: vars.canvas,
+});
+export const cardPasteInput = style({
+  flex: "1", minWidth: 0, height: "100%", padding: 0, border: 0, outline: "none", background: "none", color: vars.text, font: "inherit",
+  fontSize: vars.textUi,
   // The code in mono; what to paste said in the card's own letters.
-  selectors: { "&:not(:placeholder-shown)": { fontFamily: vars.fontMono } },
-}]);
+  selectors: { "&:not(:placeholder-shown)": { fontFamily: vars.fontMono }, "&::placeholder": { color: vars.muted } },
+});
+globalStyle(`${cardPaste}:focus-within`, { boxShadow: `0 0 0 2px color-mix(in srgb, ${vars.accent} 40%, transparent)` });
+/** 完成 in the field's end: solid; while what was entered is checked, a spinner in place of its word (nothing moves). */
+export const cardPasteDone = style({
+  position: "relative", flex: "none", height: STEP - 8, padding: "0 12px", border: 0, cornerShape: vars.cornerShape,
+  borderRadius: `calc(${stepCorner} - 4px)`, background: vars.primary, color: vars.onPrimary, font: "inherit", fontSize: vars.textMeta,
+  fontWeight: 500, cursor: "pointer", selectors: { "&:hover:not([aria-busy])": { background: vars.primaryHover } },
+});
+export const cardPasteDoneWord = style({ selectors: { [`${cardPasteDone}[aria-busy="true"] &`]: { visibility: "hidden" } } });
+export const cardPasteDoneSpin = style({ position: "absolute", inset: 0, display: "grid", placeItems: "center" });
