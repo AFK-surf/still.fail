@@ -235,8 +235,11 @@ fn main {
     })
     // and each line of a scripted run's script as it began (`{"step":…}`), at the same clock: when the run took each
     // step, for a replay to take it when the run did (src/core/replay.mbt: Replay::step_at)
-    @ui.trace_steps(fn(step) {
-      @host.log("CORETRACE " + Json::object({ "step": Json::string(step), "w": Json::number(wall()) }).stringify())
+    // (as each begins, as before; mbui's moment it acts, its input handed over, not kept yet)
+    @ui.trace_steps(fn(step, moment) {
+      if moment == Began {
+        @host.log("CORETRACE " + Json::object({ "step": Json::string(step), "w": Json::number(wall()) }).stringify())
+      }
     })
   }
   if core_linked() == 0 || !@sfcore.start() {

@@ -230,7 +230,7 @@ let swipe_fill_ms : Double = 140.0
 /// right edge (filled in ink once letting go would archive it); let go past `archive_at` of its width or flung left,
 /// it goes off to the left and is archived, else it springs back. Archiving refused, it comes back; one keeping watch
 /// springs back and asks first, as its menu's 归档. Across first it is the swipe (the row's tap and hold let go); up
-/// or down first it is the list's (`in_list`). `row` draws the row moved across by so much.
+/// or down first it is the list's (mbui's claim by way: whichever's way the finger goes past the slop first). `row` draws the row moved across by so much.
 fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row : (Double) -> Int) -> Int {
   let t = @sf.theme()
   let key = "swipe/" + item.station + "/" + item.id
@@ -268,7 +268,7 @@ fn swipe_to_archive(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool, row
   let at = off.get()
   let fill = @motion.animate(c, key + "/fill", if at < -width * archive_at { 1.0 } else { 0.0 }, spec=@motion.tween(swipe_fill_ms))
   let mut out = 0
-  c.drag_area(id, axis=Horizontal, in_list=true, w=Fill(1.0), h=Px(66.0), fn() {
+  c.drag_area(id, axis=Horizontal, w=Fill(1.0), h=Px(66.0), fn() {
     c.box(w=Fill(1.0), h=Px(66.0), clip=true, fn() {
       // under it, at the right edge it uncovers: 归档, quiet until letting go would archive it, then filled in ink
       c.box(

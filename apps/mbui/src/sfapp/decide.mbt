@@ -49,18 +49,12 @@ priv struct Decide {
   /// has them so (Decisions.kt DecisionsLocal)
   dgone : Array[String]
   dlater : Array[String]
-  /// the front decision: its key, how far across it is dragged, whether a finger has it and from where
+  /// the front decision: its key, how far across it is dragged, whether a finger has it (its moves and speed the
+  /// framework's drag's: decisions.mbt)
   mut front : String
   mut drag : Double
   mut held : Bool
   mut swiping : Bool
-  mut from_x : Double
-  mut from_y : Double
-  mut base : Double
-  /// where the pointer was the last two frames (the fling's speed)
-  mut last_x : Double
-  mut last_t : Double
-  mut speed : Double
   /// the front one let go short of going: going back where it rests (3, decisions.mbt card_back), else 0; from
   /// where across
   mut going : Int
@@ -92,12 +86,6 @@ let dui : Decide = {
   drag: 0.0,
   held: false,
   swiping: false,
-  from_x: 0.0,
-  from_y: 0.0,
-  base: 0.0,
-  last_x: 0.0,
-  last_t: 0.0,
-  speed: 0.0,
   going: 0,
   going_from: 0.0,
   out: None,
@@ -125,12 +113,6 @@ fn decide_reset() -> Unit {
   dui.drag = 0.0
   dui.held = false
   dui.swiping = false
-  dui.from_x = 0.0
-  dui.from_y = 0.0
-  dui.base = 0.0
-  dui.last_x = 0.0
-  dui.last_t = 0.0
-  dui.speed = 0.0
   dui.going = 0
   dui.going_from = 0.0
   dui.out = None
