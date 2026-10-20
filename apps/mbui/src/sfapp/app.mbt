@@ -40,6 +40,17 @@ pub(all) enum Page {
   Place(String)
   /// a page under settings (src/sfapp/settings: me, appearance, stations, the workspace…)
   Setting(@settings.Route)
+  /// a station's screen, seen and driven (screen_view.mbt), over the app as Android's ScreenActivity is
+  Screen(ScreenAt)
+} derive(Eq)
+
+///|
+/// A station's screen to view: its station (`<workspace>/<station>`), its id there, and its title until the core says
+/// one (the link's own, or the row's it was opened from; "" none).
+pub(all) struct ScreenAt {
+  station : String
+  screen : String
+  title : String
 } derive(Eq)
 
 ///|
@@ -189,6 +200,11 @@ fn reset() -> Unit {
   left_pages.clear()
   playing.clear()
   play_srcs.clear()
+  screens_open.clear()
+  screens_made.val = 0
+  screen_uis.clear()
+  screen_fix_mode.val = ""
+  peeks_reset()
   service_pages.clear()
   svc_viewports.clear()
   viz_loads.clear()
@@ -360,6 +376,7 @@ fn pages_left(src : Source) -> Unit {
       Service(station, job) => service_left(src, station, job)
       PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
       History(r, key, _) => history_left(src, r, key)
+      Screen(at) => screen_left(src, at.station, at.screen)
       _ => ()
     }
   }
@@ -377,6 +394,8 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @settings.wide.val = wide_on.val
   track_press(c)
   linger_tick(c, src)
+  // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
+  peeks_frame(c, src)
   // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
   if left_pages.length() > 0 {
     c.after_build("pages-left", fn() { pages_left(src) })
@@ -460,6 +479,12 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       if wide_on.val {
         // the rail, the sidebar and the page beside it (wide.mbt); what opens over them after them
         wide_frame(c, src, w, all, invited)
+        // a station's screen: over the whole window, as Android's ScreenActivity is over the app
+        match app.nav.top() {
+          Screen(at) =>
+            c.layer(fn() { screen_page(c, src, at.station, at.screen, at.title) }) |> ignore
+          _ => ()
+        }
         wide_overlays(c, src, w)
         pick_back(c)
         preview(c, src)
@@ -584,6 +609,7 @@ fn page_view(
         Decisions => decisions_page(c, src, w)
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
+        Screen(at) => screen_page(c, src, at.station, at.screen, at.title)
       }
     },
   )
@@ -1068,7 +1094,13 @@ fn attend(src : Source, workspace : String) -> Unit {
     // the system's say between frames (Android's activity pausing: no frame comes after it)
     @ui.on_app_change(fn(_, _) {
       match attention.src {
-        Some(s) => attend(s, attention.workspace)
+        Some(s) => {
+          attend(s, attention.workspace)
+          // the screens live in their cards stopped as the app goes behind (ScreenLinks.kt Peek: under STARTED)
+          if !@ui.app_visible() {
+            peeks_stop_all(s)
+          }
+        }
         None => ()
       }
       notices_app_change(@ui.app_visible())

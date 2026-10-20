@@ -610,7 +610,7 @@ fn open_link(href : String) -> Unit {
 
 ///|
 /// An agent's Markdown with its files (Prose.kt AgentWords): those its text names (`placed`) drawn there, the rest
-/// below it.
+/// below it; its links to a station's screens as their cards (screen_links.mbt).
 fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   let placed : Map[String, Attachment] = {}
   for n in m.placed {
@@ -657,6 +657,8 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
             None
           }
         },
+        // its links to a station's screens and 共享调试 as their cards (screen_links.mbt)
+        screens=Some(screen_links(c, src, here.station + "/" + here.session + "/" + m.ts)),
       )
       |> ignore
     }

@@ -320,6 +320,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
       })
     "status" => Some({ "items": [] })
+    "screenCard" | "adbCard" => fixture_link_card(name, params)
     "newChat" | "pick" => fixture_new_topic(f, name)
     _ =>
       match decide_fixture_topic(f, name, params) {
@@ -405,6 +406,8 @@ pub fn fixture(mode : String) -> Source {
           f.version += 1
           done(Ok(Json::object({})))
         }
+        // a screen's preview's frame taken (chat-screens): the fixture sends no other
+        "screen.ack" => done(Ok(Json::object({})))
         "prefs.set" => {
           match field(Some(params), "workspace") {
             Some(String(w)) => f.workspace = w
@@ -518,6 +521,8 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   open_fixture(mode)
   // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
   open_mode(mode)
+  // a station's screen (screen_fixture.mbt)
+  open_screen_fixture(mode)
   if mode.has_prefix("settings") {
     open_setting(@settings.fixture_page(mode))
   }

@@ -415,11 +415,18 @@ pub let leading_scale : @ui.LeadingScale = {
 }
 
 ///|
-/// still.fail's corners on mbui's scale (in order): Xl2 18 (what waits in the
-/// composer, where it is in none of the capsule's corners: Glass.kt InComposerFiles, concentric(ComposerCorner 26,
-/// ComposerFilesIn 10), what Android gives Smooth), Xl3 22 (a settings page's card and the waiting cards' shapes:
-/// Parts.kt CARD_CORNER, Waiting.kt:185).
-pub let radii : @ui.RadiusScale = { ..@ui.RadiusScale::tailwind(), xl2: 18.0, xl3: card_corner }
+/// still.fail's corners on mbui's scale (in order): Xl1_5 16 (Smooth(16.dp): a 32 high button or choice, 接管's),
+/// Xl2 18 (what waits in the composer, where it is in none of the capsule's corners: Glass.kt InComposerFiles,
+/// concentric(ComposerCorner 26, ComposerFilesIn 10), what Android gives Smooth), Xl3 22 (a settings page's card and
+/// the waiting cards' shapes: Parts.kt CARD_CORNER, Waiting.kt:185), Xl4 24 (a capsule round a 40 button 4 in: the
+/// remote screen's folded tools).
+pub let radii : @ui.RadiusScale = {
+  ..@ui.RadiusScale::tailwind(),
+  xl1_5: 16.0,
+  xl2: 18.0,
+  xl3: card_corner,
+  xl4: 24.0,
+}
 
 ///|
 /// A large title's letters drawn closer (Parts.kt:559, 562 LargeTitle: letterSpacing -0.6sp): off Tailwind's scale
@@ -599,3 +606,45 @@ pub let custom_field_w : @ui.Len = Fixed(72.0)
 
 ///|
 pub let custom_field_r : @ui.Radius = Exact(10.0)
+
+// ---------------------------------------------------------------------------
+// A station's screen, seen and driven (Android app/remote/ScreenViewer.kt): its sizes off the steps, as Android says
+// them.
+
+///|
+/// The side rail (60), a file's key (34), a progress track's height (3), the bounds of what floats over the frame
+/// (接管 480, the rail's line 280, what an ended view says 320).
+pub let rail_w : @ui.Len = Fixed(60.0)
+
+///|
+pub let row_key : @ui.Len = Fixed(34.0)
+
+///|
+pub let track_h : @ui.Len = Fixed(3.0)
+
+///|
+pub let take_over_max : @ui.Len = Fixed(480.0)
+
+///|
+pub let rail_say_max : @ui.Len = Fixed(280.0)
+
+///|
+pub let ended_max : @ui.Len = Fixed(320.0)
+
+///|
+/// A button's height on the phone (Controls.kt BUTTON_HEIGHT 38).
+pub let button_38 : @ui.Len = Fixed(38.0)
+
+///|
+/// A link's card in a message (ScreenLinks.kt, AdbLinks.kt): 236 wide; a screen's with its preview over its words 280.
+pub let link_card_w : @ui.Len = Fixed(236.0)
+
+///|
+pub let peek_card_px : Double = 280.0
+
+///|
+pub let peek_card_w : @ui.Len = Fixed(peek_card_px)
+
+///|
+/// A link's card's mark, 30 wide (36 high: S9), as the web's.
+pub let link_mark_w : @ui.Len = Fixed(30.0)

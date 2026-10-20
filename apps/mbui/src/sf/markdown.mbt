@@ -13,6 +13,8 @@
 // lighter, then its words, in the accent. With `files`, a message's files
 // its text names (the core's `placed`) are drawn where it names them: a
 // paragraph of only a link to one, or its images, as the files themselves.
+// With `screens`, its links to a station's screens (and 共享调试) are their
+// cards alone in a paragraph, their titles bare within a sentence.
 //
 // Spacing is the web's: each block keeps the margins a browser gives it,
 // and two blocks next to each other are as far apart as the larger of the
@@ -45,6 +47,8 @@ priv struct Md {
   /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
   /// chart)
   code : (String, String) -> (() -> Unit)?
+  /// links to screens and 共享调试 as a chat draws them
+  screens : Screens?
 }
 
 ///|
@@ -154,8 +158,41 @@ pub fn file_name_of(url : String) -> String {
 /// %XX escapes undone (as UTF-8); the text as it is where they do not make
 /// one.
 fn percent_decoded(s : String) -> String {
+  unescaped(s).unwrap_or(s)
+}
+
+///|
+/// As JavaScript's decodeURIComponent (Markdown.kt decoded): %XX escapes
+/// undone (as UTF-8); None where it throws (a `%` of no two hex digits,
+/// bytes of no UTF-8).
+fn decoded(s : String) -> String? {
+  let mut i = 0
+  while i < s.length() {
+    if s.at(i).to_int() == 37 {
+      let hex = fn(k : Int) {
+        if k >= s.length() {
+          return false
+        }
+        let c = s.at(k).to_int()
+        (c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102)
+      }
+      if !hex(i + 1) || !hex(i + 2) {
+        return None
+      }
+      i = i + 3
+    } else {
+      i = i + 1
+    }
+  }
+  unescaped(s)
+}
+
+///|
+/// %XX escapes undone (as UTF-8), those that make none kept as written; None
+/// where the bytes are no UTF-8.
+fn unescaped(s : String) -> String? {
   if !s.contains("%") {
-    return s
+    return Some(s)
   }
   let hex = fn(c : Int) -> Int {
     if c >= 48 && c <= 57 {
@@ -216,22 +253,142 @@ fn percent_decoded(s : String) -> String {
     } else if b0 >> 3 == 30 {
       (4, b0 & 0x07)
     } else {
-      return s
+      return None
     }
     if j + n > raw.length() {
-      return s
+      return None
     }
     let mut code = first
     for k in 1..<n {
       if raw[j + k] >> 6 != 2 {
-        return s
+        return None
       }
       code = (code << 6) | (raw[j + k] & 0x3F)
     }
     sb.write_char(code.unsafe_to_char())
     j = j + n
   }
-  sb.to_string()
+  Some(sb.to_string())
+}
+
+///|
+/// A link's path past its host (`https://still.fail/w/…`, or `/w/…` alone) cut
+/// at the slashes after `/w/`, as Markdown.kt's SCREEN_LINK and ADB_LINK read
+/// it: each part none of `/?#` and not empty, a slash at the end let be. None
+/// when it is no such path.
+fn w_parts(href : String) -> Array[String]? {
+  let mut rest = href
+  for scheme in ["https://", "http://"] {
+    if rest.has_prefix(scheme) {
+      let after = rest.view(start_offset=scheme.length()).to_string()
+      match after.find("/") {
+        Some(i) if i > 0 => rest = after.view(start_offset=i).to_string()
+        _ => return None
+      }
+      break
+    }
+  }
+  guard rest.has_prefix("/w/") else { return None }
+  let parts = rest.view(start_offset=3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
+  let parts = if parts.length() > 1 && parts[parts.length() - 1] == "" {
+    parts[:parts.length() - 1].to_array()
+  } else {
+    parts
+  }
+  if parts.iter().any(fn(p) { p == "" || p.contains("?") || p.contains("#") }) {
+    return None
+  }
+  Some(parts)
+}
+
+///|
+/// The screen a link names (Markdown.kt screenOfLink: a screen's page as its
+/// agents link to it, `/w/<workspace>/s/<station>/screen/<id>` after a host or
+/// alone): its station (`<workspace>/<station>`) and its id; None for any
+/// other link.
+pub fn screen_of_link(href : String) -> (String, String)? {
+  guard w_parts(href) is Some(p) && p.length() == 5 && p[1] == "s" && p[3] == "screen" else {
+    return None
+  }
+  guard decoded(p[0]) is Some(ws) && decoded(p[2]) is Some(st) && decoded(p[4]) is Some(id) else {
+    return None
+  }
+  Some((ws + "/" + st, id))
+}
+
+///|
+/// The station (`<workspace>/<station>`) a link to its 共享调试 names
+/// (Markdown.kt adbOfLink: `/w/<workspace>/s/<station>/adb`, after a host or
+/// alone); None for any other link.
+pub fn adb_of_link(href : String) -> String? {
+  guard w_parts(href) is Some(p) && p.length() == 4 && p[1] == "s" && p[3] == "adb" else {
+    return None
+  }
+  guard decoded(p[0]) is Some(ws) && decoded(p[2]) is Some(st) else { return None }
+  Some(ws + "/" + st)
+}
+
+///|
+/// A link drawn as a card alone in a paragraph, and as its title bare in a
+/// sentence (Markdown.kt isCardLink): a screen's, or a station's 共享调试.
+pub fn is_card_link(href : String) -> Bool {
+  screen_of_link(href) is Some(_) || adb_of_link(href) is Some(_)
+}
+
+///|
+/// A link written bare (Markdown.kt isBareLink): its words its address (as
+/// written, or decoded).
+pub fn is_bare_link(words : String, href : String) -> Bool {
+  let w = words.trim(chars=" \t\n").to_string()
+  w == href || decoded(href) == Some(w)
+}
+
+///|
+/// Links to a station's screens and 共享调试 (is_card_link), as a chat draws
+/// them (Markdown.kt Screens): `card` one alone in a paragraph (its own words,
+/// or None when it is bare); `title` the words a bare one within a sentence
+/// reads as (it still leads where it did).
+pub(all) struct Screens {
+  card : (String, String?) -> Unit
+  title : (String) -> String
+}
+
+///|
+/// A paragraph of only a link with a card (Markdown.kt screenAlone): its
+/// address, and its words unless it is bare.
+fn screen_alone(xs : Array[@md.Inline]) -> (String, String?)? {
+  let parts = xs.filter(fn(x) {
+    match x {
+      Text(t) => t.trim(chars=" \n\t").to_string() != ""
+      SoftBreak => false
+      _ => true
+    }
+  })
+  guard parts.length() == 1 else { return None }
+  match parts[0] {
+    Link(href, c) if is_card_link(href) => {
+      let words = @md.plain(c)
+      Some((href, if is_bare_link(words, href) { None } else { Some(words) }))
+    }
+    _ => None
+  }
+}
+
+///|
+/// The links with cards written bare among these words (Markdown.kt
+/// bareScreens), which read as their titles; not within an image, nor a
+/// link's own words.
+fn bare_screens(xs : Array[@md.Inline], out : Array[String]) -> Unit {
+  for x in xs {
+    match x {
+      Link(href, c) =>
+        if is_card_link(href) && is_bare_link(@md.plain(c), href) && !out.contains(href) {
+          out.push(href)
+        }
+      Emph(c) | Strong(c) | Strike(c) => bare_screens(c, out)
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -248,7 +405,7 @@ fn web() -> Palette {
 ///|
 /// `text` as Markdown, in a column as wide as it is given. `size`: the
 /// words' (0: the theme's body); `on_link` is told where a tapped link
-/// leads.
+/// leads; `files` and `screens` as the file's head says.
 pub fn markdown(
   c : @ui.Ctx,
   text : String,
@@ -260,6 +417,7 @@ pub fn markdown(
   files? : (String) -> (() -> Unit)? = fn(_) { None },
   found? : Array[String] = [],
   code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
+  screens? : Screens? = None,
 ) -> Int {
   let t = theme()
   let md = {
@@ -272,6 +430,7 @@ pub fn markdown(
     files,
     found,
     code,
+    screens,
   }
   let blocks = blocks_of(text)
   c.box(w=Fill(1.0), fn() {
@@ -321,6 +480,15 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
     Paragraph(xs) => {
       let m = if tight { 0.0 } else { s }
       let ink = self.ink
+      // one that is only a link to a screen is its card (Markdown.kt paragraph)
+      match (self.screens, task) {
+        (Some(sc), None) =>
+          match screen_alone(xs) {
+            Some((href, words)) => return [{ top: 8.0, bottom: 8.0, draw: fn() { (sc.card)(href, words) } }]
+            None => ()
+          }
+        _ => ()
+      }
       match self.placed(xs, m, task) {
         Some(ps) => ps
         None => [{ top: m, bottom: m, draw: fn() { self.words(xs, s, 0, ink, task) } }]
@@ -609,8 +777,20 @@ fn Md::words(
   let c = self.c
   let p = theme().p
   let runs = []
+  // a bare link to a screen reads as its title (Markdown.kt inline)
+  let titles : Map[String, String] = {}
+  match self.screens {
+    Some(sc) => {
+      let bare = []
+      bare_screens(xs, bare)
+      for href in bare {
+        titles[href] = (sc.title)(href)
+      }
+    }
+    None => ()
+  }
   // bold for a heading's 700; a table's head's 500 (medium) is the paragraph's own weight
-  runs_of(xs, runs, weight >= 600, false, false, "", p.accent)
+  runs_of(xs, runs, weight >= 600, false, false, "", p.accent, titles)
   self.n = self.n + 1
   c.rich(
     found_weight(runs, self.found),
@@ -647,6 +827,7 @@ fn runs_of(
   strike : Bool,
   link : String,
   accent : Int64,
+  titles : Map[String, String],
 ) -> Unit {
   for x in xs {
     match x {
@@ -662,16 +843,19 @@ fn runs_of(
             link=if link == "" && is_web_address(s) { s } else { link },
           ),
         )
-      Emph(c) => runs_of(c, out, bold, true, strike, link, accent)
-      Strong(c) => runs_of(c, out, true, italic, strike, link, accent)
-      Strike(c) => runs_of(c, out, bold, italic, true, link, accent)
+      Emph(c) => runs_of(c, out, bold, true, strike, link, accent, titles)
+      Strong(c) => runs_of(c, out, true, italic, strike, link, accent, titles)
+      Strike(c) => runs_of(c, out, bold, italic, true, link, accent, titles)
+      // a bare link to a screen or a station's 共享调试: its title, leading where it does
+      Link(href, c) if link == "" && titles.get(href) is Some(title) && is_bare_link(@md.plain(c), href) =>
+        out.push(@ui.span(title, bold~, italic~, strike~, link=href))
       Link(href, c) if link == "" && is_chat_link(href) => {
         // a reference to another chat: `@` a little lighter, its title, in
         // the accent
         out.push(@ui.span("@", bold~, italic~, strike~, link=href, color=alpha(accent, 0.7)))
         out.push(@ui.span(@md.plain(c), bold~, italic~, strike~, link=href, color=accent))
       }
-      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent)
+      Link(href, c) => runs_of(c, out, bold, italic, strike, href, accent, titles)
       Image(src, alt) => {
         let words = if alt != "" {
           alt

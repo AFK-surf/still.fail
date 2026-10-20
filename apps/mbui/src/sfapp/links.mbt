@@ -288,11 +288,9 @@ fn open_item(
 
 ///|
 /// One of a station's screens in the viewer (AppState.openScreen; remote/ScreenActivity.kt): `title`, the row's,
-/// until the core says one. The viewer is not in this app yet: said so in place of it.
+/// until the core says one (screen_view.mbt).
 fn open_screen(station : String, screen : String, title : String?) -> Unit {
-  ignore(title)
-  @host.log("screen link: no viewer yet for " + station + " " + screen)
-  toast_later(tr("android-misc.link.cantOpen"))
+  app.nav.push(Screen({ station, screen, title: title.unwrap_or("") }))
 }
 
 ///|

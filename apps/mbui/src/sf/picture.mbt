@@ -544,3 +544,24 @@ fn base64(s : String) -> Bytes {
 fn icon_named(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Int {
   icon(c, name, size~, color~)
 }
+
+///|
+/// Line art on a `vw` × `vh` grid, its paths stroked `width` wide with round ends and joins, nothing filled (a link's
+/// card's mark, ScreenLinks.kt tile): drawn `w` wide (as tall as its grid is for that) in `tint`, kept by `key` for
+/// each size and tint.
+pub fn line_art(
+  c : @ui.Ctx,
+  key : String,
+  paths : Array[String],
+  vw : Double,
+  vh : Double,
+  width : Double,
+  w : Double,
+  tint : Int64,
+) -> Int {
+  let layers : Array[Layer] = []
+  for d in paths {
+    layers.push({ d, fill: 0L, stroke: 0x000000FFL, width, even_odd: false, sx: 1.0, sy: 1.0, tx: 0.0, ty: 0.0 })
+  }
+  draw_drawable(c, "art/" + key, { w: vw, h: vh, layers }, w, Some(tint))
+}

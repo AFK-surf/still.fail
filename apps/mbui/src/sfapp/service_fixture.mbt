@@ -71,6 +71,13 @@ fn fixture_stream(
   on_value : (Json, Bytes?) -> Unit,
   done : (Result[Json, Json]) -> Unit,
 ) -> Int {
+  if name == "screen.view" {
+    // a link's card's preview (screen_links.mbt: peek), or the viewer's (screen.mbt)
+    if params is Object(o) && o.get("peek") is Some(True) {
+      return fixture_peek(on_value)
+    }
+    return screen_fixture_stream(params, on_value, done)
+  }
   if name != "station.preview" {
     done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
     return 0

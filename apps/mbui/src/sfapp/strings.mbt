@@ -7,6 +7,8 @@ let zh : Map[String, String] = {
   "common.link.copy": "复制链接",
   "common.link.copied": "已复制链接",
   "android-misc.link.cantOpen": "无法打开此链接",
+  "android-misc.screen.title": "屏幕",
+  "android-misc.adb.title": "共享调试",
   "android-chat.annotate.copied": "已复制",
   "android-chat.annotate.selectAll": "全选",
   "android-chat.archive": "归档",
@@ -178,7 +180,11 @@ pub fn tr(key : String) -> String {
             None =>
               match zh_wide.get(key) {
                 Some(s) => s
-                None => zh_links.get(key).unwrap_or(key)
+                None =>
+                  match zh_links.get(key) {
+                    Some(s) => s
+                    None => zh_screen.get(key).unwrap_or(key)
+                  }
               }
           }
       }

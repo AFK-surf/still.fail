@@ -6,7 +6,8 @@
 // home-sheet (the workspaces' sheet), place (the 文件 place); settings, settings-<page> (a page of the settings over
 // it: src/sfapp/settings/fixture.mbt), -dark after either for the dark theme; chat-flash, chat-flash-mine (the chat
 // opened at a message from a notification, flashing), settings-notify-off (settings, notifications off); chat-cards,
-// chat-answering (the chat's card answered and 保留 failed a moment ago; an option under way).
+// chat-answering (the chat's card answered and 保留 failed a moment ago; an option under way); chat-screens (links to a
+// station's screens and its 共享调试 as their cards, a tab's live).
 
 ///|
 fn main {
