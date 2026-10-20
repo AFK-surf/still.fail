@@ -2570,9 +2570,10 @@ export const SHAPES: Record<string, Shape> = {
   HistoryItem: struct([
     ["key", "String"],
     ["entries", vec("i64"), { client: vec("I54") }],
+    ["at", opt("i64"), { client: opt("I54") }],
     ["body", "HistoryBody"],
     ["turn", opt("HistoryTurn"), { skipNone: true, doc: "On the item a turn begins with (the prompt that woke the agent); left out of the others." }],
-  ], { doc: "One item of an execution history, and the transcript entries it draws (`entries`: first, last).", keepNone: true }),
+  ], { doc: "One item of an execution history, its transcript entries (`entries`: first, last), and when its first entry was written (`at`, epoch ms, when known).", keepNone: true }),
   HistoryLive: struct([
     ["id", "String"],
     ["text", "String"],

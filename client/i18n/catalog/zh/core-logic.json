@@ -516,5 +516,18 @@
   "core-logic.choose.borrow.managers": "只有 owner 或 admin 可以借用",
   "core-logic.choose.borrow.pending": "{station} 已分享给所有 station，正在同步到此 station",
   "core-logic.choose.borrow.first": "请先借用此模型的账号",
-  "core-logic.choose.borrow.nothing": "所选模型无需借用"
+  "core-logic.choose.borrow.nothing": "所选模型无需借用",
+  "core-logic.accounts.login.superseded": "账号状态已改变，请重新登录",
+  "core-logic.accounts.apple.challenge_invalid": "Apple 登录挑战无效",
+  "core-logic.accounts.apple.restart": "请重新发起 Apple 登录",
+  "core-logic.accounts.apple.state_mismatch": "Apple 登录状态不匹配",
+  "core-logic.accounts.apple.reply_invalid": "Apple 登录回复无效",
+  "core-logic.accounts.apple.params_invalid": "Apple 登录参数无效",
+  "core-logic.accounts.apple.not_configured": "Apple 登录尚未配置，请使用 Google 登录",
+  "core-logic.accounts.delete.incomplete": "服务器尚未完成账号删除",
+  "core-logic.accounts.delete.coverage_incomplete": "远端个人数据删除尚未支持，账号未被删除",
+  "core-logic.accounts.delete.reauth_required": "请重新登录后再删除账号",
+  "core-logic.accounts.delete.last_owner": "请先转移所有权或单独删除工作区",
+  "core-logic.accounts.request_failed": "请求未完成，请重试",
+  "core-logic.accounts.unsupported": "当前账号服务不支持此操作"
 }

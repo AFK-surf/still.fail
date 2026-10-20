@@ -1,0 +1,77 @@
+name: Set up iOS build tools
+description: Select Xcode 27 and prepare the pinned Node, pnpm, XcodeGen and project-local Rust caches
+inputs:
+  source-directory:
+    description: Checkout containing the iOS app
+    default: '.'
+  xcode-path:
+    description: Optional Contents/Developer path for Xcode 27
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Select Xcode 27
+      shell: bash
+      env:
+        IOS_XCODE_PATH: ${{ inputs.xcode-path }}
+      run: |
+        set -euo pipefail
+        if [[ "$(uname -m)" != arm64 ]]; then
+          echo 'The iOS app requires an Apple Silicon runner.' >&2
+          exit 1
+        fi
+        if [[ -n "$IOS_XCODE_PATH" ]]; then
+          export DEVELOPER_DIR="$IOS_XCODE_PATH"
+        else
+          for candidate in /Applications/Xcode_27.0.0.app/Contents/Developer /Applications/Xcode-27.0.0.app/Contents/Developer /Applications/Xcode.app/Contents/Developer; do
+            if [[ -x "$candidate/usr/bin/xcodebuild" ]] && DEVELOPER_DIR="$candidate" xcodebuild -version | grep -q '^Xcode 27\.'; then
+              export DEVELOPER_DIR="$candidate"
+              break
+            fi
+          done
+        fi
+        : "${DEVELOPER_DIR:?Install Xcode 27 or set IOS_XCODE_PATH to its Contents/Developer directory}"
+        xcodebuild -version | tee "$RUNNER_TEMP/stillfail-xcode-version"
+        grep -q '^Xcode 27\.' "$RUNNER_TEMP/stillfail-xcode-version"
+        echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+        echo "IOS_XCODE_CACHE_KEY=$(shasum -a 256 "$RUNNER_TEMP/stillfail-xcode-version" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+    - uses: actions/setup-node@v5
+      with:
+        node-version-file: ${{ inputs.source-directory }}/.node-version
+        package-manager-cache: false
+
+    - name: Install pinned pnpm and XcodeGen
+      shell: bash
+      env:
+        IOS_SOURCE_DIR: ${{ inputs.source-directory }}
+      run: |
+        set -euo pipefail
+        pnpm_version=$(node -p 'require(process.argv[1]).packageManager' "$(cd "$IOS_SOURCE_DIR" && pwd)/package.json")
+        npm install --global "$pnpm_version"
+        tool_dir=$(mktemp -d "$RUNNER_TEMP/stillfail-xcodegen.XXXXXX")
+        curl --fail --silent --show-error --location --retry 3 --connect-timeout 15 --max-time 120 \
+          --output "$tool_dir/xcodegen.zip" \
+          https://github.com/yonaskolb/XcodeGen/releases/download/2.44.1/xcodegen.zip
+        ditto -x -k "$tool_dir/xcodegen.zip" "$tool_dir"
+        echo "$tool_dir/xcodegen/bin" >> "$GITHUB_PATH"
+        "$tool_dir/xcodegen/bin/xcodegen" --version
+        echo "IOS_PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ env.IOS_PNPM_STORE }}
+        key: ios-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: ios-pnpm-${{ runner.os }}-${{ runner.arch }}-
+
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ${{ inputs.source-directory }}/.airbuild/rust
+          ${{ inputs.source-directory }}/.airbuild/cargo
+          ${{ inputs.source-directory }}/.airbuild/cargo-target/release
+          ${{ inputs.source-directory }}/.airbuild/cargo-target/aarch64-apple-ios/release
+          ${{ inputs.source-directory }}/.airbuild/cargo-target/aarch64-apple-ios-sim/release
+          ${{ inputs.source-directory }}/.airbuild/spm
+        key: ios-native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.source-directory }}-${{ env.IOS_XCODE_CACHE_KEY }}-${{ hashFiles('**/client/Cargo.lock', '**/apps/ios/bootstrap-rust.sh', '**/apps/ios/build-core.sh', '**/vendor/**') }}
+        restore-keys: ios-native-${{ runner.os }}-${{ runner.arch }}-${{ inputs.source-directory }}-${{ env.IOS_XCODE_CACHE_KEY }}-

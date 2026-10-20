@@ -1,3 +1,4 @@
+import type { AppleConfig } from "./apple";
 import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
@@ -6,7 +7,7 @@ import type { RelayLoad } from "./relay-load";
 import type { Relay } from "./relay-worker";
 import type { TelemetryLimiter } from "./tracing";
 
-export interface Env {
+export interface Env extends AppleConfig {
   ACCOUNTS: DurableObjectNamespace<Account>;
   DIRECTORY: DurableObjectNamespace<Directory>;
   /** The stations' releases (scripts/release.sh). */

@@ -13,7 +13,7 @@ const upgrade = { upgrade: "websocket", "sec-websocket-protocol": "iroh-relay" }
 test("native relay works without Google configuration or credentials", { timeout: 10000 }, async () => {
   const h = await harness({ noGoogle: true });
   try {
-    assert.equal((await h.fetch("/v1/auth/session")).status, 503);
+    assert.equal((await h.fetch("/v1/auth/session")).status, 401, "sessions require credentials independently of Google configuration");
     assert.equal((await h.fetch("/v1/admin/relay/restart", { method: "POST", headers: { authorization: "Bearer " + h.adminToken } })).status, 200);
     assert.equal((await h.fetch("/relay")).status, 426);
     assert.equal((await h.fetch("/relay", { method: "POST" })).status, 405);

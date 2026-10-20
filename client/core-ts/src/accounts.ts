@@ -18,6 +18,8 @@ import { base64url, isObject, parseJson, pointer, sha256, toJsonBytes, utf8 } fr
 
 export const STORAGE_KEY = "accounts";
 export const LOGIN_KEY = "login";
+const APPLE_LOGIN_KEY = "login/apple";
+const DELETED_KEY = "accounts/deleted";
 
 export type StoredAccount = {
   sub: string;
@@ -37,7 +39,8 @@ export function view(a: StoredAccount): AccountView {
   return { sub: a.sub, email: a.email, name: a.name, picture: a.picture };
 }
 
-type PendingLogin = { verifier: string; state: string; return_to: string; redirect_uri: string };
+type PendingLogin = { verifier: string; state: string; return_to: string; redirect_uri: string; epoch?: number };
+type AppleAttempt = { attempt: string; nonce: string; state: string; epoch: number };
 
 /// serde's reading of a StoredAccount: every field there, of its type (else the whole list is dropped, as
 /// `unwrap_or_default` does in the Rust core).
@@ -76,6 +79,8 @@ export class Accounts {
   #tracer: Tracer | null = null;
   /// Since when (monotonic ms) a refresh has had no answer.
   #unanswered: number | null = null;
+  #epoch = 0;
+  readonly #deleted = new Map<string, number>();
 
   private constructor(host: Host, list: StoredAccount[]) {
     this.#host = host;
@@ -84,7 +89,16 @@ export class Accounts {
 
   /// Loads the stored accounts.
   static load(host: Host): Effect.Effect<Accounts> {
-    return Effect.map(Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null), (bytes) => new Accounts(host, readStored(parseJson(bytes)) ?? []));
+    return Effect.gen(function* () {
+      const bytes = yield* Effect.orElseSucceed(host.storageGet(STORAGE_KEY), () => null);
+      const fence = parseJson(yield* Effect.orElseSucceed(host.storageGet(DELETED_KEY), () => null));
+      const accounts = new Accounts(host, readStored(parseJson(bytes)) ?? []);
+      if (isObject(fence)) for (const [sub, until] of Object.entries(fence)) {
+        if (typeof until === "number" && Number.isFinite(until) && until > host.nowMs() / 1000) accounts.#deleted.set(sub, until);
+      }
+      accounts.#list = accounts.#list.filter((a) => !accounts.#deleted.has(a.sub));
+      return accounts;
+    });
   }
 
   setTracer(tracer: Tracer): void {
@@ -109,7 +123,7 @@ export class Accounts {
     return Effect.gen({ self: this }, function* () {
       const verifier = this.#secret();
       const state = this.#secret();
-      const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri };
+      const pending: PendingLogin = { verifier, state, return_to: returnTo, redirect_uri: redirectUri, epoch: this.#epoch };
       yield* Effect.mapError(this.#host.storageSet(LOGIN_KEY, toJsonBytes(pending)), asCoreError);
       const query = (
         [
@@ -146,7 +160,7 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(expired().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(expired());
-      const account = yield* this.#signedIn(tokens);
+      const account = yield* this.#signedIn(tokens, pending.epoch ?? 0);
       const returnTo = pending.return_to === "" || pending.return_to.startsWith("/auth/") ? "/" : pending.return_to;
       return [account, returnTo] as [AccountView, string];
     });
@@ -155,19 +169,22 @@ export class Accounts {
   /// Signs in with an email and a password: only the accounts still.fail cloud set up for that (App Store review's).
   passwordSignIn(email: string, password: string, deviceName: string): Effect.Effect<AccountView, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
       const failed = () => new CoreError("login_failed", t("core-logic.accounts.login.password_failed"));
       const response = yield* Effect.mapError(this.#post("/v1/auth/password", null, { email, password, name: deviceName }, null), failed);
       if (response.status === 401) return yield* Effect.fail(new CoreError("login_wrong_password", t("core-logic.accounts.login.wrong_password")).withStatus(401));
       if (!ok(response)) return yield* Effect.fail(failed().withStatus(response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(failed());
-      return yield* this.#signedIn(tokens);
+      return yield* this.#signedIn(tokens, epoch);
     });
   }
 
-  /// Keeps the account a sign-in answered with.
-  #signedIn(tokens: Tokens): Effect.Effect<AccountView, CoreError> {
+  /// Keeps the account a sign-in answered with, unless accounts changed since it began (`epoch`: one deleted, or all
+  /// signed out) or it is one deleted here.
+  #signedIn(tokens: Tokens, epoch: number): Effect.Effect<AccountView, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      if (epoch !== this.#epoch || this.#deleted.has(tokens.subject)) return yield* Effect.fail(new CoreError("login_superseded", t("core-logic.accounts.login.superseded")));
       const account: StoredAccount = {
         sub: tokens.subject,
         email: tokens.email,
@@ -180,12 +197,81 @@ export class Accounts {
       yield* this.#put(account);
       // The picture comes with the profile; fetched once, best effort.
       const picture = yield* this.#picture(account.access);
-      if (picture !== null) {
+      if (picture !== null && epoch === this.#epoch && this.#get(account.sub)) {
         account.picture = picture;
         yield* Effect.ignore(this.#put(account));
       }
       return view(account);
     });
+  }
+
+  appleBegin(): Effect.Effect<Omit<AppleAttempt, "epoch">, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
+      const value = yield* Effect.flatMap(this.#post("/v1/auth/apple/challenge", null, {}, null), (r) => this.#authResponse(r)).pipe(Effect.mapError(asCoreError));
+      if (!isObject(value) || ["attempt", "nonce", "state"].some((k) => typeof value[k] !== "string" || value[k].length !== 43)) {
+        return yield* Effect.fail(new CoreError("apple_login_failed", t("core-logic.accounts.apple.challenge_invalid")));
+      }
+      if (epoch !== this.#epoch) return yield* Effect.fail(new CoreError("login_superseded", t("core-logic.accounts.login.superseded")));
+      const pending: AppleAttempt = { attempt: value.attempt as string, nonce: value.nonce as string, state: value.state as string, epoch };
+      yield* Effect.mapError(this.#host.storageSet(APPLE_LOGIN_KEY, toJsonBytes(pending)), asCoreError);
+      return { attempt: pending.attempt, nonce: pending.nonce, state: pending.state };
+    });
+  }
+
+  appleComplete(attempt: string, identityToken: string, authorizationCode: string, name: string | null, state: string | null): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const pending = parseJson(yield* Effect.mapError(this.#host.storageGet(APPLE_LOGIN_KEY), asCoreError));
+      if (!isObject(pending) || typeof pending.state !== "string") return yield* Effect.fail(new CoreError("login_expired", t("core-logic.accounts.apple.restart")));
+      if (pending.attempt !== attempt || pending.epoch !== this.#epoch || (state !== null && state !== pending.state)) {
+        return yield* Effect.fail(new CoreError("login_state_mismatch", t("core-logic.accounts.apple.state_mismatch")));
+      }
+      yield* Effect.mapError(this.#host.storageDelete(APPLE_LOGIN_KEY), asCoreError);
+      const response = yield* Effect.mapError(this.#post("/v1/auth/apple/token", null, { attempt, identityToken, authorizationCode, name: name ?? "", state: pending.state }, null), asCoreError);
+      const tokens = readTokens(yield* this.#authResponse(response));
+      if (!tokens) return yield* Effect.fail(new CoreError("apple_login_failed", t("core-logic.accounts.apple.reply_invalid")));
+      const account = yield* this.#signedIn(tokens, pending.epoch as number);
+      return { account, accounts: this.list() };
+    });
+  }
+
+  deletionSummary(sub: string): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const access = yield* this.accessToken(sub);
+      return yield* this.#authResponse(yield* Effect.mapError(this.#post("/v1/auth/deletion-summary", access, {}, null), asCoreError));
+    });
+  }
+
+  deleteAccount(sub: string): Effect.Effect<unknown, CoreError> {
+    return Effect.gen({ self: this }, function* () {
+      const access = yield* this.accessToken(sub);
+      const receipt = yield* this.#authResponse(yield* Effect.mapError(this.#post("/v1/auth/delete-account", access, {}, null), asCoreError));
+      if (!isObject(receipt) || receipt.deleted !== true || receipt.state !== "completed" || receipt.account !== sub ||
+          typeof receipt.fence_expires_at !== "number" || !Number.isFinite(receipt.fence_expires_at) || receipt.fence_expires_at <= this.#host.nowMs() / 1000) {
+        return yield* Effect.fail(new CoreError("deletion_incomplete", t("core-logic.accounts.delete.incomplete")));
+      }
+      this.#epoch++;
+      this.#deleted.set(sub, receipt.fence_expires_at);
+      yield* Effect.mapError(this.#host.storageSet(DELETED_KEY, toJsonBytes(Object.fromEntries(this.#deleted))), asCoreError);
+      yield* Effect.ignore(this.#host.storageDelete(LOGIN_KEY));
+      yield* Effect.ignore(this.#host.storageDelete(APPLE_LOGIN_KEY));
+      yield* this.#forget(sub);
+      return receipt;
+    });
+  }
+
+  #authResponse(response: HttpResponse): Effect.Effect<unknown, CoreError> {
+    const value = parseJson(response.body);
+    if (ok(response)) return Effect.succeed(value);
+    const raw = isObject(value) ? value.error : undefined;
+    const code = typeof raw === "string" && /^[a-z_]{1,80}$/.test(raw) ? raw : "auth_failed";
+    const messages: Record<string, string> = {
+      apple_not_configured: t("core-logic.accounts.apple.not_configured"),
+      deletion_coverage_incomplete: t("core-logic.accounts.delete.coverage_incomplete"),
+      reauth_required: t("core-logic.accounts.delete.reauth_required"),
+      last_owner: t("core-logic.accounts.delete.last_owner"),
+    };
+    return Effect.fail(new CoreError(code, messages[code] ?? t("core-logic.accounts.request_failed"), response.status));
   }
 
   /// A usable access token, refreshing it when it expires within a minute (once at a time per account). A refused
@@ -240,6 +326,7 @@ export class Accounts {
         if (!isObject(item)) continue;
         const { sub, email, access, refresh, accessExpires } = item;
         if (typeof sub !== "string" || typeof email !== "string" || typeof access !== "string" || typeof refresh !== "string" || typeof accessExpires !== "number") continue;
+        if (this.#deleted.has(sub)) continue;
         const name = item.name === undefined ? "" : item.name;
         const picture = item.picture === undefined ? "" : item.picture;
         if (typeof name !== "string" || typeof picture !== "string") continue;
@@ -258,7 +345,7 @@ export class Accounts {
     return Effect.map(Effect.orElseSucceed(this.#host.storageGet(STORAGE_KEY), () => null), (bytes) => {
       const theirs = readStored(parseJson(bytes))?.find((a) => a.sub === sub);
       const ours = this.#get(sub);
-      if (!theirs || !ours || theirs.refresh === ours.refresh) return null;
+      if (!theirs || !ours || this.#deleted.has(sub) || theirs.refresh === ours.refresh) return null;
       const good = theirs.access_expires - 60 > this.#host.nowMs() / 1000;
       const i = this.#list.findIndex((a) => a.sub === sub);
       if (i >= 0) this.#list[i] = theirs;
@@ -278,6 +365,7 @@ export class Accounts {
 
   #refresh(sub: string): Effect.Effect<string, CoreError> {
     return Effect.gen({ self: this }, function* () {
+      const epoch = this.#epoch;
       // Another core on the same storage may have refreshed already: its credentials are the current ones.
       const adopted = yield* this.#adoptStored(sub);
       if (adopted !== null) return adopted;
@@ -316,6 +404,7 @@ export class Accounts {
       if (!ok(response)) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_failed", { status: response.status }), response.status));
       const tokens = readTokens(parseJson(response.body));
       if (!tokens) return yield* Effect.fail(new CoreError("refresh_failed", t("core-logic.accounts.refresh_unreadable")));
+      if (epoch !== this.#epoch || this.#deleted.has(sub) || !this.#get(sub)) return yield* Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
       const name = tokens.name ? tokens.name : account.name;
       // The new tokens are good even if they cannot be written down.
       yield* Effect.ignore(this.#put({ ...account, access: tokens.access_token, refresh: tokens.refresh_token, access_expires: tokens.expires_at, name }));
@@ -345,6 +434,7 @@ export class Accounts {
   /// Adds or replaces an account, keeping its place in the list.
   #put(account: StoredAccount): Effect.Effect<void, CoreError> {
     return Effect.suspend(() => {
+      if (this.#deleted.has(account.sub)) return Effect.fail(CoreError.signedOut(t("core-logic.accounts.signed_out")));
       const i = this.#list.findIndex((a) => a.sub === account.sub);
       if (i >= 0) this.#list[i] = stored(account);
       else this.#list.push(stored(account));

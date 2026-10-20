@@ -2852,10 +2852,11 @@ export interface HistoryTurn {
 	text: string;
 }
 
-/** One item of an execution history, and the transcript entries it draws (`entries`: first, last). */
+/** One item of an execution history, its transcript entries (`entries`: first, last), and when its first entry was written (`at`, epoch ms, when known). */
 export interface HistoryItem {
 	key: string;
 	entries: number[];
+	at?: number;
 	body: HistoryBody;
 	/** On the item a turn begins with (the prompt that woke the agent); left out of the others. */
 	turn?: HistoryTurn;

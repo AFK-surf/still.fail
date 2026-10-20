@@ -2,9 +2,11 @@
 // once and answers when its source has it (rule 4); a write to still.fail cloud answers once what it changed is read
 // again (the account topics show it).
 import { Effect } from "effect";
+import { Accounts } from "../accounts.ts";
 import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
+import { t } from "../i18n.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
@@ -46,6 +48,19 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       }
       case "authComplete":
         return Effect.map(inner.accounts.completeSignIn(call.query), ([account, returnTo]) => ({ account, return_to: returnTo }));
+      case "appleBegin":
+      case "appleComplete":
+      case "deletionSummary":
+      case "deleteAccount": {
+        const accounts = inner.accounts;
+        if (!(accounts instanceof Accounts)) return Effect.fail(new CoreError("unsupported", t("core-logic.accounts.unsupported")));
+        switch (call.kind) {
+          case "appleBegin": return accounts.appleBegin();
+          case "appleComplete": return accounts.appleComplete(call.attempt, call.identityToken, call.authorizationCode, call.name, call.state);
+          case "deletionSummary": return accounts.deletionSummary(call.account);
+          case "deleteAccount": return accounts.deleteAccount(call.account);
+        }
+      }
       case "wake": {
         const wake = new Wake(inner.host.nowMs(), Math.max(call.away, 0), call.network && !call.retry, call.retry);
         // What is asked again as the wake fails what was under way goes on new connections.

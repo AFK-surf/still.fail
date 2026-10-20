@@ -47,8 +47,12 @@ export type Plan = keyof typeof PLANS;
 
 /** The events socket's subprotocols (api.ts socketToken), the new one first: clients from before the rename say "ember-events". */
 export const EVENTS_PROTOCOLS = ["stillfail-events", "ember-events"] as const;
-/** How long a revocation is kept and told: a day more than a credential lasts (grants.ts). */
+/** Inclusive replay lasts 31 days; first purge is at cutoff + 31 days + one second. */
 const REVOCATION_DAYS = 31;
+const REVOCATION_SEC = REVOCATION_DAYS * 86400;
+// Proactively alarm at first expiry, targeting active clearance within 24h thereafter
+// (necessary revocation records only: 32-day upper-bound target, not a provider/operator SLA).
+export const REVOCATION_CLEARANCE_TARGET_MS = 24 * 60 * 60 * 1000;
 
 /** How often a station sends "ping" on its presence socket (the runtime answers "pong" without waking this object). */
 export const PING_SEC = 30;
@@ -85,10 +89,14 @@ export type PushDevice = { kind: "web"; endpoint: string; p256dh: string; auth: 
 export type PushRegistration = PushDevice & { id: string; lang: Lang };
 
 export class Directory extends DurableObject<Env> {
+  #presenceDeadline: number | null = null;
+  #alarmQueue: Promise<void> = Promise.resolve();
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
     ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS provider_identities (provider TEXT NOT NULL, provider_sub TEXT NOT NULL, sub TEXT NOT NULL UNIQUE, PRIMARY KEY (provider, provider_sub));
       CREATE TABLE IF NOT EXISTS users (sub TEXT PRIMARY KEY, email TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', picture TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER, admitted TEXT, beta INTEGER);
       CREATE TABLE IF NOT EXISTS workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, created_by TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS members (workspace TEXT NOT NULL, sub TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL, PRIMARY KEY (workspace, sub));
@@ -146,6 +154,15 @@ export class Directory extends DurableObject<Env> {
     }
     this.migrateFreePlan();
     this.migrateStationMembers();
+    ctx.blockConcurrencyWhile(async () => {
+      // Legacy rows retain their original cutoff; startup needs no incoming traffic to rearm.
+      this.#purgeRevocations();
+      if (this.#hasPresence()) {
+        const existing = await ctx.storage.getAlarm();
+        this.#presenceDeadline = Math.min(existing ?? Infinity, Date.now() + SILENT_MS);
+      }
+      await this.#coordinateAlarm();
+    });
   }
 
   /**
@@ -252,14 +269,26 @@ export class Directory extends DurableObject<Env> {
     this.#tell(subs, ...(list ? [LIST] : []), { type: "workspace", id: workspace });
   }
 
+  /** Additive Apple mapping only: no Google rewrite/backfill and no email lookup. */
+  appleSubject(providerSub: string): string {
+    return this.ctx.storage.transactionSync(() => {
+      const old = this.#one("SELECT sub FROM provider_identities WHERE provider = 'apple' AND provider_sub = ?", providerSub);
+      if (old) return old.sub as string;
+      let sub: string;
+      do { sub = `a_${randomSecret()}`; } while (this.#one("SELECT sub FROM users WHERE sub = ? UNION ALL SELECT sub FROM provider_identities WHERE sub = ?", sub, sub));
+      this.#run("INSERT INTO provider_identities (provider, provider_sub, sub) VALUES ('apple', ?, ?)", providerSub, sub);
+      return sub;
+    });
+  }
+
   /**
    * The account a sign-in that proved it holds `email` (Google's, or a code sent to it: login.ts) is, with the name and
    * picture it has: the one `sub` already is, else the first signed in with that email, so whoever signed up one way and
    * signs in the other is the same account, with its workspaces; null for a new one. App Store review's (`pw-`,
-   * password.ts) is nobody's but its own.
+   * password.ts) is nobody's but its own, nor is an Apple sign-in's (appleSubject): no email reaches it.
    */
   accountFor(sub: string, email: string): { sub: string; name: string; picture: string } | null {
-    const row = this.#one("SELECT sub, name, picture FROM users WHERE sub = ?", sub) ?? this.#one("SELECT sub, name, picture FROM users WHERE lower(email) = lower(?) AND sub NOT LIKE 'pw-%' ORDER BY created_at, rowid LIMIT 1", email);
+    const row = this.#one("SELECT sub, name, picture FROM users WHERE sub = ?", sub) ?? this.#one("SELECT sub, name, picture FROM users WHERE lower(email) = lower(?) AND sub NOT LIKE 'pw-%' AND sub NOT IN (SELECT sub FROM provider_identities WHERE provider = 'apple') ORDER BY created_at, rowid LIMIT 1", email);
     return row ? { sub: row.sub as string, name: row.name as string, picture: row.picture as string } : null;
   }
 
@@ -270,8 +299,11 @@ export class Directory extends DurableObject<Env> {
        ON CONFLICT (sub) DO UPDATE SET email = excluded.email, name = excluded.name, picture = excluded.picture, last_seen = excluded.last_seen`,
       identity.sub, identity.email, identity.name, identity.picture, nowSeconds(), nowSeconds(),
     );
-    this.#joinAdded(identity.sub, identity.email);
-    this.#takePending(identity.sub, identity.email);
+    // An Apple identity is its own (appleSubject): it takes no seat or workspace waiting for its email.
+    if (identity.provider !== "apple") {
+      this.#joinAdded(identity.sub, identity.email);
+      this.#takePending(identity.sub, identity.email);
+    }
     if (!old || (old.email === identity.email && old.name === identity.name && old.picture === identity.picture)) return;
     // Members lists show them; invitations they sent show their name; a new email has other invitations.
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", identity.sub)) this.#changed(row.workspace as string, false);
@@ -360,6 +392,22 @@ export class Directory extends DurableObject<Env> {
     return this.workspace(sub, workspace);
   }
 
+  /** Read-only impact; owner resolution uses existing setRole/deleteWorkspace, never automatic deletion. */
+  deletionImpact(sub: string) {
+    const workspaces = this.#rows(`SELECT w.id, w.name, m.role,
+      (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id AND x.sub != ?) AS remainingMembers,
+      (SELECT COUNT(*) FROM members x WHERE x.workspace = w.id AND x.role = 'owner' AND x.sub != ?) AS remainingOwners
+      FROM members m JOIN workspaces w ON w.id = m.workspace WHERE m.sub = ?`, sub, sub, sub);
+    const lastOwnerWorkspaces = workspaces.filter(w => w.role === "owner" && w.remainingOwners === 0).map(w => ({
+      id: w.id, name: w.name, remainingMembers: w.remainingMembers,
+      actions: (w.remainingMembers as number) > 0 ? ["workspace.setRole", "workspace.delete"] : ["workspace.delete"],
+    }));
+    const count = (query: string) => this.#one(query, sub)?.n as number;
+    return { workspaces, lastOwnerWorkspaces,
+      personalCounts: { memberships: workspaces.length, push: count("SELECT COUNT(*) AS n FROM push WHERE sub = ?"), feedback: count("SELECT COUNT(*) AS n FROM feedback WHERE account = ?"), invitationsCreated: count("SELECT COUNT(*) AS n FROM invitations WHERE created_by = ?") },
+    };
+  }
+
   me(sub: string): { user: MeView | null; workspaces: WorkspaceSummary[] } {
     const row = this.#one("SELECT sub, email, name, picture, beta FROM users WHERE sub = ?", sub);
     // beta only when set: clients from before it know no such field, and an account without it says nothing.
@@ -418,7 +466,7 @@ export class Directory extends DurableObject<Env> {
   #plan(workspace: string): Plan {
     const creator = this.#one("SELECT u.sub, u.email FROM workspaces w JOIN users u ON u.sub = w.created_by WHERE w.id = ?", workspace);
     if (!creator) return "free";
-    return isAdmin(this.env, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
+    return this.#googleAdmin(creator.sub as string, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
   }
 
   /** How many people and stations a workspace may hold: its own limits (one the admin made for a company), or its plan's. */
@@ -430,6 +478,9 @@ export class Directory extends DurableObject<Env> {
   }
 
   /** How many people a workspace may hold, its creator among them. */
+  #googleAdmin(sub: string, email: string): boolean {
+    return !this.#one("SELECT sub FROM provider_identities WHERE sub = ? AND provider = 'apple'", sub) && isAdmin(this.env, email);
+  }
   #memberCap(workspace: string): number {
     return this.#limits(workspace).members;
   }
@@ -795,7 +846,7 @@ export class Directory extends DurableObject<Env> {
     this.#tell(this.#byEmail(row.email as string | null), LIST);
   }
 
-  setRole(sub: string, workspace: string, target: string, role: Role): WorkspaceView {
+  async setRole(sub: string, workspace: string, target: string, role: Role): Promise<WorkspaceView> {
     this.#role(sub, workspace, ["owner"]);
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     const current = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, target);
@@ -806,11 +857,13 @@ export class Directory extends DurableObject<Env> {
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, false);
     this.#tell([target], LIST);
-    return this.workspace(sub, workspace);
+    const view = this.workspace(sub, workspace);
+    await this.#coordinateAlarm();
+    return view;
   }
 
   /** Removes a member; anyone may remove themselves (leave). */
-  removeMember(sub: string, workspace: string, target: string): void {
+  async removeMember(sub: string, workspace: string, target: string): Promise<void> {
     const mine = this.#role(sub, workspace);
     const row = this.#one("SELECT role FROM members WHERE workspace = ? AND sub = ?", workspace, target);
     if (!row) fail(404, "member_not_found");
@@ -822,6 +875,7 @@ export class Directory extends DurableObject<Env> {
     this.#run("DELETE FROM members WHERE workspace = ? AND sub = ?", workspace, target);
     this.#revoke(workspace, "sub", target);
     this.#changed(workspace, true, [target]);
+    await this.#coordinateAlarm();
   }
 
   /**
@@ -980,10 +1034,19 @@ export class Directory extends DurableObject<Env> {
   // station hears it at once if connected, and all of its workspaces' (of the last 31 days) when it connects.
 
   /** Takes back an account's credentials in a workspace, or one session's. */
-  #revoke(workspace: string, kind: "sub" | "sid", id: string): void {
-    const at = nowSeconds();
-    this.#run("INSERT INTO revocations (workspace, kind, id, at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace, kind, id) DO UPDATE SET at = excluded.at", workspace, kind, id, at);
-    this.#run("DELETE FROM revocations WHERE at < ?", at - REVOCATION_DAYS * 86400);
+  #revoke(workspace: string, kind: "sub" | "sid", id: string, at = nowSeconds(), retry = false): void {
+    const now = nowSeconds();
+    this.#purgeRevocations();
+    // A server-owned retry uses the original cutoff, never the time of retry.
+    // Once expired it must neither resurrect a row nor send an obsolete cutoff.
+    if (!Number.isSafeInteger(at) || at > now) throw new Error("invalid_revocation_cutoff");
+    if (at < now - REVOCATION_SEC) return;
+    const old = this.#one("SELECT at FROM revocations WHERE workspace = ? AND kind = ? AND id = ?", workspace, kind, id);
+    if (old && ((old.at as number) > at || ((old.at as number) === at && retry))) return;
+    this.#run(`INSERT INTO revocations (workspace, kind, id, at) VALUES (?, ?, ?, ?)
+      ON CONFLICT (workspace, kind, id) DO UPDATE SET at = excluded.at WHERE excluded.at > revocations.at`, workspace, kind, id, at);
+    // A distinct mutation in the same second still reaches live stations;
+    // an explicit original-cutoff retry neither rewrites nor repeats it.
     // Which workspace's: a station in several takes it back there alone (one from before them reads no such field).
     const frame = JSON.stringify({ type: "revoke", kind, id, at, workspace });
     for (const station of this.#stationsIn(workspace)) {
@@ -998,14 +1061,21 @@ export class Directory extends DurableObject<Env> {
   }
 
   /** Sessions signed out (all of an account's with none named): their credentials go, in every workspace of the account. */
-  revokeSessions(sub: string, sids: string[] | null): void {
+  // Optional stable cutoff is server-owned RPC data only, never a new request parameter.
+  // Existing callers default to a fresh cutoff for a genuinely later revocation/rejoin.
+  async revokeSessions(sub: string, sids: string[] | null, cutoff?: number): Promise<void> {
+    const at = cutoff ?? nowSeconds();
+    if (!Number.isSafeInteger(at) || at > nowSeconds()) throw new Error("invalid_revocation_cutoff");
     if (sids === null) this.#run("DELETE FROM push WHERE sub = ?", sub);
     else for (const sid of sids) this.#run("DELETE FROM push WHERE sub = ? AND sid = ?", sub, sid);
     for (const row of this.#rows("SELECT workspace FROM members WHERE sub = ?", sub)) {
       const workspace = row.workspace as string;
-      if (sids === null) this.#revoke(workspace, "sub", sub);
-      else for (const sid of sids) this.#revoke(workspace, "sid", sid);
+      if (sids === null) this.#revoke(workspace, "sub", sub, at, cutoff !== undefined);
+      else for (const sid of sids) this.#revoke(workspace, "sid", sid, at, cutoff !== undefined);
     }
+    // Do not acknowledge a mutation before its no-traffic wake-up is durable.
+    // On failure the original rows/cutoff remain available for an explicit retry.
+    await this.#coordinateAlarm();
   }
 
   // ── push registrations (docs/notifications.md) ──────────────────────────
@@ -1075,7 +1145,7 @@ export class Directory extends DurableObject<Env> {
     return this.#rows("SELECT sub, email, name, picture, created_at, last_seen, admitted, beta, blocked FROM users ORDER BY created_at DESC").map((row) => {
       const sub = row.sub as string;
       const workspaces = memberships.get(sub) ?? [];
-      const admin = isAdmin(this.env, row.email as string);
+      const admin = this.#googleAdmin(row.sub as string, row.email as string);
       const admission: Admission | null = admin ? "admin" : (row.admitted as Admission | null) ?? (workspaces.length ? "early" : null);
       // As #standard has it, without a query per account.
       const mayCreate = admin || row.admitted === "code" || row.admitted === "granted" || (row.admitted === null && workspaces.length > 0);
@@ -1102,7 +1172,7 @@ export class Directory extends DurableObject<Env> {
       const member = this.#one("SELECT 1 AS x FROM members WHERE sub = ? LIMIT 1", sub);
       this.#run("UPDATE users SET admitted = ? WHERE sub = ?", creator ? "free" : member ? "invitation" : null, sub);
     }
-    return { sub, may_create: isAdmin(this.env, row!.email as string) || this.#standard(sub) };
+    return { sub, may_create: this.#googleAdmin(sub, row!.email as string) || this.#standard(sub) };
   }
 
   /** The emails the admin gave rights to that nobody has signed in with yet, the latest first. */
@@ -1224,7 +1294,7 @@ export class Directory extends DurableObject<Env> {
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
     const added = group<AddedView>(this.#rows("SELECT workspace, email, role, added_by, added_at FROM added ORDER BY added_at"));
     // As #plan has it, in the same read.
-    const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.email as string) ? "admin"
+    const plan = (w: Row): Plan => w.sub === null ? "free" : this.#googleAdmin(w.sub as string, w.email as string) ? "admin"
       : w.admitted === "code" || w.admitted === "granted" || (w.admitted === null && w.member) ? "standard" : "free";
     return this.#rows(`SELECT w.id, w.name, w.created_at, w.max_members, w.max_stations, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
       EXISTS (SELECT 1 FROM members m WHERE m.sub = u.sub) AS member FROM workspaces w
@@ -1414,7 +1484,8 @@ export class Directory extends DurableObject<Env> {
     this.ctx.acceptWebSocket(pair[1], [`station:${station}`]);
     pair[1].serializeAttachment({ station, at: Date.now() } satisfies Attachment);
     this.#sendState(station);
-    if ((await this.ctx.storage.getAlarm()) === null) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
+    this.#presenceDeadline = Math.min(this.#presenceDeadline ?? Infinity, Date.now() + SILENT_MS);
+    await this.#coordinateAlarm();
     return new Response(null, { status: 101, webSocket: pair[0] });
   }
 
@@ -1520,8 +1591,50 @@ export class Directory extends DurableObject<Env> {
   // interval however many stations there are — pinging from here would wake
   // the object for every ping, and without the check a vanished station would
   // show online until the runtime happened to notice.
+  #purgeRevocations(): void {
+    this.#run("DELETE FROM revocations WHERE at < ?", nowSeconds() - REVOCATION_SEC);
+  }
+
+  #hasPresence(): boolean {
+    return this.ctx.getWebSockets().some((ws) => {
+      const attachment = ws.deserializeAttachment() as Attachment;
+      return "station" in attachment && !attachment.dropped && ws.readyState === WebSocket.OPEN;
+    });
+  }
+
+  /** One serialized owner of the durable alarm: no later write can race an earlier deadline. */
+  #coordinateAlarm(): Promise<void> {
+    const scheduled = this.#alarmQueue.then(async () => {
+      const arm = async () => {
+        if (!this.#hasPresence()) this.#presenceDeadline = null;
+        const oldest = this.#one("SELECT MIN(at) AS at FROM revocations")?.at as number | null;
+        const expiry = oldest == null ? Infinity : (oldest + REVOCATION_SEC + 1) * 1000;
+        const deadline = Math.min(this.#presenceDeadline ?? Infinity, expiry);
+        if (deadline === Infinity) await this.ctx.storage.deleteAlarm();
+        else await this.ctx.storage.setAlarm(Math.max(Date.now(), deadline));
+      };
+      try {
+        await arm();
+      } catch (error) {
+        // One immediate recovery attempt matters for mutations with no further
+        // traffic. Still reject the original failure so awaited callers observe it.
+        try { await arm(); } catch { /* Original failure remains visible below. */ }
+        throw error;
+      }
+    });
+    // Keep subsequent scheduling recoverable, but expose failure to awaited
+    // mutations, startup, fetch and alarm (alarm rejection enables runtime retries). No IDs/secrets.
+    this.#alarmQueue = scheduled.catch(() => { console.error("Directory alarm scheduling failed"); });
+    return scheduled;
+  }
+
   async alarm(): Promise<void> {
-    if (this.sweep(Date.now())) await this.ctx.storage.setAlarm(Date.now() + SILENT_MS);
+    const now = Date.now();
+    const connected = this.sweep(now);
+    if (!connected) this.#presenceDeadline = null;
+    else if (this.#presenceDeadline === null || this.#presenceDeadline <= now) this.#presenceDeadline = now + SILENT_MS;
+    this.#purgeRevocations();
+    await this.#coordinateAlarm();
   }
 
   /** Drops station sockets silent at `now`; says whether any station is still connected. */

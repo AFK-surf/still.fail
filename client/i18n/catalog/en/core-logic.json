@@ -621,5 +621,18 @@
   "core-logic.choose.borrow.managers": "Only an owner or admin can borrow",
   "core-logic.choose.borrow.pending": "{station} shares it with every station; it is on its way to this one",
   "core-logic.choose.borrow.first": "Borrow an account for this model first",
-  "core-logic.choose.borrow.nothing": "The model picked needs no borrowing"
+  "core-logic.choose.borrow.nothing": "The model picked needs no borrowing",
+  "core-logic.accounts.login.superseded": "Your accounts changed; please sign in again",
+  "core-logic.accounts.apple.challenge_invalid": "Sign in with Apple could not start",
+  "core-logic.accounts.apple.restart": "Please sign in with Apple again",
+  "core-logic.accounts.apple.state_mismatch": "Sign in with Apple did not match; please try again",
+  "core-logic.accounts.apple.reply_invalid": "Sign in with Apple got an answer it could not read",
+  "core-logic.accounts.apple.params_invalid": "Sign in with Apple was given something it cannot use",
+  "core-logic.accounts.apple.not_configured": "Sign in with Apple is not set up yet; please sign in with Google",
+  "core-logic.accounts.delete.incomplete": "The server has not finished deleting the account",
+  "core-logic.accounts.delete.coverage_incomplete": "Deleting personal data in the cloud is not supported yet; the account was not deleted",
+  "core-logic.accounts.delete.reauth_required": "Sign in again before deleting the account",
+  "core-logic.accounts.delete.last_owner": "Hand over ownership or delete the workspace first",
+  "core-logic.accounts.request_failed": "The request did not finish; please try again",
+  "core-logic.accounts.unsupported": "These accounts cannot do that"
 }

@@ -1,0 +1,207 @@
+name: iOS TestFlight
+run-name: iOS TestFlight (${{ inputs.source_ref }}, bump ${{ inputs.version_bump || 'none' }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: main, or a tag on main, to build
+        type: string
+        required: true
+        default: main
+      version_bump:
+        description: Version bump (none keeps the version and increments only the build number)
+        type: choice
+        required: true
+        default: none
+        options:
+          - none
+          - patch
+          - minor
+          - major
+      test_notes:
+        description: What to Test
+        type: string
+        required: false
+      resume_build_id:
+        description: Existing App Store Connect build ID to distribute without building or uploading
+        type: string
+        required: false
+
+concurrency:
+  group: ios-testflight-still-fail
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    name: Build and distribute to Internal Testers
+    if: github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main'
+    runs-on: ${{ fromJSON(vars.IOS_RUNNER_LABELS || '["self-hosted","mini1"]') }}
+    environment: ios-testflight
+    timeout-minutes: 120
+    env:
+      ASC_BYPASS_KEYCHAIN: "1"
+      ASC_NO_UPDATE: "1"
+      ASC_TIMEOUT: 60s
+      ASC_UPLOAD_TIMEOUT: 20m
+      APPLE_SOURCE_DIR: ${{ github.workspace }}/source
+      IOS_SOURCE_REF: ${{ inputs.source_ref }}
+      IOS_VERSION_BUMP: ${{ inputs.version_bump }}
+      IOS_BACKEND: production
+      IOS_TEST_NOTES: ${{ inputs.test_notes }}
+      IOS_RESUME_BUILD_ID: ${{ inputs.resume_build_id }}
+    defaults:
+      run:
+        working-directory: workflow
+        shell: bash
+    steps:
+      - name: Checkout release tooling
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: workflow
+          persist-credentials: false
+
+      - name: Prepare artifact directory
+        run: |
+          set -euo pipefail
+          release_dir="$RUNNER_TEMP/ios-testflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT/artifacts"
+          mkdir -p "$release_dir"
+          echo "IOS_RELEASE_DIR=$release_dir" >> "$GITHUB_ENV"
+          echo "IOS_RELEASE_CONTEXT=$release_dir/release-context.json" >> "$GITHUB_ENV"
+
+      - name: Load TestFlight configuration
+        env:
+          IOS_TESTFLIGHT_CONFIG: ${{ secrets.IOS_TESTFLIGHT_CONFIG }}
+        run: python3 apps/ios/scripts/testflight-config.py env
+
+      - name: Restore the resolved release on retry
+        if: ${{ github.run_attempt > 1 }}
+        uses: actions/download-artifact@v5
+        with:
+          pattern: ios-testflight-context-${{ github.run_id }}
+          path: ${{ env.IOS_RELEASE_DIR }}
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Restore any recorded upload attempt
+        if: ${{ github.run_attempt > 1 }}
+        uses: actions/download-artifact@v5
+        with:
+          pattern: ios-testflight-upload-${{ github.run_id }}
+          path: ${{ runner.temp }}/ios-testflight-${{ github.run_id }}-${{ github.run_attempt }}/upload-marker
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Select a trusted source commit
+        id: source
+        env:
+          IOS_UPLOAD_CONTEXT: ${{ runner.temp }}/ios-testflight-${{ github.run_id }}-${{ github.run_attempt }}/upload-marker/release-context.json
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -f "$IOS_UPLOAD_CONTEXT" ]; then
+            cp "$IOS_UPLOAD_CONTEXT" "$IOS_RELEASE_CONTEXT"
+          fi
+          if [ -f "$IOS_RELEASE_CONTEXT" ]; then
+            echo "context_restored=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "context_restored=false" >> "$GITHUB_OUTPUT"
+          fi
+          python3 apps/ios/scripts/testflight-release.py source-ref
+
+      - name: Checkout selected app source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.source.outputs.source_ref }}
+          path: source
+          persist-credentials: false
+
+      - name: Set up App Store Connect CLI
+        uses: rudrankriyam/setup-asc@v1
+        with:
+          version: 2.6.0
+
+      - name: Resolve version, build number, and tester group
+        id: resolve
+        env:
+          IOS_TESTFLIGHT_CONFIG: ${{ secrets.IOS_TESTFLIGHT_CONFIG }}
+        run: python3 apps/ios/scripts/testflight-config.py api python3 apps/ios/scripts/testflight-release.py resolve
+
+      - name: Preserve the resolved release before building
+        if: ${{ steps.source.outputs.context_restored != 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-testflight-context-${{ github.run_id }}
+          path: ${{ env.IOS_RELEASE_CONTEXT }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Set up Apple build tools
+        if: ${{ steps.resolve.outputs.needs_build == 'true' }}
+        uses: ./workflow/.github/actions/setup-ios
+        with:
+          source-directory: source
+          xcode-path: ${{ vars.IOS_XCODE_PATH }}
+
+      - name: Test selected iOS source
+        if: ${{ steps.resolve.outputs.needs_build == 'true' }}
+        run: bash apps/ios/scripts/build-ci.sh test
+
+      - name: Archive and export the selected source
+        if: ${{ steps.resolve.outputs.needs_build == 'true' }}
+        env:
+          MARKETING_VERSION: ${{ steps.resolve.outputs.version }}
+          BUILD_NUMBER: ${{ steps.resolve.outputs.build_number }}
+          IOS_TESTFLIGHT_CONFIG: ${{ secrets.IOS_TESTFLIGHT_CONFIG }}
+        run: python3 apps/ios/scripts/testflight-config.py signing bash apps/ios/scripts/build-testflight.sh
+
+      - name: Record the upload boundary
+        id: publish_boundary
+        env:
+          IOS_TESTFLIGHT_CONFIG: ${{ secrets.IOS_TESTFLIGHT_CONFIG }}
+        run: python3 apps/ios/scripts/testflight-config.py api python3 apps/ios/scripts/testflight-release.py prepare-publish
+
+      - name: Preserve the upload boundary before upload
+        if: ${{ steps.publish_boundary.outputs.upload_marker_needed == 'true' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-testflight-upload-${{ github.run_id }}
+          path: ${{ env.IOS_RELEASE_CONTEXT }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload, wait for processing, and distribute
+        env:
+          IOS_TESTFLIGHT_CONFIG: ${{ secrets.IOS_TESTFLIGHT_CONFIG }}
+        run: python3 apps/ios/scripts/testflight-config.py api python3 apps/ios/scripts/testflight-release.py publish
+
+      - name: Remove temporary signing material
+        if: ${{ always() }}
+        run: bash apps/ios/scripts/build-testflight.sh --cleanup
+
+      - name: Write the release summary
+        if: ${{ always() }}
+        run: python3 apps/ios/scripts/testflight-release.py summary
+
+      - name: Preserve release results
+        if: ${{ always() && env.IOS_RELEASE_DIR != '' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: ios-testflight-results-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          compression-level: 0
+          path: |
+            ${{ env.IOS_RELEASE_DIR }}/release-context.json
+            ${{ env.IOS_RELEASE_DIR }}/StillFail.ipa
+            ${{ env.IOS_RELEASE_DIR }}/dSYMs.zip
+            ${{ env.IOS_RELEASE_DIR }}/tests.xcresult
+            ${{ env.IOS_RELEASE_DIR }}/archive.xcresult
+            ${{ env.IOS_RELEASE_DIR }}/*.log

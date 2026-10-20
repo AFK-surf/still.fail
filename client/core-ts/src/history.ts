@@ -444,7 +444,8 @@ export function presentHistory(live: J, cx: Context): J {
     }
     const kind = v.kind ?? null;
     delete v.kind;
-    return { key: `e${base + first}`, entries: [base + first, base + last], body: { kind, content: v } } as J;
+    const at = typeof timeline[first]?.at === "string" ? Date.parse(timeline[first].at) : NaN;
+    return { key: `e${base + first}`, entries: [base + first, base + last], at: Number.isFinite(at) ? at : null, body: { kind, content: v } } as J;
   });
 
   // Turns: each prompt that woke the agent (not one of a sub-agent's) begins one, on its item, saying when and what the

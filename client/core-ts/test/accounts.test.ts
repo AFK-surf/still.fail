@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { run } from "./run.ts";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Accounts, LOGIN_KEY, STORAGE_KEY, challenge, decodeComponent, encodeComponent, parseQuery, view, type StoredAccount } from "../src/accounts.ts";
+import { Accounts, LOGIN_KEY, STORAGE_KEY, challenge, decodeComponent, encodeComponent, parseQuery, view, type StoredAccount, type AccountView } from "../src/accounts.ts";
 import { HostError } from "../src/error.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import { Runner } from "../src/runtime.ts";
@@ -11,6 +11,7 @@ import { FakeHost, flush, jsonResponse } from "../src/testing.ts";
 import { Tracer } from "../src/trace.ts";
 import { parseJson } from "../src/util.ts";
 import type { HttpRequest } from "../src/host.ts";
+import { parseCall } from "../src/core/calls.ts";
 
 holdLanguage();
 
@@ -26,6 +27,77 @@ async function withStored(host: FakeHost, list: StoredAccount[]) {
 }
 const queryOf = (url: string) => Object.fromEntries(parseQuery(url.split("?")[1]));
 const stored = (host: FakeHost, key: string) => parseJson(host.stored(key)) as never;
+
+test("native Apple calls validate credentials before dispatch", () => {
+  assert.equal(parseCall("auth.appleBegin", {}).kind, "appleBegin");
+  assert.equal(parseCall("auth.deleteAccount", { account: "sub1" }).kind, "deleteAccount");
+  assert.throws(() => parseCall("auth.appleComplete", { attempt: "a", identityToken: "token", authorizationCode: "code" }));
+  assert.throws(() => parseCall("auth.appleComplete", { attempt: "a".repeat(43), identityToken: "token", authorizationCode: "code", name: "名".repeat(41) }));
+});
+
+test("Apple is single-use, checks state and returns account views without credentials", async () => {
+  const host = new FakeHost();
+  const accounts = await withStored(host, [account("google", now(host) + 3600)]);
+  host.onFetch(() => jsonResponse(503, { error: "apple_not_configured" }));
+  await assert.rejects(run(accounts.appleBegin()), (e: { code: string }) => e.code === "apple_not_configured");
+  assert.equal(accounts.list()[0].sub, "google");
+  const challenge = { attempt: "a".repeat(43), nonce: "n".repeat(43), state: "s".repeat(43) };
+  host.onFetch((r) => {
+    if (r.url.endsWith("/challenge")) return jsonResponse(200, challenge);
+    assert.equal(body(r).state, challenge.state);
+    return jsonResponse(200, tokens("secret-access", "secret-refresh", now(host) + 3600));
+  });
+  await run(accounts.appleBegin());
+  await assert.rejects(run(accounts.appleComplete(challenge.attempt, "token", "code", null, "wrong")), (e: { code: string }) => e.code === "login_state_mismatch");
+  const result = await run(accounts.appleComplete(challenge.attempt, "token", "code", "名称", challenge.state)) as { account: AccountView };
+  assert.equal(result.account.sub, "sub1");
+  assert.equal("access" in result.account, false);
+  assert.equal("refresh" in result.account, false);
+  await assert.rejects(run(accounts.appleComplete(challenge.attempt, "token", "code", null, challenge.state)), (e: { code: string }) => e.code === "login_expired");
+});
+
+test("account deletion retains accounts until an explicit completed receipt with a replay deadline", async () => {
+  const host = new FakeHost();
+  const accounts = await withStored(host, [account("sub1", now(host) + 3600), account("sub2", now(host) + 3600)]);
+  host.onFetch(() => jsonResponse(409, { error: "deletion_coverage_incomplete", deleted: false }));
+  await assert.rejects(run(accounts.deleteAccount("sub1")), (e: { code: string }) => e.code === "deletion_coverage_incomplete");
+  for (const receipt of [{ deleted: true }, { deleted: true, state: "completed", account: "other", fence_expires_at: now(host) + 3600 }, { deleted: true, state: "completed", account: "sub1" }]) {
+    host.onFetch(() => jsonResponse(200, receipt));
+    await assert.rejects(run(accounts.deleteAccount("sub1")), (e: { code: string }) => e.code === "deletion_incomplete");
+  }
+  assert.equal(accounts.list().length, 2);
+  host.onFetch(() => jsonResponse(200, { deleted: true, state: "completed", account: "sub1", fence_expires_at: now(host) + 3600 }));
+  await run(accounts.deleteAccount("sub1"));
+  assert.deepEqual(accounts.list().map((a) => a.sub), ["sub2"]);
+  const again = await run(Accounts.load(host));
+  await run(again.migrate([{ sub: "sub1", email: "old@x.com", access: "late", refresh: "late", accessExpires: now(host) + 3600 }]));
+  assert.deepEqual(again.list().map((a) => a.sub), ["sub2"]);
+  assert.ok(host.requests.every((r) => !r.url.endsWith("/logout")));
+});
+
+test("a refresh answered after account deletion cannot resurrect its credentials", async () => {
+  const host = new FakeHost();
+  const accounts = await withStored(host, [account("sub1", now(host) + 3600)]);
+  let finishDelete!: (r: ReturnType<typeof jsonResponse>) => void;
+  let finishRefresh!: (r: ReturnType<typeof jsonResponse>) => void;
+  host.onFetch((r) => new Promise((resolve) => {
+    if (r.url.endsWith("/delete-account")) finishDelete = resolve;
+    else if (r.url.endsWith("/refresh")) finishRefresh = resolve;
+    else throw new Error("unexpected request");
+  }));
+  const deletion = run(accounts.deleteAccount("sub1"));
+  await flush();
+  await host.time.pass(3_550_000, 3_550_000);
+  const refresh = run(accounts.accessToken("sub1"));
+  const refused = assert.rejects(refresh, (e: { code: string }) => e.code === "signed_out");
+  await flush();
+  finishDelete(jsonResponse(200, { deleted: true, state: "completed", account: "sub1", fence_expires_at: now(host) + 3600 }));
+  await deletion;
+  finishRefresh(jsonResponse(200, tokens("late-access", "late-refresh", now(host) + 3600)));
+  await refused;
+  assert.deepEqual(accounts.list(), []);
+  assert.deepEqual(stored(host, STORAGE_KEY), []);
+});
 
 test("pkce_challenge_is_base64url_sha256", () => {
   assert.equal(challenge("abc"), "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0");

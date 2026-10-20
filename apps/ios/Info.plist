@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleDisplayName</key><string>still.fail</string>
+<key>CFBundleName</key><string>still.fail</string>
+<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+<key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
+<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>zh-Hant</string><string>ja</string><string>ko</string><string>es</string></array>
+<key>LSRequiresIPhoneOS</key><true/>
+<key>UILaunchScreen</key><dict/>
+<key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
+<key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+<key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>fail.still.iphone.auth</string><key>CFBundleURLSchemes</key><array><string>stillfail</string></array></dict></array>
+<key>NSLocalNetworkUsageDescription</key><string>连接工作区内运行助手的电脑，查看会话并发送消息。</string>
+<key>NSBonjourServices</key><array><string>_stillfail._udp</string><string>_ember._udp</string></array>
+</dict></plist>

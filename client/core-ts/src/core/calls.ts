@@ -31,6 +31,9 @@ export type Call =
   | { kind: "authComplete"; query: string }
   | { kind: "authPassword"; email: string; password: string; deviceName: string | null }
   | { kind: "signOut"; account: string }
+  | { kind: "appleBegin" }
+  | { kind: "appleComplete"; attempt: string; identityToken: string; authorizationCode: string; name: string | null; state: string | null }
+  | { kind: "deletionSummary"; account: string }
   | { kind: "deleteAccount"; account: string }
   | { kind: "op"; op: ops.Request }
   | { kind: "profileModels"; op: ops.Request; id: string; models: unknown }
@@ -186,6 +189,8 @@ export function counts(call: Call, name: string): boolean {
     case "signOut":
     case "deleteAccount":
     case "authBegin":
+    case "appleBegin":
+    case "appleComplete":
     case "authPassword":
     case "stationMeasure":
       return true;
@@ -323,6 +328,18 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
     }
     case "auth.signOut":
       return { kind: "signOut", account: read(params, [["account", S, "req"]]).account as string };
+    case "auth.appleBegin":
+      return { kind: "appleBegin" };
+    case "auth.appleComplete": {
+      const p = read(params, [["attempt", S, "req"], ["identityToken", S, "req"], ["authorizationCode", S, "req"], ["name", S, "opt"], ["state", S, "opt"]]);
+      const attempt = p.attempt as string, identityToken = p.identityToken as string, authorizationCode = p.authorizationCode as string;
+      const name = p.name as string | null, state = p.state as string | null;
+      const size = (s: string) => new TextEncoder().encode(s).length;
+      if (size(attempt) !== 43 || size(identityToken) < 1 || size(identityToken) > 4096 || size(authorizationCode) < 1 || size(authorizationCode) > 4096 || (name !== null && size(name) > 120)) throw CoreError.invalid(t("core-logic.accounts.apple.params_invalid"));
+      return { kind: "appleComplete", attempt, identityToken, authorizationCode, name, state };
+    }
+    case "auth.deletionSummary":
+      return { kind: "deletionSummary", account: read(params, [["account", S, "req"]]).account as string };
     case "auth.deleteAccount":
       return { kind: "deleteAccount", account: read(params, [["account", S, "req"]]).account as string };
     case "client.error": {
