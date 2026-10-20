@@ -9,10 +9,16 @@ priv struct Held {
   mut held : Double
   mut last : Double
   mut used : Int
+  /// when it will have held (its wake), while it runs; -1 when off or done
+  mut due : Double
 }
 
 ///|
 let helds : Map[Int, Held] = {}
+
+///|
+/// What a wait's time added up frame by frame may fall short of its length by, from rounding, and still have held.
+let held_slack_ms : Double = 0.001
 
 ///|
 /// When each thing marked happened (Ctx::mark), by its id.
@@ -40,7 +46,7 @@ pub fn Ctx::held(
       if !on {
         return false
       }
-      let w = { held: 0.0, last: -1.0, used: 0 }
+      let w = { held: 0.0, last: -1.0, used: 0, due: -1.0 }
       helds[id] = w
       w
     }
@@ -49,6 +55,7 @@ pub fn Ctx::held(
   self.sweep_helds()
   if !on {
     w.last = -1.0
+    w.due = -1.0
     if !keep {
       w.held = 0.0
     }
@@ -58,11 +65,25 @@ pub fn Ctx::held(
     w.held = w.held + (self.now - w.last)
   }
   w.last = self.now
-  if w.held >= ms {
+  // (at its wake it has held: the time added up a frame at a time comes to `ms` short by a rounding at most, and that
+  // is not a frame more to wait)
+  if w.held >= ms - held_slack_ms {
+    w.due = -1.0
     true
   } else {
+    w.due = self.now + (ms - w.held)
     self.wake_in(ms - w.held, later~, loc~)
     false
+  }
+}
+
+///|
+/// When the wait `key` (Ctx::held, asked in this scope this frame) will have held: the time of its wake, while it
+/// runs; -1 when it is off (paused) or has held.
+pub fn Ctx::held_due(self : Ctx, key : String) -> Double {
+  match helds.get(self.id("\u{2}after/" + key)) {
+    Some(w) => w.due
+    None => -1.0
   }
 }
 

@@ -87,8 +87,11 @@ pub fn toaster(
   let open : Array[Toast] = []
   let mut acted : String? = None
   let drawn : Array[Toast] = []
+  // (when the next of them goes, as this frame has it: toast_due)
+  let mut due = -1.0
   if order.is_empty() {
     kept.drawn = drawn
+    kit.val.toast_dues.remove(key)
     return { open, acted }
   }
   // the time stops while the pointer is over one or the focus is in one
@@ -111,6 +114,10 @@ pub fn toaster(
         let mut dx = 0.0
         if live {
           let mut away = after(c, k, !paused, duration, keep=true, later=true)
+          let d = c.held_due(k)
+          if d >= 0.0 && (due < 0.0 || d < due) {
+            due = d
+          }
           // the swipe: followed while held, put away past a third or quick, else back
           match c.drag_of(tid) {
             Some(d) => {
@@ -176,6 +183,11 @@ pub fn toaster(
   })
   |> ignore
   kept.drawn = drawn
+  if due >= 0.0 {
+    kit.val.toast_dues[key] = due
+  } else {
+    kit.val.toast_dues.remove(key)
+  }
   { open, acted }
 }
 
@@ -256,9 +268,19 @@ pub fn toast_button(c : @ui.Ctx, key : String, text : String, label : String, ro
 }
 
 ///|
+/// When the next of `key`'s toasts (toaster) goes, its time out, as the last frame had it: the frames' clock; -1 when
+/// none shows, or each is paused (the pointer over them, the focus in one). A toast's time is a wake said `later` (what
+/// is shown does not wait for it): what goes on to it by name, as a run's end goes on to every time told (a toast left
+/// on screen at the end not decided by where the end's last frame happens to fall).
+pub fn toast_due(key : String) -> Double {
+  kit.val.toast_dues.get(key).unwrap_or(-1.0)
+}
+
+///|
 /// When the toasts of `key` (toaster) have done moving, those going away among them (their exit by `presence`): the
 /// frames' clock; -1 when none moves, +inf when one is told and has not started. What a test runs to after a toast
-/// goes (its time out, closed, swiped). Its time on screen is a timer, not a motion: `run_for` the toaster's duration.
+/// goes (its time out, closed, swiped). Its time on screen is a timer, not a motion: toast_due, or `run_for` the
+/// toaster's duration.
 pub fn toast_rest(key : String) -> Double {
   @ui.rest_of("\u{2}presence/" + key + "/")
 }

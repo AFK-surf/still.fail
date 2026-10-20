@@ -432,3 +432,34 @@ test "toasts: one gone (its time out) is drawn going away until its rest (toast_
   assert_eq(toast_rest("toasts"), -1.0)
   t.assert_idle()
 }
+
+///|
+test "toasts: toast_due says when the next goes (its time out), none while paused; at it, it goes and its exit begins" {
+  let list : Ref[Array[Toast]] = Ref([])
+  let life = 2600.0
+  let t = @ui.Tester::new(fn(c) { list.val = toaster(c, "toasts", list.val, duration=life).open })
+  assert_eq(toast_due("toasts"), -1.0)
+  list.val = [toast("a", "Saved")]
+  t.draw()
+  let shown = t.time()
+  assert_true((toast_due("toasts") - (shown + life)).abs() < 0.001, msg="\{toast_due("toasts")}")
+  // (not a wake what is shown waits for)
+  t.run_for(presence_in_ms)
+  assert_eq(t.next_wake(), None)
+  // paused under the pointer: none due
+  let (x, y, w, h) = t.get(@ui.Status, label="Saved").rect
+  t.move(x + w / 2.0, y + h / 2.0)
+  assert_eq(toast_due("toasts"), -1.0)
+  t.move(1.0, 1.0)
+  // going on again: what was left of its time from here (none of it went while paused)
+  let due = toast_due("toasts")
+  assert_true(due > t.time() && due < shown + life + presence_in_ms + 100.0, msg="\{due}")
+  t.run_for(due - t.time())
+  assert_eq(list.val.length(), 0)
+  assert_eq(toast_due("toasts"), -1.0)
+  let rest = toast_rest("toasts")
+  assert_true(rest > t.time() && rest < @double.infinity)
+  t.run_for(rest - t.time())
+  assert_eq(t.all(@ui.Status).length(), 0)
+  t.assert_idle()
+}
