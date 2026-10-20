@@ -15,8 +15,15 @@ def calm(v):
         return {k: ("…" if VOLATILE.match(k) else calm(x)) for k, x in sorted(v.items())}
     if isinstance(v, list):
         return [calm(x) for x in v]
-    if isinstance(v, str) and re.fullmatch(r"\d{6}", v):
-        return "…"
+    if isinstance(v, str):
+        # a run's own: its mark, the workspace's and stations' ids (a fresh local still.fail makes new ones), ports
+        v = re.sub(r"\b[0-9A-HJKMNP-TV-Z]{26}\b", "<ws>", v)
+        v = re.sub(r"\b[0-9a-f]{64}\b", "<st>", v)
+        v = re.sub(r"ember(%3A|:)c-[0-9a-f]{10}", "<session>", v)
+        v = re.sub(r"127\.0\.0\.1:\d+", "127.0.0.1:<port>", v)
+        v = re.sub(r"message=\d+", "message=<n>", v)
+        if re.fullmatch(r"\d{6}", v):
+            return "…"
     return v
 
 
