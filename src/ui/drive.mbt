@@ -43,9 +43,9 @@
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
 //   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
-//                               value) answered since the last step that acted (or the run began), and a frame
-//                               drawn after it, within the timeout; each such line an answer of its own: two
-//                               `answered CALL` after one step wait for two answers, not one twice
+//                               value) answered, and a frame drawn after it, within the timeout: the run's k-th
+//                               `answered CALL` line its k-th answer, counted from the run's start (one come before
+//                               the step that acted ahead of the line is as good), each line an answer of its own
 //   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded,
 //                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
@@ -90,7 +90,11 @@ priv struct Driver {
   // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
   // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
   mut mark : Int
-  // how many answers of each call (`answered CALL`) the steps since the last that acted have waited on already
+  // the answers come of each call since the run began (`answered CALL`), by its name, counted up to the ended wait
+  // `counted` (each frame, and before a step that acts takes its mark: Runtime::outside_ended lets go of what came
+  // before), and how many of them the run's `answered` lines have taken
+  answers : Map[String, Int]
+  mut counted : Int
   answers_taken : Map[String, Int]
   // whether the host watches the runner's directory (`done`), and what the runner said it has done, by name
   watching : Bool
@@ -173,6 +177,8 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     gms: 0.0,
     shot_at: -1.0,
     mark: runtime().outside_ended(),
+    answers: {},
+    counted: runtime().outside_ended(),
     answers_taken: {},
     watching,
     runner_done,
@@ -493,8 +499,8 @@ fn drive_steps(c : Ctx) -> Unit {
     // a step that acted: its input's frames come next; what it set off from outside is counted from here
     let acted = fn() {
       next()
+      d.count_answers()
       d.mark = runtime().outside_ended()
-      d.answers_taken.clear()
     }
     match cmd {
       "" => next()
@@ -537,8 +543,13 @@ fn drive_steps(c : Ctx) -> Unit {
         // what it names ended since the step began (an answer: one no earlier line took), and a frame drawn after the
         // one that saw it
         let taken = if cmd == "answered" { d.answers_taken.get(arg).unwrap_or(0) } else { 0 }
-        if d.seen_frame < 0 &&
-          runtime().outside_ended_since(d.mark).iter().filter(fn(w) { outside_named(cmd, arg, w) }).count() > taken {
+        let come = if cmd == "answered" {
+          d.count_answers()
+          d.answers.get(arg).unwrap_or(0) > taken
+        } else {
+          runtime().outside_ended_since(d.mark).iter().any(fn(w) { outside_named(cmd, arg, w) })
+        }
+        if d.seen_frame < 0 && come {
           d.seen_frame = c.frame_no
         }
         if d.seen_frame >= 0 && c.frame_no > d.seen_frame {
@@ -955,6 +966,24 @@ fn key_named(name : String) -> (Int, Int)? {
     _ => return None
   }
   Some((code, mods))
+}
+
+///|
+/// The core's answers ended since they were last counted, counted by their call's name ("core: NAME (call N)", a
+/// subscription's "core: KEY").
+fn Driver::count_answers(self : Driver) -> Unit {
+  let come = runtime().outside_ended_since(self.counted)
+  for w in come {
+    if w.has_prefix("core: ") {
+      let rest = w.unsafe_substring(start=6, end=w.length())
+      let name = match rest.find(" (call ") {
+        Some(i) => rest.unsafe_substring(start=0, end=i)
+        None => rest
+      }
+      self.answers[name] = self.answers.get(name).unwrap_or(0) + 1
+    }
+  }
+  self.counted = self.counted + come.length()
 }
 
 ///|

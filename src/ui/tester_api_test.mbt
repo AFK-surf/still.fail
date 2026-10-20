@@ -285,6 +285,27 @@ test "a scripted run's answered lines each wait for an answer of their own: two 
 }
 
 ///|
+test "a scripted run's answered line takes an answer come before the step that acted ahead of it" {
+  // the core answers x.get in the run's first frame (the Tester's second), before the tap the line comes after acts
+  // (once its words hold still, a frame on)
+  let frames = Ref::new(0)
+  let t = @ui.Tester::new(fn(c) {
+    frames.val += 1
+    if frames.val == 2 {
+      let rt = @ui.runtime()
+      rt.outside_end(rt.outside_start("core: x.get (call 1)"))
+    }
+    c.text("page", wrap=false) |> ignore
+  })
+  let log = t.drive("timeout 500\ntap page\nanswered x.get\nexit")
+  // (the answer came before the tap)
+  let tap = log.search_by(fn(l) { l.has_prefix("DRIVE tap page") }).unwrap()
+  assert_true(frames.val > 2 && tap >= 0, msg=log.join("\n"))
+  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok answered x.get") }), msg=log.join("\n"))
+  assert_true(log.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=log.join("\n"))
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")
