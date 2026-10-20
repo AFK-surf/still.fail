@@ -14,7 +14,7 @@ import { Tooltip } from "radix-ui";
 import { ToastProvider } from "@stillfail/ui/toast.tsx";
 import { MobileWorkspace } from "../mobile/index.tsx";
 import { WorkspaceShell, type WorkspaceEntry } from "../cloud/workspace.tsx";
-import { CoreClient, type Topic } from "../core/client.ts";
+import { CoreClient, CoreError, type Topic } from "../core/client.ts";
 import type { ModelOption } from "../api.ts";
 import type { ChatItem, ChatMessage, ComposerLink, SearchView, ShareInView } from "../core/shapes.ts";
 import { setCore, setTopicSource } from "../core/react.ts";
@@ -43,6 +43,7 @@ let post: (message: unknown) => void = () => undefined;
  * demo's own: a topic's value or a call's answer, undefined for the demo's. The site adds none.
  */
 export interface DemoExtension {
+  /** A `CoreError` instead: the topic fails as the core would say (a cloud from before without it, say). */
   topic?(topic: Topic): unknown;
   /** The demo's own value for a topic, changed (or undefined: as it is). */
   then?(topic: Topic, value: unknown): unknown;
@@ -236,11 +237,18 @@ function shareOpen(source: string, station: string, id: string | undefined, titl
   return row ? { station, key, session: row.session, thread: row.thread, title: row.title } : { station, key };
 }
 
-// Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML).
-setTopicSource(valueOf);
+// Every topic starts at its value: the first render shows the demo at once (and so does the site built to HTML). One
+// that fails is loading until its error comes.
+setTopicSource((topic) => { const v = valueOf(topic); return v instanceof CoreError ? undefined : v; });
+
+/** A topic's value as the core sends it, or its error. */
+function said(id: number, topic: Topic): unknown {
+  const v = valueOf(topic);
+  return v instanceof CoreError ? { id, error: { code: v.code, message: v.message, ...(v.status !== undefined ? { status: v.status } : {}) } } : { id, value: v };
+}
 
 function publish() {
-  for (const [id, topic] of subs) post({ id, value: valueOf(topic) });
+  for (const [id, topic] of subs) post(said(id, topic));
 }
 
 // What the visitor sends is answered as an account its provider has banned would be: the turn fails, still.fail says why in
@@ -370,7 +378,7 @@ setCore(new CoreClient((onMessage) => {
       const message = raw as { id: number; subscribe?: Topic; unsubscribe?: boolean; call?: string; params?: Record<string, unknown>; cancel?: boolean };
       if (message.subscribe) {
         subs.set(message.id, message.subscribe);
-        post({ id: message.id, value: valueOf(message.subscribe) });
+        post(said(message.id, message.subscribe));
       } else if (message.unsubscribe) {
         subs.delete(message.id);
       } else if (message.cancel) {

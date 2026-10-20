@@ -15,6 +15,7 @@ import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
+import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -95,6 +96,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const path = url.pathname;
   const method = request.method;
   if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+
+  // ── the relays on machines of their own: their counters, a minute apart (relay-load.ts) ──
+  if (path === "/v1/relays/load" && method === "POST") return receiveLoad(request, env);
 
   // ── stations, authenticated by their own key ────────────────────────────
   // Enrolling moves the station to the token's workspace, out of any other; joining (docs/multi-workspace.md) adds that
@@ -364,6 +368,8 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
     return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
   }
+  // How loaded the relays are (relay-load.ts).
+  if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);
   if (revoke && method === "POST") return directory(() => dir.revokeInviteCode(revoke[1]!));
   return notFound();

@@ -74,6 +74,7 @@ export const TOPICS: Record<string, Spec> = {
   adminList: { account: S, list: S, query: ["string", "def"], filter: ["string", "skip"], sort: ["string", "skip"], limit: ["u32", "skip"] },
   adminItem: { account: S, list: S, id: S },
   adminOverview: { account: S },
+  adminRelays: { account: S, range: ["string", "skip"] },
   chats: { scope: S, mine: ["bool", "def"], watching: ["bool", "skipFalse"] },
   stations: { scope: S },
   profiles: { scope: S },
@@ -183,7 +184,7 @@ export function sameTopic(a: Topic, b: Topic): boolean {
 }
 
 const STATION_TOPICS = new Set(["link", "overview", "sessions", "host", "footprint", "net", "way", "threads", "chatRows", "jobs", "archivedRows", "stationUsage", "session", "live", "thread", "slackApp", "jobLog", "drive", "screens", "screenCard", "machineLogins", "machineLogin", "machineLoginScreen", "stationSearch"]);
-const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEWS = new Set(["chats", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "chatSearch", "search", "archive", "chatJobs", "imageNear", "longJobs", "workspaceMarks", "decisions", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// The station a station topic belongs to; null for the account topics, the core's own and the views.
 export function topicStation(topic: Topic): string | null {

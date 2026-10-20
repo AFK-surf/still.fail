@@ -153,3 +153,47 @@ export const todo = style({
 globalStyle(`${todo} > svg`, { marginLeft: "auto", flex: "none", color: vars.subtle });
 export const todoText = style({ fontWeight: "500" });
 export const todoHint = style({ fontSize: vars.textMeta, color: vars.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+
+// ── the relays: a card each (pages.css.ts card), its numbers, its load over time ──
+export const relays = style({});
+/** None to show: under the title, on its line (only the bottom margin: the page's column centres it, mid). */
+export const relaysNone = style({ marginTop: "0", marginBottom: "0", fontSize: vars.textUi, color: vars.muted });
+export const relay = style({ gap: "18px" });
+export const relayHead = style({ display: "flex", alignItems: "center", gap: "8px", minWidth: "0", fontSize: vars.textUi, lineHeight: "22px" });
+globalStyle(`${relayHead} > b`, { fontWeight: "600", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const relaySeen = style({ marginLeft: "auto", flex: "none", fontSize: vars.textMeta, color: vars.subtle, whiteSpace: "nowrap" });
+/** Its numbers side by side, as wide as each one's value, wrapping onto more lines where the card is narrow. */
+export const relayNumbers = style({
+  margin: "0", display: "flex", flexWrap: "wrap", gap: "12px 32px",
+  "@media": { [NARROW]: { columnGap: "24px" } },
+});
+globalStyle(`${relayNumbers} dt`, { fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" });
+globalStyle(`${relayNumbers} dd`, { margin: "0", fontSize: vars.textHeading, lineHeight: "30px", fontWeight: "600", whiteSpace: "nowrap" });
+globalStyle(`${relayNumbers} dd[data-tone=amber]`, { color: vars.amber });
+globalStyle(`${relayNumbers} dd[data-tone=red]`, { color: vars.red });
+
+// A series' colour, by its place in the chart (the first blue, the second the accent), for its line, wash and key.
+export const seriesFirst = style({ vars: { "--series": vars.blue } });
+export const seriesSecond = style({ vars: { "--series": vars.accent } });
+export const loadChart = style({ margin: "0", display: "grid", gap: "8px", minWidth: "0" });
+export const loadHead = style({
+  display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "4px 12px", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted,
+});
+globalStyle(`${loadHead} > b`, { fontSize: vars.textUi, fontWeight: "500", color: vars.text });
+/** A series' name, its colour only in the short line before it (words stay in the text's colours). */
+export const legend = style({
+  display: "inline-flex", alignItems: "center", gap: "6px", whiteSpace: "nowrap",
+  selectors: { "&::before": { content: "''", width: "12px", height: "2px", borderRadius: "1px", background: "var(--series)" } },
+});
+export const peak = style({ marginLeft: "auto", color: vars.subtle, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" });
+export const plot = style({ height: "96px", minWidth: "0" });
+globalStyle(`${plot} > svg`, { display: "block", width: "100%", height: "100%", overflow: "visible" });
+globalStyle(`${plot} g`, { color: "var(--series)" });
+/** The foot (0) and the top (the peak): hairlines. */
+export const rule = style({ stroke: vars.line, strokeWidth: 1 });
+export const wash = style({ fill: "currentColor", fillOpacity: 0.1, stroke: "none" });
+export const trace = style({ fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinejoin: "round", strokeLinecap: "round" });
+export const ticks = style({ position: "relative", height: "16px", fontSize: vars.textCaption, lineHeight: "16px", color: vars.subtle, fontVariantNumeric: "tabular-nums" });
+globalStyle(`${ticks} > span`, { position: "absolute", top: "0", transform: "translateX(-50%)", whiteSpace: "nowrap" });
+globalStyle(`${ticks} > span[data-edge=start]`, { transform: "none" });
+globalStyle(`${ticks} > span[data-edge=end]`, { transform: "translateX(-100%)" });

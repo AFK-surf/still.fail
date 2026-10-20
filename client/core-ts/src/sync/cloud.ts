@@ -241,22 +241,23 @@ export class CloudSync {
         return;
       }
       this.#admins.add(sub);
-      yield* Effect.all(
-        ADMIN_LISTS.map((list) =>
-          Effect.gen({ self: this }, function* () {
-            const topic: Topic = { topic: "admin", account: sub, list };
-            const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/admin/${list}`, null));
-            if (answer._tag === "Success") {
-              this.errors.delete(topicKey(topic));
-              core.data.set(topic, answer.success);
-            } else if (core.data.get(topic) === undefined) {
-              this.errors.set(topicKey(topic), answer.failure);
-              core.store.invalidate(topic);
-            }
-          }),
-        ),
-        { concurrency: "unbounded" },
-      );
+      yield* Effect.all(ADMIN_LISTS.map((list) => this.adminList(sub, list)), { concurrency: "unbounded" });
+    });
+  }
+
+  /// One of an operator's lists read again (`/v1/admin/<list>`); what was read before stays when it fails.
+  adminList(sub: string, list: string): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      const core = this.#core;
+      const topic: Topic = { topic: "admin", account: sub, list };
+      const answer = yield* Effect.result(core.provider.request(sub, "GET", `/v1/admin/${list}`, null));
+      if (answer._tag === "Success") {
+        this.errors.delete(topicKey(topic));
+        core.data.set(topic, answer.success);
+      } else if (core.data.get(topic) === undefined) {
+        this.errors.set(topicKey(topic), answer.failure);
+        core.store.invalidate(topic);
+      }
     });
   }
 

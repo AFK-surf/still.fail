@@ -19,6 +19,8 @@ export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
+export { RelayLoad } from "./relay-load";
+import { sampleOwnRelay } from "./relay-load";
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -57,6 +59,10 @@ export default {
     const { response, notes } = takeNotes(await handle(request, env));
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
+  },
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts).
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sampleOwnRelay(env));
   },
 } satisfies ExportedHandler<Env>;
 

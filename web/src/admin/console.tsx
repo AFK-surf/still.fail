@@ -4,13 +4,13 @@
 // the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
 import type { CoreError, Topic } from "../core/client.ts";
-import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Ticket, Users } from "@stillfail/ui/icons.tsx";
+import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Server, Ticket, Users } from "@stillfail/ui/icons.tsx";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Segmented, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
 import { Prose } from "../Prose.tsx";
@@ -81,6 +81,23 @@ type FeedbackPage = Timed & {
   /** All of it as plain text, to hand to an agent. */
   text: string;
 };
+type Range = "day" | "week";
+type RelaysView = {
+  range: Range;
+  ranges: { id: Range; label: string }[];
+  relays: Relay[];
+};
+type Relay = {
+  url: string; name: string;
+  state: "online" | "offline" | "error";
+  /** When it was last heard from, said for people ("1 分钟前更新"). */
+  seen: string;
+  numbers: { label: string; value: string; tone?: "amber" | "red" }[];
+  charts: RelayChart[];
+  /** Where times are marked along the charts: `index` a bucket's. */
+  ticks: { index: number; label: string }[];
+};
+type RelayChart = { id: string; label: string; peak: string; series: { id: string; label: string; values: (number | null)[] }[] };
 type Overview = {
   stats: { label: string; value: number; note: string; list: List; filter: string }[];
   weeks: { count: number; label: string }[];
@@ -115,6 +132,7 @@ export function Console({ account }: { account: Account }) {
           <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
           <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />{t("web-pages.cloud.inviteCode")}</NavLink>
           <NavLink className={nav.navRow} to="/feedback"><Said {...ICON} />{t("web-pages.admin.feedback")}</NavLink>
+          <NavLink className={nav.navRow} to="/relays"><Server {...ICON} />{t("web-pages.admin.relays")}</NavLink>
         </div>
         <div className={`${nav.navFootRow} ${css.adminFoot}`}>
           <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
@@ -129,6 +147,7 @@ export function Console({ account }: { account: Account }) {
           <Route path="workspaces/:id?" element={<ListPage account={account} list="workspaces" />} />
           <Route path="codes" element={<ListPage account={account} list="invite-codes" />} />
           <Route path="feedback/:id?" element={<ListPage account={account} list="feedback" />} />
+          <Route path="relays" element={<RelaysPage account={account} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -188,6 +207,112 @@ function OverviewPage({ account }: { account: Account }) {
       </>}
     </div>
   );
+}
+
+// ── the relays ──────────────────────────────────────────────────────────
+
+/** still.fail's relays, a card each: how each stands, its numbers, and its load over the range picked (in the URL). */
+function RelaysPage({ account }: { account: Account }) {
+  const [params, setParams] = useSearchParams();
+  const range = params.get("range") === "week" ? "week" : undefined;
+  const { value: view, error } = useKept<RelaysView>({ topic: "adminRelays", account: account.sub, ...(range ? { range } : {}) });
+  const pick = (to: Range) => setParams((p) => { const next = new URLSearchParams(p); if (to === "day") next.delete("range"); else next.set("range", to); return next; }, { replace: true });
+  // A still.fail cloud from before has none.
+  const none = error?.status === 404 || view?.relays.length === 0;
+  return (
+    <div className={`${pagesCss.page} ${css.mid}`}>
+      <MobileBack to="/" label={t("web-pages.admin.title")} />
+      <header className={pagesCss.pageHead}>
+        <div><h1>{t("web-pages.admin.relays")}</h1></div>
+        {view && view.ranges.length > 1 && (
+          <Segmented<Range> label={t("web-pages.admin.relays.range")} value={view.range} onChange={pick} options={view.ranges.map((r) => ({ value: r.id, label: r.label }))} />
+        )}
+      </header>
+      {none ? <p className={css.relaysNone}>{t("web-pages.admin.relays.none")}</p> : <Failed error={error} />}
+      {!view ? !error && <Waiting shape="cards" count={3} /> : !none && (
+        <div className={css.relays}>{view.relays.map((r) => <RelayCard key={r.url} relay={r} />)}</div>
+      )}
+    </div>
+  );
+}
+
+function RelayCard({ relay }: { relay: Relay }) {
+  return (
+    <section className={`${pagesCss.card} ${css.relay}`} aria-label={relay.name}>
+      <div className={css.relayHead}>
+        <StatusDot state={relay.state} />
+        <b>{relay.name}</b>
+        <span className={css.relaySeen}>{relay.seen}</span>
+      </div>
+      {relay.numbers.length > 0 && (
+        <dl className={css.relayNumbers}>
+          {relay.numbers.map((n) => (
+            <div key={n.label}><dt>{n.label}</dt><dd data-tone={n.tone}>{n.value}</dd></div>
+          ))}
+        </dl>
+      )}
+      {relay.charts.map((c) => <LoadChart key={c.id} chart={c} ticks={relay.ticks} />)}
+    </section>
+  );
+}
+
+/** Each series' line, in a fixed order (the first blue, the second the accent): the same series the same colour in every chart. */
+const SERIES = [css.seriesFirst, css.seriesSecond];
+
+/**
+ * One chart of a relay's load: a line for each series (a lone one with a faint wash under it: two washes over each
+ * other only muddy), from 0 at the foot to the highest value of any of its series at the top (its peak, said above
+ * it); a gap where a bucket has no value.
+ */
+function LoadChart({ chart, ticks }: { chart: RelayChart; ticks: Relay["ticks"] }) {
+  const n = Math.max(1, ...chart.series.map((s) => s.values.length));
+  const top = Math.max(0, ...chart.series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
+  // Drawn in a box 0–100 across (stretched to the chart's width; the lines keep their width) and 0–100 down.
+  const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
+  const y = (v: number) => (top > 0 ? 100 - (v / top) * 100 : 100);
+  return (
+    <figure className={css.loadChart} aria-label={`${chart.label} · ${chart.peak}`}>
+      <figcaption className={css.loadHead}>
+        <b>{chart.label}</b>
+        {chart.series.length > 1 && chart.series.map((s, i) => <span key={s.id} className={`${css.legend} ${SERIES[i % SERIES.length]}`}>{s.label}</span>)}
+        <span className={css.peak}>{chart.peak}</span>
+      </figcaption>
+      <div className={css.plot}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <line className={css.rule} x1="0" x2="100" y1="0" y2="0" vectorEffect="non-scaling-stroke" />
+          <line className={css.rule} x1="0" x2="100" y1="100" y2="100" vectorEffect="non-scaling-stroke" />
+          {chart.series.map((s, i) => {
+            const runs = stretches(s.values);
+            return (
+              <g key={s.id} className={SERIES[i % SERIES.length]}>
+                {chart.series.length === 1 && <path className={css.wash} d={runs.map((r) => `M${x(r.from)} 100${r.values.map((v, k) => `L${x(r.from + k)} ${y(v)}`).join("")}L${x(r.from + r.values.length - 1)} 100Z`).join("")} />}
+                <path className={css.trace} vectorEffect="non-scaling-stroke"
+                  d={runs.map((r) => `M${x(r.from)} ${y(r.values[0]!)}${r.values.length === 1 ? "h0" : r.values.slice(1).map((v, k) => `L${x(r.from + k + 1)} ${y(v)}`).join("")}`).join("")} />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className={css.ticks} aria-hidden="true">
+        {ticks.map((tk) => {
+          const at = x(tk.index);
+          return <span key={tk.index} style={{ left: `${at}%` }} data-edge={at < 3 ? "start" : at > 97 ? "end" : undefined}>{tk.label}</span>;
+        })}
+      </div>
+    </figure>
+  );
+}
+
+/** A series' values in the stretches between its gaps (null). */
+function stretches(values: (number | null)[]): { from: number; values: number[] }[] {
+  const out: { from: number; values: number[] }[] = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    const last = out.at(-1);
+    if (last && last.from + last.values.length === i) last.values.push(v);
+    else out.push({ from: i, values: [v] });
+  });
+  return out;
 }
 
 // ── the lists ───────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { t } from "../i18n.ts";
 import type { Topic } from "../protocol.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, compareKeys, get as getU, toJson } from "../util.ts";
+import { relays } from "./admin-relays.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -28,6 +29,8 @@ export function sources(view: Topic): Topic[] {
       return [of(view.account, "workspaces"), of(view.account, "users")];
     case "adminOverview":
       return [of(view.account, "users"), of(view.account, "workspaces"), of(view.account, "invite-codes"), of(view.account, "feedback")];
+    case "adminRelays":
+      return [of(view.account, "relays")];
   }
   return [];
 }
@@ -710,6 +713,11 @@ export function admin(view: Topic, read: (account: string, list: string) => Valu
       if (w === undefined || "err" in w) return w;
       const users = okOr(read(account, "users"));
       return attempt(() => workspace(id, w.ok, users, now));
+    }
+    case "adminRelays": {
+      const v = read(account, "relays");
+      if (v === undefined || "err" in v) return v;
+      return attempt(() => relays(v.ok, (view.range as string) ?? null, now, offsetMin));
     }
     case "adminOverview": {
       const users = read(account, "users");

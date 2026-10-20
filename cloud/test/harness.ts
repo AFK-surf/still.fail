@@ -48,6 +48,11 @@ export async function harness(
     /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
     reviewAccounts?: string;
     relayUrl?: string;
+    /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
+    relayUrls?: string;
+    relayNames?: Record<string, string>;
+    /** What relays send their counters with (RELAY_LOAD_TOKEN): one made now unless given. */
+    relayLoadToken?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -90,7 +95,8 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret();
+    adminToken = randomSecret(),
+    relayLoadToken = options.relayLoadToken ?? randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -157,9 +163,12 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
+        RELAY_LOAD_TOKEN: relayLoadToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
+        ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
+        ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
@@ -167,7 +176,10 @@ export async function harness(
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
-      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
+      durableObjects: {
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
+      },
       outboundService: async (request) => {
         const url = new URL(request.url);
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
@@ -317,6 +329,7 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
+    relayLoadToken,
     signingKey,
     codes,
     mails,
