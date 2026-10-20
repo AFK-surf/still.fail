@@ -29,10 +29,9 @@ test "35-station-rename" {
     // 已重命名 said for its time from the frame that took the last rename's answer (settings' act: said as it is
     // answered, which may come after the name is shown), then gone
     let from = f.answer_taken("workspace.renameStation")
-    let left = @sfapp.toast_ms - (f.t.time() - from)
-    if left > 0.0 {
-      f.run_for(left)
-    }
+    assert_true(from >= 0.0)
+    f.see("已重命名")
+    f.run_for(@sfapp.toast_ms - (f.t.time() - from))
     // (its time out at the last frame: it starts going with the one after)
     f.t.draw()
     f.run_to_rest("toast")

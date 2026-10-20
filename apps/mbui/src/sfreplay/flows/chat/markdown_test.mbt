@@ -16,21 +16,35 @@ test "74-markdown" {
     f.gone("正在发送")
     f.see("聊天页的列表和输入框")
     f.see("placeRows")
-    // (the post all done: its 归档 under it coming in, its room opening, the list gliding to its end after what came:
-    // all at rest before the code is dragged)
-    let rest = [f.t.rest_of("under/"), f.t.rest_of("glide")].fold(init=-1.0, fn(a, b) { if b > a { b } else { a } })
+    // (the post all done: its 归档 under it coming in, its room opening, the list gliding to its end after what came,
+    // the composer letting go of the room it held for the words sent (composer_hold): all at rest before the code is
+    // dragged)
+    let rest = [f.t.rest_of("under/"), f.t.rest_of("glide"), f.t.rest_of("composer/")].fold(init=-1.0, fn(a, b) {
+      if b > a {
+        b
+      } else {
+        a
+      }
+    })
     if rest > f.t.time() {
       f.run_to(rest)
     }
     let x0 = f.t.locate("placeRows")[0].0
-    assert_true(f.t.at_end())
+    let y0 = f.t.locate("聊天页的列表和输入框")[0].1
+    let field0 = f.t.get(@ui.Role::TextField)
+    assert_true(field0.focused)
     f.drag("placeRows", -220.0, 0.0, steps=30)
     // the code scrolled sideways under the finger (its words gone left, or out of its box), not the list
     let after = f.t.locate("placeRows")
     assert_true(after.length() == 0 || after[0].0 < x0)
-    // (the list at its end still: the field let go of with the touch, the composer smaller, the list following its
-    // end down as it would, not scrolled by the finger)
-    assert_true(f.t.at_end())
+    // the touch on the list lets go of the field: the composer closes to its one row, the field lower in it, a line as
+    // tall as before; the list keeps the room of an opened composer (composer_room_for), so its words stay where they
+    // were: the page does not jump
+    let field1 = f.t.get(@ui.Role::TextField)
+    assert_true(!field1.focused)
+    assert_eq(field1.rect.3, field0.rect.3)
+    assert_true(field1.rect.1 > field0.rect.1)
+    assert_true(f.t.locate("聊天页的列表和输入框")[0].1 == y0)
     f.hold("example.com/e2e", @ui.long_press_ms)
     f.see("=复制链接")
     f.tap("=复制链接")

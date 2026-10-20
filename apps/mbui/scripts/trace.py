@@ -37,6 +37,9 @@ for line in open(src, encoding="utf-8", errors="replace"):
             ev["env"]["MBUI_CORE_ACCOUNT"] = json.dumps(scrub(json.loads(ev["env"]["MBUI_CORE_ACCOUNT"])), ensure_ascii=False, separators=(",", ":"))
         except ValueError:
             ev["env"]["MBUI_CORE_ACCOUNT"] = "-"
+    # (a sign-in's callback, its code in it: not kept)
+    if isinstance(ev.get("env"), dict) and "MBUI_AUTH_COMPLETE" in ev["env"]:
+        ev["env"]["MBUI_AUTH_COMPLETE"] = "-"
     # (a frame the host kept, whole: what the app uploads of it is compared with it)
     if "still" not in ev and len(ev.get("b", "")) > MAX_BYTES * 2:
         # (how many there were kept: a part read comes as that many, so what reads on asks for the next)
