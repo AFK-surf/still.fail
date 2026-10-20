@@ -1003,7 +1003,7 @@ fn reader_text_key(c : @ui.Ctx, key : String, label : String, p : PaperInk, on :
     padx=12.0,
     pady=6.0,
     // (上一章 and 下一章 stand in the bar's top corners: as far from both edges, concentric with it)
-    radius=@sf.concentric(reader_bar_radius, reader_bar_inset),
+    radius=@ui.concentric(reader_bar_radius, reader_bar_inset),
     bg=@sf.alpha(p.ink, if on && c.pressed(id) { 0.12 } else if on { 0.07 } else { 0.04 }),
     id=if on { id } else { 0 },
     fn() {

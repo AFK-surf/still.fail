@@ -743,7 +743,7 @@ fn Player::controls(
         c.box(
           h=Px(speed_h),
           min_w=44.0,
-          radius=@sf.concentric(bar_radius, speed_inset),
+          radius=@ui.concentric(bar_radius, speed_inset),
           padx=8.0,
           bg=if p.speed != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
           align=ACenter,

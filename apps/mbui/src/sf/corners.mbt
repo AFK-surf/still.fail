@@ -1,17 +1,7 @@
 // still.fail's corner rule (docs/ui-panels.md, "所有带圆角的东西"): what lies in a rounded container's corner stands as
-// far from its two edges, and its own corner is the container's less that distance (concentric). The one place that
-// works it out: a corner inside another is written as `concentric(outer, inset)`, never as a number of its own.
-
-///|
-/// The corner of what stands `inset` in from both edges of a container rounded `outer`: concentric with it (never
-/// below 0).
-pub fn concentric(outer : Double, inset : Double) -> Double {
-  if outer > inset {
-    outer - inset
-  } else {
-    0.0
-  }
-}
+// far from its two edges, and its own corner is concentric with the container's: `@ui.concentric(outer, inset)` (mbui's
+// smooth corners, Corners.kt's: the inset over 1.25), never a number of its own. A circle or a capsule there is round
+// and not smoothed: the container is drawn round it.
 
 ///|
 /// The corner of a container whose corner holds a whole circle (or a capsule) of `inner` radius `inset` in from both

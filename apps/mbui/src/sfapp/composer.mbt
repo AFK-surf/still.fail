@@ -57,7 +57,7 @@ let composer_files_in : Double = composer_inset + files_row_top + picture_remove
 ///|
 /// The corner of what waits in the files' row (a picture's tile, a file's card).
 fn files_corner() -> Double {
-  @sf.concentric(composer_corner, composer_files_in)
+  @ui.concentric(composer_corner, composer_files_in)
 }
 
 ///|

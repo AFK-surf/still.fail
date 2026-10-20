@@ -20,12 +20,6 @@ let side_min : Double = 180.0
 let side_max : Double = 480.0
 
 ///|
-/// The web's corners are its tokens times its superellipse's 1.25 (global.css.ts --corner-scale).
-fn corner(r : Double) -> Double {
-  r * 1.25
-}
-
-///|
 /// What the wide frame keeps of its own (the rest is the stack's and the core's).
 priv struct Wide {
   /// the sidebar's width, and whether it is folded to the rail (⌘\)
@@ -298,7 +292,7 @@ fn rail(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Uni
         c.box(
           w=Px(30.0),
           h=Px(30.0),
-          radius=corner(9.0),
+          radius=9.0,
           bg=t.p.hover,
           align=ACenter,
           justify=JCenter,
@@ -352,7 +346,7 @@ fn rail_ground(c : @ui.Ctx, id : Int, on : Bool, body : (Int64) -> Unit) -> Unit
     c.box(
       w=Px(30.0),
       h=Px(30.0),
-      radius=corner(9.0),
+      radius=9.0,
       bg=if on {
         t.p.selected
       } else if hover {

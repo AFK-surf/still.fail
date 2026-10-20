@@ -175,7 +175,7 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String) -> Bool {
   c.box(
     w=Px(32.0),
     h=Px(32.0),
-    radius=corner(12.0),
+    radius=12.0,
     align=ACenter,
     justify=JCenter,
     bg=if hot { t.p.hover } else { 0L },

@@ -291,7 +291,7 @@ fn page_note(c : @ui.Ctx, words : String) -> Unit {
 
 ///|
 /// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
-/// edges: docs/ui-panels.md); what has a ground of its own there takes @sf.concentric(card_radius, card_pad).
+/// edges: docs/ui-panels.md); what has a ground of its own there takes @ui.concentric(card_radius, card_pad).
 let card_radius : Double = 20.0
 
 ///|
@@ -548,7 +548,7 @@ fn seg(
           c.box(
             w=Px(w),
             h=Px(h),
-            radius=@sf.concentric(radius, inset),
+            radius=@ui.concentric(radius, inset),
             bg=thumb,
             border=0.5,
             border_color=t.p.line,
