@@ -8,10 +8,11 @@ test "12-offline-retry" {
     f.tap("端到端测试")
     f.run_for(@ui.nav_push_ms)
     f.see("=studio")
-    // (the station out of reach, then back: a live run's steps beside the app, scripts/e2e-local.sh)
-    f.peer("freeze")
     f.tap("发消息")
     f.type_text("断网时发出的消息 082947")
+    // (the station out of reach as it goes, before the app knows it: a live run's step beside the app; once it knows,
+    // the composer is locked, Composer.kt's `locked = offline || archived`)
+    f.peer("freeze")
     f.tap("icon:arrow-up")
     f.run_for(@sfapp.flight_ms)
     f.see("未发送")
