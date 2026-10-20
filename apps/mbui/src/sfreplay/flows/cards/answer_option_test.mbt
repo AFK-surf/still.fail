@@ -19,8 +19,10 @@ test "22-answer-option" {
     f.see("=一起换 083209")
     f.tap("=一起换 083209")
     f.see("选择了")
-    // the options gone, 你 选择了「…」 in their place: their motions to their end (in a scripted run too: the list
-    // back at its end as the room closes, told to the core)
+    // the options gone, 你 选择了「…」 in their place: their motions (from the chat's change saying the card decided,
+    // which may come after the message quoting it) to their end, in a scripted run too (the list back at its end as
+    // the room closes, told to the core)
+    f.until_moving("under-look/options/") |> ignore
     f.run_to(@sfapp.under_rest())
     f.gone("=先不换 083209")
     // the answer handed to the agent, its turn on it to its end (the fake's own posts nothing: the station says so),
