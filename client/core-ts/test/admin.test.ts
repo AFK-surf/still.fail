@@ -159,15 +159,18 @@ test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
     relays: [
       { url: "https://app.still.fail", name: "Cloudflare", at: now - 30, now: { sent: 14_336, recv: 2048, dropped: 0.021, rx: null, tx: null }, open: 71, load1: null, today: { bytes: 4.5 * 1024 ** 3, frames: 1000 }, limits: { bytes: 5 * 1024 ** 3, frames: 20_000_000 }, day: day((i) => (i < 5 ? null : 2048)), week },
       { url: "https://47.76.247.168", name: "香港", at: now - 3600, now: null, open: null, load1: null, today: { bytes: 0, frames: 0 }, day: day(() => null), week },
-      { url: "https://39.105.157.122", name: "北京", at: null, now: { sent: 0, recv: 0, dropped: 0.3, rx: 50_000, tx: 64_000 }, open: 2, load1: 0.04, today: { bytes: 0, frames: 0 }, day: day(() => 0), week },
+      { url: "https://39.105.157.122", name: "北京", at: now - 10, now: { sent: 0, recv: 0, dropped: 0.3, rx: 50_000, tx: 64_000 }, open: 2, load1: 0.04, today: { bytes: 0, frames: 0 }, day: day(() => 0), week },
+      { url: "https://relay.example", name: "深圳", at: null, now: null, open: null, load1: null, today: { bytes: 0, frames: 0 }, day: day(() => null), week },
     ],
   };
   const v = relays(answer, null, now, 480);
   assert.equal(v.range, "day");
   assert.deepEqual(v.ranges.map((r: J) => r.label), ["24 小时", "7 天"]);
-  const [cf, hk, bj] = v.relays;
-  assert.deepEqual([cf.state, hk.state, bj.state], ["online", "offline", "error"]);
-  assert.deepEqual([cf.seen, hk.seen, bj.seen], ["刚刚更新", "1 小时前更新", "暂无数据"]);
+  const [cf, hk, bj, sz] = v.relays;
+  assert.deepEqual([cf.state, hk.state, bj.state, sz.state], ["online", "offline", "online", "error"]);
+  assert.deepEqual([cf.seen, hk.seen, sz.seen], ["刚刚更新", "1 小时前更新", "暂无数据"]);
+  // Never heard from: nothing but that.
+  assert.deepEqual([sz.numbers, sz.charts, sz.ticks], [[], [], []]);
   assert.deepEqual(cf.numbers, [
     { label: "发送", value: "14 KB/s" },
     { label: "接收", value: "2.0 KB/s" },

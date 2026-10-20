@@ -38,9 +38,12 @@ function ticks(start: number, step: number, count: number, range: Range, offsetM
 }
 
 function relay(r: J, range: Range, now: number, offsetMin: number) {
+  const url = String(get(r, "url") ?? ""), name = String(get(r, "name") ?? get(r, "url") ?? "");
   const at = num(r, "at");
-  const state = at === null ? "error" : now - at <= FRESH ? "online" : "offline";
-  const seen = at === null ? t("core-views.admin.relay.never") : t("core-views.admin.relay.seen", { when: format.relativeTime(at * 1000, now * 1000, offsetMin) });
+  // Never heard from (its timer not set up yet): nothing to show but that.
+  if (at === null) return { url, name, state: "error", seen: t("core-views.admin.relay.never"), numbers: [], charts: [], ticks: [] };
+  const state = now - at <= FRESH ? "online" : "offline";
+  const seen = t("core-views.admin.relay.seen", { when: format.relativeTime(at * 1000, now * 1000, offsetMin) });
   const current = get(r, "now");
   const numbers: { label: string; value: string; tone?: "amber" | "red" }[] = [];
   const sent = num(current, "sent"), recv = num(current, "recv");
@@ -74,8 +77,8 @@ function relay(r: J, range: Range, now: number, offsetMin: number) {
   const start = num(s, "start") ?? 0, step = num(s, "step") ?? 1;
   const sentSeries = values(s, "sent"), recvSeries = values(s, "recv"), openSeries = values(s, "open");
   return {
-    url: String(get(r, "url") ?? ""),
-    name: String(get(r, "name") ?? get(r, "url") ?? ""),
+    url,
+    name,
     state,
     seen,
     numbers,
