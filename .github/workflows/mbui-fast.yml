@@ -1,0 +1,57 @@
+# still.fail mbui's four packages on GitHub's own (free) runners, the way to three minutes from a push: first what the
+# builds take there as they are (no signing, nothing put), each step timed by the run itself.
+name: mbui-fast
+on:
+  push:
+    branches: [mbui-ci-3min]
+  workflow_dispatch:
+concurrency:
+  group: mbui-fast-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ./.github/actions/setup
+      - name: MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+      - name: mbui at mbui.rev
+        run: sh apps/mbui/scripts/mbui.sh
+      - name: The Android engine and shell, prebuilt
+        run: |
+          node scripts/native.ts fetch engine android-arm64
+          node scripts/native.ts fetch shell android-arm64
+      - name: The core's packages
+        run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
+      - name: APK (APP=stillfail, release, unsigned key)
+        run: APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build 2>&1 | tail -30
+
+  mac:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+      - name: mbui at mbui.rev
+        run: sh apps/mbui/scripts/mbui.sh
+      - name: The core's packages
+        run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
+      - name: Rust (the core's shell)
+        run: rustup target add aarch64-apple-darwin aarch64-apple-ios
+      - name: The macOS app (built, ad hoc signed)
+        run: EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build 2>&1 | tail -30
