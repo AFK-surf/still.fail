@@ -115,7 +115,7 @@ fn usage_tiles(c : @ui.Ctx, v : Json?) -> Unit {
           let tv = Some(tile)
           c.box(w=Fill(1.0), padx=16.0, pady=14.0, radius=18.0, bg=t.p.card, fn() {
             c.text(text(tv, "label"), size=12.0, color=t.p.muted, wrap=false, line=17.0) |> ignore
-            c.text(text(tv, "value"), size=22.0, weight=700, color=t.p.text, wrap=false, line=30.0) |> ignore
+            c.text(text(tv, "value"), style=@sf.title.then(@sf.one_line)) |> ignore
             c.text(
               if first && k == 0 {
                 tr("android-misc.usage.seePrices")

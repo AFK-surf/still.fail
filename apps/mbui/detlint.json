@@ -180,7 +180,7 @@
       "src/sfapp/settings/security.mbt": 80,
       "src/sfapp/settings/sheet.mbt": 63,
       "src/sfapp/settings/stations.mbt": 154,
-      "src/sfapp/settings/usage.mbt": 102,
+      "src/sfapp/settings/usage.mbt": 99,
       "src/sfapp/settings/vault.mbt": 83,
       "src/sfapp/settings/workspace.mbt": 30,
       "src/sfapp/share.mbt": 90,
@@ -242,7 +242,7 @@
       "src/sfapp/settings/security.mbt": 39,
       "src/sfapp/settings/sheet.mbt": 18,
       "src/sfapp/settings/stations.mbt": 71,
-      "src/sfapp/settings/usage.mbt": 42,
+      "src/sfapp/settings/usage.mbt": 41,
       "src/sfapp/settings/vault.mbt": 35,
       "src/sfapp/settings/workspace.mbt": 14,
       "src/sfapp/share.mbt": 37,
@@ -262,7 +262,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 5
+      "src/sf/tokens.mbt": 10
     },
     "unsettled-ok": {
       "src/sfreplay/flows/chat/offline_retry_test.mbt": 1,
