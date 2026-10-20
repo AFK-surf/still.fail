@@ -16,6 +16,8 @@ test "74-markdown" {
     f.gone("正在发送")
     f.see("聊天页的列表和输入框")
     f.see("placeRows")
+    // (the post all done: its 归档 under it coming in, its room opening: at rest before where the rows are is taken)
+    f.run_to_rest("under/")
     let x0 = f.t.locate("placeRows")[0].0
     let y0 = f.t.locate("聊天页的列表和输入框")[0].1
     f.drag("placeRows", -220.0, 0.0, steps=30)
