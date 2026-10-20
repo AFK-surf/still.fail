@@ -81,25 +81,60 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
 }
 
 ///|
-/// Rows on one quiet card (ChatInfo.kt InfoList): 14 round, the ink at 5%.
+/// A sheet's side margin (Android ChatInfo.kt, AgentSheet.kt: padding(start = 18.dp, end = 18.dp)).
+let sheet_side : Double = 18.0
+
+///|
+/// What is under a fitted sheet's last card. Android: its column's padding(bottom = …) (ChatInfo.kt 30.dp,
+/// AgentSheet.kt 24.dp), the sheet then made taller by the navigation bar (Sheet.kt: fit + foot, foot
+/// WindowInsets.navigationBars). mbui draws inside the system bars (its Android host's view is set in by them,
+/// MainActivity's onApplyWindowInsets), so that part is outside what it draws: the padding alone.
+let chat_info_foot : Double = 30.0
+
+///|
+let agent_sheet_foot : Double = 24.0
+
+///|
+/// A row of an info card, its ground under the finger: Android ChatInfo.kt INFO_ROW (14.dp).
+let info_row_radius : Double = 14.0
+
+///|
+/// An info card round its rows, INFO_PAD (6.dp) in: Android ChatInfo.kt InfoList, Smooth(concentricOut(INFO_ROW,
+/// INFO_PAD)).
+let info_list_radius : Double = @sf.concentric_out(info_row_radius, 6.0)
+
+///|
+/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.
+// kept across runs: a value (no field of it changes)
+let info_list_style : @ui.Style = @ui.style(w=Full, p=S1_5, bg=A(Fg, O5), clip=true)
+
+///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), radius=14.0, bg=@sf.alpha(t.p.text, 0.05), clip=true, body) |> ignore
+  c.box(style=info_list_style, radius=info_list_radius, body) |> ignore
 }
 
 ///|
-/// A row of it (InfoRow): 12 in, 10 above and under, what it holds 12 apart; pressed, a shade. True on the frame after
-/// it was tapped (never when `key` is "": a row that leads nowhere).
-fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = ACenter) -> Bool {
+/// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
+/// top and bottom, what it holds 12 apart.
+// kept across runs: a value (no field of it changes)
+let info_row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S2_5, py=S1, gap=S3)
+
+///|
+/// A row that leads with a tile (a model's mark, 36 and 11 round): INFO_IN (4) in all round, so the tile is
+/// concentric with the row and the card.
+// kept across runs: a value (no field of it changes)
+let info_row_tile : @ui.Style = @ui.style(px=S1)
+
+///|
+/// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
+/// that leads nowhere).
+fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = ACenter, tile? : Bool = false) -> Bool {
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
+  let look = if tile { info_row_style.then(info_row_tile) } else { info_row_style }
   c.box(
-    dir=Row,
-    w=Fill(1.0),
-    padx=12.0,
-    pady=10.0,
-    gap=12.0,
-    align~,
+    style=look.then(@ui.style(align~)),
+    radius=info_row_radius,
     bg=if id != 0 && c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     body,
@@ -396,16 +431,8 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
   }
   let slack = text(chat, "slackUrl")
   let xshare = field(chat, "xshare")
-  let rows = dmax(agents.length().to_double(), 1.0) * 56.0 +
-    (
-      (if pinned is Some(_) { 1.0 } else { 0.0 }) +
-      (if slack != "" { 1.0 } else { 0.0 }) +
-      (if xshare is Some(_) { 1.0 } else { 0.0 }) +
-      2.0
-    ) *
-    40.0
-  let tall = 22.0 + 84.0 + rows + 10.0 + 30.0
-  sheet_frame(c, "info", tall, fn() {
+  // as tall as what it shows (ChatInfo.kt openChatInfo: SheetSpec(0.55f, fit)), its share until it is laid out
+  sheet_frame(c, "info", c.height * 0.55, fit=true, fn() {
     let (archived, offline) = match view {
       Some(v) => (v.archived, v.offline)
       None => (false, false)
@@ -415,7 +442,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
     let thread = field(chat, "thread")
     let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
     let title = text(chat, "title")
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=30.0, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=chat_info_foot, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
         c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
           c.text(title, size=18.0, weight=700, color=t.p.text, line=24.0) |> ignore
@@ -518,7 +545,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   None => field(field(av, "profile"), "quota")
                 })
                 chevron(c)
-              }) {
+              }, tile=true) {
               open_sheet(c, AgentOf(r, key))
             }
           }
@@ -719,22 +746,13 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
   let a = agent_json(chat, key)
   let card = (src.topic)("agentCard", { "station": Json::string(r.station), "key": Json::string(key) }).value
   let jobs = items(a, "jobs")
-  let notes = items(card, "attention").length()
-  let turns = items(a, "turns").length() > 0
-  let rows = 3.0 + (if jobs.length() > 0 { 1.0 } else { 0.0 })
-  let tall = 22.0 +
-    52.0 +
-    (if turns { 72.0 + 76.0 } else { 0.0 }) +
-    (if notes > 0 { 8.0 + notes.to_double() * 20.0 } else { 0.0 }) +
-    12.0 +
-    rows * 40.0 +
-    24.0
   let stations = stations_of((src.topic)("stations", { "scope": Json::string(w.id) }).value)
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
-  sheet_frame(c, "agent", tall, fn() {
+  // as tall as what it shows (AgentSheet.kt: SheetSpec(0.55f, fit)), its share until it is laid out
+  sheet_frame(c, "agent", c.height * 0.55, fit=true, fn() {
     let s = field(a, "session")
     let status = text(a, "status")
-    c.box(w=Fill(1.0), pl=18.0, pr=18.0, pb=24.0, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=agent_sheet_foot, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
         model_mark_big(
           c,

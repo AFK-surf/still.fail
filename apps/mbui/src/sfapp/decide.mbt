@@ -695,24 +695,44 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
 }
 
 ///|
+/// What a fitted sheet shows, as wide as it and as tall as what it holds (measured for the sheet's height).
+// kept across runs: a value (no field of it changes)
+let sheet_fitted : @ui.Style = @ui.style(w=Full)
+
+///|
 /// A sheet from the bottom (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%) closing it when tapped;
-/// the sheet `tall` high (its share of the screen, or as tall as what it shows, at most 90%), its top corners 26
-/// round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the sheet's spring, drawn only
-/// as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet: one asked in place of
-/// another goes to its height.
-fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit) -> Unit {
-  ignore(key)
+/// the sheet `tall` high (its share of the screen), or with `fit` as tall as what it shows (SheetSpec fit), at most
+/// 90%; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the
+/// sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet:
+/// one asked in place of another goes to its height.
+fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit, fit? : Bool = false) -> Unit {
   let leaving = dui.sheet is None
+  // fitted: what it shows as laid out (the frame before); `tall`, its share, until that is known
+  let fit_key = "sheet-fit/" + key
+  let h = match (fit, @motion.measured(c, fit_key)) {
+    (true, Some(m)) => m
+    _ => tall
+  }
   let r = @kit.sheet(
     c,
     "decide-sheet",
     !leaving,
-    h=dmin(tall, c.height * 0.9),
+    h=dmin(h, c.height * 0.9),
     scrim=@sf.sheet_scrim,
     look=@sf.sheet_look(),
     fn() {
-      sheet_grab(c)
-      body()
+      if fit {
+        // laid out at what it needs, kept for the next frame's height
+        let shown = c.box(style=sheet_fitted, fn() {
+          sheet_grab(c)
+          body()
+        })
+        @motion.measure(c, shown, fit_key)
+      } else {
+        // its share: what it shows may fill it (a list scrolling in it)
+        sheet_grab(c)
+        body()
+      }
     },
   )
   if !leaving && !r.open {
