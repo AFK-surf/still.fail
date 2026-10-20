@@ -60,7 +60,7 @@ pub let paragraph : @ui.TextStyle = @ui.text_style(size=Lg, leading=L7, color=Fg
 
 ///|
 /// Back in a bar: where it goes back to, in a link's ink (17/23.8: Parts.kt:491 NavBack, C.link).
-pub let back : @ui.TextStyle = @ui.text_style(size=Xl2, color=AccentText, wrap=false)
+pub let back : @ui.TextStyle = @ui.text_style(size=Xl2, color=Link, wrap=false)
 
 ///|
 /// A compact bar's title, on one line (16/22.4, semibold: Parts.kt:527 NavBar).
@@ -88,8 +88,8 @@ pub let one_line : @ui.TextStyle = @ui.text_style(wrap=false)
 pub let accent : @ui.TextStyle = @ui.text_style(color=Accent)
 
 ///|
-/// A link's words: the accent's ink, darker than the accent on paper (Theme.kt link).
-pub let link : @ui.TextStyle = @ui.text_style(color=AccentText)
+/// A link's words (Theme.kt C.link: the accent's darker ink on paper, the accent in the dark: ui_theme's `link`).
+pub let link : @ui.TextStyle = @ui.text_style(color=Link)
 
 ///|
 /// Quieter still than `quiet` (the subtle grey).
