@@ -600,7 +600,8 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
         MakerIcon(s.maker, s.runtime, 15.dp)
         Text(s.model?.let { s.modelName ?: it } ?: t("android-chat.pick.model"), fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
         Text(
-            " · ${s.effort ?: t("android-chat.pick.effort.default")} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
+            // No effort where the runtime sets none (Cursor).
+            "${if (s.effort != null || s.efforts.isNotEmpty()) " · ${s.effort ?: t("android-chat.pick.effort.default")}" else ""} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         QuotaRings(agent.account?.quota)
@@ -667,9 +668,12 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                     from?.let { o -> o.fromStation?.let { ModelFrom(it, o.fromText) } }
                 }
             }
-            GroupLabel(t("android-chat.run.effort.title"))
-            Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
-            EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            // No efforts where the runtime sets none (Cursor).
+            if (v.efforts.isNotEmpty()) {
+                GroupLabel(t("android-chat.run.effort.title"))
+                Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+                EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            }
             if (v.fastAvailable == true) {
                 GroupLabel(t("android-chat.run.label.speed"))
                 Text(t("android-chat.run.speed.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))

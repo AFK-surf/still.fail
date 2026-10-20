@@ -632,8 +632,11 @@ fun ConnectRunScreen(station: String, id: String) {
                     from?.let { o -> o.fromStation?.let { ModelFrom(it, o.fromText) } }
                 }
             }
-            GroupLabel(t("android-settings.run.effort"))
-            EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
+            // No efforts where the runtime sets none (Cursor).
+            if (efforts.isNotEmpty()) {
+                GroupLabel(t("android-settings.run.effort"))
+                EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
+            }
             GroupLabel(t("android-settings.run.account"))
             SettingRow(onClick = { list = "account" }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink)
