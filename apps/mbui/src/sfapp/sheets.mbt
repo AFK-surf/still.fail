@@ -273,19 +273,19 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
         Some(sec) => {
           // at its most it stands still
           if now - from < sec * second_ms {
-            wake_next_second(c, now - from)
+            each_second(c)
           }
           elapsed(dmin(now, from + sec * second_ms) - from) + " / " + elapsed(sec * second_ms)
         }
         None => {
-          wake_next_second(c, now - from)
+          each_second(c)
           elapsed(now - from)
         }
       }
     }
     _ => {
       let from = since.unwrap_or(now)
-      wake_next_second(c, now - from)
+      each_second(c)
       elapsed(now - from)
     }
   }

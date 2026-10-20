@@ -16,6 +16,9 @@ test "12-offline-retry" {
     f.tap("=重试")
     f.gone("未发送")
     f.gone("正在发送")
-    f.end(unsettled_ok="a motion said is not at rest（重试那条之后 agent 这一轮录到结尾还在跑）；sfapp/messages.mbt:1583 运行时长每秒一个 wake（等 app 迁移）")
+    // the agent's activity row opening as its turn runs on: to its end, as it set out (its clock comes again each
+    // second for as long as it shows: Ctx::every, not waited for)
+    f.run_to(f.t.rest_of("open/"))
+    f.end()
   })
 }
