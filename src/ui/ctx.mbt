@@ -643,6 +643,9 @@ pub fn Ctx::box(
   n.clip = first(clip, st.clip).unwrap_or(false)
   n.tx = tx
   n.ty = ty
+  // (placed by its own size only when told so this frame, Ctx::place_by_size: a slot a menu was placed in last
+  // frame is not where a box built there now goes)
+  n.place = None
   n.opacity = first(
     opacity,
     match st.opacity {

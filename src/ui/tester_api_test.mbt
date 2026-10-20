@@ -383,6 +383,33 @@ test "a scripted run taps words only where a finger reaches them: not under what
 }
 
 ///|
+test "a box built where a box placed by its size was the frame before is where it is laid out, not placed the same" {
+  // the first frame: a menu's box placed by its size (at 50, 60); the next: a plain box built in its slot
+  let menu = Ref::new(true)
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        if menu.val {
+          let i = c.box(id=c.id("menu"), w=Px(40.0), h=Px(20.0), fn() {  })
+          c.place_by_size(i, fn(_, _) { (50.0, 60.0) })
+        } else {
+          c.box(id=c.id("plain"), w=Px(40.0), h=Px(20.0), fn() {  }) |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=200.0,
+  )
+  let (mx, my, _, _) = t.ctx().rect_of(t.ctx().id("menu")).unwrap()
+  assert_eq((mx, my), (50.0, 60.0))
+  menu.val = false
+  t.frame()
+  let (px, py, _, _) = t.ctx().rect_of(t.ctx().id("plain")).unwrap()
+  assert_eq((px, py), (0.0, 0.0))
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")
