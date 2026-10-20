@@ -72,7 +72,7 @@ priv struct DriveUi {
   mut sort_set : String?
   mut hidden_set : Bool?
   /// a file being picked to go up, and where to
-  mut picking : @host.Pick?
+  mut picking : @ui.Pick?
   mut picking_for : DriveAt
   /// what is asked for in an Ask sheet, the folder picker's place and filter
   mut asked : String

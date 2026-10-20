@@ -647,7 +647,7 @@ fn paste_preview(words : String) -> String {
 priv struct ComposerUi {
   mut attach : Bool
   mut attach_at : Double
-  mut picking : @host.Pick?
+  mut picking : @ui.Pick?
   mut picking_for : String
   /// the finger: down last frame, down first this frame, lifted this frame, where and when it went down, moved past
   /// the slop since (track_press)
@@ -1585,7 +1585,7 @@ fn attach_sheet(
   let t = @sf.theme()
   let ask = fn(kind : @host.PickKind) {
     cui.attach = false
-    match @host.pick(kind) {
+    match @ui.pick(kind) {
       Some(p) => {
         cui.picking = Some(p)
         cui.picking_for = d.key
@@ -1610,7 +1610,7 @@ fn attach_sheet(
     } else if i > 0 {
       cui.attach = false
       let pick = match recent.photos.get(i - 1) {
-        Some(photo) => @host.pick_photo(photo.src)
+        Some(photo) => @ui.pick_photo(photo.src)
         None => None
       }
       match pick {

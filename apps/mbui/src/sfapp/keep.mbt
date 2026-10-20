@@ -1,6 +1,6 @@
 // Files kept on the device (still.fail's Android app: FileKinds.kt download, DriveScreen.kt saveToDownloads,
 // saveZip, DriveFetches, Parts.kt DownloadChip): a drive's file fetched a part at a time through the core
-// (`drive.read`), each part handed to the host as it comes (@host.keep_begin: a file of its temporary directory, never
+// (`drive.read`), each part handed to the host as it comes (@ui.keep_begin: a file of its temporary directory, never
 // whole in memory), how far it has come on its row (n% in the accent's filling box), then kept where the system keeps
 // downloads (MediaStore's Downloads on Android, ~/Downloads on macOS, the Files sheet on iOS, Downloads on Windows):
 // 正在下载「名字」 as it starts, 已保存到「下载」 or 下载失败 once the host has answered, 无法获取「名字」：… when the
@@ -21,7 +21,7 @@ fn dv_fetch_key(station : String, root : String, path : String) -> String {
 ///|
 /// A keep the host has not answered yet, and its file's name.
 priv struct Keeping {
-  keep : @host.Keep
+  keep : @ui.Keep
   name : String
 }
 
@@ -60,7 +60,7 @@ fn keeps_frame(c : @ui.Ctx) -> Unit {
 /// Bytes all here (a chat's file the preview has read) kept: said once the host has answered; 下载失败 at once where
 /// the host keeps nothing.
 fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> Unit {
-  match @host.keep(name, mime, bytes) {
+  match @ui.keep(name, mime, bytes) {
     Some(k) => keepings.push({ keep: k, name })
     None => say(c, tr("android-chat.file.saveFailed"))
   }
@@ -133,7 +133,7 @@ fn download_drive_file(
   mime : String,
   row? : String,
 ) -> Unit {
-  match @host.keep_begin(name, mime) {
+  match @ui.keep_begin(name, mime) {
     None => say(c, tr("android-chat.file.saveFailed"))
     Some(k) =>
       drive_fetch(src, station, root, path, row?=row, fn(b) { k.append(b) }, fn(err) {
