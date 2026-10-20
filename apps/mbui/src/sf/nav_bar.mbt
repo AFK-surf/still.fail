@@ -8,33 +8,74 @@
 // at either side.
 
 ///|
+/// Back: a chevron and where to, 6 after it and 4 over and under, its corner 8; quieter while pressed.
+// kept across runs: a value (no field of it changes)
+let nav_back_box : @ui.Style = @ui.style(
+  row=true,
+  pr=S1_5,
+  pt=S1,
+  pb=S1,
+  radius=Lg,
+  align=ACenter,
+  pressed=@ui.patch(opacity=O60),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=nav_back_size, color=Accent, wrap=false)
+
+///|
+/// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
+// kept across runs: a value (no field of it changes)
+let nav_bar_box : @ui.Style = @ui.style(w=Full, pl=S2_5, pr=S4, pt=S1_5, pb=S2_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_bar_inner : @ui.Style = @ui.style(w=Full, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_title_column : @ui.Style = @ui.style(pl=nav_title_clear, pr=nav_title_clear, align=ACenter)
+
+///|
+/// The title's first line and back and what is at the end: one 32 line, each in its middle.
+// kept across runs: a value (no field of it changes)
+let nav_line : @ui.Style = @ui.style(h=S8, justify=JCenter, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_title_words : @ui.TextStyle = @ui.text_style(size=nav_title_size, weight=Semibold, color=Fg, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_sub_row : @ui.Style = @ui.style(row=true, gap=nav_sub_gap, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_ends : @ui.Style = @ui.style(row=true, w=Full, h=S8, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let nav_trailing : @ui.Style = @ui.style(row=true, h=S8, align=ACenter)
+
+///|
 /// Back, in the accent: a chevron and where to (Parts.kt NavBack); its word no wider than `max_w` when it is said.
 /// True on the frame after it was tapped.
 pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
   let t = theme()
   let id = c.id(key)
-  c.box(
-    dir=Row,
-    pr=6.0,
-    pt=4.0,
-    pb=4.0,
-    radius=8.0,
-    align=ACenter,
-    opacity=if c.pressed(id) { 0.6 } else { 1.0 },
-    id~,
-    fn() {
+  // its styles' tokens in still.fail's theme, whatever page it is on (only settings' pages put it round them)
+  c.with_theme(ui_theme(), fn() {
+    c.box(style=nav_back_box, id~, fn() {
       icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
       if max_w > 0.0 {
-        c.box(max_w~, fn() {
-          c.text(label, size=17.0, color=t.p.accent, wrap=false) |> ignore
-        })
-        |> ignore
+        c.box(style=@ui.style(max_w=Fixed(max_w)), fn() { c.text(label, style=nav_back_words) |> ignore }) |> ignore
       } else {
-        c.text(label, size=17.0, color=t.p.accent, wrap=false) |> ignore
+        c.text(label, style=nav_back_words) |> ignore
       }
-    },
-  )
-  |> ignore
+    })
+    |> ignore
+  })
   c.clicked(id)
 }
 
@@ -51,29 +92,43 @@ pub fn nav_bar(
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
 ) -> Bool {
-  let t = theme()
   let mut went = false
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg~, fn() {
-    c.box(w=Fill(1.0), align=ACenter, fn() {
+  c.with_theme(ui_theme(), fn() { went = nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~) })
+  went
+}
+
+///|
+fn nav_bar_in(
+  c : @ui.Ctx,
+  back_key : String,
+  back : String,
+  title : String,
+  sub? : () -> Unit,
+  trailing? : () -> Unit,
+  back_max~ : Double,
+  bg~ : Int64,
+) -> Bool {
+  let mut went = false
+  // det-ok(box-loose): the page's own ground (still.fail's palette, not one of mbui's theme roles yet), as the page has it
+  c.box(style=nav_bar_box, bg~, fn() {
+    c.box(style=nav_bar_inner, fn() {
       // the title, in the flow: as tall as its lines make the bar
-      c.box(pl=84.0, pr=84.0, align=ACenter, fn() {
-        c.box(h=Px(32.0), justify=JCenter, clip=true, fn() {
-          c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        })
-        |> ignore
+      c.box(style=nav_title_column, fn() {
+        c.box(style=nav_line, fn() { c.text(title, style=nav_title_words) |> ignore }) |> ignore
         match sub {
-          Some(f) => c.box(dir=Row, ty=-4.0, gap=5.0, align=ACenter, fn() { f() }) |> ignore
+          // its line drawn 4 up, under the title's (NavBar's offset)
+          Some(f) => c.box(style=nav_sub_row, ty=-4.0, fn() { f() }) |> ignore
           None => ()
         }
       })
       |> ignore
       // back and what is at the end, on the 32 line at its top
       c.layer(fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
+        c.box(style=nav_ends, fn() {
           went = nav_back(c, back_key, back, max_w=back_max)
           c.spacer()
           match trailing {
-            Some(f) => c.box(dir=Row, h=Px(32.0), align=ACenter, fn() { f() }) |> ignore
+            Some(f) => c.box(style=nav_trailing, fn() { f() }) |> ignore
             None => ()
           }
         })
