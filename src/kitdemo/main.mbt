@@ -7,7 +7,15 @@
 fn main {
   @host.window_setup(720.0, 520.0, 960.0, 720.0)
   let page = @ui.env("MBUI_SCREEN")
-  @ui.run("mbui kit", fn(c) { gallery(c, if page == "" { "foundation" } else { page }) })
+  // MBUI_TEXTCHECK=NAME: the kept run NAME's text asked of this host again (textcheck.mbt), in place of the gallery
+  let check = @ui.env("MBUI_TEXTCHECK")
+  @ui.run("mbui kit", fn(c) {
+    if check != "" {
+      text_check_run(c, check)
+    } else {
+      gallery(c, if page == "" { "foundation" } else { page })
+    }
+  })
 }
 
 ///|

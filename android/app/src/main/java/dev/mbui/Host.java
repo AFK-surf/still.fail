@@ -186,7 +186,37 @@ final class Host {
     }
 
     static void log(String s) {
+        java.io.Writer f = logFile;
+        if (f != null) {
+            synchronized (Host.class) {
+                try {
+                    f.write(s);
+                    f.write('\n');
+                    f.flush();
+                } catch (java.io.IOException e) {
+                    logFile = null;
+                }
+            }
+        }
         Log.i("mbui", s);
+    }
+
+    /**
+     * MBUI_LOG_FILE=NAME: the log also written, whole, to the app's files/NAME (a run's tape, MBUI_DRAW_LOG and
+     * MBUI_TEXT_RECORD: thousands of lines that logcat's ring would drop), each line there before logcat has it.
+     * Opened by MainActivity once the environment is set.
+     */
+    static volatile java.io.Writer logFile;
+
+    static void openLogFile(Context c) {
+        String name = android.system.Os.getenv("MBUI_LOG_FILE");
+        if (name == null || name.isEmpty() || logFile != null) return;
+        try {
+            logFile = new java.io.BufferedWriter(new java.io.OutputStreamWriter(
+                    new java.io.FileOutputStream(new java.io.File(c.getFilesDir(), name)), "UTF-8"));
+        } catch (java.io.IOException e) {
+            Log.i("mbui", "MBUI_LOG_FILE " + name + ": " + e);
+        }
     }
 
     static int benchMode() {

@@ -24,7 +24,8 @@
     "roots": [
       "src/ui",
       "src/kit",
-      "src/motion"
+      "src/motion",
+      "src/kitdemo"
     ]
   },
   "flows": [

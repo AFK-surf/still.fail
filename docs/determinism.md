@@ -82,8 +82,8 @@ Only for these, which the framework knows by itself:
 |---|---|---|---|
 | Tester (most) | state, interaction, what each screen draws | the state and the tree asserted; at a declared moment a screen's **draw list** compared (per host's kept text); `assert_idle` at the end | every PR, any machine |
 | renderer | draw list → pixels | each host draws draw lists **offscreen** (`mbui-render`): a fixed set, and the draw lists of real screens a Tester made, against that host's pixel references, to the byte | when the host's drawing changes, or a screen's draw list does |
-| host | a real host = the fake one | a real run's tape (DRAWHASH, INPUT, TEXTREC) given again in a Tester, frame by frame the same | when a host changes |
-| text | the kept text = the system's | each answer compared, recorded again when it changed | per host |
+| host | a real host = the fake one | a real run's tape (DRAWHASH, INPUT, TEXTREC) given again in a Tester, frame by frame the same | when a host changes (below) |
+| text | the kept text = the system's | each answer asked of the system again (`MBUI_TEXTCHECK`), compared; recorded again when it changed | per host (below) |
 | core | the kept conversation = the real core | the recorded asks put to a real core, its answers the same | now and then |
 | end to end | the whole way works; new tapes | waits only for named events; a failure's tape is seen again in a Tester | a few smoke runs |
 
@@ -127,6 +127,31 @@ Only for these, which the framework knows by itself:
 - **On screen = offscreen** is checked on Mini1 (scripts/render_check.sh), by still.fail's mbui CI on its own runner,
   when mbui is bumped there and the bump changes the macOS drawing
   (src/host/apple_render.m, apple_text.m): rarely.
+- **The host's and the text's contracts, host by host** (`scripts/host_contract.sh HOST build|record|text`):
+  `record` runs kitdemo's controls page on the host with test/host/controls.drive's four taps (the app's own script,
+  MBUI_DRIVE: an emulator's `adb input swipe` is not to be had), its tape on the log (MBUI_DRAW_LOG=1
+  MBUI_TEXT_RECORD=1), made a Tester's test by scripts/textrec_test.py and run in the same job: every frame's hash the
+  same, or it fails with the first frame as the host drew it (MBUI_DRAW_DUMP=1) beside the Tester's. `text` gives
+  kitdemo MBUI_TEXTCHECK=NAME (src/kitdemo/textcheck.mbt): every metrics, shaping, whole-word key and glyph box of the
+  kept run NAME asked of the host again, in the order the run first asked them (so the host hands out glyph keys and
+  atlas places in the same order), each answer written as the log writes it (its JSON) and compared to the kept one
+  to the character; what differs is listed, and the run fails saying how to record it again. A kept run is
+  `src/kitdemo/textrec_NAME.mbt` (its data, built into kitdemo so a host can ask it again) and
+  `textrec_NAME_wbtest.mbt` (its replay, in CI's test job with every kept run); `textrec_runs.mbt` names them all.
+
+  | host | where | host's contract | text's contract | kept run |
+  |---|---|---|---|---|
+  | Android | `host-android.yml`: an x86_64 emulator (API 34, google_apis, pixel_7; `ABI=x86_64` build) on ubuntu-24.04 | 9 frames the same | each answer the same | `android_controls` |
+  | Windows | `host-windows.yml`: windows-latest, WARP | 9 frames the same | each answer the same | `windows_controls` |
+  | web | `host-web.yml`: headless Chromium (SwiftShader's WebGL2) on ubuntu-24.04 | 9 frames the same | each answer the same | `web_controls` |
+  | macOS | `host-mac.yml`: Mini1 (mbui's runner, `[self-hosted, mbui-render]`; never a fork's pull request), a window | 9 frames the same (also on Studio, by hand) | each answer of `mini1_controls` the same (Mini1's own; Studio's text was the same too) | `mini1_*`, `drive_controls` (Mini1's) |
+
+  Each workflow runs when its host's code changes (the host's files in src/host, its scripts, these scripts, its kept
+  run). What a tape does not keep yet and a host must therefore have as a Tester plays it: the system's reduced motion
+  (`@host.reduce_motion`; Windows' runner has "Show animations" off, turned on before the run) and reduced
+  transparency, the system's dark, the window's inset. Kept by the framework (on DRAWHASH, given by `replay_frames`)
+  they would need no such care. The kitdemo pages' own state, which a kept run's test starts from, is put back by `reset`
+  (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
   placed is checked (a Tester's `views`).

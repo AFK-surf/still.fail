@@ -2,6 +2,7 @@ import {
   "mbui/host",
   "mbui/ui",
   "mbui/kit",
+  "moonbitlang/core/json",
 }
 
 options(

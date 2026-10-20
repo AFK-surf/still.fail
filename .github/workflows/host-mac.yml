@@ -1,0 +1,53 @@
+# The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh), on Mini1 (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
+# scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape Mini1 kept
+# (mini1_controls) asked of Core Text again (every answer the same). When the macOS host changes.
+name: host-mac
+on:
+  pull_request:
+    paths: &paths
+      - "src/host/apple_*"
+      - "src/host/apple.h"
+      - "src/host/mac_app.m"
+      - "scripts/mac.sh"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_mini1_*"
+      - ".github/workflows/host-mac.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: host-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit (the latest, as the other jobs)
+        run: |
+          export MOON_HOME=$RUNNER_TEMP/moon
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: kitdemo
+        run: scripts/host_contract.sh mac build
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        run: scripts/host_contract.sh mac record
+      - name: "The text's contract: mini1_controls = Core Text's"
+        run: scripts/host_contract.sh mac text
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-mac
+          path: out/host/
+          if-no-files-found: ignore

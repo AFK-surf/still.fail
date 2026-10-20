@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
                 }
             }
         }
+        Host.openLogFile(this);
         // MBUI_CLIPBOARD (MBUI_CLIPBOARD_REPEAT times): put on the clipboard as the app starts, for pasting in scripted
         // runs (adb can type but not copy)
         String clip = System.getenv("MBUI_CLIPBOARD");

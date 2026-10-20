@@ -1,0 +1,49 @@
+# The host's and the text's contracts in the browser (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh): kitdemo's controls page run in headless Chromium with its scripted taps, its tape made a Tester's
+# test and run here (every frame the same), then the committed tape's text (web_controls) asked of the browser's text
+# again (every answer the same). When the web host changes.
+name: host-web
+on:
+  pull_request:
+    paths: &paths
+      - "web/**"
+      - "src/host/host_js.mbt"
+      - "src/host/textref_js.mbt"
+      - "scripts/web.sh"
+      - "scripts/host-web.mjs"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_web_*"
+      - ".github/workflows/host-web.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+env:
+  MOON_HOME: ${{ github.workspace }}/../.moon
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: kitdemo for the browser, and Chromium
+        run: scripts/host_contract.sh web build
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        run: scripts/host_contract.sh web record
+      - name: "The text's contract: web_controls = the browser's text"
+        run: scripts/host_contract.sh web text
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-web
+          path: out/host/
+          if-no-files-found: ignore

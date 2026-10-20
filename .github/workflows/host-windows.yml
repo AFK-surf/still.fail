@@ -1,0 +1,79 @@
+# The host's and the text's contracts on Windows (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh): kitdemo's controls page run in a window with its scripted taps, its tape made a Tester's test and
+# run here (every frame the same), then the committed tape's text (windows_controls) asked of DirectWrite again (every
+# answer the same). When Windows' host changes.
+name: host-windows
+on:
+  pull_request:
+    paths: &paths
+      - "src/host/win_*"
+      - "src/host/win.h"
+      - "scripts/win.sh"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_windows_*"
+      - ".github/workflows/host-windows.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  contracts:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: MoonBit's latest release
+        id: moon
+        run: |
+          tag=$( { curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/moonbit-windows-x86_64.zip || true
+                   curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.zip || true; } \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
+          if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c)" = 4 ]; then
+            echo "key=moon-windows-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.moon.outputs.key != ''
+        uses: actions/cache@v4
+        id: moon-cache
+        with:
+          path: ~/.moon
+          key: ${{ steps.moon.outputs.key }}
+      - name: Install MoonBit
+        shell: pwsh
+        run: |
+          if ("${{ steps.moon-cache.outputs.cache-hit }}" -ne "true" -or -not (Test-Path "$env:USERPROFILE\.moon\bin\moon.exe")) {
+            irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          }
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: kitdemo
+        run: scripts/host_contract.sh windows build
+      # The runner's Windows has "Show animations in Windows" off (motion reduced: mb_host_reduce_motion), which the tape
+      # does not keep (a Tester plays motion as not reduced): turned on, as a desktop has it.
+      # 待根治：减弱动效、减弱透明、系统深色、窗口 inset 都还没进带子；确定性负责人正在让宿主把它们记进带子、由
+      # replay_frames 交还给 Tester。交还之后删掉这一步（那时带子自己记着宿主是否减弱动效）。
+      - name: The system's animations on
+        shell: pwsh
+        run: |
+          Add-Type -Namespace W -Name U -MemberDefinition '[DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, System.IntPtr c, uint d); [DllImport("user32.dll")] public static extern bool SystemParametersInfo(uint a, uint b, ref bool c, uint d);'
+          $on = $false; [W.U]::SystemParametersInfo(0x1042, 0, [ref]$on, 0) | Out-Null; "client area animation before: $on"
+          [W.U]::SystemParametersInfo(0x1043, 0, [System.IntPtr]1, 3) | Out-Null
+          $on = $false; [W.U]::SystemParametersInfo(0x1042, 0, [ref]$on, 0) | Out-Null; "after: $on"
+          if (-not $on) { exit 1 }
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        run: scripts/host_contract.sh windows record
+      - name: "The text's contract: windows_controls = DirectWrite's"
+        run: scripts/host_contract.sh windows text
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-windows
+          path: out/host/
+          if-no-files-found: ignore
