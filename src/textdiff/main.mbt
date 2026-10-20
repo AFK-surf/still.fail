@@ -19,8 +19,11 @@ priv struct Row {
 ///|
 priv struct State {
   mut page : Int
-  // the page drawn, its pictures due at the frame its time is up at (textdiff_page_ms later)
+  // the page drawn, its pictures due at the frame its time is up at (textdiff_page_ms later); taken, the page still
+  // drawn in that frame (a host whose window's picture is the frame drawn next: Android, a browser), the next page at
+  // the frame after
   mut drawn : Bool
+  mut taken : Bool
   // rows of each page: the first and the end, made for the window's height
   starts : Array[Int]
   mut laid_h : Double
@@ -286,17 +289,27 @@ fn view(c : @ui.Ctx, rows : Array[Row], st : State) -> Unit {
     st.laid_h = c.height
     st.page = 0
     st.drawn = false
+    st.taken = false
     @host.log(
       "TXD start {\"rows\":\{rows.length()},\"pages\":\{st.starts.length() - 1},\"w\":\{num(c.width)},\"h\":\{num(c.height)},\"scale\":\{num(c.scale)},\"platform\":\{@host.platform()}}",
     )
   }
   let pages = st.starts.length() - 1
-  // the page the frame before drew is on the window (as drawn last): its pictures, then the next page
-  if st.drawn {
+  // the page the frame before drew is on the window (as drawn last): its pictures, and this frame draws it again (the
+  // window's picture is this frame's where the host takes the one drawn next: ref_frame); the next page at the frame
+  // after
+  if st.drawn && !st.taken {
     @host.ref_frame("p\{st.page}-mbui") |> ignore
     draw_native(c, rows, st.page, st.starts[st.page], st.starts[st.page + 1])
+    st.taken = true
+    draw_page(c, rows, st.starts[st.page], st.starts[st.page + 1])
+    c.wake_in(textdiff_page_ms)
+    return
+  }
+  if st.taken {
     st.page = st.page + 1
     st.drawn = false
+    st.taken = false
   }
   if st.page >= pages {
     @host.log("TXD done")
@@ -312,7 +325,7 @@ fn view(c : @ui.Ctx, rows : Array[Row], st : State) -> Unit {
 ///|
 fn main {
   let rows = corpus_rows(@ui.env("MBUI_TEXTDIFF_ONLY"))
-  let st = { page: 0, drawn: false, starts: [], laid_h: -1.0 }
+  let st = { page: 0, drawn: false, taken: false, starts: [], laid_h: -1.0 }
   @ui.run("textdiff", fn(c) {
     // drawn in the colours Core Text's side is (iOS's)
     c.set_theme(@ui.Theme::ios_light())
