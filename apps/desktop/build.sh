@@ -1,6 +1,7 @@
 #!/bin/sh
-# Builds the desktop app for macOS arm64, signed with the Apple Development certificate in the login keychain
-# (so macOS keeps its Local Network grant across updates).
+# Builds the desktop app for macOS arm64, signed with package.json's build.mac.identity (so macOS keeps its Local
+# Network grant across updates) in the hardened runtime (entitlements.mac.plist); with a Developer ID it is notarized
+# (after-sign.cjs, in .github/mac_signing.py's keychain), so Gatekeeper lets it open downloaded.
 # Only the Mach-O files are signed one by one (package.json build.mac.signIgnore skips the rest: Electron's .pak and
 # .dat, the web app's assets, which the app's own signature seals anyway); signing each, with Apple's timestamp, made a
 # release take some fifty minutes.
@@ -97,6 +98,8 @@ node -e '
   b.extraMetadata = { ...b.extraMetadata, version };
   // Each executable a Mach-O UUID of its own before it is signed (after-pack.cjs: macOS Local Network privacy).
   b.afterPack = require("path").resolve("after-pack.cjs");
+  // Signed, its designated requirement set and, with a Developer ID, notarized (after-sign.cjs).
+  b.afterSign = require("path").resolve("after-sign.cjs");
   if (beta) {
     const name = "youdid.wtf";
     b.appId = "fail.still.desktop.beta";

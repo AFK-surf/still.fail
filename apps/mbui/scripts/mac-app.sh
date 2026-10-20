@@ -4,11 +4,12 @@
 # bytecode (Resources/core.hbc, which the core host finds in the app: src/host/apple_core.mm) and Hermes
 # (Frameworks/hermes.framework, React Native 0.81.4's, as Android's; scripts/core.sh hermes-apple), its icon
 # (scripts/mac-icon.swift), an Info.plist of its own. Signed with MAC_SIGN_IDENTITY (CI: still.fail's, imported by
-# scripts/mac-sign.py), else ad hoc; checked with codesign's strict verify.
+# .github/mac_signing.py), else ad hoc; checked with codesign's strict verify. Signed with a Developer ID, it is
+# notarized and its ticket stapled before it is zipped (mac_signing.py notarize): Gatekeeper lets it open downloaded.
 #   apps/mbui/scripts/mac-app.sh            build and bundle it, then sign it (below)
 #   apps/mbui/scripts/mac-app.sh build      build and bundle it only (signed ad hoc)
 #   apps/mbui/scripts/mac-app.sh sign       sign it (MAC_SIGN_IDENTITY, else ad hoc), check it, zip it:
-#                                           out/mac/stillfail-mbui-<n>-arm64-mac.zip (CI: under scripts/mac-sign.py,
+#                                           out/mac/stillfail-mbui-<n>-arm64-mac.zip (CI: under .github/mac_signing.py,
 #                                           which holds the signing lock only for this)
 # The oldest macOS it runs on: still.fail's desktop app's (Electron's: 12.0), MACOSX_DEPLOYMENT_TARGET for clang and
 # cargo alike, and its Info.plist's LSMinimumSystemVersion; an object built for a newer one fails the build.
@@ -40,12 +41,15 @@ export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$A/out/core-target}-macos$MACOSX_DEP
 
 sign() {
   local t=$(now)
-  # signed: still.fail's identity (as its desktop app: no hardened runtime, not notarized), else ad hoc; what it carries
-  # (Hermes's framework) first
-  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR/Contents/Frameworks/hermes.framework"
-  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" --timestamp=none "$APPDIR"
+  # signed: still.fail's identity, else ad hoc; what it carries (Hermes's framework) first. A Developer ID's signature
+  # is what notarization takes: the hardened runtime and Apple's timestamp.
+  local how=(--timestamp=none)
+  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) how=(--options runtime --timestamp) ;; esac
+  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR/Contents/Frameworks/hermes.framework"
+  codesign --force --sign "${MAC_SIGN_IDENTITY:--}" "${how[@]}" "$APPDIR"
   codesign --verify --deep --strict --verbose=2 "$APPDIR" 2>&1 | sed 's/^/codesign: /'
   codesign -dvv "$APPDIR" 2>&1 | grep -E '^(Identifier|Authority|TeamIdentifier|Signature|Format)=' | sed 's/^/codesign: /'
+  case "${MAC_SIGN_IDENTITY:-}" in "Developer ID Application:"*) python3 "$EMBER/.github/mac_signing.py" notarize "$APPDIR" ;; esac
   spctl --assess --type execute -vv "$APPDIR" 2>&1 | sed 's/^/spctl: /' || true
   rm -f "$ZIP"
   (cd "$OUT" && ditto -c -k --sequesterRsrc --keepParent "$NAME.app" "$(basename "$ZIP")")

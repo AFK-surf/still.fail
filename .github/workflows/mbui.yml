@@ -57,8 +57,7 @@ jobs:
         run: bash apps/mbui/scripts/beta.sh publish android
 
   # The macOS app, after the APK (out by then, whatever happens here), on the same runner: signed with still.fail's
-  # identity as its desktop app is (.github/release-desktop.py: an Apple Development certificate, no hardened runtime,
-  # not notarized).
+  # identity as its desktop app is (.github/mac_signing.py), notarized once that is AFK's Developer ID.
   mac:
     needs: beta
     if: ${{ !cancelled() && github.repository == 'AFK-surf/still.fail' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
@@ -73,9 +72,13 @@ jobs:
         run: bash apps/mbui/scripts/beta.sh tools
       - name: The macOS app, built and signed
         env:
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
         run: bash apps/mbui/scripts/beta.sh mac
       - name: Put it, check it, then its feed (mac)
         env:

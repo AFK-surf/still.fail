@@ -610,6 +610,11 @@ jobs:
       - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64, win32-x64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           # The key the release is signed with (docs/release-signing.md): none is an error.
@@ -661,6 +666,10 @@ jobs:
       - name: Build and sign the beta desktop app on the organization Mac
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
