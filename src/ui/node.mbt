@@ -158,8 +158,12 @@ struct Node {
   mut rich : Rich?
   // lines drawn over its ground (Ctx::lines: line.mbt)
   mut lines : Array[Line]
+  // its runs as laid out when cut after its max_lines (the ellipsis a run of its own), else None: what is drawn
+  mut rcut : Rich?
   mut rl : RichLayout?
   mut rl_max : Double
+  // the paragraph `rl` was laid out from (its runs and their styles): `rl` serves only that one
+  mut rl_for : Rich?
   // list rows: index of the item this child shows
   mut item : Int
   // its node in the flex engine, and how the engine measures it as a leaf
@@ -263,8 +267,10 @@ fn Node::new() -> Node {
     full_max: 0.0,
     rich: None,
     lines: [],
+    rcut: None,
     rl: None,
     rl_max: 0.0,
+    rl_for: None,
     item: -1,
     fl: @flex.Node::new(),
     leaf: None,
@@ -312,6 +318,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.sideways = false
   self.rich = None
   self.lines = []
+  // (its cut runs go with its layout, kept with it: rl, rl_for)
   self.item = -1
 }
 

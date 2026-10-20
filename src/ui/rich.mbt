@@ -120,6 +120,8 @@ struct Rich {
   base : Int
   // its words picked with the pointer (Ctx::selectable: a desktop's page)
   select : Bool
+  // wrapped words cut after that many lines, ending in an ellipsis (0: all of them)
+  max_lines : Int
 }
 
 ///|
@@ -608,7 +610,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// runs: the code face at `code_scale`, in `code_color` (0: the
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
-/// `Tracking` in ems of `size`); a style's `max_lines` is not kept yet.
+/// `Tracking` in ems of `size`). `max_lines`: wrapped words cut after that many lines, ending in an ellipsis in the
+/// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis).
 pub fn Ctx::rich(
   self : Ctx,
   runs : Array[Run],
@@ -626,6 +629,7 @@ pub fn Ctx::rich(
   code_bg? : Int64 = 0x7676801FL,
   code_scale? : Double = 0.9,
   tracking? : Double,
+  max_lines? : Int,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
 ) -> Int {
@@ -706,6 +710,7 @@ pub fn Ctx::rich(
     spacing,
     base,
     select: desk.selecting,
+    max_lines: first(max_lines, st.max_lines).unwrap_or(0),
   })
   i
 }
@@ -717,23 +722,86 @@ fn Node::rich_layout(self : Node, max_w : Double) -> RichLayout? {
   match self.rich {
     None => None
     Some(r) => {
+      // kept only for the same paragraph: the same words in other runs (a range moved, a run split) are laid out
+      // again, whatever part of the frame asks
       match self.rl {
-        Some(rl) if !r.wrap || (rl.w <= max_w + 0.01 && max_w <= self.rl_max) =>
-          return Some(rl)
+        Some(rl) if rich_same(self.rl_for, self.rich) &&
+          (!r.wrap || (rl.w <= max_w + 0.01 && max_w <= self.rl_max)) => return Some(rl)
         _ => ()
       }
       let rl = layout_rich(r, max_w)
+      let rl = if r.wrap && r.max_lines > 0 && rl.line_start.length() > r.max_lines {
+        let cut = cut_rich(r, rl, max_w)
+        self.rcut = Some(cut)
+        layout_rich(cut, max_w)
+      } else {
+        self.rcut = None
+        rl
+      }
       self.rl = Some(rl)
       self.rl_max = max_w
+      self.rl_for = self.rich
       Some(rl)
     }
   }
 }
 
 ///|
+/// A paragraph cut after its `max_lines`th line in `w` (cut_to_lines's, for runs): the last line has what follows of
+/// it up to what fits with an ellipsis after it, the ellipsis in the style of the run the cut is in (a link's no
+/// link). The lines before stay as they were. Its runs, to be laid out and drawn.
+fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
+  let count = lay.starts.length()
+  let a = lay.line_start[r.max_lines - 1]
+  // the run the line's words end in, by the last of it that fits
+  let style_of = fn(c : Int) { r.runs[lay.run_of[imin(imax(c, 0), count - 1)]] }
+  let dots_w = fn(run : Run) {
+    shape("…", r.run_size(run), r.run_weight(run), style=run_style(run), spacing=r.spacing).adv.fold(
+      init=0.0,
+      fn(s, x) { s + x },
+    )
+  }
+  let mut end = a
+  let mut x = 0.0
+  while end < count && !is_nl(lay.cu[end]) {
+    let room = w - dots_w(style_of(end))
+    if x + lay.adv[end] > room + 0.01 {
+      break
+    }
+    x = x + lay.adv[end]
+    end = end + 1
+  }
+  // no space left before the dots
+  while end > a && lay.cu[end - 1] == 32 {
+    end = end - 1
+  }
+  let cut = if end < count { lay.starts[end] } else { lay.len }
+  let last = style_of(if end > a { end - 1 } else { a })
+  let runs : Array[Run] = []
+  let mut off = 0
+  for run in r.runs {
+    let n = run.text.length()
+    if off + n <= cut {
+      runs.push(run)
+    } else if off < cut {
+      runs.push({ ..run, text: run.text.view(end_offset=cut - off).to_string() })
+    }
+    off = off + n
+  }
+  runs.push({ ..last, text: "…", link: "" })
+  { ..r, runs }
+}
+
+///|
 fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
-  let (r, lay) = match (n.rich, n.rl) {
-    (Some(r), Some(l)) => (r, l)
+  // its layout as the cache has it for these runs (Node::rich_layout: laid out again when they are not the ones it was
+  // laid out from), in the width it was placed in
+  let lay = match n.rich_layout(dmax(n.fw - n.pad_l - n.pad_r, 0.0)) {
+    Some(l) => l
+    None => return
+  }
+  let r = match (n.rcut, n.rich) {
+    (Some(r), _) | (None, Some(r)) => r
     _ => return
   }
   let ox = n.x + n.pad_l

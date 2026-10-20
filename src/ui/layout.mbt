@@ -178,6 +178,7 @@ fn rich_same(a : Rich?, b : Rich?) -> Bool {
       a.code_scale == b.code_scale &&
       a.spacing == b.spacing &&
       a.code_bg == b.code_bg &&
+      a.max_lines == b.max_lines &&
       (physical_equal(a.runs, b.runs) || a.runs == b.runs)
     (None, None) => true
     _ => false

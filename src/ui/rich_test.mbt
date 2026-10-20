@@ -126,3 +126,85 @@ test "strikethrough and the layout's offsets, carets and rects" {
   assert_eq(rl.rects(1, 6), [(5.0, 0.0, 15.0, 14.0), (0.0, 14.0, 5.0, 14.0)])
   assert_eq(rl.run_at(2), 1)
 }
+
+///|
+test "max_lines: a paragraph cut after that many lines, the last ending in an ellipsis, the runs before kept" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(60.0), fn() {
+        c.rich(
+          [@ui.plain("ab "), @ui.bold("cd"), @ui.plain(" ef gh ij kl mn op")],
+          size=10.0,
+          max_lines=1,
+        )
+        |> ignore
+        c.rich([@ui.plain("xy "), @ui.bold("zw")], size=10.0, max_lines=1)
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let lines = t.lines_of("ab")
+  assert_eq(lines.length(), 1)
+  assert_true(lines[0].has_prefix("ab cd ef"))
+  assert_true(lines[0].has_suffix("…"))
+  // the bold run is where it was
+  assert_eq(t.run_rects("cd").length(), 1)
+  // what fits is not cut
+  assert_eq(t.lines_of("xy"), ["xy zw"])
+}
+
+///|
+test "the same words in runs whose ranges moved (as many runs): drawn in the runs as they are now" {
+  let red = 0xFF0000FFL
+  let ink = 0x000000FFL
+  let runs = Ref([@ui.span("ab", color=red), @ui.plain("cd")])
+  let t = @ui.Tester::new(
+    fn(c) {
+      // in a box of its own size, laid out as before: only the paragraph's runs change
+      c.box(w=Px(200.0), h=Px(40.0), fn() { c.rich(runs.val, size=10.0, color=ink) |> ignore }) |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  t.frame()
+  let colors = fn() {
+    let g = t.drawn_glyphs().copy()
+    g.sort_by(fn(a, b) { a.0.compare(b.0) })
+    g.map(fn(x) { x.2 })
+  }
+  assert_eq(colors(), [red, red, ink, ink])
+  // the red one word on: still two runs, the same words
+  runs.val = [@ui.span("abc", color=red), @ui.plain("d")]
+  t.frame()
+  assert_eq(colors(), [red, red, red, ink])
+  // and back, shorter
+  runs.val = [@ui.span("a", color=red), @ui.plain("bcd")]
+  t.frame()
+  assert_eq(colors(), [red, ink, ink, ink])
+}
+
+///|
+test "a paragraph cut after its max_lines, drawn again in later frames as it was: its cut kept with its layout" {
+  let red = 0xFF0000FFL
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(w=Px(60.0), fn() {
+        c.rich([@ui.plain("ab "), @ui.span("cd", color=red), @ui.plain(" ef gh ij kl mn op")], size=10.0, max_lines=1)
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let first = t.drawn_glyphs().map(fn(g) { g.2 })
+  // frames after: the layout kept, the runs it was cut into with it (the ellipsis a run of its own)
+  t.frame()
+  t.frame()
+  assert_eq(t.drawn_glyphs().map(fn(g) { g.2 }), first)
+  assert_eq(first.filter(fn(k) { k == red }).length(), 2)
+  assert_true(t.lines_of("ab")[0].has_suffix("…"))
+}
