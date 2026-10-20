@@ -50,11 +50,11 @@ flowchart LR
     b["Station B"]
   end
   cloud[("still.fail cloud<br/>账号 · workspace · 中继")]
-  chat -- 机器人 --> a
-  apps <-- "iroh 点对点" --> a
-  a <-- "任务 · 共享 Profile 和 skill" --> b
-  apps -. 登录 .-> cloud
-  a -. 成员关系 .-> cloud
+  chat -->|机器人| a
+  apps <-->|"iroh 点对点"| a
+  a <-->|"任务 · 共享 Profile 和 skill"| b
+  apps -.->|登录| cloud
+  a -.->|成员关系| cloud
 ```
 
 - **station**（`station/`，运行在 Node 上的 TypeScript，带少量预编译的原生组件）运行在你选定的机器上。它启动并保持 agent 会话，连接 Slack 和飞书，把对话存在本地 SQLite 里。
