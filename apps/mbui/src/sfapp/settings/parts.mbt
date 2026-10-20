@@ -313,7 +313,8 @@ let page_note_box : @ui.Style = @ui.style(w=Full, px=S6, pb=S2_5)
 
 ///|
 /// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
-/// edges: docs/ui-panels.md); what has a ground of its own there takes @ui.concentric(card_radius, card_pad).
+/// edges: docs/ui-panels.md); what has a ground of its own there takes @ui.concentric(card_radius, card_pad). The
+/// card's style says them as tokens (@sf.card_radius, S4).
 let card_radius : Double = 20.0
 
 ///|

@@ -1,14 +1,14 @@
 mbui-dl 4
 window 390 844 1
 clear 0.961 0.961 0.969
-glyph 0 16 600 0 0 "Station"
-glyph 1 16 600 0 1 "Station"
-glyph 2 16 600 0 2 "Station"
-glyph 3 16 600 0 4 "Station"
-glyph 4 16 600 0 5 "Station"
-glyph 5 16 600 0 6 "Station"
-glyph 6 17 400 0 0 "设置"
-glyph 7 17 400 0 1 "设置"
+glyph 0 17 400 0 0 "设置"
+glyph 1 17 400 0 1 "设置"
+glyph 2 16 600 0 0 "Station"
+glyph 3 16 600 0 1 "Station"
+glyph 4 16 600 0 2 "Station"
+glyph 5 16 600 0 4 "Station"
+glyph 6 16 600 0 5 "Station"
+glyph 7 16 600 0 6 "Station"
 glyph 8 16 700 0 0 "Studio"
 glyph 9 16 700 0 1 "Studio"
 glyph 10 16 700 0 2 "Studio"

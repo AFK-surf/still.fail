@@ -1,12 +1,12 @@
 mbui-dl 4
 window 390 844 1
 clear 0.961 0.961 0.969
-glyph 0 16 600 0 0 "执行历史"
-glyph 1 16 600 0 1 "执行历史"
-glyph 2 16 600 0 2 "执行历史"
-glyph 3 16 600 0 3 "执行历史"
-glyph 4 17 400 0 0 "返回"
-glyph 5 17 400 0 1 "返回"
+glyph 0 17 400 0 0 "返回"
+glyph 1 17 400 0 1 "返回"
+glyph 2 16 600 0 0 "执行历史"
+glyph 3 16 600 0 1 "执行历史"
+glyph 4 16 600 0 2 "执行历史"
+glyph 5 16 600 0 3 "执行历史"
 glyph 6 16 700 0 0 "Claude · Opus 5.5"
 glyph 7 16 700 0 1 "Claude · Opus 5.5"
 glyph 8 16 700 0 2 "Claude · Opus 5.5"
