@@ -66,6 +66,57 @@ def found(test, files, rule, n):
 
 
 class Rules(unittest.TestCase):
+    def test_style(self):
+        conf = dict(CONF, style={"tokens": ["src/app/tokens.mbt"]})
+        files = {
+            "src/app/view.mbt": """
+                let card : @ui.Style = @ui.style(px=S4, radius=Exact(22.0), gap=Fixed(14.0))
+                fn view(c : @ui.Ctx) -> Unit {
+                  c.box(style=card, pad=12.0, fn() {
+                    c.text("a", size=13.0, color=0x24272BFFL) |> ignore
+                    c.text("b", style=title) |> ignore
+                  }) |> ignore
+                  c.box(style=card, id=7, aspect=1.5, fn() {  }) |> ignore
+                }
+                """,
+            "src/app/tokens.mbt": """
+                pub let title : @ui.TextStyle = @ui.text_style(size=Exact(15.0, 21.0))
+                pub let column_max : @ui.Len = Fixed(420.0)
+                """,
+            "src/app/view_test.mbt": """
+                test "x" {
+                  c.box(pad=3.0, fn() {  }) |> ignore
+                }
+                """,
+        }
+        t = Tree(files, conf)
+        try:
+            lit = t.findings("style-literal")
+            # Exact(22.0) once (its number not again), Fixed's 14.0, pad 12.0, size 13.0, the colour: not the token
+            # file's, nor the test's, nor aspect (not a look) nor id
+            self.assertEqual(sorted(f.line for f in lit), [2, 2, 4, 5, 5], "\n".join(f.what for f in lit))
+            # the two calls said loosely (pad=, size=); a box with a style and behaviour alone (id, aspect) is not
+            self.assertEqual(sorted(f.line for f in t.findings("box-loose")), [4, 5])
+            # every Exact made, in the token file too
+            self.assertEqual(sorted((f.file, f.line) for f in t.findings("style-exact")),
+                             [("src/app/tokens.mbt", 2), ("src/app/view.mbt", 2)])
+        finally:
+            t.close()
+        # the enum's declaration and a match's patterns are not values made
+        decl = {"src/ui/style_tokens.mbt": """
+            pub(all) enum Space {
+              S4
+              Exact(Double)
+            }
+            fn Space::px(self : Space) -> Double {
+              match self {
+                S4 => 16.0
+                Exact(v) => v
+              }
+            }
+            """}
+        found(self, decl, "style-exact", 0)
+
     def test_frame_request(self):
         bad = {"src/app/view.mbt": """
             fn view(c : @ui.Ctx) -> Unit {

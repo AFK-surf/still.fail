@@ -533,6 +533,10 @@ RULES = {
     "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
     "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
     "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
+    "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside "
+                     "the token files: name it with a token (docs/style.md)",
+    "box-loose": "a box or words said by their loose look (pad=, bg=, size=…): say it as a named style (style=)",
+    "style-exact": "a value off the theme's scale (Exact(…)), in a token file too: only goes down",
     "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says "
                     "its end): counted so the ones left only go",
 }
@@ -595,6 +599,8 @@ class Config:
         self.scripts = d.get("scripts", [])
         self.skip = d.get("skip", [])
         self.counts = d.get("counts", {})
+        # the token files: where a style's numbers are said (style-literal does not count them there)
+        self.style_tokens = d.get("style", {}).get("tokens", [])
 
 
 def lint_mbt(f, cfg, out, returns, readers):
@@ -696,6 +702,64 @@ def lint_mbt(f, cfg, out, returns, readers):
             if bound_lit and any(toks[b].kind == "ident" and toks[b].text == "frame" and
                                  toks[b - 1].text == "." for b in body):
                 add("frame-count", k, f.lines[t.line - 1].strip())
+
+
+# what a box and words look like said loosely (Ctx::box, row, column, layer, text, rich): box-loose; a number in them,
+# or anywhere in a style's constructors (style.mbt), style-literal
+BOX_LOOK = {"dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "gap", "align", "justify", "bg", "radius",
+            "border", "border_color", "shadow", "shadow_color", "shadow_y", "min_w", "max_w", "min_h", "max_h", "clip",
+            "opacity"}
+TEXT_LOOK = {"size", "weight", "color", "wrap", "w", "line", "center"}
+LOOSE_CALLS = {"box": BOX_LOOK, "row": BOX_LOOK, "column": BOX_LOOK, "layer": BOX_LOOK, "text": TEXT_LOOK,
+               "rich": TEXT_LOOK}
+STYLE_MAKERS = {"style", "patch", "text_style", "text_patch"}
+
+
+def lint_style(f, cfg, out):
+    """style-literal, box-loose, style-exact (docs/style.md): tests are not counted."""
+    toks = f.toks
+    tokens_file = matches(f.rel, cfg.style_tokens)
+    counted = set()
+
+    def add(rule, k, what):
+        out.append(Finding(rule, f.rel, toks[k].line, what))
+
+    def exact_at(k):
+        """An Exact(…) made (not the enum's own declaration, nor a match arm's pattern)."""
+        if not (toks[k].kind == "ident" and toks[k].text == "Exact" and k + 1 < len(toks) and toks[k + 1].text == "("):
+            return False
+        it = f.item_of[k]
+        if it is not None and it.kind == "enum":
+            return False
+        end = toks[k + 1].end
+        return not (end is not None and end + 1 < len(toks) and toks[end + 1].text in ("=>", "|"))
+
+    for k in range(len(toks)):
+        if exact_at(k) and not f.in_test(k):
+            add("style-exact", k, f.lines[toks[k].line - 1].strip())
+            if not tokens_file:
+                add("style-literal", k, f.lines[toks[k].line - 1].strip())
+                end = toks[k + 1].end or k + 1
+                counted.update(range(k, end + 1))
+    if tokens_file:
+        return
+    for c in f.calls:
+        if c.is_def or f.in_test(c.at):
+            continue
+        line_text = f.lines[toks[c.at].line - 1].strip()
+        look = None
+        if c.kind == "method" and c.name in LOOSE_CALLS:
+            look = LOOSE_CALLS[c.name]
+            if any(label in look for label, _ in c.args):
+                add("box-loose", c.at, line_text)
+        maker = c.name in STYLE_MAKERS and (c.kind == "pkg" and c.qual == "@ui" or c.kind == "bare")
+        for label, a in c.args:
+            if not maker and (look is None or label not in look):
+                continue
+            for i in a:
+                if toks[i].kind == "num" and i not in counted:
+                    counted.add(i)
+                    add("style-literal", i, line_text)
 
 
 def cfg_host_dirs(self):
@@ -952,6 +1016,7 @@ def collect(root, cfg):
     readers = host_readers(mbts, cfg)
     for f in mbts:
         lint_mbt(f, cfg, findings, returns, readers)
+        lint_style(f, cfg, findings)
     lint_globals(mbts, cfg, findings)
     excuse(findings, texts)
     return findings

@@ -216,8 +216,17 @@ pub struct Ctx {
   mut back_edge_next : Double
   mut back_told : Bool
   mut edge : Int
-  // the theme and the direction in force where the view builds (theme.mbt)
+  // the theme and the direction in force where the view builds (theme.mbt); the themes set, wide and narrow, the
+  // width below which it is the narrow one, and whether this frame's is
   mut theme : Theme
+  mut theme_wide : Theme
+  mut theme_narrow : Theme?
+  mut narrow_below : Double
+  mut narrow : Bool
+  // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
+  // those that could not be (Tester::corner_faults says them)
+  inners : Array[Int]
+  inner_faults : Array[String]
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
   // builds; the actions asked of them (by the host's accessibility, a test) for the next frame, and this frame's
@@ -336,6 +345,12 @@ fn Ctx::new() -> Ctx {
     back_told: false,
     edge: 0,
     theme: Theme::light(),
+    theme_wide: Theme::light(),
+    theme_narrow: None,
+    narrow_below: 700.0,
+    narrow: false,
+    inners: [],
+    inner_faults: [],
     direction: Ltr,
     sems: [],
     sem_hide: 0,
@@ -454,36 +469,44 @@ fn Ctx::with_parent(self : Ctx, i : Int, body : () -> Unit) -> Unit {
 /// (above it when negative), met by the edge through fillets of `notch_fillet` (Bar.kt's notch). `aspect` > 0: its
 /// width over its height, the side not said following the other (CSS's aspect-ratio). Built where the direction is
 /// right to left (Ctx::rtl), a row runs from the right and its left and right padding swap.
+///
+/// `style` (style.mbt) says how it looks, its state blocks picked by its own state: pressed, hovered, focused by `id`
+/// (as Ctx::pressed, hovered, focus_shown read them), `selected` and `disabled` as said, dark and narrow by the theme
+/// (Ctx::set_theme). What is said here besides (`pad=`, `bg=`…) wins over the style's same property; what neither
+/// says is as without either (no padding, no ground). A padding below 0 is not said (Ctx::row passes -1).
 pub fn Ctx::box(
   self : Ctx,
-  dir? : Dir = Column,
-  w? : Size = Auto,
-  h? : Size = Auto,
-  pad? : Double = 0.0,
-  padx? : Double = -1.0,
-  pady? : Double = -1.0,
-  pl? : Double = -1.0,
-  pr? : Double = -1.0,
-  pt? : Double = -1.0,
-  pb? : Double = -1.0,
-  gap? : Double = 0.0,
-  align? : Align = AStretch,
-  justify? : Justify = JStart,
-  bg? : Int64 = 0L,
-  radius? : Double = 0.0,
-  border? : Double = 0.0,
-  border_color? : Int64 = 0L,
-  shadow? : Double = 0.0,
-  shadow_color? : Int64 = 0x0000002EL,
-  shadow_y? : Double = -1.0,
-  min_w? : Double = 0.0,
-  max_w? : Double = 1.0e9,
-  min_h? : Double = 0.0,
-  max_h? : Double = 1.0e9,
-  clip? : Bool = false,
+  style? : Style,
+  selected? : Bool = false,
+  disabled? : Bool = false,
+  dir? : Dir,
+  w? : Size,
+  h? : Size,
+  pad? : Double,
+  padx? : Double,
+  pady? : Double,
+  pl? : Double,
+  pr? : Double,
+  pt? : Double,
+  pb? : Double,
+  gap? : Double,
+  align? : Align,
+  justify? : Justify,
+  bg? : Int64,
+  radius? : Double,
+  border? : Double,
+  border_color? : Int64,
+  shadow? : Double,
+  shadow_color? : Int64,
+  shadow_y? : Double,
+  min_w? : Double,
+  max_w? : Double,
+  min_h? : Double,
+  max_h? : Double,
+  clip? : Bool,
   tx? : Double = 0.0,
   ty? : Double = 0.0,
-  opacity? : Double = 1.0,
+  opacity? : Double,
   glass? : Glass,
   glass_group? : Bool = false,
   notch_y? : Double = 0.0,
@@ -495,42 +518,114 @@ pub fn Ctx::box(
 ) -> Int {
   let i = self.alloc_part(kind_box, false, false)
   let n = self.nodes[i]
-  n.dir = dir
+  // the style's look in this node's states, the tokens looked up in the theme in force
+  let st : Patch = match style {
+    None => no_patch
+    Some(s) =>
+      s.resolve(
+        self.narrow,
+        self.theme.dark,
+        selected,
+        id != 0 && self.hovered(id),
+        id != 0 && self.focus_shown(id),
+        id != 0 && self.pressed(id),
+        disabled,
+      )
+  }
+  let th = self.theme
+  n.dir = first(
+    dir,
+    match st.row {
+      Some(true) => Some(Row)
+      Some(false) => Some(Column)
+      None => None
+    },
+  ).unwrap_or(Column)
   n.rtl = self.direction == Rtl
   n.aspect = aspect
-  n.w = w
-  n.h = h
-  let px = if padx >= 0.0 { padx } else { pad }
-  let py = if pady >= 0.0 { pady } else { pad }
-  // one side said on its own wins over both sides
-  n.pad_l = if pl >= 0.0 { pl } else { px }
-  n.pad_r = if pr >= 0.0 { pr } else { px }
+  n.w = first(
+    w,
+    match st.w {
+      Some(l) => Some(l.size())
+      None => None
+    },
+  ).unwrap_or(Auto)
+  n.h = first(
+    h,
+    match st.h {
+      Some(l) => Some(l.size())
+      None => None
+    },
+  ).unwrap_or(Auto)
+  // one side said on its own wins over both sides, both over all four; said here over the style's
+  let pad = said(pad)
+  let px = first(said(padx), pad)
+  let py = first(said(pady), pad)
+  let s_x = opt_px(first(st.px, st.p))
+  let s_y = opt_px(first(st.py, st.p))
+  n.pad_l = first(said(pl), first(px, first(opt_px(st.pl), s_x))).unwrap_or(0.0)
+  n.pad_r = first(said(pr), first(px, first(opt_px(st.pr), s_x))).unwrap_or(0.0)
   // right to left, the start (left said) is the right
   if n.rtl {
     let l = n.pad_l
     n.pad_l = n.pad_r
     n.pad_r = l
   }
-  n.pad_t = if pt >= 0.0 { pt } else { py }
-  n.pad_b = if pb >= 0.0 { pb } else { py }
-  n.min_w = min_w
-  n.max_w = max_w
-  n.min_h = min_h
-  n.max_h = max_h
-  n.shadow_c = shadow_color
-  n.shadow_y = shadow_y
-  n.gap = gap
-  n.align = align
-  n.justify = justify
-  n.bg = bg
-  n.radius = radius
-  n.border_w = border
-  n.border_c = border_color
-  n.shadow = shadow
-  n.clip = clip
+  n.pad_t = first(said(pt), first(py, first(opt_px(st.pt), s_y))).unwrap_or(0.0)
+  n.pad_b = first(said(pb), first(py, first(opt_px(st.pb), s_y))).unwrap_or(0.0)
+  n.min_w = first(min_w, opt_bound(st.min_w, 0.0)).unwrap_or(0.0)
+  n.max_w = first(max_w, opt_bound(st.max_w, 1.0e9)).unwrap_or(1.0e9)
+  n.min_h = first(min_h, opt_bound(st.min_h, 0.0)).unwrap_or(0.0)
+  n.max_h = first(max_h, opt_bound(st.max_h, 1.0e9)).unwrap_or(1.0e9)
+  let (sh_blur, sh_y) = match st.shadow {
+    Some(s) => {
+      let (b, y) = s.blur_y()
+      (Some(b), Some(y))
+    }
+    None => (None, None)
+  }
+  n.shadow_c = first(
+    shadow_color,
+    match st.shadow {
+      Some(_) => Some(th.shadow)
+      None => None
+    },
+  ).unwrap_or(0x0000002EL)
+  n.shadow_y = first(shadow_y, sh_y).unwrap_or(-1.0)
+  n.gap = first(gap, opt_px(st.gap)).unwrap_or(0.0)
+  n.align = first(align, st.align).unwrap_or(AStretch)
+  n.justify = first(justify, st.justify).unwrap_or(JStart)
+  n.bg = first(bg, opt_color(th, st.bg)).unwrap_or(0L)
+  n.radius = first(
+    radius,
+    match st.radius {
+      Some(r) => Some(th.corner(r))
+      None => None
+    },
+  ).unwrap_or(0.0)
+  // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt)
+  if radius is None && st.radius is Some(Inner) {
+    self.inners.push(i)
+  }
+  n.border_w = first(
+    border,
+    match st.border {
+      Some(b) => Some(b.px())
+      None => None
+    },
+  ).unwrap_or(0.0)
+  n.border_c = first(border_color, opt_color(th, st.border_color)).unwrap_or(0L)
+  n.shadow = first(shadow, sh_blur).unwrap_or(0.0)
+  n.clip = first(clip, st.clip).unwrap_or(false)
   n.tx = tx
   n.ty = ty
-  n.opacity = opacity
+  n.opacity = first(
+    opacity,
+    match st.opacity {
+      Some(o) => Some(o.value())
+      None => None
+    },
+  ).unwrap_or(1.0)
   n.glass = glass
   n.glass_group = glass_group
   n.notch_y = notch_y
@@ -543,6 +638,44 @@ pub fn Ctx::box(
   self.with_parent(i, body)
   i
 }
+
+///|
+/// A padding said in a call: one below 0 is not (the -1 Ctx::row and the like pass on).
+fn said(v : Double?) -> Double? {
+  match v {
+    Some(x) if x >= 0.0 => v
+    _ => None
+  }
+}
+
+///|
+fn opt_px(v : Space?) -> Double? {
+  match v {
+    Some(v) => Some(v.px())
+    None => None
+  }
+}
+
+///|
+fn opt_color(th : Theme, v : Color?) -> Int64? {
+  match v {
+    Some(v) => Some(th.color(v))
+    None => None
+  }
+}
+
+///|
+fn opt_bound(v : Len?, none_is : Double) -> Double? {
+  match v {
+    Some(v) => Some(v.bound(none_is))
+    None => None
+  }
+}
+
+///|
+/// A style that says nothing.
+// kept across runs: a value (no field of it changes)
+let no_patch : Patch = patch()
 
 ///|
 pub fn Ctx::row(
@@ -629,31 +762,76 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 }
 
 ///|
-/// Words, in the theme's colour unless `color`.
+/// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
+/// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
-  size? : Double = 15.0,
-  weight? : Int = 400,
+  style? : TextStyle,
+  size? : Double,
+  weight? : Int,
   color? : Int64,
-  wrap? : Bool = true,
-  w? : Size = Auto,
-  line? : Double = 0.0,
-  center? : Bool = false,
+  wrap? : Bool,
+  w? : Size,
+  line? : Double,
+  center? : Bool,
 ) -> Int {
-  let color = color.unwrap_or(self.theme.fg)
+  let st = self.text_patch(style)
+  let (s_size, s_line) = self.text_sizes(st)
   let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
-  n.center = center
-  n.line_h = line
+  n.center = first(center, st.center).unwrap_or(false)
+  n.line_h = first(line, s_line).unwrap_or(0.0)
   n.text = s
-  n.font_size = size
-  n.weight = weight
-  n.color = color
-  n.wrap = wrap
-  n.w = w
+  n.font_size = first(size, s_size).unwrap_or(15.0)
+  n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
+  n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
+  n.wrap = first(wrap, st.wrap).unwrap_or(true)
+  n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
   i
 }
+
+///|
+/// Words' style in this frame's states (dark, narrow).
+fn Ctx::text_patch(self : Ctx, style : TextStyle?) -> TextPatch {
+  match style {
+    None => no_text_patch
+    Some(t) => t.resolve(self.narrow, self.theme.dark)
+  }
+}
+
+///|
+/// The size and the line a style's words have, in the theme in force.
+fn Ctx::text_sizes(self : Ctx, st : TextPatch) -> (Double?, Double?) {
+  match st.size {
+    Some(z) => {
+      let (size, line) = self.theme.text_size(z)
+      (Some(size), Some(line))
+    }
+    None => (None, None)
+  }
+}
+
+///|
+fn opt_weight(v : Weight?) -> Int? {
+  match v {
+    Some(v) => Some(v.value())
+    None => None
+  }
+}
+
+///|
+fn opt_size(v : Len?) -> Size? {
+  match v {
+    Some(v) => Some(v.size())
+    None => None
+  }
+}
+
+///|
+/// Words' style that says nothing.
+// kept across runs: a value (no field of it changes)
+let no_text_patch : TextPatch = text_patch()
 
 // ---------------------------------------------------------------------------
 // Interaction

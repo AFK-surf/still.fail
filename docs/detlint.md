@@ -55,6 +55,9 @@ there a file's findings and exceptions together stay under their bar, so marking
 | `poll` | a frame or a wake asked for under a condition (if, while, match, an arm's guard, an else's if) that reads the host (`@host.*`), the layout or a host handle (`list_row_height`, `list_place`, `rect_of`, `made`, `grabbed`, `photos`, `pressed`…), or calls a function of the package that does | the host's answer, the layout's, as an event; a deadline while a finger is down is a deadline and passes |
 | `host-read` | the app calls `@host.now / wake_after / platform / system_dark / window_inset / env` (still.fail #738) | `@ui`'s, which a Tester answers |
 | `globals` | a top-level `let` of a Ref, Map, Array or struct in `globals.roots` that its package's `reset` / `reset_globals` / what `on_reset` is given (and what they call) does not name, nor says `// kept across runs: why` over it (still.fail's check of `mbui-reader-rest`) | put it back in reset |
+| `style-literal` | a number in a box's or words' look (`c.box(pad=12.0)`, `c.text(size=13.0)`, `c.row(gap=8.0)`), in `@ui.style(…)`, `patch`, `text_style`, `text_patch`, or an `Exact(…)` made outside the token files (`style.tokens` in detlint.json); not in tests | a token by name; an off-scale value named in the token file (docs/style.md) |
+| `box-loose` | a call to `box`, `row`, `column`, `layer`, `text`, `rich` that says its look loosely (`pad=`, `bg=`, `size=`, `color=`…); not in tests | `style=` a named style |
+| `style-exact` | every `Exact(…)` made (not the enums' declarations, nor a match's patterns), the token files' too; not in tests | a token on the theme's scale |
 
 ## How it reads MoonBit, and its limits
 

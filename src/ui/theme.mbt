@@ -69,6 +69,70 @@ pub(all) struct Theme {
   /// the focus ring's width, and how far out of what it rings it lies
   focus_w : Double
   focus_gap : Double
+  /// what floats over the page (a bar, a capsule): style.mbt's `Raised`
+  raised : Int64
+  /// a card's ground on the page
+  card : Int64
+  /// words in the accent's colour, and the accent's quiet ground (a chosen row, a badge)
+  accent_text : Int64
+  accent_bg : Int64
+  /// the ground of what failed (an error's box)
+  danger_bg : Int64
+  /// a quiet pill's ground, a placeholder's grey
+  neutral : Int64
+  /// what is chosen in a list
+  selected : Int64
+  /// links
+  link : Int64
+  /// the sizes of words with their lines' heights (style.mbt's TextSize), and the corners (Radius)
+  text : TextScale
+  radii : RadiusScale
+}
+
+///|
+/// The sizes of words, each with its line's height (size, line).
+pub(all) struct TextScale {
+  xs : (Double, Double)
+  sm : (Double, Double)
+  base : (Double, Double)
+  lg : (Double, Double)
+  xl : (Double, Double)
+  xl2 : (Double, Double)
+  xl3 : (Double, Double)
+  xl4 : (Double, Double)
+}
+
+///|
+/// Tailwind's (v3.4).
+pub fn TextScale::tailwind() -> TextScale {
+  {
+    xs: (12.0, 16.0),
+    sm: (14.0, 20.0),
+    base: (16.0, 24.0),
+    lg: (18.0, 28.0),
+    xl: (20.0, 28.0),
+    xl2: (24.0, 32.0),
+    xl3: (30.0, 36.0),
+    xl4: (36.0, 40.0),
+  }
+}
+
+///|
+/// The corners.
+pub(all) struct RadiusScale {
+  sm : Double
+  base : Double
+  md : Double
+  lg : Double
+  xl : Double
+  xl2 : Double
+  xl3 : Double
+}
+
+///|
+/// Tailwind's (v3.4).
+pub fn RadiusScale::tailwind() -> RadiusScale {
+  { sm: 2.0, base: 4.0, md: 6.0, lg: 8.0, xl: 12.0, xl2: 16.0, xl3: 24.0 }
 }
 
 ///|
@@ -107,6 +171,16 @@ pub fn Theme::light() -> Theme {
     control_h: 36.0,
     focus_w: 2.0,
     focus_gap: 2.0,
+    raised: 0xE4E4E8FFL,
+    card: 0xF6F6F7FFL,
+    accent_text: 0xA23203FFL,
+    accent_bg: 0xFFEFE6FFL,
+    danger_bg: 0xFFF0EFFFL,
+    neutral: 0xEDEFF1FFL,
+    selected: 0xEBE7E1FFL,
+    link: 0x1559C4FFL,
+    text: TextScale::tailwind(),
+    radii: RadiusScale::tailwind(),
   }
 }
 
@@ -135,6 +209,14 @@ pub fn Theme::dark() -> Theme {
     focus: 0x8A8D93FFL,
     scrim: 0x00000080L,
     shadow: 0x00000073L,
+    raised: 0x2A2C31FFL,
+    card: 0x28292CFFL,
+    accent_text: 0xFC9B6FFFL,
+    accent_bg: 0x43251AFFL,
+    danger_bg: 0x442322FFL,
+    neutral: 0x2A2B2FFFL,
+    selected: 0x323338FFL,
+    link: 0x81AEFAFFL,
   }
 }
 
@@ -156,6 +238,11 @@ pub fn Theme::narrow_light() -> Theme {
     font: 15.0,
     font_sm: 13.0,
     control_h: 38.0,
+    raised: 0xFFFFFFFFL,
+    card: 0xFFFFFFFFL,
+    accent_text: 0xB9471FFFL,
+    accent_bg: 0xFBE6DCFFL,
+    neutral: 0xE8E4DCFFL,
   }
 }
 
@@ -178,6 +265,11 @@ pub fn Theme::narrow_dark() -> Theme {
     font: 15.0,
     font_sm: 13.0,
     control_h: 38.0,
+    raised: 0x2A2C31FFL,
+    card: 0x26272BFFL,
+    accent_text: 0xF6A383FFL,
+    accent_bg: 0x4A2F25FFL,
+    neutral: 0x313237FFL,
   }
 }
 
@@ -217,6 +309,16 @@ pub fn Theme::ios_light() -> Theme {
     control_h: 36.0,
     focus_w: 2.0,
     focus_gap: 2.0,
+    raised: 0xF2F2F7FFL,
+    card: 0xF2F2F7FFL,
+    accent_text: 0x0A84FFFFL,
+    accent_bg: 0x0A84FF1FL,
+    danger_bg: 0xFF3B301FL,
+    neutral: 0xE5E5EAFFL,
+    selected: 0xD1D1D6FFL,
+    link: 0x0A84FFFFL,
+    text: TextScale::tailwind(),
+    radii: RadiusScale::tailwind(),
   }
 }
 
@@ -241,6 +343,14 @@ pub fn Theme::ios_dark() -> Theme {
     focus: 0x409CFFB3L,
     scrim: 0x0000008CL,
     shadow: 0x00000073L,
+    raised: 0x2C2C2EFFL,
+    card: 0x1C1C1EFFL,
+    accent_text: 0x409CFFFFL,
+    accent_bg: 0x0A84FF33L,
+    danger_bg: 0xFF453A33L,
+    neutral: 0x3A3A3CFFL,
+    selected: 0x3A3A3CFFL,
+    link: 0x409CFFFFL,
   }
 }
 
@@ -251,9 +361,121 @@ pub fn Ctx::theme(self : Ctx) -> Theme {
 }
 
 ///|
-/// The theme from here on (this frame's rest and the next frames'), until set again.
-pub fn Ctx::set_theme(self : Ctx, t : Theme) -> Unit {
-  self.theme = t
+/// The theme from here on (this frame's rest and the next frames'), until set again. With `narrow`, that one in its
+/// place in the frames whose window is narrower than `narrow_below` (a phone's), picked as each frame starts from its
+/// width (Ctx::narrow; style.mbt's `narrow` blocks). The app calls it as it starts and when the person picks light
+/// or dark, not every frame.
+pub fn Ctx::set_theme(self : Ctx, t : Theme, narrow? : Theme, narrow_below? : Double = 700.0) -> Unit {
+  self.theme_wide = t
+  self.theme_narrow = narrow
+  self.narrow_below = narrow_below
+  self.pick_theme()
+}
+
+///|
+/// The theme set (Ctx::set_theme) for this frame's width.
+fn Ctx::pick_theme(self : Ctx) -> Unit {
+  self.theme = match self.theme_narrow {
+    Some(n) if self.width < self.narrow_below => n
+    _ => self.theme_wide
+  }
+  self.narrow = self.theme_narrow is Some(_) && self.width < self.narrow_below
+}
+
+///|
+/// Whether this frame is drawn in the narrow theme (Ctx::set_theme's `narrow`).
+pub fn Ctx::narrow(self : Ctx) -> Bool {
+  self.narrow
+}
+
+///|
+/// What a spacing token comes to.
+pub fn Ctx::space(self : Ctx, s : Space) -> Double {
+  ignore(self)
+  s.px()
+}
+
+///|
+/// What a colour token comes to in the theme in force.
+pub fn Ctx::color(self : Ctx, c : Color) -> Int64 {
+  self.theme.color(c)
+}
+
+///|
+/// A size of words in the theme in force: (size, line).
+pub fn Ctx::text_size(self : Ctx, s : TextSize) -> (Double, Double) {
+  self.theme.text_size(s)
+}
+
+///|
+/// What a colour token comes to in this theme.
+pub fn Theme::color(self : Theme, c : Color) -> Int64 {
+  match c {
+    Clear => 0L
+    Bg => self.bg
+    Surface => self.surface
+    Raised => self.raised
+    Card => self.card
+    Fg => self.fg
+    Muted => self.muted
+    Subtle => self.subtle
+    Faint => self.faint
+    Line => self.line
+    Border => self.border
+    Accent => self.accent
+    AccentText => self.accent_text
+    AccentBg => self.accent_bg
+    OnAccent => self.on_accent
+    Primary => self.primary
+    OnPrimary => self.on_primary
+    Positive => self.positive
+    Danger => self.danger
+    DangerBg => self.danger_bg
+    OnDanger => self.on_danger
+    Neutral => self.neutral
+    Hover => self.hover
+    Selected => self.selected
+    Focus => self.focus
+    Scrim => self.scrim
+    Link => self.link
+    ShadowC => self.shadow
+    A(c, o) => alpha(self.color(c), o.value())
+    Over(u, t) => over(self.color(u), self.color(t))
+    Exact(v) => v
+  }
+}
+
+///|
+/// A size of words in this theme: (size, line).
+pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
+  match s {
+    Xs => self.text.xs
+    Sm => self.text.sm
+    Base => self.text.base
+    Lg => self.text.lg
+    Xl => self.text.xl
+    Xl2 => self.text.xl2
+    Xl3 => self.text.xl3
+    Xl4 => self.text.xl4
+    Exact(size, line) => (exact_ok(size, "TextSize"), exact_ok(line, "TextSize"))
+  }
+}
+
+///|
+/// A corner in this theme (`Inner` is worked out once laid out: 0 here).
+pub fn Theme::corner(self : Theme, r : Radius) -> Double {
+  match r {
+    Sharp | Inner => 0.0
+    Sm => self.radii.sm
+    Base => self.radii.base
+    Md => self.radii.md
+    Lg => self.radii.lg
+    Xl => self.radii.xl
+    Xl2 => self.radii.xl2
+    Xl3 => self.radii.xl3
+    Full => 1.0e6
+    Exact(v) => exact_ok(v, "Radius")
+  }
 }
 
 ///|

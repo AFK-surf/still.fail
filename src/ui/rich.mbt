@@ -610,12 +610,13 @@ pub fn Ctx::rich(
   self : Ctx,
   runs : Array[Run],
   key? : String = "",
-  size? : Double = 15.0,
-  weight? : Int = 400,
-  color? : Int64 = 0x1D1D1FFFL,
-  line? : Double = 0.0,
-  wrap? : Bool = true,
-  w? : Size = Auto,
+  style? : TextStyle,
+  size? : Double,
+  weight? : Int,
+  color? : Int64,
+  line? : Double,
+  wrap? : Bool,
+  w? : Size,
   link_color? : Int64 = 0x0A84FFFFL,
   pressed_bg? : Int64 = 0x0A84FF29L,
   code_color? : Int64 = 0L,
@@ -624,6 +625,15 @@ pub fn Ctx::rich(
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
 ) -> Int {
+  // its style (style.mbt) under what is said here, as Ctx::text's
+  let st = self.text_patch(style)
+  let (s_size, s_line) = self.text_sizes(st)
+  let size = first(size, s_size).unwrap_or(15.0)
+  let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
+  let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
+  let line = first(line, s_line).unwrap_or(0.0)
+  let wrap = first(wrap, st.wrap).unwrap_or(true)
+  let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let sb = StringBuilder()
   for r in runs {
     sb.write_string(r.text)

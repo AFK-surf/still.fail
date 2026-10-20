@@ -27,37 +27,17 @@ fn Node::corner(self : Node) -> Double {
 pub fn Tester::corner_faults(self : Tester) -> Array[String] {
   ignore(self)
   let c = g()
-  let out : Array[String] = []
+  // the corners said `Inner` that could not be worked out (corners_after_layout), first
+  let out : Array[String] = c.inner_faults.copy()
   let grounds = c.layer_grounds()
   for i in 0..<c.count {
     let b = c.nodes[i]
     if !b.grounded() || b.layer {
       continue
     }
-    // the nearest rounded container round it that shows (a ground, an edge, glass, or what it cuts), its own or one
-    // laid under it as a layer of the same size (a composer's glass drawn beside what it holds: `grounds`)
-    let mut p = b.parent
-    let mut ra = 0.0
-    let mut ground = -1
-    while p >= 0 {
-      let a = c.nodes[p]
-      if a.kind == kind_box && a.corner() >= 6.0 && (a.grounded() || a.glass is Some(_) || a.clip) {
-        ra = a.corner()
-        ground = p
-        break
-      }
-      match grounds.get(p) {
-        Some(gi) if gi != i => {
-          ra = c.nodes[gi].corner()
-          ground = gi
-          break
-        }
-        _ => ()
-      }
-      p = a.parent
-    }
-    if p < 0 {
-      continue
+    let (p, ra, ground) = match c.corner_container(i, grounds) {
+      Some(found) => found
+      None => continue
     }
     // the container's own ground drawn on (the same fill, no edge: a grouped row's square patch over its rounded
     // corners): its shape, not something in its corner
@@ -179,6 +159,28 @@ fn Ctx::centred_in(self : Ctx, i : Int, p : Int) -> (Bool, Bool) {
   (y, x)
 }
 ///|
+/// The rounded container node `i` lies in, as the corner rule sees it: the nearest round it that shows (a ground, an
+/// edge, glass, or what it cuts) with a corner of 6 or more, its own or one laid under it as a layer of the same size
+/// (a composer's glass drawn beside what it holds: `grounds`, Ctx::layer_grounds). Its node, its corner, the node whose
+/// ground that corner is; None when there is none. Tester::corner_faults and `Inner` (corners_after_layout) both ask
+/// this, so they measure against the same container.
+fn Ctx::corner_container(self : Ctx, i : Int, grounds : Map[Int, Int]) -> (Int, Double, Int)? {
+  let mut p = self.nodes[i].parent
+  while p >= 0 {
+    let a = self.nodes[p]
+    if a.kind == kind_box && a.corner() >= 6.0 && (a.grounded() || a.glass is Some(_) || a.clip) {
+      return Some((p, a.corner(), p))
+    }
+    match grounds.get(p) {
+      Some(gi) if gi != i => return Some((p, self.nodes[gi].corner(), gi))
+      _ => ()
+    }
+    p = a.parent
+  }
+  None
+}
+
+///|
 /// The rounded grounds laid as layers the size of what they are under: for a box, the rounded node (a fill, an edge or
 /// glass) of its own size below it, through boxes all of that size (the composer's glass, a card's ground drawn
 /// apart from what it holds): the box's corner is that ground's.
@@ -206,4 +208,60 @@ fn Ctx::layer_grounds(self : Ctx) -> Map[Int, Int] {
     }
   }
   out
+}
+
+///|
+/// How far apart two of a box's distances from its container's edges may be and still be one (half a pixel, as
+/// corner_faults measures).
+let inner_even : Double = 0.5
+
+///|
+/// The corners said `Inner` (style.mbt), from where their boxes lie as laid out (the covers moved: after
+/// covers_after_layout, before anything is painted or its clip and hit target recorded): the corner of the container
+/// the corner rule measures against (corner_container: through boxes with no corner, a ground laid beside as a layer)
+/// less the box's distance from that container's edges it is near (nearer than the container's corner is round),
+/// those distances the same; so the box is concentric with it by how it is written, and corner_faults finds nothing
+/// in it. In the order they were built, a container `Inner` itself worked out first. A box in no rounded container,
+/// near none of its edges, or near edges at different distances (the window narrowed, a max_w come into force) is
+/// drawn square, and said so: corner_faults lists it, so a test fails where a person's screen would not.
+fn Ctx::corners_after_layout(self : Ctx) -> Unit {
+  self.inner_faults.clear()
+  if self.inners.is_empty() {
+    return
+  }
+  let grounds = self.layer_grounds()
+  for i in self.inners {
+    let n = self.nodes[i]
+    n.radius = 0.0
+    let (p, ra, _) = match self.corner_container(i, grounds) {
+      Some(found) => found
+      None => {
+        self.inner_faults.push("\{self.named(i)}: radius=Inner, in no rounded container")
+        continue
+      }
+    }
+    let a = self.nodes[p]
+    let sides = [
+      ("left", n.x - a.x),
+      ("top", n.y - a.y),
+      ("right", a.x + a.fw - (n.x + n.fw)),
+      ("bottom", a.y + a.fh - (n.y + n.fh)),
+    ]
+    let near = sides.filter(fn(s) { s.1 < ra })
+    if near.is_empty() {
+      self.inner_faults.push(
+        "\{self.named(i)}: radius=Inner, near none of the edges of \{self.named(p)} (corner \{ra})",
+      )
+      continue
+    }
+    let d = near[0].1
+    if near.iter().any(fn(s) { (s.1 - d).abs() > inner_even }) {
+      let said = near.map(fn(s) { "\{s.0} \{s.1}" }).join(", ")
+      self.inner_faults.push(
+        "\{self.named(i)}: radius=Inner, at different distances from the edges of \{self.named(p)} (corner \{ra}): \{said}",
+      )
+      continue
+    }
+    n.radius = dmax(ra - d, 0.0)
+  }
 }

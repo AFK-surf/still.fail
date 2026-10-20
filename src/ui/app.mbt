@@ -134,6 +134,9 @@ let frame_hook : Ref[(() -> Unit)?] = Ref::new(None)
 fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Double {
   c.width = w
   c.height = h
+  // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
+  c.pick_theme()
+  c.inners.clear()
   if scale != c.scale {
     // images are as large as their pixels at this scale
     c.epoch = c.epoch + 1
@@ -191,6 +194,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.layout(root, 0.0, 0.0, w, h) |> ignore
   // what covers an item, over it as laid out now (cover.mbt)
   c.covers_after_layout()
+  // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
+  c.corners_after_layout()
   // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
   c.drawing_after_layout()
   // what words marked as selectable hold, as laid out (words.mbt)
