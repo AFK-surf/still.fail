@@ -46,21 +46,25 @@ fn pace_of(seed : UInt) -> @core.Pace {
 ///|
 /// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), in the pass `seed`
 /// names (0: the strict one, as the run had it; else what is due at once in the order drawn from it, at that pass's
-/// pace: pace_of). `skip`: the run's calls a Tester does not make (the engine's start
-/// told the core what the device is: sfcore.start). `drop`: asks of the run's its timing made, by words in them
+/// pace: pace_of). `drop`: asks of the run's its timing made, by words in them
 /// (Replay::drop), each with what came for it.
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
-  skip? : Array[String] = ["client.device"],
   drop? : Array[String] = [],
   w? : Double = 390.0,
   h? : Double = 844.0,
   env? : Array[(String, String)] = [],
 ) -> Flow {
   let r = @core.Replay::parse(trace)
-  for call in skip {
-    r.skip(call)
+  // (the app started as the run's was: with the account its environment gave it, as its trace's `migrate` says)
+  run_account.val = match r.first_params("migrate") {
+    Some(Object(p)) =>
+      match p.get("accounts") {
+        Some(Array(a)) if a.length() > 0 => a[0].stringify()
+        _ => ""
+      }
+    _ => ""
   }
   // (asks the run's timing made, with what came for them: each test says which and why)
   for text in drop {

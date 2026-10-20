@@ -994,3 +994,14 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
   }
   None
 }
+
+///|
+/// The params of the run's first call `call` (as its trace keeps them), None when it made none.
+pub fn Replay::first_params(self : Replay, call : String) -> Json? {
+  for e in self.evs {
+    if e.out && e.msg is Object(m) && kind_of(m) == "call" && name_of(m) == call {
+      return m.get("params")
+    }
+  }
+  None
+}

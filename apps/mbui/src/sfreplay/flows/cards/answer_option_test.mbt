@@ -5,8 +5,7 @@
 ///|
 test "22-answer-option" {
   @sfreplay.orders(fn(seed) raise {
-    // (the run's first: its core was given the run's account then, `migrate`, as a Tester's is not)
-    let f = @sfreplay.Flow::start(@sfreplay.trace_answer_option, seed~, skip=["client.device", "migrate"])
+    let f = @sfreplay.Flow::start(@sfreplay.trace_answer_option, seed~)
     f.tap("端到端测试")
     // the chat pushed over Home: in place once its push is over
     f.run_for(@ui.nav_push_ms)
