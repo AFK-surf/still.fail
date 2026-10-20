@@ -176,6 +176,9 @@ export const PARAMS: Record<string, string> = {
   "admin.setPending": "email:string beta?:boolean may_create?:boolean",
   "admin.removePending": "email:string",
   "admin.deleteWorkspace": "workspace:string",
+  "admin.createWorkspace": "name:string owners:strings members:number stations:number",
+  "admin.setLimits": "workspace:string members:number stations:number",
+  "admin.enroll": "workspace:string name:string",
   "admin.feedbackStatus": "id:string status?:string",
 };
 
@@ -567,6 +570,12 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/v1/admin/pending/remove", p.pick(["email"]));
     case "admin.deleteWorkspace":
       return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/delete`, null);
+    case "admin.createWorkspace":
+      return op("POST", () => "/v1/admin/workspaces", p.pick(["name", "owners", "members", "stations"]));
+    case "admin.setLimits":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/limits`, p.pick(["members", "stations"]));
+    case "admin.enroll":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/enrollments`, p.pick(["name"]));
     case "admin.feedbackStatus":
       return op("POST", () => `/v1/admin/feedback/${p.at("id")}/status`, p.pick(["status"]));
     default:

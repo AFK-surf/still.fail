@@ -540,7 +540,8 @@ list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's
 `workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,
 `invitation.preview`, `invitation.accept`, `invitation.decline`,
 `loginSession.revoke`, `admin.me`, `admin.createCode`, `admin.revokeCode`,
-`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`.
+`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`,
+`admin.createWorkspace`, `admin.setLimits`, `admin.enroll`.
 
 An operation answers only after the live topics it touches are current, so
 the UI never invalidates caches itself and a page that navigates right after a
