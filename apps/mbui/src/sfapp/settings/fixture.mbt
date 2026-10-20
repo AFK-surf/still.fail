@@ -686,15 +686,23 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
 
 ///|
 /// The lock as a device not confirmed in it has it (MBUI_FIXTURE=lock-waiting, lock-finding, lock-code, lock-wrong,
-/// lock-security: its waiting page asking, finding, the code being typed, typed wrong; its security page): this device
-/// waiting (its own request among the workspace's), not a signer.
+/// lock-checking, lock-none, lock-failed, lock-refused, lock-nocode, lock-security, each also -dark: its waiting page
+/// asking, finding, the code being typed, typed wrong, being checked, no device found, the pairing failed, the request
+/// refused, this device without its code yet; its security page): this device waiting (its own request among the
+/// workspace's), not a signer.
 fn waiting_lock(mode : String) -> Json {
+  let mode = if mode.has_suffix("-dark") { mode.unsafe_substring(start=0, end=mode.length() - 5) } else { mode }
   let pair = match mode {
     "lock-finding" => obj([("state", str("finding"))])
     "lock-code" => obj([("state", str("code")), ("left", Json::number(3.0))])
     "lock-wrong" => obj([("state", str("wrong")), ("left", Json::number(2.0))])
+    "lock-checking" => obj([("state", str("checking")), ("left", Json::number(3.0))])
+    "lock-none" => obj([("state", str("none"))])
+    "lock-failed" => obj([("state", str("failed")), ("error", str("配对超时"))])
     _ => Json::null()
   }
+  let failed = if mode == "lock-refused" { "station 不在线" } else { "" }
+  let code = if mode == "lock-nocode" { "" } else { "Q4K-7PM" }
   obj([
     ("available", Json::boolean(true)),
     ("locked", Json::boolean(true)),
@@ -711,11 +719,12 @@ fn waiting_lock(mode : String) -> Json {
       "me",
       obj([
         ("device", str("d-me")),
-        ("code", str("Q4K-7PM")),
+        ("code", str(code)),
         ("kind", str("app")),
         ("confirmed", Json::boolean(false)),
         ("asked", Json::boolean(true)),
         ("waiting", Json::boolean(true)),
+        ("failed", str(failed)),
         ("pair", pair),
       ]),
     ),

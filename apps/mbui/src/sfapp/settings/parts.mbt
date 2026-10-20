@@ -661,15 +661,19 @@ fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = fa
 ///|
 /// A wait said in a line of its own (Waiting.kt WaitLine): a spinner before it; what is wrong in red.
 fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool = false) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, padx=if pad { 20.0 } else { 0.0 }, pady=if pad { 8.0 } else { 0.0 }, gap=8.0, align=ACenter, fn() {
+  c.box(style=if pad { wait_line_padded } else { @sf.beside }, fn() {
     if !error {
       spinner(c, inline=true)
     }
-    c.text(words, size=13.0, color=if error { t.p.red } else { t.p.muted }, line=18.0) |> ignore
+    c.text(words, style=if error { @sf.meta.then(@sf.bad) } else { @sf.meta }) |> ignore
   })
   |> ignore
 }
+
+///|
+/// A wait's line in a page's flow: in from its sides as a card's words.
+// kept across runs: a value (no field of it changes)
+let wait_line_padded : @ui.Style = @sf.beside.then(@ui.style(px=S5, py=S2))
 
 ///|
 /// The shapes of a settings page's cards to come (Waiting.kt Waiting, WaitShape.Cards), breathing; what could not be
@@ -1055,25 +1059,45 @@ fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
+/// With `style` (a role of @sf's styles.mbt), that, and what is said besides over it.
 fn mono(
   c : @ui.Ctx,
   words : String,
-  size? : Double = 13.0,
-  weight? : Int = 400,
+  style? : @ui.TextStyle,
+  size? : Double,
+  weight? : Int,
   color? : Int64,
-  line? : Double = 0.0,
+  line? : Double,
   wrap? : Bool = false,
   center? : Bool = false,
 ) -> Unit {
-  let t = @sf.theme()
-  let ink = color.unwrap_or(t.p.text)
+  // without a style, as it always was: 13, 400, the words' colour, the font's own line
+  let (size, weight, color, line) = match style {
+    Some(_) => (size, weight, color, line)
+    None =>
+      (
+        Some(size.unwrap_or(13.0)),
+        Some(weight.unwrap_or(400)),
+        Some(color.unwrap_or(@sf.theme().p.text)),
+        Some(line.unwrap_or(0.0)),
+      )
+  }
   if center {
     c.box(w=Fill(1.0), align=ACenter, fn() {
-      c.rich([@ui.span(words, mono=true)], size~, weight~, color=ink, line~, wrap~) |> ignore
+      c.rich([@ui.span(words, mono=true)], style?, size?, weight?, color?, line?, wrap~) |> ignore
     })
     |> ignore
   } else {
-    c.rich([@ui.span(words, mono=true)], size~, weight~, color=ink, line~, wrap~, w=if wrap { Fill(1.0) } else { Auto })
+    c.rich(
+      [@ui.span(words, mono=true)],
+      style?,
+      size?,
+      weight?,
+      color?,
+      line?,
+      wrap~,
+      w=if wrap { Fill(1.0) } else { Auto },
+    )
     |> ignore
   }
 }

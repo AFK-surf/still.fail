@@ -364,3 +364,44 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
   }
   (ch(24) << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)
 }
+
+// ---------------------------------------------------------------------------
+// mbui's tokens (its docs/style.md): what still.fail's styles (styles.mbt) say by name. The numbers are here and
+// nowhere else; a value off mbui's scale is one of the few `Exact`s below.
+
+///|
+/// still.fail's sizes of words on mbui's scale (Tailwind's names): Xs a note (12/18), Sm the meta line (13/18), Base
+/// the body (15/22), Xl2 a title (22/28), as the pages say them now.
+pub let text_scale : @ui.TextScale = {
+  ..@ui.TextScale::tailwind(),
+  xs: (12.0, 18.0),
+  sm: (13.0, 18.0),
+  base: (15.0, 22.0),
+  xl2: (22.0, 28.0),
+}
+
+///|
+/// The code face's size in a line of its own, its line the font's own (mono).
+pub let code_size : @ui.TextSize = Exact(13.0, 0.0)
+
+///|
+/// A code's box's edge: the words' colour at 18%.
+pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
+
+///|
+/// A column a phone's width at most, in the middle (phone_column): its widest.
+pub let phone_max : @ui.Len = Fixed(420.0)
+
+///|
+/// The theme as mbui's (its Theme's roles over this frame's palette: wide or narrow, light or dark), with
+/// still.fail's sizes of words: what the styles' tokens are looked up in.
+pub fn ui_theme() -> @ui.Theme {
+  let t = current.val
+  let base = match (t.narrow, t.dark) {
+    (false, false) => @ui.Theme::light()
+    (false, true) => @ui.Theme::dark()
+    (true, false) => @ui.Theme::narrow_light()
+    (true, true) => @ui.Theme::narrow_dark()
+  }
+  { ..base, text: text_scale }
+}
