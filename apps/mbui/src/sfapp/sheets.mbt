@@ -81,25 +81,46 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
 }
 
 ///|
-/// Rows on one quiet card (ChatInfo.kt InfoList): 14 round, the ink at 5%.
+/// A row of an info card, its ground under the finger: Android ChatInfo.kt INFO_ROW (14.dp).
+let info_row_radius : Double = 14.0
+
+///|
+/// An info card round its rows, INFO_PAD (6.dp) in: Android ChatInfo.kt InfoList, Smooth(concentricOut(INFO_ROW,
+/// INFO_PAD)).
+let info_list_radius : Double = @sf.concentric_out(info_row_radius, 6.0)
+
+///|
+/// Rows on one quiet card (Android ChatInfo.kt InfoList): its rows INFO_PAD (6) in, the ink at 5%.
+// kept across runs: a value (no field of it changes)
+let info_list_style : @ui.Style = @ui.style(w=Full, p=S1_5, bg=A(Fg, O5), clip=true)
+
+///|
 fn info_list(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), radius=14.0, bg=@sf.alpha(t.p.text, 0.05), clip=true, body) |> ignore
+  c.box(style=info_list_style, radius=info_list_radius, body) |> ignore
 }
 
 ///|
-/// A row of it (InfoRow): 12 in, 10 above and under, what it holds 12 apart; pressed, a shade. True on the frame after
-/// it was tapped (never when `key` is "": a row that leads nowhere).
-fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = ACenter) -> Bool {
+/// A row of it (Android InfoRow): 44 high at least, its words INFO_TEXT (10) in from its sides and INFO_IN (4) from
+/// top and bottom, what it holds 12 apart.
+// kept across runs: a value (no field of it changes)
+let info_row_style : @ui.Style = @ui.style(row=true, w=Full, min_h=S11, px=S2_5, py=S1, gap=S3)
+
+///|
+/// A row that leads with a tile (a model's mark, 36 and 11 round): INFO_IN (4) in all round, so the tile is
+/// concentric with the row and the card.
+// kept across runs: a value (no field of it changes)
+let info_row_tile : @ui.Style = @ui.style(px=S1)
+
+///|
+/// Its ground rounded INFO_ROW, pressed a shade. True on the frame after it was tapped (never when `key` is "": a row
+/// that leads nowhere).
+fn info_row(c : @ui.Ctx, key : String, body : () -> Unit, align? : @ui.Align = ACenter, tile? : Bool = false) -> Bool {
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
+  let look = if tile { info_row_style.then(info_row_tile) } else { info_row_style }
   c.box(
-    dir=Row,
-    w=Fill(1.0),
-    padx=12.0,
-    pady=10.0,
-    gap=12.0,
-    align~,
+    style=look.then(@ui.style(align~)),
+    radius=info_row_radius,
     bg=if id != 0 && c.pressed(id) { @sf.alpha(t.p.text, 0.06) } else { 0L },
     id~,
     body,
@@ -518,7 +539,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
                   None => field(field(av, "profile"), "quota")
                 })
                 chevron(c)
-              }) {
+              }, tile=true) {
               open_sheet(c, AgentOf(r, key))
             }
           }

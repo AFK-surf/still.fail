@@ -20,3 +20,16 @@ pub fn concentric(outer : Double, inset : Double) -> Double {
 pub fn around(inset : Double, inner : Double) -> Double {
   inset + inner
 }
+
+///|
+/// How much longer Android's smooth corner (Corners.kt Smooth, the web's superellipse(1.5)) is than the radius it is
+/// given: Corners.kt SMOOTH_SCALE.
+pub let smooth_scale : Double = 1.25
+
+///|
+/// Android's corner of a smooth box round one of corner `inner`, `inset` in from its edges (Corners.kt concentricOut:
+/// the inset taken a quarter smaller, as Smooth draws a corner a quarter larger than it is given). For a value the
+/// Android original works out this way, taken as it is.
+pub fn concentric_out(inner : Double, inset : Double) -> Double {
+  inner + inset / smooth_scale
+}
