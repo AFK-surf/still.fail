@@ -1379,7 +1379,7 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             let quotes = marks_quotes(marking.job_name, self.file.name, z.nw, z.nh)
             let key = self.draft_key()
             let list = marked_into.get(key).unwrap_or([])
-            list.push((marking.job_name, png, quotes))
+            list.push((marking.job_name, png, quotes, "image"))
             marked_into[key] = list
             marks_leave()
             say(c, pv("android-chat.preview.put.done"))
