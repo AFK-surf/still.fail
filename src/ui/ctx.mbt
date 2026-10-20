@@ -935,19 +935,6 @@ fn Ctx::read_changed(self : Ctx, what : String, loc~ : SourceLoc) -> Unit {
 }
 
 ///|
-/// The next frame owed to what the framework itself changed of what the view shows (a stack pushed, popped or
-/// replaced; gone back), in a frame or between frames: the host told now, as Ctx::request_frame tells it. The
-/// scheduler's own: no view asks it.
-#callsite(autofill(loc))
-fn Ctx::owe_frame(self : Ctx, loc~ : SourceLoc) -> Unit {
-  self.wants_frame = true
-  h_request_frame()
-  if self.frame_by is None {
-    self.frame_by = Some(loc)
-  }
-}
-
-///|
 /// A motion set out between frames (Ctx::set_out): the next frame is owed to it (its start), the host told now, as
 /// a frame asked between frames is.
 fn Ctx::owe_start(self : Ctx) -> Unit {

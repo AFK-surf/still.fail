@@ -273,9 +273,10 @@ pub fn[P] Nav::replace(self : Nav[P], page : P) -> Unit {
 }
 
 ///|
-/// A stack changed: the next frame shows it (Ctx::owe_frame).
+/// A stack changed: changed as the frame is built, built again from it in the frame (no frame shows the page it left
+/// as it was); between frames, the next frame (Ctx::read_changed).
 fn wake() -> Unit {
-  g().owe_frame()
+  g().read_changed("a stack changed")
 }
 
 ///|
@@ -450,7 +451,7 @@ pub fn Ctx::back(self : Ctx) -> Bool {
   match self.back {
     Some(f) => {
       f(4, 0.0, 1.0, self.now)
-      self.owe_frame()
+      self.read_changed("gone back")
       true
     }
     None => false
