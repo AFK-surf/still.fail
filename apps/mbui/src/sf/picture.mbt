@@ -431,6 +431,7 @@ pub fn station_mark(
   icon : String,
   size : Double,
   tint : Int64,
+  none? : String,
 ) -> Unit {
   if icon.has_prefix("glyph:") {
     let rest = icon.view(start_offset=6).to_owned()
@@ -495,6 +496,12 @@ pub fn station_mark(
   }
   if emoji != "" {
     c.text(emoji, size=size * 0.9, wrap=false, line=size) |> ignore
+    return
+  }
+  // none of its own: `none`'s icon, if given (Parts.kt StationMark's `none`)
+  match none {
+    Some(n) => icon_named(c, n, size, tint) |> ignore
+    None => ()
   }
 }
 
@@ -530,4 +537,10 @@ fn base64(s : String) -> Bytes {
     }
   }
   Bytes::from_array(out)
+}
+
+///|
+/// Icon `name` (`icon`, where a parameter of that name hides it).
+fn icon_named(c : @ui.Ctx, name : String, size : Double, color : Int64) -> Int {
+  icon(c, name, size~, color~)
 }

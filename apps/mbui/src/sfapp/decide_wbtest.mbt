@@ -8,7 +8,7 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done })
+      calls.push({ name, params, bytes: None, done, heard: None })
       done(Ok(Json::object({})))
     },
   }

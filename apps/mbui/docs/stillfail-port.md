@@ -96,13 +96,29 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   compares it with goldens/mac-home*.png and web-home.png.
 
 Not yet, against the current app: the bottom bar (slice 7: 奏 N and 令 in
-it, so no new-chat button here), the search page, the long-press menu (pin, rename, copy link)
+it, so no new-chat button here), the long-press menu (pin, rename, copy link)
 and swiping a row away, the rows' motion as the list changes, the open jobs
 banner and the changelog's note, pull to refresh (the app has none either),
 the update button, inviting and new workspaces in the sheet, English (the
 words are the Chinese catalog's), avatars' pictures on Android (no image
 decoding there yet), `client.focus`, and picking the first workspace into the
 prefs at start (only a switch made here writes them).
+
+The search (src/sfapp/search.mbt, Search.kt; branch mbui-search-composer, 2026-10-21): the list starts at its first
+row with the field above it out of view (Home.kt top); the field tapped, the search opens over Home: its field comes
+up from where it was to the top in 280 ms (Ease.Arrive), narrowing as 取消 comes in from the right, the list going up
+56 and fading with the top bar, the bottom bar out of its way; 取消 or back, all of it back in 240 ms (Ease.Standard).
+What the words find (the core's `search` topic): the chats (as Home lists them; one found by a line of it, that line
+over its title), the messages, then a section per kind (services and tasks, files, stations, members), 查看更多 under
+one that has more (that kind alone, from the top; 全部结果 or back, every kind again); under it all the stations still
+answering, those that could not be searched in red, the core's note; 未找到结果, 更新后才能搜索. A found line is one line
+cut at its end (mbui's rich `max_lines`), the words bold with a hand-drawn stroke in the accent under each, drawn in
+one after another (520 ms each, 180 apart: src/sf/stroke.mbt). A message opens its chat at it with the words marked
+there (bold, stroked, kept while the chat shows; its first word put in the middle when it lies low; nothing flashes:
+search_marks.mbt); a service its chat and its page, a station its page, a member the workspace's, a file its place in
+its station's files (a folder entered, a text read, a video played). `APP=sffix MBUI_FIXTURE=search-results` (and
+search-jobs) is the Android app's SearchResultsTest's search; scripts/motion/search.drive records the open and close.
+Not yet: the keyboard's 搜索 key (mbui's editor has no IME action).
 
 Slice 4, a chat read (branch chat-read, 2026-10-19): a row pushes its chat
 (src/sfapp/chat.mbt, messages.mbt over the core's `chat {station, session}`
@@ -235,12 +251,22 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   composer so: `scripts/shots.sh composer web-composer` compares them with
   goldens/mac-composer-*.png and web-composer-*.png.
 
-Not yet, against the current app: `@` references to
-other chats and pasted chat links as marks (chat.ref, chatSearch), sharing
-what they refer to before sending, a
-picture's preview from its tile, files pasted or sent by the keyboard (only
-words are), the text toolbar of the field
-(select, cut, copy by touch; the keyboard's own paste works), links drawn but not tapped while words are picked (a tap
+Words with a reference to another chat (`@[title]`) are looked at before they
+go (`chat.outsideRefs`, src/sfapp/outside.mbt): another workspace's chats they
+name are shared first from a sheet (`chat.xshareAdd`; 仍然发送 when none may
+be), in a chat and a new chat's first message alike. A picture waiting in the
+composer opens in the viewer from its tile; a link shared in opens; the draft's
+files and its station files are one row, in the order put in, scrolled
+sideways; a file going up says how far while a part goes (`progress`); files
+sent fly from their tiles to their places in the message (flight.mbt).
+`MBUI_FIXTURE=chat-attach-row` is the row wider than the capsule.
+
+Not yet, against the current app, for want of mbui's (its editor has no caret
+or selection to read or set, no styled ranges, no say in an edit; its hosts
+paste words only): `@` references to other chats and pasted chat links as
+marks (chat.ref, chatSearch), the marks drawn in the accent and taken whole by
+a backspace, files pasted or sent by the keyboard, the text toolbar of the
+field (select, cut, copy by touch; the keyboard's own paste works), links drawn but not tapped while words are picked (a tap
 on one lets go of the pick and follows it), the long press's haptic tick (no host haptics yet), a new chat
 (slice 6).
 

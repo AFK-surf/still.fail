@@ -9,8 +9,7 @@
 pub fn page(c : @ui.Ctx, core : Core, here : Here, route : Route, root? : Bool = false) -> Unit {
   frame_core.val = Some(core)
   at_root.val = root
-  // the styles' tokens (@sf styles.mbt) looked up in still.fail's theme, as this frame's palette has it
-  c.with_theme(@sf.ui_theme(), fn() { route_page(c, core, here, route) })
+  route_page(c, core, here, route)
 }
 
 ///|

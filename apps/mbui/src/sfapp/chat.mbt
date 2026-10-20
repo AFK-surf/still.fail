@@ -117,6 +117,13 @@ priv struct Reading {
   flash_lit : @motion.Anim
   /// flashes started (each one's own hold, with motion reduced)
   mut flash_n : Int
+  /// a message the search opened the chat at (ChatMotion.kt foundAt, "" none) and its words marked in it (`found`),
+  /// for as long as the chat shows; how far their strokes are drawn in (ms of drawFound's); its first word yet to be
+  /// put in the list's middle when it lies low (Chat.kt rememberJump's FOUND)
+  mut found_at : String
+  mut found_words : Array[String]
+  found_drawn : @motion.Anim
+  mut found_centre : Bool
 }
 
 ///|
@@ -157,6 +164,10 @@ fn reading_of(key : String) -> Reading {
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
         flash_n: 0,
+        found_at: "",
+        found_words: [],
+        found_drawn: @motion.Anim::new(0.0),
+        found_centre: false,
       }
       readings[key] = r
       r
@@ -269,6 +280,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         |> ignore
         // words sent, as typed, until their row is in the list (flight.mbt)
         flight_waiting(c, draft_key(r))
+        // and the files sent with them, from their tiles to their places (flight.mbt)
+        flight_files(c, draft_key(r))
         // a passage picked: its handles and its bar over the list (pick.mbt)
         pick_layer(c, src, r)
         // a link held: its menu (link_menu.mbt)
@@ -352,6 +365,9 @@ fn messages(
   let n = list.length()
   // a message gone to, flashing: its words' bubble (yours) or a ground under its row (flash.mbt's underlay)
   flashing.val = (rd.flash, flash_of(c, rd, rd.flash))
+  // a search's words marked in the message it opened the chat at (search_marks.mbt)
+  found_marking.val = (rd.found_at, rd.found_words, rd.found_drawn.get())
+  found_centre(c, rd, key)
   flash_row.val = None
   // a new chat's list comes up out of the composer as it becomes this chat (newchat.mbt)
   c.box(w=Fill(1.0), h=Fill(1.0), ty=new_chat_rise(c, r), fn() {
@@ -522,6 +538,7 @@ fn messages(
       Some(target) if rd.placed && !put_now => {
         let mut at = -1
         let mut first = -1.0
+        let mut found = false
         for i, e in list {
           match e {
             Said(m) => {
@@ -530,7 +547,16 @@ fn messages(
               }
               if m.seq == target {
                 at = i
-                rd.flash = m.ts
+                // opened from a search: its words marked in it, nothing flashing (Chat.kt markWords, FOUND)
+                match go_to_words.get(gk) {
+                  Some(words) => {
+                    go_to_words.remove(gk)
+                    rd.found_at = m.ts
+                    rd.found_words = words
+                    found = true
+                  }
+                  None => rd.flash = m.ts
+                }
                 break
               }
             }
@@ -539,7 +565,11 @@ fn messages(
         }
         if at >= 0 {
           go_tos.remove(gk)
-          flash_start(rd)
+          if found {
+            found_start(rd)
+          } else {
+            flash_start(rd)
+          }
           c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
           @host.log("chat: gone to message \{target.to_int()}")
         } else {
@@ -885,6 +915,21 @@ pub fn open_chat_at(r : ChatRef, seq : Double, held? : Bool = false) -> Unit {
 
 ///|
 let flash_held : Ref[Bool] = Ref(false)
+
+///|
+/// The words a search opened each chat at its message with (Screen.Chat.words), by chat: marked in that message
+/// rather than it flashing (Chat.kt host.goToWords).
+let go_to_words : Map[String, Array[String]] = {}
+
+///|
+/// The chat `r` opened from the search at its message `seq`, the search's `words` marked there (Search.kt FoundRow).
+fn open_chat_found(r : ChatRef, seq : Double, words : Array[String]) -> Unit {
+  go_to(r, seq)
+  if words.length() > 0 {
+    go_to_words[r.station + "\u{1}" + r.session] = words
+  }
+  app.nav.push(Chat(r))
+}
 
 ///|
 /// A message gone to flashes (ChatMotion.kt flash): the accent's ground in over `flash_in_ms` on Ease.Out, held to

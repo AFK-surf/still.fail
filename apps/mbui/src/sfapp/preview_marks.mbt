@@ -194,9 +194,9 @@ priv struct Marking {
   mut job : @ui.MarkedImage?
   mut to_draft : Bool
   mut job_name : String
-  /// the words being written and the open note's, as their fields have them
-  mut write_text : String
-  mut note_text : String
+  /// the words being written and the open note's (their fields show them)
+  write_field : @ui.Field
+  note_field : @ui.Field
 }
 
 ///|
@@ -219,8 +219,8 @@ let marking : Marking = {
   job: None,
   to_draft: false,
   job_name: "",
-  write_text: "",
-  note_text: "",
+  write_field: @ui.Field::new(),
+  note_field: @ui.Field::new(),
 }
 
 ///|
@@ -292,7 +292,7 @@ fn marks_put_down(c : @ui.Ctx) -> Unit {
     Some(x) => x
     None => return
   }
-  let text = marking.write_text.trim(chars=" \n\t").to_string()
+  let text = marking.write_field.text().trim(chars=" \n\t").to_string()
   marking.writing = None
   c.blur()
   if id >= 0 {
@@ -373,7 +373,7 @@ fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double,
             // an arrow's end near the finger: that end moves; words with the words tool: written again
             if s.kind == "words" && marking.tool == Words {
               marking.writing = Some((s.id, s.pts[0], s.pts[1], s.w, s.color))
-              c.set_editor_text("marks/write", s.text)
+              marking.write_field.set(s.text)
               c.focus_editor("marks/write")
               return
             }
@@ -396,7 +396,7 @@ fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double,
             } else {
               let w = mark_text / k
               marking.writing = Some((-1, x, y - w * 0.65, w, marking.color))
-              c.set_editor_text("marks/write", "")
+              marking.write_field.set("")
               c.focus_editor("marks/write")
             }
         }
@@ -463,7 +463,7 @@ fn marks_finger(c : @ui.Ctx, phase : Int, px : Double, py : Double, r : (Double,
             // a box or an arrow drawn: what to say about it, at once
             if m.numbered() {
               marking.note = m.id
-              c.set_editor_text("marks/note", "")
+              marking.note_field.set("")
               c.focus_editor("marks/note")
             }
           }
@@ -617,7 +617,7 @@ fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh
             marking.picked = -1
             marking.note = if marking.note == s.id { -1 } else { s.id }
             if marking.note >= 0 {
-              c.set_editor_text("marks/note", marking.comments.get(s.id).unwrap_or(""))
+              marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
               c.focus_editor("marks/note")
             }
           }
@@ -658,8 +658,8 @@ fn marks_draw(c : @ui.Ctx, r : (Double, Double, Double, Double), nw : Double, nh
             color~,
             placeholder_color=@sf.alpha(color, 0.55),
             caret_color=color,
+            field=marking.write_field,
           )
-          marking.write_text = e.text
           match e.submitted {
             Some(_) => marks_put_down(c)
             None => ()
@@ -757,7 +757,7 @@ fn marks_back(c : @ui.Ctx) -> Unit {
 ///|
 fn marks_note_done(c : @ui.Ctx) -> Unit {
   if marking.note >= 0 {
-    marking.comments[marking.note] = marking.note_text
+    marking.comments[marking.note] = marking.note_field.text()
   }
   marking.note = -1
   c.blur()
@@ -766,7 +766,7 @@ fn marks_note_done(c : @ui.Ctx) -> Unit {
 ///|
 /// Something drawn (or being written) to be kept.
 fn marks_any() -> Bool {
-  marking.shapes.length() > 0 || (marking.writing is Some(_) && marking.write_text.trim(chars=" \n\t") != "")
+  marking.shapes.length() > 0 || (marking.writing is Some(_) && marking.write_field.text().trim(chars=" \n\t") != "")
 }
 
 ///|
@@ -849,7 +849,7 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
             wrap=false,
           )
           |> ignore
-          let e = c.editor(
+          c.editor(
             "marks/note",
             font_size=15.0,
             max_lines=4,
@@ -857,8 +857,9 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
             placeholder_color=dark_muted,
             caret_color=0xE5704AFFL,
             enter_sends=false,
+            field=marking.note_field,
           )
-          marking.note_text = e.text
+          |> ignore
           c.box(dir=Row, w=Fill(1.0), gap=8.0, justify=JEnd, fn() {
             let remove = c.id("marks/note-remove")
             if c.clicked(remove) {
@@ -898,7 +899,7 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
               if c.clicked(id) {
                 marks_put_down(c)
                 marking.note = s.id
-                c.set_editor_text("marks/note", marking.comments.get(s.id).unwrap_or(""))
+                marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
                 c.focus_editor("marks/note")
               }
               let said = marking.comments.get(s.id).unwrap_or("")

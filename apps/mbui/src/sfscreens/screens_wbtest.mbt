@@ -176,8 +176,18 @@ fn screen_check(it : @test.Test, t : @ui.Tester, mode : String, unlike_mac? : St
       faults.join("\n"),
     )
   }
-  it.write(t.drawlist(bytes=true))
-  it.snapshot(filename=mode + ".dl")
+  // (its reference as another machine wrote it: the same screen though a number's last bits differ (an arc's points
+  // on an arm64 Mac and an x64 Linux), mbui's drawlist_same; kept as it is then; compared to the byte, and rewritten
+  // with UPDATE=1, only when it is not that screen, or missing)
+  let dl = t.drawlist(bytes=true)
+  let kept = kept_drawlist(mode + ".dl")
+  if kept == "" || !@ui.drawlist_same(dl, kept) {
+    if @ui.drawlist_first_unlike(kept, dl) is Some((n, was, now)) && kept != "" {
+      println("\{mode}.dl: line \{n} not the same screen:\n  kept: \{was}\n  now:  \{now}")
+    }
+    it.write(dl)
+    it.snapshot(filename=mode + ".dl")
+  }
   t.assert_idle()
 }
 

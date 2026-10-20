@@ -65,18 +65,15 @@ let nav_trailing : @ui.Style = @ui.style(row=true, h=S8, align=ACenter)
 pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
   let t = theme()
   let id = c.id(key)
-  // its styles' tokens in still.fail's theme, whatever page it is on (only settings' pages put it round them)
-  c.with_theme(ui_theme(), fn() {
-    c.box(style=nav_back_box, id~, fn() {
-      icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-      if max_w > 0.0 {
-        c.box(style=@ui.style(max_w=Fixed(max_w)), fn() { c.text(label, style=nav_back_words) |> ignore }) |> ignore
-      } else {
-        c.text(label, style=nav_back_words) |> ignore
-      }
-    })
-    |> ignore
+  c.box(style=nav_back_box, id~, fn() {
+    icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
+    if max_w > 0.0 {
+      c.box(style=@ui.style(max_w=Fixed(max_w)), fn() { c.text(label, style=nav_back_words) |> ignore }) |> ignore
+    } else {
+      c.text(label, style=nav_back_words) |> ignore
+    }
   })
+  |> ignore
   c.clicked(id)
 }
 
@@ -93,9 +90,7 @@ pub fn nav_bar(
   back_max? : Double = 0.0,
   bg? : Int64 = 0L,
 ) -> Bool {
-  let mut went = false
-  c.with_theme(ui_theme(), fn() { went = nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~) })
-  went
+  nav_bar_in(c, back_key, back, title, sub?, trailing?, back_max~, bg~)
 }
 
 ///|

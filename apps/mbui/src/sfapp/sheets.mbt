@@ -646,14 +646,24 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
 }
 
 ///|
+/// The rename sheet's words (its field shows them), and the chat they were given the name of ("" none yet: given the
+/// next time it is shown).
+let rename_field : @ui.Field = @ui.Field::new()
+
+///|
+let rename_given : Ref[String] = Ref("")
+
+///|
 /// Renaming the chat (ChatInfo.kt askTitle): a field with its name, 取消 and 保存 (an empty name gives it back its
 /// first message); the sheet goes as it is saved, the core showing the new name at once.
 fn rename_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, was : String) -> Unit {
   let t = @sf.theme()
   let key = "rename/field"
   sheet_frame(c, "rename", c.height * 0.42, fn() {
-    if !c.has_editor(key) {
-      c.set_editor_text(key, was)
+    let whose = r.station + "/" + r.session
+    if rename_given.val != whose {
+      rename_given.val = whose
+      rename_field.set(was)
       c.focus_editor(key)
     }
     sheet_head(c, tr("android-chat.rename.title"))
@@ -679,6 +689,7 @@ fn rename_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, was : 
             placeholder_color=t.p.subtle,
             caret_color=t.p.accent,
             enter_sends=false,
+            field=rename_field,
           )
           now = res.text
         },
@@ -687,12 +698,14 @@ fn rename_sheet(c : @ui.Ctx, src : Source, r : ChatRef, thread : Double?, was : 
       c.text(tr("android-chat.rename.note"), size=12.0, color=t.p.muted, line=17.0) |> ignore
       c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
         if sheet_button(c, "rename/cancel", tr("common.cancel"), false, true) {
-          c.take_editor_text(key) |> ignore
+          rename_field.set("")
+          rename_given.val = ""
           close_sheet(c)
         }
         let title = now.trim(chars=" \n\t").to_string()
         if sheet_button(c, "rename/save", tr("common.save"), true, title != was) {
-          c.take_editor_text(key) |> ignore
+          rename_field.set("")
+          rename_given.val = ""
           close_sheet(c)
           let p : Map[String, Json] = {
             "station": Json::string(r.station),

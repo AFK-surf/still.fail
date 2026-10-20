@@ -53,14 +53,14 @@ pub fn icon(c : @ui.Ctx, name : String, size? : Double = 16.0, color? : Int64) -
 }
 
 ///|
-/// The spinner's frames a turn.
-let spin_frames = 24
+/// The spinner's line: 2 wide (Waiting.kt Spinner: Stroke(2.dp)).
+let spin_stroke : Double = 2.0
 
 ///|
-/// The spinner (styles/spinner.css.ts): a ring of line_strong, a quarter of
-/// it in the accent, turning in 0.8s; 14, or 12 in a line of small text.
-/// `sweep` (of a turn) and `period` for other rings that turn (a chat's mark
-/// at work: three quarters, 1.2s).
+/// The spinner (styles/spinner.css.ts, Waiting.kt Spinner): a ring of line_strong, a quarter of it in the accent,
+/// turning in 0.8s; 14, or 12 in a line of small text. `sweep` (of a turn) and `period` for other rings that turn (a
+/// chat's mark at work: three quarters, 1.2s). Its lines drawn as they are every frame (mbui's Ctx::lines), only where
+/// the arc starts going round with the clock: nothing to make, nothing to wait for.
 pub fn spinner(
   c : @ui.Ctx,
   size? : Double = 14.0,
@@ -72,60 +72,20 @@ pub fn spinner(
   let t = theme()
   let ring = ring.unwrap_or(t.p.line_strong)
   let arc = arc.unwrap_or(t.p.accent)
-  let frame = (c.cycle(period) * spin_frames.to_double()).to_int() % spin_frames
-  let px = px_of(c, size)
-  let key = "mem:sf/spin/\{px}/\{ring}/\{arc}/\{frame}" +
-    (if sweep != 0.25 { "/\{sweep}" } else { "" })
-  if !made.contains(key) {
-    made[key] = true
-    // a border 2 wide inside the box: its middle 1 in from the edge
-    let unit = size
-    let r = size / 2.0 - 1.0
-    let mid = size / 2.0
-    let circle = fn(from : Double, to : Double, n : Int) -> Array[Double] {
-      let pts = []
-      for k in 0..=n {
-        let a = from + (to - from) * k.to_double() / n.to_double()
-        pts.push(mid + r * @math.cos(a))
-        pts.push(mid + r * @math.sin(a))
-      }
-      pts
-    }
-    let pi = 3.141592653589793
-    let turn = frame.to_double() / spin_frames.to_double() * 2.0 * pi
-    let whole = Art::new(unit)
-    whole.stroke(circle(0.0, 2.0 * pi, 48), 2.0, true)
-    let top = Art::new(unit)
-    let from = -0.75 * pi + turn
-    top.stroke(
-      circle(from, from + sweep * 2.0 * pi, (48.0 * sweep).ceil().to_int()),
-      2.0,
-      false,
-    )
-    let a = whole.cover(px)
-    let b = top.cover(px)
-    // the arc over the ring, as one picture
-    let rgba = FixedArray::make(px * px * 4, b'\x00')
-    for i in 0..<(px * px) {
-      let ca = a[i] * (ring & 0xFFL).to_double() / 255.0
-      let cb = b[i] * (arc & 0xFFL).to_double() / 255.0
-      let oa = cb + ca * (1.0 - cb)
-      if oa > 0.0 {
-        for ch in 0..<3 {
-          let sh = 24 - ch * 8
-          let x = ((ring >> sh) & 0xFFL).to_double()
-          let y = ((arc >> sh) & 0xFFL).to_double()
-          rgba[i * 4 + ch] = ((y * cb + x * ca * (1.0 - cb)) / oa)
-            .round()
-            .to_int()
-            .to_byte()
-        }
-        rgba[i * 4 + 3] = (oa * 255.0).round().to_int().to_byte()
-      }
-    }
-    @ui.add_image(key, png(px, px, rgba))
-  }
-  c.image(key, w=Px(size), h=Px(size), fit=FitFill, bg=0L, fade=false)
+  let pi = 3.141592653589793
+  // the line's middle 1 in from the edge; the arc from a quarter before the top (the web's: a border whose top is
+  // the arc), turned by the clock
+  let mid = size / 2.0
+  let r = mid - spin_stroke / 2.0
+  let from = -0.75 * pi + c.cycle(period) * 2.0 * pi
+  c.lines(
+    [
+      @ui.line(@ui.arc(mid, mid, r, from=0.0, sweep=2.0 * pi), width=spin_stroke, color=ring),
+      @ui.line(@ui.arc(mid, mid, r, from~, sweep=sweep * 2.0 * pi), width=spin_stroke, color=arc),
+    ],
+    w=Px(size),
+    h=Px(size),
+  )
 }
 
 ///|

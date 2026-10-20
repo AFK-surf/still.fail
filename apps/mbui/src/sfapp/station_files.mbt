@@ -25,6 +25,8 @@ priv struct DraftRef {
   mut mode : String
   /// sent as a file: it going up, then up (its `done` the attachment)
   mut up : Pending?
+  /// its place among what was put in the draft (next_pending's count, as the draft's files: one row in that order)
+  order : Int
 }
 
 ///|
@@ -38,7 +40,9 @@ fn draft_ref(
   dir : Bool,
   size? : Double = 0.0,
 ) -> DraftRef {
-  { station, station_name, path: dv_absolute(root, at), name, dir, root, at, size, mode: "path", up: None }
+  let order = next_pending.val
+  next_pending.val += 1
+  { station, station_name, path: dv_absolute(root, at), name, dir, root, at, size, mode: "path", up: None, order }
 }
 
 ///|
@@ -137,6 +141,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     width: 0,
     height: 0,
     pasted: None,
+    local: None,
     done: None,
     sent: 0,
     error: None,
@@ -473,85 +478,75 @@ fn sf_folder(c : @ui.Ctx, src : Source, p : SfPlace) -> Unit {
 }
 
 ///|
-/// The station files in the draft (StationFiles.kt RefCard): each its name and where it is (named by its path:
+/// A station file in the draft (StationFiles.kt RefCard), in the files' row (draft_files_row): its name and where it is (named by its path:
 /// outlined, as it stays where it is), or how it goes up (the bubble's grey: a spinner, how far, why it failed, its
 /// size); × takes it out; tapped, its sheet (ref_sheet).
-fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
-  let refs = refs_of(key)
-  if refs.length() == 0 {
-    return
-  }
+fn ref_card(c : @ui.Ctx, key : String, r : DraftRef) -> Unit {
   let t = @sf.theme()
-  // (as the files' row: as far from the capsule's left edge as from its top)
-  c.box(style=composer_files_row, fn() {
-    for r in refs {
-      let remove = c.id("composer/unref/" + r.station + "|" + r.path)
-      let card = c.id("composer/ref/" + r.station + "|" + r.path)
-      if c.clicked(remove) {
-        draft_refs[key] = refs_of(key).filter(fn(x) { !(x.station == r.station && x.path == r.path) })
-      } else if c.clicked(card) {
-        sfs.ref = Some((key, r))
-        sfs.ref_closing = false
-      }
-      let named = r.mode == "path"
-      let up = if named { None } else { r.up }
-      let busy = !named &&
-        (match up {
-          Some(p) => p.done is None && p.error is None
-          None => true
-        })
-      let failed = match up {
-        Some(p) => p.error
-        None => None
-      }
-      let name = if !named && r.dir { r.name + ".zip" } else { r.name }
-      let note = if named {
-        r.station_name + " · " + tr("web-main.file.modePath")
-      } else {
-        match up {
-          Some(p) =>
-            match (p.error, p.done) {
-              (Some(e), _) => e
-              (_, Some(done)) => file_size(number(Some(done), "size"))
-              _ => uploading_text(p)
-            }
-          None => tr("common.uploading")
+  let remove = c.id("composer/unref/" + r.station + "|" + r.path)
+  let card = c.id("composer/ref/" + r.station + "|" + r.path)
+  if c.clicked(remove) {
+    draft_refs[key] = refs_of(key).filter(fn(x) { !(x.station == r.station && x.path == r.path) })
+  } else if c.clicked(card) {
+    sfs.ref = Some((key, r))
+    sfs.ref_closing = false
+  }
+  let named = r.mode == "path"
+  let up = if named { None } else { r.up }
+  let busy = !named &&
+    (match up {
+      Some(p) => p.done is None && p.error is None
+      None => true
+    })
+  let failed = match up {
+    Some(p) => p.error
+    None => None
+  }
+  let name = if !named && r.dir { r.name + ".zip" } else { r.name }
+  let note = if named {
+    r.station_name + " · " + tr("web-main.file.modePath")
+  } else {
+    match up {
+      Some(p) =>
+        match (p.error, p.done) {
+          (Some(e), _) => e
+          (_, Some(done)) => file_size(number(Some(done), "size"))
+          _ => uploading_text(p)
         }
-      }
-      // (as far down as a picture's tile in the files' row; as wide as it is, never squeezed)
-      c.box(w=Px(file_card_w), pt=picture_remove_out, fn() {
-      c.box(
-        dir=Row,
-        w=Px(file_card_w),
-        min_h=picture_tile,
-        padx=10.0,
-        pady=8.0,
-        gap=10.0,
-        style=files_card(),
-        border=if named { 1.0 } else { 0.0 },
-        border_color=@sf.alpha(t.p.text, 0.22),
-        bg=if named { 0L } else { ink().neutral },
-        align=ACenter,
-        id=card,
-        fn() {
-          if busy {
-            @sf.spinner(c, size=16.0) |> ignore
-          } else {
-            @sf.icon(c, if r.dir && named { "folder" } else { "read" }, size=16.0, color=t.p.muted) |> ignore
-          }
-          c.box(w=Fill(1.0), fn() {
-            c.text(name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
-            c.text(note, size=11.0, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
-            |> ignore
-          })
-          |> ignore
-          card_close(c, remove)
-        },
-      )
-      |> ignore
-      })
-      |> ignore
+      None => tr("common.uploading")
     }
+  }
+  // (as far down as a picture's tile in the files' row; as wide as it is, never squeezed)
+  c.box(w=Px(file_card_w), pt=picture_remove_out, fn() {
+    let tile = c.box(
+      dir=Row,
+      w=Px(file_card_w),
+      padx=10.0,
+      pady=8.0,
+      gap=10.0,
+      style=files_card(),
+      border=if named { 1.0 } else { 0.0 },
+      border_color=@sf.alpha(t.p.text, 0.22),
+      bg=if named { 0L } else { ink().neutral },
+      align=ACenter,
+      id=card,
+      fn() {
+        if busy {
+          @sf.spinner(c, size=16.0) |> ignore
+        } else {
+          @sf.icon(c, if r.dir && named { "folder" } else { "read" }, size=16.0, color=t.p.muted) |> ignore
+        }
+        c.box(w=Fill(1.0), fn() {
+          c.text(name, size=15.0, color=t.p.text, wrap=false, line=20.0) |> ignore
+          c.text(note, size=11.0, color=if failed is Some(_) && !named { t.p.red } else { t.p.muted }, wrap=false, line=16.0)
+          |> ignore
+        })
+        |> ignore
+        card_close(c, remove)
+      },
+    )
+    // where it is, for it to fly from when sent as a file (flight.mbt)
+    @motion.measure(c, tile, "composer/tile/ref/\{r.order}")
   })
   |> ignore
 }

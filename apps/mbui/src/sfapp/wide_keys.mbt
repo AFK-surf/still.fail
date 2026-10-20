@@ -13,7 +13,7 @@ fn wide_keys(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     wide.switcher = !wide.switcher
     wide.chosen = 0
     switcher_query.val = ""
-    c.set_editor_text("switcher/field", "")
+    switcher_field.set("")
     wide.menu = None
     wide.attention_open = false
   }
@@ -163,6 +163,13 @@ fn row_menu(c : @ui.Ctx, src : Source) -> Unit {
 let switcher_query : Ref[String] = Ref("")
 
 ///|
+/// The switcher's words, and a row's title being renamed in place (their fields show them).
+let switcher_field : @ui.Field = @ui.Field::new()
+
+///|
+let side_rename_field : @ui.Field = @ui.Field::new()
+
+///|
 /// ⌘K (Switcher.tsx ChatSwitcher): over a scrim, 14% down the window, 560 wide at most: a field (搜索全部内容和操作), the
 /// chats whose titles hold what is typed (all of them, newest first, while nothing is), ↑ / ↓ to choose, Enter or a
 /// press to open; Esc or a press outside closes it.
@@ -243,6 +250,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
               placeholder_color=t.p.subtle,
               caret_color=t.p.accent,
               enter_sends=true,
+              field=switcher_field,
             )
             if !res.focused && !c.field_focused() {
               c.focus_editor("switcher/field")
@@ -253,7 +261,7 @@ fn switcher(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
             }
             match res.submitted {
               Some(words) => {
-                c.set_editor_text("switcher/field", words)
+                switcher_field.set(words)
                 if wide.chosen < shown.length() {
                   open(shown[wide.chosen])
                 }
@@ -410,9 +418,9 @@ fn keys_dialog(c : @ui.Ctx) -> Unit {
 fn side_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
   let t = @sf.theme()
   let key = "side/rename"
-  if !c.has_editor(key) || rename_for.val != item.station + "/" + item.id {
+  if rename_for.val != item.station + "/" + item.id {
     rename_for.val = item.station + "/" + item.id
-    c.set_editor_text(key, item.title)
+    side_rename_field.set(item.title)
     c.focus_editor(key)
   }
   c.box(w=Fill(1.0), fn() {
@@ -425,6 +433,7 @@ fn side_rename(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
       color=t.p.text,
       caret_color=t.p.accent,
       enter_sends=true,
+      field=side_rename_field,
     )
     match res.submitted {
       Some(title) => {

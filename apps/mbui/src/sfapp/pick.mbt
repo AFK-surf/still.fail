@@ -105,8 +105,8 @@ fn pickable(
 ) -> Unit {
   let key = "pick/" + ts
   let id = c.id(key)
-  // a tap on it: the keyboard goes
-  if c.clicked(id) {
+  // a tap on it: the keyboard goes (not a long press: Keyboard.kt letsGoOfKeyboard)
+  if c.clicked(id) && !cui.long {
     c.blur()
   }
   let (px, py, down) = c.pointer()
@@ -114,12 +114,28 @@ fn pickable(
     Some((x, y, w, h)) => cui.down_x >= x && cui.down_x < x + w && cui.down_y >= y && cui.down_y < y + h
     None => false
   }
+  // a search's words in it (search_marks.mbt): their strokes behind its words
+  let found = found_words_of(ts)
+  let at = if found.is_empty() {
+    (0.0, 0.0)
+  } else {
+    match c.laid_rect(id) {
+      Some((x, y, _, _)) => (x, y)
+      None => (0.0, 0.0)
+    }
+  }
   // built first: a link held in it is the link's menu (its hold told while building), not a pick
-  let box = c.box(w=if fill_w { Fill(1.0) } else { Auto }, id~, body)
-  // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles ask)
+  let box = c.box(w=if fill_w { Fill(1.0) } else { Auto }, id~, fn() {
+    if !found.is_empty() {
+      found_strokes(c, key, found, found_marking.val.2, at.0, at.1)
+    }
+    body()
+  })
+  // its words kept as laid out while a press is in it or a passage of it is picked (what the hold and the handles
+  // ask), or a search's words are marked in it
   if pk.ts == ts {
     c.words(box, key, a=pk.a, b=pk.b, color=@sf.alpha(@sf.theme().p.accent, 0.26))
-  } else if down && pressed_in {
+  } else if (down && pressed_in) || !found.is_empty() {
     c.words(box, key)
   }
   let mine = pk.ts == ts

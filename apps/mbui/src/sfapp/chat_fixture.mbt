@@ -423,6 +423,53 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         },
       ])
     "chatJobs" => Some({ "jobs": [] })
+    // the `@` menu's (chat_refs.mbt): this station's chats whose title has the words (not the one written in), then
+    // those of 个人 (fix_outside), saying whose
+    "chatSearch" => {
+      let query = match params.get("query") {
+        Some(String(q)) => q
+        _ => ""
+      }
+      let exclude = match params.get("exclude") {
+        Some(String(x)) => x
+        _ => ""
+      }
+      // `@` alone: the Android app's ChatShareTest's (its screenshots' twin, xws-menu): two of this workspace's, then
+      // two of the viewer's other workspaces', each saying whose
+      if query == "" && params.get("elsewhere") is Some(True) {
+        return Some({
+          "items": [
+            row("c-2", "登录页在 Safari 上没反应", "ws1/st1", "12 分钟前", {}),
+            row("c-3", "发版说明 0.1.2500", "ws1/st1", "40 分钟前", {}),
+            row("c-9", "首页改版的配色方案", "ws-design/mac", "5 分钟前", { "outside": "设计组", "stationName": "mac" }),
+            row("c-8", "Q3 招聘计划", "ws-acme/srv", "90 分钟前", { "outside": "Acme 海外", "stationName": "srv" }),
+          ],
+        })
+      }
+      let out : Array[Json] = []
+      for d in fixture_days(f) {
+        for r in items(Some(d), "items") {
+          let title = text(Some(r), "title")
+          if text(Some(r), "station") == "ws1/st1" &&
+            text(Some(r), "session") != exclude &&
+            title.contains(query) &&
+            out.length() < 8 {
+            out.push(r)
+          }
+        }
+      }
+      if params.get("elsewhere") is Some(True) {
+        for x in fix_outside {
+          let (id, title, _) = x
+          if title.contains(query) && out.length() < 8 {
+            out.push(
+              row(id, title, "ws2/st9", "昨天", { "session": Json::string(id), "outside": "个人", "stationName": "家里" }),
+            )
+          }
+        }
+      }
+      Some({ "items": Json::array(out) })
+    }
     "machineLogin" =>
       Some({
         "id": "login-1",
@@ -496,6 +543,16 @@ let fix_clock : Ref[(() -> Double)?] = { val: None }
 
 ///|
 let fix_drafts : Map[String, Json] = {}
+
+///|
+/// The chats of the viewer's other workspace (个人, its station ws2/st9) that a reference may name (`chat.outsideRefs`):
+/// their keys, titles, and whether the viewer may share them.
+// kept across runs: a table, never written
+let fix_outside : Array[(String, String, Bool)] = [("s-p1", "季度路线图", true), ("s-p2", "预算草稿", false)]
+
+///|
+/// Those of them shared with 星火工作室 since (`chat.xshareAdd`): outside no more.
+let fix_xshared : Map[String, Bool] = {}
 
 ///|
 let fix_serial : Ref[Int] = { val: 0 }
@@ -740,6 +797,37 @@ fn fixture_chat_call(f : Fixture, name : String, params : Json) -> Result[Json, 
       )
     }
     "session.warm" | "client.focus" | "chat.place" => Some(Ok(Json::object({})))
+    // a chat's mark (chat.ref): `@[its title]`, its link kept; links kept for marks (chat.refs)
+    "chat.ref" => Some(Ok({ "mark": Json::string("@[" + text(p, "title") + "]") }))
+    "chat.refs" => Some(Ok(Json::object({})))
+    // what the words refer to in 个人 not shared with 星火工作室 yet, by their marks (`@[title]`)
+    "chat.outsideRefs" => {
+      let words = text(p, "text")
+      let chats : Array[Json] = []
+      for x in fix_outside {
+        let (id, title, may) = x
+        if words.contains("@[" + title + "]") && !fix_xshared.contains(id) {
+          chats.push({
+            "station": "ws2/st9",
+            "id": Json::string(id),
+            "title": Json::string(title),
+            "workspace": "ws2",
+            "workspaceName": "个人",
+            "may": Json::boolean(may),
+          })
+        }
+      }
+      Some(Ok({ "chats": Json::array(chats) }))
+    }
+    "chat.xshareAdd" => {
+      let id = text(p, "id")
+      if fix_outside.iter().any(fn(x) { x.0 == id && x.2 }) {
+        fix_xshared[id] = true
+        Some(Ok(Json::object({})))
+      } else {
+        Some(Err({ "code": "forbidden", "message": "没有分享权限" }))
+      }
+    }
     _ => fixture_drive_call(f, name, params)
   }
 }
@@ -757,7 +845,8 @@ fn seeded_draft(mode : String, key : String) -> Json {
         "quotes": [],
         "files": [],
       }
-    "chat-attach" =>
+    // chat-attach-row: a station's file before them (drive_fixture.mbt), the row wider than the capsule
+    "chat-attach" | "chat-attach-row" =>
       {
         "text": "截图和构建日志都在这里，帮我看看第二屏",
         "quotes": [],

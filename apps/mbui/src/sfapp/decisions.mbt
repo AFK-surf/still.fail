@@ -764,6 +764,8 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
             placeholder_color=t.p.subtle,
             caret_color=t.p.accent,
             enter_sends=false,
+            // its words the decision's own: put back by a failed reply's answer, which comes when no frame is built
+            field=decision_field(key),
           )
           words = res.text
         })
@@ -786,7 +788,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
           if src.read_only {
             say(c, read_only_words)
           } else {
-            let taken = c.take_editor_text(fkey)
+            let taken = decision_field(key).take()
             c.blur()
             go_decision(c, 2, item, fn() { dui.dgone.push(key) })
             (src.call)(
@@ -804,7 +806,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
                   Err(e) => {
                     dui.dgone.retain(fn(k) { k != key })
                     if text(Some(e), "code") == "invalid_params" {
-                      c.set_editor_text(fkey, taken)
+                      decision_field(key).set(taken)
                     }
                     toast_later(fill("android-misc.decisions.replyFailed", [("error", error_words(e))]))
                   }
@@ -819,6 +821,22 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// Each decision's reply, by its key, while the app runs (mbui's Field: its field shows it, an answer writes it).
+let decision_fields : Map[String, @ui.Field] = {}
+
+///|
+fn decision_field(key : String) -> @ui.Field {
+  match decision_fields.get(key) {
+    Some(f) => f
+    None => {
+      let f = @ui.Field::new()
+      decision_fields[key] = f
+      f
+    }
+  }
 }
 
 ///|

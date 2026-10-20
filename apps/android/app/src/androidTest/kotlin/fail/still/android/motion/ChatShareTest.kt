@@ -137,7 +137,7 @@ class ChatShareTest {
         h.send()
         h.settle()
         rule.onNodeWithText("分享对话").assertIsDisplayed()
-        rule.onNodeWithText("发送后，此 workspace 中的 agent 可读取：").assertIsDisplayed()
+        rule.onNodeWithText("发送后，此 workspace 中的 agent 可读取以下内容（连续 6 小时未使用即失效）：").assertIsDisplayed()
         rule.onNodeWithText("来自 设计组").assertIsDisplayed()
         rule.onNodeWithText("来自 Acme 海外").assertIsDisplayed()
         rule.onNodeWithText("你没有分享权限，需由发起人或管理员分享").assertIsDisplayed()

@@ -422,7 +422,8 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       let r = draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)
       sfs.ticked[r.station + "\n" + r.path] = r
     }
-    "chat-station-ref" =>
+    // (chat-attach-row: put in before the draft's kept files are read, so it is the first of the files' row)
+    "chat-station-ref" | "chat-attach-row" =>
       draft_refs["ws1/st1:s-c1"] = [draft_ref("ws1/st1", "Studio", fix_docs, "发布清单.md", "发布清单.md", false, size=4210.0)]
     // one sent as a file (staged on the chat's station: up), a folder as a zip still going; a card's sheet open
     "chat-station-file" | "chat-station-sheet" => {
@@ -436,6 +437,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         width: 0,
         height: 0,
         pasted: None,
+        local: None,
         done: Some({ "name": "发布清单.md", "path": "uploads/发布清单.md", "size": 4210 }),
         sent: 4210,
         error: None,
@@ -450,6 +452,7 @@ pub fn open_drive_fixture(mode : String) -> Unit {
         width: 0,
         height: 0,
         pasted: None,
+        local: None,
         done: None,
         sent: 0,
         error: None,

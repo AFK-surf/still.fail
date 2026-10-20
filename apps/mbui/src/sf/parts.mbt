@@ -499,6 +499,11 @@ pub fn wait_pill(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
 }
 
 ///|
+/// WaitLine's words: 13/18 on every width (Waiting.kt: fontSize 13.sp, lineHeight 18.sp).
+// kept across runs: a value (no field of it changes)
+let wait_words : @ui.TextStyle = @ui.text_style(size=Sm, leading=L5)
+
+///|
 /// A small part still on its way (WaitLine): a 12 spinner and grey words
 /// after later_ms; red words and no spinner when it failed.
 pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool = false) -> Unit {
@@ -511,13 +516,7 @@ pub fn wait_line(c : @ui.Ctx, text : String, key? : String = "", error? : Bool =
     if !error {
       spinner(c, size=12.0) |> ignore
     }
-    c.text(
-      text,
-      size=t.t.meta,
-      color=if error { t.p.red } else { t.p.muted },
-      line=18.0,
-    )
-    |> ignore
+    c.text(text, style=wait_words, color=if error { t.p.red } else { t.p.muted }) |> ignore
   })
   |> ignore
 }

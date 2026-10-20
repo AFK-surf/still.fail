@@ -7,6 +7,13 @@
 // way up); the composer's room stays as tall as when they were sent until they are a quarter of the way, and its
 // hint comes back once they are out of it (200 ms, Ease.Arrive). A row that never comes (2 s): the composer as it
 // was. With motion reduced (or in screenshots) none of it: the row is where it is.
+//
+// The files sent with them go from their tiles in the composer (ChatHost.kt FlyingFile, landingFile, files): drawn as
+// their tiles were where they were until the row is in the list, then each to its place in the message, across and up
+// as the words go: a picture's box growing from the tile's to its own, the picture cropped to it as it is (opening out
+// from the tile's square crop), its corner from the composer's (18) to its own (10); any other file's card carried
+// there, from the tile's size to its own. Sent with no words, the row comes in where it is, its files flying into it,
+// and the composer's hint stays.
 
 ///|
 priv struct SendFlight {
@@ -24,6 +31,8 @@ priv struct SendFlight {
   before : Map[String, Bool]
   /// the composer's room when sent (held a quarter of the way)
   room : Double
+  /// the files sent with them, from their tiles
+  files : Array[FlyingFile]
   /// its row's key once it is in the list, whether it is and from which frame; how far it has come (0 … 1, linear,
   /// told to go as its row is first laid out: as Compose's animation, it sets off the frame after)
   mut key : String
@@ -33,7 +42,25 @@ priv struct SendFlight {
 }
 
 ///|
+/// A file sent with the words (ChatHost.kt FlyingFile): the station's path its message has it by, its tile in the
+/// composer (x, y, w, h in the window), a picture's key ("" a card), and the tile as the composer drew it (what is
+/// drawn where it was while the row is not in the list).
+priv struct FlyingFile {
+  path : String
+  from : (Double, Double, Double, Double)
+  picture : String
+  face : () -> Unit
+}
+
+///|
 let send_flight : Ref[SendFlight?] = { val: None }
+
+///|
+/// A tile's corner in the composer and a picture's in a message, which a flying picture's goes from and to.
+let flight_tile_corner : Double = 18.0
+
+///|
+let flight_file_corner : Double = 10.0
 
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they
@@ -53,9 +80,16 @@ let flight_settle : Double = 0.24
 ///|
 /// What is sent from the composer of chat `chat` takes off from the field (before it is emptied). The composer's room
 /// is held as tall as it was until the words let go of it (composer_hold), said now: at most their wait for the row.
-fn flight_start(c : @ui.Ctx, chat : String, words : String, v : ChatView, room : Double) -> Unit {
+fn flight_start(
+  c : @ui.Ctx,
+  chat : String,
+  words : String,
+  v : ChatView,
+  room : Double,
+  files : Array[FlyingFile],
+) -> Unit {
   send_flight.val = None
-  if @ui.reduced_motion() || words == "" {
+  if @ui.reduced_motion() || (words == "" && files.is_empty()) {
     return
   }
   match c.field_words(field_key) {
@@ -82,6 +116,7 @@ fn flight_start(c : @ui.Ctx, chat : String, words : String, v : ChatView, room :
         field_h: h,
         before,
         room,
+        files,
         key: "",
         placed: false,
         placed_frame: -1,
@@ -188,7 +223,7 @@ fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
           ty=f.field_y,
           clip=true,
           fn() {
-            c.box(w=Fill(1.0), tx=f.from_x - f.field_x, ty=f.from_y - f.field_y, fn() {
+            c.box(style=@sf.full_width, tx=f.from_x - f.field_x, ty=f.from_y - f.field_y, fn() {
               c.text(f.text, size=send_size, color=t.p.text, line=send_line, w=Fill(1.0)) |> ignore
             })
             |> ignore
@@ -221,7 +256,90 @@ fn flight_bubble(c : @ui.Ctx, f : SendFlight, i : Int) -> Unit {
 /// Whether the composer's hint is away: words sent are over it, not yet out of it.
 fn flight_hint_away(c : @ui.Ctx, chat : String) -> Bool {
   match flight_of(chat) {
-    Some(f) => !f.placed || flight_up(flight_p(c, f)) < 0.5
-    None => false
+    // (only words pass over it: files alone leave it where it is)
+    Some(f) if f.text != "" => !f.placed || flight_up(flight_p(c, f)) < 0.5
+    _ => false
   }
+}
+
+///|
+/// The file of the flight with `path`, if one flies there.
+fn flight_file_of(f : SendFlight, path : String) -> FlyingFile? {
+  f.files.iter().find_first(fn(x) { x.path == path })
+}
+
+///|
+/// Each file sent (ChatHost.kt FlightLayer, files): as its tile was, where it was, until the row is in the list; then a
+/// picture from there to its place in the message (where the message's own box is laid out: flight_landing), its box
+/// growing to its own and its corner to the message's. Over the composer and the list, drawn only.
+fn flight_files(c : @ui.Ctx, chat : String) -> Unit {
+  let f = match flight_of(chat) {
+    Some(f) if f.files.length() > 0 => f
+    _ => return
+  }
+  let l = c.layer(fn() {
+    for ff in f.files {
+      let (fx, fy, fw, fh) = ff.from
+      let landing = if f.placed && f.placed_frame != c.frame_number() {
+        @motion.measured_rect(c, "flight/to/" + ff.path)
+      } else {
+        None
+      }
+      match landing {
+        Some((ex, ey, ew, eh)) if ff.picture != "" => {
+          let p = flight_p(c, f)
+          let across = flight_across(p)
+          let up = flight_up(p)
+          let w = fw + (ew - fw) * up
+          let h = fh + (eh - fh) * up
+          c.box(
+            style=flying_picture,
+            w=Px(w),
+            h=Px(h),
+            tx=fx + (ex - fx) * across,
+            ty=fy + (ey - fy) * up,
+            radius=flight_tile_corner + (flight_file_corner - flight_tile_corner) * up,
+            fn() { c.image(ff.picture, w=Px(w), h=Px(h), fit=FitCover, bg=0L) |> ignore },
+          )
+          |> ignore
+        }
+        // a card on its way is the message's own, carried (flight_landing)
+        Some(_) => ()
+        None => c.box(tx=fx, ty=fy, fn() { (ff.face)() }) |> ignore
+      }
+    }
+  })
+  // drawn only (ChatHost.kt FlightLayer draws them): not the files, which are the message's
+  c.draw_only(l)
+}
+
+///|
+/// A flying picture's box: its ground the chip's, what it holds cut to its corner.
+// kept across runs: a value (no field of it changes)
+let flying_picture : @ui.Style = @ui.style(bg=Neutral, clip=true)
+
+///|
+/// A file of the message words were sent to (node `i`, the box it is laid out in), while a file flies there
+/// (ChatHost.kt landingFile): where it is, kept for the picture flying to it (drawn there by flight_files, not here);
+/// a card, carried from its tile on the words' way, grown from the tile's size to its own.
+fn flight_landing(c : @ui.Ctx, f : SendFlight, i : Int, path : String) -> Unit {
+  let ff = match flight_file_of(f, path) {
+    Some(ff) => ff
+    None => return
+  }
+  @motion.measure(c, i, "flight/to/" + path)
+  let (fx, fy, fw, fh) = ff.from
+  if ff.picture != "" || !f.placed || f.placed_frame == c.frame_number() {
+    // its first frame (and a picture all the way): not seen here
+    c.look(i, @ui.look(alpha=0.0))
+    return
+  }
+  let p = flight_p(c, f)
+  let up = flight_up(p)
+  // from the tile's size: by the larger of its two shares of its own (Compose's crop to the box)
+  let s0 = match @motion.measured_rect(c, "flight/to/" + path) {
+    Some((_, _, ew, eh)) if ew > 0.0 && eh > 0.0 => dmax(fw / ew, fh / eh)
+    _ => 1.0
+  }
+  @motion.fly(c, i, fx, fy, scale=s0, px=flight_across(p), py=up, ps=up)
 }

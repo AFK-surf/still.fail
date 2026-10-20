@@ -100,6 +100,8 @@ priv struct ServicePage {
   /// the path the address field was last given, and the one last said on the log
   mut shown_path : String
   mut logged_path : String
+  /// the address field's words (the field shows them)
+  address : @ui.Field
 }
 
 ///|
@@ -136,6 +138,7 @@ fn service_page_for(station : String, job : String) -> ServicePage {
         asked: 0,
         shown_path: "",
         logged_path: "",
+        address: @ui.Field::new(),
       }
       service_pages[key] = p
       p
@@ -617,7 +620,7 @@ fn service_page_bar(
           // where it went is what the bar says, unless someone is typing there
           if !editing && at != p.shown_path {
             p.shown_path = at
-            c.set_editor_text(field_key, at)
+            p.address.set(at)
           }
           let r = c.editor(
             field_key,
@@ -626,6 +629,7 @@ fn service_page_bar(
             plain=true,
             color=if editing { t.p.text } else { t.p.muted },
             caret_color=t.p.accent,
+            field=p.address,
           )
           match r.submitted {
             Some(typed) => {

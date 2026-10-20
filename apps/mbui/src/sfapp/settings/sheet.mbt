@@ -64,12 +64,6 @@ pub fn close() -> Unit {
 ///|
 /// The sheet, over everything the app shows: call after the pages each frame.
 pub fn overlay(c : @ui.Ctx, core : Core) -> Unit {
-  // the styles' tokens looked up in still.fail's theme (as the pages: page)
-  c.with_theme(@sf.ui_theme(), fn() { overlay_themed(c, core) })
-}
-
-///|
-fn overlay_themed(c : @ui.Ctx, core : Core) -> Unit {
   menu_overlay(c)
   let up = sheet.draw is Some(_)
   if up {
@@ -133,7 +127,13 @@ fn sheet_head(c : @ui.Ctx, title : String, lead? : () -> Unit) -> Unit {
 
 ///|
 /// A line to type in (Controls.kt Field): on a soft frame, its placeholder until it has words.
-fn field_box(c : @ui.Ctx, key : String, placeholder : String, mono? : Bool = false) -> String {
+fn field_box(
+  c : @ui.Ctx,
+  key : String,
+  placeholder : String,
+  mono? : Bool = false,
+  field? : @ui.Field,
+) -> String {
   let t = @sf.theme()
   let mut words = ""
   c.box(
@@ -156,6 +156,7 @@ fn field_box(c : @ui.Ctx, key : String, placeholder : String, mono? : Bool = fal
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
         enter_sends=true,
+        field?,
       )
       ignore(mono)
       words = r.text
@@ -179,16 +180,17 @@ fn ask(
 ) -> Unit {
   let key = "ask/" + (sheet.serial + 1).to_string()
   let filled : Ref[Bool] = Ref(false)
+  // the line's words, `value` at first (this sheet's own)
+  let field = @ui.Field::new(text=value)
   open_sheet(0.42, fn(c, _core) {
     let t = @sf.theme()
     if !filled.val {
       filled.val = true
-      c.set_editor_text(key, value)
       c.focus_editor(key)
     }
     sheet_head(c, title)
     c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-      let words = field_box(c, key, placeholder).trim(chars=" \t\n").to_owned()
+      let words = field_box(c, key, placeholder, field~).trim(chars=" \t\n").to_owned()
       if hint != "" {
         c.text(hint, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
       }
