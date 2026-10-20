@@ -32,6 +32,8 @@ import { Bulk, LINK, type Synced, actual, apply, listed, page, patchOf, planPart
 export { type Inbox, MESH_WAIT_MS, type PeerCall, Refused } from "../mesh/bus.ts";
 /// A request that did not get through (asked again later).
 class Unreached extends Error {}
+/// What a task's station said of it in a round: its `task.get` answer, its refusal; null when it was not reached.
+type Got = { result: Json } | { refused: string } | null;
 /// Tells a session's agent something; a throw (or rejection) is "not told" (it is told again later).
 export type RemoteNotify = (session: string, text: string) => void | Promise<void>;
 
@@ -47,6 +49,8 @@ const CLOSE_FOR_MS = 30 * 24 * 3600 * 1000;
 const WATCH_EVERY = "5 seconds";
 const CLOSE_EVERY = "60 seconds";
 const SWEEP_EVERY = "1 hour";
+/// A task its station does not know, or has not started, this long after its start was asked for is no longer followed.
+export const GIVE_UP_MS = 10 * 60_000;
 
 export type RemoteOptions = {
   /// The data directory: remote/ and mesh/cloud.json in it.
@@ -74,6 +78,11 @@ const SYNC_KEPT_MS = 10 * 60_000;
 
 /// A directory's sync to a station, for one task: the start that began it, and later ones of the same task, wait on it.
 type Syncing = { key: string; result: Promise<Synced | null>; endedAt: number | null };
+
+/// The requests about tasks that only read what is here: answered as they come, never after another one (`lanes`).
+const READS = new Set(["task.get", "task.gets", "task.log", "task.list"]);
+/// The tasks a source asks about at once (`task.gets`), at most.
+export const GETS_MAX = 200;
 
 /// station_list asks every station of the workspace at once and lists one that has not answered within this as offline.
 export const LIST_WAIT_MS = 2000;
@@ -172,10 +181,19 @@ export class Remote {
   private places: Places;
   /// How busy this station is, told to the others in `describe` (load.ts); none: `describe` says nothing of it.
   private load: (() => Promise<Json>) | null = null;
-  /// Target-side requests, the sweep and withdrawals, one at a time.
+  /// Withdrawals (`revoke`), one at a time.
   private serial: Promise<unknown> = Promise.resolve();
+  /// Each source session's requests that change something here, one after another; those of different sessions at
+  /// once, and those that only read (READS) as they come. All of them in one line, a task's state asked by one chat
+  /// waited behind another chat's sync of a big directory on a loaded station, past its caller's 30 s, and the callers
+  /// asked again into the same line (2026-10-21, Studio for ccvm: a 1 KB file synced in 61 s).
+  private lanes = new Map<string, Promise<unknown>>();
   /// The records followed now (outgoing tasks, closing sessions).
   private watching = new Set<string>();
+  /// The outgoing tasks followed, by the station (and workspace) they are on: asked about together.
+  private following = new Map<string, Set<string>>();
+  /// The station is stopping: nothing more is followed.
+  private stopped = false;
   /// The station's bulk requests to the others (syncs' contents, files' chunks), one at a time (dirsync.ts).
   private bulk = new Bulk();
   /// The sync of each directory to each station of each session (by `hash([workspace, session, station, dir])`), the
@@ -198,7 +216,12 @@ export class Remote {
     this.bus = options.bus ?? new PeerBus({ waitMs: options.meshWaitMs ?? MESH_WAIT_MS, sleep: (ms) => this.run(Effect.sleep(Duration.millis(ms))).catch(() => undefined) });
     // What this answers: how this station is and what it takes, and the tasks (whatever no other part answers).
     this.bus.on("describe", () => this.describe());
-    this.bus.otherwise((peer, request, workspace) => this.serially(() => this.task(workspace ?? "", peer, text(request, "method"), request)));
+    this.bus.otherwise((peer, request, workspace) => {
+      const ws = workspace ?? "";
+      const method = text(request, "method");
+      if (READS.has(method)) return this.task(ws, peer, method, request);
+      return this.inLane(this.room(ws, peer, text(request, "session")), () => this.task(ws, peer, method, request));
+    });
     this.bus.whenAttached(() => this.started());
   }
 
@@ -223,6 +246,7 @@ export class Remote {
 
   /// Its schedules end (the station stops).
   async close(): Promise<void> {
+    this.stopped = true;
     await Effect.runPromise(Scope.close(this.scope, Exit.void));
   }
 
@@ -237,6 +261,20 @@ export class Remote {
   private serially<T>(f: () => Promise<T>): Promise<T> {
     const result = this.serial.then(f, f);
     this.serial = result.catch(() => undefined);
+    return result;
+  }
+
+  /// `f` after what was asked before it in `lane` (a source session's: its room).
+  private inLane<T>(lane: string, f: () => Promise<T>): Promise<T> {
+    const result = (this.lanes.get(lane) ?? Promise.resolve()).then(f, f);
+    const tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.lanes.set(lane, tail);
+    void tail.then(() => {
+      if (this.lanes.get(lane) === tail) this.lanes.delete(lane);
+    });
     return result;
   }
 
@@ -303,7 +341,7 @@ export class Remote {
     return this.store.getJob(this.jobOf(task))?.state === "running";
   }
 
-  /// Stops a source session's tasks and removes their records and its shared directory. Callers hold `serial`.
+  /// Stops a source session's tasks and removes their records and its shared directory. Callers are in its lane.
   private async closeHere(workspace: string, peer: string, session: string): Promise<void> {
     for (const task of this.tasksOf(workspace, peer, session)) {
       if (this.running(task)) await this.jobs.stop(this.jobOf(task));
@@ -318,43 +356,49 @@ export class Remote {
 
   /// The target's own cleanup: a source session's directory unused for IDLE_MS, with nothing running, goes; so do task
   /// directories from before shared session directories.
-  sweep(now: number): Promise<void> {
-    return this.serially(async () => {
-      const sessions = join(this.root, "sessions");
-      for (const name of this.list(sessions)) {
-        let meta: Json;
+  async sweep(now: number): Promise<void> {
+    const sessions = join(this.root, "sessions");
+    for (const name of this.list(sessions)) {
+      let meta: Json;
+      try {
+        meta = readJson(join(sessions, name, "session.json"));
+      } catch {
+        continue;
+      }
+      if (now - (asI64(field(meta, "seen")) ?? now) < IDLE_MS) continue;
+      const [workspace, peer, session] = [text(meta, "workspace"), text(meta, "station"), text(meta, "session")];
+      await this.inLane(this.room(workspace, peer, session), async () => {
+        // Asked again in its lane: used meanwhile, it stays.
         try {
-          meta = readJson(join(sessions, name, "session.json"));
+          if (now - (asI64(field(readJson(join(sessions, name, "session.json")), "seen")) ?? now) < IDLE_MS) return;
         } catch {
-          continue;
+          return;
         }
-        if (now - (asI64(field(meta, "seen")) ?? now) < IDLE_MS) continue;
-        const [workspace, peer, session] = [text(meta, "workspace"), text(meta, "station"), text(meta, "session")];
-        if (this.tasksOf(workspace, peer, session).some((t) => this.running(t))) continue;
+        if (this.tasksOf(workspace, peer, session).some((t) => this.running(t))) return;
         try {
           await this.closeHere(workspace, peer, session);
         } catch (error) {
           log.warn("remote", "idle remote session directory not removed", { error: (error as Error).message });
         }
+      });
+    }
+    const incoming = join(this.root, "incoming");
+    for (const name of this.list(incoming)) {
+      const dir = join(incoming, name);
+      const record = join(dir, "task.json");
+      let meta: Json;
+      try {
+        meta = readJson(record);
+      } catch {
+        continue;
       }
-      const incoming = join(this.root, "incoming");
-      for (const name of this.list(incoming)) {
-        const dir = join(incoming, name);
-        const record = join(dir, "task.json");
-        let meta: Json;
-        try {
-          meta = readJson(record);
-        } catch {
-          continue;
-        }
-        let modified = now;
-        try {
-          modified = Math.floor(statSync(record).mtimeMs);
-        } catch {}
-        if (field(meta, "layout") === "session" || now - modified < IDLE_MS || this.running(dir)) continue;
-        rmSync(dir, { recursive: true, force: true });
-      }
-    });
+      let modified = now;
+      try {
+        modified = Math.floor(statSync(record).mtimeMs);
+      } catch {}
+      if (field(meta, "layout") === "session" || now - modified < IDLE_MS || this.running(dir)) continue;
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 
   usedPath(session: string): string {
@@ -569,6 +613,21 @@ export class Remote {
   }
 
   private async task(workspace: string, peer: string, method: string, request: Json): Promise<Json> {
+    if (method === "task.gets") {
+      // What `task.get` says of each, in one request (a source follows all its tasks here at once: `follow`).
+      const asked = field(request, "tasks");
+      if (!Array.isArray(asked) || asked.length > GETS_MAX) throw new Error(`tasks are required (at most ${GETS_MAX})`);
+      const tasks: Json[] = [];
+      for (const one of asked) {
+        const [session, key] = [field(one, "session"), field(one, "key")];
+        try {
+          tasks.push({ session, key, result: await this.task(workspace, peer, "task.get", { session, key }) });
+        } catch (error) {
+          tasks.push({ session, key, error: (error as Error).message });
+        }
+      }
+      return { tasks };
+    }
     const session = text(request, "session");
     if (method === "task.list") {
       if (session === "" || bytes(session) > 256) throw new Error("session is required");
@@ -868,66 +927,166 @@ export class Remote {
   }
 
   /// Follows a task started from here: asks its station every 5 s until it is over, telling its session what it said on
-  /// the way and how it ended. Across restarts (the record is a file).
+  /// the way and how it ended. The tasks followed on one station are asked about in one request (`task.gets`; one each
+  /// of a station from before it). Across restarts (the record is a file).
   private watch(path: string): void {
-    if (this.watching.has(path)) return;
+    if (this.watching.has(path) || this.stopped) return;
+    let entry: Json;
+    try {
+      entry = readJson(path);
+    } catch {
+      return;
+    }
+    if (entry.delivered === true) return;
     this.watching.add(path);
+    const station = text(entry, "station");
+    const workspace = field(entry, "workspace");
+    const group = JSON.stringify([station, workspace]);
+    const paths = this.following.get(group);
+    if (paths !== undefined) {
+      paths.add(path);
+      return;
+    }
+    this.follow(group, station, workspace, new Set([path]));
+  }
+
+  /// Asks `station` about the tasks of `paths` every WATCH_EVERY until none is left to follow.
+  private follow(group: string, station: string, workspace: Json, paths: Set<string>): void {
+    this.following.set(group, paths);
+    const done = (path: string) => {
+      paths.delete(path);
+      this.watching.delete(path);
+    };
+    let batched = true;
     const round = Effect.promise(async (): Promise<boolean> => {
-      let entry: Json;
-      try {
-        entry = readJson(path);
-      } catch {
-        return true;
-      }
-      if (entry.delivered === true) return true;
-      const request = { method: "task.get", workspace: field(entry, "workspace"), session: field(entry, "session"), key: field(entry, "key") };
-      let result: Json;
-      try {
-        result = await this.ask(text(entry, "station"), request);
-      } catch {
-        return false;
-      }
-      const state = text(field(result, "job"), "state");
-      const notices = field(result, "notices");
-      const finished = state !== "" && state !== "running";
-      // What the task was to bring back, and what it changed of its directory, comes before its end is told (once).
-      if (finished && entry.brought === undefined && (Array.isArray(entry.back) || typeof entry.dir === "string")) {
+      const entries: [string, Json][] = [];
+      for (const path of [...paths]) {
+        let entry: Json = null;
         try {
-          entry.brought = await this.bringBack(entry);
-        } catch (error) {
-          if (error instanceof Unreached) return false;
-          entry.brought = { error: (error as Error).message };
-        }
-        try {
-          writeJson(path, entry);
+          entry = readJson(path);
         } catch {}
+        if (entry === null || entry.delivered === true) done(path);
+        else entries.push([path, entry]);
       }
-      if (finished && entry.brought !== undefined && result !== null && typeof result === "object") result.back = entry.brought;
-      if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
-        const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: ${JSON.stringify(result)}`;
-        let told = true;
-        try {
-          await this.notify(text(entry, "session"), message);
-        } catch {
-          told = false;
-        }
-        if (told) {
-          entry.notices = notices;
-          entry.delivered = finished;
-          try {
-            writeJson(path, entry);
-          } catch {}
-        }
-      }
-      return finished && entry.delivered === true;
+      if (entries.length === 0) return true;
+      const got = await this.states(station, workspace, entries.map(([, e]) => e), batched, () => (batched = false));
+      await Promise.all(entries.map(async ([path, entry], i) => {
+        if (await this.settle(path, entry, got[i])) done(path);
+      }));
+      return paths.size === 0;
     });
     void this.run(
       round.pipe(
         Effect.repeat({ schedule: Schedule.spaced(WATCH_EVERY), until: (over) => over }),
-        Effect.ensuring(Effect.sync(() => this.watching.delete(path))),
+        Effect.ensuring(Effect.sync(() => {
+          if (this.following.get(group) === paths) this.following.delete(group);
+          // Followed after the last round had found none left: followed anew.
+          for (const path of [...paths]) {
+            this.watching.delete(path);
+            this.watch(path);
+          }
+        })),
         Effect.asVoid,
       ),
     ).catch(() => undefined);
+  }
+
+  /// What `station` says of each of `entries`' tasks: its `task.get` answer, or its refusal, or null when it was not
+  /// reached. In one request while `batched`; `unbatch` when the station is from before that (it refuses it).
+  private async states(station: string, workspace: Json, entries: Json[], batched: boolean, unbatch: () => void): Promise<Got[]> {
+    const ref = (e: Json) => ({ session: field(e, "session"), key: field(e, "key") });
+    if (batched) {
+      try {
+        const out: Got[] = [];
+        for (let i = 0; i < entries.length; i += GETS_MAX) {
+          const part = entries.slice(i, i + GETS_MAX);
+          const answer = await this.ask(station, { method: "task.gets", workspace, tasks: part.map(ref) });
+          const tasks = field(answer, "tasks");
+          if (!Array.isArray(tasks) || tasks.length !== part.length) throw new Refused("task.gets is not answered there");
+          for (const t of tasks) out.push(typeof field(t, "error") === "string" ? { refused: text(t, "error") } : { result: field(t, "result") });
+        }
+        return out;
+      } catch (error) {
+        if (!(error instanceof Refused)) return entries.map(() => null);
+        unbatch();
+      }
+    }
+    return Promise.all(
+      entries.map(async (e): Promise<Got> => {
+        try {
+          return { result: await this.ask(station, { method: "task.get", workspace, ...ref(e) }) };
+        } catch (error) {
+          return error instanceof Refused ? { refused: error.message } : null;
+        }
+      }),
+    );
+  }
+
+  /// One round's answer about the task of `entry` (the record at `path`): what it said on the way and how it ended told
+  /// its session; whether it is no longer followed.
+  private async settle(path: string, entry: Json, got: Got): Promise<boolean> {
+    if (got === null) return false;
+    const now = this.store.now();
+    if (typeof entry.since !== "number") {
+      entry.since = now;
+      try {
+        writeJson(path, entry);
+      } catch {}
+    }
+    const result = "result" in got ? got.result : null;
+    // Never started there (its prepare or start did not get through, and the agent went on with another key): followed
+    // for good, every 5 s, by the dozen on a loaded station (2026-10-21, ccvm's 90 to Studio). Given up on, said once.
+    const unknown = "refused" in got && /unknown task/.test(got.refused);
+    if (unknown || (result !== null && field(result, "job") === null)) {
+      if (now - entry.since < GIVE_UP_MS) return false;
+      const why = unknown ? "that station does not know it" : "it is prepared there but was never started";
+      const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: ${why} ${GIVE_UP_MS / 60_000} minutes after its start was asked for, and is no longer followed. Ask with get, or prepare and start it again.`;
+      try {
+        await this.notify(text(entry, "session"), message);
+      } catch {
+        return false;
+      }
+      entry.delivered = true;
+      entry.lost = true;
+      try {
+        writeJson(path, entry);
+      } catch {}
+      return true;
+    }
+    if (result === null) return false;
+    const state = text(field(result, "job"), "state");
+    const notices = field(result, "notices");
+    const finished = state !== "" && state !== "running";
+    // What the task was to bring back, and what it changed of its directory, comes before its end is told (once).
+    if (finished && entry.brought === undefined && (Array.isArray(entry.back) || typeof entry.dir === "string")) {
+      try {
+        entry.brought = await this.bringBack(entry);
+      } catch (error) {
+        if (error instanceof Unreached) return false;
+        entry.brought = { error: (error as Error).message };
+      }
+      try {
+        writeJson(path, entry);
+      } catch {}
+    }
+    if (finished && entry.brought !== undefined && typeof result === "object") result.back = entry.brought;
+    if (finished || (Array.isArray(notices) && notices.length > 0 && !isDeepStrictEqual(field(entry, "notices"), notices))) {
+      const message = `Remote task ${text(entry, "key")} on ${text(entry, "station")}: ${JSON.stringify(result)}`;
+      let told = true;
+      try {
+        await this.notify(text(entry, "session"), message);
+      } catch {
+        told = false;
+      }
+      if (told) {
+        entry.notices = notices;
+        entry.delivered = finished;
+        try {
+          writeJson(path, entry);
+        } catch {}
+      }
+    }
+    return finished && entry.delivered === true;
   }
 
   /// A file of a task's station (`request`'s path) to `path` here, in chunks; its size. An existing file is replaced
@@ -1185,7 +1344,7 @@ export class Remote {
         } catch {}
         if (!existsSync(path) || refused) {
           const more = local === null ? {} : { dir: local.dir ?? null, back: local.back ?? null, prefix: synced?.prefix ?? "" };
-          writeJson(path, { workspace, session, station, key, delivered: false, ...more });
+          writeJson(path, { workspace, session, station, key, delivered: false, since: this.store.now(), ...more });
         }
         this.watch(path);
       }

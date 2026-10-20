@@ -99,6 +99,51 @@ test("a slow request holds up no other on the same connection", async () => {
   }
 });
 
+test("requests asked while no connection is open share the one dialed; one answered late leaves it to the others", async () => {
+  // Each request dialed its own, and one that timed out dropped the connection for the next to dial another while the
+  // old one's requests were still answered: dozens of a station's followed tasks, each round (2026-10-21, ccvm to Studio).
+  const mesh = memoryMesh();
+  const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
+  const [source, target] = await Promise.all([bind(), bind()]);
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => (release = resolve));
+  const remote: any = {
+    handle: async (_workspace: string, _peer: string, request: any) => {
+      if (request.method === "slow") await released;
+      return { ok: request.method };
+    },
+  };
+  const conns: any[] = [];
+  void (async () => {
+    for (;;) {
+      const conn = await target.accept();
+      if (!conn) return;
+      conns.push(conn);
+      void servePeer(conn, cloudOf(target.id(), [source.id()]), remote).catch(() => {});
+    }
+  })();
+  const port = target.sockets()[0]!.split(":").at(-1);
+  // Answers waited for 50 ms: the slow one is never answered in time, however fast the machine.
+  const call = peerCall(source, cloudOf(source.id(), [target.id()]), (id) => ({ id, ips: [`127.0.0.1:${port}`] }), undefined, 50);
+  try {
+    const answers = await Promise.all(Array.from({ length: 10 }, (_, i) => call(target.id(), "ws", { method: `m${i}` })));
+    assert.deepEqual(answers.map((a: any) => a.ok), Array.from({ length: 10 }, (_, i) => `m${i}`));
+    assert.equal(conns.length, 1, "dialed once");
+    await assert.rejects(call(target.id(), "ws", { method: "slow" }), /timed out/);
+    assert.deepEqual(await call(target.id(), "ws", { method: "after" }), { ok: "after" });
+    assert.equal(conns.length, 1, "its peer heard: the connection kept");
+    // Its peer no longer heard: the connection closed, the next request dials again.
+    conns[0].silent = true;
+    await assert.rejects(call(target.id(), "ws", { method: "slow" }), /timed out/);
+    await conns[0].closed();
+    assert.deepEqual(await call(target.id(), "ws", { method: "again" }), { ok: "again" });
+    assert.equal(conns.length, 2);
+  } finally {
+    release();
+    await Promise.all([source.close(), target.close()]);
+  }
+});
+
 test("a station of another workspace is asked only when chats are shared with it, and heard only for them", async () => {
   const mesh = memoryMesh();
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
