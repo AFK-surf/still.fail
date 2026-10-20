@@ -52,7 +52,7 @@ flowchart LR
   cloud[("still.fail cloud<br/>accounts · workspaces · relays")]
   chat -->|bot| a
   apps <-->|"iroh, peer-to-peer"| a
-  a <-->|"tasks · shared profiles and skills"| b
+  a <-->|"tasks, profiles, skills"| b
   apps -.->|sign-in| cloud
   a -.->|membership| cloud
 ```
