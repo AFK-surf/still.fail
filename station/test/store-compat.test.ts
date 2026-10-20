@@ -43,7 +43,7 @@ function shape(path: string): string[] {
 
 /// Columns the TS station adds to tables the Rust station made (schema.ts), by table: a station's in several workspaces
 /// (docs/multi-workspace.md).
-const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "runtime"]];
+const ADDED: [string, string][] = [["sessions", "ws"], ["archive_policy", "ws"], ["entries", "runtime"], ["jobs", "screen"], ["jobs", "queued"]];
 
 const noToken = <T extends { token: string }>(r: T) => {
   const { token: _, ...rest } = r;

@@ -16,6 +16,7 @@ import { GrokDriver } from "../agents/grok.ts";
 import { CursorDriver } from "../agents/cursor.ts";
 import { DevinDriver } from "../agents/devin.ts";
 import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
+import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
 import type { Control } from "../ops/launcher.ts";
@@ -225,6 +226,11 @@ export const AgentsLive = (control: Control) =>
         },
       });
       const remote = new Remote({ data, store, jobs, notify: (session, text) => hub.notify(session, text), places: hub.places, bus: yield* Peers });
+      // What the agents run here, watched for the machine's memory (jobs/memory.ts): their agents told when it is much,
+      // the largest stopped only when the machine is about to run out.
+      const memory = liveMemory({ data, store, jobs, notify: (session, text) => hub.notify(session, text), clock: hub.clock });
+      memory.start();
+      yield* Effect.addFinalizer(() => Effect.promise(() => memory.close()));
       // Tasks of stations no longer in the workspace, or no longer allowed, stop: once the mesh is up, and as the roster
       // or the config changes.
       let roster: (() => void) | null = null;

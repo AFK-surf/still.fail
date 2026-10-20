@@ -337,6 +337,14 @@ export class Remote {
     return `remote_${basename(task)}`;
   }
 
+  /// What a task waiting in the queue is told of it: its place and why it waits (none for one not waiting).
+  private queued(jobId: string): Json {
+    const q = this.jobs.queueOf(jobId);
+    if (q === null) return {};
+    const why = q.why === "memory" ? "the machine's memory is under pressure" : q.why === "screen" ? "another task that uses the screen runs" : "the machine is busy";
+    return { queue: { place: q.place, why: q.why, note: `Waiting in this station's queue (${q.place === 1 ? "next" : `number ${q.place}`}): ${why}. It starts by itself when there is room; you are told when it ends, as for any task.` } };
+  }
+
   private running(task: string): boolean {
     return this.store.getJob(this.jobOf(task))?.state === "running";
   }
@@ -729,8 +737,9 @@ export class Remote {
         }
         if (mirror !== null) cwd = filePath(work, mirror, false);
         const spec = field(meta, "spec");
-        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId);
-        return { key, job: jobJson(started) };
+        // Through the station's queue (jobs/admit.ts): started now if there is room, else when there is.
+        const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true });
+        return { key, job: jobJson(started), ...this.queued(started.id) };
       }
       case "sync.begin": {
         if (job) return { key, started: true };
@@ -826,7 +835,7 @@ export class Remote {
       case "task.get":
       case "task.log": {
         const lines = Math.min(Math.max(asU64(field(request, "lines")) ?? 50, 1), 1000);
-        return { key, job: job ? jobJson(job) : null, log: job ? tail(job.log, lines) : null, notices: this.store.jobNotices(jobId, 20) };
+        return { key, job: job ? jobJson(job) : null, log: job ? tail(job.log, lines) : null, notices: this.store.jobNotices(jobId, 20), ...this.queued(jobId) };
       }
       case "task.stop": {
         if (!job) throw new Error("task has not started");
@@ -1271,6 +1280,8 @@ export class Remote {
       request.method = `task.${action}`;
       request.lines = field(args, "lines");
       request.spec = { name: field(args, "name"), command: field(args, "command"), requestedBy: row.createdBy };
+      // Said only when so: a task prepared before keeps the same inputs.
+      if (field(args, "screen") === true) request.spec.screen = true;
       // A task's directory and what it brings back, as this station has them (remote/prepared).
       const prepared = join(this.root, "prepared", `${hash([workspace, session, station, key])}.json`);
       if (action === "prepare") {
