@@ -51,7 +51,6 @@ test "words sent fly from the field into their bubble" {
   t.run_for(@ui.nav_push_ms)
   t.tap_text("发消息")
   t.type_text("发布前再看一眼签名")
-  t.draw()
   t.tap_once(390.0 - 10.0 - 8.0 - 18.0, 844.0 - 10.0 - 8.0 - 18.0)
   // the words as typed, over the field, until their row is in the list
   let (fx, fy) = t.drawn_of("发布前再看一眼签名").unwrap()
@@ -152,7 +151,6 @@ test "＋'s sheet going down takes no tap: the field tapped meanwhile is the fie
   let (active, _, _, _) = t.ime()
   assert_true(active)
   t.type_text("还在下去的时候")
-  t.draw()
   tap_send(t)
   let sent = named(calls, "chat.send")
   assert_eq(sent.length(), 1)
@@ -171,14 +169,12 @@ test "a quote's line for a comment, tapped while the capsule grows round it, tak
   t.press_at(x, y)
   t.run_for(long_press_ms)
   t.release(x, y)
-  t.draw()
   t.tap_text("引用")
   t.frame()
   t.tap_text("添加说明（可选）")
   let (active, _, _, _) = t.ime()
   assert_true(active)
   t.type_text("长出来的时候点的")
-  t.draw()
   tap_send(t)
   let sent = named(calls, "chat.send")
   assert_eq(sent.length(), 1)
@@ -248,7 +244,6 @@ test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under 
   assert_true(sheet_host.shown != NoSheet)
   let (xs, y) = bar_places_at()
   t.tap_once(xs[1], y)
-  t.draw()
   assert_true(app.nav.top() == Files)
 }
 
@@ -265,7 +260,6 @@ test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does
   t.frame()
   assert_true(t.find("重命名") is Some(_))
   tap_once_on(t, "重命名")
-  t.draw()
   // no rename sheet came
   assert_true(t.find("保存") is None)
 }
@@ -281,7 +275,6 @@ test "the bar going down under a page pushed takes no tap: the field tapped wher
   let (x, y, w, h) = t.rect_of("发消息").unwrap()
   assert_true(y + h > 844.0 - 22.0 - 56.0)
   t.tap_once(x + w / 2.0, y + h / 2.0)
-  t.draw()
   let (active, _, _, _) = t.ime()
   assert_true(active)
 }

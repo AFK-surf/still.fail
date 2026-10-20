@@ -130,7 +130,6 @@ fn hold_row(t : @ui.Tester, title : String) -> Unit {
   t.press_at(x, y)
   t.run_for(hold_ms)
   t.release(x, y)
-  t.draw()
 }
 
 ///|

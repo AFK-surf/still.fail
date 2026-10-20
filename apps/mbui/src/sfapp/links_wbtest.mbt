@@ -35,7 +35,6 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
   t.press_at(x + w / 2.0, y + h / 2.0)
   t.run_for(long_press_ms)
   t.release(x + w / 2.0, y + h / 2.0)
-  t.draw()
   assert_eq(t.opened().length(), 0)
   assert_true(t.find("打开链接") is Some(_))
   // no words picked by the same press

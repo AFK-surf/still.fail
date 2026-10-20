@@ -185,7 +185,6 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   // dragged down (a finger's: no easing to wait for), the cards below what shows
   t.drag(195.0, 150.0, 195.0, 750.0)
   t.drag(195.0, 150.0, 195.0, 750.0)
-  t.draw()
   assert_true(rd.ask)
   assert_true(rd.jump)
   // over the way to the end, once it has risen (the list, still flung, is stopped by a tap first: it takes that one)
@@ -196,7 +195,6 @@ test "what waits to be decided and is out of view: a bell over the way to the en
   }
   assert_true(!t.list_moving())
   t.tap(bx, by)
-  t.draw()
   assert_eq(rd.flash, "ts8")
   // the next tap goes to the next one's
   assert_eq(ask_turns.get("ws1/st1\u{1}s-c1"), Some(1))
