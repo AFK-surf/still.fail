@@ -211,6 +211,8 @@ pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
     Some(f) => {
       ignore(image)
       f.marks.push((marks, g().frame_no))
+      f.marks_out.push(f.marks_next.unwrap_or(marked_png))
+      f.marks_next = None
       f.wants = true
       Some({ host: None, fake: f.marks.length() - 1 })
     }
@@ -231,13 +233,21 @@ pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
       match fake.val {
         Some(f) if self.fake >= 0 && self.fake < f.marks.length() =>
           if g().frame_no > f.marks[self.fake].1 {
-            Some(marked_png)
+            Some(f.marks_out[self.fake])
           } else {
             None
           }
         _ => Some(b"")
       }
   }
+}
+
+///|
+/// What the next drawing of marks gives as its PNG (draw_marks, made): `png`, the bytes a run's host gave (as large,
+/// its header as wide and tall, as the run's upload says), in place of one clear pixel; the one after, one clear pixel
+/// again.
+pub fn Tester::marks_make(self : Tester, png : Bytes) -> Unit {
+  self.fake.marks_next = Some(png)
 }
 
 ///|

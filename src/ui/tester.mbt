@@ -179,6 +179,8 @@ pub fn Tester::new(
     share: None,
     share_files: [],
     marks: [],
+    marks_out: [],
+    marks_next: None,
     shares: [],
   }
   for im in images {

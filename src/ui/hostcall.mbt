@@ -81,6 +81,9 @@ struct FakeHost {
   share_files : Array[Bytes]
   /// the marks drawn onto images (draw_marks' JSON), oldest first, and the frame each was asked in
   marks : Array[(String, Int)]
+  /// the PNG each drawing of marks gives (Tester::marks_make: what the next is to give, else one clear pixel)
+  marks_out : Array[Bytes]
+  mut marks_next : Bytes?
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
 }

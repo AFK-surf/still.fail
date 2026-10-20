@@ -213,3 +213,27 @@ test "what the app shares out is handed to the system's sheet, kept for the test
   assert_eq(@ui.share("a link: https://example.test", "", "", b""), true)
   assert_eq(t.shared_out(), [("", "a.png", "image/png", b"\x89PNG"), ("a link: https://example.test", "", "", b"")])
 }
+
+///|
+test "marks drawn onto an image give the PNG the test says, the next one a clear pixel again" {
+  let made : Array[Bytes] = []
+  let marking : Array[@ui.MarkedImage] = []
+  let t = @ui.Tester::new(fn(c) {
+    for m in marking {
+      match m.made() {
+        Some(png) => if !made.iter().any(fn(b) { physical_equal(b, png) }) { made.push(png) }
+        None => ()
+      }
+    }
+    c.text("marks", wrap=false) |> ignore
+  })
+  let given = Bytes::makei(10957, fn(i) { if i < 8 { b"\x89PNG\r\n\x1A\n"[i] } else { b'\x00' } })
+  t.marks_make(given)
+  marking.push(@ui.draw_marks(b"image", "{}").unwrap())
+  t.draw()
+  marking.push(@ui.draw_marks(b"image", "{}").unwrap())
+  t.draw()
+  assert_eq(made.length(), 2)
+  assert_eq(made[0].length(), 10957)
+  assert_true(made[1].length() < 100)
+}
