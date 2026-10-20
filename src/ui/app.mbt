@@ -23,6 +23,8 @@ let bench : Bench = {
   start: 0.0,
   speed: 0.0,
   phases: [0.0, 0.0, 0.0],
+  host: 0,
+  held: false,
 }
 
 ///|
@@ -37,6 +39,10 @@ struct Bench {
   mut speed : Double
   // build, layout and paint time summed over the measured frames
   phases : Array[Double]
+  // the host's bench mode as the window opened (MBUI_BENCH), kept after its own bench is over (mode 0 again)
+  mut host : Int
+  // a bench of the app's own asked this frame to draw the next one (Ctx::bench_frames)
+  mut held : Bool
 }
 
 ///|
@@ -44,6 +50,7 @@ struct Bench {
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
   g_view.val = view
   bench.mode = @host.bench_mode()
+  bench.host = bench.mode
   drive_init()
   @host.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
   @host.set_app_state(fn(s) { on_app_state(s) })
@@ -89,7 +96,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if c.read_back_moved {
     c.wants_frame = true
   }
-  if c.wants_frame || bench.mode > 0 {
+  let held = bench.held
+  bench.held = false
+  if c.wants_frame || bench.mode > 0 || held {
     h_request_frame()
   } else if c.motion_left || c.cycling || c.fiber_frame {
     // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
@@ -917,4 +926,15 @@ pub fn app_focused() -> Bool {
 /// activity pauses, its GL thread about to stop); one at a time, the last given.
 pub fn on_app_change(f : (Bool, Bool) -> Unit) -> Unit {
   app_change.val = Some(f)
+}
+
+///|
+/// A bench of the app's own (a page's, as still.fail's chat bench scrolls its list) draws every frame while it asks
+/// (`on`, asked each frame): only where the host was opened in its bench mode (MBUI_BENCH not 0), with the app as it
+/// ships, no other path. Anywhere else (a run of the app, a Tester) it does nothing: no frame is asked for by it.
+pub fn Ctx::bench_frames(self : Ctx, on : Bool) -> Unit {
+  ignore(self)
+  if on && bench.host != 0 && fake.val is None {
+    bench.held = true
+  }
 }
