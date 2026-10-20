@@ -179,6 +179,7 @@ fn reset() -> Unit {
   app.menu_at = 0.0
   app.held = 0
   app.held_at = 0.0
+  reset_row_menu()
   app.toast = ""
   app.toast_at = 0.0
   read_views.clear()
@@ -416,6 +417,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         filter_menu(c, src, w)
+        // a row's menu, held long (home_menu.mbt)
+        home_row_menu(c, src)
       }
       sheet_layer(c, fn(kind) {
         match kind {

@@ -770,6 +770,10 @@ fn chat_row(
     }
   }
   let held = pressed && app.held == id && c.now() - app.held_at >= hold_ms
+  if held {
+    // held long: what can be done to the chat (home_menu.mbt)
+    row_held(c, id, item)
+  }
   if pressed && !held {
     c.wake_in(hold_ms - (c.now() - app.held_at))
   }
@@ -792,121 +796,125 @@ fn chat_row(
   }
   let dim = if item.offline is Some(_) { 0.45 } else { 1.0 }
   let archivable = item.archivable && item.offline is None && !item.pending
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    h=Px(66.0),
-    pl=22.0,
-    pr=16.0,
-    gap=6.0,
-    align=ACenter,
-    bg=if held {
-      @sf.alpha(t.p.text, 0.05)
-    } else if lifted >= 0.0 {
-      // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
-      let p = lifted / 480.0
-      @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
-    } else {
-      0L
-    },
-    id~,
-    fn() {
-      if archivable {
-        archive_chip(c, src, item)
-      }
-      c.box(w=Fill(1.0), justify=JCenter, opacity=if item.settled { 0.45 } else { 1.0 }, fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Px(22.0), gap=8.0, align=ACenter, fn() {
-          let tone = row_tone(item)
-          if tone != "" {
-            chat_mark(c, tone, pop=item.station + "/" + item.id)
-          }
-          c.box(w=Fill(1.0), opacity=dim, fn() {
-            c.text(
-              item.title,
-              size=16.0,
-              weight=if item.unread { 600 } else { 400 },
-              color=t.p.text,
-              wrap=false,
-              line=22.0,
-            )
-            |> ignore
-          })
-          |> ignore
-          if @sf.has_station_mark(item.station_emoji, item.station_icon) {
-            c.box(opacity=dim, fn() {
-              @sf.station_mark(c, item.station_emoji, item.station_icon, 12.0, t.p.muted)
-            })
-            |> ignore
-          }
-          if item.offline is Some(_) || item.reconnecting is Some(_) {
-            c.box(w=Px(14.0), align=ACenter, fn() {
-              @sf.icon(c, "unplug", size=13.0, color=t.p.subtle) |> ignore
-            })
-            |> ignore
-          } else if item.connect {
-            c.box(w=Px(14.0), align=ACenter, fn() { @sf.slack_mark(c, 13.0) |> ignore })
-            |> ignore
-          }
-        })
-        |> ignore
-        c.box(dir=Row, w=Fill(1.0), h=Px(20.0), gap=8.0, align=ACenter, fn() {
-          c.box(w=Fill(1.0), opacity=dim, fn() {
-            let state = match item.state_text {
-              Some(s) => Some(s)
-              None => item.decision_text
+  let busy = row_busy(item)
+  let failed = row_failed(c, item)
+  let row = fn(tx : Double) -> Int {
+    c.box(
+      dir=Row,
+      w=Fill(1.0),
+      h=Px(66.0),
+      tx~,
+      pl=22.0,
+      pr=16.0,
+      gap=6.0,
+      align=ACenter,
+      bg=if held || row_menu_open(item) {
+        @sf.alpha(t.p.text, 0.05)
+      } else if lifted >= 0.0 {
+        // going ahead of others, on a ground of its own over them: held to 60% of its 480 ms, then fading
+        let p = lifted / 480.0
+        @sf.alpha(@sf.over(t.p.bg, @sf.alpha(t.p.text, 0.06)), if p < 0.6 { 1.0 } else { 1.0 - (p - 0.6) / 0.4 })
+      } else if tx != 0.0 {
+        // swiped, over its 归档 (home_menu.mbt swipe_to_archive)
+        t.p.bg
+      } else {
+        0L
+      },
+      id~,
+      fn() {
+        if archivable {
+          archive_chip(c, src, item, busy)
+        }
+        c.box(w=Fill(1.0), justify=JCenter, opacity=if item.settled { 0.45 } else { 1.0 }, fn() {
+          c.box(dir=Row, w=Fill(1.0), h=Px(22.0), gap=8.0, align=ACenter, fn() {
+            let tone = row_tone(item)
+            if tone != "" {
+              chat_mark(c, tone, pop=item.station + "/" + item.id)
             }
-            match state {
-              Some(s) => state_line(c, s)
-              None =>
-                match item.last {
-                  Some(l) =>
-                    c.text(l, size=14.0, color=t.p.muted, wrap=false, line=20.0)
-                    |> ignore
-                  None => ()
+            c.box(w=Fill(1.0), opacity=dim, fn() {
+              c.text(
+                item.title,
+                size=16.0,
+                weight=if item.unread { 600 } else { 400 },
+                color=t.p.text,
+                wrap=false,
+                line=22.0,
+              )
+              |> ignore
+            })
+            |> ignore
+            if @sf.has_station_mark(item.station_emoji, item.station_icon) {
+              c.box(opacity=dim, fn() {
+                @sf.station_mark(c, item.station_emoji, item.station_icon, 12.0, t.p.muted)
+              })
+              |> ignore
+            }
+            if busy || failed {
+              // its pin or archive under way: a spinner; failed a moment ago: a red mark (DoingMark)
+              c.box(w=Px(14.0), align=ACenter, fn() {
+                if busy {
+                  @sf.spinner(c, size=12.0) |> ignore
+                } else {
+                  @sf.icon(c, "info", size=12.0, color=t.p.red) |> ignore
                 }
+              })
+              |> ignore
+            } else if item.offline is Some(_) || item.reconnecting is Some(_) {
+              c.box(w=Px(14.0), align=ACenter, fn() {
+                @sf.icon(c, "unplug", size=13.0, color=t.p.subtle) |> ignore
+              })
+              |> ignore
+            } else if item.connect {
+              c.box(w=Px(14.0), align=ACenter, fn() { @sf.slack_mark(c, 13.0) |> ignore })
+              |> ignore
             }
           })
           |> ignore
-          if held {
-            c.text(item.ago, size=12.0, color=t.p.subtle, wrap=false) |> ignore
-          } else {
-            c.box(opacity=dim, fn() { row_aside(c, src, item, lead) }) |> ignore
-          }
+          c.box(dir=Row, w=Fill(1.0), h=Px(20.0), gap=8.0, align=ACenter, fn() {
+            c.box(w=Fill(1.0), opacity=dim, fn() {
+              let state = match item.state_text {
+                Some(s) => Some(s)
+                None => item.decision_text
+              }
+              match state {
+                Some(s) => state_line(c, s)
+                None =>
+                  match item.last {
+                    Some(l) =>
+                      c.text(l, size=14.0, color=t.p.muted, wrap=false, line=20.0)
+                      |> ignore
+                    None => ()
+                  }
+              }
+            })
+            |> ignore
+            if held {
+              c.text(item.ago, size=12.0, color=t.p.subtle, wrap=false) |> ignore
+            } else {
+              c.box(opacity=dim, fn() { row_aside(c, src, item, lead) }) |> ignore
+            }
+          })
+          |> ignore
         })
         |> ignore
-      })
-      |> ignore
-    },
-  )
+      },
+    )
+  }
+  if archivable {
+    swipe_to_archive(c, src, item, busy, row)
+  } else {
+    row(0.0)
+  }
 }
 
 ///|
-/// A small 归档 at a row's start, for a chat with nothing left in it: a tap archives it.
-fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem) -> Unit {
+/// A small 归档 at a row's start, for a chat with nothing left in it: a tap archives it (home_menu.mbt archive_from_row), not
+/// while its pin or archive is under way.
+fn archive_chip(c : @ui.Ctx, src : Source, item : ChatItem, busy : Bool) -> Unit {
   let t = @sf.theme()
   let id = c.id("archive/" + item.station + "/" + item.id)
-  if c.clicked(id) {
-    match item.watch_ask {
-      // one keeping watch asks first (its watch runs on in the archive): not from here yet
-      Some(ask) => say(c, ask)
-      None => {
-        let params : Map[String, Json] = {
-          "station": Json::string(item.station),
-          "session": Json::string(item.session),
-          "archived": Json::boolean(true),
-        }
-        match item.thread {
-          Some(th) => params["thread"] = Json::number(th)
-          None => ()
-        }
-        (src.call)("chat.archive", Json::object(params), fn(r) {
-          match r {
-            Ok(_) => say(c, tr("android-chat.archived"))
-            Err(e) => say(c, tr("android-chat.archive") + "：" + text(Some(e), "message"))
-          }
-        })
-      }
-    }
+  if c.clicked(id) && !busy {
+    archive_from_row(src, item)
   }
   c.box(
     padx=10.0,
