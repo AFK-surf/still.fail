@@ -93,21 +93,39 @@ fn screen(mode : String, opening : Double, unlike_mac? : String = "") -> @ui.Tes
     w=window_w,
     h=window_h,
     text~,
+    // (what its host said of its views before its first frame, said before the Tester's: Tester::new's `run`)
+    run=text,
     scale=host_scale,
     time=host_start,
     stable=true,
   )
   // drawn when the Mac drew (its section's DRAWHASH times): what turns while shown (a spinner, Ctx::cycle) turns
-  // through the frames the Mac's did, to the one its picture is of
+  // through the frames the Mac's did, to the one its picture is of; what its host said of its views (a player's
+  // state, a video's frames: VIEWSAID) said again where it said it
   let times = mac_frame_times(text)
   let last = times.last().unwrap_or(0.0)
   if last < opening {
     fail("\{mode}: the Mac took its picture at \{last} ms, before what it opens with ends (\{opening} ms)")
   }
-  for at in times {
-    if at > t.time() {
-      t.frame(ms=at - t.time())
+  let mut framed = false
+  for v in text.split("\n") {
+    if v.has_prefix("VIEWSAID ") {
+      if framed {
+        ignore(t.view_said(v.view(start_offset=9).to_owned()))
+      }
+      continue
     }
+    guard v.has_prefix("DRAWHASH ") else { continue }
+    // (its first frame the Tester's own, drawn as it was made; each after it one of the Mac's, at its time)
+    if !framed {
+      framed = true
+      continue
+    }
+    let at = match (try Some(@json.parse(v.split(" ").to_array().get(2).map(fn(p) { p.to_owned() }).unwrap_or(""))) catch { _ => None }) {
+      Some(Number(d, ..)) => d
+      _ => continue
+    }
+    t.frame(ms=at - t.time())
   }
   t.draw()
   t.assert_idle()
@@ -540,12 +558,7 @@ test "chat-preview-pdf" (it : @test.Test) {
 
 ///|
 test "chat-preview-video" (it : @test.Test) {
-  check(
-    it,
-    "chat-preview-video",
-    @ui.nav_push_ms,
-    unlike_mac="its video: ready at once on the fake host (its controls shown), the Mac's still opening it",
-  )
+  check(it, "chat-preview-video", @ui.nav_push_ms)
 }
 
 ///|
@@ -611,12 +624,7 @@ test "player-ended" (it : @test.Test) {
 
 ///|
 test "player-opening" (it : @test.Test) {
-  check(
-    it,
-    "player-opening",
-    @ui.nav_push_ms,
-    unlike_mac="its player's state: the fake host's player knows the length the Mac is still reading",
-  )
+  check(it, "player-opening", @ui.nav_push_ms)
 }
 
 ///|
