@@ -903,7 +903,7 @@ fn fixture_card_call(f : Fixture, name : String, params : Json) -> Result[Json, 
 pub fn open_cards_fixture(mode : String) -> Unit {
   match mode {
     "chat-answering" => dui.doing["answer/" + seq_key("ws1/st1", 7.0, 8.0) + "/一起换"] = true
-    "chat-cards" => dui.failed["keep/ws1/st1/7"] = -1.0
+    "chat-cards" => dui.failed["keep/ws1/st1/7"] = failed_next()
     // a word of the last post picked (its handles and its bar), once laid out (pick.mbt)
     "chat-pick" => {
       pk.ts = "ts11"

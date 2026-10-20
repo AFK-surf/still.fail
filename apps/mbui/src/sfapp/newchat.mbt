@@ -78,7 +78,7 @@ fn pick_new(c : @ui.Ctx, src : Source, ws : String, fill : Map[String, Json]) ->
     match res {
       Err(e) => {
         app.toast = fill_words("android-chat.pick.failed", text(Some(e), "message"))
-        app.toast_at = -1.0
+        app.toast_n += 1
       }
       _ => ()
     }
@@ -856,7 +856,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
       match res {
         Err(e) => {
           app.toast = fill_words("android-chat.pick.failed", text(Some(e), "message"))
-          app.toast_at = -1.0
+          app.toast_n += 1
         }
         _ => ()
       }
@@ -1108,7 +1108,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
               Ok(_) => if sheet_host.kind == RunPicker(station) { lower_sheet() }
               Err(e) => {
                 app.toast = fill_words("android-chat.save.failed", text(Some(e), "message"))
-                app.toast_at = -1.0
+                app.toast_n += 1
               }
             }
                   },

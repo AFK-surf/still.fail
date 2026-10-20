@@ -1487,7 +1487,7 @@ fn unsent_button(
         match res {
           Err(e) => {
             app.toast = verb + "：" + text(Some(e), "message")
-            app.toast_at = -1.0
+            app.toast_n += 1
           }
           _ => ()
         }

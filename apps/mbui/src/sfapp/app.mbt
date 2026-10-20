@@ -52,9 +52,9 @@ priv struct App {
   /// a row held: its id, and whether it has been held long (its time on @kit.after)
   mut held : Int
   mut held_long : Bool
-  /// what was said last of a write (a toast), and when
+  /// what was said last of a write (a toast), and which saying it is (one said again is a new one)
   mut toast : String
-  mut toast_at : Double
+  mut toast_n : Int
 }
 
 ///|
@@ -67,7 +67,7 @@ let app : App = {
   held: 0,
   held_long: false,
   toast: "",
-  toast_at: 0.0,
+  toast_n: 0,
 }
 
 ///|
@@ -176,7 +176,6 @@ fn reset() -> Unit {
   app.held_long = false
   reset_row_menu()
   app.toast = ""
-  app.toast_at = 0.0
   read_views.clear()
   read_chats.clear()
   readings.clear()
@@ -203,7 +202,7 @@ fn reset() -> Unit {
   update.source = None
   update_version.val = 0
   svc_folded.val = false
-  splash_first.val = -1.0
+  splash_waited.val = false
   drafts.clear()
   cui.attach = false
   cui.picking = None
@@ -607,7 +606,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
     sign_in: fn() { (src.sign_in)() },
     say: fn(words) {
       app.toast = words
-      app.toast_at = -1.0
+      app.toast_n += 1
     },
     picture: fn(url) { (src.picture)(url) },
     notify_ask: fn() { ask_from_switch() },
@@ -677,11 +676,7 @@ let told_dark : Ref[Bool?] = Ref(None)
 /// it), in ink, 2.6 s (paused while the pointer is on it), coming in and going out; one said again is a new one.
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
-  // said from a call's answer, between frames: from this frame on
-  if app.toast != "" && app.toast_at < 0.0 {
-    app.toast_at = c.now()
-  }
-  let said = if app.toast != "" { [@kit.toast("t\{app.toast_at}", app.toast)] } else { [] }
+  let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
   let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
@@ -700,8 +695,9 @@ pub let toast_ms : Double = 2600.0
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
+  ignore(c)
   app.toast = words
-  app.toast_at = c.now()
+  app.toast_n += 1
 }
 
 ///|
@@ -709,7 +705,10 @@ fn say(c : @ui.Ctx, words : String) -> Unit {
 /// waits for said only once it takes a while (a second), or at once when `now` (a failure).
 fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   let t = @sf.theme()
-  let since = splash_since(c)
+  // a second after the app's first splash, what it waits for is said from then on
+  if !splash_waited.val && @kit.after(c, "splash-label", true, splash_label_ms) {
+    splash_waited.val = true
+  }
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
@@ -739,10 +738,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       |> ignore
       match label {
         Some(s) => {
-          let shown = now || c.now() - since > splash_label_ms
-          if !shown {
-            c.wake_in(splash_label_ms - (c.now() - since))
-          }
+          let shown = now || splash_waited.val
           c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
             c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
             |> ignore
@@ -765,15 +761,8 @@ let splash_label_ms : Double = 1000.0
 let splash_float_ms : Double = 1800.0
 
 ///|
-let splash_first : Ref[Double] = { val: -1.0 }
-
-///|
-fn splash_since(c : @ui.Ctx) -> Double {
-  if splash_first.val < 0.0 {
-    splash_first.val = c.now()
-  }
-  splash_first.val
-}
+/// Whether the app's first splash has waited its second (splash_label_ms): what it waits for said from then on.
+let splash_waited : Ref[Bool] = { val: false }
 
 ///|
 /// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.

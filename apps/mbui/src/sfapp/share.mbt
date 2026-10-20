@@ -641,11 +641,11 @@ fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Uni
         None =>
           if !@ui.share("", e.name, e.mime, all.to_bytes()) {
             app.toast = sh("android-misc.drive.noApp")
-            app.toast_at = -1.0
+            app.toast_n += 1
           }
         Some(err) => {
           app.toast = fill("android-misc.drive.fetchFailed", [("name", e.name), ("error", dv_error(err))])
-          app.toast_at = -1.0
+          app.toast_n += 1
         }
       }
     },

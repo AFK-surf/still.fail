@@ -149,9 +149,8 @@ test "an option pressed is drawn smaller, its tap where it is laid out" {
   scroll_to_words(t, "保留")
   let (x, y) = t.find("保留").unwrap()
   t.press_at(x, y)
-  for _ in 0..<8 {
-    t.frame()
-  }
+  // drawn pressed, the finger still down
+  t.draw()
   t.release(x, y)
   assert_eq(named(calls, "chat.keep").length(), 1)
 }

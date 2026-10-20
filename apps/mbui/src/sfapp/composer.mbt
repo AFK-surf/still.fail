@@ -851,7 +851,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
           save_draft(src, d)
         } else {
           app.toast = fill("android-chat.composer.send.failed", [("error", text(Some(e), "message"))])
-          app.toast_at = -1.0
+          app.toast_n += 1
         }
       _ => ()
     }
@@ -897,6 +897,33 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   if d.focus == -1 {
     c.focus_editor(field_key)
     d.focus = 0
+  }
+  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark: taken
+  // in before the capsule is laid out, so this frame draws them
+  match marked_into.get(d.key) {
+    Some(list) => {
+      marked_into.remove(d.key)
+      for x in list {
+        add_file(src, d, r.station, x.0, x.1, None)
+        for q in x.2 {
+          let id = next_pending.val
+          next_pending.val += 1
+          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
+          d.comments[id] = q.2
+        }
+      }
+    }
+    None => ()
+  }
+  // files another app shared into this chat (share.mbt), up as ＋'s are
+  match shared_into.get(d.key) {
+    Some(list) => {
+      shared_into.remove(d.key)
+      for f in list {
+        add_file(src, d, r.station, f.name, f.bytes, None)
+      }
+    }
+    None => ()
   }
   let expanded = focused ||
     d.text != "" ||
@@ -1028,34 +1055,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     if x.mode == "file" && x.up is None {
       ref_send_up(c, src, d, r.station, x)
     }
-  }
-  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark
-  match marked_into.get(d.key) {
-    Some(list) => {
-      marked_into.remove(d.key)
-      for x in list {
-        add_file(src, d, r.station, x.0, x.1, None)
-        for q in x.2 {
-          let id = next_pending.val
-          next_pending.val += 1
-          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
-          d.comments[id] = q.2
-        }
-      }
-      c.request_frame()
-    }
-    None => ()
-  }
-  // files another app shared into this chat (share.mbt), up as ＋'s are
-  match shared_into.get(d.key) {
-    Some(list) => {
-      shared_into.remove(d.key)
-      for f in list {
-        add_file(src, d, r.station, f.name, f.bytes, None)
-      }
-      c.request_frame()
-    }
-    None => ()
   }
   // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
   // @kit.sheet); drawn until it has gone
