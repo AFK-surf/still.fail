@@ -49,7 +49,7 @@ The rules (see RULES below for each one's words):
                    call to its core ((src.call)(…), what detlint.json's build_effect.fields names), a host's effect
                    (@host.share, @ui.keep… : build_effect.calls), a native view's own (its reload, set_scale, seek,
                    close…: build_effect.methods, by name), or a function of the app's that does one, other than
-                   in Ctx::after_build, in a callback (fn(…) { … }: an answer, an event's handler) or under an input
+                   in Ctx::after_build or Ctx::tell, in a callback (fn(…) { … }: an answer, an event's handler) or under an input
                    the frame takes (a click, a tap, a key, a drag let go, a menu's choice: taken by the frame's first
                    build only). A frame is built again while what it read changes, and what a build let go of told
                    outside is told all the same
@@ -1252,7 +1252,7 @@ def lint_build_effects(files, cfg, out):
             t = toks[o]
             if t.kind != "op" or t.text not in "({" or t.end is None or t.end < k:
                 continue
-            if t.text == "(" and o > 0 and toks[o - 1].kind == "ident" and toks[o - 1].text == "after_build":
+            if t.text == "(" and o > 0 and toks[o - 1].kind == "ident" and toks[o - 1].text in ("after_build", "tell"):
                 return True
             if t.text == "{":
                 # a callback's body: fn(…) { … } or fn(…) -> T { … }

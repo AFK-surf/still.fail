@@ -85,6 +85,24 @@ Only for these, which the framework knows by itself:
   the first since a frame took the last asks for one frame, which takes all that came, in their order);
 - **layout read back** into the build: a value the build read from the last layout changed (at most a few frames).
 
+## Inputs, and what they tell outside
+
+A frame may be built more than once (a layout read back into the build): every build of it is a function of the
+frame's state, and an input is part of that state once, as the build that sees it takes it.
+
+- **An input becomes state in the build that sees it.** A click, a tap, a key, a menu's choice, a host's answer taken
+  (a pick's files, marks drawn, a frame grabbed) are handed to the frame's first build alone; it turns them into
+  state (a toggle flipped, a page pushed, a file added), and the frame's later builds build from that state. An input
+  seen again by each build would be taken again (a toggle flipped back, a page pushed twice): handed once, as an
+  event is to its handler (Compose's, React's).
+- **What an input tells outside is said with `Ctx::tell(key, f)`.** A call to a core, a player told to play, bytes
+  kept: said in the build that took the input, kept until the frame's builds are over and told once then (the last
+  said under its key), whichever build said it.
+- **What every build works out alike is said with `Ctx::after_build(key, f)`.** Asked while it is not yet (a page's
+  next part, a page left, an answer not asked for): each build says it, the last build's is told.
+
+Nothing else in a build tells outside (detlint's build-effect): those two are its ways out.
+
 ## What is compared, and where
 
 | layer | what | how it is judged | when |
