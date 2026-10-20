@@ -28,7 +28,7 @@ import type { Clock } from "effect";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { codexAuthFile } from "../agents/machine-logins.ts";
 import { CONSOLE_FILE } from "../accounts/console.ts";
-import { grokEmail } from "../accounts/profiles.ts";
+import { cursorEmail, grokEmail } from "../accounts/profiles.ts";
 import type { Cloud } from "../cloud/state.ts";
 import type { ConfigFile } from "../ops/config.ts";
 import { Fibers } from "../ops/fibers.ts";
@@ -682,6 +682,7 @@ export class Sharing {
     if (typeof p.share?.email === "string") return p.share.email;
     const home = this.home(p);
     if (p.runtime === "grok") return grokEmail(home);
+    if (p.runtime === "cursor") return cursorEmail(home);
     if (p.runtime === "codex") {
       try {
         const auth = JSON.parse(readFileSync(join(home, "auth.json"), "utf8"));
@@ -864,6 +865,8 @@ export class Sharing {
     if (isObject(p.share) && p.share.borrowed === true) throw new Error("this profile is another station's");
     // Grok Build's sign-in is not lent yet (only Claude Code's and Codex's are: lendClaude, lendCodex).
     if (on && p.access?.kind === "subscription" && p.runtime === "grok") throw new Error("a SuperGrok subscription cannot be shared with other stations yet");
+    // Nor Cursor's (its key stays where it was minted).
+    if (on && p.access?.kind === "subscription" && p.runtime === "cursor") throw new Error("a Cursor account cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
     this.deps.config.update((raw) => {
       for (const x of raw.profiles ?? []) {

@@ -462,5 +462,9 @@
   "station.login.consoleExpired": "授权码已过期，请重新登录",
   "station.login.consoleDenied": "授权已被拒绝",
   "station.login.consoleUnreadable": "已登录，但无法读取 OpenCode 的登录信息",
-  "station.profile.consoleSignedOut": "OpenCode 登录已失效"
+  "station.profile.consoleSignedOut": "OpenCode 登录已失效",
+  "station.login.cursorKeyFailed": "已登录 Cursor，但无法生成 station 的 key：{error}",
+  "station.profile.cursorSubscription": "Cursor 账号",
+  "station.profile.cursorKeyRevoked": "station 的 Cursor key 已被撤销，请重新登录",
+  "station.quota.cursorUnsupported": "Cursor 不向 station 提供套餐用量"
 }

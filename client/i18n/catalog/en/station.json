@@ -468,5 +468,9 @@
   "station.login.consoleExpired": "The code has expired; sign in again",
   "station.login.consoleDenied": "Authorization was denied",
   "station.login.consoleUnreadable": "Signed in, but the OpenCode sign-in couldn't be read",
-  "station.profile.consoleSignedOut": "OpenCode sign-in expired"
+  "station.profile.consoleSignedOut": "OpenCode sign-in expired",
+  "station.login.cursorKeyFailed": "Signed in to Cursor, but couldn't create the station's key: {error}",
+  "station.profile.cursorSubscription": "Cursor account",
+  "station.profile.cursorKeyRevoked": "The station's Cursor key was revoked; sign in again",
+  "station.quota.cursorUnsupported": "Cursor doesn't report plan usage to the station"
 }

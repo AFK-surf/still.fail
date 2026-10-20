@@ -1,4 +1,4 @@
-// Claude Code, Codex, DeepSeek Harness and Grok Build on this machine (the Rust station's updates.rs): where the station's PATH finds
+// Claude Code, Codex, DeepSeek Harness and Grok Build on this machine (Cursor's SDK: updates.ts readCursor) (the Rust station's updates.rs): where the station's PATH finds
 // them, how each is updated the way it was installed (`claude update`, npm, Homebrew, Vite+, Codex's standalone
 // installer) or installed when it is not there, and running those commands.
 import { existsSync, realpathSync } from "node:fs";
@@ -20,7 +20,7 @@ export const RUNTIMES: Exclude<Kind, "station">[] = RUNTIME_KINDS;
 export const kindName = (k: Kind) => (k === "station" ? "Station" : runtimeLabel(k));
 export const kindCommand = (k: Kind) => (k === "station" ? "stillfail-station" : k);
 /// Where the latest is said: the npm registry's latest of the runtime's package.
-export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : "");
+export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-code" : k === "codex" ? "@openai/codex" : k === "dsh" ? "@deepseek-ai/dsh" : k === "grok" ? "@xai-official/grok" : k === "cursor" ? "@cursor/sdk" : "");
 
 /// How an update is done: a program and its arguments.
 export type How = { program: string; args: string[] };

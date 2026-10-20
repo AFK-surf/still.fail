@@ -5,6 +5,8 @@
 // - codex: <home>/sessions/**/rollout-*<id>.jsonl, lines of {type: response_item, payload: message | reasoning | …}
 // - dsh: <home>/dsh-sessions/<cwd>/<id>/session.v<N>.jsonl, lines of {type: user/message | assistant/message |
 //   tool/result | …, time, data}
+// - cursor: <home>/cursor/sessions/<id>.jsonl, the station's own (agents/cursor-bridge.mjs), lines of {time, type: user |
+//   assistant | thinking | tool | usage | end, …}
 //
 // JSON is read with JSON.parse, so a value shows as JavaScript has it: a number written `1.0` shows `1`, a key that is
 // an integer comes first, a number past 2^53 rounds (serde_json keeps each as written). Transcripts rarely have them.
@@ -129,6 +131,10 @@ const entriesOf = (dir: string): string[] | null => {
 export function transcriptPath(runtime: RuntimeKind, home: string, id: string): string | null {
   if (runtime === "dsh") return dshTranscript(home, id);
   if (runtime === "grok") return grokTranscript(home, id);
+  if (runtime === "cursor") {
+    const path = join(home, "cursor", "sessions", `${id}.jsonl`);
+    return isFile(storage(path)) ? path : null;
+  }
   if (runtime === "claude") {
     for (const dir of entriesOf(join(home, "projects")) ?? []) {
       const path = join(home, "projects", dir, `${id}.jsonl`);
@@ -227,6 +233,7 @@ export function timelineOf(runtime: RuntimeKind, record: Json, state: ReadState,
   if (runtime === "claude") claudeTimeline(record, state, out);
   else if (runtime === "dsh") dshTimeline(record, out);
   else if (runtime === "grok") grokTimeline(record, out);
+  else if (runtime === "cursor") cursorTimeline(record, out);
   else codexTimeline(record, state, out);
 }
 
@@ -323,6 +330,47 @@ function grokTimeline(r: Json, out: TimelineEntry[]) {
     if (id !== undefined) e.callId = id;
     out.push(e);
   }
+}
+
+/// Cursor's: what the station's driver kept of a session (agents/cursor-bridge.mjs), each call with what it gave back.
+function cursorTimeline(r: Json, out: TimelineEntry[]) {
+  const kind = stringOf(get(r, "type")) ?? "";
+  const time = get(r, "time");
+  const at = typeof time === "number" && Number.isFinite(time) ? new Date(time).toISOString() : null;
+  if (kind === "user" || kind === "assistant" || kind === "thinking") {
+    const text = stringOf(get(r, "text")) ?? "";
+    if (trim(text) !== "") out.push({ at, kind, text: clip(text) });
+  } else if (kind === "tool") {
+    let name = stringOf(get(r, "name")) ?? "";
+    let input: Json = get(r, "args") ?? {};
+    // An MCP server's tool named as Claude Code names one (mcp__server__tool; agents/live.ts cursorCall).
+    if (name === "mcp" && isStr(get(input, "providerIdentifier")) && isStr(get(input, "toolName"))) [name, input] = [`mcp__${get(input, "providerIdentifier")}__${get(input, "toolName")}`, get(input, "args") ?? {}];
+    const args = pretty(input);
+    const id = stringOf(get(r, "id"));
+    const call: TimelineEntry = { at, kind: "tool_call", text: isPosting(name) ? args : clip(args), tool: name };
+    if (id !== undefined) call.callId = id;
+    out.push(withBrief(call, input));
+    const result: TimelineEntry = { at, kind: "tool_result", text: clip(cursorResult(get(r, "result"))), ok: get(r, "status") !== "error" };
+    if (id !== undefined) result.callId = id;
+    out.push(result);
+  }
+}
+
+/// What a call of Cursor's gave back, as the history shows it: a command's output, an MCP tool's text, else as it is.
+function cursorResult(result: Json): string {
+  let r: Json = result;
+  if (isStr(r)) {
+    try {
+      r = JSON.parse(r);
+    } catch {
+      return r as string;
+    }
+  }
+  const v = get(r, "value") ?? r;
+  if (isStr(get(v, "stdout")) || isStr(get(v, "stderr"))) return [stringOf(get(v, "stdout")) ?? "", stringOf(get(v, "stderr")) ?? ""].filter((t) => t !== "").join("\n");
+  const content = get(v, "content");
+  if (Array.isArray(content)) return content.map((c: Json) => stringOf(get(get(c, "text"), "text")) ?? stringOf(get(c, "text")) ?? "").filter((t: string) => t !== "").join("\n");
+  return r === null || r === undefined ? "" : isStr(r) ? r : pretty(r);
 }
 
 function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
