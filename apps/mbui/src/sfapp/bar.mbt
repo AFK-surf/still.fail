@@ -574,6 +574,17 @@ pub fn bar_rest() -> Double {
 }
 
 ///|
+/// When the bar chosen in the panel has landed (the frames' clock, ms): the end of the panel's own spring as it closes
+/// under it; -1 when none is landing. Until then a finger does not take the panel (a bar landing lands untouched): what
+/// a test runs to before it draws the panel up again.
+pub fn bar_landed() -> Double {
+  match bar.swap {
+    Some(_) => bar.o.end()
+    None => -1.0
+  }
+}
+
+///|
 /// Everything where it is going, at once (the first frame; reduced motion).
 fn BarModel::jump(self : BarModel) -> Unit {
   for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
