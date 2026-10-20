@@ -156,6 +156,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.scroll_list(c.bench_list, bench.speed)
   }
   let t0 = h_now()
+  // what was posted from outside since the last frame (a core's answers), all of it, handed to its handlers in the
+  // order it came, before anything reads it (messages.mbt)
+  take_messages()
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
   drawing_begin()

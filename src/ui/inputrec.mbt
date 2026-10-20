@@ -25,7 +25,7 @@ let inputs_since : Ref[Bool] = Ref::new(false)
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
   inputs_since.val = true
   h_request_frame()
-  if draw_logging() {
+  if taping() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),
       "t": Json::number(t),
@@ -35,7 +35,7 @@ fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -
       Some(s) => m["s"] = Json::string(s)
       None => ()
     }
-    @host.log("INPUT " + Json::object(m).stringify())
+    tape_line("INPUT " + Json::object(m).stringify())
   }
 }
 

@@ -100,12 +100,12 @@ let draw_frames : Ref[Int] = Ref::new(0)
 
 ///|
 fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
-  if draw_logging() {
+  if taping() {
     draw_frames.val += 1
     let stable = if bench.mode < 0 { 1 } else { 0 }
-    @host.log("DRAWHASH \{draw_frames.val} \{t} \{w} \{h} \{scale} \{drawn_hash()} \{stable}")
+    tape_line("DRAWHASH \{draw_frames.val} \{t} \{w} \{h} \{scale} \{drawn_hash()} \{stable}")
     // MBUI_DRAW_DUMP=N: frame N drawn as text (drawn_text), a line each
-    if @host.env("MBUI_DRAW_DUMP") == draw_frames.val.to_string() {
+    if draw_logging() && @host.env("MBUI_DRAW_DUMP") == draw_frames.val.to_string() {
       for line in drawn_text().split("\n") {
         @host.log("DRAWDUMP " + line.to_owned())
       }
@@ -144,6 +144,11 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       replay_input(self.fake, line)
       continue
     }
+    // what came from outside, posted again at its place: the frame after it takes it (messages.mbt)
+    if is_message_line(line) {
+      replay_message(self.fake, line)
+      continue
+    }
     guard line.find("DRAWHASH ") is Some(i) else { continue }
     let parts = line.view(start_offset=i + 9).split(" ").map(fn(p) { p.to_owned() }).to_array()
     guard parts.length() >= 6 else { continue }
@@ -157,8 +162,9 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     if parts.length() >= 7 {
       bench.mode = if parts[6] == "1" { -1 } else { 0 }
     }
-    // (the frame a Tester made at this time already, as it was made: its first, Tester::new's `time`)
-    if t != self.fake.time {
+    // (the frame a Tester made at this time already, as it was made: its first, Tester::new's `time`; any later one at
+    // the same time is drawn, as a Tester's tape has them: Tester::draw)
+    if t != self.fake.time || out.length() > 0 {
       self.frame(ms=t - self.fake.time)
     }
     out.push((n.to_int(), parts[5], drawn_hash().to_string()))

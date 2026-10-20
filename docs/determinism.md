@@ -15,7 +15,7 @@ ever asserted (`Tester::assert_idle`), never waited for.
    | the frame's time, the window's size and scale, stable output (MBUI_BENCH=-1) | `DRAWHASH` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames` |
    | the user's input: pointer, wheel, keys, the input method, the system's back, the app shown or hidden | `INPUT` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames` |
    | the system's text: font metrics, shaping, glyph keys and boxes | `TEXTREC` lines (MBUI_TEXT_RECORD=1) | `Tester::new(text=)` |
-   | the core's messages (an app's: still.fail's apps/mbui) | `CORETRACE` lines | its `Replay` |
+   | messages from outside: a core's answers, posted on a channel (`mb_post` from any thread, web/host.js `post`) and handed to the channel's handler (`@ui.on_message`) as the next frame begins | `MSG` lines (MBUI_DRAW_LOG=1) | `Tester::replay_frames`; a test posts its own (`Tester::post`) |
    | the host's work for the app (images decoded, native views ready) | effect.mb outside tickets end on the host's event | a Tester's fake host (`finish`) |
    | the environment, the platform, the system's dark, the window's inset, the notifications shown | fixed under a Tester (`Tester::new` parameters, `notices`) | — |
 
@@ -58,8 +58,8 @@ A test says its time; nothing else moves it.
 - Time goes by only by `run_for(ms)`, `ms` a declared length: an animation's (`nav_push_ms`, `sheet_scrim_ms`,
   `cover_slide_ms`), a timer's, or the moment a test looks at. A test runs to the end of the motion it cares about by
   that motion's own end (`Nav::rest`, `Ctx::pager_rest`, `Anim::ends_at`), never to whenever everything has stopped.
-- At its end a test can assert that nothing is left: no frame asked for, no wake due, nothing awaited
-  (`assert_idle`), and says why when something is.
+- At its end a test can assert that nothing is left: no frame asked for, no wake due, nothing awaited, no message
+  posted that no frame took (`assert_idle`), and says why when something is.
 
 ## When a frame is needed
 
@@ -68,7 +68,8 @@ Only for these, which the framework knows by itself:
 - **an input** was handed to the app (and the frame after, for what it changed late in its frame);
 - **a motion said** is not at rest yet, or **a cycle** is read by what is shown;
 - **a time** comes: a timer's deadline on the frames' clock (`wake_in`, effect.mb's timers);
-- **the outside** answers: a ticket ended by its event, never polled with frames;
+- **the outside** answers: a ticket ended by its event, never polled with frames; a message posted (src/ui/messages.mbt:
+  the first since a frame took the last asks for one frame, which takes all that came, in their order);
 - **layout read back** into the build: a value the build read from the last layout changed (at most a few frames).
 
 ## What is compared, and where

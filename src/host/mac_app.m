@@ -6,6 +6,7 @@
 #import <UserNotifications/UserNotifications.h>
 #import <mach/mach.h>
 #import "apple.h"
+#include "post.h"
 
 mb_callbacks mb_cb;
 
@@ -833,6 +834,13 @@ double mb_host_event_time(void) { return event_time; }
 int32_t mb_host_platform(void) { return 0; }
 
 void mb_host_request_frame(void) { [the_view requestFrame]; }
+
+// A message posted from outside the frames (post.h), on whatever thread: its frame asked for on the main thread.
+static void mb_post_wake(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    mb_host_request_frame();
+  });
+}
 
 void mb_host_wake_after(double ms) {
   if (settle) {

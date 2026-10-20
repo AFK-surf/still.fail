@@ -34,6 +34,7 @@ fn reset_globals() -> Unit {
   text_table.val = None
   inputs_since.val = false
   in_frame.val = false
+  messages_reset()
   image_cache.clear()
   outside_tickets.clear()
   views_told.clear()
@@ -86,6 +87,7 @@ fn leaked_state() -> Array[String] {
   check("words", words_marks.length() + words_kept.length() + words_sel.length())
   check("list_counts", list_counts.length())
   check("drawing", dr.entries.length() + dr.overlay.length() + dr.carry.length())
+  check("messages", fake_posted.length())
   out
 }
 
@@ -290,6 +292,8 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
   }
   on_frame(self.w, self.h, self.fake.scale, self.fake.time)
   self.frames = self.frames + 1
+  // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
+  frame_ended_outside()
 }
 
 ///|

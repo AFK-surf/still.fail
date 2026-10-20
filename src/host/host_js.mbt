@@ -845,3 +845,38 @@ pub fn word_at(text : String, off : Int) -> (Int, Int) {
 pub fn open_url(url : String) -> Bool {
   js_open_url(url)
 }
+
+///|
+extern "js" fn js_post_take() -> Int =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.postTake) ? globalThis.__mbhost.postTake() : 0
+
+///|
+extern "js" fn js_post_next() -> String =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.postNext) ? globalThis.__mbhost.postNext() : ""
+
+///|
+extern "js" fn js_post_json() -> String =
+  #|() => globalThis.__mbhost.postJson()
+
+///|
+extern "js" fn js_post_bytes() -> Bytes =
+  #|() => globalThis.__mbhost.postBytes()
+
+///|
+/// What was posted from outside the frames since the last take (`__mbhost.post(channel, json, bytes)`: web/host.js),
+/// taken now as a frame begins: how many. They are handed on one at a time (`post_next`), in the order posted.
+pub fn post_take() -> Int {
+  js_post_take()
+}
+
+///|
+/// The next message taken (`post_take`): its channel, its JSON and the bytes beside it (empty: none). None when all
+/// taken are handed on.
+pub fn post_next() -> (String, String, Bytes)? {
+  let channel = js_post_next()
+  if channel == "" {
+    None
+  } else {
+    Some((channel, js_post_json(), js_post_bytes()))
+  }
+}

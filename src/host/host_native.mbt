@@ -949,3 +949,34 @@ fn word_pair(v : Double) -> (Int, Int) {
 pub fn open_url(url : String) -> Bool {
   ffi_open_url(url) != 0
 }
+
+///|
+extern "C" fn ffi_post_take() -> Int = "mb_host_post_take"
+
+///|
+extern "C" fn ffi_post_next() -> String = "mb_host_post_next"
+
+///|
+extern "C" fn ffi_post_json() -> String = "mb_host_post_json"
+
+///|
+extern "C" fn ffi_post_bytes() -> Bytes = "mb_host_post_bytes"
+
+///|
+/// What was posted from outside the frames since the last take (`mb_post`, any thread: post.h), taken now as a frame
+/// begins: how many. They are handed on one at a time (`post_next`), in the order posted.
+pub fn post_take() -> Int {
+  ffi_post_take()
+}
+
+///|
+/// The next message taken (`post_take`): its channel, its JSON and the bytes beside it (empty: none). None when all
+/// taken are handed on, or dropped since (`mb_post_drop`: a core stopped).
+pub fn post_next() -> (String, String, Bytes)? {
+  let channel = ffi_post_next()
+  if channel == "" {
+    None
+  } else {
+    Some((channel, ffi_post_json(), ffi_post_bytes()))
+  }
+}

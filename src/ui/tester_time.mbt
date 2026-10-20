@@ -57,10 +57,15 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
 /// ticket of the runtime running. Else the test fails, saying who. What never ends while shown (a cycle: a spinner, a
 /// breath) does not break it: it is said (Tester::cycles).
 pub fn Tester::assert_idle(self : Tester) -> Unit {
+  // messages posted that no frame took: what came from outside, not looked at (messages.mbt)
+  let posted = posted_left()
   // (the frame the last input or motion left owed is drawn first: idle is what comes after)
   self.draw()
   let c = g()
   let why = []
+  if posted != "" {
+    why.push(posted)
+  }
   if c.frame_by is Some(_) {
     why.push("a frame asked for" + by_of(c.frame_by))
   } else if c.motion_left {

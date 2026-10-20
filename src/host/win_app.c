@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "win.h"
+#include "post.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -73,11 +74,6 @@ static void run_script_step(int step);
 static void ime_place(void);
 double mb_host_mem_bytes(void);
 
-// What an app's engine said since the last frame (still.fail's core client, core_native.c `mbc_frame`), drained as
-// each frame begins, as on Android; an app without it links the stand-in (MSVC has no weak symbols: /alternatename).
-void mbc_frame(void);
-void mb_win_no_core_frame(void) {}
-#pragma comment(linker, "/alternatename:mbc_frame=mb_win_no_core_frame")
 
 static mb_outside_fn outside_cb;  // who is told as what the host does for the app is done (mb_host_set_outside)
 
@@ -85,7 +81,6 @@ static void draw_frame(void) {
   RECT rc;
   GetClientRect(hwnd, &rc);
   want_frame = 0;
-  mbc_frame();
   mb_images_tell(outside_cb);
   mb_views_tell(outside_cb);
   if (rc.right <= 0 || rc.bottom <= 0) return;  // minimized; WM_SIZE asks again
@@ -569,6 +564,9 @@ int32_t mb_host_platform(void) { return 3; }
 void mb_host_request_frame(void) { want_frame = 1; }
 
 void mb_app_wake(void) { PostMessageW(hwnd, WM_APP, 0, 0); }
+
+// A message posted from outside the frames (post.h), on whatever thread: the window's loop asked for a frame.
+static void mb_post_wake(void) { mb_app_wake(); }
 
 void *mb_app_hwnd(void) { return hwnd; }
 

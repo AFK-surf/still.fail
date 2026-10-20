@@ -34,6 +34,28 @@
   };
   H.wakeAfter = (ms) => setTimeout(H.requestFrame, ms);
 
+  // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
+  // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their
+  // order; the first since a frame took the last asks for that frame, the rest wait for it.
+  const posted = [];
+  let postTaken = [], postCur = null;
+  H.post = (channel, json, bytes) => {
+    if (!channel) return;
+    const first = posted.length === 0;
+    posted.push([String(channel), String(json), bytes ? new Uint8Array(bytes) : new Uint8Array(0)]);
+    if (first) H.requestFrame();
+  };
+  H.postTake = () => {
+    postTaken = postTaken.concat(posted.splice(0));
+    return postTaken.length;
+  };
+  H.postNext = () => {
+    postCur = postTaken.shift() || null;
+    return postCur ? postCur[0] : '';
+  };
+  H.postJson = () => (postCur ? postCur[1] : '');
+  H.postBytes = () => (postCur ? postCur[2] : new Uint8Array(0));
+
   // ---- what the app awaits of the host (effect.mb's outside: src/ui/hostcall.mbt) ----
   // The app is told (outside(kind, id, state)) as the work it asked for is done: kind 1 an image decoded (id: the
   // image), 2 a native view ready (a page loaded, a video's first frame showable); state 1 done, -1 failed, once an

@@ -11,6 +11,7 @@
 #include <string.h>
 #include <time.h>
 #include "moonbit.h"
+#include "post.h"
 
 #define LOG(...) __android_log_print(ANDROID_LOG_INFO, "mbui", __VA_ARGS__)
 
@@ -57,8 +58,6 @@ int mbui_main(int argc, char **argv);  // the MoonBit program's main (renamed)
 // The process's VM, for the still.fail core's engine (android_core.c).
 JavaVM *mb_android_vm(void) { return vm; }
 
-// The core's queue, drained as each frame begins (src/core/core_native.c), in apps that link mbui/core's engine.
-extern void mbc_frame(void) __attribute__((weak));
 
 static JNIEnv *env_(void) {
   JNIEnv *env = NULL;
@@ -775,7 +774,6 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfl
   cur_h = h;
   cur_scale = scale;
   want_frame = 0;
-  if (mbc_frame) mbc_frame();
   if (cb.frame) cb.frame(w, h, scale, now);
   return want_frame ? JNI_TRUE : JNI_FALSE;
 }
@@ -840,6 +838,21 @@ void mb_host_request_frame(void) {
   want_frame = 1;
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_request_frame);
+}
+
+// A message posted from outside the frames (post.h), on whatever thread: a frame asked of the view (Host.requestFrame
+// is any thread's). A thread the VM does not know is attached for the call and let go after.
+static void mb_post_wake(void) {
+  if (!vm || !host_cls) return;
+  JNIEnv *env = NULL;
+  int attached = 0;
+  if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
+    if ((*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) return;
+    attached = 1;
+  }
+  (*env)->CallStaticVoidMethod(env, host_cls, m_request_frame);
+  if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+  if (attached) (*vm)->DetachCurrentThread(vm);
 }
 
 // Whether the system is in night mode (@host.system_dark), as MainActivity keeps it (Host.systemDark: the
