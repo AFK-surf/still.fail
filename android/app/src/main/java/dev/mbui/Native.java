@@ -20,4 +20,8 @@ final class Native {
     static native void imageDone(int id, int tex, int w, int h, int ow, int oh);
     /** What the host did for the app is done (android_host.c's mb_host_set_outside): on the GL thread. */
     static native void outside(int kind, int id, int state);
+    /** A run to a declared moment (MBView: Host.shotAt): the app's clock is its frames' (mb_host_now). */
+    static native void ownClock();
+    /** How many of the app's asks of the host are not answered yet, as its last frame said (mb_host_frame_settled). */
+    static native int awaiting();
 }

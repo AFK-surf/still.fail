@@ -53,6 +53,10 @@ static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in, m_
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
+// A run to a declared moment (MBView's shotFrame, Native.ownClock): the app's clock is its frames', the time the
+// frame being drawn (or the last one) was given.
+static int own_clock;
+static double frame_now;
 
 int mbui_main(int argc, char **argv);  // the MoonBit program's main (renamed)
 
@@ -897,6 +901,7 @@ JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_frame(JNIEnv *env, jclass c, jfl
   cur_h = h;
   cur_scale = scale;
   want_frame = 0;
+  frame_now = now;
   if (cb.frame) cb.frame(w, h, scale, now);
   return want_frame ? JNI_TRUE : JNI_FALSE;
 }
@@ -951,7 +956,10 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   cb.text = text;
 }
 
+JNIEXPORT void JNICALL Java_dev_mbui_Native_ownClock(JNIEnv *env, jclass c) { own_clock = 1; }
+
 double mb_host_now(void) {
+  if (own_clock) return frame_now;
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
   return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
@@ -1187,12 +1195,15 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint 
 }
 
 // How the frame just built stands (host_native.mbt's frame_settled): settled, how many of the app's asks are not
-// answered yet, and what they are. Nothing here waits on it (screenshots come from adb).
+// answered yet, and what they are. Nothing waits on its being settled; a run to a declared moment keeps its clock
+// still while the app awaits the host (MBView's shotFrame, Native.awaiting).
+static int awaiting_n;
 void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
   (void)settled;
-  (void)awaiting;
   (void)what;
+  awaiting_n = awaiting;
 }
+JNIEXPORT jint JNICALL Java_dev_mbui_Native_awaiting(JNIEnv *env, jclass c) { return awaiting_n; }
 
 int32_t mb_host_bench_mode(void) {
   JNIEnv *env = env_();

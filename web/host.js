@@ -21,24 +21,44 @@
   window.__logs = [];
 
   // ---- frames ----
+  // A picture at a declared moment (?shot_at=MS, scripts/web-shot.mjs): the run's frames are on a clock of their own,
+  // 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m), and drawn one a display frame whether the app asks
+  // for them or not, until that clock reaches MS; that frame drawn, no other, and the page says so (window.__shot:
+  // its frame and time, "SHOT n t" on the log). The clock stands still while the app awaits the host (an image
+  // decoding: what its last frame said), so the picture is of the app at MS on its own clock, however fast the
+  // machine is. The app's timers and its reads of the clock are on that clock too.
+  const shotAt = params.has('shot_at') ? Number(params.get('shot_at')) : -1;
+  let clock = 0;
   let frames = 0, inFrame = false;
   function tick() {
     pending = false;
     resize();
     inFrame = true;
-    cb.frame(cssW, cssH, dpr, performance.now());
+    const t = shotAt >= 0 ? clock : performance.now();
+    cb.frame(cssW, cssH, dpr, t);
     inFrame = false;
     frames++;
+    if (shotAt < 0) return;
+    if (awaiting > 0) return;  // the clock stands still; the host's answer asks for the next frame
+    if (t >= shotAt) {
+      window.__shot = { frame: frames, t };
+      H.log(`SHOT ${frames} ${t}`);
+      return;
+    }
+    clock = frames * (1000 / 60);
+    H.requestFrame();
   }
   H.requestFrame = () => {
     // asked between frames (an event, a timer): not settled until a frame has taken it
     if (!inFrame) appSettled = false;
-    if (!pending && cb && window.__done === undefined) {
+    if (!pending && cb && window.__done === undefined && window.__shot === undefined) {
       pending = true;
       requestAnimationFrame(tick);
     }
   };
-  H.wakeAfter = (ms) => setTimeout(H.requestFrame, ms);
+  // (a run to a declared moment draws every frame to it: its timers are on its clock, due at the frame they fall in)
+  H.wakeAfter = (ms) => { if (shotAt < 0) setTimeout(H.requestFrame, ms); };
+  H.now = () => (shotAt >= 0 ? clock : performance.now());
 
   // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
   // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their

@@ -52,6 +52,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         MBText.reset();
         if (!started) {
             started = true;
+            // (a run to a declared moment: the app's clock is its frames' from the start, shotFrame below)
+            if (Host.shotAt >= 0) Native.ownClock();
             Native.start();
         }
     }
@@ -63,11 +65,48 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     private double lastFrame;
 
+    // A picture at a declared moment (Host.shotAt, --ei shot_at MS: scripts/shots.sh android): the run's frames are on
+    // a clock of their own, 1/60 s a frame from 0, as a stable run's on macOS (mac_app.m) and the browser's
+    // (web/host.js shot_at), each drawn at the next vsync whether the app asks for it or not, until that clock reaches
+    // MS; that frame drawn, no other ("SHOT n t" on the log: adb's screencap takes it), and a frame the system asks
+    // for after it drawn at the same moment. The clock stands still while the app awaits the host (an image decoding:
+    // what its last frame said), so the picture is of the app at MS on its own clock, however fast the machine is.
+    private double shotClock;
+    private int shotFrames;
+    private volatile boolean shotTaken;
+
+    private void shotFrame(float w, float h) {
+        double t = shotClock;
+        Native.frame(w, h, density, t);
+        Script.frameDrawn();
+        if (shotTaken) return;
+        shotFrames++;
+        if (Native.awaiting() > 0) {
+            // the clock stands still; the host's answer asks for the next frame
+            return;
+        }
+        if (t >= Host.shotAt) {
+            shotTaken = true;
+            // said once it is on the screen: swapped as this returns, taken by the compositor at the next vsync,
+            // shown by the one after
+            final String said = "SHOT " + shotFrames + " " + t;
+            Host.main.post(() -> Choreographer.getInstance().postFrameCallback(a ->
+                    Choreographer.getInstance().postFrameCallback(b -> Host.log(said))));
+            return;
+        }
+        shotClock = shotFrames * (1000.0 / 60.0);
+        wantFrame();
+    }
+
     @Override
     public void onDrawFrame(GL10 gl) {
         // the soft keyboard's height off the bottom (Host.imeBottom, as it moves): the app lays out above it, the
         // surface keeps its size (resizing it with each step of the keyboard's motion would be far too slow)
         float w = getWidth() / density, h = Math.max(1, getHeight() - Host.imeBottom) / density;
+        if (Host.shotAt >= 0) {
+            shotFrame(w, h);
+            return;
+        }
         // the vsync's time; a frame the system asked for (a resize) has none, and time never goes back
         long v = vsyncNanos;
         double now = v != 0 ? v / 1e6 : System.nanoTime() / 1e6;
@@ -91,6 +130,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     /** A frame at the next vsync (from any thread). */
     void wantFrame() {
+        if (shotTaken) return;
         if (!wanted.compareAndSet(false, true)) return;
         if (Looper.myLooper() == Looper.getMainLooper()) postVsync.run();
         else Host.main.post(postVsync);

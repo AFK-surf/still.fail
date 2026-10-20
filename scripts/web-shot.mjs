@@ -1,4 +1,5 @@
-// One screenshot of the browser build, in stable mode: [QUERY=k=v] node web-shot.mjs out.png
+// One screenshot of the browser build, at a declared moment of its run: [QUERY=k=v] node web-shot.mjs out.png MS
+// (MS: the time on the run's own clock the picture is of, web/host.js's shot_at: frames 1/60 s apart from 0)
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -19,14 +20,17 @@ const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gestur
 const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
 // QUERY: more of the page's query (MBUI_SCREEN=kit: the demo's kit screen)
 fs.rmSync(process.argv[2], { force: true });
-await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1${process.env.QUERY ? '&' + process.env.QUERY : ''}`);
-await page.waitForFunction(() => window.__mb !== undefined);
-// shot once the app is settled (web/host.js __mbhost.settled: as its last frame said, no frame asked for since);
-// SETTLE_TIMEOUT (30000 ms) without is a failure, said with what it awaits, and no picture
-const settled = await page.waitForFunction(() => window.__done !== undefined || __mbhost.settled(), null, { timeout: Number(process.env.SETTLE_TIMEOUT || 30000) })
-  .then(() => page.evaluate(() => __mbhost.settled()), () => false);
-if (settled) await page.screenshot({ path: process.argv[2] });
-else console.log(`SETTLE FAIL ${process.argv[2]}: not settled:`, JSON.stringify(await page.evaluate(() => __mbhost.unsettled())));
+const at = Number(process.argv[3]);
+if (!(at >= 0)) { console.log('web-shot: the moment the picture is of (ms on the run\'s clock) is its second argument'); process.exit(2); }
+await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1&shot_at=${at}${process.env.QUERY ? '&' + process.env.QUERY : ''}`);
+// the frame at that moment drawn (window.__shot, web/host.js), or the app ended before it (window.__done: a run that
+// fails ends itself, its words on the log); SHOT_DEADLINE (60000 ms) is what a run that hangs is given, not a wait
+const shot = await page.waitForFunction(() => window.__shot || (window.__done !== undefined && { done: window.__done }),
+  null, { timeout: Number(process.env.SHOT_DEADLINE || 60000) }).then((h) => h.jsonValue(), () => null);
+const ok = !!(shot && shot.frame);
+if (ok) await page.screenshot({ path: process.argv[2] });
+else console.log(`SHOT FAIL ${process.argv[2]}: no frame at ${at} ms:`, JSON.stringify(shot),
+  JSON.stringify(await page.evaluate(() => window.__logs.slice(-5))));
 await browser.close();
 server.close();
-process.exit(settled ? 0 : 1);
+process.exit(ok ? 0 : 1);

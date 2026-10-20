@@ -45,10 +45,8 @@ for h in $HOSTS; do
       # the last run's pictures gone (the app not yet installed on a new emulator has none)
       $ADB shell run-as dev.mbui.demo rm -rf files/textdiff 2>/dev/null || true
       APP=textdiff ENV="MBUI_BENCH=-1;MBUI_TEXTDIFF_ONLY=${ONLY:-}" bash scripts/android.sh run
-      for i in $(seq 1 300); do
-        $ADB logcat -d -s mbui:I | grep -q "TXD done" && break
-        sleep 2
-      done
+      # the app's own named end, or its crash, as logcat has it (cleared above: this run's)
+      $ADB logcat -v brief -m 1 -e "TXD done|FATAL EXCEPTION|Fatal signal" >/dev/null
       $ADB logcat -d -v raw -s mbui:I > $O/log.txt
       grep -q "TXD done" $O/log.txt || { echo "textdiff android: the app did not finish"; fail=1; }
       $ADB exec-out run-as dev.mbui.demo tar cf - -C files/textdiff . | tar xf - -C $O ;;

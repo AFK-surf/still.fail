@@ -38,24 +38,33 @@ for p in $PLATFORMS; do
       cp out/shot-win/main.png out/shots/windows.png ;;
     web)
       bash scripts/web.sh build >/dev/null
-      NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web.png ;;
+      # the demo's first screen at its declared moment: nothing moves as it starts (no motion said before an input), and
+      # its list's rows are measured by the frames its first moment asks for (Tester::draw: three at most), here 1/60 s
+      # apart on the run's own clock (web/host.js shot_at): the picture is of the frame at 100 ms
+      NODE_PATH=$PWD/out/node/node_modules node scripts/web-shot.mjs out/shots/web.png 100 ;;
     ios)
       bash scripts/ios.sh build >/dev/null
       rm -rf out/ios/shots
       BENCH=-1 bash scripts/ios.sh run shot >/dev/null
-      for i in $(seq 1 30); do [ -f out/ios/shots/main.png ] && break; sleep 1; done
+      # its picture written, as the app says on its log once it is (ios_app.m's "SHOT <path> ok"; scripts/ios.sh's log)
+      python3 scripts/logwait.py --log "${MBUI_IOS_LOG:-$PWD/out/ios/app.log}" --line '^SHOT .*/main\.png (ok|failed)$' --deadline 120 \
+        | grep -q ' ok$' || { echo "ios: no picture"; fail=1; continue; }
       cp out/ios/shots/main.png out/shots/ios.png ;;
     android)
       bash scripts/android.sh build >/dev/null
       bash scripts/android.sh emu >/dev/null
       A=$HOME/Library/Android/sdk/platform-tools/adb
-      $A -s emulator-5580 shell settings put global sysui_demo_allowed 1
-      $A -s emulator-5580 shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null
-      $A -s emulator-5580 shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 1200 >/dev/null
-      $A -s emulator-5580 shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null
-      BENCH=-1 bash scripts/android.sh run
-      sleep 4
-      $A -s emulator-5580 exec-out screencap -p > out/shots/android.png ;;
+      $A -s emulator-${EMU_PORT:-5580} shell settings put global sysui_demo_allowed 1
+      $A -s emulator-${EMU_PORT:-5580} shell am broadcast -a com.android.systemui.demo -e command enter >/dev/null
+      $A -s emulator-${EMU_PORT:-5580} shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 1200 >/dev/null
+      $A -s emulator-${EMU_PORT:-5580} shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false >/dev/null
+      # the demo's first screen at its declared moment (as the browser's, above): the app's frames on its own clock
+      # (MBView's shot_at) to the frame at 100 ms, which it says once it is on the screen ("SHOT n t")
+      $A -s emulator-${EMU_PORT:-5580} logcat -c
+      SHOT_AT=100 BENCH=-1 bash scripts/android.sh run
+      $A -s emulator-${EMU_PORT:-5580} logcat -v raw -m 1 -e "SHOT [0-9]+ [0-9]|FATAL EXCEPTION|Fatal signal" \
+        | grep -q "SHOT [0-9]" || { echo "android: no picture"; fail=1; continue; }
+      $A -s emulator-${EMU_PORT:-5580} exec-out screencap -p > out/shots/android.png ;;
   esac
   for p in $names; do
     if [ "${UPDATE:-}" = 1 ]; then

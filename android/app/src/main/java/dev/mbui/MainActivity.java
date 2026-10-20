@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
         }
         Host.script = hooks ? getIntent().getStringExtra("script") : null;
         Host.bench = hooks ? getIntent().getIntExtra("bench", 0) : 0;
+        Host.shotAt = hooks ? getIntent().getIntExtra("shot_at", -1) : -1;
         // what another app shared into this one (ACTION_SEND or SEND_MULTIPLE: text, files), for the app to take
         Shares.take(getIntent());
         FrameLayout root = new FrameLayout(this);

@@ -162,7 +162,12 @@ case "${1:-build}" in
         -gpu swiftshader_indirect -no-snapshot >$OUT/emu.log 2>&1 &
     fi
     $ADB -s $SERIAL wait-for-device
-    until [ "$($ADB -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; do sleep 2; done
+    # booted: init's own word as the system sets sys.boot_completed (its actions for it, on the log from the boot's
+    # start: `logcat -m 1` reads what is there, then waits for it), unless it was set already
+    if [ "$($ADB -s $SERIAL shell getprop sys.boot_completed | tr -d '\r')" != 1 ]; then
+      $ADB -s $SERIAL logcat -b all -v brief -m 1 -e 'processing action \(sys\.boot_completed=1' | grep -q boot_completed \
+        || { echo "android.sh: no boot on the log of $SERIAL" >&2; exit 1; }
+    fi
     echo "emulator ready"
     ;;
   run)
@@ -172,7 +177,7 @@ case "${1:-build}" in
     if [ -n "${2:-}" ]; then
       $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity --es script "$2" ${ENV:+--es env "'$ENV'"} >/dev/null
     else
-      $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${ENV:+--es env "'$ENV'"} >/dev/null
+      $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${SHOT_AT:+--ei shot_at $SHOT_AT} ${ENV:+--es env "'$ENV'"} >/dev/null
     fi
     ;;
   fling-test)
@@ -187,10 +192,8 @@ case "${1:-build}" in
     REC=$!
     # the flings are Script.java's (--es script fling): swipes at set speeds, as the system delivers a finger's
     ENV="MBUI_SCROLL_LOG=1${ENV:+;$ENV}" "$0" run fling
-    for i in $(seq 1 60); do
-      $ADB -s $SERIAL logcat -d -s mbui:I | grep -q "script fling: done" && break
-      sleep 1
-    done
+    # the script's own named end (Script.java), or the app's crash, as logcat has it (cleared above: this run's)
+    $ADB -s $SERIAL logcat -v brief -m 1 -e "script fling: done|FATAL EXCEPTION|Fatal signal" >/dev/null
     $ADB -s $SERIAL shell pkill -INT screenrecord || true
     wait $REC || true
     $ADB -s $SERIAL pull /sdcard/fling.mp4 $F/fling.mp4 >/dev/null
@@ -211,16 +214,18 @@ case "${1:-build}" in
     DRV=""
     # (the app module's scripts/motion/NAME.drive)
     [ -n "${4:-}" ] && DRV="MBUI_DRIVE_B64=$(base64 < scripts/motion/$4.drive | tr -d '\n');"
-    # storage takes a while after boot
-    for i in $(seq 1 60); do $ADB -s $SERIAL shell touch /sdcard/.rec 2>/dev/null && break; sleep 1; done
+    # (recorded into the shell's own /data/local/tmp: there from boot, not the shared storage that comes later)
     $ADB -s $SERIAL logcat -c
-    $ADB -s $SERIAL shell screenrecord --time-limit $SECS /sdcard/$NAME.mp4 &
+    $ADB -s $SERIAL shell screenrecord --verbose --time-limit $SECS /data/local/tmp/$NAME.mp4 > $R/$NAME.rec.txt 2>&1 &
     REC=$!
-    sleep 1
+    # the app started once the recorder is (its words as it begins: the display it records set up), or it ended
+    python3 "$D/logwait.py" --log $R/$NAME.rec.txt --line '^Content area is' --pid $REC --deadline 60 >/dev/null \
+      || { cat $R/$NAME.rec.txt; echo "android.sh: the recorder did not start" >&2; exit 1; }
     ENV="${DRV}MBUI_MOTION_LOG=1${ENV:+;$ENV}" "$0" run
+    # (the file whole once screenrecord has ended: the shell's end is its)
     wait $REC || true
-    sleep 1
-    $ADB -s $SERIAL pull /sdcard/$NAME.mp4 $R/$NAME.mp4 >/dev/null
+    $ADB -s $SERIAL pull /data/local/tmp/$NAME.mp4 $R/$NAME.mp4 >/dev/null
+    $ADB -s $SERIAL shell rm -f /data/local/tmp/$NAME.mp4
     $ADB -s $SERIAL logcat -d -s mbui:I > $R/$NAME.log
     echo "RECORDED $R/$NAME.mp4 ($(grep -c MOTION $R/$NAME.log) moving frames logged)"
     ;;
@@ -236,8 +241,10 @@ case "${1:-build}" in
     if [ -f $OUT/http.pid ]; then kill $(cat $OUT/http.pid) 2>/dev/null || true; rm -f $OUT/http.pid; fi
     ;;
   delete)
+    # the emulator's processes (its qemu) ended before its files go: their end, not a time (scripts/logwait.py)
+    EPIDS=$(pgrep -f -- "-avd $AVD( |$)" || true)
     $ADB -s $SERIAL emu kill 2>/dev/null || true
-    sleep 3
+    for p in $EPIDS; do python3 "$D/logwait.py" --pid $p --deadline 120; done
     $(ls -d $SDK/cmdline-tools/*/bin | tail -1)/avdmanager delete avd -n $AVD
     ;;
   *)

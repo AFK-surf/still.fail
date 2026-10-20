@@ -12,7 +12,7 @@ extern "js" fn js_run(
   #|(t, f, p, w, k, x) => globalThis.__mbhost.run(t, f, p, w, k, x)
 
 extern "js" fn js_now() -> Double =
-  #|() => performance.now()
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.now) ? globalThis.__mbhost.now() : performance.now()
 
 extern "js" fn js_event_time() -> Double =
   #|() => (globalThis.__mbhost && globalThis.__mbhost.eventTime) ? globalThis.__mbhost.eventTime() : -1

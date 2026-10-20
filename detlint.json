@@ -65,15 +65,8 @@
       "src/ui/scroll_wbtest.mbt": 5
     },
     "flow-wait": {},
-    "script-wait": {
-      "scripts/android.sh": 6,
-      "scripts/shots.sh": 2,
-      "scripts/textdiff.sh": 1
-    },
-    "page-settle": {
-      "scripts/web-shot.mjs": 3,
-      "scripts/web-test.mjs": 2
-    },
+    "script-wait": {},
+    "page-settle": {},
     "frame-count": {
       "src/effecttest/frame_test.mbt": 1,
       "src/motion/fx_test.mbt": 2,

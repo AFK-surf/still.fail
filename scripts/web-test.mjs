@@ -25,17 +25,32 @@ const browser = await chromium.launch({ headless: !headed, args: ['--use-angle=m
 const ctx = await browser.newContext({ viewport: { width: 900, height: 720 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
 const errors = [];
-// the app settled: no frame asked for (motion over, what was typed drawn), nothing awaited of the host, no timer
-// what is shown waits for (web/host.js __mbhost.settled; a caret's blink is a `later` one, not waited for)
-const idle = (p = page) => p.waitForFunction(() => __mbhost.settled(), null, { timeout: 30000 })
-  .catch(async (e) => { throw new Error(`not settled: ${JSON.stringify(await p.evaluate(() => __mbhost.unsettled()))}`); });
+// What the app took and drew, as its tape says (?MBUI_DRAW_LOG=1: an INPUT line for each input it was handed, as it
+// was handed, a DRAWHASH line for each frame drawn; src/ui/inputrec.mbt): an input is drawn once the frame that took
+// it and the one after it (inputs_since: for what was changed late in that frame) are on the log. `drawn(from, want,
+// n)`: the n-th INPUT since log line `from` that `want` matches (k, the input's kind; s, its text), then those two
+// frames. A run that hangs fails at 30 s, saying what came.
+const mark = (p = page) => p.evaluate(() => window.__logs.length);
+const drawn = (from, want, n = 1, p = page) => p.waitForFunction(([from, want, n]) => {
+  const l = window.__logs.slice(from);
+  let seen = 0, last = -1;
+  l.forEach((x, i) => {
+    if (!x.startsWith('INPUT ')) return;
+    const j = JSON.parse(x.slice(6));
+    if (j.k === want.k && (want.s === undefined || j.s === want.s)) { seen++; last = i; }
+  });
+  return seen >= n && l.slice(last + 1).filter((x) => x.startsWith('DRAWHASH ')).length >= 2;
+}, [from, want, n], { timeout: 30000 }).catch(async () => {
+  const came = await p.evaluate((f) => window.__logs.slice(f).filter((x) => x.startsWith('INPUT ')).slice(-5), from);
+  throw new Error(`not drawn: ${JSON.stringify(want)} x${n}; the last inputs taken: ${JSON.stringify(came)}`);
+});
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
 const t0 = Date.now();
-await page.goto(base);
-await page.waitForFunction(() => window.__mb !== undefined);
-await idle();
+await page.goto(base + '?MBUI_DRAW_LOG=1');
+// its first frame drawn
+await page.waitForFunction(() => window.__logs.some((l) => l.startsWith('DRAWHASH ')), null, { timeout: 30000 });
 console.log('first frames after', Date.now() - t0, 'ms');
 await page.screenshot({ path: `${shots}/01-start.png` });
 
@@ -43,24 +58,28 @@ if (process.env.BENCH_ONLY) {
   await page.close();
 } else {
 // click the composer and type through a real composition
+// (the input method's textarea focused: the app said its editor has the focus, web/host.js setIme)
 await page.mouse.click(120, 690);
 await page.waitForFunction(() => document.activeElement === document.getElementById('ime'));
-await idle();
 const cdp = await ctx.newCDPSession(page);
+let m = await mark();
 await cdp.send('Input.imeSetComposition', { text: 'ni hao', selectionStart: 6, selectionEnd: 6 });
-await idle();
+await drawn(m, { k: 'text', s: 'ni hao' });
 await page.screenshot({ path: `${shots}/02-composing.png` });
+m = await mark();
 await cdp.send('Input.insertText', { text: '你好' });
 await page.keyboard.type('，MoonBit ');
 await cdp.send('Input.imeSetComposition', { text: 'shi jie', selectionStart: 7, selectionEnd: 7 });
 await cdp.send('Input.insertText', { text: '世界 👋' });
-await idle();
+await drawn(m, { k: 'text', s: '世界 👋' });
 await page.screenshot({ path: `${shots}/03-typed.png` });
+m = await mark();
 await page.keyboard.press('Enter');
-await idle();
+await drawn(m, { k: 'key' });
 await page.screenshot({ path: `${shots}/04-sent.png` });
+m = await mark();
 for (let i = 0; i < 30; i++) await page.mouse.wheel(0, -120);
-await idle();
+await drawn(m, { k: 'wheel' }, 30);
 await page.screenshot({ path: `${shots}/05-scrolled.png` });
 }
 

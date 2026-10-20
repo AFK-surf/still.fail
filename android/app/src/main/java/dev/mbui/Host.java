@@ -14,6 +14,8 @@ final class Host {
     static MBView view;
     static String script;
     static int bench;
+    /** A picture at a declared moment (--ei shot_at MS; -1: none): MBView's frames on a clock of their own. */
+    static int shotAt = -1;
     static final Handler main = new Handler(Looper.getMainLooper());
 
     // the focused field's text and selection, for the input method
