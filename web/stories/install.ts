@@ -4,7 +4,7 @@
 // it where the station takes bug reports (views.ts `reportable`). And SuperGrok's sign-in on a station without Grok Build
 // (core forms.ts `profileView`): installing it first.
 import type { DemoExtension } from "../src/demo/mount.tsx";
-import type { ChatMessage, ChatView, ProfileFlowView, RuntimeInstall } from "../src/core/shapes.ts";
+import type { ApiProvider, ChatMessage, ChatView, ProfileFlowView, RuntimeInstall } from "../src/core/shapes.ts";
 
 export type InstallStory = "missing" | "installing" | "failed" | "member" | "notice" | "turn" | "report";
 
@@ -64,5 +64,34 @@ export function installFlowDemo(state: "missing" | "installing"): DemoExtension 
     topic: (t) => (t.topic === "profileFlow" ? { ...view, station: String(t.station) } : undefined),
     // The page's edits and installing answer at once, the page as it was (the stories show states, not what follows).
     call: (name) => (name.startsWith("profile.flow.") || name === "software.update" ? {} : undefined),
+  };
+}
+
+/** The add-profile picker on a station that runs Cursor (core forms.ts `groups`): Cursor last of the makers, its plan alone
+ *  (no key), and its variables by hand among the rest. */
+export function cursorPickDemo(): DemoExtension {
+  type Tile = ApiProvider;
+  const tile = (id: string, name: string, over: Partial<Tile>): Tile => ({
+    id, name, group: "labs", mark: id, kind: "api-provider", hasKey: true, hasPlan: false, endpointRequired: false, protocols: [], keyOptional: false, uses: [], usesText: "", ...over,
+  });
+  const env = (runtime: string, label: string): Tile => ({
+    id: `env-${runtime}`, name: `环境变量（${label}）`, group: "local", kind: "env", hasKey: false, hasPlan: false, runtime, endpointRequired: false, protocols: [], keyOptional: true, uses: [runtime], usesText: label,
+  });
+  const view: ProfileFlowView = {
+    step: "pick", station: "", title: "选择服务商", hint: "订阅和 API key 都在这里添加，选择服务商开始", choices: [], showEndpoint: false, endpoint: "", protocols: [], regions: [],
+    showKey: false, key: "", keyLabel: "", canSubmit: false, pending: false, submitLabel: "", usesLine: "",
+    groups: [
+      { id: "labs", title: "模型厂商", providers: [
+        tile("openai", "OpenAI", { hasPlan: true, runtime: "codex", uses: ["codex", "dsh"], usesText: "Codex · DeepSeek Harness" }),
+        tile("anthropic", "Anthropic", { hasPlan: true, runtime: "claude", uses: ["claude", "dsh"], usesText: "Claude Code · DeepSeek Harness" }),
+        tile("deepseek", "DeepSeek", { uses: ["claude", "dsh", "decision"], usesText: "Claude Code · DeepSeek Harness · 自动决策" }),
+        tile("cursor", "Cursor", { hasKey: false, hasPlan: true, runtime: "cursor", uses: ["cursor"], usesText: "Cursor" }),
+      ] },
+      { id: "local", title: "本地", providers: [env("claude", "Claude Code"), env("codex", "Codex"), env("dsh", "DeepSeek Harness"), env("cursor", "Cursor")] },
+    ],
+  };
+  return {
+    topic: (t) => (t.topic === "profileFlow" ? { ...view, station: String(t.station) } : undefined),
+    call: (name) => (name.startsWith("profile.flow.") ? {} : undefined),
   };
 }

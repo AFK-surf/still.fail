@@ -432,7 +432,8 @@ function RunRow({ agent, onOpen }: { agent: ChatAgent; onOpen: () => void }) {
     <button type="button" className={css.mRunRow} onClick={onOpen}>
       <MakerIcon maker={s.maker} runtime={s.runtime} size={15} />
       <b>{s.model ? s.modelName ?? s.model : t("web-mobile.history.pickModel")}</b>
-      <span>{` · ${s.effort ?? t("web-mobile.newChat.effortDefault")} · ${s.profilePinned ? name : t("web-mobile.history.autoAccount", { name })}`}</span>
+      {/* No effort where the runtime sets none (Cursor). */}
+      <span>{`${s.effort || s.efforts.length > 0 ? ` · ${s.effort ?? t("web-mobile.newChat.effortDefault")}` : ""} · ${s.profilePinned ? name : t("web-mobile.history.autoAccount", { name })}`}</span>
       <QuotaRings quota={agent.account?.quota} />
       <ChevronDown size={14} />
     </button>
@@ -499,11 +500,14 @@ export function RunSettingsScreen() {
         <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={s.runtime} size={18} />}>
           <span className={historyCss.mSettingMain}>{v.modelText}</span>
         </SettingRow>
-        <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
-        <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>{t("web-mobile.history.effortNote")}</p>
-        <div className={historyCss.mChips}>
-          {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? t("web-mobile.newChat.default")}</button>)}
-        </div>
+        {/* No efforts where the runtime sets none (Cursor). */}
+        {v.efforts.length > 0 && <>
+          <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
+          <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>{t("web-mobile.history.effortNote")}</p>
+          <div className={historyCss.mChips}>
+            {[null, ...v.efforts].map((e) => <button key={e ?? "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => pick.set({ effort: e })}>{e ?? t("web-mobile.newChat.default")}</button>)}
+          </div>
+        </>}
         {v.fastAvailable && <>
           <GroupLabel>{t("web-mobile.newChat.speed")}</GroupLabel>
           <p className={`${partsCss.mSmall} ${partsCss.mMuted} ${historyCss.mEffortNote}`}>{t("web-mobile.history.fastNote")}</p>

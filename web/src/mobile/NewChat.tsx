@@ -144,7 +144,8 @@ function NewChatOn({ choice, view, stations, pick, create }: {
                 {/* The runtime only when the model runs on more than one. */}
                 {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                   onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
-                <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+                {/* None where the runtime sets no effort (Cursor). */}
+                {choice.efforts.length > 0 && <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />}
                 {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
                   <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
                   <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>

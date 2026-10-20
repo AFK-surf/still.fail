@@ -561,10 +561,13 @@ export function ConnectRunScreen() {
         {models.length === 0 && <p className={settingsCss.mCallout}>{t("web-mobile.connects.noModels", { runtime: connect.runtimeText })}</p>}
         <GroupLabel>{t("web-mobile.history.model")}</GroupLabel>
         <SettingRow onClick={() => setList("model")} leading={<MakerIcon maker={v.maker} runtime={runtime} size={18} />}><span className={historyCss.mSettingMain}>{v.modelText}</span></SettingRow>
-        <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
-        <div className={historyCss.mChips}>
-          {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || t("web-mobile.newChat.default")}</button>)}
-        </div>
+        {/* No efforts where the runtime sets none (Cursor). */}
+        {efforts.length > 0 && <>
+          <GroupLabel>{t("web-mobile.newChat.pickEffort")}</GroupLabel>
+          <div className={historyCss.mChips}>
+            {["", ...efforts].map((e) => <button key={e || "-"} type="button" className={historyCss.mChip} data-on={e === effort || undefined} onClick={() => set({ effort: e })}>{e || t("web-mobile.newChat.default")}</button>)}
+          </div>
+        </>}
         <GroupLabel>{t("web-mobile.history.account")}</GroupLabel>
         <SettingRow onClick={() => setList("account")}>
           <span className={historyCss.mSettingMain}>{v.accountText}</span>
