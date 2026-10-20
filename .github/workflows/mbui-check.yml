@@ -91,7 +91,7 @@ jobs:
     env:
       MBC_LOG: ${{ github.workspace }}/../mbc.log
       MBC_LTO: ${{ matrix.lto && 'thin' || '0' }}
-      CACHE_PREFIX: mbui-native-${{ matrix.lto && 'lto' || 'test' }}-
+      CACHE_PREFIX: mbui-native-store-${{ matrix.lto && 'lto' || 'test' }}-
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -104,13 +104,14 @@ jobs:
       - uses: actions/cache/restore@v4
         id: build-cache
         with:
-          path: apps/mbui/_build/native/release/**/*.mbc/u_*
+          path: apps/mbui/_build/native/release/mbc-store
           key: ${{ env.CACHE_PREFIX }}${{ github.sha }}
           restore-keys: ${{ env.CACHE_PREFIX }}
       - name: The mbui app's tests and the flows seen again (native${{ matrix.lto && ', ThinLTO' || '' }})
         run: |
           set -o pipefail
           [ "$MBC_LTO" = 0 ] || echo "### native with ThinLTO (main's run: the apps' build)" >> "$GITHUB_STEP_SUMMARY"
+          touch "$RUNNER_TEMP/mbui-native.start"
           TARGETS=native LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-native.log"
       - name: What was compiled
         if: always()
@@ -119,12 +120,15 @@ jobs:
           du -sh apps/mbui/_build/native/release || true
           # (by the split's manifests and each object's stamp, its command and compiler with what it was made of: a key by
           # the C alone kept the objects of a command no longer used, as #841's run did, 0 of 513 up to date after it)
-          c=$(find apps/mbui/_build/native/release \( -path '*.mbc/src/manifest.json' -o -path '*.mbc/u_*.mbc' \) -exec shasum {} + 2>/dev/null | sort -k2 | shasum | cut -c1-16)
+          # (the store as this run used it: what it did not take or make, older objects, gone)
+          S=apps/mbui/_build/native/release/mbc-store
+          [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/mbui-native.start" -exec rm -rf {} +; du -sh $S; }
+          c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | shasum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$c" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
+      - if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/share-trial') && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
-          path: apps/mbui/_build/native/release/**/*.mbc/u_*
+          path: apps/mbui/_build/native/release/mbc-store
           key: ${{ env.BUILD_KEY }}
       - name: What failed
         if: failure()
