@@ -532,6 +532,8 @@ RULES = {
     "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
     "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
     "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
+    "unsettled-ok": "a test leaves out its end's idle check (unsettled_ok=…: what still moves or asks, until it says "
+                    "its end): counted so the ones left only go",
 }
 
 FRAME_ASK = {"request_frame", "wake_in", "wake_after", "wake_at", "wake_at_time", "frames_until"}
@@ -859,6 +861,8 @@ SCRIPT_WAITS = [
     re.compile(r"\btime\.sleep\("),
 ]
 PAGE_SETTLE = re.compile(r"\b__mb\w*\.(?:settled|unsettled)\b")
+# a test's end without its idle check: Tester::settle's, a replay's Flow::end's (an argument, not a declaration)
+UNSETTLED_OK = re.compile(r"\bunsettled_ok\s*=")
 
 
 def lint_lines(rel, src, rule, pats, out, comment):
@@ -918,6 +922,7 @@ def collect(root, cfg):
                 src = read(path)
                 texts[rel] = src.split("\n")
                 mbts.append(MbtFile(path, rel, src))
+                lint_lines(rel, src, "unsettled-ok", [UNSETTLED_OK], findings, "//")
             elif matches(rel, cfg.flows):
                 src = read(path)
                 texts[rel] = src.split("\n")

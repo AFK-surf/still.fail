@@ -133,6 +133,12 @@ class Rules(unittest.TestCase):
         found(self, {"flows/01.drive": "# wait 1500 was here\ntap 发消息\nuntil 收到\ntimeout 60000\nhold 700 引用\n"},
               "flow-wait", 0)
 
+    def test_unsettled_ok(self):
+        found(self, {"src/app/view_test.mbt": "test \"x\" {\n  t.settle(unsettled_ok=true) |> ignore\n  f.end(unsettled_ok=\"a spinner\")\n}\n"},
+              "unsettled-ok", 2)
+        found(self, {"src/ui/tester.mbt": "pub fn Tester::settle(self : Tester, unsettled_ok? : Bool = false) -> Int {\n  0\n}\n"},
+              "unsettled-ok", 0)
+
     def test_script_wait(self):
         bad = {
             "scripts/shots.sh": "MBUI_SCRIPT=shot MBUI_SHOT_AT=60 ./app\nsleep 3\n",

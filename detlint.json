@@ -146,7 +146,8 @@
       "src/ui/scroll.mbt": 3,
       "src/ui/sideways.mbt": 1,
       "src/ui/textrec.mbt": 2
-    }
+    },
+    "unsettled-ok": {}
   },
   "excused": {
     "frame-request": {},
@@ -162,6 +163,7 @@
     "wall-clock": {},
     "poll": {},
     "host-read": {},
-    "globals": {}
+    "globals": {},
+    "unsettled-ok": {}
   }
 }
