@@ -273,8 +273,8 @@ fn service_body(
   }
   // up again after a restart: the page loads anew
   if p.restarting && !restarting {
-    // det-ok(build-effect): by the job's restart as the core says it: the same in each build of the frame
-    site.reload()
+    // (once the frame's builds are over: by the job's restart as the core says it)
+    c.tell("service-reload", fn() { site.reload() })
   }
   p.restarting = restarting
   service_page_bar(c, src, p, site, name, station, port)

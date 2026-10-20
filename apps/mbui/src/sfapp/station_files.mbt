@@ -151,8 +151,8 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
     )
   }
   if r.station == station {
-    // det-ok(build-effect): sent once, by the file's place as it was chosen: nothing a build changes
-    (src.call)(
+    // (sent once the frame's builds are over: by the file's place as it was chosen)
+    c.tell("drive.stage/" + r.at, fn() { (src.call)(
       "drive.stage",
       Json::object({
         "station": Json::string(station),
@@ -170,6 +170,7 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
         }
       },
     )
+    })
   } else {
     let all = Buffer()
     drive_fetch(src, r.station, r.root, r.at, fn(b) {

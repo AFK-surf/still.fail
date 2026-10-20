@@ -547,12 +547,14 @@ fn messages(
             Some(thread) if v.more && first > target =>
               if rd.asked != first {
                 rd.asked = first
-                // det-ok(build-effect): the messages are the core's, the target the tap's: the same in each build
-                (src.call)(
-                  "chat.older",
-                  { "station": Json::string(r.station), "thread": Json::number(thread) },
-                  fn(res) { if res is Err(_) { go_tos.remove(gk) } },
-                )
+                // (asked once the frame's builds are over)
+                c.tell("chat.older/" + gk, fn() {
+                  (src.call)(
+                    "chat.older",
+                    { "station": Json::string(r.station), "thread": Json::number(thread) },
+                    fn(res) { if res is Err(_) { go_tos.remove(gk) } },
+                  )
+                })
               }
             _ => go_tos.remove(gk)
           }
@@ -1740,7 +1742,7 @@ fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) 
       "cpu_p95=\{a[n * 95 / 100]} cpu_p99=\{a[n * 99 / 100]} cpu_max=\{a[n - 1]} slow(>8ms)=\{slow} " +
       "present_avg=\{psum / n.to_double()}",
     )
-    // det-ok(build-effect): the bench's end, once its frames are counted (MBUI_CHAT_BENCH runs only)
-    @host.exit(0)
+    // the bench's end, once its frames are counted and the frame's builds are over (MBUI_CHAT_BENCH runs only)
+    c.tell("chat-bench-end", fn() { @host.exit(0) })
   }
 }

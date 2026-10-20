@@ -219,7 +219,7 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if c.clicked(quote) {
     let text = words.slice(pk.a, pk.b).trim(chars=" \n\t").to_string()
     if text != "" {
-      draft_quote(draft_of(src, r), pk.author, text, pk.ts, pk.role)
+      draft_quote(draft_of(c, src, r), pk.author, text, pk.ts, pk.role)
     }
     pick_clear()
     return
