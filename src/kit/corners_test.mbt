@@ -72,3 +72,21 @@ test "corners: toasts, fields, segmented choices, a toolbar" {
   t.move(x + w / 2.0, y + h / 2.0)
   assert_eq(t.corner_faults(), [])
 }
+
+///|
+test "corners: a fault names what breaks the rule by its words and place" {
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=20.0, fn() {
+      c.box(w=Px(200.0), h=Px(80.0), pad=4.0, bg=0xEEEEEEFFL, radius=16.0, fn() {
+        c.box(pad=8.0, bg=0x3366FFFFL, radius=16.0, fn() { c.text("Send", size=13.0) |> ignore })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let faults = t.corner_faults()
+  assert_true(faults.length() > 0)
+  assert_true(faults[0].contains("「Send」"))
+}
