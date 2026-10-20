@@ -344,3 +344,43 @@ pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? :
   self.t.draw()
   self.core()
 }
+
+///|
+/// One of the app's notifications (the system's, @ui.notice_show: Tester::notices) holds `text` in its title or words
+/// now.
+pub fn Flow::noticed(self : Flow, text : String) -> Unit {
+  if !self.t.notices().iter().any(fn(n) { n.title.contains(text) || n.body.contains(text) }) {
+    self.fail("no notice holds " + text)
+  }
+}
+
+///|
+/// None of the app's notifications holds `text` now.
+pub fn Flow::no_notice(self : Flow, text : String) -> Unit {
+  if self.t.notices().iter().any(fn(n) { n.title.contains(text) || n.body.contains(text) }) {
+    self.fail("a notice holds " + text)
+  }
+}
+
+///|
+/// The notification holding `text` tapped, as the system's shade sends the tap (Tester::tap_notice), and what the
+/// core answers to what that opens given.
+pub fn Flow::tap_notice(self : Flow, text : String) -> Unit {
+  if !self.t.tap_notice(text) {
+    self.fail("no notice to tap holds " + text)
+    return
+  }
+  self.core()
+}
+
+///|
+/// A finger down at (x, y) (negative: from the right, the bottom), moved by (dx, dy) a move a frame over `steps`
+/// frames, then lifted there (a flow's `drag X Y DX DY`); what the core answers given.
+pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Double, steps? : Int = 10) -> Unit {
+  let (w, h) = self.t.size()
+  let x0 = if x < 0.0 { w + x } else { x }
+  let y0 = if y < 0.0 { h + y } else { y }
+  self.t.drag(x0, y0, x0 + dx, y0 + dy, steps~)
+  self.t.draw()
+  self.core()
+}

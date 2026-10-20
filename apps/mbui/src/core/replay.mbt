@@ -30,6 +30,8 @@ pub struct Replay {
   priv mut client : Client?
   priv diverged : Array[String]
   priv fuzzy : Array[String]
+  /// asks the app makes that the run need not have (`ignore_asks`): words they hold
+  priv ignored : Array[String]
   /// the wall clock as the last message given came
   priv mut wall : Double
   /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
@@ -76,6 +78,7 @@ pub fn Replay::parse(log : String) -> Replay {
     client: None,
     diverged: [],
     fuzzy: [],
+    ignored: [],
     wall: 0.0,
     seed: 0,
   }
@@ -130,6 +133,47 @@ pub fn Replay::drop(self : Replay, text : String) -> Int {
   }
   self.advance()
   gone.length()
+}
+
+///|
+/// The run's asks whose message holds `text` but the first of them, and what came for them, left out (as `drop`): the
+/// same ask made again as the run's list came back to its end (`client.focus` with `"end":true`, after the first time)
+/// that a test's, its list at its end throughout, does not make again. How many.
+pub fn Replay::drop_but_first(self : Replay, text : String) -> Int {
+  let gone : Array[Int] = []
+  let mut first = true
+  for e in self.evs {
+    if e.out && !e.done && e.msg.stringify().contains(text) {
+      if first {
+        first = false
+        continue
+      }
+      e.done = true
+      match e.msg {
+        Object(m) =>
+          match id_of(m) {
+            Some(id) => gone.push(id)
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
+  for e in self.evs {
+    if !e.out && !e.done && e.msg is Object(m) && id_of(m) is Some(id) && gone.contains(id) {
+      e.done = true
+    }
+  }
+  self.advance()
+  gone.length()
+}
+
+///|
+/// The app's asks holding `has` that the run did not make let pass (none comes for them; not matched to another of
+/// their name): what the app asks as it sees a moment the run's did not (its chat's list off its end a frame,
+/// `client.focus` end: false, then true).
+pub fn Replay::ignore_asks(self : Replay, has : String) -> Unit {
+  self.ignored.push(has)
 }
 
 ///|
@@ -314,7 +358,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
       break
     }
   }
-  if found < 0 && (kind == "subscribe" || kind == "call") {
+  // (an ask let pass is not matched to another of its name: its words differ as the run's timing did)
+  let let_pass = self.ignored.iter().any(fn(w) { text.contains(w) })
+  if found < 0 && !let_pass && (kind == "subscribe" || kind == "call") {
     let name = name_of(m)
     for i in self.first_out..<self.evs.length() {
       let e = self.evs[i]
@@ -326,7 +372,9 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     }
   }
   if found < 0 {
-    self.diverged.push(text)
+    if !let_pass {
+      self.diverged.push(text)
+    }
     return
   }
   let e = self.evs[found]

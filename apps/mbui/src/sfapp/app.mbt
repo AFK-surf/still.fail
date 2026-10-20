@@ -723,6 +723,11 @@ fn toast(c : @ui.Ctx) -> Unit {
 pub let toast_ms : Double = 2600.0
 
 ///|
+/// A toast's whole time: `toast_ms` shown, then gone as @kit.toaster lets one go (its presence's exit: @kit.presence's
+/// own, 100 ms). A test runs to it once one was said.
+pub let toast_rest_ms : Double = toast_ms + 100.0
+
+///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
   app.toast = words
   app.toast_at = c.now()

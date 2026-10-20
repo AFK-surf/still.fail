@@ -296,17 +296,41 @@ let card_arrive_ms : Double = 260.0
 /// The deck's motions, each from 0 to 1 on its curve: the one that went flying off (across or up), the front one
 /// going back where it rests, the front one coming in (1: there).
 fn card_out(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "deck/out", 1.0, global=true)
+  deck_anim(c, "deck/out")
 }
 
 ///|
 fn card_back(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "deck/back", 1.0, global=true)
+  deck_anim(c, "deck/back")
 }
 
 ///|
 fn card_arrive(c : @ui.Ctx) -> @motion.Anim {
-  @motion.anim(c, "deck/arrive", 1.0, global=true)
+  deck_anim(c, "deck/arrive")
+}
+
+///|
+/// The deck's motions as asked (the same each time: @motion.anim's, global) and the frame each was last drawn in,
+/// kept to say when those drawn are at rest.
+let deck_anims : Map[String, (@motion.Anim, Int)] = {}
+
+///|
+fn deck_anim(c : @ui.Ctx, key : String) -> @motion.Anim {
+  let a = @motion.anim(c, key, 1.0, global=true)
+  deck_anims[key] = (a, c.frame_number())
+  a
+}
+
+///|
+/// When the deck's motions drawn in the last frame that drew any (one flying off or up, one going back, one coming
+/// in: none left, nothing comes in) are at rest (the frames' clock; -1: none moves; +inf: told to go, not started
+/// yet): a test runs to it.
+pub fn deck_rest() -> Double {
+  let mut last = -1
+  deck_anims.each(fn(_, af) { if af.1 > last { last = af.1 } })
+  let mut end = -1.0
+  deck_anims.each(fn(_, af) { if af.1 == last && af.0.ends_at() > end { end = af.0.ends_at() } })
+  end
 }
 
 ///|

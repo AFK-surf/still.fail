@@ -105,6 +105,8 @@ let dui : Decide = {
 ///|
 /// As at the start (tests).
 fn decide_reset() -> Unit {
+  under_ends.clear()
+  deck_anims.clear()
   dui.doing.clear()
   dui.gone.clear()
   dui.failed.clear()
@@ -259,6 +261,20 @@ let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, 
 let archive_tween : @motion.Spec = @motion.tween(280.0, ease=Soft)
 
 ///|
+/// The rooms under the posts as their motions were asked (under_post, by its key), kept to say when they are at rest.
+let under_ends : Map[String, @motion.Anim] = {}
+
+///|
+/// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
+/// rooms opening or closing on their springs and tweens (the frames' clock; -1: none moves; +inf: told to go, not
+/// started yet): a test runs to it.
+pub fn under_rest() -> Double {
+  let mut end = -1.0
+  under_ends.each(fn(_, a) { if a.ends_at() > end { end = a.ends_at() } })
+  end
+}
+
+///|
 /// What `body` builds under a post, shown or not as `shown` says (Compose's AnimatedVisibility with expandVertically /
 /// shrinkVertically from its top): coming by `enter` (None: there at once, EnterTransition.None) as its room opens by
 /// `open`, going by `exit` as its room closes by `close`; turned back mid-way from where it is; the first time as it
@@ -287,6 +303,7 @@ fn under_post(
     }
   }
   h.follow(to, if shown { open } else { close })
+  under_ends[key] = h
   let share = h.get()
   let look = match look {
     Some(l) => l

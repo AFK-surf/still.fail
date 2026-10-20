@@ -19,7 +19,9 @@
 // Nothing of it with Source.read_only (a run on a real account changes nothing in it).
 
 ///|
-/// What the system is asked through (@host's; tests put their own).
+/// What the system is asked through: shown, taken back and tapped through @ui (a Tester's fake host keeps them:
+/// Tester::notices, tap_notice); what it allows, the ask and pushes @host's (a Tester's fake host says "granted" where
+/// the runs it replays were told "unknown": not through @ui until a test can say what its host allows).
 priv struct NoticeHost {
   show : (String, String, String, String) -> Unit
   cancel : (String) -> Unit
@@ -35,13 +37,13 @@ priv struct NoticeHost {
 fn host_notices() -> NoticeHost {
   {
     show: fn(tag, title, body, opens) {
-      @host.notice_show(channel=tr("android-misc.notify.channel"), tag~, title~, body~, opens~)
+      @ui.notice_show(channel=tr("android-misc.notify.channel"), tag~, title~, body~, opens~)
     },
-    cancel: fn(tag) { @host.notice_cancel(tag) },
+    cancel: fn(tag) { @ui.notice_cancel(tag) },
     permission: fn() { @host.notice_permission() },
     ask: fn() { @host.notice_ask() },
     answer: fn() { @host.notice_answer() },
-    opened: fn() { @host.notice_opened() },
+    opened: fn() { @ui.notice_opened() },
     token: fn() { @host.push_token() },
     pushed: fn() { @host.push_next() },
   }
