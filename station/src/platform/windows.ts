@@ -10,7 +10,7 @@ import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { holder, pidAlive, runnerBinary } from "./processes.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
-import { trim } from "./text.ts";
+import { pressureOfAvailable, trim } from "./text.ts";
 
 const run = promisify(execFile);
 
@@ -524,6 +524,10 @@ export const windows: Platform = {
   // the command itself is taken to listen.
   terminal: () => null,
   descendants: async () => [],
+  // What is left of the memory says its pressure; the processes are not read (the watch over them is macOS's and Linux's).
+  memoryPressure: async () => pressureOfAvailable(freemem(), totalmem()),
+  processTable: async () => null,
+  cwds: async () => new Map(),
   async listening(pids, port) {
     try {
       const { stdout } = await run("netstat", ["-ano", "-p", "TCP"], { windowsHide: true });

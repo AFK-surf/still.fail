@@ -62,7 +62,20 @@ Choosing where to run: the right OS and architecture first; then enough free mem
 build needs several GiB of each); then the least busy (low CPU busy and load per core, few running tasks). Heavy
 builds and test suites go to a big machine, not a small VM. Offline stations are skipped. There are no locks: do
 not wait for, ask for or announce a "lock" on a machine, and do not queue behind other agents' claims. Look at the
-load, and if a machine is busy pick another or run anyway when nothing better is free.
+load, and if a machine is busy pick another or start anyway when nothing better is free: the station queues it.
+
+A station runs other stations' tasks through its own queue. When it is busy, `start` answers with `queue` (its place
+and why it waits: busy CPUs, memory under pressure, another screen task) and the task starts by itself when there is
+room: one by one, each next only once the last has got going and the CPUs have room, none while the memory is under
+pressure. A task started beside others gets `STILLFAIL_CPUS` (and `MAKEFLAGS`, `CARGO_BUILD_JOBS`,
+`CMAKE_BUILD_PARALLEL_LEVEL` when not set) with how many CPUs are free: pass it to tools that take every core
+otherwise. Give `screen: true` at prepare for a task that opens windows or uses the screen (GUI tests, simulators,
+emulators, screenshots): those run one at a time. You end `waiting` as for any task; its end is told as usual.
+
+Memory: nothing is stopped for using much. When something you run (a task, a job, a command in your own shell) uses
+more than an eighth of the machine's memory, or the memory comes under pressure, you are told; stop or shrink it if
+you can. Only when the machine is about to run out of memory does the station stop the largest of what the agents run
+there, and tells its agent why.
 
 Prepare `station_task` with a stable `key`, upload inputs with `station_file`, then start the same key. Commands
 run as the target OS user, not a sandbox. All tasks of this session share one directory on the target (the working

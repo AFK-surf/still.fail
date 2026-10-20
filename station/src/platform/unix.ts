@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { field, firstWord, output, parseF64, parseLsof, parseU64, procStatTicks, trim } from "./text.ts";
+import { field, firstWord, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
 /// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
@@ -460,6 +460,57 @@ export const unix: Platform = {
     return script === undefined ? null : [script, ["-qfec", inner.map(quoted).join(" "), "/dev/null"]];
   },
   descendants,
+  async memoryPressure() {
+    try {
+      if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);
+      const info = readFileSync("/proc/meminfo", "utf8");
+      return pressureOfAvailable(field(info, "MemAvailable"), field(info, "MemTotal"));
+    } catch {
+      return null;
+    }
+  },
+  async processTable(exact) {
+    let table;
+    try {
+      table = parsePs((await run("ps", ["-axo", "pid=,ppid=,pgid=,rss=,comm="], { maxBuffer: 16 << 20 })).stdout);
+    } catch {
+      return null;
+    }
+    // macOS: resident memory leaves out what is compressed or swapped out, which is most of a process that grew past
+    // the memory there is; top's MEM is its footprint, as Activity Monitor says it.
+    if (exact && MACOS) {
+      try {
+        const mem = parseTopMem((await run("top", ["-l", "1", "-stats", "pid,mem", "-n", "100000"], { maxBuffer: 16 << 20 })).stdout);
+        for (const p of table) p.bytes = mem.get(p.pid) ?? p.bytes;
+      } catch {}
+    }
+    return table;
+  },
+  async cwds(pids) {
+    const out = new Map<number, string>();
+    if (pids.length === 0) return out;
+    if (!MACOS) {
+      for (const pid of pids) {
+        try {
+          out.set(pid, readlinkSync(`/proc/${pid}/cwd`));
+        } catch {}
+      }
+      return out;
+    }
+    let text = "";
+    try {
+      text = (await run("lsof", ["-a", "-d", "cwd", "-p", pids.join(","), "-Fpn"])).stdout;
+    } catch (e) {
+      // lsof exits 1 when one of them is gone; what it found is still said.
+      text = (e as { stdout?: string }).stdout ?? "";
+    }
+    let pid: number | null = null;
+    for (const line of text.split("\n")) {
+      if (line.startsWith("p")) pid = Number(line.slice(1));
+      else if (line.startsWith("n") && pid !== null) out.set(pid, line.slice(1));
+    }
+    return out;
+  },
   async listening(pids, port) {
     if (pids.length === 0) return [];
     try {

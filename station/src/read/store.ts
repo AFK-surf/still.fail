@@ -81,6 +81,8 @@ export type JobRow = {
   id: string; sessionKey: string; name: string; command: string; cwd: string; port: number | null; state: string;
   pgid: number | null; exitCode: number | null; startedAt: number; endedAt: number | null; restarts: number; log: string;
   watch: boolean;
+  queued?: boolean;
+  screen?: boolean;
 };
 
 /// How a turn ended or a post was declared, in the words from before: final, block, waiting.
@@ -744,7 +746,7 @@ export function sessionStats(s: Store, key: string | null): Map<string, SessionS
 const toJob = (r: Json): JobRow => ({
   id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, state: r.state,
   pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at, restarts: r.restarts, log: r.log,
-  watch: r.watch !== 0,
+  watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
 });
 
 /// A session's jobs (all sessions' with null), newest first.

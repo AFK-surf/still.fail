@@ -139,6 +139,10 @@ export type JobRow = {
   token: string;
   state: string; pgid: number | null; exitCode: number | null; startedAt: number; endedAt: number | null;
   restarts: number; log: string; watch: boolean;
+  /// Waiting in the station's queue for room (jobs/admit.ts): running as far as its agent is concerned, not started yet.
+  queued?: boolean;
+  /// It uses the screen (windows, a simulator): one such job at a time.
+  screen?: boolean;
 };
 
 export type JobNotice = { at: number; text: string };
@@ -393,7 +397,7 @@ export function toJob(r: Json): JobRow {
   return {
     id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, token: r.token,
     state: r.state, pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at,
-    restarts: r.restarts, log: r.log, watch: r.watch !== 0,
+    restarts: r.restarts, log: r.log, watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
   };
 }
 

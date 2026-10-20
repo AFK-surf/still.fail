@@ -13,6 +13,7 @@ import {
   type FSWatcher, appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readlinkSync, renameSync, rmSync,
   statSync, watch,
 } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join, sep } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Schedule, Scope } from "effect";
 import { startEnv } from "../ops/agent-env.ts";
@@ -24,6 +25,8 @@ import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
+import { Busy, LOOK_MS, type Pressure, type Started, type Waiting, type Why, cpusFor, pick, place } from "./admit.ts";
+import type { Ticks } from "../read/host.ts";
 
 export { outputAt, tail };
 
@@ -77,6 +80,15 @@ export type Notify = (session: string, text: string) => void;
 /// service), when the station is in a workspace.
 export type Link = (session: string, job: string) => string | null;
 
+/// What the queue (jobs/admit.ts) measures of the machine: its CPUs, their ticks, what the system says of its memory.
+export type Machine = { cpus(): number; ticks(): Ticks | null; pressure(): Promise<Pressure | null> };
+
+export const liveMachine: Machine = {
+  cpus: () => availableParallelism(),
+  ticks: () => platform.host.cpuTicks(),
+  pressure: () => platform.memoryPressure(),
+};
+
 export type JobsOptions = {
   store: Store;
   /// The data directory: jobs live in its jobs/ (logs/, bin/, exit/).
@@ -85,6 +97,8 @@ export type JobsOptions = {
   link: Link;
   /// The clock its timers run on (a TestClock in tests).
   clock?: Clock.Clock;
+  /// What the queue measures (the machine's own by default).
+  machine?: Machine;
 };
 
 type Running = {
@@ -105,8 +119,14 @@ export function jobJson(j: JobRow): Json {
   return {
     id: j.id, session: j.sessionKey, name: j.name, command: j.command, cwd: j.cwd, port: j.port, state: j.state, pgid: j.pgid,
     exitCode: j.exitCode, startedAt: j.startedAt, endedAt: j.endedAt, restarts: j.restarts, log: j.log, watch: j.watch,
+    // Said only when so: what a station from before the queue answered has neither.
+    ...(j.queued === true ? { queued: true } : {}),
+    ...(j.screen === true ? { screen: true } : {}),
   };
 }
+
+/// Whether a job is the queue's: another station's task (jobs/remote.ts names them `remote_…`).
+export const queues = (job: JobRow): boolean => job.id.startsWith("remote_");
 
 /// A job as the pages show it: its record, what it said lately (newest first) and when its output last grew.
 export function shown(store: Store, job: JobRow): Json {
@@ -176,6 +196,17 @@ export class Jobs {
   /// What waits for an exit file to appear, by job id; the watch on jobs/exit that tells them.
   private exitHeard = new Map<string, () => void>();
   private exitWatch: FSWatcher | null = null;
+  /// The queue (jobs/admit.ts): what it measures, the CPUs as it saw them, what the system last said of its memory, when
+  /// its last task started and when each session's did, and why the first waiting waits.
+  private machine: Machine;
+  private busy = new Busy();
+  private pressure: Pressure | null = null;
+  private lastStart: number | null = null;
+  private lastOf = new Map<string, number>();
+  private why: Why | null = null;
+  /// The queue looks at the machine (every LOOK_MS) while a task waits, on the jobs' clock.
+  private looking = false;
+  private queueNow: () => number;
 
   constructor(options: JobsOptions) {
     this.store = options.store;
@@ -211,6 +242,8 @@ export class Jobs {
     this.run = Effect.runSync(options.clock ? runtime.pipe(Effect.provideService(Clock.Clock, options.clock)) : runtime);
     const clock = options.clock;
     this.timed = (effect) => Effect.runPromise(clock ? effect.pipe(Effect.provideService(Clock.Clock, clock)) : effect);
+    this.machine = options.machine ?? liveMachine;
+    this.queueNow = clock ? () => clock.currentTimeMillisUnsafe() : () => this.store.now();
   }
 
   /// Where `stillfail-job notify` posts, once the endpoint listens.
@@ -236,7 +269,12 @@ export class Jobs {
   }
 
   /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
-  startId(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false): JobRow {
+  /// `queue`: it waits in the station's queue (jobs/admit.ts) when there is no room for it now; `screen`: it uses the
+  /// screen, one such at a time.
+  startId(
+    session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
+    queue: { screen: boolean } | null = null,
+  ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
       if (job) return job;
@@ -275,8 +313,16 @@ export class Jobs {
       endedAt: null,
       restarts: 0,
       watch,
+      ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
     };
     this.store.insertJob(job);
+    if (queue !== null) {
+      // Started now if there is room (the memory as last looked at) and it is next, else when it is.
+      this.startNext();
+      const now = this.store.getJob(job.id) ?? job;
+      if (now.queued === true) log.info("jobs", "job queued", { job: job.id, session, name: job.name, why: this.why });
+      return now;
+    }
     try {
       this.spawn(job, false);
     } catch (error) {
@@ -285,6 +331,97 @@ export class Jobs {
     }
     log.info("jobs", "job started", { job: job.id, session, name: job.name, port: job.port });
     return this.store.getJob(job.id) ?? job;
+  }
+
+  // ── the queue (jobs/admit.ts) ──
+
+  /// The tasks waiting, oldest first, and the queue's running.
+  private line(): { waiting: Waiting[]; running: Started[] } {
+    const waiting: Waiting[] = [];
+    const running: Started[] = [];
+    for (const j of this.store.listJobs(null)) {
+      if (j.state !== "running" || !queues(j)) continue;
+      if (j.queued === true) waiting.push({ id: j.id, session: j.sessionKey, screen: j.screen === true, queuedAt: j.startedAt });
+      else running.push({ id: j.id, screen: j.screen === true });
+    }
+    waiting.sort((a, b) => a.queuedAt - b.queuedAt);
+    return { waiting, running };
+  }
+
+  /// What the queue would start now, and why the first waiting waits else (kept for `queueOf`).
+  private chosen(pressure: Pressure | null): ReturnType<typeof pick> {
+    const { waiting, running } = this.line();
+    const chosen = pick(waiting, running, { busy: this.busy.share(), pressure }, this.queueNow(), this.lastStart, (s) => this.lastOf.get(s) ?? null);
+    this.why = chosen !== null && "wait" in chosen ? chosen.wait : null;
+    return chosen;
+  }
+
+  /// A task of the queue starts: noted as the last, and what it is told of the CPUs free.
+  private admitted(job: JobRow): Record<string, string> {
+    const alone = this.line().running.length === 0;
+    const now = this.queueNow();
+    this.lastStart = now;
+    this.lastOf.set(job.sessionKey, now);
+    return cpusFor(startEnv(), this.machine.cpus(), this.busy.share(), alone);
+  }
+
+  /// While a task waits: every LOOK_MS the CPUs noted, the memory asked for, the next started if there is room.
+  private watchQueue(): void {
+    if (this.looking || this.closing) return;
+    this.looking = true;
+    const waiting = () => !this.closing && this.line().waiting.length > 0;
+    const look = Effect.promise(async () => {
+      this.busy.note(this.queueNow(), this.machine.ticks());
+      try {
+        this.pressure = await this.machine.pressure();
+      } catch {
+        this.pressure = null;
+      }
+      this.startNext();
+    });
+    void this.run(
+      Effect.sync(() => this.busy.note(this.queueNow(), this.machine.ticks())).pipe(
+        Effect.andThen(Effect.sleep(LOOK_MS)),
+        Effect.andThen(Effect.andThen(look, Effect.sync(waiting)).pipe(Effect.repeat({ schedule: Schedule.spaced(LOOK_MS), until: (more) => !more }))),
+        Effect.ensuring(Effect.sync(() => {
+          this.looking = false;
+          // One that came as the looks ended is watched anew.
+          if (waiting()) this.watchQueue();
+          else this.why = null;
+        })),
+      ),
+    ).catch(() => undefined);
+  }
+
+  /// Starts what the queue picks now (one at most: the next waits for its ramp); while others wait, the queue watched.
+  private startNext(): void {
+    if (this.closing) return;
+    const chosen = this.chosen(this.pressure);
+    if (chosen !== null && "wait" in chosen) this.watchQueue();
+    if (chosen === null || !("start" in chosen)) return;
+    const job = this.store.getJob(chosen.start.id);
+    if (!job || job.state !== "running" || job.queued !== true) return;
+    try {
+      this.spawn(job, false, this.admitted(job));
+      log.info("jobs", "queued job started", { job: job.id, session: job.sessionKey, name: job.name });
+    } catch (error) {
+      const e = (error as Error).message;
+      log.warn("jobs", "queued job not started", { job: job.id, error: e });
+      try {
+        appendFileSync(job.log, `[still.fail] could not start: ${e}\n`);
+      } catch {}
+      this.store.jobEnded(job.id, "failed", null);
+      this.tell(job, `${named(job)} could not be started: ${e}`);
+    }
+    if (this.line().waiting.length > 0) this.watchQueue();
+  }
+
+  /// A waiting task's place in line (1: the next) and why the first waits; null for one not waiting.
+  queueOf(id: string): { place: number; why: Why | null } | null {
+    const job = this.store.getJob(id);
+    if (!job || job.state !== "running" || job.queued !== true) return null;
+    const p = place(this.line().waiting, id, (s) => this.lastOf.get(s) ?? null);
+    return p === null ? null : { place: p, why: this.why };
   }
 
   /// Where a job's exit code is written when it ends.
@@ -300,14 +437,14 @@ export class Jobs {
     return running;
   }
 
-  /// Runs a job's command, and follows it to its end.
-  private spawn(job: JobRow, restarted: boolean): void {
+  /// Runs a job's command, and follows it to its end. `extra`: variables it is given besides (the queue's CPUs).
+  private spawn(job: JobRow, restarted: boolean, extra: Record<string, string> = {}): void {
     // Made (or found) here, so a log that cannot be written is said now; the shell opens it itself (below).
     closeSync(openSync(job.log, "a"));
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
     // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
-    const env: NodeJS.ProcessEnv = platform.prependPath(startEnv(), join(this.dir, "bin"));
+    const env: NodeJS.ProcessEnv = { ...platform.prependPath(startEnv(), join(this.dir, "bin")), ...extra };
     // Under both names: scripts written against the old ones go on working.
     for (const prefix of ["STILLFAIL_", "EMBER_"]) {
       env[`${prefix}JOB_ID`] = job.id;
@@ -411,6 +548,8 @@ export class Jobs {
     } finally {
       running?.settle();
     }
+    // Room for the next task of the queue, maybe.
+    this.startNext();
   }
 
   private endedRecord(id: string, pgid: number | null, code: number | null, stopped: boolean, ranMs: number): void {
@@ -559,6 +698,8 @@ export class Jobs {
     const followed = new Set<number>();
     const jobs = this.store.listJobs(null);
     for (const job of jobs.filter((j) => j.state === "running")) {
+      // Still waiting in the queue: it never ran, and starts when there is room.
+      if (job.queued === true) continue;
       const entry = job.pgid !== null ? recorded.get(job.pgid) : undefined;
       if (entry) {
         if (stillOurs(entry)) {
@@ -610,6 +751,8 @@ export class Jobs {
       }
       this.store.forgetProcess(pgid);
     }
+    // What still waits in the queue starts when there is room.
+    this.startNext();
   }
 
   /// The station stops: its jobs go on (the next station takes them up); what followed them and the services' restart

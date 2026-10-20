@@ -14,6 +14,9 @@ export type Found = { onPath: string; real: string };
 /// A program and its arguments, as runtimes are installed and updated.
 export type How = { program: string; args: string[] };
 
+/// A process as the memory watch sees it (jobs/memory.ts).
+export type ProcessInfo = { pid: number; ppid: number; pgid: number; bytes: number; command: string };
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
@@ -165,6 +168,15 @@ export type Platform = {
   terminal(program: string, args: string[], cols: number, rows: number): [string, string[]] | null;
   /// The processes `pid` started, and theirs (not itself).
   descendants(pid: number): Promise<number[]>;
+  // Memory, as the station's queue and its watch over the agents' processes read it (jobs/admit.ts, jobs/memory.ts).
+  /// What the system says of its memory: macOS's own pressure level; elsewhere how much is still available
+  /// (pressureOfAvailable). None when it cannot be read.
+  memoryPressure(): Promise<"normal" | "high" | "critical" | null>;
+  /// Every process: its parent, group, program and memory in bytes (resident; its footprint on macOS when `exact`,
+  /// which takes longer to read but counts what is compressed or swapped out). None where it is not read (Windows).
+  processTable(exact: boolean): Promise<ProcessInfo[] | null>;
+  /// The working directory of each of `pids` that says one.
+  cwds(pids: number[]): Promise<Map<number, string>>;
   /// The addresses those processes listen on at TCP `port` (127.0.0.1, ::1, * for all); null when this machine cannot
   /// tell.
   listening(pids: number[], port: number): Promise<string[] | null>;
