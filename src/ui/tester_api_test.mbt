@@ -316,4 +316,13 @@ test "the system's say on notifications is the test's: refused, the app's ask an
   assert_eq(t.notice_asks(), 2)
   assert_eq(answers, [false])
   t.assert_idle()
+  // a host that cannot tell (macOS, Windows, the web: "unknown") has no way to ask: nothing asked, no answer
+  t.set_notice_permission("unknown")
+  t.set_notice_reply(Some(true))
+  t.draw()
+  assert_eq(@ui.notice_ask(), false)
+  t.draw()
+  assert_eq(t.notice_asks(), 2)
+  assert_eq(answers, [false])
+  assert_true(t.find("unknown") is Some(_))
 }

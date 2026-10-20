@@ -64,11 +64,12 @@ pub fn notice_permission() -> String {
 
 ///|
 /// Asks the system to let the app show notifications (@host.notice_ask): false when nothing was asked (allowed
-/// already). Under a Tester the person answers as the test said (Tester::set_notice_reply), from the next frame.
+/// already, or a host that cannot tell has no way to ask: "unknown", as macOS, Windows and the web say). Under a
+/// Tester the person answers as the test said (Tester::set_notice_reply), from the next frame.
 pub fn notice_ask() -> Bool {
   match fake.val {
     Some(f) => {
-      if f.notice_perm == "granted" {
+      if f.notice_perm == "granted" || f.notice_perm == "unknown" {
         return false
       }
       f.notice_asks += 1
