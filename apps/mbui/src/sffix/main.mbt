@@ -16,34 +16,8 @@ fn main {
   }
   let mode = @ui.env("MBUI_FIXTURE")
   let src = @sfapp.fixture(mode)
-  let rich : @sfapp.ChatRef = {
-    station: "ws1/st1",
-    session: "s-c1",
-    title: "整理发布清单",
-    station_name: "Studio",
-  }
-  if mode == "chat-flash" || mode == "chat-flash-mine" {
-    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
-    @sfapp.open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
-  } else if mode.has_prefix("chat") {
-    @sfapp.open_chat(rich)
-    // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
-    @sfapp.open_cards_fixture(mode)
-  }
-  // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
-  @sfapp.open_drive_fixture(mode)
-  // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
-  @sfapp.open_fixture(mode)
-  // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
-  @sfapp.open_mode(mode)
-  if mode.has_prefix("settings") {
-    @sfapp.open_setting(@settings.fixture_page(mode))
-  }
-  // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
-  // waiting page in the chats' place), lock-security (its security page)
-  if mode == "lock-security" {
-    @sfapp.open_setting(@settings.fixture_page("settings-security"))
-  }
+  // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
+  @sfapp.open_fixture_mode(mode)
   @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }

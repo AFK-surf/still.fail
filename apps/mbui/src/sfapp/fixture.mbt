@@ -476,3 +476,49 @@ pub fn fixture(mode : String) -> Source {
     read_only: false,
   }
 }
+
+///|
+/// What a fixture mode opens over Home before the first frame, as src/sffix (the screenshots' app) opens it: the
+/// first row's chat (opened at a message from a notification for chat-flash…), its cards' states; the drive's pages;
+/// the 奏 page, a history, a chat's sheets; a new chat, the bar's panel, a place; a page of the settings.
+pub fn open_fixture_mode(mode : String) -> Unit {
+  let rich : ChatRef = {
+    station: "ws1/st1",
+    session: "s-c1",
+    title: "整理发布清单",
+    station_name: "Studio",
+  }
+  if mode == "chat-flash" || mode == "chat-flash-mine" {
+    // opened from a notification at a message (Ana's, or yours), its flash held at its peak (slice 10's)
+    open_chat_at(rich, if mode == "chat-flash" { 4.0 } else { 6.0 }, held=true)
+  } else if mode.has_prefix("chat") {
+    open_chat(rich)
+    // the cards' states (chat_fixture.mbt): chat-cards, chat-answering
+    open_cards_fixture(mode)
+  }
+  // the drive's pages (src/sfapp/drive_fixture.mbt): files, drive…, reader…
+  open_drive_fixture(mode)
+  // slice 8's (src/sfapp/decide_fixture.mbt): the 奏 page, a history, a chat's sheets
+  open_fixture(mode)
+  // a new chat (with its sheets), the bar's panel, a place: newchat_fixture.mbt
+  open_mode(mode)
+  if mode.has_prefix("settings") {
+    open_setting(@settings.fixture_page(mode))
+  }
+  // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
+  // waiting page in the chats' place), lock-security (its security page)
+  if mode == "lock-security" {
+    open_setting(@settings.fixture_page("settings-security"))
+  }
+}
+
+///|
+/// The app as src/sffix starts it for `mode`, for a Tester made next (src/sfscreens): the app as at the start (reset:
+/// whatever ran before in the process), the made-up source of the mode and what it opens before the first frame
+/// (open_fixture_mode). The Tester keeps it as it starts (reset by hand).
+pub fn fixture_app(mode : String) -> Source {
+  reset()
+  let src = fixture(mode)
+  open_fixture_mode(mode)
+  src
+}

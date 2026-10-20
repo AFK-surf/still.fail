@@ -24,7 +24,13 @@ else
     mkdir -p "$CACHE"
     # one bare clone for every commit (only what a checkout needs comes over), each commit a plain copy
     [ -d "$CACHE/repo.git" ] || git clone -q --bare --filter=blob:none "$REPO" "$CACHE/repo.git"
-    git -C "$CACHE/repo.git" cat-file -e "$rev^{commit}" 2>/dev/null || git -C "$CACHE/repo.git" fetch -q --filter=blob:none origin "$rev"
+    # (by its sha; GitHub answers a commit merged a moment ago "not our ref" for a while: then by the branches)
+    git -C "$CACHE/repo.git" cat-file -e "$rev^{commit}" 2>/dev/null \
+      || git -C "$CACHE/repo.git" fetch -q --filter=blob:none origin "$rev" 2>/dev/null \
+      || git -C "$CACHE/repo.git" fetch -q --filter=blob:none origin '+refs/heads/*:refs/heads/*'
+    # (the pinned commit itself, or nothing: never a branch's newest in its place)
+    git -C "$CACHE/repo.git" cat-file -e "$rev^{commit}" 2>/dev/null \
+      || { echo "apps/mbui: mbui $rev (mbui.rev) is not in mbui's history" >&2; exit 1; }
     tmp=$(mktemp -d "$CACHE/.new.XXXXXX")
     git -C "$CACHE/repo.git" archive "$rev" | tar -x -C "$tmp"
     rm -rf "$dir" && mv "$tmp" "$dir"
