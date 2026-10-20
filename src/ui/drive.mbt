@@ -100,6 +100,19 @@ fn drive_init() -> Unit {
 }
 
 ///|
+/// Who is told each line of a script as it begins (@ui.trace_steps): a run's record of it.
+// kept across runs: the app's own, set once as it starts
+let steps_tracer : Ref[((String) -> Unit)?] = Ref::new(None)
+
+///|
+/// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as it begins, as written (`tap 发消息`,
+/// `until …`), before anything of it is done: what a run keeps beside its other messages (its own clock added), for a
+/// replay to know when each step came.
+pub fn trace_steps(step : (String) -> Unit) -> Unit {
+  steps_tracer.val = Some(step)
+}
+
+///|
 fn drive_start(script : String, dir : String) -> Unit {
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
   driver.val = Some({
@@ -406,6 +419,10 @@ fn drive_steps(c : Ctx) -> Unit {
     if d.since < 0.0 {
       d.since = now
       d.seen_frame = -1
+      match steps_tracer.val {
+        Some(told) => told(line)
+        None => ()
+      }
     }
     let waited = now - d.since
     // (`now STEP`: STEP)

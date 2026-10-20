@@ -253,6 +253,16 @@ test "a scripted run waits for a picture decoded from bytes handed over for it, 
 }
 
 ///|
+test "a scripted run tells each line of its script as it begins, as written" {
+  let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
+  let told : Array[String] = []
+  @ui.trace_steps(fn(step) { told.push(step) })
+  let log = t.drive("# a note\nuntil go\nnow wait 50\ntap go\nexit")
+  @ui.trace_steps(fn(_) {  })
+  assert_eq(told, ["# a note", "until go", "now wait 50", "tap go", "exit"], msg=log.join("\n"))
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")
