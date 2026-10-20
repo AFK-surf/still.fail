@@ -218,8 +218,9 @@ private fun WorkspaceList(scope: String) {
                             else e.where.ifEmpty { listOfNotNull(p.checkText, p.usesText?.ifEmpty { null } ?: ACCESS_LABEL[p.access.kind] ?: p.access.kind).joinToString(" · ") },
                             fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
+                        // Its allowance a line of its own, so the name and where it is keep the row's width.
+                        p.quota?.takeIf { e.usable && it.state == "ok" && it.windows.isNotEmpty() }?.let { Box(Modifier.padding(top = 6.dp)) { QuotaRings(it) } }
                     }
-                    if (e.usable) QuotaRings(p.quota)
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
             }

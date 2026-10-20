@@ -9,6 +9,7 @@ export const mMono = style({
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mProfileNote = style({ padding: "8px 24px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+export const mRowQuota = style({ display: "flex", marginTop: "6px" });
 export const mCheckPill = style({ marginLeft: "0", fontSize: vars.textCaption });
 export const mDeviceCode = style({
   alignSelf: "flex-start", padding: "8px 14px", borderRadius: `calc(10px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,

@@ -129,8 +129,9 @@ function WorkspaceList({ scope }: { scope: string }) {
                 <span className={`${partsCss.mGrow} ${listsCss.mRowText}`} style={e.usable ? undefined : { opacity: 0.55 }}>
                   <span className={listsCss.mRowTitle}><Presence state={e.usable ? toneDot(e.profile.checkTone) : "error"} /> {e.profile.name}</span>
                   <span className={listsCss.mRowNote}>{e.usable ? e.where || `${e.profile.checkText} · ${e.profile.usesText || accessLabel(e.profile)}` : t("web-pages.settings.profiles.hostAway", { station: e.hostName })}</span>
+                  {/* Its allowance a line of its own, so the name and where it is keep the row's width. */}
+                  {e.usable && e.profile.quota?.state === "ok" && e.profile.quota.windows.length > 0 && <span className={css.mRowQuota}><QuotaRings quota={e.profile.quota} /></span>}
                 </span>
-                {e.usable && <QuotaRings quota={e.profile.quota} />}
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </ListRow>
             ))}
