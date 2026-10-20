@@ -44,6 +44,7 @@ globalStyle(":root", {
   colorScheme: "light",
   vars: {
     "--font-body": "\"Inter Variable\", -apple-system, BlinkMacSystemFont, \"PingFang SC\", \"Hiragino Sans GB\", sans-serif",
+    "--font-text": "var(--font-body)",
     "--font-mono": "ui-monospace, SFMono-Regular, Menlo, monospace",
     "--canvas": "oklch(100% 0 0)",
     // What floats over the canvas (the composer): a grey ground of its own, a step darker than the canvas in light and

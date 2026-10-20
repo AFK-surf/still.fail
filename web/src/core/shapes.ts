@@ -2663,6 +2663,54 @@ export interface FlowSignIn {
 	provider: string;
 }
 
+/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md). */
+export interface FontChoices {
+	/** The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face. */
+	ui?: string;
+	/** What people and agents wrote (messages, the composer); none: as `ui`. */
+	text?: string;
+	/** Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page). */
+	code?: string;
+}
+
+/** A face's file for the Android app. */
+export interface FontFile {
+	/** The weight it is (400, 500, …); 0: one variable file for every weight. */
+	weight: number;
+	/** Where it is, gzipped. */
+	url: string;
+	/** Its size gzipped. */
+	bytes: number;
+	/** The hash of it unzipped. */
+	sha256: string;
+}
+
+export interface FontFace {
+	/** Its id (`local:<family>` for one installed on the device); empty: the app's own face. */
+	id: string;
+	/** Its name as people know it, in their language (empty: the app's own). */
+	name: string;
+	/** Its characters are all one width: a face for code. */
+	mono: boolean;
+	/** The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own. */
+	family: string;
+	/** A page's stylesheet for it: its slices, fetched as their characters are shown. */
+	css?: string;
+	/** What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own). */
+	files?: FontFile[];
+	/** What `files` come to. */
+	bytes: number;
+}
+
+/** The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are. */
+export interface FontsView {
+	ui: FontFace;
+	text: FontFace;
+	code: FontFace;
+	/** The faces there are to choose, beside the app's own and those installed on the device. */
+	list: FontFace[];
+}
+
 export interface FootprintConfirm {
 	title: string;
 	text: string;
@@ -4131,6 +4179,10 @@ export interface PrefsView {
 	 * by `bars` (one set for all, as devices kept it before).
 	 */
 	barsBy?: Record<string, BarPrefs>;
+	/** The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own). */
+	fonts?: FontChoices;
+	/** The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them). */
+	faces?: FontsView;
 }
 
 /** Providers of one group, as the picker lists them. */

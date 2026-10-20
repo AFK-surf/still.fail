@@ -725,5 +725,9 @@
   "android-settings.vault.migrate.body": "Secrets saved before security mode was turned on are still stored in plain text on the station",
   "android-settings.vault.migrate.action": "Encrypt",
   "android-settings.vault.migrate.what": "encrypt secrets",
-  "android-settings.vault.migrate.done": "Encrypted"
+  "android-settings.vault.migrate.done": "Encrypted",
+  "android-settings.fonts.download": "Download {size}",
+  "android-settings.fonts.downloading": "Downloading {percent}%",
+  "android-settings.fonts.failed": "Couldn't download: {error}",
+  "android-settings.fonts.damaged": "The file is damaged"
 }

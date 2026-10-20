@@ -64,6 +64,7 @@ import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.DoingMark
+import fail.still.android.ui.UiFont
 
 @Composable
 fun ArchiveScreen(current: WorkspaceEntry) {
@@ -132,7 +133,7 @@ private fun ArchiveSearch(q: String, onChange: (String) -> Unit) {
             if (q.isEmpty()) Text(t("web-pages.archive.search"), fontSize = 16.sp, color = C.muted, maxLines = 1)
             BasicTextField(
                 q, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
-                textStyle = TextStyle(fontSize = 16.sp, color = C.ink),
+                textStyle = TextStyle(fontFamily = UiFont, fontSize = 16.sp, color = C.ink),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = t("web-pages.archive.search") },
             )

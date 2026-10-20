@@ -116,6 +116,33 @@ test("a module's package: its feeds as they change, its archive (named by its ve
   }
 });
 
+test("a face's files: a page's stylesheet and slices, the Android app's file, cached for good and fetched from any origin", async () => {
+  const h = await harness();
+  try {
+    const bucket = (await h.mf.getR2Bucket("RELEASES", "api")) as unknown as { put(key: string, value: Uint8Array | string): Promise<unknown> };
+    await bucket.put("fonts/noto-sans-sc/2.004/font.css", "@font-face{}");
+    await bucket.put("fonts/noto-sans-sc/2.004/var-12.woff2", new Uint8Array([1, 2, 3]));
+    await bucket.put("fonts/lxgw-wenkai/1.530/400.ttf.gz", new Uint8Array([4, 5]));
+    for (const [path, type] of [["fonts/noto-sans-sc/2.004/font.css", "text/css; charset=utf-8"], ["fonts/noto-sans-sc/2.004/var-12.woff2", "font/woff2"], ["fonts/lxgw-wenkai/1.530/400.ttf.gz", "application/gzip"]] as const) {
+      const got = await h.fetch(`/releases/${path}`);
+      assert.equal(got.status, 200, path);
+      assert.equal(got.headers.get("content-type"), type);
+      assert.equal(got.headers.get("cache-control"), "public, max-age=31536000, immutable");
+      assert.equal(got.headers.get("access-control-allow-origin"), "*");
+      await got.arrayBuffer();
+    }
+    for (const path of ["fonts/noto-sans-sc/font.css", "fonts/noto-sans-sc/2.004/../x.css", "fonts/Noto/2.004/font.css", "fonts/noto-sans-sc/2.004/font.js"]) {
+      const got = await h.fetch(`/releases/${path}`);
+      assert.equal(got.status, 404, path);
+      await got.arrayBuffer();
+    }
+    // Only a face's files are for any origin.
+    assert.equal((await h.fetch("/releases/station.json")).headers.get("access-control-allow-origin"), null);
+  } finally {
+    await h.close();
+  }
+});
+
 test("ranges are read from the bucket in a few reads", () => {
   assert.deepEqual(parseRanges("bytes=0-9, 20-, -5", 100), [{ start: 0, end: 10 }, { start: 20, end: 100 }, { start: 95, end: 100 }]);
   assert.deepEqual(parseRanges("bytes=200-300", 100), []);

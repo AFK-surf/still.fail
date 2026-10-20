@@ -2618,6 +2618,58 @@ data class FlowSignIn (
 	val provider: String
 )
 
+/// The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md).
+@Serializable
+data class FontChoices (
+	/// The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face.
+	val ui: String? = null,
+	/// What people and agents wrote (messages, the composer); none: as `ui`.
+	val text: String? = null,
+	/// Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page).
+	val code: String? = null
+)
+
+/// A face's file for the Android app.
+@Serializable
+data class FontFile (
+	/// The weight it is (400, 500, …); 0: one variable file for every weight.
+	val weight: Long,
+	/// Where it is, gzipped.
+	val url: String,
+	/// Its size gzipped.
+	val bytes: Long,
+	/// The hash of it unzipped.
+	val sha256: String
+)
+
+@Serializable
+data class FontFace (
+	/// Its id (`local:<family>` for one installed on the device); empty: the app's own face.
+	val id: String,
+	/// Its name as people know it, in their language (empty: the app's own).
+	val name: String,
+	/// Its characters are all one width: a face for code.
+	val mono: Boolean,
+	/// The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own.
+	val family: String,
+	/// A page's stylesheet for it: its slices, fetched as their characters are shown.
+	val css: String? = null,
+	/// What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own).
+	val files: List<FontFile>? = null,
+	/// What `files` come to.
+	val bytes: Long
+)
+
+/// The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are.
+@Serializable
+data class FontsView (
+	val ui: FontFace,
+	val text: FontFace,
+	val code: FontFace,
+	/// The faces there are to choose, beside the app's own and those installed on the device.
+	val list: List<FontFace>
+)
+
 @Serializable
 data class FootprintConfirm (
 	val title: String,
@@ -4068,7 +4120,11 @@ data class PrefsView (
 	val bars: BarPrefs? = null,
 	/// A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
 	/// by `bars` (one set for all, as devices kept it before).
-	val barsBy: Map<String, BarPrefs>? = null
+	val barsBy: Map<String, BarPrefs>? = null,
+	/// The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own).
+	val fonts: FontChoices? = null,
+	/// The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them).
+	val faces: FontsView? = null
 )
 
 /// Providers of one group, as the picker lists them.

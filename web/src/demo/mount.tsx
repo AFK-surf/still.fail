@@ -22,6 +22,8 @@ import { addItem, agentCardView, chatView, newChat, received, VISITOR, chatsView
 import { makeStory, openingChats } from "./story.ts";
 import { RealStillFail, askForReal } from "./real.tsx";
 import * as station from "./station.ts";
+import * as fonts from "../../../client/core-ts/src/fonts.ts";
+import { followFonts } from "../fonts.ts";
 
 /** The demo's box; the app is drawn in a box of its own inside it (the buddy goes beside it: setPageRoot). */
 let root: HTMLElement;
@@ -71,7 +73,7 @@ function demoValueOf(topic: Topic): unknown {
     case "status": return { items: [] };
     case "connection": return { items: [] };
     // What the visitor chose (prefs.set, below): the defaults till then (the core's shape leaves them out).
-    case "prefs": return prefs;
+    case "prefs": return { ...prefs, fonts: fonts.chosen(prefs.fonts), faces: fonts.shown(prefs.fonts) };
     case "doing": return { doing: [] };
     // What is written stays the page's here (draft.ts shows what it did), but for what was shared into a chat.
     case "composer": return composerView(String(topic.key ?? ""));
@@ -499,6 +501,7 @@ export function mountDemo(element: HTMLElement): void {
   const app = root.appendChild(document.createElement("div"));
   app.style.height = "100%";
   startScrollbars();
+  followFonts();
 
   // The app is made to be the whole page; here it is a part of one. Keys pressed elsewhere on the page are the page's
   // (space scrolls it rather than going to the composer), and nothing in it takes the focus, or scrolls the page to

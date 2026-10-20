@@ -122,6 +122,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import fail.still.android.ui.Button
 import fail.still.android.ui.chatSubtle
+import fail.still.android.ui.UiFont
 
 // ── calls ──────────────────────────────────────────────────────────────
 
@@ -745,7 +746,7 @@ fun VaultItemScreen(current: WorkspaceEntry, vault: String, item: String) {
 @Composable
 private fun Fact(label: String, value: String, mono: Boolean = false) = Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
     Text(label, fontSize = 14.sp, lineHeight = 21.sp, color = C.muted, modifier = Modifier.widthIn(min = 52.dp))
-    Text(value, fontSize = if (mono) 14.sp else 15.sp, lineHeight = 21.sp, fontFamily = if (mono) CodeFont else null, color = C.ink, modifier = Modifier.weight(1f))
+    Text(value, fontSize = if (mono) 14.sp else 15.sp, lineHeight = 21.sp, fontFamily = if (mono) CodeFont else UiFont, color = C.ink, modifier = Modifier.weight(1f))
 }
 
 /** An agent's use of an item: its chat (turned down, said so), the command or how it was given, when; a tap opens the chat. */
@@ -956,7 +957,7 @@ private fun Labeled(label: String, content: @Composable ColumnScope.() -> Unit) 
 @Composable
 private fun VaultField(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, secret: Boolean = false, lines: Int = 1) {
     var shown by remember { mutableStateOf(false) }
-    val style = TextStyle(color = C.ink, fontSize = if (mono) 14.sp else 15.sp, lineHeight = 20.sp, fontFamily = if (mono) CodeFont else null)
+    val style = TextStyle(color = C.ink, fontSize = if (mono) 14.sp else 15.sp, lineHeight = 20.sp, fontFamily = if (mono) CodeFont else UiFont)
     Row(
         Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(start = 12.dp, end = if (secret) 8.dp else 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),

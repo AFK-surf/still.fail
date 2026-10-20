@@ -71,6 +71,7 @@ import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
+import fail.still.android.ui.UiFont
 
 @Composable
 fun ChangelogScreen() {
@@ -122,7 +123,7 @@ private fun Line(line: ChangelogLine) {
         Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink)
         return
     }
-    val labelStyle = TextStyle(fontSize = 13.sp, lineHeight = 19.sp)
+    val labelStyle = TextStyle(fontFamily = UiFont, fontSize = 13.sp, lineHeight = 19.sp)
     val measurer = rememberTextMeasurer()
     val width = with(LocalDensity.current) { (measurer.measure(line.label, labelStyle).size.width.toDp() + 12.dp + 6.dp).toSp() }
     val new = line.kind == "new"

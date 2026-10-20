@@ -126,6 +126,8 @@ sealed interface Screen {
     data object Me : Screen { override val id = "me" }
     /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
     data object Appearance : Screen { override val id = "appearance" }
+    /** One place's font, from 外观 (screens/Fonts.kt): `place` ui, text or code. */
+    data class Fonts(val place: String) : Screen { override val id = "fonts/$place" }
     /** Files opened in the app and kept on this device, to delete (screens/KeptFiles.kt). */
     data object KeptFiles : Screen { override val id = "kept-files" }
     /** What is kept of a chat (null: files of no chat known), from KeptFiles. */
@@ -309,6 +311,15 @@ class AppState(override val core: StillFailCore, private val prefs: SharedPrefer
     /** 外观: "system" (the default), "light" or "dark". */
     val theme: String get() = kept.appearance ?: "system"
     fun useTheme(value: String) = setPrefs(kept.copy(appearance = value), buildJsonObject { put("appearance", value) })
+
+    /** The face chosen for a place (ui, text, code): a face's id, `local:<family>` (chosen on a computer), or null (the app's own). */
+    fun fontChosen(place: String): String? = kept.fonts?.let { when (place) { "ui" -> it.ui; "text" -> it.text; else -> it.code } }
+    /** One place's face changed (`prefs.set {fonts: {place: id}}`; null: the app's own); the faces follow as the core says. */
+    fun setFont(place: String, id: String?) {
+        val now = kept.fonts ?: fail.still.android.data.FontChoices()
+        val next = when (place) { "ui" -> now.copy(ui = id); "text" -> now.copy(text = id); else -> now.copy(code = id) }
+        setPrefs(kept.copy(fonts = next), buildJsonObject { putJsonObject("fonts") { put(place, id) } })
+    }
 
     /** 动画: "reduce" or "full" as chosen; null follows the system's (ui/Motion.kt). */
     val motion: String? get() = kept.motion

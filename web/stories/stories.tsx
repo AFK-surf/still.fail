@@ -29,6 +29,7 @@ import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, logins
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
+import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
 import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
@@ -87,6 +88,12 @@ const toStation = (part: "设置" | "软件与设备"): Step[] => [{ click: '[ar
 /** To a station's page on the phone (settings › Station › the demo's one). */
 const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }];
 const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
+
+/** Fonts chosen on this device (client/core-ts/src/fonts.ts): each place a face of its own. */
+const chosenFonts: DemoExtension = (() => {
+  const choice = { ui: "noto-serif-sc", text: "lxgw-wenkai", code: "maple-mono" };
+  return { topic: (t) => (t.topic === "prefs" ? { fonts: choice, faces: fontsShown(choice) } : undefined) };
+})();
 
 /** The demo with stations of other workspaces to add (`list`), or one that refuses to join (none to add: no choice). */
 const joining = (kind: "list" | "error"): DemoExtension => ({
@@ -790,6 +797,9 @@ export const stories: Story[] = [
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
+  { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "phone-settings-fonts", group: "设置", title: "手机 · 外观 › 字体 › 正文", app: true, phone: true, demo: chosenFonts, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }, { text: "正文" }] },
+  { id: "app-chat-fonts", group: "设置", title: "对话 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
   { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人发言")' }] },
   {

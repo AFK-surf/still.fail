@@ -161,6 +161,8 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
             <Route path="settings" element={<Navigate to="appearance" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
+            {/* A phone's page of one place's font (mobile/Fonts.tsx): the wide screen has them all on 外观. */}
+            <Route path="settings/appearance/fonts/:place" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
             <Route path="settings/permissions" element={<PermissionsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}

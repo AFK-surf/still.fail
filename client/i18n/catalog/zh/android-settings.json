@@ -662,5 +662,9 @@
   "android-settings.vault.migrate.body": "开启安全模式前保存的密钥仍以明文保存在 station 上",
   "android-settings.vault.migrate.action": "加密",
   "android-settings.vault.migrate.what": "加密密钥",
-  "android-settings.vault.migrate.done": "已加密"
+  "android-settings.vault.migrate.done": "已加密",
+  "android-settings.fonts.download": "下载 {size}",
+  "android-settings.fonts.downloading": "正在下载 {percent}%",
+  "android-settings.fonts.failed": "下载失败：{error}",
+  "android-settings.fonts.damaged": "文件已损坏"
 }

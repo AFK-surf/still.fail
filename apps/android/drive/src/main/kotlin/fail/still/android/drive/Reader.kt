@@ -129,6 +129,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import fail.still.android.data.DriveCache
+import fail.still.android.ui.UiFont
 
 /** How a text comes: how much of it so far (and of how much), then the text itself, or why not. */
 private sealed interface Opening {
@@ -398,7 +399,7 @@ private fun FoundPill(haze: HazeState, p: PaperInk, r: Reading, modifier: Modifi
         modifier.padding(top = 6.dp).paperGlass(haze, Smooth(20.dp), p).height(40.dp).padding(start = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
+        Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
         BarIcon(Icons.ChevronLeft, t("android-misc.drive.reader.prevHit"), p) { r.step(-1) }
         BarIcon(Icons.ChevronRight, t("android-misc.drive.reader.nextHit"), p) { r.step(1) }
         BarIcon(Icons.Close, t("common.close"), p) { r.query = ""; r.hit = -1 }
@@ -428,7 +429,7 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.weight(1f)) { Hairline(r.fraction, p.ink.copy(alpha = 0.14f), p.accent, p.bar) { r.jumpTo(it) } }
-            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.ink, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(40.dp))
+            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.ink, textAlign = TextAlign.End, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.width(40.dp))
         }
         Row {
             Tool(Icons.List, t("android-misc.drive.reader.contents"), p, onChapters)
@@ -546,7 +547,7 @@ private fun openSearch(app: AppState, r: Reading) {
                 if (r.query.isEmpty()) Text(t("android-misc.drive.reader.searchAll"), color = C.subtle, fontSize = 15.sp)
                 BasicTextField(
                     r.query, { r.query = it }, singleLine = true, cursorBrush = SolidColor(C.accent),
-                    textStyle = TextStyle(color = C.ink, fontSize = 15.sp),
+                    textStyle = TextStyle(fontFamily = UiFont, color = C.ink, fontSize = 15.sp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
@@ -619,7 +620,7 @@ private fun Stepper(label: String, value: String, less: Boolean, more: Boolean, 
     SettingRow(label) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepKey(Icons.Minus, t("android-misc.drive.reader.less", "what" to label), less) { step(-1) }
-            Text(value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(48.dp))
+            Text(value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.width(48.dp))
             StepKey(Icons.Plus, t("android-misc.drive.reader.more", "what" to label), more) { step(1) }
         }
     }
