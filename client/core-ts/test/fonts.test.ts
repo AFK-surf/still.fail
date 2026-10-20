@@ -31,6 +31,8 @@ test("each place's face is as chosen, whole as it goes out; text is ui's until c
   assert.equal(faces.ui.files.length, 1);
   assert.match(faces.ui.files[0].url, /\/releases\/fonts\/noto-sans-sc\/2\.004\/var\.ttf\.gz$/);
   assert.equal(faces.ui.bytes, faces.ui.files[0].bytes);
+  // Its preview (the fonts page's characters alone), beside its files.
+  assert.match(faces.ui.preview, /\/releases\/fonts\/noto-sans-sc\/2\.004\/preview-[0-9a-f]{8}\.ttf$/);
   // Text not chosen: as ui.
   assert.deepEqual(faces.text, faces.ui);
   assert.deepEqual([faces.code.id, faces.code.family, faces.code.files, faces.code.css], ["local:Berkeley Mono", "Berkeley Mono", [], undefined]);

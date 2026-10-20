@@ -421,7 +421,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     Screen.Me -> MeScreen(current)
                     Screen.Settings -> fail.still.android.screens.SettingsScreen(current)
                     Screen.Appearance -> fail.still.android.screens.AppearanceScreen()
-                    is Screen.Fonts -> fail.still.android.screens.FontsScreen(screen.place)
+                    Screen.Fonts -> fail.still.android.screens.FontsScreen()
                     Screen.KeptFiles -> fail.still.android.screens.KeptFilesScreen()
                     is Screen.KeptChat -> fail.still.android.screens.KeptChatScreen(screen.station, screen.thread)
                     Screen.Changelog -> fail.still.android.screens.ChangelogScreen()

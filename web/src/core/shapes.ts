@@ -2698,6 +2698,8 @@ export interface FontFace {
 	css?: string;
 	/** What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own). */
 	files?: FontFile[];
+	/** Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched. */
+	preview?: string;
 	/** What `files` come to. */
 	bytes: number;
 }

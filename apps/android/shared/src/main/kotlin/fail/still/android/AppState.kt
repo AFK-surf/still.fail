@@ -126,8 +126,8 @@ sealed interface Screen {
     data object Me : Screen { override val id = "me" }
     /** How this device shows still.fail: its theme, whose pictures lead a chat's row. */
     data object Appearance : Screen { override val id = "appearance" }
-    /** One place's font, from 外观 (screens/Fonts.kt): `place` ui, text or code. */
-    data class Fonts(val place: String) : Screen { override val id = "fonts/$place" }
+    /** The fonts, from 外观 (screens/Fonts.kt): each place's face. */
+    data object Fonts : Screen { override val id = "fonts" }
     /** Files opened in the app and kept on this device, to delete (screens/KeptFiles.kt). */
     data object KeptFiles : Screen { override val id = "kept-files" }
     /** What is kept of a chat (null: files of no chat known), from KeptFiles. */

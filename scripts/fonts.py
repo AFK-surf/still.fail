@@ -4,12 +4,15 @@ published into what the apps take, under fonts/<id>/<version>/ in the releases b
 
 - for pages, font.css and its woff2 files: a Chinese face cut by unicode-range into the slices Google Fonts cuts Noto
   Sans SC into (a page fetches only the slices its characters are in), a Latin one whole;
-- for the Android app, each source file gzipped (<name>.ttf.gz), fetched whole when the face is chosen.
+- for the Android app, each source file gzipped (<name>.ttf.gz), fetched whole when the face is chosen, and a
+  preview (preview-<hash>.ttf, some tens of KB): only the characters the fonts page shows (its words in the catalogs,
+  the faces' names, ASCII), for each face to be shown in itself before it is fetched.
 
-  python3 scripts/fonts.py [--put]     (needs fontTools and brotli: pip install fonttools brotli)
+  python3 scripts/fonts.py [--put [--previews]]     (needs fontTools and brotli: pip install fonttools brotli)
 
 Prints the catalogue's files (sizes and hashes) to put in fonts.ts. --put puts what it made in the bucket with wrangler
-(cloud/'s, logged in). A face's files never change once put: a new version of it is a new <version>."""
+(cloud/'s, logged in); --previews only the previews (the pages' words changed: each is named by its hash, the
+rest stays). A face's files never change once put: a new version of it is a new <version>."""
 import concurrent.futures
 import gzip
 import hashlib
@@ -143,6 +146,32 @@ def cmap_of(ttf: Path) -> set[int]:
     return set(TTFont(str(ttf), lazy=True).getBestCmap().keys())
 
 
+# What the fonts pages draw in a face before it is fetched: ASCII, the faces' names and the pages' own words.
+NAMES = "思源黑体思源宋体霞鹜文楷"
+
+
+def preview_text() -> str:
+    words = []
+    for lang in ("zh", "en"):
+        catalog = json.loads((ROOT / f"client/i18n/catalog/{lang}/web-pages.json").read_text())
+        words += [v for k, v in catalog.items() if k.startswith("web-pages.appearance.fonts.")]
+    return "".join(chr(c) for c in range(0x20, 0x7F)) + NAMES + "".join(words) + "，。：、·…“”‘’（）"
+
+
+def preview(ttf: Path, base: Path) -> tuple[str, int]:
+    """The face's preview file: its glyphs for preview_text() alone, as TTF (what Android loads)."""
+    text = preview_text()
+    tmp = ttf.with_suffix(".preview.ttf")
+    r = subprocess.run([sys.executable, "-m", "fontTools.subset", str(ttf), f"--output-file={tmp}", "--layout-features=*", "--no-hinting",
+                        "--name-IDs=*", f"--text={text}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"preview {ttf}: {r.stderr}")
+    data = tmp.read_bytes()
+    name = f"preview-{hashlib.sha256(data).hexdigest()[:8]}.ttf"
+    (base / name).write_bytes(data)
+    return name, len(data)
+
+
 def make(face) -> dict:
     fid, version, family, sliced, sources = face
     base = OUT / "fonts" / fid / version
@@ -165,6 +194,8 @@ def make(face) -> dict:
         css_weight = axis or str(weight)
         face_css = lambda src, rng: "@font-face{font-family:\"%s\";font-style:normal;font-weight:%s;font-display:swap;src:url(%s) format(\"woff2\")%s}" % (
             family, css_weight, src, f";unicode-range:{rng}" if rng else "")
+        if "--previews" in sys.argv:
+            continue
         if not sliced:
             out = base / f"{name}.woff2"
             subset(ttf, out, None)
@@ -186,13 +217,18 @@ def make(face) -> dict:
         for (file, rng), ok in zip(jobs, done):
             if ok:
                 css.append(face_css(file, rng))
-    (base / "font.css").write_text("\n".join(css) + "\n")
-    return {"id": fid, "version": version, "family": family, "files": files}
+    if css:
+        (base / "font.css").write_text("\n".join(css) + "\n")
+    # The preview of the regular (the first source).
+    shown, size = preview(tmp / ("var.ttf" if sources[0][0] == "var" else f"{sources[0][0]}.ttf"), base)
+    return {"id": fid, "version": version, "family": family, "files": files, "preview": shown, "previewBytes": size}
 
 
 def put() -> None:
     names = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*") if p.is_file())
-    types = {".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".gz": "application/gzip"}
+    if "--previews" in sys.argv:
+        names = [n for n in names if n.rsplit("/", 1)[-1].startswith("preview-")]
+    types = {".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".gz": "application/gzip", ".ttf": "font/ttf"}
 
     def one(name: str) -> str:
         t = types[Path(name).suffix]
