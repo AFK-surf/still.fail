@@ -7,8 +7,10 @@
 // back, and in the background once a page reads it SHOWN_MS after the last look.
 //
 // The helper's window asks for a grant on this Mac, once: not again (nor brought forward) while it is up asking for it,
-// nor for AGAIN_MS after it was shown for it, so a page read again, a client retrying or a person refreshing never puts
-// it up again; whoever asks then is told it was closed a moment ago.
+// nor for AGAIN_MS after it was shown for it, so an agent asking again, the drive retrying or a person refreshing never
+// puts it up again; whoever asks then is told it was closed a moment ago. A person's own ask (the station's page: a
+// client retrying it is answered once, by its key) puts it up again however lately it was shown: 2026-10-20 a person
+// closed it, granted nothing, tapped Request again and was told to come back in a few minutes.
 import { execFile } from "node:child_process";
 import { lstatSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -175,15 +177,15 @@ export class HelperGrants {
   }
 
   /// The helper's window asking for `grant` on this Mac (in `words`; `paths` a disk's folder for its grant), unless it
-  /// is up asking for it or was shown for it within AGAIN_MS.
-  async show(grant: GrantId, words: Record<string, unknown>, paths?: Record<string, string>): Promise<WindowState> {
+  /// is up asking for it or was shown for it within AGAIN_MS (`again`: a person's own ask, shown however lately it was).
+  async show(grant: GrantId, words: Record<string, unknown>, paths?: Record<string, string>, again = false): Promise<WindowState> {
     const status: HelperStatus | null = await this.helper.request({ op: "status" }).catch(() => null);
     if (status !== null) this.#learn(status);
     // Up already asking for it: left as it is, not brought forward.
     if (status?.asking === true && Array.isArray(status.asked) && status.asked.includes(grant)) return "up";
     // Shown for it a moment ago: not again (whatever asks again), until AGAIN_MS have gone by.
     const last = this.#asked.get(grant);
-    if (last !== undefined && this.#now() - last < AGAIN_MS) return status === null ? "up" : "closed";
+    if (!again && last !== undefined && this.#now() - last < AGAIN_MS) return status === null ? "up" : "closed";
     this.#asked.set(grant, this.#now());
     try {
       await this.helper.request({ op: "permissions.show", words, grants: [grant], ...(paths ? { paths } : {}) });
@@ -208,11 +210,12 @@ export class HelperGrants {
 
   /// A person (or an agent) asks for `grant`: the window up for it, unless it is granted already (`granted`); whether
   /// the screen can be seen and driven (the person can then click in the window from wherever they are). A disk's grant
-  /// needs a disk of its kind mounted (macOS asks as the app opens one): refused (`GrantRefused`) when none is.
-  async request(grant: GrantId, words: Record<string, unknown>): Promise<{ window: WindowState | "granted"; screen: boolean }> {
+  /// needs a disk of its kind mounted (macOS asks as the app opens one): refused (`GrantRefused`) when none is. `again`:
+  /// a person's own ask, shown however lately it was.
+  async request(grant: GrantId, words: Record<string, unknown>, again = false): Promise<{ window: WindowState | "granted"; screen: boolean }> {
     if (!this.#folders && !SCREEN.includes(grant) && grant !== "localNetwork") throw new GrantRefused("station.permissions.unknown");
     await this.refresh(true);
-    if (grant === "localNetwork") return { window: this.#settings(), screen: this.#status?.capture === true && this.#status.control === true };
+    if (grant === "localNetwork") return { window: this.#settings(again), screen: this.#status?.capture === true && this.#status.control === true };
     const s = this.#status;
     if (s === null) throw new GrantRefused("station.permissions.noHelper");
     const screen = () => this.#status?.capture === true && this.#status.control === true;
@@ -223,16 +226,16 @@ export class HelperGrants {
       if (disk === null) throw new GrantRefused(grant === "removable" ? "station.permissions.noDisk" : "station.permissions.noNetworkDisk");
       paths = { [grant]: disk };
     }
-    const window = await this.show(grant, words, paths);
+    const window = await this.show(grant, words, paths, again);
     return { window, screen: screen() };
   }
 
   /// The LAN not reached: System Settings' Local Network list up on the Mac for it, once in a while as the helper's
-  /// window is (`granted` when it is reached, `closed` within AGAIN_MS of the last time).
-  #settings(): WindowState | "granted" {
+  /// window is (`granted` when it is reached, `closed` within AGAIN_MS of the last time unless a person asks `again`).
+  #settings(again: boolean): WindowState | "granted" {
     if (this.#lan === "granted") return "granted";
     const last = this.#asked.get("localNetwork");
-    if (last !== undefined && this.#now() - last < AGAIN_MS) return "closed";
+    if (!again && last !== undefined && this.#now() - last < AGAIN_MS) return "closed";
     this.#asked.set("localNetwork", this.#now());
     this.#open(LOCAL_NETWORK_SETTINGS);
     return "up";

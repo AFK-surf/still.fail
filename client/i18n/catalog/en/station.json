@@ -442,7 +442,6 @@
   "station.drive.helperNeeded": "This Mac hasn't let still.fail Helper open “{folder}” yet. On that Mac, allow it in System Settings → Privacy & Security → Files and Folders.",
   "station.permissions.unknown": "This permission can't be requested on this station",
   "station.permissions.noHelper": "still.fail Helper isn't responding; try again later",
-  "station.permissions.closed": "The window for {grant} was closed a moment ago; request it again in a few minutes",
   "station.permissions.none": "Couldn't show the permission window on that Mac",
   "station.permissions.noDisk": "No external disk is connected to that Mac; connect one, then request again",
   "station.permissions.noNetworkDisk": "No network disk is mounted on that Mac; mount one, then request again",
