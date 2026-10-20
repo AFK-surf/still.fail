@@ -80,11 +80,13 @@ test "near the top the page before comes in, and what is in view stays where it 
 test "a reference to another chat is its chip, and opens that chat" {
   let t = chat_tester("chat")
   t.move(195.0, 400.0)
+  let mut scrolled = -1.0
   for _ in 0..<4 {
     if t.find("性能数据放在") is Some(_) {
       break
     }
     t.wheel(195.0, 400.0, -400.0)
+    scrolled = t.time()
   }
   assert_true(t.find("@首页的列表改成按天分组") is Some(_))
   t.tap_run("首页的列表改成按天分组")
@@ -98,6 +100,10 @@ test "a reference to another chat is its chip, and opens that chat" {
   }
   // the chat pushed in
   t.run_for(@ui.nav_push_ms)
+  // and the scroll bar of the list under it gone: shown since its last wheel, then faded out
+  if scrolled >= 0.0 {
+    t.run_for(scrolled + @ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms - t.time())
+  }
   t.assert_idle()
 }
 
