@@ -1,6 +1,5 @@
 // One screenshot of the browser build, at a declared moment of its run: [QUERY=k=v] node web-shot.mjs out.png MS
-// (MS: the time on the run's own clock the picture is of, web/host.js's shot_at: frames 1/60 s apart from 0; `rest`:
-// the first frame that left nothing that ends to come)
+// (MS: the time on the run's own clock the picture is of, web/host.js's shot_at: frames 1/60 s apart from 0)
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -21,8 +20,8 @@ const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gestur
 const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })).newPage();
 // QUERY: more of the page's query (MBUI_SCREEN=kit: the demo's kit screen)
 fs.rmSync(process.argv[2], { force: true });
-const at = process.argv[3] === 'rest' ? 'rest' : Number(process.argv[3]);
-if (!(at === 'rest' || at >= 0)) { console.log('web-shot: the moment the picture is of (ms on the run\'s clock) is its second argument'); process.exit(2); }
+const at = Number(process.argv[3]);
+if (!(at >= 0)) { console.log('web-shot: the moment the picture is of (ms on the run\'s clock) is its second argument'); process.exit(2); }
 await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1&shot_at=${at}${process.env.QUERY ? '&' + process.env.QUERY : ''}`);
 // the frame at that moment drawn (window.__shot, web/host.js), or the app ended before it (window.__done: a run that
 // fails ends itself, its words on the log); SHOT_DEADLINE (60000 ms) is what a run that hangs is given, not a wait

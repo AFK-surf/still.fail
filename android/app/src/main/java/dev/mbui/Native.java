@@ -44,9 +44,4 @@ final class Native {
     static native void ownClock();
     /** How many of the app's asks of the host are not answered yet, as its last frame said (mb_host_frame_awaiting). */
     static native int awaiting();
-    /** Whether its last frame left nothing that ends to come (@ui's Ctx::at_rest: mb_host_frame_awaiting), and nothing
-     * is posted that no frame took (post.h). */
-    static native boolean atRest();
-    /** What kept its last frame from its rest, in words ("" when nothing). */
-    static native String restWhy();
 }

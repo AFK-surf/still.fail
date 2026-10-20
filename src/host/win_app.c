@@ -719,10 +719,9 @@ int32_t mb_host_set_outside(mb_outside_fn f) {
 }
 // How many of the app's asks are not answered yet, and what they are, as the frame just built left it
 // (host_native.mbt's frame_awaiting): nothing here waits on it yet.
-void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what, moonbit_string_t unrest) {
+void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
   (void)awaiting;
   (void)what;
-  (void)unrest;
 }
 
 int32_t mb_host_bench_mode(void) {

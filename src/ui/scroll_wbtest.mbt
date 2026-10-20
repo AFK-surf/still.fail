@@ -186,19 +186,19 @@ test "Android: a fling follows Compose's spline frame by frame, from the velocit
   // the spline is not quite 0)
   approx(t.list_offset(), start + spline_at(0.0, dur).0 * dist, 1.0e-9)
   let t0 = t.time()
-  let mut frames = 0
-  while t.list_moving() && frames < 400 {
+  // each of the display's frames to where its duration is over (in whole ms)
+  let end = t0 + dur.ceil()
+  while t.time() < end {
     t.frame()
-    frames = frames + 1
     // (in whole ms played, as Compose's)
     let played = (t.time() - t0).floor()
     let want = spline_at(played, dur).0 * dist
     approx(t.list_offset() - start, want, 0.01)
   }
   approx(t.list_offset() - start, dist, 0.01)
-  // it ends at the frame its duration is over (in whole ms): the display's at or past it
-  assert_true(frames > 0)
-  assert_eq(t.time(), t.display_frame(t0 + dur.ceil()))
+  // and it is over there: the frame at or past it the first that does not move it
+  assert_eq(t.time(), t.display_frame(end))
+  assert_true(!t.list_moving())
 }
 
 ///|
@@ -285,18 +285,26 @@ test "Android: scrolling back first undoes the stretch" {
 test "Android: a fling into the end stretches there and comes back" {
   let t = Tester::new(rows_view(40), platform=2)
   swipe(t, 700.0, -24.0, 12)
+  // (the frame that takes the finger's lift sets the fling out)
+  t.draw()
   let mut stretched = 0.0
-  let mut frames = 0
-  while frames < 600 {
-    t.frame()
-    frames = frames + 1
-    if t.list_overscroll() < stretched {
-      stretched = t.list_overscroll()
+  // each of the display's frames to `end`, the stretch at its deepest kept
+  let frames_to = fn(end : Double) {
+    // (a motion told and not started yet has no end to run to: a test that says otherwise is wrong)
+    if end > 1.0e300 {
+      abort("the list's motion has not started")
     }
-    if !t.list_moving() {
-      break
+    while t.time() < end {
+      t.frame()
+      if t.list_overscroll() < stretched {
+        stretched = t.list_overscroll()
+      }
     }
   }
+  // the fling, to the end it declares; then the stretch hitting the end set off, and its way back, to theirs
+  frames_to(t.rest_of("a list"))
+  frames_to(t.rest_of("a list"))
+  assert_true(!t.list_moving())
   // 40 rows of 50 in a view 844 high
   approx(t.list_offset(), 40.0 * 50.0 - 844.0, 1.0e-6)
   assert_true(stretched < -0.05)

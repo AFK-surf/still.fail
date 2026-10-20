@@ -52,6 +52,7 @@
     "script-wait": {},
     "page-settle": {},
     "frame-wait": {},
+    "at-rest-wait": {},
     "frame-count": {},
     "literal-time": {},
     "stable-mode": {},
@@ -155,6 +156,7 @@
     "frame-wait": {
       "src/ui/fx_test.mbt": 1
     },
+    "at-rest-wait": {},
     "frame-count": {},
     "literal-time": {},
     "stable-mode": {},

@@ -1298,28 +1298,15 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint 
   if (outside_cb) outside_cb(kind, id, state);
 }
 
-// How many of the app's asks are not answered yet, and what they are, as the frame just built left it, and whether it
-// left nothing that ends to come (host_native.mbt's frame_awaiting): a run to a declared moment keeps its clock still
-// while any is, a run to its rest is pictured at the first frame at rest (MBView's shotFrame, Native.awaiting,
-// Native.atRest).
+// How many of the app's asks are not answered yet, and what they are, as the frame just built left it
+// (host_native.mbt's frame_awaiting): a run to a declared moment keeps its clock still while any is (MBView's
+// shotFrame, Native.awaiting).
 static int awaiting_n;
-static jchar unrest_buf[1024];  // what kept it from its rest ("": nothing), cut to the buffer
-static int unrest_len;
-void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what, moonbit_string_t unrest) {
+void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
   (void)what;
   awaiting_n = awaiting;
-  int n = Moonbit_array_length(unrest);
-  unrest_len = n < 1024 ? n : 1024;
-  memcpy(unrest_buf, unrest, unrest_len * sizeof(jchar));
 }
 JNIEXPORT jint JNICALL Java_dev_mbui_Native_awaiting(JNIEnv *env, jclass c) { return awaiting_n; }
-JNIEXPORT jboolean JNICALL Java_dev_mbui_Native_atRest(JNIEnv *env, jclass c) {
-  return unrest_len == 0 && !mb_post_pending() ? JNI_TRUE : JNI_FALSE;
-}
-JNIEXPORT jstring JNICALL Java_dev_mbui_Native_restWhy(JNIEnv *env, jclass c) {
-  if (unrest_len == 0) return (*env)->NewStringUTF(env, mb_post_pending() ? "a message posted that no frame took" : "");
-  return (*env)->NewString(env, unrest_buf, unrest_len);
-}
 
 int32_t mb_host_bench_mode(void) {
   JNIEnv *env = env_();

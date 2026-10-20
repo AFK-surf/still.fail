@@ -22,11 +22,6 @@
 #   scripts/host_contract.sh HOST site          a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK,
 #        src/kitdemo/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
-#   scripts/host_contract.sh HOST rest          (android, mac) kitdemo's foundation page pictured at its rest (a run
-#        on its own clock: Android's shot_at=rest, mac's MBUI_SHOT_MS=rest; @ui's Ctx::at_rest) and at a declared
-#        moment (1000 ms on that clock): both taken ("SHOT n t"), both of the page, and the same to the byte in the
-#        window's rows (out/host/HOST/rest-*.png; a phone's status bar, its clock, is the system's), or it fails: the
-#        moment the app's rest is found at is not too early
 #   scripts/host_contract.sh HOST kinds         the kinds of what the host tells done (outside) named as
 #        src/ui/hostcall.mbt's outside_kinds numbers them, none told as a bare number (scripts/outside_kinds.py)
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
@@ -498,42 +493,7 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
       echo "marks contract ($H): the host's PNG is not $REF.png (this run's artifact has it: $O/marks.png)"
       exit 1
     fi ;;
-  rest)
-    case $H in mac|android) ;; *) echo "rest contract: not on $H yet (android, mac)"; exit 1 ;; esac
-    # (the moment a picture at a declared time is taken at: past what the page sets moving as it opens; the foundation
-    # page, where nothing turns: the controls page's progress bar that runs on is at its clock's turn, other at each
-    # moment)
-    at_ms=1000
-    REST_PAGE=foundation
-    grep -q "\"$REST_PAGE\" =>" src/kitdemo/main.mbt || { echo "rest contract: kitdemo has no page $REST_PAGE"; exit 1; }
-    rm -f $O/rest-*.png $O/rest-*.log
-    for m in $at_ms rest; do
-      case $H in
-        mac)
-          MBUI_BENCH=-1 MBUI_WIN=960x720 MBUI_SCREEN=$REST_PAGE MBUI_SCRIPT=shot MBUI_SHOT_MS=$m MBUI_SHOT_NAME=rest-$m \
-            MBUI_SHOT_DIR=$PWD/$O ./_build/native/release/build/kitdemo/kitdemo.exe > $O/rest-$m.log 2>&1 || true ;;
-        android)
-          $ADB logcat -c
-          EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 SHOT_AT=$m ENV="MBUI_SCREEN=$REST_PAGE" bash scripts/android.sh run
-          # (said once it is on the screen: MBView's shotFrame)
-          $ADB logcat -v raw -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "SHOT [0-9]+ [0-9]|SHOT FAIL|FATAL EXCEPTION|Fatal signal" | tr -d '\r' > $O/rest-$m.log
-          # (and the app's window the one shown, the system's splash gone: android.sh shown)
-          grep -aq "^SHOT [0-9]" $O/rest-$m.log && EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown \
-            && $ADB exec-out screencap -p > $O/rest-$m.png ;;
-      esac
-      grep -aE "SHOT" $O/rest-$m.log | tr -d '\r' | head -2
-      if ! grep -aqE "^SHOT [0-9]+ [0-9]" $O/rest-$m.log || [ ! -s $O/rest-$m.png ]; then
-        echo "rest contract ($H): no picture at $m"; tail -20 $O/rest-$m.log; exit 1
-      fi
-    done
-    # (of the page: two wrong pictures, a splash's or "No page", would be the same to the byte too)
-    if "$PY" scripts/gallery_shot.py $O/rest-$at_ms.png $O/rest-rest.png; then
-      echo "rest contract ($H): the picture at its rest is the one at $at_ms ms"
-    else
-      echo "rest contract ($H): the picture at its rest is not the one at $at_ms ms ($O/rest-rest.png, rest-$at_ms.png)"
-      exit 1
-    fi ;;
   kinds)
     "$PY" scripts/outside_kinds.py $H ;;
-  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, rest, kinds; ios: free, done)" >&2; exit 1 ;;
+  *) echo "host_contract.sh: no command $CMD (build, record, text, marks, kinds; ios: free, done)" >&2; exit 1 ;;
 esac

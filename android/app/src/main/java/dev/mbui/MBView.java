@@ -80,8 +80,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     // MS; that frame drawn, no other ("SHOT n t" on the log: adb's screencap takes it), and a frame the system asks
     // for after it drawn at the same moment. The clock stands still while the app awaits the host (an image decoding:
     // what its last frame said), so the picture is of the app at MS on its own clock, however fast the machine is.
-    // shot_at=rest (Host.shotRest): at the first frame that left nothing that ends to come (@ui's Ctx::at_rest), a
-    // failure ("SHOT FAIL") when none has by a minute on its clock.
+    // Never "once the app is at rest": that is settling by another name (a moment is declared, or a drive waits for the
+    // page's own named event).
     private double shotClock;
     private int shotFrames;
     private volatile boolean shotTaken;
@@ -96,14 +96,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // the clock stands still; the host's answer asks for the next frame
             return;
         }
-        if (Host.shotRest && !Native.atRest() && (t >= 60000 || Native.restWhy().startsWith("never: "))) {
-            shotTaken = true;
-            String why = Native.restWhy();
-            Host.log("SHOT FAIL: " + (why.startsWith("never: ") ? "at rest, but " + why.substring(7)
-                    : "not at rest after 60 s on its clock: " + why));
-            return;
-        }
-        if (Host.shotRest ? Native.atRest() : t >= Host.shotAt) {
+        if (t >= Host.shotAt) {
             shotTaken = true;
             // said once it is on the screen: swapped as this returns, taken by the compositor at the next vsync,
             // shown by the one after

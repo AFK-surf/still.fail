@@ -162,6 +162,79 @@ class Rules(unittest.TestCase):
         }
         found(self, good, "frame-wait", 0)
 
+    def test_at_rest_wait(self):
+        bad = {
+            # waited on: a loop, a condition, an until; a drive's rest step, in a test's text and in a flow
+            "src/app/view_test.mbt": """
+                test "saves" {
+                  let t = @ui.Tester::new(fn(c) { view(c) })
+                  while !t.at_rest() {
+                    t.frame()
+                  }
+                  if t.at_rest() { t.tap(1.0, 2.0) }
+                  t.drive("tap save\\nrest\\nexit") |> ignore
+                }
+                """,
+            # a tap's target waited on until it holds still from one frame to the next
+            "src/ui/drive.mbt": """
+                fn drive_tap(d : Driver, x : Double, y : Double) -> Unit {
+                  if !d.held_still(x, y) {
+                    return
+                  }
+                  press(x, y)
+                }
+                """,
+            "flows/01-save.drive": "tap save\nrest\nexit\n",
+            # a picture at the app's rest
+            "scripts/shots.sh": "MBUI_SHOT_MS=rest ./app\nnode web-shot.mjs out.png && open 'http://x/?shot_at=rest'\n",
+            # an end run on until nothing moves: to what moves' end, again; the frame left owed drawn, a timer's
+            # time, again (each loop once)
+            "src/app/flow.mbt": """
+                fn Flow::end(self : Flow) -> Unit {
+                  while true {
+                    while self.t.rest_of("") > self.t.time() {
+                      self.t.run_for(self.t.rest_of("") - self.t.time())
+                    }
+                    self.t.draw()
+                    match self.t.next_wake() {
+                      Some((at, _)) => self.t.run_for(at - self.t.time())
+                      None => break
+                    }
+                  }
+                  self.t.assert_idle()
+                }
+                """,
+        }
+        found(self, bad, "at-rest-wait", 9)
+        good = {
+            # asserted, with what keeps it from it said; a word "rest" that is no step; a declared moment
+            "src/app/view_test.mbt": """
+                test "saves" {
+                  let t = @ui.Tester::new(fn(c) { view(c) })
+                  t.run_for(@kit.dialog_in)
+                  assert_true(t.at_rest(), msg=t.rest_why())
+                  assert_false(t.at_rest())
+                  t.drive("tap rest of the list\\nexit") |> ignore
+                }
+                """,
+            "flows/01-save.drive": "tap the rest\nuntil saved\nexit\n",
+            "scripts/shots.sh": "MBUI_SHOT_MS=1000 ./app\n",
+            # the frame core's own reading of it as a frame ends
+            "src/ui/app.mbt": "fn on_frame(c : Ctx) -> Unit {\n  c.frame_rest = c.at_rest()\n}\n",
+            # one declared end run to; what moves read where nothing runs the clock; an end a declared time
+            "src/app/flow.mbt": """
+                fn Flow::end(self : Flow) -> Unit {
+                  self.t.run_to(@ui.nav_rest())
+                  for m in self.t.moving() {
+                    self.said.push(m)
+                  }
+                  self.t.run_for(@kit.toast_ms)
+                  self.t.assert_idle()
+                }
+                """,
+        }
+        found(self, good, "at-rest-wait", 0)
+
     def test_settle(self):
         bad = {
             "src/app/view_test.mbt": """

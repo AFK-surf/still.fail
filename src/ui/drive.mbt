@@ -31,15 +31,15 @@
 //   wheel DY                    the list under the middle of the window scrolled by DY
 //   wheelat DY TEXT             the list under the lowest TEXT scrolled by DY, a mouse wheel's notches (eased in)
 //   move X Y                    the pointer moved there, no button down (negative: from the right, the bottom)
-//   hover TEXT                  the pointer moved onto the lowest TEXT, once it holds still
-//   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, once it holds still
+//   hover TEXT                  the pointer moved onto the lowest TEXT, where the frame has it
+//   rightclick TEXT             a secondary click (a context menu's) on the lowest TEXT, where the frame has it
 //   key NAME                    a key, with what is held before it: esc, tab, enter, space, up, down, left, right,
 //                               home, end, pageup, pagedown, backspace, a character; cmd+ (⌘ on macOS, Ctrl
 //                               elsewhere), ctrl+, alt+, shift+ (cmd+k, shift+enter, alt+down)
 //   resize W H                  the window's content resized to W by H (the host's own window, where it can)
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
-//   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
+//   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
 //   shot NAME                   the window's picture, as the frame just drawn, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
 //                               "SHOT NAME" is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
 //   noticed TEXT                one of the app's notifications (the system's, @host.notice_show) holds TEXT in its
@@ -70,19 +70,16 @@
 //                               its words "ok" (or none): done; else what went wrong, and the run fails saying it.
 //                               Where the host watches no such directory (a Tester's, the web's, iOS's), it fails
 //                               at once
-//   rest                        the app at rest: a frame drawn since the step began left nothing that ends to come
-//                               (no motion short of its end, no wake owed, nothing awaited from outside or running:
-//                               Ctx::at_rest), within the timeout; what a run's end waits for of the app's own, in
-//                               place of a pause as long as one run's end took
 //   now STEP                    STEP (as written before steps waited for nothing: kept, the same as STEP)
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
-// frame just drawn has them, once they hold still from one frame to the next. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready, outside_done, shown, done, rest), within the timeout. The run asks for
-// no frame of its own: what it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake
-// at that time.
-// `wait` stays a pause in real time, for what is outside the app (a command beside the run, the other device, the
-// station) that no `until` can see, and that the runner does not say it has done (`done`).
+// frame just drawn has them, that frame, never waiting for them to hold still. What comes later than a frame is waited
+// for by name (until, gone, answered, decoded, ready, outside_done, shown, done), within the timeout. Nothing waits for
+// the app to be at rest (settled by another name): that is asserted of a run, never waited on (a Tester's
+// assert_true(t.at_rest())). The run asks for no frame of its own: what it waits for in time (a timeout, a hold let
+// go, a `wait`, a shot another takes) is a wake at that time. `wait` stays a pause in real time, for what is outside
+// the app (a command beside the run, the other device, the station) that no `until` can see, and that the runner does
+// not say it has done (`done`).
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
 
 ///|
@@ -94,9 +91,6 @@ priv struct Driver {
   mut release_at : Double
   mut rx : Double
   mut ry : Double
-  // where a tap's target was last frame: it is tapped once it holds still (not while a list or a page still moves it)
-  mut seen_x : Double
-  mut seen_y : Double
   // a drag under way (drag, dragon): where it went down, how far it goes, since when, over how long (0: none)
   mut gx : Double
   mut gy : Double
@@ -166,7 +160,7 @@ fn drive_init() -> Unit {
 ///|
 /// The moments of a script's line a run's tracer is told of (@ui.trace_steps).
 pub(all) enum StepMoment {
-  /// the line begun, before anything of it is done (a tap still waiting for its words to hold still)
+  /// the line begun, before anything of it is done (a tap still waiting for its words to be on screen)
   Began
   /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
   Acted
@@ -180,8 +174,8 @@ let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref::new(None)
 ///|
 /// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as written (`tap 发消息`, `until …`): as it
 /// begins (Began), before anything of it is done, and, a line that acts, again as its input is handed over (Acted),
-/// after the frames it waited for its words to hold still: what a run keeps beside its other messages (its own clock
-/// added), for a replay to know when each step came and when its input did.
+/// in the frame its words are on screen: what a run keeps beside its other messages (its own clock added), for a
+/// replay to know when each step came and when its input did.
 pub fn trace_steps(step : (String, StepMoment) -> Unit) -> Unit {
   steps_tracer.val = Some(step)
 }
@@ -228,8 +222,6 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     release_at: -1.0,
     rx: 0.0,
     ry: 0.0,
-    seen_x: -1.0,
-    seen_y: -1.0,
     gx: 0.0,
     gy: 0.0,
     gdx: 0.0,
@@ -572,15 +564,6 @@ fn topmost(at : Array[(Double, Double)]) -> (Double, Double) {
 }
 
 ///|
-/// Whether what is to be tapped is where it was last frame (else noted, for the next).
-fn Driver::still(self : Driver, x : Double, y : Double) -> Bool {
-  let same = (x - self.seen_x).abs() < 0.5 && (y - self.seen_y).abs() < 0.5
-  self.seen_x = x
-  self.seen_y = y
-  same
-}
-
-///|
 fn press(x : Double, y : Double, up : Bool) -> Unit {
   on_pointer(0, x, y, 0)
   if up {
@@ -611,8 +594,8 @@ fn drive_frame(c : Ctx) -> Unit {
     if line.has_prefix("wait ") {
       soon(d.since + number(line.unsafe_substring(start=5, end=line.length())))
     }
-    // what it saw end wants a frame drawn after it; a target seen once, its next place to see it hold still
-    if d.seen_frame >= 0 || d.seen_x >= 0.0 {
+    // what it saw end wants a frame drawn after it
+    if d.seen_frame >= 0 {
       soon(now)
     }
   }
@@ -637,8 +620,6 @@ fn drive_steps(c : Ctx) -> Unit {
     d.release_at = -1.0
     d.at = d.at + 1
     d.since = -1.0
-    d.seen_x = -1.0
-    d.seen_y = -1.0
     return
   }
   if d.gms > 0.0 {
@@ -652,8 +633,6 @@ fn drive_steps(c : Ctx) -> Unit {
       d.gms = 0.0
       d.at = d.at + 1
       d.since = -1.0
-      d.seen_x = -1.0
-      d.seen_y = -1.0
     }
     return
   }
@@ -682,8 +661,6 @@ fn drive_steps(c : Ctx) -> Unit {
     let next = fn() {
       d.at = d.at + 1
       d.since = -1.0
-      d.seen_x = -1.0
-      d.seen_y = -1.0
       d.shot_at = -1.0
     }
     // a step that acted: its input's frames come next; what it set off from outside is counted from here
@@ -752,21 +729,6 @@ fn drive_steps(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms")
-          return
-        } else {
-          return
-        }
-      }
-      "rest" => {
-        // (a frame drawn since it began: what the step before set off is in it)
-        if d.seen_frame < 0 {
-          d.seen_frame = c.frame_no
-        }
-        if c.frame_no > d.seen_frame && c.frame_rest {
-          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
-          next()
-        } else if waited > d.timeout {
-          drive_fail(c, d, "not at rest after \{d.timeout.to_int()} ms: \{c.rest_why()}")
           return
         } else {
           return
@@ -888,9 +850,6 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         let (x, y) = if cmd == "tap1" { topmost(at) } else { lowest(at) }
-        if !d.still(x, y) {
-          return
-        }
         h_log("DRIVE \{cmd} \{arg} at \{x.to_int()},\{y.to_int()}")
         press(x, y, true)
         acted()
@@ -921,9 +880,6 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         let (x, y) = lowest(at)
-        if !d.still(x, y) {
-          return
-        }
         tell_step(d.steps[d.at], Acted)
         press(x, y, false)
         d.rx = x
@@ -959,9 +915,6 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
           let (x, y) = lowest(at)
-          if !d.still(x, y) {
-            return
-          }
           (x, y, words[0:3].to_owned())
         }
         d.gx = x
@@ -1084,9 +1037,6 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         }
         let (x, y) = lowest(at)
-        if !d.still(x, y) {
-          return
-        }
         h_log("DRIVE \{cmd} \{what} at \{x.to_int()},\{y.to_int()}")
         match cmd {
           "hover" => on_pointer(1, x, y, 0)

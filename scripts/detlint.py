@@ -28,6 +28,14 @@ The rules (see RULES below for each one's words):
     frame-wait     a fiber waits for the next frame (@effect.next_frame()) outside the runtime itself: an animation
                    waits until the moment its run ends, a step until its time or its event, never a frame (how many
                    frames come is the display's)
+    at-rest-wait   anything goes on until the app is at rest (settled by another name): at_rest() read anywhere but in
+                   an assertion's arguments (assert_true(t.at_rest())), a drive's `rest` step (a flow's, a script's,
+                   a test's drive text), a picture taken at the app's rest (MBUI_SHOT_MS=rest, shot_at=rest,
+                   SHOT_AT=rest), a target waited on until it holds still from one frame to the next (held_still,
+                   holds_still, hold_still, steady, still_at), a loop that runs the clock on while something still
+                   moves or is still to come (rest_of, moving, next_wake read in it: an end's "on to what moves' end,
+                   draw, again"): a step waits for its own named thing and acts where this frame has its target, an end
+                   runs a declared time and asserts idle, a picture is of a declared moment
     frame-count    a test runs a fixed number of frames (for _ in 0..<N { t.frame() })
     literal-time   a time given as a bare number (run_for(347), wake_in(500.0), advance(16.0), frame(ms=33.0),
                    wake_at(c.now() + 500.0)): a time names what it is (an animation's, a timer's declared length)
@@ -240,6 +248,14 @@ class MbtFile:
             for k in range(it.start, min(it.end + 1, len(self.toks))):
                 self.item_of[k] = it
         self.calls = self._calls()
+        self._assert_args = None
+
+    def assert_args(self):
+        """The token indices inside each assertion's arguments (assert_true(…), …): sets, one an assertion."""
+        if self._assert_args is None:
+            self._assert_args = [set(i for _, a in c.args for i in a) for c in self.calls
+                                 if c.name in ASSERTS and not c.is_def]
+        return self._assert_args
 
     def _items(self):
         """Top-level items: each from a keyword at the start of a line, outside any bracket (after pub, priv, async,
@@ -540,6 +556,10 @@ RULES = {
                    "time, or wait for the named thing",
     "frame-wait": "a fiber waits for the next frame: wait until the moment (an animation's declared end, a timer) or the "
                   "event, not a frame: how many frames come is the display's",
+    "at-rest-wait": "goes on until the app is at rest (settled by another name): at_rest is asserted (assert_true("
+                    "t.at_rest())), never waited on, nor run on in a loop while something moves or is still to come; a "
+                    "step waits for its own named thing, an end runs a declared time and asserts idle, a picture is of "
+                    "a declared moment",
     "frame-count": "a test runs a fixed number of frames: give the inputs and run_for a declared time",
     "literal-time": "a time given as a bare number: name what it is (an animation's or a timer's declared length)",
     "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time "
@@ -571,6 +591,16 @@ RETIRED = {"frames_until", "animating", "animating_until", "run_animations"}
 # kept inside the framework, given up for tests and apps: run_for(motion_end() - time()) is run_animations again
 RETIRED_OUTSIDE = {"motion_end"}
 SETTLE = {"settle", "settled"}
+# a target's place waited on until it holds still from frame to frame (a tap's, a drag's): settling by another name
+# (by its names: `still` is not one, Ctx::still is the reduced motion's)
+HOLD_STILL = {"held_still", "holds_still", "hold_still", "steady", "still_at"}
+# what still moves or is still to come, read (where a motion ends, what moves, the next timer): in a loop that runs the
+# clock on, a run "until it stops" (an end's "while something moves, on to its end, draw, again"): settling by another
+# name. A step runs to one declared end (run_to(@ui.nav_rest())), an end a declared time, then assert_idle.
+MOVE_READS = {"rest_of", "moving", "moving_now", "next_wake", "motion_end", "rest_why", "list_moving"}
+CLOCK_RUNS = {"run_for", "run_to", "run_to_rest", "frame", "frame_at", "draw", "draw_owed", "advance"}
+# what may hold at_rest(): an assertion's arguments (a test's end), nothing that goes on until it is
+ASSERTS = {"assert_true", "assert_false", "assert_eq", "assert_not_eq", "inspect", "debug_inspect"}
 SETTLE_TYPES = {"Tester", "Ctx", "Runtime"}
 SETTLE_DEFS = {"settle", "settled", "unsettled", "stable", "assert_idle"}
 TIME_FNS = {"run_for": 0, "wake_in": 0, "wake_after": 0, "wake_at": 0, "advance": 0, "frames_until": 0,
@@ -700,6 +730,13 @@ def lint_mbt(f, cfg, out, returns, readers):
         # its tests)
         if c.name == "next_frame" and c.kind in ("pkg", "bare") and not under(f.rel, ["src/effect", "src/effecttest"]):
             add("frame-wait", c.at, line_text)
+        # 3. at rest, read but in an assertion (the framework's own reading of it as a frame ends: frame_core)
+        if c.name == "at_rest" and c.kind in ("method", "pkg", "bare") and not under(f.rel, cfg.frame_core):
+            if not any(c.at in held for held in f.assert_args()):
+                add("at-rest-wait", c.at, line_text)
+        # a target waited on until it holds still
+        if c.name in HOLD_STILL and c.kind in ("method", "bare"):
+            add("at-rest-wait", c.at, line_text)
         # the app as it is screenshotted is not the app
         if c.name == "stable" and c.kind == "method" and not test and not c.args and f.recv_type(
                 c.at, returns) in ("Ctx", None):
@@ -764,6 +801,10 @@ def lint_mbt(f, cfg, out, returns, readers):
             add("builtin-hash", k, f.lines[t.line - 1].strip())
         if t.kind == "at" and t.text in ("@hashmap", "@hashset"):
             add("hash-order", k, f.lines[t.line - 1].strip())
+    # a loop that runs the clock on while something still moves or is still to come: run until it stops
+    if not under(f.rel, cfg.frame_core):
+        for k, line in run_until_still(f):
+            add("at-rest-wait", k, line)
     # 3. a fixed count of frames in a test
     for k, t in enumerate(toks):
         if t.kind == "ident" and t.text == "for" and f.in_test(k):
@@ -782,6 +823,37 @@ def lint_mbt(f, cfg, out, returns, readers):
             if bound_lit and any(toks[b].kind == "ident" and toks[b].text == "frame" and
                                  toks[b - 1].text == "." for b in body):
                 add("frame-count", k, f.lines[t.line - 1].strip())
+
+
+def run_until_still(f):
+    """The loops (while, loop, a `for` that is not over what it is given) that run the clock on (CLOCK_RUNS called in them) and read what still moves or is
+    still to come (MOVE_READS) outside a loop within them so counted: each such loop once, where it begins."""
+    toks = f.toks
+    loops = []
+    for k, t in enumerate(toks):
+        if t.kind == "ident" and t.text in ("while", "loop", "for"):
+            j = k + 1
+            while j < len(toks) and not (toks[j].kind == "op" and toks[j].text == "{"):
+                j += 1
+            # (a `for … in` goes over what it is given, the steps of a test: not on until something stops)
+            over = t.text == "for" and any(toks[i].kind == "ident" and toks[i].text == "in" for i in range(k + 1, j))
+            if j < len(toks) and toks[j].end is not None and not over:
+                loops.append((k, toks[j].end))
+
+    def called(i, names):
+        return toks[i].kind == "ident" and toks[i].text in names and i + 1 < len(toks) and \
+            toks[i + 1].text == "(" and i > 0 and toks[i - 1].text in (".", "::")
+
+    def inside(i, lp):
+        return lp[0] < i < lp[1]
+
+    runs = [lp for lp in loops if any(called(i, CLOCK_RUNS) for i in range(lp[0] + 1, lp[1]))]
+    out = []
+    for lp in runs:
+        inner = [o for o in runs if o != lp and inside(o[0], lp)]
+        if any(called(i, MOVE_READS) and not any(inside(i, o) for o in inner) for i in range(lp[0] + 1, lp[1])):
+            out.append((lp[0], f.lines[toks[lp[0]].line - 1].strip()))
+    return out
 
 
 # what a box and words look like said loosely (Ctx::box, row, column, layer, text, rich): box-loose; a number in them,
@@ -1012,6 +1084,11 @@ def lint_globals(files, cfg, out):
 # Flows and scripts
 
 DRIVE_WAIT = re.compile(r"^\s*(wait|linger)\s+[0-9]")
+# a drive's `rest` step: a flow's line, or a line of drive text in a string (a test's, a script's)
+DRIVE_REST = re.compile(r"^\s*rest\s*(#.*)?$")
+DRIVE_REST_TEXT = re.compile(r"(\\n|^\s*#\||\"|')rest\s*(\\n|\"|'|$)")
+# a picture at the app's rest
+SHOT_REST = re.compile(r"\b(MBUI_SHOT_MS|shot_at|SHOT_AT)\s*=\s*[\"']?rest\b")
 SCRIPT_WAITS = [
     re.compile(r"(?<![\w-])sleep\s+[\"'$0-9.]"),
     re.compile(r"\bMBUI_SHOT_AT=[\"'$0-9]"),
@@ -1082,16 +1159,19 @@ def collect(root, cfg):
                 texts[rel] = src.split("\n")
                 mbts.append(MbtFile(path, rel, src))
                 lint_lines(rel, src, "unsettled-ok", [UNSETTLED_OK], findings, "//")
+                lint_lines(rel, src, "at-rest-wait", [DRIVE_REST_TEXT, SHOT_REST], findings, "//")
             elif matches(rel, cfg.flows):
                 src = read(path)
                 texts[rel] = src.split("\n")
                 lint_lines(rel, src, "flow-wait", [DRIVE_WAIT], findings, "#")
+                lint_lines(rel, src, "at-rest-wait", [DRIVE_REST], findings, "#")
             elif matches(rel, cfg.scripts):
                 src = read(path)
                 texts[rel] = src.split("\n")
                 comment = "//" if n.endswith((".mjs", ".js", ".ts")) else "#"
                 lint_lines(rel, src, "script-wait", SCRIPT_WAITS, findings, comment)
                 lint_lines(rel, src, "page-settle", [PAGE_SETTLE], findings, comment)
+                lint_lines(rel, src, "at-rest-wait", [SHOT_REST, DRIVE_REST_TEXT], findings, comment)
     returns = {}
     for f in mbts:
         returns.update(f.returns())

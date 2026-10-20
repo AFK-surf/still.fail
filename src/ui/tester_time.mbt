@@ -227,8 +227,8 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
 /// runtime running (a fiber ready or waiting for a frame, what is awaited from outside: the host's work, the core's
 /// answers as the app tracks them, a timer said once). What never ends while shown (Ctx::cycle) or comes again
 /// (Ctx::every) does not count: what it shows at that moment is its clock's. What a host has had posted and no frame
-/// has taken yet (post.h) is the host's to count. Where a run to its rest takes its picture (a host's `rest` shot:
-/// mac_app.m MBUI_SHOT_MS=rest, web/host.js shot_at=rest, MBView's), each moment of it a declared one.
+/// has taken yet (post.h) is the host's to count. Said of a run (Tester::at_rest, asserted), never waited on: a wait
+/// until it is would be settling by another name.
 fn Ctx::at_rest(self : Ctx) -> Bool {
   self.frame_by is None &&
   !self.motion_left &&
@@ -238,8 +238,8 @@ fn Ctx::at_rest(self : Ctx) -> Bool {
 }
 
 ///|
-/// What keeps the frame being ended from its rest (Ctx::at_rest), in words, for a run to its rest that never comes
-/// to it ("SHOT FAIL"): "" when nothing does.
+/// What keeps the frame being ended from its rest (Ctx::at_rest), in words, for an assertion that it is at rest that
+/// fails: "" when nothing does.
 fn Ctx::rest_why(self : Ctx) -> String {
   let why = []
   if self.frame_by is Some(_) {
@@ -271,9 +271,8 @@ fn Ctx::rest_why(self : Ctx) -> String {
 
 ///|
 /// Whether the app is at its rest after the last frame (Ctx::at_rest, as that frame ended), with no frame asked for
-/// between frames and no message posted that no frame took: what a step that runs the frames on until the app has
-/// nothing that ends left to come goes on to (a frame grabbed and kept, then said: a frame each). A host's picture at
-/// its rest is taken at the same.
+/// between frames and no message posted that no frame took. For assertions only (`assert_true(t.at_rest())`, a test's
+/// end): no loop, `until` or run goes on until it is (scripts/detlint.py's at-rest-wait).
 pub fn Tester::at_rest(self : Tester) -> Bool {
   g().frame_rest && !self.fake.wants && posted_left() == ""
 }

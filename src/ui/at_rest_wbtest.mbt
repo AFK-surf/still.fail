@@ -1,4 +1,5 @@
-// Ctx::at_rest: where a run to its rest (a host's `rest` shot) takes its picture.
+// Ctx::at_rest: whether a frame left nothing that ends to come, said of a run (asserted: a test's end, assert_idle),
+// never waited on.
 
 ///|
 test "at rest: not while a spring is short of its end or a wake is owed; a spinner turning on does not keep it from it" {
@@ -45,51 +46,6 @@ test "at rest: not while a spring is short of its end or a wake is owed; a spinn
 }
 
 ///|
-test "a scripted run's rest: it waits for what a tap set moving to come to its end, a frame drawn after it" {
-  let target = Ref(0.0)
-  let t = Tester::new(
-    fn(c) {
-      ignore(c.spring("slide", target.val, from=0.0))
-      if c.button("go") {
-        target.val = 100.0
-      }
-    },
-    w=100.0,
-    h=100.0,
-  )
-  let log = t.drive("timeout 3000\ntap go\nrest\nexit")
-  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok rest") }), msg=log.join("\n"))
-  assert_eq(target.val, 100.0)
-  // (the spring at its end as the step passed)
-  assert_true(rest_of("slide") < 0.0, msg=log.join("\n"))
-}
-
-///|
-test "a video playing on screen is said as moving on its own (a run to its rest fails there), not as kept from rest" {
-  let cell : Ref[NativeView?] = Ref(None)
-  let t = Tester::new(fn(c) {
-    let v = match cell.val {
-      Some(v) => v
-      None => {
-        let v = NativeView::video("video/mp4", fn(_o, _l, answer) { answer(b"", -1.0) })
-        cell.val = Some(v)
-        v
-      }
-    }
-    c.native(v, h=Px(220.0)) |> ignore
-  })
-  let v = cell.val.unwrap()
-  // (a minute long, two seconds in)
-  t.set_player(v.id(), duration=60000.0, position=2000.0, playing=true, shown=true)
-  t.draw()
-  assert_true(g().frame_rest, msg=g().rest_why())
-  assert_eq(g().views_moving, ["view \{v.id()} playing"])
-  t.set_player(v.id(), playing=false)
-  t.draw()
-  assert_eq(g().views_moving, [])
-}
-
-///|
 test "a runtime's timer said once is a wake a run's end sees, with who said it; one said `later` is not" {
   let t = Tester::new(fn(c) { c.text("x", wrap=false) |> ignore }, w=100.0, h=100.0)
   // (a core's retry, as its client says it)
@@ -112,7 +68,7 @@ test "a runtime's timer said once is a wake a run's end sees, with who said it; 
 }
 
 ///|
-test "a Tester asked whether the app is at rest: frames on until it is, each a frame of what it does after another" {
+test "a Tester asked whether the app is at rest: not while a frame is asked for, at rest once the frames it said are drawn" {
   // (a frame grabbed, then kept, then said: each step in the frame after the last, as still.fail's "save this frame")
   let step = Ref(0)
   let t = Tester::new(fn(c) {
@@ -127,11 +83,10 @@ test "a Tester asked whether the app is at rest: frames on until it is, each a f
   t.frame()
   assert_false(t.at_rest())
   assert_true(t.rest_why().contains("a frame asked for"), msg=t.rest_why())
-  let mut frames = 0
-  while !t.at_rest() && frames < 10 {
-    t.frame()
-    frames += 1
-  }
+  // (steps 2 and 3: the two frames it asks for, then none)
+  t.frame()
+  assert_false(t.at_rest())
+  t.frame()
   assert_true(t.at_rest(), msg=t.rest_why())
   assert_true(t.find("saved") is Some(_))
 }

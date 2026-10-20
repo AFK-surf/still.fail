@@ -294,18 +294,13 @@ test "a scripted run tells each line of its script as it begins, as written, and
 }
 
 ///|
-test "a tap's input told as handed over: after the frames it waits for its words to hold still, in the frame it goes" {
-  // the words come down for a while (a sheet rising), then hold: the tap begins as they show, acts once they hold
+test "a tap goes where the frame drawn has its words, that frame: no wait for them to hold still" {
+  // the words come down for a while (a sheet rising): the tap acts as they first show, where they are in that frame
   let y = Ref::new(200.0)
-  let clicked_at = Ref::new(-1.0)
   let t = @ui.Tester::new(fn(c) {
-    let id = c.id("go")
-    if c.clicked(id) && clicked_at.val < 0.0 {
-      clicked_at.val = c.now()
-    }
     c.box(fn() {
       c.box(h=Px(y.val), fn() {  }) |> ignore
-      c.box(id~, fn() { c.text("go", wrap=false) |> ignore }) |> ignore
+      c.box(id=c.id("go"), fn() { c.text("go", wrap=false) |> ignore }) |> ignore
     })
     |> ignore
     if y.val > 100.0 {
@@ -315,22 +310,31 @@ test "a tap's input told as handed over: after the frames it waits for its words
   })
   let began = Ref::new(-1.0)
   let acted = Ref::new(-1.0)
+  let words = Ref::new((0.0, 0.0, 0.0, 0.0))
   @ui.trace_steps(fn(step, moment) {
     if step == "tap go" {
       match moment {
         @ui.Began => began.val = t.time()
-        @ui.Acted => acted.val = t.time()
+        @ui.Acted => {
+          acted.val = t.time()
+          words.val = t.rect_of("go").unwrap()
+        }
       }
     }
   })
   let log = t.drive("tap go\nexit")
   @ui.trace_steps(fn(_, _) {  })
-  assert_true(began.val >= 0.0 && acted.val > began.val, msg="began \{began.val}, acted \{acted.val}\n" + log.join("\n"))
-  // handed over in the frame it was told (the drive's turn after that frame was drawn): the app takes it in the
-  // display's next frame (the grid's next after `acted`, a frame on)
-  assert_eq(clicked_at.val, t.display_frame(acted.val + t.frame_period() / 2.0), msg="acted \{acted.val}")
+  // acted in the frame it began: the words were on screen
+  assert_true(began.val >= 0.0 && acted.val == began.val, msg="began \{began.val}, acted \{acted.val}\n" + log.join("\n"))
+  // pressed inside the words as that frame drew them
   let tap = log.search_by(fn(l) { l.has_prefix("DRIVE tap go at") }).unwrap()
-  assert_true(tap >= 0)
+  let at = log[tap].unsafe_substring(start=16, end=log[tap].length()).split(",").to_array()
+  let mut ty = 0.0
+  for ch in at[1] {
+    ty = ty * 10.0 + (ch.to_int() - '0'.to_int()).to_double()
+  }
+  let (_, wy, _, wh) = words.val
+  assert_true(ty >= wy.floor() && ty <= wy + wh, msg="tapped at \{ty}, the words at \{wy}..\{wy + wh}")
 }
 
 ///|

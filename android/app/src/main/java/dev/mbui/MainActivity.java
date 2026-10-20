@@ -78,10 +78,10 @@ public class MainActivity extends Activity {
         // a run (scripted, driven, taped: the test hooks' intent) begins with no cookies in its sites
         if (Host.script != null || given != null) NativeViews.clearCookies();
         Host.bench = hooks ? getIntent().getIntExtra("bench", 0) : 0;
-        // (shot_at MS, or "rest": the first frame at rest)
+        // (shot_at MS, a moment on the run's clock; anything else is no moment: said, and no picture)
         Object shotArg = hooks && getIntent().getExtras() != null ? getIntent().getExtras().get("shot_at") : null;
-        Host.shotRest = "rest".equals(shotArg);
-        Host.shotAt = shotArg instanceof Integer ? (Integer) shotArg : Host.shotRest ? 0 : -1;
+        if (shotArg != null && !(shotArg instanceof Integer)) Host.log("SHOT FAIL: shot_at is a moment in ms (--ei), not " + shotArg);
+        Host.shotAt = shotArg instanceof Integer ? (Integer) shotArg : -1;
         // what another app shared into this one (ACTION_SEND or SEND_MULTIPLE: text, files), for the app to take
         Shares.take(getIntent());
         FrameLayout root = new FrameLayout(this);

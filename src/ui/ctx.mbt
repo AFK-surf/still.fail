@@ -156,8 +156,6 @@ pub struct Ctx {
   mut wake_waited : Double
   // the last frame left nothing that ends to come (Ctx::at_rest, as it ended)
   mut frame_rest : Bool
-  // the native views shown in it that move on their own (a player playing, a page loading: Ctx::sync_views)
-  views_moving : Array[String]
   /// who asked for the next frame first this frame (Ctx::request_frame's caller), and for the wake it waits for
   /// (Ctx::wake_in's): what Tester::assert_idle says of what is left
   mut frame_by : SourceLoc?
@@ -349,7 +347,6 @@ fn Ctx::new() -> Ctx {
     wake_at: -1.0,
     wake_waited: -1.0,
     frame_rest: false,
-    views_moving: [],
     frame_by: None,
     wake_by: None,
     hit_ids: [],

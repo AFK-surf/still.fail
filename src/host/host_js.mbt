@@ -83,8 +83,8 @@ extern "js" fn js_bench_mode() -> Int =
 extern "js" fn js_set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool =
   #|(f) => globalThis.__mbhost.setOutside ? (globalThis.__mbhost.setOutside(f), true) : false
 
-extern "js" fn js_frame_awaiting(awaiting : Int, what : String, unrest : String) -> Unit =
-  #|(n, w, r) => globalThis.__mbhost.frameAwaiting && globalThis.__mbhost.frameAwaiting(n, w, r)
+extern "js" fn js_frame_awaiting(awaiting : Int, what : String) -> Unit =
+  #|(n, w) => globalThis.__mbhost.frameAwaiting && globalThis.__mbhost.frameAwaiting(n, w)
 
 extern "js" fn js_exit(code : Int) -> Unit =
   #|(c) => globalThis.__mbhost.exit(c)
@@ -256,12 +256,9 @@ pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
 
 ///|
 /// As the frame just built left it: how many of the app's asks the host has not answered yet and what they are (""
-/// when none), and what keeps it from its rest (`unrest`, "" when nothing that ends is left to come: @ui's
-/// Ctx::at_rest; "-" when not said, outside a run of its own clock; "never: …" at rest with a native view shown that
-/// moves on its own, a video playing: a run to its rest fails there, saying it). A run to a declared moment keeps its
-/// clock still while any is awaited; a run to its rest is pictured at the first frame at rest with none.
-pub fn frame_awaiting(awaiting : Int, what : String, unrest : String) -> Unit {
-  js_frame_awaiting(awaiting, what, unrest)
+/// when none). A run to a declared moment keeps its clock still while any is awaited.
+pub fn frame_awaiting(awaiting : Int, what : String) -> Unit {
+  js_frame_awaiting(awaiting, what)
 }
 
 ///|
