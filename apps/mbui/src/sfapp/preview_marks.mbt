@@ -2,7 +2,7 @@
 // boxes, arrows, lines drawn by hand and words, drawn on the image where it is shown (zoomed and panned with it); a
 // mark picked again to move, stretch, recolour or remove; undo and redo. Boxes and arrows are numbered: a pin on each,
 // and something said about it in a note. Done, the image with its marks (and their pins), drawn again at its own size
-// by the host (@host.draw_marks), goes into the chat's draft as a new file with a quote per numbered mark, or is kept
+// by the host (@ui.draw_marks), goes into the chat's draft as a new file with a quote per numbered mark, or is kept
 // with the downloads.
 //
 // On the screen the marks are boxes of mbui's: a box is a bordered box, a line or an arrow a row of dots its width
@@ -191,7 +191,7 @@ priv struct Marking {
   mut error : String
   mut next_id : Int
   /// the marked image being drawn by the host, and whether it goes into the draft (else downloaded)
-  mut job : @host.MarkedImage?
+  mut job : @ui.MarkedImage?
   mut to_draft : Bool
   mut job_name : String
   /// the words being written and the open note's, as their fields have them

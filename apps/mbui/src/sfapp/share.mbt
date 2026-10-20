@@ -1,7 +1,7 @@
 // Sharing (ember apps/android app/share/ShareActivity.kt, ShareSheet.kt; drive/DriveScreen.kt hand; docs/share-in.md).
 //
 // In: what another app shares into still.fail (Android's share sheet: ACTION_SEND of a link, some text or files,
-// ACTION_SEND_MULTIPLE of files, @host.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's
+// ACTION_SEND_MULTIPLE of files, @ui.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs, the host's
 // MBUI_SHARE_FILES on macOS) opens one sheet: what is shared at its top (its title, the
 // app's subject or its first line; a link's mark or text's), 发到 the chats it can go to (the core's `shareIn` view: the
 // one a thing from the same site went to last first, saying so; 搜索 from six chats), 新 chat last (then which station,
@@ -91,7 +91,7 @@ let searched_from : Int = 6
 /// Each frame once signed in: what another app shared since, its sheet raised; let go once its sheet closed.
 fn share_in_frame(c : @ui.Ctx) -> Unit {
   if share_in.shared is None {
-    let said = @host.shared_in()
+    let said = @ui.shared_in()
     let mut got : (String, String?)? = None
     let files : Array[SharedFile] = []
     if said != "" {
@@ -99,7 +99,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       let title = text(v, "title")
       got = Some((text(v, "text"), if title == "" { None } else { Some(title) }))
       for i, f in items(v, "files") {
-        let bytes = @host.shared_in_file(i)
+        let bytes = @ui.shared_in_file(i)
         if bytes.length() == 0 {
           continue
         }
