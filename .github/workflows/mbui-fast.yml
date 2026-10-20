@@ -50,8 +50,10 @@ jobs:
         run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
       - name: APK (APP=stillfail, release, unsigned key)
         run: |
-          set -o pipefail
-          APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build 2>&1 | grep -av '│\|Warning\|╭\|╰' | tail -30
+          L=$RUNNER_TEMP/build.log
+          APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build > $L 2>&1 || { grep -av '│\|Warning\|╭\|╰\|warning:' $L | tail -60; exit 1; }
+          grep -a '^android.sh\|^core.hbc\|compiled (\|units in\|BUILD \|^moon:\|Finished' $L | cut -c1-240 | tail -20
+          ls -la apps/mbui/android/app/build/outputs/apk/*/*.apk
 
   mac:
     runs-on: macos-15
@@ -85,5 +87,6 @@ jobs:
           key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/core/**') }}
       - name: The macOS app (built, ad hoc signed)
         run: |
-          set -o pipefail
-          EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build 2>&1 | grep -av '│\|Warning\|╭\|╰' | tail -30
+          L=$RUNNER_TEMP/build.log
+          EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build > $L 2>&1 || { grep -av '│\|Warning\|╭\|╰\|warning:' $L | tail -60; exit 1; }
+          grep -a '^mac-app.sh\|^mac.sh\|^core\|compiled (\|units in\|Finished\|cargo\|Compiling stillfail' $L | cut -c1-240 | tail -20
