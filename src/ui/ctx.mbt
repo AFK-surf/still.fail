@@ -280,6 +280,9 @@ pub struct Ctx {
   /// what the view tells outside of what it built, by key, this build's (Ctx::after_build): done once the frame's
   /// builds are over
   tells : Array[(Int, () -> Unit)]
+  /// what the frame's builds said to tell outside, by its key, the last said of each kept, whichever build said it
+  /// (Ctx::tell)
+  told : Array[(Int, () -> Unit)]
   mut layer_cur : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
@@ -410,6 +413,7 @@ fn Ctx::new() -> Ctx {
     last_layers: [],
     layers_opened: [],
     tells: [],
+    told: [],
     layer_cur: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),
