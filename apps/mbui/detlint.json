@@ -44,9 +44,7 @@
     ]
   },
   "counts": {
-    "frame-request": {
-      "src/sfapp/chat.mbt": 1
-    },
+    "frame-request": {},
     "settle": {},
     "flow-wait": {
       "e2e/flows/09-paste-long.drive": 1,
@@ -83,9 +81,7 @@
     "retired-api": {},
     "app-clock": {},
     "wall-clock": {
-      "src/coredemo/shelf.mbt": 1,
-      "src/sfreplay/source.mbt": 1,
-      "src/stillfail/main.mbt": 1
+      "src/sfreplay/source.mbt": 1
     },
     "poll": {},
     "host-read": {},
