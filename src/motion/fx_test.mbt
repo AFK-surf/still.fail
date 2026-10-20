@@ -25,11 +25,12 @@ test "animate: the value the view reads at frame n is the transition's generator
     c.effect("go", async fn(_s) { ignore(x.val.animate(100.0, spec)) })
     seen.push(x.val.get())
   })
-  // forked in the first frame (at 1016); every frame after reads where the spring is 16 ms more on
+  // forked in the first frame (at 1016), run in the frame it owes at that moment (where it starts: seen[1]); every
+  // frame after reads where the spring is 16 ms more on
   let g = @motion.spring_generator(0.0, 100.0, stiffness=300.0, damping=20.0)
   run_frames(t, 20)
-  for k in 1..=20 {
-    assert_true(same(seen[k], g.next(16.0 * k.to_double()).value), msg="frame \{k}: \{seen[k]}")
+  for k in 0..=20 {
+    assert_true(same(seen[k + 1], g.next(16.0 * k.to_double()).value), msg="frame \{k}: \{seen[k + 1]}")
   }
   // and it stops asking for frames once it is there: at the spring's own end
   t.run_for(x.val.ends_at() - t.time())
@@ -79,10 +80,11 @@ test "a timeline: each animation awaited in turn; the next starts the frame the 
     })
     log.push("\{x.get()} \{y.get()}")
   })
-  // the timeline's own length: x's, then y's (told at its first frame's moment, 1016)
+  // the timeline's own length: x's, then y's (told at its first frame's moment, 1016: the frame it owes there starts
+  // it)
   t.run_for(x_ms + y_ms)
   assert_eq(log, [
-    "0 0", "2.5 0", "5 0", "7.5 0", "x there at 1080", "10 0", "10 5", "y there at 1112",
+    "0 0", "0 0", "2.5 0", "5 0", "7.5 0", "x there at 1080", "10 0", "10 5", "y there at 1112",
     "10 10",
   ])
   t.assert_idle()
@@ -157,8 +159,6 @@ fn interrupted(seed : Int, k : Int) -> Array[Double] {
     },
     seed~,
   )
-  // (the fibers forked in the first frame run at the next)
-  t.frame()
   // to the first spring's own end: the one back took it over at frame k, well before
   t.run_for(xv.val.ends_at() - t.time())
   if xv.val.target() != 0.0 {
@@ -167,7 +167,8 @@ fn interrupted(seed : Int, k : Int) -> Array[Double] {
   // to the spring back's own end
   t.run_for(xv.val.ends_at() - t.time())
   t.assert_idle()
-  seen
+  // from the frame they start in (the one the first frame owes, at its moment: the fibers forked in it run there)
+  seen[1:].to_array()
 }
 
 ///|

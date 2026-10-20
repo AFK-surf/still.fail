@@ -119,9 +119,11 @@ priv struct Drawn {
 ///|
 priv struct DrawState {
   entries : Array[Drawn]
-  /// by node: its entry this frame (when `stamp` is this frame)
+  /// by node: its entry this build (when `stamp` is this build's)
   at : Array[Int]
   stamp : Array[Int]
+  /// the builds so far (a frame's each: frame_body builds it again while what it read changes)
+  mut build : Int
   mut any : Bool
   /// the node being painted by its entry (painted plainly once)
   mut bypass : Int
@@ -129,7 +131,7 @@ priv struct DrawState {
   mut mode : Int
   mut overlaying : Bool
   overlay : Array[(Int, Double)]
-  /// by node: the frame something in it was last drawn moved (Ctx::draw_carries)
+  /// by node: the build something in it was last drawn moved in (Ctx::draw_carries)
   carry : Array[Int]
 }
 
@@ -138,6 +140,7 @@ let dr : DrawState = {
   entries: [],
   at: [],
   stamp: [],
+  build: 0,
   any: false,
   bypass: -1,
   mode: 0,
@@ -190,6 +193,7 @@ fn reset_drawing() -> Unit {
   dr.entries.clear()
   dr.at.clear()
   dr.stamp.clear()
+  dr.build = 0
   dr.any = false
   dr.bypass = -1
   dr.mode = 0
@@ -203,8 +207,9 @@ fn reset_drawing() -> Unit {
 }
 
 ///|
-/// A new frame: no looks yet.
+/// A new build (of a frame: frame_body): no looks yet.
 fn drawing_begin() -> Unit {
+  dr.build = dr.build + 1
   dr.entries.clear()
   dr.any = false
   dr.bypass = -1
@@ -231,10 +236,10 @@ fn Ctx::drawing_after_layout(self : Ctx) -> Unit {
       while dr.carry.length() <= p {
         dr.carry.push(-1)
       }
-      if dr.carry[p] == self.frame_no {
+      if dr.carry[p] == dr.build {
         break
       }
-      dr.carry[p] = self.frame_no
+      dr.carry[p] = dr.build
       p = self.nodes[p].parent
     }
   }
@@ -247,11 +252,11 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
     dr.at.push(-1)
     dr.stamp.push(-1)
   }
-  if dr.stamp[i] == self.frame_no && dr.at[i] >= 0 {
+  if dr.stamp[i] == dr.build && dr.at[i] >= 0 {
     return dr.entries[dr.at[i]]
   }
   let e : Drawn = { node: i, look: still_look, z: 0, only: false, keep: None, keep_rel: -1, bottom: -1.0, top: -1.0 }
-  dr.stamp[i] = self.frame_no
+  dr.stamp[i] = dr.build
   dr.at[i] = dr.entries.length()
   dr.entries.push(e)
   dr.any = true
@@ -261,7 +266,7 @@ fn Ctx::drawn_of(self : Ctx, i : Int) -> Drawn {
 ///|
 /// Node `i`'s entry this frame, if it has one.
 fn Ctx::drawn_entry(self : Ctx, i : Int) -> Drawn? {
-  if dr.any && i >= 0 && i < dr.stamp.length() && dr.stamp[i] == self.frame_no && dr.at[i] >= 0 {
+  if dr.any && i >= 0 && i < dr.stamp.length() && dr.stamp[i] == dr.build && dr.at[i] >= 0 {
     Some(dr.entries[dr.at[i]])
   } else {
     None
@@ -376,7 +381,7 @@ fn Ctx::drawn_z(self : Ctx, i : Int) -> Int {
 /// Whether something in node `i` is drawn moved this frame: then `i` is painted even where it is laid out outside
 /// what cuts it.
 fn Ctx::draw_carries(self : Ctx, i : Int) -> Bool {
-  i < dr.carry.length() && dr.carry[i] == self.frame_no
+  i < dr.carry.length() && dr.carry[i] == dr.build
 }
 
 ///|
@@ -718,6 +723,14 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
 /// The number of the frame being made.
 pub fn Ctx::frame_number(self : Ctx) -> Int {
   self.frame_no
+}
+
+///|
+/// Whether a frame is being made now (its build, its layout): a motion told in it starts at its time; told between
+/// frames (a host's callback), at the next.
+pub fn Ctx::in_frame(self : Ctx) -> Bool {
+  ignore(self)
+  in_frame.val
 }
 
 ///|

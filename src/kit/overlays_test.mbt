@@ -229,8 +229,7 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   assert_eq(list.val.length(), 2)
   t.frame(ms=1000.0)
   assert_eq(list.val.map(fn(x) { x.id }), [])
-  // drawn while they go out (the frame after their time, at its moment), gone once they have
-  t.draw()
+  // drawn while they go out (from the frame at their time), gone once they have
   t.run_for(presence_out_ms)
   assert_eq(t.all(@ui.Status).length(), 0)
   // the action

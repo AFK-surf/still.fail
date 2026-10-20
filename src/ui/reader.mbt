@@ -493,7 +493,7 @@ fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   let next = st.index + dir
   if next < 0 || next >= st.count {
     st.edge = dir
-    self.request_frame()
+    self.read_changed("a pager at its end")
     return
   }
   st.index = next

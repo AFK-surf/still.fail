@@ -50,8 +50,8 @@ fn fx_frame_start(c : Ctx) -> Unit {
 }
 
 ///|
-/// A frame is built: the lifetimes not asked for end; another frame while a fiber waits for one, else a wake at the
-/// next timer.
+/// A frame is built: the lifetimes not asked for end; another frame while a fiber waits for one (the host's next, as
+/// the clock goes: no frame owed at this moment), else a wake at the next timer.
 fn fx_frame_end(c : Ctx) -> Unit {
   if !lives.is_empty() {
     let gone : Array[Int] = []
@@ -65,9 +65,12 @@ fn fx_frame_end(c : Ctx) -> Unit {
     }
   }
   let rt = fx.val
-  if rt.wants_frame() {
+  // (one ready, forked by this frame or woken in it: it runs at the next frame, at this moment, as an input's
+  // frame after)
+  if !rt.idle() {
     c.request_frame()
   }
+  c.fiber_frame = rt.wants_frame()
   // (whether what is shown waits for it is the runtime's to say: Ctx::settled asks it)
   match rt.next_timer() {
     Some(at) => c.wake_at_time(at.to_double(), later=true)
@@ -145,7 +148,7 @@ pub fn Ctx::unsettled(self : Ctx) -> String {
   }
   if self.wake_waited >= 0.0 {
     why.push(
-      "a wake at \{self.wake_waited.to_int()} ms it waits for" +
+      "a wake in \{(self.wake_waited - self.now).ceil().to_int()} ms it waits for" +
       (match self.wake_by {
         Some(l) => " (by \{l})"
         None => ""

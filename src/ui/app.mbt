@@ -91,9 +91,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   }
   if c.wants_frame || bench.mode > 0 {
     h_request_frame()
-  } else if c.motion_left || c.cycling {
-    // what moves on is drawn as the clock goes, on the host's next frame: no frame is owed at this moment (a
-    // Tester's draw draws none for it; its run_for does, as its time goes)
+  } else if c.motion_left || c.cycling || c.fiber_frame {
+    // what moves on (a motion, a fiber stepping a frame at a time) is drawn as the clock goes, on the host's next
+    // frame: no frame is owed at this moment (a Tester's draw draws none for it; its run_for does, as its time goes)
     c.wants_frame = true
     h_request_frame_on()
   } else if c.wake_at > 0.0 {
@@ -142,7 +142,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.height = h
   // the theme set for this width (a phone's when narrower than its bound: Ctx::set_theme)
   c.pick_theme()
-  c.inners.clear()
   if scale != c.scale {
     // images are as large as their pixels at this scale
     c.epoch = c.epoch + 1
@@ -175,43 +174,51 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   take_messages()
   // the runtime's fibers run up to this frame's time (fx.mbt): the view reads what they left
   fx_frame_start(c)
-  drawing_begin()
   desk_frame_start()
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
   c.focus_frame_start()
   // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
   views_frame_start()
-  c.sems.clear()
-  c.sem_hide = 0
-  c.sem_hidden.clear()
-  c.layer_cur = 0
-  c.group_cur = 0
-  c.count = 0
-  c.cur = -1
-  c.back_next = None
-  c.back_node_next = -1
-  let root = c.alloc(kind_box)
-  c.nodes[root].w = Px(w)
-  c.nodes[root].h = Px(h)
-  c.with_parent(root, fn() { (g_view.val)(c) })
-  // what lies over the page over everything else (overlay.mbt)
-  c.raise_layers()
-  let t1 = h_now()
-  // lists build their rows while laid out, and those see clicks too
-  c.layout(root, 0.0, 0.0, w, h) |> ignore
-  // what covers an item, over it as laid out now (cover.mbt)
-  c.covers_after_layout()
-  // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
-  c.corners_after_layout()
-  // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
-  c.drawing_after_layout()
-  // what words marked as selectable hold, as laid out (words.mbt)
-  c.words_after_layout()
-  // how far what scrolls sideways can (sideways.mbt)
-  c.sideways_after_layout()
-  c.clicked.clear()
-  c.tapped = None
+  // built and laid out; built again, at once, while what the view read in it changed as it was built or laid out
+  // (Ctx::read_changed: the focus given, a layer dismissed, a list scrolled, words laid out elsewhere): what is drawn
+  // is what the view builds from the state as it is, never a frame of it as it was (frame_passes_most at most)
+  let mut root = 0
+  let mut t1 = t0
+  let mut pass = 0
+  c.layers_opened.clear()
+  while true {
+    pass = pass + 1
+    c.read_back_moved = false
+    building.val = true
+    root = frame_build(c, w, h)
+    t1 = h_now()
+    // lists build their rows while laid out, and those see clicks too
+    c.layout(root, 0.0, 0.0, w, h) |> ignore
+    // what covers an item, over it as laid out now (cover.mbt)
+    c.covers_after_layout()
+    // the corners said `Inner`, from where they lie in their parents as laid out, the covers moved (corners.mbt)
+    c.corners_after_layout()
+    // how things are drawn this frame, from where they are laid out (draw.mbt: the motion package's looks)
+    c.drawing_after_layout()
+    // what words marked as selectable hold, as laid out (words.mbt)
+    c.words_after_layout()
+    // how far what scrolls sideways can (sideways.mbt)
+    c.sideways_after_layout()
+    // the focus into the layers that opened, back from those that went (overlay.mbt)
+    c.layers_focus()
+    // (what this pass took of the inputs is taken: one built again sees none of them, the clicks, keys, menus and
+    // actions since the last frame)
+    c.clicked.clear()
+    c.tapped = None
+    desk.keys.clear()
+    desk.menus.clear()
+    c.actions.clear()
+    building.val = false
+    if !c.read_back_moved || pass >= frame_passes_most {
+      break
+    }
+  }
   if scroll_logging() {
     c.log_scroll()
   }
@@ -267,6 +274,42 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.t_layout = t2 - t1
   c.t_paint = t3 - t2
   t0
+}
+
+///|
+/// The most times a frame is built (frame_body): what the view read still changing after them is built again at the
+/// next frame (a frame asked for), and a Tester's draw says whose it is (Ctx::read_back_key).
+let frame_passes_most = 3
+
+///|
+/// Whether a frame is being built or laid out now (frame_body), before it is drawn: what the view read changing now
+/// is built again in this frame (Ctx::read_changed).
+let building : Ref[Bool] = Ref::new(false)
+
+///|
+/// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
+fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
+  c.inners.clear()
+  drawing_begin()
+  desk_build_start()
+  c.layers.clear()
+  c.focusables.clear()
+  c.sems.clear()
+  c.sem_hide = 0
+  c.sem_hidden.clear()
+  c.layer_cur = 0
+  c.group_cur = 0
+  c.count = 0
+  c.cur = -1
+  c.back_next = None
+  c.back_node_next = -1
+  let root = c.alloc(kind_box)
+  c.nodes[root].w = Px(w)
+  c.nodes[root].h = Px(h)
+  c.with_parent(root, fn() { (g_view.val)(c) })
+  // what lies over the page over everything else (overlay.mbt)
+  c.raise_layers()
+  root
 }
 
 ///|

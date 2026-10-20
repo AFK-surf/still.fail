@@ -127,16 +127,18 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curv
   self.p1 = p1
   self.dur = dur
   self.curve = curve
-  self.t0 = -1.0
-  // said once, as it sets out: frames until it is there (it starts at the next frame)
+  // told in a frame, it starts there, at its time (its end known as it is told); told between frames, at the next
+  // frame that builds it (Ctx::nav)
+  self.t0 = if in_frame.val { g().now } else { -1.0 }
+  // said once, as it sets out: frames until it is there
   self.asked = g().frame_no
   g().moving(self.mover, self as &Moving, what="a stack's slide")
 }
 
 ///|
 /// When its slide is over, asked at each frame's end while it slides: read only, the same whoever asks first. Told to
-/// go, it starts at the first frame after that builds it (Ctx::nav sets its start): until then +inf; not built in
-/// that frame, at rest, said to move again as Ctx::nav starts it.
+/// go between frames, it starts at the first frame after that builds it (Ctx::nav sets its start): until then +inf;
+/// not built in that frame, at rest, said to move again as Ctx::nav starts it.
 impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
   ignore(now)
   if self.mode != 1 && self.mode != 2 && self.mode != 4 {

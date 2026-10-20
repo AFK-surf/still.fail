@@ -70,8 +70,8 @@ pub fn Ctx::overlay(
   let dismissed = self.dismissals.get(id)
   if dismissed is Some(_) {
     self.dismissals.remove(id)
-    // the view closes it as it reads this: a frame again to draw it closed
-    self.request_frame()
+    // the view closes it as it reads this: built again, closed
+    self.read_changed("a layer dismissed")
   }
   let initial = if initial_focus == -2 {
     if trap {
@@ -137,11 +137,11 @@ pub fn Ctx::overlay(
 }
 
 ///|
-/// The layer `id` dismissed (as though by `why`) for the next frame: a view's own close button for a layer it
-/// closes the same way.
+/// The layer `id` dismissed (as though by `why`): a view's own close button for a layer it closes the same way. Told
+/// as the frame is built, it is built again with it.
 pub fn Ctx::dismiss(self : Ctx, id : Int, why? : Dismiss = Escape) -> Unit {
   self.dismissals[id] = why
-  self.request_frame()
+  self.read_changed("a layer dismissed")
 }
 
 ///|
@@ -340,12 +340,13 @@ fn Ctx::link_last(self : Ctx, p : Int, i : Int) -> Unit {
 }
 
 ///|
-/// As the frame ends: the focus into the layers that opened (as they say), back from those that went; this frame's
-/// layers the last frame's for the next.
-fn Ctx::layers_frame_end(self : Ctx) -> Unit {
+/// As the frame is laid out: the focus into the layers that opened (as they say), back from those that went; given
+/// there, the view that read it is built again in this frame (Ctx::read_changed).
+fn Ctx::layers_focus(self : Ctx) -> Unit {
+  let had = self.focus
   // opened: not there (or leaving) the last frame
   for l in self.layers {
-    if l.inert || l.initial == 0 {
+    if l.inert || l.initial == 0 || self.layers_opened.contains(l.id) {
       continue
     }
     let was = match self.last_layer(l.id) {
@@ -372,7 +373,7 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
       }
     }
     self.focus = target
-    self.request_frame()
+    self.layers_opened.push(l.id)
   }
   // gone, or leaving: the focus back, when it was in it or is nowhere
   for l in self.last_layers {
@@ -391,9 +392,18 @@ fn Ctx::layers_frame_end(self : Ctx) -> Unit {
       })
     if back != 0 && inside {
       self.focus = back
-      self.request_frame()
     }
-    if !self.layers.iter().any(fn(x) { x.id == l.id }) {
+  }
+  if self.focus != had {
+    self.read_changed("the focus, into a layer or back from one")
+  }
+}
+
+///|
+/// As the frame ends: this frame's layers the last frame's for the next.
+fn Ctx::layers_frame_end(self : Ctx) -> Unit {
+  for l in self.last_layers {
+    if !l.inert && !self.layers.iter().any(fn(x) { x.id == l.id }) {
       self.layer_return.remove(l.id)
     }
   }

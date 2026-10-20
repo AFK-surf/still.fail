@@ -287,6 +287,7 @@ pub fn Ctx::list(
         glide_rest: -1.0,
         glide_left: 0.0,
         built: -1,
+        scroll_asked: (-1, 0, 0.0),
         fling: 0,
         fling_v: 0.0,
         fling_t0: -1.0,
@@ -332,13 +333,17 @@ pub fn Ctx::list(
   st.direction = self.direction
   // shown again (not built the frame before): what of it still moves says so again
   let back = st.built >= 0 && st.built < self.frame_no - 1
+  // (built again in the same frame: its motion stepped once a frame, at the first)
+  let again = st.built == self.frame_no
   st.built = self.frame_no
   if back && st.rest_at(self.now, self.frame_no) > self.now {
     self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
   }
-  self.step_ease(st)
-  self.step_glide(st)
-  self.step_scroll(st)
+  if !again {
+    self.step_ease(st)
+    self.step_glide(st)
+    self.step_scroll(st)
+  }
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
   // (still.fail's Follow), rather than being put at its end at once
   if self.list_grew(id, count) && glide_on_growth && st.stick_end && st.at_end && !self.still() {
@@ -570,11 +575,11 @@ fn Ctx::place_list(
   }
   st.at_end = last == st.count - 1 && (pinned_end || bottom <= bottom_edge + 0.5)
   st.below = if last == st.count - 1 { bottom - bottom_edge } else { 1.0e9 }
-  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told): a
-  // frame more where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
-  // leave it drawn as before the scroll until something else asked for a frame)
+  // what the view built this frame read from the list as it stood (a way back to the end, the rows in view told):
+  // built again where this layout changed that (a scroll that took one frame, a wheel's or a key's, would otherwise
+  // be drawn with what was read before it)
   if was != (st.vis_first, st.vis_last, st.at_end, st.below) {
-    self.request_frame()
+    self.read_changed("a list's rows in view, its end")
   }
   if st.glide {
     // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
@@ -665,12 +670,14 @@ pub fn Ctx::list_scroll_to(
   offset? : Double = 0.0,
 ) -> Unit {
   match self.lists.get(self.id(key)) {
-    Some(st) => {
+    // (asked again as the frame is built again: done already)
+    Some(st) if st.scroll_asked != (self.frame_no, item, offset) => {
+      st.scroll_asked = (self.frame_no, item, offset)
       st.scroll_to(item)
       st.anchor_off = offset
-      self.request_frame()
+      self.read_changed("a list scrolled to a row")
     }
-    None => ()
+    _ => ()
   }
 }
 
@@ -686,7 +693,7 @@ pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit 
       } else {
         st.scroll_to_end()
       }
-      self.request_frame()
+      self.read_changed("a list sent to its end")
     }
     None => ()
   }

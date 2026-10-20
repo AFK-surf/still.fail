@@ -1206,7 +1206,7 @@ test "Motion.kt's motionSpring is Motion's spring by visual duration and bounce"
 // ── Motion's transitions played by animate ──────────────────────────────
 
 ///|
-test "animate plays a Motion spring as its generator says, from the frame after it is asked" {
+test "animate plays a Motion spring as its generator says, from the frame it is asked in" {
   let to = Ref::new(0.0)
   let seen : Array[Double] = []
   let kept : Ref[@motion.Anim?] = Ref::new(None)
@@ -1218,8 +1218,7 @@ test "animate plays a Motion spring as its generator says, from the frame after 
   })
   to.val = 100.0
   t.frame()
-  // asked this frame, its first frame next: at its start
-  t.frame()
+  // asked this frame: it starts here, at its start
   assert_eq(seen[seen.length() - 1], 0.0)
   let g = @motion.spring_generator(0.0, 100.0, stiffness=300.0, damping=20.0)
   for i in 1..=5 {
@@ -1246,7 +1245,7 @@ test "animate plays inertia to where it ends, not to the target asked" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   go.val = true
-  // the frame it is told in, and the one after (its first), at this moment
+  // the frame it is told in (it starts there)
   t.draw()
   match a.val {
     // 420 a second at power 1 would end at 420: the snap point nearest is 400 (where it is at its own end)
@@ -1278,7 +1277,7 @@ test "animate plays keyframes through their values" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   on.val = true
-  t.frame()
+  // told in this frame, at its start; halfway 80 ms on
   t.frame()
   t.frame(ms=80.0)
   // halfway: at the middle value

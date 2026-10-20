@@ -605,9 +605,10 @@ pub fn Runtime::tick(self : Runtime) -> Unit {
 ///|
 /// A frame at `at` (ms, the frame's time on a UI's clock; virtual time): the
 /// clock moves there as `advance` moves it, each timer due firing at its own
-/// time; then the fibers waiting for a frame (`next_frame`) go on, all at `at`.
-/// A frame at or before the clock's time only runs what is ready and waits for
-/// a frame.
+/// time; then the fibers waiting for a frame (`next_frame`) go on, all at `at`,
+/// with what is ready. A frame at or before the clock's time only runs what is
+/// ready and what waits for a frame. What starts waiting for a frame in it waits
+/// for the next one.
 pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
   guard self.clock is None else { abort("effect: frame on the host's clock") }
   let outer = self.turning
@@ -619,9 +620,8 @@ pub fn Runtime::frame(self : Runtime, at : Int64) -> Unit {
   if at > self.time {
     self.fire_until(at)
     self.time = at
-  } else {
-    ignore(self.run_ready())
   }
+  // (those that waited before it: one forked or woken in it that waits for a frame waits for the next)
   self.frame_waiters.wake_all()
   ignore(self.run_ready())
 }

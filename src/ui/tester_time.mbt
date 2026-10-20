@@ -24,7 +24,7 @@ fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
     if n == draw_frames_most {
       let c = g()
       if c.read_back_moved {
-        let s = "Tester::draw: a layout read back (words_of \"\{c.read_back_key}\") still moves after \{n} frames: it does not converge"
+        let s = "Tester::draw: what the view reads (\{c.read_back_key}) still changes after \{n} frames: it does not converge"
         println(s)
         abort(s)
       }
@@ -118,7 +118,7 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
       (if c.took_input {
         " (an input's frame after)"
       } else if c.read_back_moved {
-        " (a layout read back moved: words_of \"\{c.read_back_key}\")"
+        " (what the view reads still changed: \{c.read_back_key})"
       } else {
         ""
       }),
@@ -127,7 +127,7 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
     why.push("a frame asked for between frames")
   }
   if c.wake_waited >= 0.0 {
-    why.push("a wake at \{c.wake_waited.to_int()} ms" + by_of(c.wake_by))
+    why.push("a wake in \{(c.wake_waited - c.now).ceil().to_int()} ms" + by_of(c.wake_by))
   }
   let rt = fx.val.unsettled()
   if rt != "" {

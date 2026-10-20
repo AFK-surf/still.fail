@@ -1,7 +1,7 @@
 // Animated values kept from frame to frame (Compose's Animatable and animateFloatAsState; Motion's MotionValue and
-// animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. As Compose's,
-// a motion asked for in one frame starts at the next (its first frame drawn at its start), and its time goes by the
-// frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
+// animate): a number going to a target by a spec, from where it is and how fast it moves when told anew. A motion told
+// in a frame starts there, at its time (that frame draws it at its start; its end known as it is told); told between
+// frames, at the next. Its time goes by the frames' clock in whole milliseconds. Reduced motion (the host's setting, or MBUI_REDUCE_MOTION=1) puts every
 // motion at its end at once (Motion.kt: one clock for all of it); a screenshot's run moves as any run.
 
 ///|
@@ -18,7 +18,7 @@ pub struct Anim {
   mut gen : Generator?
   mut from : Double
   mut v0 : Double
-  /// when it started (ms); -1: it starts at the first frame after `asked`
+  /// when it started (ms); -1: it starts at the first frame after `asked` (told between frames)
   mut start : Double
   mut asked : Int
   mut dur : Double
@@ -115,9 +115,8 @@ fn Anim::finish(self : Anim) -> Unit {
 
 ///|
 /// When it is there (whole ms, as its time goes), asked at each frame's end while it moves: read only, the same
-/// whoever asks first. Told to go, it starts at the first frame
-/// after (its first step there): until then +inf; not read in that frame (nothing shows it), at rest, said to move
-/// again by its first step.
+/// whoever asks first. Told to go between frames, it starts at the first frame after (its first step there): until
+/// then +inf; not read in that frame (nothing shows it), at rest, said to move again by its first step.
 pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
   ignore(now)
   if !self.running {
@@ -132,8 +131,8 @@ pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
 }
 
 ///|
-/// When it is there (whole ms, the frames' clock): +inf while it has not started yet (it starts at the first frame
-/// after it was told to go), before now (-1) when it is at rest.
+/// When it is there (whole ms, the frames' clock): from when it was told in a frame; +inf while it has not started
+/// yet (told between frames, it starts at the first frame after), before now (-1) when it is at rest.
 pub fn Anim::ends_at(self : Anim) -> Double {
   if !self.running {
     -1.0
@@ -165,8 +164,8 @@ pub fn Anim::target(self : Anim) -> Double {
 }
 
 ///|
-/// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from the next
-/// frame on (Animatable.animateTo).
+/// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from this
+/// frame's time on (told between frames: from the next frame's).
 #callsite(autofill(loc))
 pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Double, loc~ : SourceLoc) -> Unit {
   let c = @ui.current()
@@ -192,14 +191,15 @@ pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Doub
       self.end = target
     }
   }
-  self.start = -1.0
+  // (this frame shows it at its start: where it is now)
+  self.start = if c.in_frame() { c.now() } else { -1.0 }
   self.asked = c.frame_number()
   self.stepped = c.frame_number()
   if c.still() || (self.dur <= 0.0 && self.from == self.end) {
     self.finish()
   } else {
     self.running = true
-    // said once, as it is told to go: frames until it is there (it starts at the next frame)
+    // said once, as it is told to go: frames until it is there
     self.told = (if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }) +
       " to \{target}, told at \{loc}"
     c.moving_as(self.id, self as &@ui.Moving, self.told)

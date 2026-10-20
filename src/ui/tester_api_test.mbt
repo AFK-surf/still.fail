@@ -213,10 +213,17 @@ test "what moves says what it is and who told it; a test runs to it by its name"
 
 ///|
 test "a scripted run waits for a picture decoded by its name, and a frame drawn after it" {
+  // (shown once the run has begun: what it waits for ends after its step begins)
+  let shown = Ref::new(false)
   let t = @ui.Tester::new(
-    fn(c) { c.image("e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore },
+    fn(c) {
+      if shown.val {
+        c.image("e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+      }
+    },
     images=[("e2e-photo.jpg", 400, 300)],
   )
+  shown.val = true
   let log = t.drive("decoded e2e-photo.jpg\nexit")
   assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded e2e-photo.jpg") }), msg=log.join("\n"))
   assert_true(log.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=log.join("\n"))
@@ -228,10 +235,14 @@ test "a scripted run waits for a picture decoded by its name, and a frame drawn 
 ///|
 test "a scripted run waits for a picture decoded from bytes handed over for it, by its name" {
   // (the bytes as a core's answer brings them: a key of the app's, under which the node shows them)
+  let shown = Ref::new(false)
   let t = @ui.Tester::new(fn(c) {
-    c.image_bytes("core:files/e2e-photo.jpg", b"\xFF\xD8\xFF\xE0 not a whole JPEG")
-    c.image("core:files/e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+    if shown.val {
+      c.image_bytes("core:files/e2e-photo.jpg", b"\xFF\xD8\xFF\xE0 not a whole JPEG")
+      c.image("core:files/e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore
+    }
   })
+  shown.val = true
   let log = t.drive("decoded e2e-photo.jpg\nexit")
   assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded e2e-photo.jpg") }), msg=log.join("\n"))
   let rt = @ui.runtime()
@@ -251,17 +262,21 @@ test "a scripted run that waits for a call never answered fails within its timeo
 ///|
 test "a scripted run finds what it waits for however many others end before it looks (300 pictures in one frame)" {
   let srcs = Array::makei(300, fn(k) { "p\{k}.jpg" })
+  let shown = Ref::new(false)
   let t = @ui.Tester::new(
     fn(c) {
-      c.column(fn() {
-        for s in srcs {
-          c.image(s, w=Px(2.0), h=Px(2.0)) |> ignore
-        }
-      })
-      |> ignore
+      if shown.val {
+        c.column(fn() {
+          for s in srcs {
+            c.image(s, w=Px(2.0), h=Px(2.0)) |> ignore
+          }
+        })
+        |> ignore
+      }
     },
     images=srcs.map(fn(s) { (s, 40, 30) }),
   )
+  shown.val = true
   let log = t.drive("decoded p0.jpg\nexit")
   assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded p0.jpg") }), msg=log.join("\n"))
 }
@@ -347,6 +362,21 @@ test "how a node is drawn over its layout: its scale and opacity, with what hold
   t.draw()
   assert_eq(t.look_of("card"), Some((1.0, 0.85, 0.5)))
   assert_eq(t.look_of("nothing of that name"), None)
+}
+
+///|
+test "how a node is drawn, the text node whose words are exactly these (=WORDS): not the first that holds them" {
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      c.text("sent: grey 083209", wrap=false) |> ignore
+      let opt = c.box(fn() { c.text("grey 083209", wrap=false) |> ignore })
+      c.look(opt, @ui.look(scale=0.9))
+    })
+    |> ignore
+  })
+  assert_eq(t.look_of("grey 083209"), Some((1.0, 1.0, 1.0)))
+  assert_eq(t.look_of("=grey 083209"), Some((0.9, 0.9, 1.0)))
+  assert_eq(t.look_of("=grey"), None)
 }
 
 ///|

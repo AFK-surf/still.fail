@@ -188,6 +188,12 @@ fn desk_frame_start() -> Unit {
     desk.keys.push(k)
   }
   desk.mutable_keys.clear()
+}
+
+///|
+/// As the view is built (each time a frame builds it: frame_body): the shapes, drag areas and selections it says
+/// begin from none.
+fn desk_build_start() -> Unit {
   desk.next_cursors.clear()
   desk.next_drags.clear()
   desk.next_sels.clear()

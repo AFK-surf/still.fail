@@ -35,6 +35,7 @@ fn reset_globals() -> Unit {
   text_table.val = None
   inputs_since.val = false
   in_frame.val = false
+  building.val = false
   messages_reset()
   image_cache.clear()
   outside_tickets.clear()
@@ -110,7 +111,8 @@ fn leaked_state() -> Array[String] {
 
 ///|
 /// A tester showing `view` in a window of w × h logical pixels; it has
-/// already drawn the first frame. `images`: sources views may load, with
+/// already drawn the first frame, and the frames it owes at that moment
+/// (Tester::draw's). `images`: sources views may load, with
 /// their size in pixels (others fail to load).
 /// `dark`, `window_inset`, `env`, `app_version`: what the app reads of where
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
@@ -122,7 +124,8 @@ fn leaked_state() -> Array[String] {
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
 /// later). `stable`: output the same on every run, as a host asked by MBUI_BENCH=-1 makes it (Ctx::stable).
 /// `run`: a real host's run this Tester replays (Tester::replay_frames): the system's settings it began with (its ENV
-/// lines before its first frame) are set before the first frame is drawn, so that frame is the run's first.
+/// lines before its first frame) are set before the first frame is drawn, so that frame is the run's first (and only
+/// it: the run's next frames are its own).
 /// `finish`: what the host does for the app (an image decoding, a native view
 /// loading) is done by itself at the next frame, in the order asked; false: it
 /// stays undone until the test says (Tester::finish, finish_all), so the test
@@ -218,6 +221,11 @@ pub fn Tester::new(
   g_view.val = view
   let t = { fake: f, w, h, frames: 0, seed }
   t.frame()
+  // (what the first frame left owed, drawn at its moment, as Tester::draw draws an input's; a host's run replayed has
+  // only the frames it drew: Tester::replay_frames draws the next where it did)
+  if run is None {
+    t.draw_owed(1)
+  }
   t
 }
 
@@ -1147,9 +1155,10 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 }
 
 ///|
-/// How the node keyed `what` (its id's key, as built: c.id(what)), else the first text node containing `what`, was
-/// drawn in the last frame over how it is laid out: its scale across and down and its opacity, its own look's and all
-/// its ancestors' together (a card shrunk to 90% as it goes: (0.9, 0.9, 1.0)). None when there is no such node.
+/// How the node keyed `what` (its id's key, as built: c.id(what)), else the first text node containing `what` (`=WORDS`:
+/// whose words are WORDS exactly, as Tester::locate takes it), was drawn in the last frame over how it is laid out: its
+/// scale across and down and its opacity, its own look's and all its ancestors' together (a card shrunk to 90% as it
+/// goes: (0.9, 0.9, 1.0)). None when there is no such node.
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
   ignore(self)
   let c = g()
@@ -1162,9 +1171,18 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
     }
   }
   if found < 0 {
+    let exact = if what.has_prefix("=") && what.length() > 1 {
+      Some(what.unsafe_substring(start=1, end=what.length()))
+    } else {
+      None
+    }
     for i in 0..<c.count {
       let n = c.nodes[i]
-      if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(what) {
+      if (n.kind == kind_text || n.kind == kind_rich) &&
+        (match exact {
+          Some(e) => n.text == e
+          None => n.text.contains(what)
+        }) {
         found = i
         break
       }

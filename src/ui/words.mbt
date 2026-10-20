@@ -69,9 +69,9 @@ pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
 
 ///|
 /// Once laid out: what each marked box holds, kept; the selections to draw. Words kept elsewhere than before (their
-/// box moved: a page sliding in, a list scrolled) are a layout read back that moved (Ctx::read_back_moved): what the
+/// box moved: a page sliding in, a list scrolled) are a layout read back that moved (Ctx::read_changed): what the
 /// app placed from them this frame (handles over a passage, words_of read while building) was placed where they were
-/// the frame before, and is placed again in a frame more.
+/// the pass before, and is placed again as the frame is built again.
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
   if words_marks.is_empty() {
@@ -113,10 +113,7 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
       }
     }
     match words_kept.get(m.key) {
-      Some(was) if !same_place(was.pieces, pieces) => {
-        self.read_back_moved = true
-        self.read_back_key = m.key
-      }
+      Some(was) if !same_place(was.pieces, pieces) => self.read_changed("words_of \"" + m.key + "\"")
       _ => ()
     }
     words_kept[m.key] = { text: sb.to_string(), pieces }

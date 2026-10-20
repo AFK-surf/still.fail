@@ -100,7 +100,7 @@ test "words: a box not built this frame is forgotten" {
 }
 
 ///|
-test "words: moved (a page sliding in to its place), a frame more: what was placed from them where they were placed again" {
+test "words: moved (a page sliding in to its place): the frame built again, what was placed from them placed where they are" {
   let dx = Ref::new(0.0)
   let placed = Ref::new(-1.0)
   let t = @ui.Tester::new(
@@ -118,11 +118,9 @@ test "words: moved (a page sliding in to its place), a frame more: what was plac
   t.draw()
   let x0 = t.ctx().words_of("m").unwrap().pieces[0].x
   dx.val = 10.5
-  // one frame: built from where they were, laid out further on
+  // one frame: built from where they were, laid out further on, built again in it from where they are now (no frame
+  // drawn with them as they were)
   t.frame(ms=0.0)
-  assert_eq(placed.val, x0)
-  // the frame more it asked for: placed again where they are
-  t.draw()
   assert_eq(placed.val, x0 + 10.5)
   t.assert_idle()
 }

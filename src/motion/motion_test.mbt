@@ -102,7 +102,7 @@ test "a tween goes by whole milliseconds on its curve, after its delay" {
 }
 
 ///|
-test "an animated value starts the frame after it is asked, and follows its target" {
+test "an animated value starts the frame it is asked in, and follows its target" {
   let shown = Ref::new(false)
   let seen : Array[Double] = []
   let kept : Ref[@motion.Anim?] = Ref(None)
@@ -126,19 +126,14 @@ test "an animated value starts the frame after it is asked, and follows its targ
   assert_eq(seen[seen.length() - 1], 0.0)
   shown.val = true
   t.frame()
-  // asked this frame: still where it was
-  assert_eq(seen[seen.length() - 1], 0.0)
-  t.frame()
-  // its first frame: its start
+  // asked this frame: it starts here, at its start
   assert_eq(seen[seen.length() - 1], 0.0)
   t.frame()
   assert_true(near(seen[seen.length() - 1], 0.1, 1.0e-9))
   t.frame(ms=64.0)
   assert_true(near(seen[seen.length() - 1], 0.5, 1.0e-9))
-  // turned back mid-way: from where it is (the frame it is told in still
-  // moves it on, as Compose's: 0.6)
+  // turned back mid-way: from where it is in the frame it is told in (0.6), back from there on
   shown.val = false
-  t.frame()
   t.frame()
   let back = seen[seen.length() - 1]
   assert_true(near(back, 0.6, 1.0e-9), msg="\{back}")
@@ -202,11 +197,9 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
   assert_eq(y0, 40.0)
   before.val = false
   t.frame()
-  // laid out at 0, drawn at 40 still; tapped where it is laid out
+  // laid out at 0, drawn at 40 still (its move starts here); tapped where it is laid out
   assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   assert_eq(t.ctx().rect_of(id).unwrap().1, 0.0)
-  t.frame()
-  assert_eq(drawn_y(t, 0xFF0000FFL), 40.0)
   t.frame()
   let y2 = drawn_y(t, 0xFF0000FFL)
   assert_true(y2 < 40.0 && y2 > 0.0, msg="\{y2}")
@@ -233,7 +226,7 @@ test "layout_rest: a keyed node's move ends when its spring says, the same whene
   assert_eq(@motion.layout_rest("moved"), -1.0)
   assert_eq(@motion.layout_rest("nothing of that name"), -1.0)
   before.val = false
-  // the frame that moves it, and the one after it (its spring's first), at this moment
+  // the frame that moves it (its spring starts there)
   t.draw()
   let end = @motion.layout_rest("moved")
   assert_true(end > t.time() && end < 1.0e300, msg="\{end}")
@@ -255,7 +248,7 @@ test "shown and hidden: in by its enter, out by its exit, then gone" {
   assert_eq(looks[looks.length() - 1], None)
   shown.val = true
   t.frame()
-  t.frame()
+  // told this frame: it starts here
   match looks[looks.length() - 1] {
     Some(l) => assert_eq((l.alpha, l.sx, l.dy), (0.0, 0.6, 18.0))
     None => fail("shown")
@@ -269,8 +262,7 @@ test "shown and hidden: in by its enter, out by its exit, then gone" {
   shown.val = false
   t.frame()
   assert_true(looks[looks.length() - 1] is Some(_))
-  // the frame after (the exit's first, at this moment), then the exit's own length
-  t.draw()
+  // from the frame it is told in, the exit's own length
   t.run_for(trans_ms(exit))
   assert_eq(looks[looks.length() - 1], None)
   t.assert_idle()
@@ -336,8 +328,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   // a row new to the list comes in
   keys.val = ["e", "a", "c", "d"]
   t.frame()
-  // (the frame after: their motions' first, at this moment) to the end of e's entrance and of a's move
-  t.draw()
+  // (their motions start in that frame) to the end of e's entrance and of a's move
   let e_end = @motion.layout_rest("row/e")
   let a_end = @motion.layout_rest("row/a")
   t.run_for((if e_end > a_end { e_end } else { a_end }) - t.time())
@@ -347,8 +338,7 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   t.frame()
   let lifted_at = t.time()
   assert_true(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d") >= 0.0)
-  // (the frame after: its move's first) to the end of d's move
-  t.draw()
+  // (its move starts in that frame) to the end of d's move
   t.run_for(@motion.layout_rest("row/d") - t.time())
   assert_eq(t.drawn_of("d").unwrap().1, 0.0)
   // and of its lift over the others
@@ -503,6 +493,7 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   let shown = Ref::new(true)
   let under = Ref::new(0)
   let over = Ref::new(0)
+  let sheet_ms = 300.0
   let t = @ui.Tester::new(fn(c) {
     let u = c.id("under")
     if c.clicked(u) {
@@ -513,7 +504,7 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
       over.val = over.val + 1
     }
     c.box(w=Px(200.0), h=Px(100.0), bg=0x112233FFL, id=u, fn() {  }) |> ignore
-    match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(300.0))) {
+    match @motion.presence(c, "sheet", shown.val, enter=@motion.trans(fade=0.0, spec=@motion.tween(sheet_ms))) {
       Some(look) => {
         let l = c.layer(fn() {
           let b = c.box(w=Px(200.0), h=Px(100.0), bg=0x445566FFL, id=o, fn() {  })
@@ -528,16 +519,19 @@ test "what leaves is drawn, and a tap meanwhile goes to what is under it" {
   t.tap_once(100.0, 50.0)
   t.frame()
   assert_eq((over.val, under.val), (1, 0))
+  // the sheet's rect as drawn, however faded (its opacity applied to its colour): not the button's
+  let sheet = fn() { t.drawn_rects().filter(fn(r) { r.2 == 200.0 && r.4 != 0x112233FFL }) }
   shown.val = false
   t.frame()
-  t.frame()
-  // still drawn, going
-  assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x445566FFL }).length(), 1)
+  // still drawn, going from here
+  assert_eq(sheet().map(fn(r) { r.4 }), [0x445566FFL])
   t.tap_once(100.0, 50.0)
   t.frame()
   assert_eq((over.val, under.val), (1, 1))
-  t.draw()
-  assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x445566FFL }).length(), 0)
+  // drawn fainter as it goes, then gone
+  assert_true(sheet().length() == 1 && (sheet()[0].4 & 0xFFL) < 0xFFL)
+  t.run_for(sheet_ms)
+  assert_eq(sheet().length(), 0)
 }
 
 ///|
@@ -619,9 +613,9 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
       v.animate(100.0, @motion.tween(fade_ms))
       kept.val = Some(v)
       if ask {
-        // not yet started: no end to say
-        if v.ends_at() <= 1.0e300 {
-          abort("an Anim not started yet said an end")
+        // started here, at this frame's time: its end said at once
+        if v.ends_at() != c.now() + fade_ms {
+          abort("an Anim told in a frame did not say its end there")
         }
       }
     }
@@ -630,7 +624,7 @@ fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tes
 }
 
 ///|
-test "an Anim's start is its first frame's, whoever asks its end before or between" {
+test "an Anim's start is the frame it is told in, whoever asks its end then or between" {
   let fade_ms = 200.0
   let a1 : Ref[@motion.Anim?] = Ref(None)
   let quiet = told_once(false, fade_ms, a1)
@@ -644,7 +638,7 @@ test "an Anim's start is its first frame's, whoever asks its end before or betwe
       None => -1.0
     }
   }
-  // started at the frame after it was told (drawn at the same moment here): its end from there
+  // started at the frame it was told in: its end from there
   let e = end(a2)
   assert_eq(e, end(a1))
   assert_eq(end(a2), e)
