@@ -140,8 +140,9 @@ jobs:
           EOF
           nohup bash "$RUNNER_TEMP/simbg.sh" > /dev/null 2>&1 &
           echo $! > "$RUNNER_TEMP/simbg.pid"
-      # (beside the app's build, while the simulator's processes are held back: after it, beside them, 3 minutes)
-      - name: The local still.fail installing
+      # (beside the app's build, while the simulator's processes are held back: after it, beside them, its install 3
+      # minutes and its start up to 2.5)
+      - name: The local still.fail installing and starting
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash apps/mbui/scripts/ios-smoke.sh prepare
