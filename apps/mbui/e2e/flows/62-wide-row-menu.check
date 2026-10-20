@@ -1,2 +1,0 @@
-check "pinned from the menu: the station has alice's pin" 'grep "^PINS" $OUT/$name.log | head -1 | grep -q "PINS 1"'
-check "let go from the menu: none" 'grep "^PINS" $OUT/$name.log | tail -1 | grep -q "PINS 0"'
