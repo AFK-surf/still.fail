@@ -311,6 +311,9 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
   }
   let now = self.t.time()
   if end > now {
+    // (in a scripted run, the same time on: a step that does not wait for words, a tap at a place, comes after the
+    // motion as here)
+    emit_wait(end - now)
     self.t.run_for(end - now)
   }
   self.core()
