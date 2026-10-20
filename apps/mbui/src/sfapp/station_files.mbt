@@ -517,10 +517,10 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
         }
       }
       // its remove button over its corner, as a picture's in the composer
-      with_remove(c, remove, fn() {
+      with_remove(c, remove, file_card_w, fn() {
       c.box(
         dir=Row,
-        w=Px(236.0),
+        w=Px(file_card_w),
         min_h=picture_tile,
         padx=10.0,
         pady=8.0,

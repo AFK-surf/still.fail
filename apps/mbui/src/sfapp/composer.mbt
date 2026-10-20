@@ -45,6 +45,13 @@ let picture_remove_out : Double = 5.0
 let files_row_top : Double = 2.0
 
 ///|
+/// A file's card and a pasted text's card in the files' row, how wide.
+let file_card_w : Double = 236.0
+
+///|
+let pasted_card_w : Double = 260.0
+
+///|
 let composer_files_in : Double = composer_inset + files_row_top + picture_remove_out
 
 ///|
@@ -1364,7 +1371,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
           draft_picture(c, f, picture, remove)
         } else {
           // (its remove button over its corner as a picture's: their tops in line)
-          with_remove(c, remove, fn() {
+          with_remove(c, remove, if f.pasted is Some(_) { pasted_card_w } else { file_card_w }, fn() {
             match f.pasted {
               Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
               None => file_tile(c, f, remove)
@@ -1383,7 +1390,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
 /// remove button over its corner.
 fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Unit {
   let t = @sf.theme()
-  with_remove(c, remove, fn() {
+  with_remove(c, remove, picture_tile, fn() {
     c.box(w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), bg=t.p.chip, clip=true, fn() {
       if picture != "" {
         c.image(picture, w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), fit=FitCover, bg=0L) |> ignore
@@ -1416,9 +1423,10 @@ fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Un
 ///|
 /// What waits to go with the message (a picture's tile, a file's card), its remove button over its top right corner,
 /// reaching `picture_remove_out` beyond it (Composer.kt: a picture's; a file's card the same here, so both read alike).
-fn with_remove(c : @ui.Ctx, remove : Int, body : () -> Unit) -> Unit {
+fn with_remove(c : @ui.Ctx, remove : Int, w : Double, body : () -> Unit) -> Unit {
   let t = @sf.theme()
-  c.box(pt=picture_remove_out, pr=picture_remove_out, fn() {
+  // (as wide as what it holds and its button's reach: never squeezed by a row too narrow for all of them)
+  c.box(w=Px(w + picture_remove_out), pt=picture_remove_out, pr=picture_remove_out, fn() {
     body()
     c.layer(align=AEnd, fn() {
       c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, id=remove, fn() {
@@ -1465,7 +1473,7 @@ fn pasted_card(
   }
   c.box(
     dir=Row,
-    w=Px(260.0),
+    w=Px(pasted_card_w),
     min_h=picture_tile,
     pl=10.0,
     pr=8.0,
@@ -1539,7 +1547,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
   let link = field(f.done, "link")
   c.box(
     dir=Row,
-    w=Px(236.0),
+    w=Px(file_card_w),
     min_h=picture_tile,
     padx=10.0,
     pady=8.0,
