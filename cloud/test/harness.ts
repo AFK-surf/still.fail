@@ -70,6 +70,8 @@ export async function harness(
     fcm?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
+    /** The grant key (its private JWK, kid "test-grant"): one made now unless given (dev.ts's RESUME keeps it). */
+    grantJwk?: JsonWebKey & { kid?: string };
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
@@ -98,9 +100,10 @@ export async function harness(
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
   const mails: MailMessage[] = [];
-  const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
-  const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
-  const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
+  const grantPair = options.grantJwk ? null : await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+  const grantJwk = options.grantJwk ? { ...options.grantJwk, kid: "test-grant" } : { ...(await exportJWK(grantPair!.privateKey)), kid: "test-grant" };
+  const { d: _d, ...grantPublicFields } = grantJwk as JsonWebKey & { kid: string };
+  const grantPublicJwk = options.grantJwk ? { ...grantPublicFields, kid: "test-grant" } : { ...(await exportJWK(grantPair!.publicKey)), kid: "test-grant" };
   const bundle = async (entry: string) => (await build({
     entryPoints: [entry],
     bundle: true,
@@ -311,6 +314,7 @@ export async function harness(
     oldOrigin,
     oldAdminOrigin,
     as,
+    grantJwk,
     grantPublicJwk,
     adminToken,
     signingKey,
