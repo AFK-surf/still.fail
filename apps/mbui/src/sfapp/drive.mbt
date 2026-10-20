@@ -942,7 +942,7 @@ fn dv_pump(src : Source) -> Unit {
       dv.pumping = true
       u.state = "going"
       u.sent = 0
-      u.id = upload_id(src)
+      u.id = upload_id("drive\u{1}\{u.root}\u{1}\{u.dir}\u{1}" + file_seed(u.station, u.name, u.bytes), u.serial)
       dv_up_part(src, u, 0, dv_part_first)
     }
     None => ()

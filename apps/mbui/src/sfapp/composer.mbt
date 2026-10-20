@@ -362,28 +362,11 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes): from a seed this run of
-/// the app takes once (the source's time of day as its first upload is made) and a count, so the same uploads made
-/// over the same source get the same ids, whenever each is made and whatever came between (a fixture's or a replay's
-/// time), and another run of the app other ids.
-let upload_serial : Ref[Int] = { val: 0 }
-
-///|
-/// The seed upload ids are made from (upload_id), once taken.
-let upload_seed : Ref[Double?] = { val: None }
-
-///|
-fn upload_id(src : Source) -> String {
-  upload_serial.val += 1
-  let run = match upload_seed.val {
-    Some(s) => s
-    None => {
-      let s = (src.now)()
-      upload_seed.val = Some(s)
-      s
-    }
-  }
-  let seed = "\{run}/\{upload_serial.val}"
+/// An upload's id: 32 hex digits (the Android app's UUID without its dashes), from what goes up and where, never
+/// from a clock: `what` (where it goes, its name, its bytes' hash) and `n` (its place among what goes up there: a
+/// draft's files, a folder's uploads). The same upload made over any run, recorded or replayed, has the same id.
+fn upload_id(what : String, n : Int) -> String {
+  let seed = "\{what}/\{n}"
   let hex = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
@@ -491,7 +474,13 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
     p.error = Some(read_only_words)
     return
   }
-  upload_part(src, d, station, p, bytes, upload_id(src), 0)
+  upload_part(src, d, station, p, bytes, upload_id(file_seed(station, name, bytes), d.files.length() - 1), 0)
+}
+
+///|
+/// What a file going up is known by for its id (upload_id): the station, its name, its size and its bytes' hash.
+fn file_seed(station : String, name : String, bytes : Bytes) -> String {
+  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{bytes.hash()}"
 }
 
 ///|
@@ -575,10 +564,16 @@ fn uploading_text(f : Pending) -> String {
 }
 
 ///|
-/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it).
+/// A long paste: the text file it goes as (`pasted-text-<id>.txt`, UTF-8, as the web names it; paste_name).
 fn paste_as_file(src : Source, d : Draft, station : String, words : String) -> Unit {
-  let name = "pasted-text-" + uuid(upload_id(src)) + ".txt"
+  let name = paste_name(words, d.files.length())
   add_file(src, d, station, name, utf8_bytes(words), Some(words))
+}
+
+///|
+/// The name a long paste goes up as: from its words and its place among the draft's files (`n`), never a clock.
+fn paste_name(words : String, n : Int) -> String {
+  "pasted-text-" + uuid(upload_id("paste\u{1}" + words, n)) + ".txt"
 }
 
 ///|

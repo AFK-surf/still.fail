@@ -267,8 +267,6 @@ fn reset() -> Unit {
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
   quote_seeded.clear()
-  upload_serial.val = 0
-  upload_seed.val = None
   marked_into.clear()
   shared_into.clear()
   share_files_made.val = 0

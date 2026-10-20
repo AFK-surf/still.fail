@@ -17,6 +17,7 @@ fn fake_core(
   calls : Array[Made],
   kept? : Json = Json::null(),
   read_only? : Bool = false,
+  now? : Double = 0.0,
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -31,6 +32,7 @@ fn fake_core(
       }
     },
     call_bytes: fn(name, params, bytes, done) { calls.push({ name, params, bytes: Some(bytes), done }) },
+    now: fn() { now },
     read_only,
   }
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
@@ -137,6 +139,30 @@ test "a kept quote's comment comes back into its line and goes with the message"
   // tall as they went meanwhile, then let go to its own height (both said as they set off)
   t.run_for(flight_wait_ms + composer_morph_ms)
   t.assert_idle()
+}
+
+///|
+test "a long paste goes up by the same id and name whatever the clocks say: from its words and its place alone" {
+  let long = "第一行要点\n" + String::make(6000, 'x')
+  // two runs: other times of day, the frames' clock further on in the second
+  let ids = []
+  for run in [(0.0, 0.0), (1792462301917.0, 4321.0)] {
+    let calls : Array[Made] = []
+    let t = fake_core(calls, now=run.0)
+    t.run_for(run.1)
+    t.tap_text("发消息")
+    t.type_text(long)
+    t.draw()
+    let parts = named(calls, "station.upload.part")
+    assert_eq(parts.length(), 1)
+    let p = Some(parts[0].params)
+    ids.push((text(p, "id"), text(p, "name")))
+  }
+  assert_eq(ids[0], ids[1])
+  assert_eq(ids[0].1, paste_name(long, 0))
+  // another paste, or the same one second in its draft, is another file
+  assert_true(paste_name(long + "y", 0) != paste_name(long, 0))
+  assert_true(paste_name(long, 1) != paste_name(long, 0))
 }
 
 ///|
