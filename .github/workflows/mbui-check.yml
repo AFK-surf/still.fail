@@ -117,7 +117,9 @@ jobs:
         run: |
           grep -a 'compiled (' "$MBC_LOG" | sed 's/^mbc: //' | sort | tee -a "$GITHUB_STEP_SUMMARY" || true
           du -sh apps/mbui/_build/native/release || true
-          c=$(find apps/mbui/_build/native/release -path '*.mbc/src/manifest.json' -exec shasum {} + 2>/dev/null | sort -k2 | shasum | cut -c1-16)
+          # (by the split's manifests and each object's stamp, its command and compiler with what it was made of: a key by
+          # the C alone kept the objects of a command no longer used, as #841's run did, 0 of 513 up to date after it)
+          c=$(find apps/mbui/_build/native/release \( -path '*.mbc/src/manifest.json' -o -path '*.mbc/u_*.mbc' \) -exec shasum {} + 2>/dev/null | sort -k2 | shasum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$c" >> "$GITHUB_ENV"
       - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
         uses: actions/cache/save@v4
