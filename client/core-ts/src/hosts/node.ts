@@ -351,13 +351,17 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     if (dead) return;
     dead = true;
     console.error("still.fail core:", error);
-    // Its databases are let go before its clients hear: the core that follows in this process opens them (one
-    // connection at a time: locking_mode EXCLUSIVE).
-    running?.close();
-    host.close();
+    // Its device values are written and its databases let go before its clients hear: the core that follows in this
+    // process reads them and opens them (one connection at a time: locking_mode EXCLUSIVE).
     const said = JSON.stringify({ fatal: t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }) });
-    for (const client of clients) listener(client, said);
-    void ready.then((core) => core.close(), () => {});
+    void (running?.close() ?? Promise.resolve())
+      .catch((e: unknown) => console.error("still.fail core: closing:", e))
+      .then(() => {
+        host.close();
+        for (const client of clients) listener(client, said);
+      });
+    // Not yet started: let go once it is.
+    if (!running) void ready.then((core) => core.close(), () => {}).catch((e: unknown) => console.error("still.fail core: closing:", e));
   };
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
   const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account, modules: options.modules }).then((core) => {
@@ -391,8 +395,11 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
     },
     async close(): Promise<void> {
       dead = true;
-      (await ready).close();
-      host.close();
+      try {
+        await (await ready).close();
+      } finally {
+        host.close();
+      }
     },
   };
 }
