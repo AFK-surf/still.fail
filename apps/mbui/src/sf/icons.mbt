@@ -72,13 +72,7 @@ pub fn spinner(
   let t = theme()
   let ring = ring.unwrap_or(t.p.line_strong)
   let arc = arc.unwrap_or(t.p.accent)
-  let frame = if c.stable() {
-    0
-  } else {
-    c.request_frame()
-    let turns = c.now() / period
-    ((turns - turns.floor()) * spin_frames.to_double()).to_int() % spin_frames
-  }
+  let frame = (c.cycle(period) * spin_frames.to_double()).to_int() % spin_frames
   let px = px_of(c, size)
   let key = "mem:sf/spin/\{px}/\{ring}/\{arc}/\{frame}" +
     (if sweep != 0.25 { "/\{sweep}" } else { "" })

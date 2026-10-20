@@ -40,8 +40,6 @@
   ],
   "counts": {
     "frame-request": {
-      "src/sf/icons.mbt": 1,
-      "src/sf/parts.mbt": 1,
       "src/sfapp/app.mbt": 3,
       "src/sfapp/bar.mbt": 2,
       "src/sfapp/chat.mbt": 2,
@@ -177,8 +175,6 @@
       "src/sfapp/share_wbtest.mbt": 2
     },
     "stable-mode": {
-      "src/sf/icons.mbt": 1,
-      "src/sf/parts.mbt": 1,
       "src/sfapp/app.mbt": 3,
       "src/sfapp/bar.mbt": 2,
       "src/sfapp/chat.mbt": 3,
@@ -195,8 +191,6 @@
     },
     "retired-api": {},
     "app-clock": {
-      "src/sf/icons.mbt": 1,
-      "src/sf/parts.mbt": 1,
       "src/sfapp/app.mbt": 9,
       "src/sfapp/chat.mbt": 7,
       "src/sfapp/chat_fixture.mbt": 1,
