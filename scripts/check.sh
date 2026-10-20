@@ -75,6 +75,7 @@ step() {
     set +e
     for k in $before; do until [ -e "$tmp/step.$k.done" ]; do sleep 0.1; done; done
     start=$(date +%s)
+    echo "$start" > "$tmp/step.$n.start"
     {
       ok=1
       for w in $waits; do ready "$w" || { echo "preparing $w failed:"; cat "$tmp/prep.$w.log"; ok=0; break; }; done
@@ -95,13 +96,32 @@ ready() {
   until [ -e "$tmp/prep.$1.done" ]; do sleep 0.1; done
   [ "$(cat "$tmp/prep.$1.done")" = 0 ]
 }
-# Says each step, in order, as it is done.
+# The steps started and not done, with how long each has run (and with `tail`, the end of each one's output so far).
+running() {
+  now=$(date +%s)
+  k=0
+  while [ $k -lt $n ]; do
+    k=$((k + 1))
+    [ -e "$tmp/step.$k.start" ] && [ ! -e "$tmp/step.$k.done" ] || continue
+    echo "  … $(cat "$tmp/step.$k.name"): running, $((now - $(cat "$tmp/step.$k.start"))) s"
+    [ -z "${1:-}" ] || tail -20 "$tmp/step.$k.log" | sed 's/^/      /'
+  done
+}
+# Stopped (CI's time up, ^C): which steps were still running, and where each had got to, said before it ends (a
+# check stopped after 10 minutes said only the last step done, not the one it waited for: 39468530573).
+trap 'echo "stopped; still running:"; running tail; exit 1' INT TERM
+# Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {
   i=0
   while [ $i -lt $n ]; do
     i=$((i + 1))
     name=$(cat "$tmp/step.$i.name")
-    until [ -e "$tmp/step.$i.done" ]; do sleep 0.1; done
+    w=0
+    until [ -e "$tmp/step.$i.done" ]; do
+      sleep 0.1
+      w=$((w + 1))
+      [ $((w % 600)) != 0 ] || running
+    done
     read -r rc took < "$tmp/step.$i.done"
     if [ "$rc" = 0 ]; then echo "· $name … ok (${took} s)"; else
       echo "· $name … FAILED (${took} s)"
