@@ -11,6 +11,9 @@
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
 #   scripts/e2e-local.sh down       stops what `up` started
+#   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
+#                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
+#   scripts/e2e-local.sh restore NAME          back to it (the station and the cloud stopped, put back, started)
 #   scripts/e2e-local.sh all        up, mac, down (what a later slice runs to check itself)
 #   scripts/e2e-local.sh peer ARGS  e2e/peer.ts as alice's other device (send TEXT, create, chats, …)
 #   scripts/e2e-local.sh sql SQL    the test station's database, read only
@@ -84,6 +87,65 @@ ember() {
 
 native() { (cd $E && node scripts/native.ts file $1); }
 
+# the cloud (cloud/test/dev.ts) over what it holds in $RUN/cloud-state; RESUME=1 (a starting point put back): the same
+# cloud again, nothing made anew
+start_cloud() {
+  (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
+    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
+  wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+}
+
+# the test station (enrolled), its launcher over its own data
+start_station() {
+  local launcher=$(native launcher)
+  (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
+  wait_for "[ -f $STATION/data/stillfail.db ]" 60 || { tail -20 $RUN/station.log; die "the station did not start"; }
+}
+
+# the station and the cloud stopped, their files at rest (the relay holds nothing: it stays)
+stop_held() {
+  stop station
+  pkill -f "$STATION/data" 2>/dev/null || true
+  stop cloud
+  pkill -f "$E/cloud/node_modules" 2>/dev/null || true
+  wait_for "! listening $PORT" 5 || true
+}
+
+# A starting point (e2e/run.sh's E2E_START: every flow begins at the same one, its trace on its own): what the cloud
+# holds, the station's data and HOME, alice's other device's, and the app's core data (CORE: a run's, after its first
+# start), kept in $WORK/snapshots/NAME; the station and the cloud stopped for it and started again.
+snapshot() {
+  local name=${1:?a name}; local core=${2:-$WORK/core-mac} at=$WORK/snapshots/${1}
+  stop_held
+  rm -rf $at && mkdir -p $at
+  cp -a $RUN/cloud-state $at/cloud-state
+  cp $RUN/auth-key $at/auth-key
+  cp -a $STATION $at/station
+  cp -a $WORK/peer $at/peer 2>/dev/null || true
+  cp -a $WORK/peer-home $at/peer-home 2>/dev/null || true
+  [ -d "$core" ] && cp -a "$core" $at/core
+  start_cloud resume
+  start_station
+  say "snapshot $name: $at"
+}
+
+# Back to starting point NAME, as it was taken: the station and the cloud stopped, their files put back, started again
+# (the cloud as the same cloud). The app's core data is the run's to copy (e2e/run.sh: a copy for each flow).
+restore() {
+  local name=${1:?a name} at=$WORK/snapshots/${1}
+  [ -d $at ] || die "no starting point $name ($at)"
+  stop_held
+  rm -rf $RUN/cloud-state $STATION $WORK/peer $WORK/peer-home
+  cp -a $at/cloud-state $RUN/cloud-state
+  cp $at/auth-key $RUN/auth-key
+  cp -a $at/station $STATION
+  [ -d $at/peer ] && cp -a $at/peer $WORK/peer
+  [ -d $at/peer-home ] && cp -a $at/peer-home $WORK/peer-home
+  start_cloud resume
+  start_station
+  say "restored $name"
+}
+
 up() {
   for p in $PORT $((PORT + 1)) $((PORT + 2)) $((PORT + 3)) $((PORT + 4)) $((PORT + 5)) $RELAY_PORT; do
     listening $p && die "port $p is taken (E2E_PORT, E2E_RELAY): run down, or pick others"
@@ -99,10 +161,11 @@ EOF
   detach "$(native iroh-relay)" --dev --config-path $RUN/relay.toml >$RUN/relay.log 2>&1 &
   echo $! > $RUN/relay.pid
   wait_for "listening $RELAY_PORT" 20 || die "the relay did not start ($RUN/relay.log)"
-  # the cloud: fresh each time (its test identities and workspace made anew)
-  (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
-    detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
-  wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+  # the cloud: fresh each time (its test identities and workspace made anew), what it holds kept in $RUN/cloud-state
+  # and its sign-ins' key in $RUN/auth-key, so that a starting point taken of it can be put back (snapshot, restore)
+  rm -rf $RUN/cloud-state && mkdir -p $RUN/cloud-state
+  python3 -c 'import secrets; print(secrets.token_urlsafe(48))' > $RUN/auth-key
+  start_cloud
   local token=$(grep -m1 '^ENROLL ' $RUN/cloud.log | awk '{print $NF}')
   [ -n "$token" ] || die "no enrollment in the cloud's log"
   # the station: its own data and HOME, the fake runtimes first on PATH (e2e/fake's claude, which posts cards and
@@ -124,11 +187,9 @@ export STILLFAIL_MESH_NATIVE=$(native mesh)
 export STILLFAIL_RUNNER=$(native runner)
 export FAKE_DUMP=$STATION/fake-claude.jsonl
 EOF
-  local launcher=$(native launcher)
   (. $RUN/station-env.sh && node $E/station/dist/main.js enroll $ORIGIN $token --data $STATION/data >$RUN/enroll.log 2>&1) \
     || { cat $RUN/enroll.log; die "enrolling the station failed"; }
-  (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
-  wait_for "[ -f $STATION/data/stillfail.db ]" 60 || { tail -20 $RUN/station.log; die "the station did not start"; }
+  start_station
   # alice's other device: the chat the app opens, made on the station, with its first words
   peer setup >$RUN/peer-setup.log 2>&1 || { cat $RUN/peer-setup.log; die "the peer could not make the chat"; }
   account=$(curl -sf "$ORIGIN/__dev/account?user=alice") || die "no mock account"
@@ -363,6 +424,8 @@ thaw() {
 
 case "${1:-all}" in
   up) up ;;
+  snapshot) shift; snapshot "$@" ;;
+  restore) shift; restore "$@" ;;
   down) down ;;
   status)
     for p in relay cloud station; do echo "$p: $(alive $p && echo "up ($(cat $RUN/$p.pid))" || echo down)"; done ;;

@@ -164,17 +164,26 @@ if [ $PLATFORM = mac ]; then
   export MB_CORE_BUNDLE=$ROOT/out/core/core.hbc
 fi
 
+# a step the runner takes beside the app, as the trace has it (CORETRACE {"step": WORDS}: the words given to
+# scripts/e2e-local.sh, {T} in them this run's tag)
+step_line() { python3 -c 'import json, sys; print("CORETRACE " + json.dumps({"step": sys.argv[1]}, ensure_ascii=False))' "$1"; }
+
 # runs a flow in the app; its log as it goes, `log do:` acted on. A flow's `#env K=V` lines are put in the app's
 # environment for that run (MBUI_OPEN_PAGE=files: the drive's 文件 pushed over Home)
 run_flow() {
-  local name=$1 log=$OUT/$name.log script=$OUT/$name.drive
+  local name=$1
+  local log=$OUT/$name.log script=$OUT/$name.drive
   # {T} this run's tag; {SVC} the service port; {FILES} where the files to attach are (on Android the app's own copy of them); {PKG} the app
   local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
   sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
   mkdir -p $OUT/$name
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
-  # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere)
+  # (a starting point's run: the trace says which, scripts/trace.py keeps it as its first line)
+  [ -n "${E2E_START:-}" ] && printf 'CORETRACE {"start":"%s"}\n' "$E2E_START" >> $log
+  # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere),
+  # each said on the trace where it happened (a step of the run's own, what a contract test does again there)
   sed -n 's/^#before //p' $script | while IFS= read -r words; do
+    step_line "$words" >> $log
     "$ROOT/scripts/e2e-local.sh" $words < /dev/null >> $log 2>&1
   done
   if [ $PLATFORM = mac ]; then
@@ -186,7 +195,8 @@ run_flow() {
       timeout ${E2E_FLOW_TIMEOUT:-300} "$EXE" 2>&1 | while IFS= read -r line; do
         echo "$line" >> $log
         case "$line" in
-          "DRIVE LOG do: "*) "$ROOT/scripts/e2e-local.sh" ${line#DRIVE LOG do: } < /dev/null >> $log 2>&1 & ;;
+          "DRIVE LOG do: "*) step_line "${line#DRIVE LOG do: }" >> $log
+            "$ROOT/scripts/e2e-local.sh" ${line#DRIVE LOG do: } < /dev/null >> $log 2>&1 & ;;
         esac
       done
     grep -q "^DRIVE PASS" $log
@@ -200,6 +210,23 @@ run_flow() {
   fi
 }
 
+# E2E_START=NAME (macOS): every flow begins at the same starting point, its trace its own (scripts/e2e-local.sh
+# snapshot, restore): the first time, taken once the app has started on the signed-in account (01-signin's run: its
+# core's first start done); before each flow, put back, with a copy of the app's core data of its own
+if [ -n "${E2E_START:-}" ] && [ $PLATFORM = mac ]; then
+  if [ ! -d "$WORK/snapshots/$E2E_START" ]; then
+    run_flow start-$E2E_START $D/flows/01-signin.drive || { echo "e2e: the starting point's first start failed ($OUT/start-$E2E_START.log)"; exit 1; }
+    "$ROOT/scripts/e2e-local.sh" snapshot "$E2E_START" "$CORE" || exit 1
+  fi
+fi
+start_flow() {
+  [ -n "${E2E_START:-}" ] && [ $PLATFORM = mac ] || return 0
+  "$ROOT/scripts/e2e-local.sh" restore "$E2E_START" > /dev/null || { echo "e2e: could not restore $E2E_START"; return 1; }
+  rm -rf $CORE && cp -a "$WORK/snapshots/$E2E_START/core" $CORE
+  # (the restored station holds the starting point's drive folder: this run's lives under its own tag)
+  "$ROOT/scripts/e2e-local.sh" drive-seed $TAG >/dev/null
+}
+
 TABLE=$OUT/../$PLATFORM.txt
 : > $TABLE
 total=0; passed=0
@@ -210,6 +237,7 @@ for f in $flows; do
   total=$((total + 1))
   echo "== $name"
   FAILS=""
+  start_flow || { echo "FAIL $name (its starting point)" | tee -a $TABLE; continue; }
   if run_flow $name $f; then drove=ok; else drove=FAIL; FAILS="|the app's run"; grep "DRIVE FAIL" $OUT/$name.log | head -3 | sed 's/^/  /'; fi
   # (a flow that stopped with the station frozen leaves it so: thawed for the next)
   "$ROOT/scripts/e2e-local.sh" thaw >/dev/null 2>&1
