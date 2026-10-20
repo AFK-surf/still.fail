@@ -1206,14 +1206,19 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -
 let round_button : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter)
 
 ///|
-/// A body of words in a list card (PageParts.kt Body): 16 and 14 in, 12 apart.
+/// A body of words (PageParts.kt Body): on a list card 12 and 12 in (its words 20 from the card's edge, as its rows'),
+/// else 16 and 14; 12 apart.
 fn body(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  c.box(style=body_box, f) |> ignore
+  c.box(style=if on_card.val { body_on_card } else { body_box }, f) |> ignore
 }
 
 ///|
 // kept across runs: a value (no field of it changes)
 let body_box : @ui.Style = @ui.style(w=Full, px=S4, py=S3_5, gap=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let body_on_card : @ui.Style = body_box.then(@ui.style(px=S3, py=S3))
 
 ///|
 /// A paragraph and a quieter one under it (Security.kt Para).
