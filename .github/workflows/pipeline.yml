@@ -307,8 +307,16 @@ jobs:
   check-mbui:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui == 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # js on Linux (with the check); native on GitHub's macOS, as its host's C stubs are Apple's (mbui/host: Objective-C)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, targets: js, check: true }
+          - { os: macos-15, targets: native, check: false }
+    name: check-mbui (${{ matrix.targets }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     env:
       MOON_HOME: ${{ github.workspace }}/../.moon
     steps:
@@ -320,9 +328,10 @@ jobs:
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: The mbui app's check (detlint, then every target type-checked)
+        if: matrix.check
         run: moon version && bash apps/mbui/scripts/check.sh
-      - name: The mbui app's tests and the flows seen again (js, native)
-        run: TARGETS="js native" LINES_OUT=40 bash apps/mbui/scripts/test.sh
+      - name: The mbui app's tests and the flows seen again (${{ matrix.targets }})
+        run: moon version && TARGETS="${{ matrix.targets }}" LINES_OUT=40 bash apps/mbui/scripts/test.sh
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
