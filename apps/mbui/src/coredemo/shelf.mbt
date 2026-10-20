@@ -220,12 +220,12 @@ fn core_chapter(book : String, index : Int) -> Result[Array[@ui.Block], String]?
 }
 
 ///|
-fn core_save_place(book : String, chapter : Int, offset : Int) -> Unit {
+fn core_save_place(book : String, chapter : Int, offset : Int, at : Double) -> Unit {
   guard media_station() is Some(station) else { return }
   let place : Map[String, Json] = {
     "chapter": Json::number(chapter.to_double()),
     "offset": Json::number(offset.to_double()),
-    "at": Json::number((core_source.now)().floor()),
+    "at": Json::number(at.floor()),
   }
   let params : Map[String, Json] = {
     "station": Json::string(station),
