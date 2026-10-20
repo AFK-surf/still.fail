@@ -40,7 +40,6 @@
   ],
   "counts": {
     "frame-request": {
-      "src/sfapp/app.mbt": 1,
       "src/sfapp/chat.mbt": 1,
       "src/sfapp/composer.mbt": 4,
       "src/sfapp/drive_reader.mbt": 4,
@@ -162,17 +161,10 @@
       "src/sfapp/recent.mbt": 1,
       "src/sfapp/share_wbtest.mbt": 2
     },
-    "stable-mode": {
-      "src/sfapp/app.mbt": 1,
-      "src/sfapp/drive_reader.mbt": 2,
-      "src/sfapp/drive_sheets.mbt": 1,
-      "src/sfapp/history.mbt": 4,
-      "src/sfapp/sheets.mbt": 1,
-      "src/sfapp/station_files.mbt": 1
-    },
+    "stable-mode": {},
     "retired-api": {},
     "app-clock": {
-      "src/sfapp/app.mbt": 6,
+      "src/sfapp/app.mbt": 5,
       "src/sfapp/bar.mbt": 1,
       "src/sfapp/chat.mbt": 5,
       "src/sfapp/chat_fixture.mbt": 1,

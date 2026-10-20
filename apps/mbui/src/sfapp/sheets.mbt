@@ -265,9 +265,6 @@ fn agent_since(c : @ui.Ctx, src : Source, a : Json?) -> String {
   if wait is None && since is None {
     return text(field(field(field(a, "session"), "time"), "lastActiveAt"), "ago")
   }
-  if c.stable() {
-    return ""
-  }
   let now = (src.now)()
   match wait {
     Some(Object(_)) => {

@@ -260,7 +260,7 @@ fn station_files_close(c : @ui.Ctx) -> Unit {
 /// 取消 and 添加.
 fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> Unit {
   let closing = !sfs.open
-  if closing && (c.now() - sfs.closed_at >= 300.0 || c.stable() || sfs.draft != key) {
+  if closing && (c.now() - sfs.closed_at >= 300.0 || sfs.draft != key) {
     return
   }
   if closing {
