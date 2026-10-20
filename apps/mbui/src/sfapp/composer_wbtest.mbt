@@ -297,6 +297,33 @@ test "the same file twice in a draft is two uploads, and again after it was sent
 }
 
 ///|
+test "a draft emptied, not sent: the core names the next, and the same file put in again is another upload" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let _t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  let bytes = b"the same bytes"
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let first = named(calls, "station.upload.part")[0]
+  // up: the draft holds it, kept so (draft.put with the file: the same draft, its name kept)
+  (first.done)(Ok({ "file": { "name": "a.txt", "path": "uploads/u/a.txt", "size": 14 } }))
+  save_draft(src, d)
+  let named_as = d.id
+  assert_true(named_as != "")
+  // taken out again, nothing sent: kept empty, and the core names the next draft
+  d.files.clear()
+  save_draft(src, d)
+  assert_true(d.id != named_as)
+  assert_eq(named(calls, "chat.send").length(), 0)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let parts = named(calls, "station.upload.part")
+  assert_eq(parts.length(), 2)
+  assert_true(text(Some(parts[1].params), "id") != text(Some(first.params), "id"))
+}
+
+///|
 test "a long paste goes as a text file, up to the station, and with the message" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
