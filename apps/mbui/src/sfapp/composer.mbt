@@ -1388,30 +1388,11 @@ fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Un
 }
 
 ///|
-/// A file's card in the composer (and a station file's): its corner, and how far in from every edge what it holds
-/// stands.
-let file_card_radius : Double = 16.0
-
-///|
-let file_card_pad : Double = 10.0
-
-///|
-/// The round × of a card in the composer, in the card's top right corner: as far from both edges as the card's room
-/// (a whole circle: round by what it is).
+/// The round × of a card in the composer.
 fn card_close(c : @ui.Ctx, remove : Int) -> Unit {
   let t = @sf.theme()
-  c.box(h=Fill(1.0), fn() {
-    c.box(
-      w=Px(22.0),
-      h=Px(22.0),
-      radius=11.0,
-      bg=@sf.alpha(t.p.text, 0.06),
-      align=ACenter,
-      justify=JCenter,
-      id=remove,
-      fn() { @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore },
-    )
-    |> ignore
+  c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
+    @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
   })
   |> ignore
 }
@@ -1451,9 +1432,12 @@ fn pasted_card(
   c.box(
     dir=Row,
     w=Px(260.0),
-    pad=file_card_pad,
+    pl=10.0,
+    pr=8.0,
+    pt=8.0,
+    pb=8.0,
     gap=10.0,
-    radius=file_card_radius,
+    radius=16.0,
     bg=k.neutral,
     align=ACenter,
     fn() {
@@ -1518,7 +1502,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
   let busy = f.done is None && f.error is None
   // a link shared in (share-in.ts): its title and its site, drawn as a file is
   let link = field(f.done, "link")
-  c.box(dir=Row, w=Px(236.0), pad=file_card_pad, gap=10.0, radius=file_card_radius, bg=k.neutral, align=ACenter, fn() {
+  c.box(dir=Row, w=Px(236.0), padx=10.0, pady=8.0, gap=10.0, radius=16.0, bg=k.neutral, align=ACenter, fn() {
     if busy {
       @sf.spinner(c) |> ignore
     } else if link is Some(_) {
