@@ -436,7 +436,6 @@
   "station.drive.helperNeeded": "这台 Mac 尚未允许 still.fail Helper 访问「{folder}」。请在该 Mac 的「系统设置 → 隐私与安全性 → 文件与文件夹」中允许。",
   "station.permissions.unknown": "此 station 无法申请该权限",
   "station.permissions.noHelper": "still.fail Helper 未响应，请稍后重试",
-  "station.permissions.closed": "「{grant}」的授权窗口刚被关闭，请几分钟后重新申请",
   "station.permissions.none": "无法在该 Mac 上显示授权窗口",
   "station.permissions.noDisk": "该 Mac 未连接外接磁盘，请连接后再申请",
   "station.permissions.noNetworkDisk": "该 Mac 未连接网络磁盘，请连接后再申请",
