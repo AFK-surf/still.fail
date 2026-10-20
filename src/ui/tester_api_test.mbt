@@ -253,13 +253,55 @@ test "a scripted run waits for a picture decoded from bytes handed over for it, 
 }
 
 ///|
-test "a scripted run tells each line of its script as it begins, as written" {
+test "a scripted run tells each line of its script as it begins, as written, and a line that acts as it does" {
   let t = @ui.Tester::new(fn(c) { c.text("go", wrap=false) |> ignore })
   let told : Array[String] = []
-  @ui.trace_steps(fn(step) { told.push(step) })
+  @ui.trace_steps(fn(step, moment) { told.push((if moment == @ui.Acted { "acted " } else { "" }) + step) })
   let log = t.drive("# a note\nuntil go\nnow wait 50\ntap go\nexit")
-  @ui.trace_steps(fn(_) {  })
-  assert_eq(told, ["# a note", "until go", "now wait 50", "tap go", "exit"], msg=log.join("\n"))
+  @ui.trace_steps(fn(_, _) {  })
+  assert_eq(told, ["# a note", "until go", "now wait 50", "tap go", "acted tap go", "exit"], msg=log.join("\n"))
+}
+
+///|
+test "a tap's input told as handed over: after the frames it waits for its words to hold still, in the frame it goes" {
+  // the words come down for a while (a sheet rising), then hold: the tap begins as they show, acts once they hold
+  let y = Ref::new(200.0)
+  let clicked_at = Ref::new(-1.0)
+  let t = @ui.Tester::new(fn(c) {
+    let id = c.id("go")
+    if c.clicked(id) && clicked_at.val < 0.0 {
+      clicked_at.val = c.now()
+    }
+    c.box(fn() {
+      c.box(h=Px(y.val), fn() {  }) |> ignore
+      c.box(id~, fn() { c.text("go", wrap=false) |> ignore }) |> ignore
+    })
+    |> ignore
+    if y.val > 100.0 {
+      y.val = y.val - 25.0
+      c.request_frame()
+    }
+  })
+  let began = Ref::new(-1.0)
+  let acted = Ref::new(-1.0)
+  @ui.trace_steps(fn(step, moment) {
+    if step == "tap go" {
+      match moment {
+        @ui.Began => began.val = t.time()
+        @ui.Acted => acted.val = t.time()
+      }
+    }
+  })
+  let log = t.drive("tap go\nexit")
+  @ui.trace_steps(fn(_, _) {  })
+  assert_true(began.val >= 0.0 && acted.val > began.val, msg="began \{began.val}, acted \{acted.val}\n" + log.join("\n"))
+  // handed over in the frame it was told (the drive's turn after that frame was drawn): the app takes it the next
+  assert_true(
+    clicked_at.val > acted.val && clicked_at.val - acted.val <= 16.0,
+    msg="clicked \{clicked_at.val}, acted \{acted.val}",
+  )
+  let tap = log.search_by(fn(l) { l.has_prefix("DRIVE tap go at") }).unwrap()
+  assert_true(tap >= 0)
 }
 
 ///|

@@ -122,16 +122,34 @@ fn drive_init() -> Unit {
 }
 
 ///|
-/// Who is told each line of a script as it begins (@ui.trace_steps): a run's record of it.
-// kept across runs: the app's own, set once as it starts
-let steps_tracer : Ref[((String) -> Unit)?] = Ref::new(None)
+/// The moments of a script's line a run's tracer is told of (@ui.trace_steps).
+pub(all) enum StepMoment {
+  /// the line begun, before anything of it is done (a tap still waiting for its words to hold still)
+  Began
+  /// its input handed to the app as the host sends it (the press, the words typed, the key): the frame it goes in
+  Acted
+} derive(Eq, Show)
 
 ///|
-/// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as it begins, as written (`tap 发消息`,
-/// `until …`), before anything of it is done: what a run keeps beside its other messages (its own clock added), for a
-/// replay to know when each step came.
-pub fn trace_steps(step : (String) -> Unit) -> Unit {
+/// Who is told each line of a script as it begins and as it acts (@ui.trace_steps): a run's record of it.
+// kept across runs: the app's own, set once as it starts
+let steps_tracer : Ref[((String, StepMoment) -> Unit)?] = Ref::new(None)
+
+///|
+/// Each line of a scripted run's script (MBUI_DRIVE) given to `step` as written (`tap 发消息`, `until …`): as it
+/// begins (Began), before anything of it is done, and, a line that acts, again as its input is handed over (Acted),
+/// after the frames it waited for its words to hold still: what a run keeps beside its other messages (its own clock
+/// added), for a replay to know when each step came and when its input did.
+pub fn trace_steps(step : (String, StepMoment) -> Unit) -> Unit {
   steps_tracer.val = Some(step)
+}
+
+///|
+fn tell_step(line : String, moment : StepMoment) -> Unit {
+  match steps_tracer.val {
+    Some(told) => told(line, moment)
+    None => ()
+  }
 }
 
 ///|
@@ -514,10 +532,7 @@ fn drive_steps(c : Ctx) -> Unit {
     if d.since < 0.0 {
       d.since = now
       d.seen_frame = -1
-      match steps_tracer.val {
-        Some(told) => told(line)
-        None => ()
-      }
+      tell_step(line, Began)
     }
     let waited = now - d.since
     // (`now STEP`: STEP)
@@ -542,7 +557,9 @@ fn drive_steps(c : Ctx) -> Unit {
       d.shot_at = -1.0
     }
     // a step that acted: its input's frames come next; what it set off from outside is counted from here
+    let raw = d.steps[d.at]
     let acted = fn() {
+      tell_step(raw, Acted)
       next()
       d.count_answers()
       d.mark = runtime().outside_ended()
@@ -704,6 +721,7 @@ fn drive_steps(c : Ctx) -> Unit {
         if !d.still(x, y) {
           return
         }
+        tell_step(d.steps[d.at], Acted)
         press(x, y, false)
         d.rx = x
         d.ry = y
@@ -750,6 +768,7 @@ fn drive_steps(c : Ctx) -> Unit {
         d.gms = if rest.length() > 2 { dmax(number(rest[2]), 16.0) } else { 300.0 }
         d.gt0 = now
         h_log("DRIVE \{cmd} \{arg} from \{x.to_int()},\{y.to_int()}")
+        tell_step(d.steps[d.at], Acted)
         on_pointer(0, x, y, 0)
         return
       }
