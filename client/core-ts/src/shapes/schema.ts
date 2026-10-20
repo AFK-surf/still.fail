@@ -2155,7 +2155,17 @@ export const SHAPES: Record<string, Shape> = {
     ["state", opt("String")],
     ["last", opt("String")],
     ["said", opt("String")],
-  ], { doc: "A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a\nstation yet to say), and, put in by the core, its last line and when in words (absent: nothing to say)." }),
+    ["runs", opt(vec("TermRun")), { doc: "`text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`)." }],
+  ], { doc: "A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done\nor dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,\nits last line and when in words (absent: nothing to say)." }),
+  TermRun: struct([
+    ["text", "String"],
+    ["fg", opt("String"), { doc: "One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;\nabsent: the text's colour." }],
+    ["bg", opt("String"), { doc: "As `fg`; absent: none." }],
+    ["bold", opt("bool")],
+    ["dim", opt("bool")],
+    ["italic", opt("bool")],
+    ["underline", opt("bool")],
+  ], { doc: "Text of a command's output in one style (its SGR codes)." }),
   MachineLoginsView: struct([
     ["supported", "bool", { doc: "False for a station from before remote login (it answers 404): the page offers none, or says to update it." }],
     ["loaded", "bool", { doc: "What the station has was read (or told) at least once." }],
