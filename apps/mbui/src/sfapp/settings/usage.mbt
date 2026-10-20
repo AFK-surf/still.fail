@@ -297,7 +297,7 @@ fn usage_lists(c : @ui.Ctx, core : Core, v : Json?) -> Unit {
       lists.map(fn(l) { text(Some(l), "title") }),
       at,
       fill=true,
-      radius=@sf.concentric(card_radius, card_pad),
+      radius=@ui.concentric(card_radius, card_pad),
     )
     if picked != at {
       usage_state.list = picked
