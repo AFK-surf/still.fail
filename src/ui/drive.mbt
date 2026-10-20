@@ -12,6 +12,12 @@
 //   untiln N TEXT               N or more of them on screen
 //   gone TEXT                   no longer on screen
 //   field TEXT                  a field's words contain TEXT (\n a new line)     empty   the focused field is empty
+//   empty now                   the focused field empty in the frame the step before acted in: read at once, not
+//                               waited for (words sent: the field given up as they go, not later)
+//   said TEXT                   an event the app said (Ctx::say) holding TEXT, within the timeout: a fact of its state
+//                               or of what came from outside it (a message sent is in the list, by its row's key),
+//                               never a motion's end (no step waits for a motion to be over); the run's
+//                               k-th `said` line the k-th such event, counted from the run's start
 //   clear                       the focused field emptied (all selected, deleted)
 //   tap TEXT                    taps the lowest TEXT on screen (in a chat, the newest), once there (within the
 //                               timeout), holding still and not under something else a press would go to (a
@@ -106,10 +112,28 @@ priv struct Driver {
   runner_done : Map[String, String]
   mut seen_frame : Int
   dir : String
+  // the app's events (Ctx::say) the run's `said` lines have taken: those before this one
+  mut said_taken : Int
 }
 
 ///|
 let driver : Ref[Driver?] = { val: None }
+
+///|
+/// What the app said happened (Ctx::say), in order, while a run is driven (`said`).
+let app_said : Array[String] = []
+
+///|
+/// Says that `what` is so (a fact of the app's state, or of what came from outside it: a message sent is in the list,
+/// by its row's key; never a motion's end): an event a driven run waits for by name (`said`), logged as SAID; nothing
+/// when no run is driven.
+pub fn Ctx::say(self : Ctx, what : String) -> Unit {
+  ignore(self)
+  if driver.val is Some(_) {
+    app_said.push(what)
+    h_log("SAID \{what}")
+  }
+}
 
 ///|
 /// Reads the script from the environment, once, as the window opens.
@@ -207,6 +231,7 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     runner_done,
     seen_frame: -1,
     dir,
+    said_taken: 0,
   })
   let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
   h_log("DRIVE start: \{steps.length()} lines" + watched)
@@ -664,6 +689,31 @@ fn drive_steps(c : Ctx) -> Unit {
       "timeout" => {
         d.timeout = number(arg)
         next()
+      }
+      "empty" if arg == "now" =>
+        if field_words(c) == "" {
+          h_log("DRIVE ok \{line}")
+          next()
+        } else {
+          drive_fail(c, d, "the focused field holds \"\{field_words(c)}\"")
+          return
+        }
+      "said" => {
+        let mut k = d.said_taken
+        while k < app_said.length() && !app_said[k].contains(arg) {
+          k = k + 1
+        }
+        if k < app_said.length() {
+          d.said_taken = k + 1
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms): \{app_said[k]}")
+          next()
+        } else if waited > d.timeout {
+          let last = if app_said.is_empty() { "none" } else { app_said[app_said.length() - 1] }
+          drive_fail(c, d, "not said after \{d.timeout.to_int()} ms (the last: \{last})")
+          return
+        } else {
+          return
+        }
       }
       "until" | "untiln" | "gone" | "field" | "empty" => {
         let ok = match cmd {

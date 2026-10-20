@@ -55,7 +55,7 @@ fn fx_frame_start(c : Ctx) -> Unit {
 fn fx_frame_end(c : Ctx) -> Unit {
   if !lives.is_empty() {
     let gone : Array[Int] = []
-    lives.each(fn(id, l) { if l.seen < c.frame_no { gone.push(id) } })
+    lives.each(fn(id, l) { if l.seen != c.build_no { gone.push(id) } })
     for id in gone {
       match lives.get(id) {
         Some(l) => l.scope.close_now()
@@ -92,11 +92,11 @@ pub fn Ctx::lifetime(self : Ctx, key : String) -> @effect.Scope {
   let id = self.id("\u{2}life/" + key)
   match lives.get(id) {
     Some(l) => {
-      l.seen = self.frame_no
+      l.seen = self.build_no
       l.scope
     }
     None => {
-      let l = { scope: fx.val.scope(), seen: self.frame_no }
+      let l = { scope: fx.val.scope(), seen: self.build_no }
       lives[id] = l
       l.scope
     }

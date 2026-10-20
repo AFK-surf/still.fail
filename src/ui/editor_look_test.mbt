@@ -119,7 +119,7 @@ test "a field written with what it holds already: nothing to draw, no frame aske
 }
 
 ///|
-test "panic: one Field given to two editors in one frame stops the app, naming both" {
+test "panic: one Field given to two editors in one build stops the app, naming both" {
   let field = @ui.Field::new()
   let t = @ui.Tester::new(
     fn(c) {

@@ -370,7 +370,7 @@ pub fn animate_presence(
       p
     }
   }
-  p.seen = c.frame_number()
+  p.seen = c.build_number()
   let rt = @ui.runtime()
   match (shown, p.cur) {
     (true, None) => {
@@ -518,8 +518,17 @@ priv struct LayoutFx {
   p : Value
   mut spec : Spec
   mut node : Int
-  mut frame : Int
+  /// the build it was asked in (Ctx::build_number: its node one of that build's)
+  mut build : Int
   mut known : Bool
+  /// as it stood when this frame was first laid out (a frame built again moves it from there, not from what an
+  /// earlier build of it set, which was never drawn), and whether a build of this frame moved it
+  mut frame_at : Int
+  was_from : Box
+  was_to : Box
+  mut was_p : Double
+  mut was_known : Bool
+  mut moved_now : Bool
 }
 
 ///|
@@ -542,8 +551,14 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
         p: Value::new(1.0),
         spec,
         node: i,
-        frame: -1,
+        build: -1,
         known: false,
+        frame_at: -1,
+        was_from: create_box(),
+        was_to: create_box(),
+        was_p: 1.0,
+        was_known: false,
+        moved_now: false,
       }
       layouts[id] = l
       l
@@ -551,7 +566,7 @@ pub fn animate_layout(c : @ui.Ctx, i : Int, key : String, spec? : Spec = spring_
   }
   l.node = i
   l.spec = spec
-  l.frame = c.frame_number()
+  l.build = c.build_number()
 }
 
 ///|
@@ -581,23 +596,48 @@ fn layouts_after(c : @ui.Ctx) -> Unit {
     return
   }
   let frame = c.frame_number()
+  let build = c.build_number()
   let gone : Array[Int] = []
   layouts.each(fn(id, l) {
-    if l.frame != frame {
+    // (not asked in this build: not built in it, its node another's)
+    if l.build != build {
       gone.push(id)
       return
     }
+    if l.frame_at != frame {
+      l.frame_at = frame
+      copy_box_into(l.was_from, l.from)
+      copy_box_into(l.was_to, l.to)
+      l.was_p = l.p.get()
+      l.was_known = l.known
+      l.moved_now = false
+    }
     let now = laid_box(c, l.node)
-    if !l.known {
+    if !l.was_known {
       l.known = true
       copy_box_into(l.from, now)
       copy_box_into(l.to, now)
-    } else if now != l.to {
-      let shown = l.shown()
+    } else if now != l.was_to {
+      // from where it showed as the frame began
+      let p = l.was_p
+      let shown : Box = {
+        x: { min: mix(l.was_from.x.min, l.was_to.x.min, p), max: mix(l.was_from.x.max, l.was_to.x.max, p) },
+        y: { min: mix(l.was_from.y.min, l.was_to.y.min, p), max: mix(l.was_from.y.max, l.was_to.y.max, p) },
+      }
       copy_box_into(l.from, shown)
       copy_box_into(l.to, now)
       l.p.set(0.0)
       ignore(l.p.start(1.0, l.spec))
+      l.moved_now = true
+    } else if l.moved_now {
+      // an earlier build of this frame moved it, this one has it where it was: as it was
+      l.moved_now = false
+      copy_box_into(l.from, l.was_from)
+      copy_box_into(l.to, l.was_to)
+      l.p.set(l.was_p)
+      if l.was_p < 1.0 {
+        ignore(l.p.start(1.0, l.spec))
+      }
     }
     if l.p.get() < 1.0 || l.p.is_animating() {
       let d = create_delta()
@@ -631,9 +671,10 @@ fn sweep_presences(c : @ui.Ctx) -> Unit {
   if presences.is_empty() {
     return
   }
-  let frame = c.frame_number()
+  // (not asked in this build: not built in it)
+  let build = c.build_number()
   let gone : Array[Int] = []
-  presences.each(fn(id, p) { if p.seen != frame { gone.push(id) } })
+  presences.each(fn(id, p) { if p.seen != build { gone.push(id) } })
   for id in gone {
     match presences.get(id) {
       Some(p) => {

@@ -142,6 +142,9 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
+  /// how many times a frame has been built (frame_body's passes, over every frame): what is said of a build, said
+  /// again by the next (motion's keyed nodes, by node: another pass's nodes are other nodes)
+  mut build_no : Int
   /// how many sideways boxes' content is being built now (Ctx::sideways): what is made in it is marked in_sideways
   mut sideways_depth : Int
   // the layout epoch: when it moves on, nothing laid out before is reused
@@ -339,6 +342,7 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
+    build_no: 0,
     sideways_depth: 0,
     epoch: 0,
     wants_frame: false,

@@ -727,6 +727,14 @@ pub fn Ctx::frame_number(self : Ctx) -> Int {
 }
 
 ///|
+/// The number of the build being made (each of a frame's builds its own, frame_body: a frame built again, as what the
+/// view read changed, is another build): what is kept of a build by its nodes' numbers is kept by this, not by the
+/// frame's (another build's nodes are other nodes).
+pub fn Ctx::build_number(self : Ctx) -> Int {
+  self.build_no
+}
+
+///|
 /// Whether a frame is being made now (its build, its layout): a motion told in it starts at its time; told between
 /// frames (a host's callback), at the next.
 pub fn Ctx::in_frame(self : Ctx) -> Bool {

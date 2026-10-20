@@ -332,12 +332,12 @@ pub fn Ctx::editor(
   st.looked = None
   // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
   // (by id: the same key in two scopes, a list's rows, is two editors)
-  if field is Some(_) && st.built_frame == self.frame_no && st.built_id != id {
+  if field is Some(_) && st.built_frame == self.build_no && st.built_id != id {
     abort(
-      "Ctx::editor: one Field given to two editors in one frame (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
+      "Ctx::editor: one Field given to two editors in one build (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
     )
   }
-  st.built_frame = self.frame_no
+  st.built_frame = self.build_no
   st.built_key = key
   st.built_id = id
   if st.blink_again {

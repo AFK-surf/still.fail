@@ -131,6 +131,19 @@ priv struct Rec {
   drawing : @ui.Drawing
   mut exit : Trans?
   mut list : Int
+  /// where it was drawn last frame (its last build's place), taken as this frame first lays it out: every build of a
+  /// frame (frame_body) moves it from there, none from another build's place, which was never drawn; and its offsets
+  /// then, which a move this frame sets from (not adds to, once a build)
+  mut frame_at : Int
+  mut was_x : Double
+  mut was_y : Double
+  mut was_vy : Double
+  mut was_ref : Int
+  mut was_seen : Int
+  mut was_ox : Double
+  mut was_oy : Double
+  /// a build of this frame moved it (its offsets set from was_ox, was_oy)
+  mut moved_now : Bool
 }
 
 ///|
@@ -154,6 +167,15 @@ fn Rec::new() -> Rec {
     drawing: @ui.Drawing::new(),
     exit: None,
     list: 0,
+    frame_at: -1,
+    was_x: 0.0,
+    was_y: 0.0,
+    was_vy: 0.0,
+    was_ref: 0,
+    was_seen: -10,
+    was_ox: 0.0,
+    was_oy: 0.0,
+    moved_now: false,
   }
 }
 
@@ -188,11 +210,12 @@ priv struct Ghost {
 ///|
 priv struct MotionState {
   entries : Array[Moving]
-  /// by node: its entry this frame (when `stamp` is this frame)
+  /// by node: its entry this build (when `stamp` is this build: Ctx::build_number, a frame built again another, its
+  /// nodes other nodes)
   at : Array[Int]
   stamp : Array[Int]
-  /// the frame `entries` are of
-  mut frame : Int
+  /// the build `entries` are of
+  mut build : Int
   recs : Map[Int, Rec]
   lists : Map[Int, ListMo]
   ghosts : Array[Ghost]
@@ -203,7 +226,7 @@ let mo : MotionState = {
   entries: [],
   at: [],
   stamp: [],
-  frame: -1,
+  build: -1,
   recs: {},
   lists: {},
   ghosts: [],
@@ -233,7 +256,7 @@ fn reset() -> Unit {
   mo.entries.clear()
   mo.at.clear()
   mo.stamp.clear()
-  mo.frame = -1
+  mo.build = -1
   mo.recs.clear()
   mo.lists.clear()
   mo.ghosts.clear()
@@ -284,19 +307,19 @@ pub fn log_frame(c : @ui.Ctx, key : String, fields : String) -> Unit {
 let motion_log : Ref[Int] = { val: -1 }
 
 ///|
-/// The entry of node `i` this frame, made when it has none.
+/// The entry of node `i` this build, made when it has none.
 fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
   install()
-  let frame = c.frame_number()
-  if mo.frame != frame {
+  let build = c.build_number()
+  if mo.build != build {
     mo.entries.clear()
-    mo.frame = frame
+    mo.build = build
   }
   while mo.at.length() <= i {
     mo.at.push(-1)
     mo.stamp.push(-1)
   }
-  if mo.stamp[i] == frame && mo.at[i] >= 0 {
+  if mo.stamp[i] == build && mo.at[i] >= 0 {
     return mo.entries[mo.at[i]]
   }
   let e : Moving = {
@@ -315,17 +338,17 @@ fn moving_of(c : @ui.Ctx, i : Int) -> Moving {
     scope: 0,
     fly: None,
   }
-  mo.stamp[i] = frame
+  mo.stamp[i] = build
   mo.at[i] = mo.entries.length()
   mo.entries.push(e)
   e
 }
 
 ///|
-/// Node `i`'s entry this frame, if it has one.
+/// Node `i`'s entry this build, if it has one.
 fn entry_of(c : @ui.Ctx, i : Int) -> Moving? {
-  let frame = c.frame_number()
-  if mo.frame == frame && i >= 0 && i < mo.stamp.length() && mo.stamp[i] == frame && mo.at[i] >= 0 {
+  let build = c.build_number()
+  if mo.build == build && i >= 0 && i < mo.stamp.length() && mo.stamp[i] == build && mo.at[i] >= 0 {
     Some(mo.entries[mo.at[i]])
   } else {
     None
@@ -752,9 +775,10 @@ pub fn reveal(
 fn after_layout(c : @ui.Ctx) -> Unit {
   sweep_anims(c)
   let frame = c.frame_number()
-  if mo.frame != frame {
+  let build = c.build_number()
+  if mo.build != build {
     mo.entries.clear()
-    mo.frame = frame
+    mo.build = build
   }
   if mo.entries.is_empty() {
     forget_recs(c)
@@ -806,8 +830,22 @@ fn after_layout(c : @ui.Ctx) -> Unit {
           r
         }
       }
+      // (the first build of this frame to lay it out: where it was drawn, and its offsets then)
+      if r.frame_at != frame {
+        r.frame_at = frame
+        r.was_x = r.x
+        r.was_y = r.y
+        r.was_vy = r.vy
+        r.was_ref = r.ref
+        r.was_seen = r.seen
+        r.ox.step(c)
+        r.oy.step(c)
+        r.was_ox = r.ox.get()
+        r.was_oy = r.oy.get()
+        r.moved_now = false
+      }
       let lm = if li >= 0 { mo.lists.get(ref) } else { None }
-      let was_seen = r.seen >= frame - 1 && r.ref == ref
+      let was_seen = r.was_seen >= frame - 1 && r.was_ref == ref
       // where it shows in its list's view
       let vy = if li >= 0 {
         let (_, ly, _, _) = c.node_rect(li)
@@ -815,9 +853,26 @@ fn after_layout(c : @ui.Ctx) -> Unit {
       } else {
         ry
       }
+      // (a build before this one moved it, this one does not: its offsets as they were when the frame began)
+      let undo = fn() {
+        if r.moved_now {
+          r.moved_now = false
+          r.driven = false
+          r.ox.value = r.was_ox
+          r.oy.value = r.was_oy
+          if r.was_ox == 0.0 { r.ox.snap(0.0) } else { r.ox.animate(0.0, e.spec) }
+          if r.was_oy == 0.0 { r.oy.snap(0.0) } else { r.oy.animate(0.0, e.spec) }
+        }
+      }
+      if !(e.flip && was_seen) {
+        undo()
+      }
       if e.flip && was_seen {
-        let dx = r.x - rx
-        let dy = if e.screen { r.vy - vy } else { r.y - ry }
+        let dx = r.was_x - rx
+        let dy = if e.screen { r.was_vy - vy } else { r.was_y - ry }
+        if dx.abs() <= 0.5 && dy.abs() <= 0.5 {
+          undo()
+        }
         if dx.abs() > 0.5 || dy.abs() > 0.5 {
           // in a list told its rows: only as they change (else it is the list's own layout, taken at once)
           let changed = match lm {
@@ -828,10 +883,12 @@ fn after_layout(c : @ui.Ctx) -> Unit {
             r.ox.snap(0.0)
             r.oy.snap(0.0)
             r.driven = false
+            r.moved_now = false
           } else if e.drive >= 0.0 {
-            r.fx = r.ox.get() + dx
-            r.fy = r.oy.get() + dy
+            r.fx = r.was_ox + dx
+            r.fy = r.was_oy + dy
             r.driven = true
+            r.moved_now = true
           } else {
             // closing over a row gone: a little late, unless it went ahead
             let delay = match lm {
@@ -845,11 +902,10 @@ fn after_layout(c : @ui.Ctx) -> Unit {
               Motion(tr) => Motion(tr.delayed(delay))
             }
             r.driven = false
-            r.ox.step(c)
-            r.ox.value = r.ox.value + dx
+            r.moved_now = true
+            r.ox.value = r.was_ox + dx
             r.ox.animate(0.0, spec)
-            r.oy.step(c)
-            r.oy.value = r.oy.value + dy
+            r.oy.value = r.was_oy + dy
             r.oy.animate(0.0, spec)
           }
         }

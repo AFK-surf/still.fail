@@ -217,6 +217,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     pass = pass + 1
     c.read_back_moved = false
     building.val = true
+    c.build_no = c.build_no + 1
     root = frame_build(c, w, h)
     t1 = h_now()
     // lists build their rows while laid out, and those see clicks too

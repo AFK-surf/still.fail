@@ -21,7 +21,8 @@ priv struct Sideways {
   mut x_end : Double
   mover : Mover
   mut held : Bool
-  /// this frame's box and what it holds (node indices), for their widths once laid out
+  /// this build's box and what it holds (node indices: a frame built again, its last build's), for their widths once
+  /// laid out; the build (Ctx::build_number)
   mut box : Int
   mut inner : Int
   mut frame : Int
@@ -61,7 +62,7 @@ pub fn Ctx::sideways(
   self.nodes[b].hit = false
   st.box = b
   st.inner = inner
-  st.frame = self.frame_no
+  st.frame = self.build_no
   b
 }
 
@@ -182,7 +183,7 @@ pub fn Ctx::capped(
   self.nodes[b].hit = false
   st.box = b
   st.inner = inner
-  st.frame = self.frame_no
+  st.frame = self.build_no
   b
 }
 
@@ -214,7 +215,7 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
   }
   let gone : Array[Int] = []
   sideways.each(fn(id, st) {
-    if st.frame != self.frame_no {
+    if st.frame != self.build_no {
       if !st.held {
         gone.push(id)
       }

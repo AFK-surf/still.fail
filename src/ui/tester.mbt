@@ -66,6 +66,7 @@ fn reset_globals() -> Unit {
   drags.clear()
   sideways.clear()
   words_marks.clear()
+  app_said.clear()
   words_kept.clear()
   words_sel.clear()
   list_counts.clear()

@@ -609,7 +609,8 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
       0.0,
     )
   }
-  v.painted = self.frame_no
+  // (by build: a frame built again paints again, and what the last build did not paint is not shown)
+  v.painted = self.build_no
   // (its content on whole device pixels too, as its hole is: placed between pixels, the row its edge half covers
   // shows what is under the canvas, a line along the picture's edge)
   let cx0 = snap(x)
@@ -657,7 +658,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     if v.closed {
       continue
     }
-    let shown = v.painted == self.frame_no
+    let shown = v.painted == self.build_no
     let mut moved = shown != v.told_shown
     if shown {
       for j in 0..<9 {
