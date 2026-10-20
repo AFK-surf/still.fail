@@ -1320,7 +1320,8 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
           c.focus_editor(key)
           d.focus = 0
         }
-        c.box(w=Fill(1.0), radius=composer_corner - composer_inset, bg=k.card, fn() {
+        // (concentric with the capsule's, a smooth corner's: @ui.concentric, not the radius less the inset)
+        c.box(w=Fill(1.0), radius=@ui.concentric(composer_corner, composer_inset), bg=k.card, fn() {
           c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=34.0, pt=9.0, align=AStart, fn() {
             // the quote's mark ahead of whose it is (Composer.kt quoteLine's quoteMark)
             c.box(w=Px(15.0), h=Px(19.5), justify=JCenter, fn() {
