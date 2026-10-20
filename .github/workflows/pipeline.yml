@@ -354,18 +354,20 @@ jobs:
             [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # The mbui app's tests on native, on macOS (mini1-6, label mbui: its own runner on Mini1), as they run on js above:
-  # a test's binary links mbui's hosts' Objective-C through mbui's scripts/cc_apple.sh (MOON_CC; a test package is
-  # given no cc-link-flags). Only where native can differ from js (plan's mbui_native): the hosts, the FFI, the link
-  # options, the pinned mbui; on main, any change to the app. 134-145 s (2026-10-20); 10 minutes at most, as every job.
+  # The mbui app's tests on native, on macOS, as they run on js above: a test's binary links mbui's hosts' Objective-C
+  # through mbui's scripts/cc_apple.sh (MOON_CC; a test package is given no cc-link-flags). Only where native can differ
+  # from js (plan's mbui_native): the hosts, the FFI, the link options, the pinned mbui; on main, any change to the app.
+  # On GitHub's macos-15 (free for a public repository): it needs nothing of Mini1's, whose mbui runner (mini1-6) is
+  # main's beta's. ~3.7 min there (its tests on three cores), against 134-145 s on Mini1 but up to 3 minutes waiting
+  # behind the rest (2026-10-20); done waits for neither. 10 minutes at most.
   check-mbui-native:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui_native == 'true' }}
-    runs-on: mbui
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/setup
       - name: Tools (MoonBit, mbui)
         run: bash apps/mbui/scripts/beta.sh tools
       - name: The mbui app's tests and the flows seen again (native)
@@ -518,16 +520,17 @@ jobs:
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
   # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): the desktop
-  # app and the TypeScript station's bundle (a branch's Android app is check-android's).
+  # app and the TypeScript station's bundle (a branch's Android app is check-android's). On GitHub's macos-15 (free for
+  # a public repository): unsigned, it needs nothing of Mini1's (main's signed builds stay there, with its keychain).
   mac-build:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: The TypeScript station's bundle (darwin-arm64)
         run: |
