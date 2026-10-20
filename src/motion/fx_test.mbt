@@ -125,15 +125,15 @@ test "in parallel (all) both move from the same frame; staggered, each `each` ms
   t.assert_idle()
   // from the centre: the middle first, the ends last
   let from_centre : Array[(Int, Int64)] = []
+  let n2 = 5
+  let each2 = 10
   let t2 = @ui.Tester::new(fn(c) {
     c.effect("go", async fn(_s) {
-      @motion.stagger(5, 10, from=Center, i => from_centre.push((i, @effect.now())))
+      @motion.stagger(n2, each2, from=Center, i => from_centre.push((i, @effect.now())))
     })
   })
-  // nothing here asks for frames; its sleeps are timers, so frames are drawn past the last of them
-  for _ in 0..<4 {
-    t2.frame()
-  }
+  // nothing here asks for frames; its sleeps are timers: to its own length, the ends `each2` ms a step from the middle
+  t2.run_for((n2 / 2 * each2).to_double())
   from_centre.sort_by_key(s => s.0)
   assert_eq(from_centre, [(0, 1036L), (1, 1026L), (2, 1016L), (3, 1026L), (4, 1036L)])
 }
@@ -369,28 +369,31 @@ test "drag: the value follows the finger, then goes on by momentum and is caught
 ///|
 test "layout: a node that moves is drawn from where it was, and goes to its new place over frames" {
   let top = Ref(true)
+  // the move's length
+  let move_ms = 160.0
   let t = @ui.Tester::new(fn(c) {
     c.column(w=Fill(1.0), h=Fill(1.0), fn() {
       if !top.val {
         c.box(h=Px(200.0), fn() {  }) |> ignore
       }
       let i = c.box(fn() { c.text("card") |> ignore })
-      @motion.animate_layout(c, i, "card", spec=@motion.tween_to(duration=160.0, ease=@motion.linear))
+      @motion.animate_layout(c, i, "card", spec=@motion.tween_to(duration=move_ms, ease=@motion.linear))
     })
     |> ignore
   })
   let (_, y0) = t.drawn_of("card").unwrap()
   top.val = false
-  t.frame()
+  t.draw()
   // laid out 200 lower, drawn where it was
   let (_, y1) = t.drawn_of("card").unwrap()
   assert_true(same(y1, y0))
   let ys : Array[Double] = []
+  // its way in tenths
   for _ in 0..<10 {
-    t.frame()
+    t.run_for(move_ms / 10.0)
     ys.push(t.drawn_of("card").unwrap().1)
   }
-  // 20 px a frame (linear over 160 ms), there at the end
+  // 20 px a tenth (linear), there at the end
   for k, y in ys {
     assert_true(same(y, y0 + 20.0 * (k + 1).to_double()), msg="frame \{k}: \{y}")
   }

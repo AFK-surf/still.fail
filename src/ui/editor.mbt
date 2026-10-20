@@ -363,6 +363,10 @@ pub fn Ctx::editor(
 }
 
 ///|
+/// How long a focused field's caret is shown, and then hidden, as it blinks (ms).
+pub let caret_blink_ms : Double = 530.0
+
+///|
 fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   let st = match self.editors.get(n.id) {
     Some(s) => s
@@ -426,8 +430,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // caret
   if focused {
     let since = self.now - st.blink0
-    let phase = (since / 530.0).to_int()
-    self.wake_at_time(st.blink0 + (phase + 1).to_double() * 530.0, later=true)
+    let phase = (since / caret_blink_ms).to_int()
+    self.wake_at_time(st.blink0 + (phase + 1).to_double() * caret_blink_ms, later=true)
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if phase % 2 == 0 {
       let (cx, cl) = tl.caret(coff)

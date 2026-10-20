@@ -197,14 +197,22 @@ pub fn nav_trigger(label : String, content : () -> Unit) -> NavItem {
 }
 
 ///|
+/// How long the pointer rests on a navigation menu's trigger before its content shows (ms), and how long after it has
+/// left both trigger and content it is hidden: `navigation_menu`'s defaults.
+pub let nav_menu_open_ms : Double = 200.0
+
+///|
+pub let nav_menu_close_ms : Double = 150.0
+
+///|
 /// `key`'s navigation menu (see the file's head) of `items`, a trigger's content shown once the pointer has rested on
 /// it `delay` ms, hidden `close_delay` ms after it has left both; named `label`. The link followed, if one was.
 pub fn navigation_menu(
   c : @ui.Ctx,
   key : String,
   items : Array[NavItem],
-  delay? : Double = 200.0,
-  close_delay? : Double = 150.0,
+  delay? : Double = nav_menu_open_ms,
+  close_delay? : Double = nav_menu_close_ms,
   label? : String = "",
   trigger_look? : (@ui.Ctx, ToggleState) -> Unit = menubar_trigger_look,
   look? : (@ui.Ctx, PopState, () -> Unit) -> Unit = popover_look,

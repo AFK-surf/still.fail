@@ -1220,10 +1220,14 @@ test "animate plays a Motion spring as its generator says, from the frame it is 
   t.frame()
   // asked this frame: it starts here, at its start
   assert_eq(seen[seen.length() - 1], 0.0)
+  let start = t.time()
+  let span = kept.val.unwrap().ends_at() - start
   let g = @motion.spring_generator(0.0, 100.0, stiffness=300.0, damping=20.0)
+  // the first half of its way, a tenth of it at a time: where its generator says
   for i in 1..=5 {
-    t.frame()
-    let want = g.next(16.0 * i.to_double()).value
+    let at = span * i.to_double() / 10.0
+    t.run_for(start + at - t.time())
+    let want = g.next(at).value
     assert_true((seen[seen.length() - 1] - want).abs() < 1.0e-9, msg="\{i}: \{seen[seen.length() - 1]} \{want}")
   }
   // the spring's own end, asked
@@ -1263,13 +1267,15 @@ test "animate plays keyframes through their values" {
   let seen : Array[Double] = []
   let on = Ref::new(false)
   let kept : Ref[@motion.Anim?] = Ref::new(None)
+  // the keyframes' length
+  let keys_ms = 160.0
   let t = @ui.Tester::new(fn(c) {
     seen.push(
       @motion.animate(
         c,
         "k",
         if on.val { 1.0 } else { 0.0 },
-        spec=@motion.keyframes_to([10.0, 5.0], duration=160.0, ease=@motion.linear),
+        spec=@motion.keyframes_to([10.0, 5.0], duration=keys_ms, ease=@motion.linear),
       ),
     )
     // (the Anim it plays, to ask its end)
@@ -1277,9 +1283,9 @@ test "animate plays keyframes through their values" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   on.val = true
-  // told in this frame, at its start; halfway 80 ms on
+  // told in this frame, at its start; halfway its keyframes' length on
   t.frame()
-  t.frame(ms=80.0)
+  t.run_for(keys_ms / 2.0)
   // halfway: at the middle value
   assert_true((seen[seen.length() - 1] - 10.0).abs() < 1.0e-9, msg="\{seen[seen.length() - 1]}")
   // to the keyframes' own end

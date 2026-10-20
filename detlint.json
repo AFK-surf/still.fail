@@ -63,30 +63,9 @@
     "script-wait": {},
     "page-settle": {},
     "frame-count": {
-      "src/effecttest/frame_test.mbt": 1,
-      "src/motion/fx_test.mbt": 2,
-      "src/motion/motion_port_test.mbt": 1,
-      "src/motion/motion_test.mbt": 1,
-      "src/ui/code_field_wbtest.mbt": 3,
-      "src/ui/fx_test.mbt": 2,
-      "src/ui/image_test.mbt": 1,
-      "src/ui/layout_wbtest.mbt": 8,
-      "src/ui/list_test.mbt": 1,
-      "src/ui/words_test.mbt": 1
+      "src/effecttest/frame_test.mbt": 1
     },
-    "literal-time": {
-      "src/kit/disclosure_test.mbt": 1,
-      "src/kit/menus_test.mbt": 5,
-      "src/kit/overlays_test.mbt": 13,
-      "src/kit/time_test.mbt": 7,
-      "src/motion/motion_port_test.mbt": 1,
-      "src/motion/motion_test.mbt": 1,
-      "src/ui/focus_test.mbt": 3,
-      "src/ui/frames_test.mbt": 1,
-      "src/ui/hostread_test.mbt": 1,
-      "src/ui/layout_wbtest.mbt": 2,
-      "src/ui/words_test.mbt": 1
-    },
+    "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {

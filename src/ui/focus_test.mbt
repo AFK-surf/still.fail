@@ -173,11 +173,15 @@ test "held long: long_pressed once, and no click when let go" {
   })
   let (x, y, w, h) = t.get(Button, label="hold me").rect
   t.press_at(x + w / 2.0, y + h / 2.0)
-  t.frame(ms=200.0)
+  t.draw()
+  let due = t.time() + long_press_ms
+  t.run_for(long_press_ms - 1.0)
   assert_eq(log, [])
-  t.frame(ms=250.0)
+  t.run_for(due - t.time())
   assert_eq(log, ["long"])
-  t.frame(ms=100.0)
+  // held on as long again: still once
+  t.run_for(long_press_ms)
+  assert_eq(log, ["long"])
   t.release(x + w / 2.0, y + h / 2.0)
   assert_eq(log, ["long"])
   t.tap(x + w / 2.0, y + h / 2.0)

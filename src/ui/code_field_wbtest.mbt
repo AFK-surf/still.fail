@@ -59,14 +59,14 @@ test "a code field: a complete code handed on once, however many frames, and aga
   let handed = []
   let t = Tester::new(code_view(handed))
   t.type_text("12345")
-  for _ in 0..<30 {
-    t.frame()
-  }
+  // a whole blink of its caret, shown and hidden, drawn as it goes
+  t.draw()
+  t.run_for(caret_blink_ms * 2.0)
   assert_eq(handed, [])
   t.type_text("6")
-  for _ in 0..<30 {
-    t.frame()
-  }
+  // a whole blink of its caret, shown and hidden, drawn as it goes
+  t.draw()
+  t.run_for(caret_blink_ms * 2.0)
   assert_eq(handed, ["123456"])
   // a seventh digit is no new code
   t.type_text("7")
@@ -80,9 +80,9 @@ test "a code field: a complete code handed on once, however many frames, and aga
   assert_eq(handed, ["123456", "123456"])
   t.backspace()
   t.type_text("9")
-  for _ in 0..<30 {
-    t.frame()
-  }
+  // a whole blink of its caret, shown and hidden, drawn as it goes
+  t.draw()
+  t.run_for(caret_blink_ms * 2.0)
   assert_eq(handed, ["123456", "123456", "123459"])
 }
 

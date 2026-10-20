@@ -45,6 +45,14 @@ pub fn popover(
 }
 
 ///|
+/// How long a mouse rests on a hover card's trigger before it opens (ms), and how long after it has left both the
+/// trigger and the card it closes: `hover_card`'s defaults.
+pub let hover_card_open_ms : Double = 700.0
+
+///|
+pub let hover_card_close_ms : Double = 300.0
+
+///|
 /// `key`'s hover card (see the file's head) for the trigger `trigger` (its id): opened once a mouse has rested on the
 /// trigger `open_delay` ms, closed `close_delay` ms after it has left both, and by Escape and a press outside. Whether
 /// it is open.
@@ -52,8 +60,8 @@ pub fn hover_card(
   c : @ui.Ctx,
   key : String,
   trigger : Int,
-  open_delay? : Double = 700.0,
-  close_delay? : Double = 300.0,
+  open_delay? : Double = hover_card_open_ms,
+  close_delay? : Double = hover_card_close_ms,
   side? : @ui.Side = Bottom,
   along? : @ui.Along = Middle,
   offset? : Double = 6.0,
@@ -93,6 +101,14 @@ pub fn hover_card(
 let tip_closed : Int = @ui.stable_hash("kit/tooltip closed").to_int()
 
 ///|
+/// How long a mouse rests on a tooltip's trigger before it shows (ms), and how soon after another tooltip closed one
+/// shows at once: `tooltip`'s defaults.
+pub let tooltip_delay_ms : Double = 700.0
+
+///|
+pub let tooltip_skip_ms : Double = 300.0
+
+///|
 /// `key`'s tooltip (see the file's head) for the trigger `trigger` (its id), saying `text`: shown once a mouse has
 /// rested on it `delay` ms (at once within `skip` ms of another closing), or at once while it has the focus by the
 /// keyboard. Whether it shows.
@@ -101,8 +117,8 @@ pub fn tooltip(
   key : String,
   trigger : Int,
   text : String,
-  delay? : Double = 700.0,
-  skip? : Double = 300.0,
+  delay? : Double = tooltip_delay_ms,
+  skip? : Double = tooltip_skip_ms,
   side? : @ui.Side = Top,
   along? : @ui.Along = Middle,
   offset? : Double = 6.0,

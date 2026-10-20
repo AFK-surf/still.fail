@@ -44,10 +44,17 @@ pub fn collapsible(
 }
 
 ///|
+/// How long a collapsible's content takes to grow in (ms), and to shrink away: a tween each.
+pub let collapsible_open_ms : Double = 200.0
+
+///|
+pub let collapsible_close_ms : Double = 160.0
+
+///|
 /// What `body` builds, while `open` (and while it closes), its height growing from nothing to its own and back by
 /// `presence`; a region named `label` for the semantics tree.
 fn unfolding(c : @ui.Ctx, key : String, open : Bool, label : String, body : () -> Unit) -> Unit {
-  let p = presence(c, key + "/content", open, enter=@motion.tween(200.0, ease=Out), exit=@motion.tween(160.0, ease=Out))
+  let p = presence(c, key + "/content", open, enter=@motion.tween(collapsible_open_ms, ease=Out), exit=@motion.tween(collapsible_close_ms, ease=Out))
   if !p.built {
     return
   }

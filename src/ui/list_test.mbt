@@ -122,7 +122,7 @@ test "list: sticking to its end, it follows new rows until scrolled away" {
   // as rows come, the list follows the end
   for _ in 0..<40 {
     n[0] = n[0] + 1
-    t.frame()
+    t.draw()
     if n[0] > 12 {
       assert_eq(bottom_of(t, n[0] - 1), 400.0)
     }

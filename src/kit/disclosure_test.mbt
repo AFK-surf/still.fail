@@ -11,7 +11,7 @@ test "collapsible: its trigger opens it, its content grows in; closed, gone from
   t.click(@ui.Button, label="Details")
   assert_true(open.val)
   // on its way: cut to part of its height
-  t.frame(ms=50.0)
+  t.run_for(collapsible_open_ms / 2.0)
   let (_, _, _, h1) = t.get(@ui.Region, label="Details").rect
   t.draw()
   let (_, _, _, h2) = t.get(@ui.Region, label="Details").rect

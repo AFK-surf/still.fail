@@ -1,7 +1,12 @@
 // Runs compared frame by frame (frames.mbt).
 
 ///|
-/// A view that changes with time and with a tap: a count of taps, and words that come 100 ms after the last.
+/// How long after the last tap `counting`'s words come (ms).
+let counting_later_ms = 100.0
+
+///|
+/// A view that changes with time and with a tap: a count of taps, and words that come `counting_later_ms` after the
+/// last.
 fn counting() -> (@ui.Ctx) -> Unit {
   let taps : Ref[Int] = Ref::new(0)
   let at : Ref[Double] = Ref::new(-1.0)
@@ -9,10 +14,10 @@ fn counting() -> (@ui.Ctx) -> Unit {
     if c.button("加一") {
       taps.val = taps.val + 1
       at.val = c.now()
-      c.wake_in(100.0)
+      c.wake_in(counting_later_ms)
     }
     c.text("按了 \{taps.val} 次") |> ignore
-    if at.val >= 0.0 && c.now() - at.val >= 100.0 {
+    if at.val >= 0.0 && c.now() - at.val >= counting_later_ms {
       c.text("过了一会儿") |> ignore
     }
   }

@@ -176,9 +176,8 @@ test "a link held still a long press's time: its hold told once, with where it l
   t.frame()
   let (x, y, w, h) = t.run_rects("docs")[0]
   t.press_at(x + w / 2.0, y + h / 2.0)
-  for _ in 0..<10 {
-    t.frame(ms=50.0)
-  }
+  t.draw()
+  t.run_for(@ui.long_press_ms)
   t.release(x + w / 2.0, y + h / 2.0)
   t.draw()
   assert_eq(held.length(), 1)

@@ -59,6 +59,8 @@ test "host reads: the clock is the Tester's" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   let t0 = @ui.now()
-  t.frame(ms=100.0)
-  assert_eq(@ui.now() - t0, 100.0)
+  assert_eq(t0, t.time())
+  t.frame()
+  assert_true(t.time() > t0)
+  assert_eq(@ui.now(), t.time())
 }

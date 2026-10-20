@@ -91,8 +91,8 @@ test "menu: letters typed go to the item they start; a press outside closes it; 
   assert_eq(t.focused().unwrap().label, "Share")
   t.press("s")
   assert_eq(t.focused().unwrap().label, "Show bookmarks")
-  // a second later: a word from the start
-  t.frame(ms=1000.0)
+  // what was typed forgotten: a word from the start
+  t.run_for(typeahead_ms)
   t.press("n")
   t.press("e")
   t.press("w")
@@ -167,8 +167,8 @@ test "context menu: opened at the pointer by a right click, at its press by a lo
   assert_true(t.query(@ui.Menu) is None)
   // a finger held still
   t.touch(0, 50.0, 200.0)
-  t.frame()
-  t.frame(ms=600.0)
+  t.draw()
+  t.run_for(@ui.long_press_ms)
   t.touch(2, 50.0, 200.0)
   t.draw()
   ignore(t.get(@ui.Menu, label="Edit"))
@@ -311,9 +311,10 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   ignore(t.get(@ui.Navigation, label="Site"))
   let (x, y, w, h) = t.get(@ui.Button, label="Learn").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.frame(ms=100.0)
+  let due = t.time() + nav_menu_open_ms
+  t.run_for(nav_menu_open_ms - 1.0)
   assert_true(t.find("Guides and tutorials") is None)
-  t.frame(ms=150.0)
+  t.run_for(due - t.time())
   t.draw()
   assert_true(t.find("Guides and tutorials") is Some(_))
   let (x2, y2, w2, h2) = t.get(@ui.Button, label="Overview").rect
@@ -323,7 +324,10 @@ test "navigation menu: a trigger's content shown once the pointer rests on it, a
   assert_true(t.find("Guides and tutorials") is None)
   // away from both: closed after a moment
   t.move(380.0, 800.0)
-  t.frame(ms=200.0)
+  let due = t.time() + nav_menu_close_ms
+  t.run_for(nav_menu_close_ms - 1.0)
+  assert_true(t.find("What it is") is Some(_))
+  t.run_for(due - t.time())
   t.draw()
   assert_true(t.find("What it is") is None)
   // by the keyboard: Down opens it, Escape closes it

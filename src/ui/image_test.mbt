@@ -100,9 +100,9 @@ test "what is shown awaits the images it asked for until they are in, as the tes
     |> ignore
   }
   let t = @ui.Tester::new(view, images=[("a.jpg", 400, 400), ("b.jpg", 400, 400)], finish=false)
-  for _ in 0..<5 {
-    t.frame()
-  }
+  // time going by does not bring them in (a fade's worth): the test says when
+  t.draw()
+  t.run_for(@ui.image_fade_ms)
   assert_eq(t.pending(), [(1, 1), (1, 2)])
   assert_eq(t.awaited(), ["image 1 a.jpg", "image 2 b.jpg"])
   t.finish(1, 2)

@@ -127,8 +127,9 @@ test "kept layouts: styles changing (padding, sizes, gaps, alignment, colours on
     )
     for s in 0..<8 {
       step.val = s
-      t.frame()
-      t.frame()
+      // drawn, and drawn again with nothing changed (what was kept, kept)
+      t.draw()
+      t.draw()
     }
   })
   assert_true(n > 10)
@@ -363,8 +364,9 @@ test "kept layouts: texts changing (words, size, weight, wrapping, cut to fit)" 
     )
     for s in 0..<8 {
       step.val = s
-      t.frame()
-      t.frame()
+      // drawn, and drawn again with nothing changed (what was kept, kept)
+      t.draw()
+      t.draw()
     }
   })
   |> ignore
@@ -493,7 +495,7 @@ test "kept layouts: a column moved under a clip (the scroll scene), and lists sc
     )
     for k in 0..<12 {
       off.val = k.to_double() * 13.5
-      t.frame()
+      t.draw()
     }
     // and still: nothing moves
     t.frame()
@@ -537,10 +539,9 @@ test "kept layouts: animations (springs moving boxes, widths, opacity)" {
     target.val = 100.0
     t.draw()
     target.val = 20.0
-    for _ in 0..<5 {
-      t.frame()
-    }
     t.draw()
+    // every frame of its way, to its own rest
+    t.run_for(t.rest_of("\"x\"") - t.time())
   })
   |> ignore
 }
@@ -577,8 +578,9 @@ test "kept layouts: only something deep inside moving, nothing around it" {
     )
     for i in 0..<6 {
       k.val = i
-      t.frame()
-      t.frame()
+      // drawn, and drawn again with nothing changed (what was kept, kept)
+      t.draw()
+      t.draw()
     }
   })
   |> ignore
@@ -615,8 +617,9 @@ test "kept layouts: rich text changing (words, styles, colours only)" {
     )
     for s in 0..<6 {
       step.val = s
-      t.frame()
-      t.frame()
+      // drawn, and drawn again with nothing changed (what was kept, kept)
+      t.draw()
+      t.draw()
     }
   })
   |> ignore
@@ -674,15 +677,12 @@ test "kept layouts: pages pushed and popped, mid-slide" {
     })
     t.tap_text("open 1")
     nav.push(2)
-    for _ in 0..<6 {
-      t.frame(ms=40.0)
-    }
+    // mid-slide: half its push
     t.draw()
+    t.run_for(nav_push_ms / 2.0)
     nav.pop() |> ignore
-    for _ in 0..<4 {
-      t.frame(ms=50.0)
-    }
     t.draw()
+    t.run_for(nav_push_ms / 2.0)
     t.back_gesture(150.0, false)
     t.draw()
     t.back_gesture(300.0, true)

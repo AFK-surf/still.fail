@@ -4,24 +4,25 @@
 ///|
 test "the runtime's clock is the frames' clock: a sleep wakes in the frame its time falls in" {
   let woke : Array[Int64] = []
+  // how long it sleeps
+  let nap = 100
   let t = @ui.Tester::new(fn(c) {
     c.effect("timer", async fn(_s) {
-      @effect.sleep(100)
+      @effect.sleep(nap)
       woke.push(@effect.now())
     })
   })
+  let due = t.time() + nap.to_double()
   // the first frame (1016) forked it; it first ran at the start of the second, at the time it was forked (what is
   // ready at a time runs at that time, before the clock moves on), and sleeps until 1116
   t.frame()
   assert_eq(@ui.runtime().now(), 1032L)
   assert_eq(woke, [])
-  for _ in 0..<5 {
-    t.frame()
-  }
-  // frame at 1112: not yet
+  t.run_for(due - 1.0 - t.time())
+  // a frame at 1115: not yet
   assert_eq(woke, [])
-  t.frame()
-  // frame at 1128: the timer fired at its own time, before the frame's
+  t.run_for(nap.to_double() / 4.0)
+  // a frame at 1140: the timer fired at its own time, before the frame's
   assert_eq(woke, [1116L])
   assert_eq(@ui.runtime().now().to_double(), t.time())
 }
@@ -30,6 +31,8 @@ test "the runtime's clock is the frames' clock: a sleep wakes in the frame its t
 test "a frame's handler forks; the fiber first runs at the start of the next frame, before the view" {
   let log : Array[String] = []
   let shown = Ref("idle")
+  // how long the fiber sleeps
+  let nap = 32
   let t = @ui.Tester::new(fn(c) {
     log.push("view \{shown.val}")
     if c.button("Go") {
@@ -37,7 +40,7 @@ test "a frame's handler forks; the fiber first runs at the start of the next fra
         c.fork(async fn() {
           log.push("fiber at \{@effect.now()}")
           shown.val = "busy"
-          @effect.sleep(32)
+          @effect.sleep(nap)
           shown.val = "done"
         }),
       )
@@ -47,12 +50,16 @@ test "a frame's handler forks; the fiber first runs at the start of the next fra
   let (x, y) = t.find("Go").unwrap()
   t.touch(0, x, y)
   t.touch(2, x, y)
-  // 1032: the handler forks; 1048: the fiber runs first (at 1032, when it was forked), then the view; it sleeps
-  // until 1064
-  for _ in 0..<4 {
-    t.frame()
-  }
-  assert_eq(log, ["view idle", "fiber at 1032", "view busy", "view done", "view done"])
+  // at 1016, the tap's frame: the handler forks; the frame after (at that moment): the fiber runs first, then the view;
+  // it sleeps until 1048
+  t.draw()
+  assert_eq(log[0:3].to_array(), ["view idle", "fiber at 1016", "view busy"])
+  let due = t.time() + nap.to_double()
+  t.run_for(due - 1.0 - t.time())
+  assert_eq(log[log.length() - 1], "view busy")
+  assert_false(log.contains("view done"))
+  t.run_for(due - t.time())
+  assert_eq(log[log.length() - 1], "view done")
 }
 
 ///|

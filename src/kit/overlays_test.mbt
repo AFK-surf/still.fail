@@ -121,16 +121,18 @@ test "tooltip: shown once the pointer has rested on its trigger; at once by the 
   })
   let (x, y, w, h) = t.get(@ui.Button, label="Bold").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.frame(ms=600.0)
+  let due = t.time() + tooltip_delay_ms
+  t.run_for(tooltip_delay_ms - 1.0)
   assert_false(shown.val)
-  t.frame(ms=100.0)
+  t.run_for(due - t.time())
   assert_true(shown.val)
   t.draw()
   ignore(t.get(@ui.Tooltip, label="Bold (⌘B)"))
   // a press shuts it until the pointer leaves
   t.tap(x + w / 2.0, y + h / 2.0)
   assert_false(shown.val)
-  t.frame(ms=1000.0)
+  // a whole delay rested there again: still shut
+  t.run_for(tooltip_delay_ms)
   assert_false(shown.val)
   t.move(1.0, 1.0)
   assert_false(shown.val)
@@ -157,18 +159,17 @@ test "tooltip: one shown soon after another closed skips the wait" {
   let (ax, ay, aw, ah) = t.get(@ui.Button, label="A").rect
   let (bx, by, bw, bh) = t.get(@ui.Button, label="B").rect
   t.move(ax + aw / 2.0, ay + ah / 2.0)
-  t.frame(ms=700.0)
+  t.run_for(tooltip_delay_ms)
   assert_true(a.val)
   t.move(bx + bw / 2.0, by + bh / 2.0)
-  t.frame()
-  t.frame()
+  t.draw()
   assert_false(a.val)
   assert_true(b.val)
-  // long after: the wait again
+  // its skip gone by: the wait again
   t.move(1.0, 1.0)
-  t.frame(ms=1000.0)
+  t.run_for(tooltip_skip_ms)
   t.move(ax + aw / 2.0, ay + ah / 2.0)
-  t.frame()
+  t.draw()
   assert_false(a.val)
 }
 
@@ -184,21 +185,23 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
   })
   let (x, y, w, h) = t.get(@ui.Button, label="@ada").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.frame(ms=699.0)
+  let due = t.time() + hover_card_open_ms
+  t.run_for(hover_card_open_ms - 1.0)
   assert_false(open.val)
-  t.frame(ms=1.0)
+  t.run_for(due - t.time())
   assert_true(open.val)
   t.draw()
   // onto the card: still open
   let (cx, cy, cw, ch) = t.rect_of("Ada Lovelace").unwrap()
   t.move(cx + cw / 2.0, cy + ch / 2.0)
-  t.frame(ms=1000.0)
+  t.run_for(hover_card_close_ms)
   assert_true(open.val)
   // off both: closed after its delay
   t.move(380.0, 800.0)
-  t.frame(ms=200.0)
+  let due = t.time() + hover_card_close_ms
+  t.run_for(hover_card_close_ms - 1.0)
   assert_true(open.val)
-  t.frame(ms=100.0)
+  t.run_for(due - t.time())
   assert_false(open.val)
 }
 
@@ -206,8 +209,10 @@ test "hover card: opened once the pointer rests on its trigger, kept while over 
 test "toasts: each goes after its time, paused under the pointer; closed, acted on, swiped away" {
   let list : Ref[Array[Toast]] = Ref([])
   let acted : Ref[String?] = Ref(None)
+  // how long the test gives each toast
+  let life_ms = 3000.0
   let t = @ui.Tester::new(fn(c) {
-    let r = toaster(c, "toasts", list.val, duration=3000.0)
+    let r = toaster(c, "toasts", list.val, duration=life_ms)
     list.val = r.open
     if r.acted is Some(_) {
       acted.val = r.acted
@@ -221,13 +226,14 @@ test "toasts: each goes after its time, paused under the pointer; closed, acted 
   // paused while the pointer is over them
   let (x, y, w, h) = t.get(@ui.Status, label="Saved").rect
   t.move(x + w / 2.0, y + h / 2.0)
-  t.frame(ms=5000.0)
+  t.run_for(life_ms)
   assert_eq(list.val.length(), 2)
-  // (none of their 3000 ms went by before the pointer came over them)
+  // (none of their time went by before the pointer came over them)
   t.move(1.0, 1.0)
-  t.frame(ms=2000.0)
+  let due = t.time() + life_ms
+  t.run_for(life_ms - 1.0)
   assert_eq(list.val.length(), 2)
-  t.frame(ms=1000.0)
+  t.run_for(due - t.time())
   assert_eq(list.val.map(fn(x) { x.id }), [])
   // drawn while they go out (from the frame at their time), gone once they have
   t.run_for(presence_out_ms)

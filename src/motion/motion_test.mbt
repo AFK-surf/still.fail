@@ -104,6 +104,8 @@ test "a tween goes by whole milliseconds on its curve, after its delay" {
 ///|
 test "an animated value starts the frame it is asked in, and follows its target" {
   let shown = Ref::new(false)
+  // the tween's length
+  let tween_ms = 160.0
   let seen : Array[Double] = []
   let kept : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
@@ -115,7 +117,7 @@ test "an animated value starts the frame it is asked in, and follows its target"
       } else {
         0.0
       },
-      spec=@motion.tween(160.0, ease=Linear),
+      spec=@motion.tween(tween_ms, ease=Linear),
     )
     seen.push(v)
     // (the Anim it plays, to ask its end)
@@ -128,16 +130,17 @@ test "an animated value starts the frame it is asked in, and follows its target"
   t.frame()
   // asked this frame: it starts here, at its start
   assert_eq(seen[seen.length() - 1], 0.0)
-  t.frame()
+  let start = t.time()
+  t.run_for(tween_ms / 10.0)
   assert_true(near(seen[seen.length() - 1], 0.1, 1.0e-9))
-  t.frame(ms=64.0)
+  t.run_for(start + tween_ms / 2.0 - t.time())
   assert_true(near(seen[seen.length() - 1], 0.5, 1.0e-9))
   // turned back mid-way: from where it is in the frame it is told in (0.6), back from there on
   shown.val = false
-  t.frame()
+  t.run_for(tween_ms / 10.0)
   let back = seen[seen.length() - 1]
   assert_true(near(back, 0.6, 1.0e-9), msg="\{back}")
-  t.frame()
+  t.run_for(tween_ms / 10.0)
   assert_true(seen[seen.length() - 1] < back)
   // on its way still, to its own end
   let end = kept.val.unwrap().ends_at()
@@ -159,16 +162,22 @@ test "a spring told anew mid-way goes on as fast as it went" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   to.val = 100.0
-  for _ in 0..<6 {
-    t.frame()
-  }
-  let a = seen[seen.length() - 2]
+  // asked, and its first frame, at this moment
+  t.draw()
+  let span = kept.val.unwrap().ends_at() - t.time()
+  // a step: a twentieth of its way
+  let step = span / 20.0
+  // a quarter of its way: going fast
+  t.run_for(span / 4.0 - step)
+  let a = seen[seen.length() - 1]
+  t.run_for(step)
   let b = seen[seen.length() - 1]
   to.val = 200.0
-  t.frame()
-  t.frame()
+  // told at this moment, from where it is
+  t.draw()
+  t.run_for(step)
   let c1 = seen[seen.length() - 1]
-  t.frame()
+  t.run_for(step)
   let d = seen[seen.length() - 1]
   // no stop: the step after is at least as long as the one before
   assert_true(d - c1 >= (b - a) * 0.9, msg="\{a} \{b} \{c1} \{d}")

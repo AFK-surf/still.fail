@@ -3,29 +3,35 @@ test "after: true once its condition has held so long by the tester's clock; off
   let on = Ref(false)
   let keep = Ref(false)
   let done = Ref(false)
-  let t = @ui.Tester::new(fn(c) { done.val = after(c, "d", on.val, 500.0, keep=keep.val) })
+  // the delay the test gives `after`
+  let hold_ms = 500.0
+  let t = @ui.Tester::new(fn(c) { done.val = after(c, "d", on.val, hold_ms, keep=keep.val) })
   on.val = true
-  t.frame(ms=16.0)
-  t.frame(ms=300.0)
+  t.draw()
+  let due = t.time() + hold_ms
+  t.run_for(hold_ms - 1.0)
   assert_false(done.val)
-  t.frame(ms=200.0)
+  t.run_for(due - t.time())
   assert_true(done.val)
-  // off and on again: from nothing
+  // off and on again: from nothing (half of it held: not yet, though it had held all of it before)
   on.val = false
-  t.frame()
+  t.draw()
   on.val = true
-  t.frame()
-  t.frame(ms=300.0)
+  t.draw()
+  t.run_for(hold_ms / 2.0)
   assert_false(done.val)
-  // paused, kept: it goes on from where it was
+  // paused, kept: it goes on from where it was (half of it held), however long the pause
   keep.val = true
   on.val = false
-  t.frame(ms=1000.0)
+  t.draw()
+  t.run_for(hold_ms)
   on.val = true
-  t.frame()
-  t.frame(ms=150.0)
+  t.draw()
   assert_false(done.val)
-  t.frame(ms=60.0)
+  let due = t.time() + hold_ms / 2.0
+  t.run_for(hold_ms / 2.0 - 1.0)
+  assert_false(done.val)
+  t.run_for(due - t.time())
   assert_true(done.val)
 }
 
