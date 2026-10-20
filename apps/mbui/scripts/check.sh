@@ -1,9 +1,10 @@
 #!/bin/bash
-# Type-check every target of this module (and mbui with it); print errors only.
-# TODO(#741): every global of the app put back by its package's reset() (or `// kept across runs: why`) is detlint's
-# `globals` rule; nothing of it here.
+# Type-check every target of this module (and mbui with it); print errors only. First the determinism lint (the pinned
+# mbui's scripts/detlint.py, its docs/detlint.md, with apps/mbui/detlint.json: every global put back by its package's
+# reset is its `globals` rule; still.fail's scripts/check.sh runs it too): its report, and a failure stops here.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
+python3 "$MBUI_DIR/scripts/detlint.py" "$A" || exit 1
 cd "$A"
 for t in ${TARGETS:-js native}; do
   echo "=== $t"
