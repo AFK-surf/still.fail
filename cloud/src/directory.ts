@@ -1189,10 +1189,20 @@ export class Directory extends DurableObject<Env> {
     return limits;
   }
 
-  /** An enrollment the admin makes for any workspace, without being in it: a station installed for a company. */
+  /**
+   * An enrollment the admin makes without being in the workspace: a station installed for a company, before it is
+   * theirs. Only a workspace made for a company (#limits of its own) none of whose owners has signed in yet; from then
+   * on its stations are its owners' to add.
+   */
   async adminEnrollment(by: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
-    if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", workspace)) fail(404, "workspace_not_found");
+    const w = this.#one("SELECT max_members FROM workspaces WHERE id = ?", workspace);
+    if (!w) fail(404, "workspace_not_found");
+    if (w!.max_members === null || this.#hasOwner(workspace)) fail(409, "not_before_owner");
     return this.#enrollment(by, workspace, name);
+  }
+
+  #hasOwner(workspace: string): boolean {
+    return Boolean(this.#one("SELECT 1 AS x FROM members WHERE workspace = ? AND role = 'owner' LIMIT 1", workspace));
   }
 
   adminWorkspaces(): AdminWorkspace[] {
@@ -1227,6 +1237,8 @@ export class Directory extends DurableObject<Env> {
       stations: stations.get(w.id as string) ?? [],
       invitations: invitations.get(w.id as string) ?? [],
       added: added.get(w.id as string) ?? [],
+      // As adminEnrollment has it: one made for a company, none of its owners signed in yet.
+      enrollable: w.max_members !== null && !(members.get(w.id as string) ?? []).some((m) => m.role === "owner"),
       // As #limits has it: its own, or its creator's plan's.
       ...(w.max_members !== null && w.max_stations !== null
         ? { seats: w.max_members as number, station_seats: w.max_stations as number, plan: "enterprise" as const }

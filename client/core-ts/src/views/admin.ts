@@ -533,6 +533,8 @@ export function workspace(id: string, workspaces: J, users: J, now: number): J {
     plan: enterprise ? t("core-views.admin.enterprise") : null,
     // What the limits form starts from: a cloud from before gives neither.
     limits: whole(seats) && whole(stationSeats) ? { members: seats, stations: stationSeats } : null,
+    // The admin puts a station in only before the company's owners are in (directory.ts adminEnrollment).
+    enrollable: get(w, "enrollable") === true,
     members,
     added,
     stations,
