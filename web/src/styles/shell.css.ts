@@ -116,8 +116,11 @@ export const main = style({
 // The window takes a click on a drag region for itself and the page never sees it, so a menu, popover or select left open
 // would stay open when the top of the window is clicked. While one is open nothing drags: the click reaches the page and
 // closes it like a click anywhere else. Tooltips (data-state "delayed-open"/"instant-open") don't count.
-const menuOpen = `:root[data-desktop]:has([data-radix-popper-content-wrapper] > [data-state="open"], [data-radix-select-viewport])`;
-globalStyle(`${menuOpen} *, ${menuOpen} *::before, ${menuOpen} *::after`, { WebkitAppRegion: "no-drag !important" as "no-drag" });
+// Nor while a folded sidebar is shown a while (Rail.tsx peekSidebar): it reaches over the page's top row, and the window
+// takes that row's area under it whatever is drawn over it. On Windows the page is then told the pointer left it, so the
+// sidebar folded again as the pointer reached 新建对话 (test/browser/peek-drag.mjs). Folded again, the row drags again.
+const nothingDrags = `:root[data-desktop]:is([data-sidebar-peek], :has([data-radix-popper-content-wrapper] > [data-state="open"], [data-radix-select-viewport]))`;
+globalStyle(`${nothingDrags} *, ${nothingDrags} *::before, ${nothingDrags} *::after`, { WebkitAppRegion: "no-drag !important" as "no-drag" });
 export const gate = style({
   height: "100%", display: "grid", placeContent: "center", justifyItems: "center", gap: "8px", padding: "24px",
   textAlign: "center",
