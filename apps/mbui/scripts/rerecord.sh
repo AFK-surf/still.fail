@@ -74,16 +74,32 @@ rc=${PIPESTATUS[0]}
 # (a flow its run failed keeps its old trace; the others are recorded again)
 [ $rc = 0 ] || echo "rerecord: not all of the run passed: those that failed keep their traces ($TMP/run.log, out/e2e/mac/)"
 code=$rc
+# (those whose trace is still the old one, and why: a batch may hold traces of two builds of the app)
+kept=""
 for x in $tests; do
   name=${x%%:*}; rest=${x#*:}; trace=${rest%%:*}; test=${rest#*:}
   if ! grep -aq '^DRIVE PASS' "out/e2e/mac/$name.log" 2>/dev/null; then
+    why=$(grep -a -m1 'DRIVE FAIL line' "out/e2e/mac/$name.log" 2>/dev/null | sed 's/^ *DRIVE FAIL //' | cut -c1-160)
     echo "  $test: its run failed, its trace kept as it was:"; grep -a 'DRIVE FAIL' "out/e2e/mac/$name.log" 2>/dev/null | head -2 | cut -c1-300
+    kept="$kept
+  $(basename "$trace"): the run failed (${why:-no DRIVE FAIL line})"
     continue
   fi
   cp "$trace" "$TMP/$(basename "$trace").old"
+  mbt="src/sfreplay/trace_$(basename "$trace" .trace | tr -c 'a-z0-9\n' '_').mbt"
+  cp "$mbt" "$TMP/$(basename "$mbt").old"
   python3 scripts/trace.py "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
   python3 scripts/tracediff.py "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
   if moon test --target js "$test" > "$TMP/$name.after.log" 2>&1; then echo "  $test: passes"; else
-    echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1; fi
+    echo "  $test: fails over the new trace ($TMP/$name.after.log):"; grep -a '^flow:\|assert_idle' "$TMP/$name.after.log" | head -5 | cut -c1-300; code=1
+    # (the new trace is the run's; the test does not hold over it: the old one back, said)
+    cp "$TMP/$(basename "$trace").old" "$trace"
+    cp "$TMP/$(basename "$mbt").old" "$mbt"
+    kept="$kept
+  $(basename "$trace"): its test fails over the new one ($(grep -a -m1 '^flow:\|assert_idle' "$TMP/$name.after.log" | cut -c1-160))"
+  fi
 done
+if [ -n "$kept" ]; then
+  echo "rerecord: these keep their old traces (recorded by an earlier build of the app than the others):$kept"
+fi
 exit $code
