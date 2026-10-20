@@ -988,9 +988,12 @@ fn h_view_site_state(id : Int) -> String {
 ///|
 fn h_view_text(id : Int, what : Int) -> String? {
   match fake.val {
-    // as the run recorded the host's saying it (Tester::view_said); not said yet: not known (a grab: none asked)
+    // as the run recorded the host's saying it (Tester::view_said); not said yet: not known (a grab: none asked). A
+    // grab said ready before its frame is said ("2", then the `still` line: a host says both in one frame, a replay may
+    // give them a frame apart): still grabbing until the frame is here, not ready with none
     Some(f) =>
       match f.view_texts.get((id, what)) {
+        Some("2") if what == 2 && !(f.view_stills.get(id) is Some(q) && q.length() > 0) => Some("1")
         Some(t) => Some(t)
         None => if what == 2 { Some("0") } else { None }
       }

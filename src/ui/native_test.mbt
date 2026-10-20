@@ -277,6 +277,14 @@ test "a video's frames' times and a frame grabbed are what the run said the host
   t.draw()
   assert_eq(v.grabbed(), Some(b"\x89PNG"))
   assert_eq(v.grabbed(), None)
+  // its ready said a frame before its frame (as a replay may give the run's two lines): grabbing until it is here
+  v.grab_frame(80.0)
+  assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":2,\"text\":\"2\"}}"))
+  t.draw()
+  assert_eq(v.grabbed(), None)
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"89504e47\"}"))
+  t.draw()
+  assert_eq(v.grabbed(), Some(b"\x89PNG"))
   // a grab that failed, as said
   assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":2,\"text\":\"-1\"}}"))
   assert_eq(v.grabbed(), Some(b""))
