@@ -199,9 +199,15 @@ pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
 /// The flow's end: all the run's conversation given, every ask of the run's made again as it was (but `unmade`, the
 /// run's asks this one does not make, each said why at the test), nothing else asked, and the app idle. The screen
 /// as it ends, in a number (screen_sum). The app's core the engine again.
-pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
+pub fn Flow::end(self : Flow, unmade? : Array[String] = [], unsettled_ok? : String = "") -> String {
   self.core()
-  self.t.assert_idle()
+  // (unsettled_ok: why the app still asks for frames of its own here, until its migration lands; the idle check is
+  // left out for this flow, said on the log)
+  if unsettled_ok == "" {
+    self.t.assert_idle()
+  } else {
+    println("flow: not checked idle: " + unsettled_ok)
+  }
   let r = self.r
   let why = []
   if r.left() > 0 {
@@ -264,4 +270,15 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
     self.t.run_for(end - now)
   }
   self.core()
+}
+
+///|
+/// `page` pushed over Home, as a scripted run's `#env MBUI_OPEN_PAGE` has it (src/stillfail/main.mbt; there before
+/// the first frame, here once the Tester has drawn Home: the same asks, matched whatever their order), in place once
+/// its push is over (@ui.nav_rest).
+pub fn Flow::open_page(self : Flow, page : @sfapp.Page) -> Unit {
+  @sfapp.open_page(page)
+  self.t.draw()
+  self.core()
+  self.run_to(@ui.nav_rest())
 }

@@ -2,4 +2,5 @@ import {
   "stillfail/sfreplay",
   "stillfail/sfapp",
   "mbui/ui",
+  "mbui/kit",
 }
