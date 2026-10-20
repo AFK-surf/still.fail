@@ -91,7 +91,8 @@ priv struct Moving {
   mut drive : Double
   /// in a list, by where it shows in the list's view rather than in its content (what the list's scrolling moves too)
   mut screen : Bool
-  /// its key in words, for the motion log (MBUI_MOTION_LOG=1)
+  /// its key in words: what its motions are said as (Tester::moving: "layout KEY"), and the motion log's
+  /// (MBUI_MOTION_LOG=1)
   mut name : String
   mut enter : Trans?
   mut exit : Trans?
@@ -350,9 +351,7 @@ pub fn layout(
   screen? : Bool = false,
 ) -> Unit {
   let e = moving_of(c, i)
-  if logging() {
-    e.name = key
-  }
+  e.name = key
   e.key = motion_key(key)
   e.flip = true
   e.screen = screen
@@ -372,9 +371,7 @@ pub fn layout(
 /// leaves by `exit`, a copy of it).
 pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans) -> Unit {
   let e = moving_of(c, i)
-  if logging() {
-    e.name = key
-  }
+  e.name = key
   e.key = motion_key(key)
   if exit is Some(_) {
     e.exit = exit
@@ -386,9 +383,7 @@ pub fn keyed(c : @ui.Ctx, i : Int, key : String, exit? : Trans) -> Unit {
 /// before): what is new as the app says (a message said while the chat shows).
 pub fn entering(c : @ui.Ctx, i : Int, key : String, enter : Trans) -> Unit {
   let e = moving_of(c, i)
-  if logging() {
-    e.name = key
-  }
+  e.name = key
   e.key = motion_key(key)
   e.enter = Some(enter)
   e.fresh = true
@@ -411,7 +406,7 @@ pub fn fly(
   z? : Int = 2,
 ) -> Unit {
   let e = moving_of(c, i)
-  if logging() && e.name == "" {
+  if e.name == "" {
     e.name = "fly"
   }
   e.fly = Some((x, y, scale, px, py, ps))
@@ -801,6 +796,12 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         Some(r) => r
         None => {
           let r = Rec::new()
+          // (what moves it said by its key, as layout_rest(KEY) asks of it: Tester::moving's "Anim \"layout KEY\"")
+          let said = "layout " + e.name
+          r.ox.name = said
+          r.oy.name = said
+          r.ef.name = said
+          r.em.name = said
           mo.recs[e.key] = r
           r
         }
@@ -939,7 +940,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
     if look != app_look {
       c.set_look(e.node, look)
     }
-    if e.name != "" && (!look.is_still() || e.fly is Some(_)) {
+    if logging() && e.name != "" && (!look.is_still() || e.fly is Some(_)) {
       @ui.log(
         "MOTION \{c.now()} \{e.name} x=\{nx + look.dx} y=\{ny + look.dy} w=\{nw * look.sx} h=\{nh * look.sy} alpha=\{look.alpha} dx=\{look.dx} dy=\{look.dy} scale=\{look.sx} fy=\{flip_dy}",
       )

@@ -213,6 +213,8 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
   let y2 = drawn_y(t, 0xFF0000FFL)
   assert_true(y2 < 40.0 && y2 > 0.0, msg="\{y2}")
   assert_eq(t.ctx().rect_of(id).unwrap().1, 0.0)
+  // said moving by its key, as layout_rest asks of it
+  assert_true(t.moving().iter().any(fn(m) { m.contains("Anim \"layout moved\"") }), msg=t.moving().join("; "))
   // its move's own end (its spring's), asked by its key
   t.run_for(@motion.layout_rest("moved") - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
