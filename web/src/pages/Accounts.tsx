@@ -548,33 +548,33 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
 }
 
 /** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
-const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : "ChatGPT");
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : profile.runtime === "cursor" ? "Cursor" : "ChatGPT");
 
 /**
  * A device sign-in (Codex's, Grok's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
  * there with no trip back; the rest finishes by itself. OpenCode's page has the code in its address: it is only
- * compared there, not copied.
+ * compared there, not copied. Cursor's has none: its page is only opened, and confirmed there.
  */
-function DeviceCode({ url, code, provider }: { url: string; code: string; provider: string }) {
+function DeviceCode({ url, code, provider }: { url: string; code: string | null; provider: string }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
-  const filled = provider === "OpenCode";
+  const filled = provider === "OpenCode" || code === null;
   const go = () => {
-    if (filled) return void window.open(url, "_blank", "noopener");
+    if (filled || code === null) return void window.open(url, "_blank", "noopener");
     // Not copied: the page opens all the same, the code to type in by hand.
     void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast(t("web-pages.profiles.copyFailed"))).finally(() => window.open(url, "_blank", "noopener"));
   };
   return (
     <div className={css.deviceCode}>
-      <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
+      {code !== null && <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>}
       <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
+      <p className={shellCss.muted}>{code === null ? t("web-pages.profiles.deviceCodeNoteCursor") : provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
 
-/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), or the link
- * and the one-time code to enter (Codex). */
+/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), the link
+ * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). */
 export function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
 }) {
@@ -598,7 +598,8 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
           </li>
         </ol>
       )}
-      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} provider={provider} />}
+      {/* No code where the page only asks to confirm (Cursor's). */}
+      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider} />}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>

@@ -770,7 +770,7 @@ function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactN
   const api = useApi();
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : "ChatGPT";
+  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const [manual, setManual] = useState(false);
@@ -829,7 +829,7 @@ function InstallStep({ install }: { install: RuntimeInstall }) {
   );
 }
 
-/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), or copy the code and open the page (Codex). */
+/** What the person does in the browser for a sign-in under way: open the page and paste the code back (Claude), copy the code and open the page (Codex), or only open the page and confirm there (Cursor). */
 function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined; provider: string; send: (code: string) => Promise<unknown> }) {
   const app = useApp();
   const [code, setCode] = useState("");
@@ -840,6 +840,15 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   if (!job || job.state === "starting") return <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} />;
   if (job.state === "verifying") return <WaitLine text={t("web-mobile.profiles.finishing")} />;
   if (job.state === "done") return <WaitLine text={t("web-mobile.profiles.adding")} />;
+  // No code: the page only asks to confirm (Cursor's).
+  if (job.state === "needs_approval" && job.url && !job.userCode) {
+    return (
+      <>
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{t("web-mobile.profiles.cursorNote")}</p>
+        <Button label={t("web-mobile.profiles.openAuth")} primary onClick={() => void window.open(job.url!, "_blank", "noopener")} />
+      </>
+    );
+  }
   if (job.state === "needs_approval" && job.url && job.userCode) {
     return (
       <>
@@ -939,8 +948,8 @@ export function NewProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const pending = login ? overview?.logins.find((l) => l.id === login) : undefined;
   // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
-  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" ? d.tile.runtime : "claude");
-  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : "ChatGPT");
+  const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" || d?.tile?.runtime === "cursor" ? d.tile.runtime : "claude");
+  const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : runtime === "cursor" ? "Cursor" : "ChatGPT");
   const begin = () => api.newLogin(runtime, d?.signIn?.access).then(({ id }) => setLogin(id), (e: Error) => setError(e.message));
   const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
   // The sign-in made its profile: on to it.

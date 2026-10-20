@@ -132,11 +132,14 @@ export function Splash({ label, now = false, children }: { label?: string; now?:
 }
 
 /**
- * The agent runtimes' marks: Claude's in its orange, OpenAI's (Codex), DeepSeek Harness's and xAI's (Grok Build) in the text
- * colour. Claude's and OpenAI's paths from simple-icons (CC0); DeepSeek Harness's from its repository (MIT); xAI's the
- * maker mark Grok's models have (public/models/xai.svg).
+ * The agent runtimes' marks: Claude's in its orange, OpenAI's (Codex), DeepSeek Harness's, xAI's (Grok Build) and Cursor's in
+ * the text colour. Claude's, OpenAI's and Cursor's paths from simple-icons (CC0); DeepSeek Harness's from its repository
+ * (MIT); xAI's the maker mark Grok's models have (public/models/xai.svg).
  */
 export function RuntimeLogo({ runtime, size = 16 }: { runtime: RuntimeKind; size?: number }) {
+  if (runtime === "cursor") return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Cursor" role="img" className={css.runtimeLogo}><path fill="currentColor" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" /></svg>
+  );
   if (runtime === "grok") return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-label="Grok Build" role="img" className={css.runtimeLogo}><path fill="currentColor" fillRule="evenodd" d="M6.469 8.776L16.512 23h-4.464L2.005 8.776H6.47zm-.004 7.9l2.233 3.164L6.467 23H2l4.465-6.324zM22 2.582V23h-3.659V7.764L22 2.582zM22 1l-9.952 14.095-2.233-3.163L17.533 1H22z" /></svg>
   );
@@ -174,14 +177,14 @@ export function ProviderLogo({ runtime, kind, mark, size = 16 }: { runtime: Runt
   if (kind === "env") return <Sliders size={size} strokeWidth={1.7} aria-hidden="true" />;
   // A key on a listed provider: its maker's mark, or the generic plug where there is none.
   if (kind === "api-provider") return mark ? <ModelLogo maker={{ id: mark, name: mark }} runtime={runtime} size={size} /> : <Plug size={size} strokeWidth={1.7} aria-hidden="true" />;
-  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : { id: "openai", name: "OpenAI" };
+  const maker = runtime === "claude" || kind === "anthropic-api" ? { id: "anthropic", name: "Anthropic" } : runtime === "grok" ? { id: "xai", name: "xAI" } : runtime === "cursor" ? { id: "cursor", name: "Cursor" } : { id: "openai", name: "OpenAI" };
   return <ModelLogo maker={maker} runtime={runtime} size={size} />;
 }
 
 /** A runtime's name, short, for the tags after a profile's name. */
-const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK" };
+const RUNTIME_TAG: Record<RuntimeKind, string> = { claude: "CC", codex: "Codex", dsh: "DSH", grok: "GROK", cursor: "Cursor" };
 
-/** The runtimes a profile runs, as small marks after its name (CC for Claude Code, Codex, DSH for DeepSeek Harness, GROK for Grok Build), and 自动决策 where it serves the automatic decisions. */
+/** The runtimes a profile runs, as small marks after its name (CC for Claude Code, Codex, DSH for DeepSeek Harness, GROK for Grok Build, Cursor), and 自动决策 where it serves the automatic decisions. */
 export function RuntimeTags({ runtimes, decision = false }: { runtimes: RuntimeKind[]; decision?: boolean | undefined }) {
   return (
     <span className={waitingCss.runtimeTags}>

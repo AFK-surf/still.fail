@@ -35,7 +35,7 @@ import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
 import { libraryDemo, vaultDemo } from "./vault.ts";
-import { installDemo, installFlowDemo } from "./install.ts";
+import { cursorPickDemo, installDemo, installFlowDemo } from "./install.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { lockDemo } from "./lock.ts";
@@ -169,6 +169,7 @@ const everyKind: DemoExtension = {
         ...v.items,
         as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
         as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
+        as("cursor", "cursor", "Cursor 订阅", { name: "lin@acme.dev", runtime: "cursor", runtimes: ["cursor"], quota: null }),
         as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: null }),
       ],
     };
@@ -199,6 +200,36 @@ const superGrok = (signingIn: boolean): DemoExtension => {
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
         return { ...v, items: v.items.map((e) => ({ ...e, group: "grok", groupTitle: "SuperGrok 订阅", profile: grok(e.profile as Record<string, unknown>) })) };
+      }
+      return undefined;
+    },
+  };
+};
+/** The demo's profile as a Cursor subscription: signed in, or being signed in again (`signingIn`: Cursor's page is up, with
+ *  no code; it is only confirmed there). The workspace's list has it under its own kind too. */
+const cursorAccount = (signingIn: boolean): DemoExtension => {
+  const at = Date.UTC(2026, 9, 20, 3, 0);
+  const login = { profile: "machine-claude", runtime: "cursor", state: "needs_approval", url: "https://cursor.com/loginDeepControl?challenge=Xq7…&uuid=5b1e…&mode=login", userCode: null, startedAt: at, expiresAt: at + 600_000 };
+  const models = ["composer-2", "gpt-5.5"];
+  const cursor = (p: Record<string, unknown>) => ({
+    ...p, machine: false, runtime: "cursor", runtimes: ["cursor"], loginCommand: undefined, providerName: undefined,
+    access: { kind: "subscription", key: "" }, quota: { state: "unavailable", windows: [], checkedAt: at }, trouble: null,
+    models, available: models, modelsText: "已启用 2 / 2 个模型", series: [{ name: "Composer", models: ["composer-2"] }, { name: "GPT", models: ["gpt-5.5"] }],
+    makers: { "composer-2": { id: "cursor", name: "Cursor" }, "gpt-5.5": { id: "openai", name: "OpenAI" } }, names: { "composer-2": "Composer 2", "gpt-5.5": "GPT-5.5" },
+    ...(signingIn
+      ? { login, check: { checkedAt: 0, state: "login", detail: "Cursor 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+      : { login: null, check: { checkedAt: 0, state: "ok", detail: "已登录", models }, checkText: "可用", checkTone: "green" }),
+  });
+  return {
+    then: (t, value) => {
+      if (!value || typeof value !== "object") return undefined;
+      if (t.topic === "overview") {
+        const o = value as { profiles: Record<string, unknown>[] };
+        return { ...o, profiles: o.profiles.map(cursor) };
+      }
+      if (t.topic === "profiles") {
+        const v = value as { items: Record<string, unknown>[] };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "cursor", groupTitle: "Cursor 订阅", profile: cursor(e.profile as Record<string, unknown>) })) };
       }
       return undefined;
     },
@@ -535,7 +566,7 @@ export const stories: Story[] = [
     render: () => sheet([
       ["标签", <><Pill>普通</Pill><Pill tone="green">在线</Pill><Pill tone="blue">进行中</Pill><Pill tone="amber">等待</Pill><Pill tone="red">失败</Pill><Pill tone="accent">强调</Pill></>],
       ["状态", <><StatusDot state="online" label="在线" /><StatusDot state="busy" label="忙" /><StatusDot state="error" label="出错" /><StatusDot state="offline" label="离线" /><StatusText text="已连接 · 3 分钟前" /></>],
-      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok"]} /></>],
+      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><ModelLogo maker={null} runtime="cursor" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok", "cursor"]} /></>],
     ]),
   },
   {
@@ -631,6 +662,9 @@ export const stories: Story[] = [
   { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-add-installing", group: "应用", title: "添加 Profile · SuperGrok · 正在安装 Grok Build", app: true, demo: installFlowDemo("installing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-cursor", group: "应用", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-cursor", group: "应用", title: "Profile · Cursor 订阅", app: true, demo: cursorAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-cursor-signing-in", group: "应用", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-phone-models", group: "选模型", title: "手机 · 模型列表（本机、借用的、可借用的）", phone: true, render: phoneModels },
@@ -957,6 +991,8 @@ export const stories: Story[] = [
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
+  { id: "phone-profile-cursor-signing-in", group: "手机", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, phone: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
