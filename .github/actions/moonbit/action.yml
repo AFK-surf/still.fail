@@ -1,0 +1,33 @@
+name: moonbit
+description: MoonBit's latest release on a GitHub runner (macOS, Linux), MOON_HOME ~/.moon on PATH; kept in the Actions cache by the ETags of its two downloads, installed again only when either changed
+runs:
+  using: composite
+  steps:
+    - id: moon
+      shell: bash
+      run: |
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          macOS-ARM64) bin=moonbit-darwin-aarch64.tar.gz ;;
+          Linux-X64) bin=moonbit-linux-x86_64.tar.gz ;;
+          *) bin= ;;
+        esac
+        tag=$( { [ -z "$bin" ] || curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/$bin || true
+                 curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.tar.gz || true; } \
+          | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
+        # (no answer from either: no key, installed)
+        if [ -n "$bin" ] && [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" = 4 ]; then
+          echo "key=moon-$RUNNER_OS-$RUNNER_ARCH-$(printf '%s' "$tag" | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        fi
+    - if: steps.moon.outputs.key != ''
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.moon
+        key: ${{ steps.moon.outputs.key }}
+    - shell: bash
+      run: |
+        if [ "${{ steps.cache.outputs.cache-hit }}" != true ] || ! [ -x "$HOME/.moon/bin/moon" ]; then
+          curl -fsSL --retry 2 https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
+        fi
+        echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+        echo "MOON_HOME=$HOME/.moon" >> "$GITHUB_ENV"
