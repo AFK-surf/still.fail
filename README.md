@@ -50,11 +50,11 @@ flowchart LR
     b["Station B"]
   end
   cloud[("still.fail cloud<br/>accounts · workspaces · relays")]
-  chat -- bot --> a
-  apps <-- "iroh, peer-to-peer" --> a
-  a <-- "tasks · shared profiles and skills" --> b
-  apps -. sign-in .-> cloud
-  a -. membership .-> cloud
+  chat -->|bot| a
+  apps <-->|"iroh, peer-to-peer"| a
+  a <-->|"tasks · shared profiles and skills"| b
+  apps -.->|sign-in| cloud
+  a -.->|membership| cloud
 ```
 
 - A **station** (`station/`, TypeScript on Node, with a few prebuilt native parts) runs on a machine you choose. It starts and keeps the agent sessions, connects to Slack and Feishu, and stores conversations locally in SQLite.
