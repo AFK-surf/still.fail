@@ -105,8 +105,8 @@ fn page_name(page : @sfapp.Page) -> String {
 }
 
 ///|
-/// The calls the core answered in the step just taken, a scripted run's `answered NAME` each (drive.mbt: the step
-/// after waits for that answer and the frame drawn after it), once each in order.
+/// The calls the step just taken made of the core (that the run answered), a scripted run's `answered NAME` each
+/// (drive.mbt: what has ended since the last step that acted, and the frame drawn after it), once each in order.
 fn emit_answered(names : Array[String]) -> Unit {
   match script.val {
     Some(_) => {
