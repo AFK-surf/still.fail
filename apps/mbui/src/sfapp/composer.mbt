@@ -35,15 +35,14 @@ let composer_inset : Double = 8.0
 ///|
 /// What waits to go with the message, in the capsule's top left corner: a picture's tile (its remove button reaching
 /// `picture_remove_out` beyond its top right corner), each file's card as tall and as round. The row stands as far
-/// from the capsule's left edge as from its top (composer_files_in), so their corner is concentric with the capsule's.
+/// from the capsule's left edge as from its top (Glass.kt ComposerFilesIn, 10), its items' corner `Inner`: concentric
+/// with the capsule's by how it is written (composer_files_row, files_card).
 let picture_tile : Double = 56.0
 
 ///|
 let picture_remove_out : Double = 5.0
 
 ///|
-let files_row_top : Double = 2.0
-
 ///|
 /// A file's card and a pasted text's card in the files' row, how wide.
 let file_card_w : Double = 236.0
@@ -52,12 +51,61 @@ let file_card_w : Double = 236.0
 let pasted_card_w : Double = 260.0
 
 ///|
-let composer_files_in : Double = composer_inset + files_row_top + picture_remove_out
+/// The files' row (and the station files' row): 2 in from the capsule's room at its sides and top, 10 from its edges
+/// (Composer.kt `beyond`), the reach of the last picture's remove button kept at its end (`end = beyond +
+/// PictureRemoveOut`); what does not fit cut at its sides.
+// kept across runs: a value (no field of it changes)
+let composer_files_row : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  pl=S0_5,
+  pt=S0_5,
+  pr=@sf.files_row_end,
+  gap=@sf.files_gap,
+  align=AEnd,
+  clip=true,
+)
 
 ///|
-/// The corner of what waits in the files' row (a picture's tile, a file's card).
-fn files_corner() -> Double {
-  @sf.concentric(composer_corner, composer_files_in)
+/// What waits in the files' row (a picture's tile, a file's card, a pasted text's): its corner concentric with the
+/// capsule's (Glass.kt InComposerFiles) where the row is the capsule's first (in its corner: `Inner`); under a quote
+/// or a notice, what Android gives Smooth there (@sf.files_corner), the row then in no corner.
+fn files_card() -> @ui.Style {
+  if files_cornered.val {
+    files_card_inner
+  } else {
+    files_card_set
+  }
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_card_inner : @ui.Style = @ui.style(radius=Inner)
+
+///|
+// kept across runs: a value (no field of it changes)
+let files_card_set : @ui.Style = @ui.style(radius=@sf.files_corner)
+
+///|
+/// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).
+let files_cornered : Ref[Bool] = Ref::new(false)
+
+///|
+/// How far down the capsule's room starts: its inset, less the reach of a remove button above a picture's tile when
+/// the files' row (or the station files') is the first thing in it, so the tiles stand 10 from its top edge as from
+/// its left (Composer.kt: the button reaches past the row there, Compose's horizontalScroll cutting only sideways;
+/// here the row cuts all round, so its room for the button comes off the capsule's).
+fn capsule_top(v : ChatView?, d : Draft) -> Double {
+  let notices = match v {
+    Some(v) => v.archived || v.offline
+    None => false
+  }
+  files_cornered.val = !notices && d.quotes.length() == 0 && (refs_of(d.key).length() > 0 || d.files.length() > 0)
+  if files_cornered.val {
+    composer_inset - picture_remove_out
+  } else {
+    composer_inset
+  }
 }
 
 ///|
@@ -876,15 +924,16 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     None => None
   }
   let mut content = -1
+  let top = capsule_top(v, d)
   c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, fn() {
-    c.box(w=Fill(1.0), pad=composer_inset, id=cap, fn() {
+    c.box(w=Fill(1.0), pad=composer_inset, pt=top, id=cap, fn() {
       // its ground, as tall as the morph has it, on the capsule's bottom edge (over it while it is taller)
       let ground = c.layer(fn() {
         c.box(w=Fill(1.0), h=Fill(1.0), justify=JEnd, fn() {
           c.box(
             w=Fill(1.0),
             h=match morph {
-              Some(h) => Px(h + 2.0 * composer_inset)
+              Some(h) => Px(h + top + composer_inset)
               None => Fill(1.0)
             },
             radius=composer_corner,
@@ -927,9 +976,9 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   let room = match (flight_of(d.key), natural, morph) {
     // while words fly to their row, the list keeps the room the composer will have, so their place is where they
     // land (ChatHost.kt roomForList)
-    (Some(_), Some(h), _) => h + 2.0 * composer_inset + 8.0 + 10.0
+    (Some(_), Some(h), _) => h + top + composer_inset + 8.0 + 10.0
     // otherwise the room the capsule is drawn with (the list's rows going with it)
-    (None, _, Some(h)) => h + 2.0 * composer_inset + 8.0 + 10.0
+    (None, _, Some(h)) => h + top + composer_inset + 8.0 + 10.0
     _ =>
       match c.rect_of(cap) {
         Some((_, _, _, h)) => h + 8.0 + 10.0
@@ -1333,16 +1382,9 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
   }
   ref_cards(c, d.key)
   if d.files.length() > 0 {
-    // as far from the capsule's left edge as from its top (composer_files_in), past its own room
+    // as far from the capsule's left edge as from its top, past its own room (composer_files_row, capsule_top)
     c.box(
-      dir=Row,
-      w=Fill(1.0),
-      pl=composer_files_in - composer_inset,
-      pr=2.0,
-      pt=files_row_top,
-      gap=11.0,
-      align=AEnd,
-      clip=true,
+      style=composer_files_row,
       fn() {
       for f in d.files {
         let remove = c.id("composer/remove/\{f.id}")
@@ -1390,9 +1432,9 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
 fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Unit {
   let t = @sf.theme()
   with_remove(c, remove, picture_tile, fn() {
-    c.box(w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), bg=t.p.chip, clip=true, fn() {
+    c.box(w=Px(picture_tile), h=Px(picture_tile), style=files_card(), bg=t.p.chip, clip=true, fn() {
       if picture != "" {
-        c.image(picture, w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), fit=FitCover, bg=0L) |> ignore
+        c.image(picture, w=Px(picture_tile), h=Px(picture_tile), fit=FitCover, bg=0L) |> ignore
       }
       if f.done is None {
         c.layer(fn() {
@@ -1435,10 +1477,11 @@ fn card_close(c : @ui.Ctx, remove : Int) -> Unit {
 fn with_remove(c : @ui.Ctx, remove : Int, w : Double, body : () -> Unit) -> Unit {
   let t = @sf.theme()
   // (as wide as what it holds and its button's reach: never squeezed by a row too narrow for all of them)
-  c.box(w=Px(w + picture_remove_out), pt=picture_remove_out, pr=picture_remove_out, fn() {
+  // (the button reaches past its right edge over the gap after it, as Composer.kt's: it takes no room of its own there)
+  c.box(w=Px(w), pt=picture_remove_out, fn() {
     body()
     c.layer(align=AEnd, fn() {
-      c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, id=remove, fn() {
+      c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, tx=picture_remove_out, id=remove, fn() {
         @sf.icon(c, "close", size=12.0, color=t.p.raised) |> ignore
       })
       |> ignore
@@ -1489,7 +1532,7 @@ fn pasted_card(
     pt=8.0,
     pb=8.0,
     gap=10.0,
-    radius=files_corner(),
+    style=files_card(),
     bg=k.neutral,
     align=ACenter,
     fn() {
@@ -1561,7 +1604,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
     padx=10.0,
     pady=8.0,
     gap=10.0,
-    radius=files_corner(),
+    style=files_card(),
     bg=k.neutral,
     align=ACenter,
     fn() {

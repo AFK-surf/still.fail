@@ -405,3 +405,16 @@ pub fn ui_theme() -> @ui.Theme {
   }
   { ..base, text: text_scale }
 }
+
+///|
+/// The composer's files' row: the gap between what waits in it (Composer.kt: 6 and a remove button's reach past a
+/// picture), and the room kept at its end for the last button's reach (Composer.kt `beyond + PictureRemoveOut`).
+pub let files_gap : @ui.Space = Exact(11.0)
+
+///|
+pub let files_row_end : @ui.Space = Exact(7.0)
+
+///|
+/// What waits in the composer, its corner where it is in none of the capsule's (Glass.kt InComposerFiles:
+/// concentric(ComposerCorner 26, ComposerFilesIn 10), what Android gives Smooth).
+pub let files_corner : @ui.Radius = Exact(18.0)

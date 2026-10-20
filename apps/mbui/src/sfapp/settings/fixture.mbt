@@ -36,6 +36,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
     "settings-profile" => "profile:ws1/st1#cc"
+    "settings-me-reading" => "me"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
       if m.has_prefix("settings-") {
@@ -634,6 +635,8 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ),
       )
     "archive" => Some(fx_archive())
+    // (settings-me-reading: where the account is signed in not read yet, its wait line shown)
+    "loginSessions" if mode.has_prefix("settings-me-reading") => None
     "loginSessions" =>
       Some([
         obj([("id", str("l1")), ("name", str("Pixel 9 · still.fail")), ("current", Json::boolean(true)), ("time", obj([("created_at", stamp_of("3 天前")), ("expires_at", stamp_of("", until="27 天后"))]))]),
