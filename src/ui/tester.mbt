@@ -155,6 +155,8 @@ pub fn Tester::new(
     inset: window_inset,
     env: Map::from_array(env),
     app_version,
+    notices: [],
+    notice_opened: "",
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

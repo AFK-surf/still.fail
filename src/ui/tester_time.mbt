@@ -69,3 +69,74 @@ pub fn Tester::motion_end(self : Tester) -> Double {
   ignore(self)
   g().motion_end()
 }
+
+///|
+/// Where the words (or `=WORDS` exactly, `icon:NAME` an @sf icon, `img:NAME` an image by the end of its source) are
+/// on screen, as a scripted run's steps find them (drive.mbt): the middle of each, laid out inside the window.
+pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {
+  ignore(self)
+  on_screen(g(), what)
+}
+
+///|
+/// The focused field's words ("" when none is focused).
+pub fn Tester::field_words(self : Tester) -> String {
+  ignore(self)
+  field_words(g())
+}
+
+///|
+/// `words` pasted where the focus is, as a scripted run pastes (drive.mbt `paste`): put on the clipboard, then given
+/// as the system gives a paste; the frames it causes drawn.
+pub fn Tester::paste(self : Tester, words : String) -> Unit {
+  h_clipboard_set(words)
+  on_text(0, words, 0, 0)
+  self.frame()
+  self.draw()
+}
+
+///|
+/// The key named `name` pressed, as a scripted run names keys (drive.mbt `key`): `esc`, `enter`, `shift+enter`,
+/// `cmd+k` (Ctrl off macOS)…; false for a name it does not know. The frames it causes drawn.
+pub fn Tester::key_named(self : Tester, name : String) -> Bool {
+  match key_named(name) {
+    Some((code, mods)) => {
+      on_key(code, mods)
+      self.frame()
+      self.draw()
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// The window's size (points).
+pub fn Tester::size(self : Tester) -> (Double, Double) {
+  ignore(self)
+  let c = g()
+  (c.width, c.height)
+}
+
+///|
+/// The notifications the app shows now, oldest first (@ui.notice_show).
+pub fn Tester::notices(self : Tester) -> Array[Notice] {
+  self.fake.notices.copy()
+}
+
+///|
+/// The notification whose title or words hold `text` tapped, as the system taps one: what it opens is given to the
+/// app (@ui.notice_opened), the frames that causes drawn. False when none holds it.
+pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
+  match self.fake.notices.search_by(fn(n) { n.title.contains(text) || n.body.contains(text) }) {
+    Some(k) => {
+      self.fake.notice_opened = self.fake.notices[k].opens
+      // (the system takes it away as it is tapped)
+      self.fake.notices.remove(k) |> ignore
+      self.frame()
+      self.draw()
+      true
+    }
+    None => false
+  }
+}

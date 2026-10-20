@@ -53,6 +53,9 @@ struct FakeHost {
   mut inset : Bool
   env : Map[String, String]
   app_version : Int
+  /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
+  notices : Array[Notice]
+  mut notice_opened : String
 }
 
 ///|
