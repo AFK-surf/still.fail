@@ -34,6 +34,8 @@ import fail.still.android.data.Access
 import fail.still.android.data.Profile
 import fail.still.android.data.WorkspaceProfile
 import fail.still.android.data.ProfilesView
+import fail.still.android.data.Quota
+import fail.still.android.data.QuotaWindow
 import fail.still.android.data.StationState
 import fail.still.android.data.Topics
 import fail.still.android.data.UsageView
@@ -66,22 +68,30 @@ class PlacePagesTest {
         ),
     )
 
+    /** An allowance read fine, a window each (mark, what is left). */
+    private fun quota(vararg windows: Pair<String, Long>) = Quota(state = "ok", checkedAt = Fixtures.NOW, windows = windows.map { (mark, left) ->
+        QuotaWindow(label = mark, usedPercent = 100.0 - left, mark = mark, left = left, level = if (left < 10) "red" else "ok")
+    })
+
     /** A workspace's account of a kind (its section, with that kind's mark before its title). */
-    private fun account(id: String, group: String, title: String, name: String, runtime: String, kind: String) = WorkspaceProfile(
+    private fun account(id: String, group: String, title: String, name: String, runtime: String, kind: String, quota: Quota? = null) = WorkspaceProfile(
         key = "${Fixtures.WS}/st/$id", group = group, groupTitle = title, station = Fixtures.STATION, stationId = "st", stationName = "studio",
         profile = Profile(
             id = id, name = name, email = name, runtime = runtime, runtimes = listOf(runtime), access = Access(kind = kind, key = ""),
             home = "/Users/alice/.stillfail/profiles/$id", homeExists = true, models = listOf("opus"), env = emptyList(), usedBy = emptyList(), loginCommand = "",
             checkText = "可用", checkTone = "green", makers = emptyMap(), names = emptyMap(), series = emptyList(), modelsText = "1 个模型",
+            quota = quota,
         ),
         shared = false, host = "st", hostName = "studio", hostOnline = true, usable = true, where = "仅在 studio", stations = emptyList(), editable = true, canShare = true,
     )
 
     private val accounts = listOf(
         account("p1", "claude", "Claude 订阅", "alice@example.com", "claude", "subscription"),
-        account("p2", "chatgpt", "ChatGPT 订阅", "codex-alice", "codex", "subscription"),
+        account("p2", "chatgpt", "ChatGPT 订阅", "codex-alice", "codex", "subscription", quota("5h" to 100)),
         account("p3", "grok", "SuperGrok 订阅", "alice@x.example", "grok", "subscription"),
         account("p4", "key", "API Key", "OpenRouter", "claude", "api-provider"),
+        // Three windows: on a line of their own, under its name and where it is, not squeezing them.
+        account("p5", "key", "API Key", "alice.long.name@example.com", "codex", "api-provider", quota("5H" to 100, "W" to 64, "M" to 8)),
     )
 
     private fun launch(stack: List<Screen>, dark: Boolean): Harness {
