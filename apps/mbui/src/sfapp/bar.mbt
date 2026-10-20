@@ -1282,6 +1282,8 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
   }
   // the gestures on the glass
   let glass_id = c.id("bar/glass")
+  // (what the places say takes their presses: the glass, while it takes them, as its gestures are read)
+  let presses = if shown { glass_id } else { 0 }
   if shown {
     match c.drag_of(glass_id) {
       Some(d) => bar_gesture(c, src, ws, d, sets, cur, others, active, fx, fy, w, panel, final_cs)
@@ -1398,7 +1400,10 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
                   None => active_key == key
                 }
                 let tint = tint_of("row:" + key, on)
-                let row = place_at(c, key, cs[j], over + n.to_double() * bar_row + bar_row / 2.0, slot, idle, lit, tint, dots)
+                let row_y = over + n.to_double() * bar_row + bar_row / 2.0
+                // (a row the glass is not under yet, the panel coming up: pressed through nothing)
+                let row_presses = if row_y + 24.0 > clip_top { presses } else { 0 }
+                let row = place_at(c, key, cs[j], row_y, slot, idle, lit, tint, dots, row_presses)
                 c.look(row, @ui.look(alpha~, dy=shift))
               }
             }
@@ -1407,7 +1412,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
           let now_cs = bar_centres(w, k_now, items.length())
           for j, key in items {
             let tint = tint_of("bar:" + key, under == key)
-            place_at(c, key, now_cs[j], bar_mid, slot, idle, lit, tint, dots) |> ignore
+            place_at(c, key, now_cs[j], bar_mid, slot, idle, lit, tint, dots, presses) |> ignore
           }
         }
         Some(s) => {
@@ -1445,6 +1450,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
                     lit,
                     was("row:" + key),
                     dots,
+                    presses,
                   )
                   c.look(row, @ui.look(alpha~, dy=shift + row_drop))
                 }
@@ -1453,7 +1459,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
             let laid_items = s.sets[s.cur]
             let laid_cs = bar_centres(w, k_now, laid_items.length())
             for j, key in laid_items {
-              let p = place_at(c, key, laid_cs[j], bar_mid - clip_top, slot, idle, lit, was("bar:" + key), dots)
+              let p = place_at(c, key, laid_cs[j], bar_mid - clip_top, slot, idle, lit, was("bar:" + key), dots, presses)
               c.look(p, @ui.look(dy=shift))
             }
           })
@@ -1473,7 +1479,7 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
               } else {
                 from + (end - from) * t
               }
-              let p = place_at(c, key, now_cs[j], bar_mid - clip_top, slot, idle, lit, tint, dots)
+              let p = place_at(c, key, now_cs[j], bar_mid - clip_top, slot, idle, lit, tint, dots, presses)
               if j < xs.length() {
                 c.look(p, @ui.look(alpha~, dx=xs[j] - now_cs[j], dy=y + row_drop - bar_mid))
               }
@@ -1546,8 +1552,13 @@ fn place_at(
   lit : Int64,
   tint : Double,
   dots : Map[String, Int64],
+  glass : Int,
 ) -> Int {
   at(c, x - slot / 2.0, y - 24.0, slot, 48.0, body=fn() {
+    // pressed through the glass over it, which reads where a press lands (bar_gesture): while it takes them
+    if glass != 0 {
+      c.presses_to(glass)
+    }
     c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
       place_face(c, key, idle, lit, tint, dots.get(key).unwrap_or(0L))
     })
