@@ -440,9 +440,16 @@ export class Core {
     if (stoppable) inner.calls.set(key, fiber as Fiber.Fiber<unknown, unknown>);
   }
 
-  /// Lets the core go: its fibers stop.
-  close(): void {
-    this.inner.runner.shutdown();
+  #closing: Promise<void> | null = null;
+
+  /// Lets the core go: its fibers stop, then what the device's tables changed and were yet to write is written (a core
+  /// that follows on the same storage reads it). Fails with what could not be written; the core is gone all the same.
+  close(): Promise<void> {
+    if (this.#closing) return this.#closing;
+    const { runner, data } = this.inner;
+    runner.shutdown();
+    this.#closing = runner.run(data.device.close());
+    return this.#closing;
   }
 }
 

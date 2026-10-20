@@ -5,7 +5,7 @@
 //
 // Topics of this data have no value of their own: their value is read from here (`shared`), by query, when it goes
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
-import { Effect, Queue } from "effect";
+import { Effect, Fiber, Queue } from "effect";
 import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
 import type { Host, Sql } from "./host.ts";
 import { HostError, SqlError } from "./host.ts";
@@ -63,23 +63,45 @@ export const DEVICE_TABLES = ["prefs", "changelog", "choice", "chat_ref", "drive
 export type DeviceTable = (typeof DEVICE_TABLES)[number];
 
 class Device {
+  readonly #host: Host;
   readonly #tables = new Map<string, Record<string, unknown>>();
   readonly #dirty = new Set<string>();
   readonly #writes: Queue.Queue<string>;
+  readonly #writer: Fiber.Fiber<never, never>;
 
   constructor(host: Host, runner: Runner) {
+    this.#host = host;
     this.#writes = Effect.runSync(Queue.unbounded<string>());
-    // One writer: a table's latest value, in the order they changed.
-    runner.fork(
+    // One writer: a table's latest value, in the order they changed. A write once begun is finished, though the core
+    // closes: `close` writes what is left after it. One that fails leaves its table to be written again (by the next
+    // change, or `close`, which says it failed).
+    this.#writer = runner.fork(
       Effect.forever(
         Effect.flatMap(Queue.take(this.#writes), (table) =>
-          Effect.suspend(() => {
-            if (!this.#dirty.delete(table)) return Effect.void;
-            return Effect.ignore(host.storageSet(`device/${table}`, toJsonBytes(this.#tables.get(table) ?? {})));
-          }),
+          Effect.uninterruptible(Effect.suspend(() => (this.#dirty.has(table) ? Effect.ignore(this.#write(table)) : Effect.void))),
         ),
       ),
     );
+  }
+
+  /// A table's latest value written; still to be written if it fails.
+  #write(table: string): Effect.Effect<void, HostError> {
+    this.#dirty.delete(table);
+    return Effect.tapError(this.#host.storageSet(`device/${table}`, toJsonBytes(this.#tables.get(table) ?? {})), () => Effect.sync(() => void this.#dirty.add(table)));
+  }
+
+  /// Stops the writer (once the write it began is done) and writes each table changed since: what a core closing does
+  /// before its runner stops (Core.close). Fails with every table that could not be written.
+  close(): Effect.Effect<void, HostError> {
+    return Effect.gen({ self: this }, function* () {
+      yield* Fiber.interrupt(this.#writer);
+      const failed: string[] = [];
+      for (const table of [...this.#dirty]) {
+        const written = yield* Effect.result(this.#write(table));
+        if (written._tag === "Failure") failed.push(`device/${table}: ${written.failure.message}`);
+      }
+      if (failed.length > 0) return yield* Effect.fail(new HostError(failed.join("; ")));
+    });
   }
 
   load(host: Host): Effect.Effect<void> {
