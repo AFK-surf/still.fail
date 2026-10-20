@@ -1,0 +1,66 @@
+# MoonBit's latest release put in the Actions cache, once each (by the ETags of this platform's binaries and core): what
+# every job's MoonBit is (.github/actions/moonbit), restored there, never downloaded in a job. Asked each hour; a release
+# already in, nothing done. A download that breaks off fails this run alone, the jobs going on with the release before.
+name: moonbit
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: &paths
+      - ".github/workflows/moonbit.yml"
+      - ".github/actions/moonbit/**"
+  # (a change to it tried on its pull request: what it puts in is that pull request's own)
+  pull_request:
+    paths: *paths
+
+jobs:
+  put:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, bin: moonbit-linux-x86_64.tar.gz, core: core-latest.tar.gz }
+          - { os: macos-15, bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
+          - { os: windows-latest, bin: moonbit-windows-x86_64.zip, core: core-latest.zip }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: The latest release's ETags
+        id: tag
+        shell: bash
+        run: |
+          base=https://cli.moonbitlang.com
+          tag=$( { curl -fsSI --retry 3 --max-time 20 $base/binaries/latest/${{ matrix.bin }}
+                   curl -fsSI --retry 3 --max-time 20 $base/cores/${{ matrix.core }}; } \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
+          [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" = 4 ] || { echo "::error::no ETags from $base: $tag"; exit 1; }
+          echo "key=moonbit-${{ runner.os }}-${{ runner.arch }}-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: had
+        with:
+          path: ~/.moon-ci
+          key: ${{ steps.tag.outputs.key }}
+          lookup-only: true
+      - name: Installed (MOON_HOME=~/.moon-ci)
+        if: steps.had.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          export MOON_HOME=$(cd ~ && pwd)/.moon-ci
+          if [ "${{ runner.os }}" = Windows ]; then
+            MOON_HOME=$(cygpath -w "$MOON_HOME") powershell -NoProfile -Command "irm https://cli.moonbitlang.com/install/powershell.ps1 | iex"
+          else
+            curl -fsSL --retry 3 https://cli.moonbitlang.com/install/unix.sh | bash
+          fi
+          ls "$MOON_HOME/bin"
+          PATH="$MOON_HOME/bin:$PATH" moon version --all
+      - if: steps.had.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.moon-ci
+          key: ${{ steps.tag.outputs.key }}
+      # (what a job gets: the action over what was put in)
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: .github/actions }
+      - uses: ./.github/actions/moonbit

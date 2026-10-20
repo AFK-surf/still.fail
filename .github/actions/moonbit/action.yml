@@ -1,0 +1,28 @@
+# MoonBit for a job, as the moonbit workflow put its latest release in the Actions cache (each release once, by its
+# downloads' ETags): restored, never downloaded here. No cached release for this runner's OS and architecture: the job
+# fails saying so (run the moonbit workflow), not a download that now and then breaks off (cli.moonbitlang.com's
+# SSL_ERROR_SYSCALL, 2026-10-20). MOON_HOME and PATH for the steps after it; `moon version --all` said.
+name: MoonBit
+description: The latest MoonBit, from the cache the moonbit workflow fills
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v4
+      id: moon
+      with:
+        path: ~/.moon-ci
+        # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
+        key: moonbit-${{ runner.os }}-${{ runner.arch }}-none
+        restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-
+    - shell: bash
+      run: |
+        m=$(cd ~ && pwd)/.moon-ci
+        if [ ! -x "$m/bin/moon" ] && [ ! -x "$m/bin/moon.exe" ]; then
+          echo "::error::no MoonBit for ${{ runner.os }} ${{ runner.arch }} in the Actions cache: run the moonbit workflow (it puts each new release in once)"
+          exit 1
+        fi
+        echo "MoonBit: ${{ steps.moon.outputs.cache-matched-key }}"
+        if [ "${{ runner.os }}" = Windows ]; then m=$(cygpath -w "$m"); echo "$m\\bin" >> "$GITHUB_PATH"; else echo "$m/bin" >> "$GITHUB_PATH"; fi
+        echo "MOON_HOME=$m" >> "$GITHUB_ENV"
+    - shell: bash
+      run: moon version --all
