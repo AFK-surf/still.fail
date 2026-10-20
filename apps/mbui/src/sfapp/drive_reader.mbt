@@ -1200,7 +1200,6 @@ fn reader_panels(
             )
             let want = if k == 0 { "serif" } else { "sans" }
             if want != prefs.face {
-              // det-ok(build-effect): a choice the segmented took: the frame's input
               reader_put(src, "face", Json::string(want))
             }
           })
@@ -1212,7 +1211,6 @@ fn reader_panels(
               if prefs.indent { 0 } else { 1 },
             )
             if (k == 0) != prefs.indent {
-              // det-ok(build-effect): a choice the segmented took: the frame's input
               reader_put(src, "indent", Json::boolean(k == 0))
             }
           })

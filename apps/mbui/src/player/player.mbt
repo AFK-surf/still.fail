@@ -796,7 +796,6 @@ fn Player::timeline(self : Player, c : @ui.Ctx, s : Status, on : Bool) -> Unit {
     }
     _ =>
       if p.scrub >= 0.0 {
-        // det-ok(build-effect): the timeline let go of: where it was dragged to in the frames before, said once
         p.seek(p.scrub)
         p.scrub = -1.0
         p.wake()
