@@ -58,6 +58,10 @@ struct FakeHost {
   mut notice_opened : String
   /// the PDFs opened, by their ids: their bytes' name and length (what their kept answers are by)
   pdfs : Map[Int, (String, Int)]
+  /// what the system's pickers give (Tester::picks), what was asked of them (files.mbt), the files kept on the device
+  picks : Array[@host.Picked]
+  pick_asks : Array[FakePick]
+  keeps : Array[FakeKeep]
 }
 
 ///|
@@ -538,6 +542,17 @@ fn h_image_free(id : Int) -> Unit {
 // never ask to read; it notes what is asked of them (FakeHost.views).
 
 ///|
+/// A native view's kind by name (native.mbt): video (audio, its type audio/…), web (a page), site.
+fn view_kind_name(kind : Int, arg : String) -> String {
+  match kind {
+    1 => if arg.has_prefix("audio/") { "audio" } else { "video" }
+    2 => "web"
+    3 => "site"
+    _ => "kind \{kind}"
+  }
+}
+
+///|
 fn h_view_open(kind : Int, arg : String) -> Int {
   let id = match fake.val {
     Some(f) => {
@@ -547,7 +562,7 @@ fn h_view_open(kind : Int, arg : String) -> Int {
     }
     None => @host.view_open(kind, arg)
   }
-  outside_start(2, id, "view \{id} (kind \{kind})")
+  outside_start(2, id, "view \{id} (kind \{kind}, \{view_kind_name(kind, arg)})")
   id
 }
 

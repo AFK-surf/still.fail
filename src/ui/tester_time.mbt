@@ -41,6 +41,39 @@ fn Tester::owed_now(self : Tester) -> Bool {
 }
 
 ///|
+/// What is said to move and is not at rest after the last frame, a line each: what it is (a spring, an Anim and its
+/// key, a list's ease, a stack's slide), who told it, and when it is at rest.
+pub fn Tester::moving(self : Tester) -> Array[String] {
+  ignore(self)
+  g().moving_now()
+}
+
+///|
+/// When what moves named `name` is at rest (the frames' clock): the latest of those whose line (Tester::moving)
+/// says `name` (`c.spring "seg"`, `Anim "fade"`, a key); +inf when one has not started; -1 when none moves. What a
+/// test runs to when the motion has no rest of its own to ask.
+pub fn Tester::rest_of(self : Tester, name : String) -> Double {
+  ignore(self)
+  rest_of(name)
+}
+
+///|
+/// When what moves named `name` is at rest (Tester::rest_of): for a component's own rest query (@kit.toast_rest).
+pub fn rest_of(name : String) -> Double {
+  let c = g()
+  let mut last = -1.0
+  for e in c.movers {
+    if e.what.contains(name) {
+      let r = e.m.rest_at(c.now, c.frame_no)
+      if r > c.now && r > last {
+        last = r
+      }
+    }
+  }
+  last
+}
+
+///|
 /// `ms` on the frames' clock, a frame each 16 ms, the last at `ms`.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   let end = self.fake.time + ms
@@ -69,9 +102,18 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
   if c.frame_by is Some(_) {
     why.push("a frame asked for" + by_of(c.frame_by))
   } else if c.motion_left {
-    why.push("a motion said is not at rest")
+    why.push("a motion said is not at rest: " + c.moving_now().join("; "))
   } else if c.wants_frame && !c.cycling {
-    why.push("a frame asked for")
+    why.push(
+      "a frame asked for" +
+      (if c.took_input {
+        " (an input's frame after)"
+      } else if c.read_back_moved {
+        " (a layout read back moved: words_of \"\{c.read_back_key}\")"
+      } else {
+        ""
+      }),
+    )
   } else if self.fake.wants && !c.wants_frame {
     why.push("a frame asked for between frames")
   }

@@ -60,7 +60,7 @@ struct Nav[P] {
   track : Tracker
   on_leave : (P) -> Unit
   /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
-  mover : Int
+  mover : Mover
   mut asked : Int
 }
 
@@ -83,7 +83,7 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     vel: 0.0,
     track: Tracker::new(),
     on_leave,
-    mover: g().mover_id(),
+    mover: Mover::new(),
     asked: -1,
   }
 }
@@ -129,7 +129,7 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curv
   self.t0 = -1.0
   // said once, as it sets out: frames until it is there (it starts at the next frame)
   self.asked = g().frame_no
-  g().moving(self.mover, self as &Moving)
+  g().moving(self.mover, self as &Moving, what="a stack's slide")
 }
 
 ///|
@@ -344,7 +344,7 @@ pub fn[P] Ctx::nav(
     if nav.t0 < 0.0 {
       // it starts now: said to move again (not built in the frame it was to start in, it had been let be)
       nav.t0 = self.now
-      self.moving(nav.mover, nav as &Moving)
+      self.moving(nav.mover, nav as &Moving, what="a stack's slide")
     }
     let t = if nav.dur <= 0.0 { 1.0 } else { (self.now - nav.t0) / nav.dur }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))

@@ -81,16 +81,6 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     bench_step(c, t3 - t0, t4 - t3)
   }
   drive_frame(c)
-  // whether what is shown is settled, and what is still awaited from the host: a scripted run's clock stands still
-  // while any is, and its screenshot waits for settled (mac_app.m)
-  if outside_told.val {
-    let rt = runtime()
-    let n = rt.awaiting()
-    let settled = c.settled()
-    // what it awaits, or (settled or not) why it is not: what a run that never settles says
-    let what = if settled { "" } else { c.unsettled() }
-    @host.frame_settled(settled, n, what)
-  }
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
   c.motion_left = c.motion_owed()
   // (a layout read back that moved: what was placed from it, placed again)
@@ -101,6 +91,18 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     h_request_frame()
   } else if c.wake_at > 0.0 {
     h_wake_after(dmax(c.wake_at - t, 1.0))
+  }
+  // (once what it asks for is known: a frame asked for only by what never ends while shown, a cycle, leaves it
+  // settled, as Tester::assert_idle has it)
+  // whether what is shown is settled, and what is still awaited from the host: a scripted run's clock stands still
+  // while any is, and its screenshot waits for settled (mac_app.m)
+  if outside_told.val {
+    let rt = runtime()
+    let n = rt.awaiting()
+    let settled = c.settled()
+    // what it awaits, or (settled or not) why it is not: what a run that never settles says
+    let what = if settled { "" } else { c.unsettled() }
+    @host.frame_settled(settled, n, what)
   }
 }
 
@@ -531,6 +533,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         None => ()
       }
       sideways_up(
+        c,
         c.drag_scroll,
         dclamp(track_x.velocity(), -max_fling, max_fling),
         dclamp(track_y.velocity(), -max_fling, max_fling),
@@ -561,7 +564,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
         Some(st) => c.release(st, 0.0)
         None => ()
       }
-      sideways_up(c.drag_scroll, 0.0, 0.0)
+      sideways_up(c, c.drag_scroll, 0.0, 0.0)
       if pagers.contains(c.drag_scroll) {
         c.pager_release(c.drag_scroll, 0.0)
       }

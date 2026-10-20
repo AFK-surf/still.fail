@@ -34,6 +34,8 @@ of a test (src/ui/motion_data.mbt).
   start (`SpringPath::go`, `Anim::animate`, `Nav::go`, a row lifted over others). At the end of each frame the
   framework asks each what moves when it is at rest (`rest_at`) and draws frames until then, and none after. A
   view's build says nothing of motion; nothing asks for frames one by one.
+- Who moves is the moving thing itself (a `Mover` it holds), not a number counted out: made before a context or in
+  another, told first or last, it is no other's.
 - `rest_at` is only read: the same whoever asks it first, and when. What starts at the frame after it was told
   (Compose's convention) has its start set by its own first step there; until then its rest is +inf.
 - Springs are solved, not stepped (`SpringPath`: under-, critically and over-damped in closed form, at rest by an
@@ -57,7 +59,9 @@ A test says its time; nothing else moves it.
   `drag_step_ms` apart.
 - Time goes by only by `run_for(ms)`, `ms` a declared length: an animation's (`nav_push_ms`, `sheet_scrim_ms`,
   `cover_slide_ms`), a timer's, or the moment a test looks at. A test runs to the end of the motion it cares about by
-  that motion's own end (`Nav::rest`, `Ctx::pager_rest`, `Anim::ends_at`), never to whenever everything has stopped.
+  that motion's own end (`Nav::rest`, `Ctx::pager_rest`, `Anim::ends_at`, `Ctx::list_rest`, `Ctx::sideways_rest`,
+  `@kit.sheet_rest`, `toast_rest`, `switch_rest`; any by its name: `Tester::rest_of`), never to whenever everything has
+  stopped. What still moves is said with what it is and who told it (`Tester::moving`, `assert_idle`).
 - At its end a test can assert that nothing is left: no frame asked for, no wake due, nothing awaited, no message
   posted that no frame took (`assert_idle`), and says why when something is.
 

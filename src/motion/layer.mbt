@@ -562,7 +562,7 @@ pub fn list_keys(
         Some(r) if r > kept_i && liftable(keys[i]) => {
           lm.lifted[k] = now
           // frames while it passes over the others (lift_ms from now)
-          c.moving(c.mover_id(), (Lift::{ at: now }) as &@ui.Moving)
+          c.moving(@ui.Mover::new(), (Lift::{ at: now }) as &@ui.Moving, what="a row lifted")
         }
         _ => ()
       }

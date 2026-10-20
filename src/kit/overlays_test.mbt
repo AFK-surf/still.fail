@@ -397,3 +397,21 @@ test "sheet_rest: a test runs to when a sheet is at rest, opened or closed, by t
   assert_false(shown.val)
   assert_eq(sheet_rest("nothing of that name"), -1.0)
 }
+
+///|
+test "toasts: one gone (its time out) is drawn going away until its rest (toast_rest), then nothing moves" {
+  let list : Ref[Array[Toast]] = Ref([])
+  let life = 3000.0
+  let t = @ui.Tester::new(fn(c) { list.val = toaster(c, "toasts", list.val, duration=life).open })
+  list.val = [toast("a", "Saved")]
+  t.draw()
+  t.run_for(life)
+  assert_eq(list.val.length(), 0)
+  t.draw()
+  let rest = toast_rest("toasts")
+  assert_true(rest > t.time() && rest < @double.infinity)
+  t.run_for(rest - t.time())
+  assert_eq(t.all(@ui.Status).length(), 0)
+  assert_eq(toast_rest("toasts"), -1.0)
+  t.assert_idle()
+}

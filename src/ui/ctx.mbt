@@ -30,8 +30,16 @@ struct ListState {
   // how far the last row's bottom was below the view's after the last
   // layout (1e9 when it was not laid out)
   mut below : Double
-  // gliding to its end (Ctx::list_to_end), until there or scrolled
+  // gliding to its end (Ctx::list_to_end), until there or scrolled: set out at `glide_t0` (+inf: at its next layout)
+  // from `glide_l0` px above its end, what is left of it e^(-t/list_glide_ms) of that, at its end at `glide_rest`;
+  // how far it was above its end at the last layout
   mut glide : Bool
+  mut glide_t0 : Double
+  mut glide_l0 : Double
+  mut glide_rest : Double
+  mut glide_left : Double
+  // the frame it was last built in (one not built is shown by nothing: at rest)
+  mut built : Int
   // a fling (scroll.mbt): its kind (0 the desktop's, coasting on `vel`; 1
   // Android's spline; 2 iOS's deceleration), its velocity at the start (px
   // per ms, positive down the list), when it started (-1: at the next
@@ -60,7 +68,7 @@ struct ListState {
   mut ease : Double
   mut ease_t0 : Double
   mut ease_done : Double
-  ease_mover : Int
+  ease_mover : Mover
   // the size its rows are built for: the Ctx's as the list was (Ctx::sized), its rows built later, as it is laid out
   mut vw : Double
   mut vh : Double
@@ -164,8 +172,7 @@ pub struct Ctx {
   editors : Map[Int, EditorState]
   springs : Map[Int, SpringPath]
   /// what is said to move (motion_data.mbt), the last id given to one, and whether a cycle was read this frame
-  movers : Map[Int, &Moving]
-  mut mover_ids : Int
+  movers : Array[MoverEntry]
   mut cycling : Bool
   /// the cycles read this frame (their periods, who reads them), whether a motion said was not at rest at its end, and
   /// the latest rest of the stacks (Ctx::nav) built this frame: what a test asks (Tester::assert_idle, nav_rest)
@@ -296,8 +303,7 @@ fn Ctx::new() -> Ctx {
     lists: Map::new(),
     editors: Map::new(),
     springs: Map::new(),
-    movers: Map([]),
-    mover_ids: 0,
+    movers: [],
     cycling: false,
     cycles: [],
     motion_left: false,
@@ -713,6 +719,7 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
 
 ///|
 /// A value that follows `target` with a spring.
+#callsite(autofill(loc))
 pub fn Ctx::spring(
   self : Ctx,
   key : String,
@@ -720,6 +727,7 @@ pub fn Ctx::spring(
   from? : Double,
   stiffness? : Double = 420.0,
   damping? : Double = 32.0,
+  loc~ : SourceLoc,
 ) -> Double {
   let id = self.id(key)
   let s = match self.springs.get(id) {
@@ -734,9 +742,19 @@ pub fn Ctx::spring(
   // where it is now: a function of the time since it set out (motion_data.mbt); a new target (or one born away from
   // it) sets it out again from here, as fast as it goes
   if target != s.target() {
-    s.go(self.now, target)
+    s.go(self.now, target, what="c.spring \"" + key + "\"", loc~)
   }
   s.value(self.now)
+}
+
+///|
+/// When the spring `key` (Ctx::spring, in the same scope) is at rest (the frames' clock; -1: it is, or there is none):
+/// what a test runs to.
+pub fn Ctx::spring_rest(self : Ctx, key : String) -> Double {
+  match self.springs.get(self.id(key)) {
+    Some(s) if s.end() > self.now => s.end()
+    _ => -1.0
+  }
 }
 
 ///|

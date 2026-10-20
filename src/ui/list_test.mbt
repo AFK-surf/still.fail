@@ -326,17 +326,72 @@ test "list: back to its end, gliding, then at its end" {
   let info = t.ctx().list_info("list").unwrap()
   assert_true(info.below > 250.0)
   t.ctx().list_to_end("list")
-  t.frame()
-  // on its way, not there at once
-  assert_true(!t.at_end())
   t.draw()
+  // on its way, not there at once: its way said as it sets out, at its end by a time of its own
+  assert_true(!t.at_end())
+  let rest = t.ctx().list_rest("list")
+  assert_true(rest > t.time() && rest < @double.infinity)
+  let was = t.list_offset()
+  t.run_for(@ui.list_glide_ms)
+  // on its way: further down, not at its end
+  assert_true(t.list_offset() > was)
+  assert_true(!t.at_end())
+  t.run_for(rest - t.time())
   assert_true(t.at_end())
   assert_true(t.ctx().list_info("list").unwrap().below.abs() < 0.5)
-  // far from it, most of the way at once
+  t.assert_idle()
+  // far from it, the way at once
   t.wheel(100.0, 100.0, -3000.0)
   t.ctx().list_to_end("list")
-  t.frame()
+  t.draw()
   assert_true(t.at_end())
+}
+
+///|
+test "list: the same glide to its end at any frame rate: where it is is a function of the time since it set out" {
+  let at = fn(step : Double) -> Double {
+    let t = @ui.Tester::new(boxes(fn() { 200 }, varied, stick_end=true), w=300.0, h=400.0)
+    t.move(100.0, 100.0)
+    t.wheel(100.0, 100.0, -300.0)
+    t.run_for(@ui.wheel_ease_ms * 10.0)
+    t.ctx().list_to_end("list")
+    t.draw()
+    let end = t.time() + @ui.list_glide_ms
+    while t.time() + step < end {
+      t.frame(ms=step)
+    }
+    t.frame(ms=end - t.time())
+    t.list_offset()
+  }
+  assert_eq(at(8.0), at(16.0))
+  assert_eq(at(16.0), at(33.0))
+}
+
+///|
+test "list: a list not built (a page over it) is at rest, its scroll bar too; shown again it fades on" {
+  let shown = Ref(true)
+  let t = @ui.Tester::new(
+    fn(c) {
+      if shown.val {
+        boxes(fn() { 200 }, varied, stick_end=true)(c)
+      }
+    },
+    w=300.0,
+    h=400.0,
+  )
+  t.move(100.0, 100.0)
+  t.wheel(100.0, 100.0, -300.0)
+  t.run_for(@ui.wheel_ease_ms * 10.0)
+  // its scroll bar shows a while: the list moves
+  assert_true(t.ctx().list_rest("list") > t.time())
+  shown.val = false
+  t.draw()
+  t.assert_idle()
+  shown.val = true
+  t.draw()
+  assert_true(t.moving().length() > 0)
+  t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+  t.assert_idle()
 }
 
 ///|

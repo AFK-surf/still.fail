@@ -55,6 +55,7 @@ static int settle;
 static double settle_clock;        // ms, the frames' clock
 static double settle_wake = -1;    // when the app asked to be woken, on that clock (-1: not)
 static BOOL app_wants;             // the app (or the host for it) asked for a frame since the last one began
+static BOOL in_app_frame;          // the app's frame is being built (what it asks for there, its frame's end says)
 static BOOL script_wants;          // the script goes on (its next step)
 static int awaiting;               // what the app awaits from the host, as its last frame said
 static BOOL app_settled;           // whether what it shows is settled, as its last frame said (ui's Ctx::settled)
@@ -127,6 +128,8 @@ static void run_script_step(int step);
   self.wantFrame = YES;
   if (settle) {
     app_wants = YES;
+    // asked between frames (an event, a timer): not settled until a frame has taken it
+    if (!in_app_frame) app_settled = NO;
     pump_soon();
     return;
   }
@@ -176,7 +179,9 @@ static double record_t0 = -1;
     return;
   }
   if (settle) app_wants = NO;
+  in_app_frame = YES;
   mb_cb.frame(s.width, s.height, scale, settle ? settle_clock : mb_now_ms());
+  in_app_frame = NO;
 }
 
 static int frames_drawn;
@@ -205,9 +210,10 @@ static void script_next(void) {
   pump_soon();
 }
 
-// Whether the app has nothing to do now, as its last frame said (ui's Ctx::settled: no frame asked for, no fiber
-// waiting for one or for the host, no timer set that what is shown waits for), and nothing asked for since.
-static BOOL settled(void) { return app_settled && !app_wants; }
+// Whether the app has nothing to do now, as its last frame said (ui's Ctx::settled: no frame asked for but by what
+// never ends while shown, no fiber waiting for one or for the host, no timer set that what is shown waits for), and
+// nothing asked for since (requestFrame between frames).
+static BOOL settled(void) { return app_settled; }
 
 static void pump(void) {
   MBView *v = the_view;

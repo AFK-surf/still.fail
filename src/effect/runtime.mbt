@@ -177,6 +177,11 @@ pub struct Runtime {
   /// What it waits on from outside (outside.mbt): by ticket, what it is and since when.
   priv awaited : Map[Int, (String, Int64)]
   priv mut tickets : Int
+  /// What ended of it since the mark asked last (outside_ended): what each was, and how many had ended before it;
+  /// kept only once someone asks (a scripted run)
+  priv ended : Array[(Int, String)]
+  priv mut ended_n : Int
+  priv mut keep_ended : Bool
 }
 
 ///|
@@ -208,6 +213,9 @@ fn Runtime::make(seed : Int, shuffle : Bool, start : Int64, clock : (() -> Int64
     log: [],
     steps: 0,
     awaited: Map::new(),
+    ended: [],
+    ended_n: 0,
+    keep_ended: false,
     tickets: 0,
   }
 }

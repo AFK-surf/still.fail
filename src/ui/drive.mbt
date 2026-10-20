@@ -42,6 +42,12 @@
 //   exit                        ends the run: DRIVE PASS, exit 0
 //   linger MS                   the run passed (DRIVE PASS said now), the app left running MS more for what the last
 //                               step set off (a share sheet, a download): a check beside the run looks at it
+//   answered CALL               a call to the core named CALL (drive.read; or a subscription's topic key, its first
+//                               value) answered since the last step that acted (or the run began), and a frame
+//                               drawn after it, within the timeout
+//   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded
+//   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
+//                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
 //   now STEP                    STEP as soon as it is due, the app settled or not (below): what is looked at or done
 //                               while something still moves (a tap on what a sheet going down only draws, a shot of
 //                               it on its way; after a `wait` into the motion)
@@ -78,6 +84,10 @@ priv struct Driver {
   mut gms : Double
   // when a shot the host cannot take was asked for (logged "SHOT NAME": whoever takes it has 1.5 s), -1 before
   mut shot_at : Double
+  // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
+  // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
+  mut mark : Int
+  mut seen_frame : Int
   // frames in a row the app was settled at; whether this step's waiting for it was told (on the log, after a second)
   mut calm : Int
   /// whether steps first wait for the app to be settled (a host's run: MBUI_DRIVE_SETTLED=1; under the Tester, yes)
@@ -120,6 +130,8 @@ fn drive_start(script : String, dir : String, settles? : Bool = true) -> Unit {
     gt0: 0.0,
     gms: 0.0,
     shot_at: -1.0,
+    mark: runtime().outside_ended(),
+    seen_frame: -1,
     calm: 0,
     settles,
     told: false,
@@ -422,6 +434,7 @@ fn drive_frame(c : Ctx) -> Unit {
     let line = d.steps[d.at]
     if d.since < 0.0 {
       d.since = now
+      d.seen_frame = -1
     }
     let waited = now - d.since
     // `now STEP`: the step as it is due, settled or not
@@ -451,6 +464,7 @@ fn drive_frame(c : Ctx) -> Unit {
     let acted = fn() {
       next()
       d.calm = 0
+      d.mark = runtime().outside_ended()
     }
     if !at_once && !calm && settles_first(cmd) && d.shot_at < 0.0 {
       if waited > d.timeout {
@@ -504,6 +518,22 @@ fn drive_frame(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms")
+          return
+        } else {
+          return
+        }
+      }
+      "answered" | "decoded" | "ready" => {
+        // what it names ended since the step began, and a frame drawn after the one that saw it
+        if d.seen_frame < 0 &&
+          runtime().outside_ended_since(d.mark).iter().any(fn(w) { outside_named(cmd, arg, w) }) {
+          d.seen_frame = c.frame_no
+        }
+        if d.seen_frame >= 0 && c.frame_no > d.seen_frame {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+        } else if waited > d.timeout {
+          drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaited: " + c.unsettled() + ")")
           return
         } else {
           return
@@ -896,4 +926,26 @@ fn key_named(name : String) -> (Int, Int)? {
     _ => return None
   }
   Some((code, mods))
+}
+
+///|
+/// Whether `what` (a wait on outside, as Runtime::outside_ended_since says it) is what the step `cmd` (answered,
+/// decoded, ready) names by `arg`.
+fn outside_named(cmd : String, arg : String, what : String) -> Bool {
+  match cmd {
+    // "core: NAME (call N)", a subscription's "core: KEY"
+    "answered" => what.has_prefix("core: " + arg + " (call ") || what == "core: " + arg
+    // "image N SRC", "image N (PDF D, page P)"
+    "decoded" => what.has_prefix("image ") && (what.has_suffix(arg) || (arg == "PDF" && what.contains("(PDF ")))
+    _ =>
+      if arg == "pdf" {
+        what.has_prefix("image ") && what.contains("(PDF ")
+      } else if arg.has_prefix("#") {
+        what.has_prefix("view " + arg.unsafe_substring(start=1, end=arg.length()) + " (")
+      } else if arg.length() > 0 && arg.iter().all(fn(ch) { ch >= '0' && ch <= '9' }) {
+        what.has_prefix("view ") && what.contains("(kind " + arg + ",")
+      } else {
+        what.has_prefix("view ") && what.has_suffix(", " + arg + ")")
+      }
+  }
 }

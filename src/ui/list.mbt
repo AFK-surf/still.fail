@@ -175,21 +175,24 @@ pub fn Ctx::list_rest(self : Ctx, key : String) -> Double {
 /// List `st` scrolled now: its scroll bar shows (and then fades) from now, said as what moves.
 fn Ctx::scrolled(self : Ctx, st : ListState) -> Unit {
   st.last_scroll = self.now
-  self.moving(st.ease_mover, st as &Moving)
+  self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease and scroll bar")
 }
 
 ///|
 /// What moves of a list by itself: a wheel's ease (at rest at its end) and its scroll bar (gone once faded).
 impl Moving for ListState with rest_at(self, now, frame) {
   ignore(now)
-  ignore(frame)
+  // not built this frame: nothing shows it, at rest (shown again, it says so again: Ctx::list)
+  if self.built != frame {
+    return -1.0
+  }
+  if self.glide && self.glide_t0 == @double.infinity {
+    return @double.infinity
+  }
   let bar = self.last_scroll + scrollbar_hold_ms + scrollbar_fade_ms
   let eased = if self.ease == 0.0 { -1.0 } else { self.ease_t0 + ease_end(self.ease) }
-  if bar > eased {
-    bar
-  } else {
-    eased
-  }
+  let glided = if self.glide { self.glide_rest } else { -1.0 }
+  dmax(bar, dmax(eased, glided))
 }
 
 ///|
@@ -279,6 +282,11 @@ pub fn Ctx::list(
         owner: self.owner,
         below: 1.0e9,
         glide: false,
+        glide_t0: 0.0,
+        glide_l0: 0.0,
+        glide_rest: -1.0,
+        glide_left: 0.0,
+        built: -1,
         fling: 0,
         fling_v: 0.0,
         fling_t0: -1.0,
@@ -295,7 +303,7 @@ pub fn Ctx::list(
         ease: 0.0,
         ease_t0: 0.0,
         ease_done: 0.0,
-        ease_mover: self.mover_id(),
+        ease_mover: Mover::new(),
         vw: 0.0,
         vh: 0.0,
         sel: false,
@@ -318,13 +326,20 @@ pub fn Ctx::list(
   st.vw = self.width
   st.vh = self.height
   st.sel = desk.selecting
+  // shown again (not built the frame before): what of it still moves says so again
+  let back = st.built >= 0 && st.built < self.frame_no - 1
+  st.built = self.frame_no
+  if back && st.rest_at(self.now, self.frame_no) > self.now {
+    self.moving(st.ease_mover, st as &Moving, what="a list's wheel ease, glide and scroll bar")
+  }
   self.step_ease(st)
+  self.step_glide(st)
   self.step_scroll(st)
   // with `glide_on_growth`, rows come at the end while it is at its end: it glides after them from where it was
   // (still.fail's Follow), rather than being put at its end at once
   if self.list_grew(id, count) && glide_on_growth && st.stick_end && st.at_end && !self.still() {
     st.at_end = false
-    st.glide = true
+    self.glide_to_end(st)
   }
   let i = self.alloc_part(kind_list, true, false)
   let n = self.nodes[i]
@@ -553,24 +568,23 @@ fn Ctx::place_list(
     self.request_frame()
   }
   if st.glide {
-    // each frame the same share of what is left (1 - e^(-dt/100ms)), at
-    // least a pixel; far below what is laid out, most of the way at once
-    if last == st.count - 1 {
-      let left = bottom - bottom_edge
-      if left < 1.0 {
-        st.glide = false
-        st.at_end = true
-      } else {
-        let step = left * (1.0 - 2.718281828459045.pow(-self.dt / 100.0))
-        st.pending = if step < 1.0 { dmin(left, 1.0) } else { step }
-        self.request_frame()
-      }
-    } else if st.count - 1 - last > 12 {
-      st.scroll_to_end()
-      self.request_frame()
+    // how far it is above its end: the rows not laid out by their heights as known (measured, or estimated)
+    let left = if last == st.count - 1 {
+      bottom - bottom_edge
     } else {
-      st.pending = ih
-      self.request_frame()
+      st.above(st.count) - st.above(last + 1) + (bottom - bottom_edge)
+    }
+    st.glide_left = left
+    if st.glide_t0 == @double.infinity {
+      // it sets out at its first layout: its way said once (what is left of it e^(-t/list_glide_ms), at its end once
+      // under a pixel)
+      st.glide_t0 = self.now
+      st.glide_l0 = left
+      st.glide_rest = if left < 1.0 { self.now } else { self.now + (list_glide_ms * @math.ln(left)).ceil() }
+    }
+    if left < 1.0 {
+      st.glide = false
+      st.at_end = true
     }
   }
   // a finger pulls past the end it reached; a fling stops there
@@ -652,20 +666,61 @@ pub fn Ctx::list_scroll_to(
 }
 
 ///|
-/// Back to list `key`'s end: gliding there (each frame a share of the way
-/// left, as still.fail's lists follow their newest), or at once.
+/// Back to list `key`'s end: gliding there (what is left of the way e^(-t/list_glide_ms) of it, as still.fail's lists
+/// follow their newest; far from it, more than list_glide_rows rows, at once), or at once.
 pub fn Ctx::list_to_end(self : Ctx, key : String, glide? : Bool = true) -> Unit {
   match self.lists.get(self.id(key)) {
     Some(st) => {
       if glide {
         st.stop()
-        st.glide = true
+        self.glide_to_end(st)
       } else {
         st.scroll_to_end()
       }
       self.request_frame()
     }
     None => ()
+  }
+}
+
+///|
+/// A glide to the end's time constant (ms): 1 - 1/e of the way left gone by then.
+pub let list_glide_ms : Double = 100.0
+
+///|
+/// Further than this many rows from its end (as last laid out), a glide to it goes at once.
+let list_glide_rows : Int = 12
+
+///|
+/// List `st` sets out for its end (Ctx::list_to_end, a row come at its end): said once, as it sets out; its way is
+/// solved at its next layout, where it knows how far it is (step_glide).
+fn Ctx::glide_to_end(self : Ctx, st : ListState) -> Unit {
+  if st.vis_last >= 0 && st.count - 1 - st.vis_last > list_glide_rows {
+    st.scroll_to_end()
+    st.glide = false
+    return
+  }
+  st.glide = true
+  st.glide_t0 = @double.infinity
+  st.glide_rest = -1.0
+  self.moving(st.ease_mover, st as &Moving, what="a list gliding to its end")
+}
+
+///|
+/// Where a glide to the end is at this frame: what is left of it as a function of the time since it set out, the
+/// list moved by what it is further than that; at its end from its rest on.
+fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
+  if !st.glide || st.glide_t0 == @double.infinity {
+    return
+  }
+  if self.now >= st.glide_rest {
+    st.scroll_to_end()
+    st.glide = false
+    return
+  }
+  let want = st.glide_l0 * @math.exp(-(self.now - st.glide_t0) / list_glide_ms)
+  if st.glide_left > want {
+    st.pending = st.pending + (st.glide_left - want)
   }
 }
 

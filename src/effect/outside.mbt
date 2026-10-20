@@ -18,10 +18,33 @@ pub fn Runtime::outside_start(self : Runtime, what : String) -> Int {
 /// nothing.
 pub fn Runtime::outside_end(self : Runtime, ticket : Int) -> Unit {
   if self.awaited.contains(ticket) {
+    let what = self.awaited.get(ticket).unwrap().0
     self.awaited.remove(ticket)
+    if self.keep_ended {
+      self.ended.push((self.ended_n, what))
+    }
+    self.ended_n += 1
     // a frame soon: what was waited on may change what is shown
     (self.waker)()
   }
+}
+
+///|
+/// How many waits on outside have ended so far: a mark to ask what ended since (outside_ended_since). From the first
+/// ask on, every one that ends is kept, until a later mark is asked: what ended before that is let go (a scripted
+/// run marks at each step that acts), so nothing it waits for is ever pushed out, however many end between.
+pub fn Runtime::outside_ended(self : Runtime) -> Int {
+  self.keep_ended = true
+  let n = self.ended_n
+  self.ended.retain(e => e.0 >= n)
+  n
+}
+
+///|
+/// What of outside ended since the mark `n` (outside_ended), oldest first: what each was ("core: drive.read (call 12)",
+/// "image 3 photo.jpg", "view 1 (kind 1, video)").
+pub fn Runtime::outside_ended_since(self : Runtime, n : Int) -> Array[String] {
+  self.ended.filter(e => e.0 >= n).map(e => e.1)
 }
 
 ///|

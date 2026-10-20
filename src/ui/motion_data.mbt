@@ -15,17 +15,61 @@ pub(open) trait Moving {
 }
 
 ///|
-/// `m` (by `id`, unique among what moves) sets out: frames until it is at rest. Said once, by what moves, as it sets
-/// out; said again (a new way) it replaces what was said.
-pub fn Ctx::moving(self : Ctx, id : Int, m : &Moving) -> Unit {
-  self.movers[id] = m
+/// Who moves: what moves holds one, made with it, and is told by it (Ctx::moving). It is that thing itself, not a
+/// number: whatever context it was made in, and whatever was made or told before it, it is no other's.
+pub struct Mover {
+  priv mut told : Int
 }
 
 ///|
-/// An id for what moves, of its own (Ctx::moving).
-pub fn Ctx::mover_id(self : Ctx) -> Int {
-  self.mover_ids = self.mover_ids + 1
-  self.mover_ids
+/// A mover of its own, for what moves.
+pub fn Mover::new() -> Mover {
+  { told: 0 }
+}
+
+///|
+/// What is said to move: who, what it is, what it is said to be and who told it (Tester::moving).
+struct MoverEntry {
+  who : Mover
+  mut m : &Moving
+  mut what : String
+}
+
+///|
+/// `m` (`who` its mover) sets out: frames until it is at rest. Said once, by what moves, as it sets out; said again
+/// (a new way) it replaces what was said. `what` it is (a spring, an Anim and its key), and who told it (`loc`): what a
+/// test is told of it while it moves (Tester::moving).
+#callsite(autofill(loc))
+pub fn Ctx::moving(self : Ctx, who : Mover, m : &Moving, what? : String = "", loc~ : SourceLoc) -> Unit {
+  self.moving_as(who, m, (if what == "" { "" } else { what + ", " }) + "told at \{loc}")
+}
+
+///|
+/// The same as Ctx::moving, `what` saying all of what it is and who told it (what moves again by itself, as first told).
+pub fn Ctx::moving_as(self : Ctx, who : Mover, m : &Moving, what : String) -> Unit {
+  who.told = who.told + 1
+  for e in self.movers {
+    if physical_equal(e.who, who) {
+      e.m = m
+      e.what = what
+      return
+    }
+  }
+  self.movers.push({ who, m, what })
+}
+
+///|
+/// What is said to move and is not at rest at the last frame's end: what it is, who told it, when it is at rest.
+fn Ctx::moving_now(self : Ctx) -> Array[String] {
+  let out = []
+  for e in self.movers {
+    let r = e.m.rest_at(self.now, self.frame_no)
+    if r > self.now {
+      let at = if r == @double.infinity { "not started" } else { "at rest at \{r} ms" }
+      out.push(e.what + " (" + at + ")")
+    }
+  }
+  out
 }
 
 ///|
@@ -49,37 +93,34 @@ pub fn Ctx::cycle(self : Ctx, period : Double, loc~ : SourceLoc) -> Double {
 /// Whether something said to move is not at rest at this frame's end (the next frame is owed to it); what is, is
 /// forgotten.
 fn Ctx::motion_owed(self : Ctx) -> Bool {
-  let done = []
   let mut owed = false
   self.motion_unstarted = false
-  self.movers.each(fn(id, m) {
-    let r = m.rest_at(self.now, self.frame_no)
+  self.movers.retain(fn(e) {
+    let r = e.m.rest_at(self.now, self.frame_no)
     if r > self.now {
       owed = true
       if r == @double.infinity {
         self.motion_unstarted = true
       }
+      true
     } else {
-      done.push(id)
+      false
     }
   })
-  for id in done {
-    self.movers.remove(id)
-  }
   owed
 }
 
 ///|
 /// When the last of what is said to move is at rest (-1: none moves).
 fn Ctx::motion_end(self : Ctx) -> Double {
-  let mut e = -1.0
-  self.movers.each(fn(_, m) {
-    let r = m.rest_at(self.now, self.frame_no)
-    if r > e {
-      e = r
+  let mut last = -1.0
+  for e in self.movers {
+    let r = e.m.rest_at(self.now, self.frame_no)
+    if r > last {
+      last = r
     }
-  })
-  e
+  }
+  last
 }
 
 // ── a spring, solved ─────────────────────────────────────────────────────────
@@ -98,13 +139,13 @@ pub struct SpringPath {
   priv k : Double
   priv c : Double
   priv rest : Double
-  priv id : Int
+  priv id : Mover
 }
 
 ///|
 /// A spring at rest at `x`.
 pub fn SpringPath::new(x : Double, k~ : Double, c~ : Double, rest? : Double = 0.001) -> SpringPath {
-  { x0: x, v0: 0.0, to: x, t0: 0.0, end: -1.0, k, c, rest, id: g().mover_id() }
+  { x0: x, v0: 0.0, to: x, t0: 0.0, end: -1.0, k, c, rest, id: Mover::new() }
 }
 
 ///|
@@ -136,15 +177,24 @@ pub fn SpringPath::end(self : SpringPath) -> Double {
 }
 
 ///|
-/// Sent to `to` at `now`, from where it is then, as fast as it goes then (or at `v` a second).
-pub fn SpringPath::go(self : SpringPath, now : Double, to : Double, v? : Double) -> Unit {
+/// Sent to `to` at `now`, from where it is then, as fast as it goes then (or at `v` a second). `what` it is, for a
+/// test told what moves (Tester::moving).
+#callsite(autofill(loc))
+pub fn SpringPath::go(
+  self : SpringPath,
+  now : Double,
+  to : Double,
+  v? : Double,
+  what? : String = "a spring",
+  loc~ : SourceLoc,
+) -> Unit {
   let (x, v1) = self.at(now)
   self.x0 = x
   self.v0 = v.unwrap_or(v1)
   self.to = to
   self.t0 = now
   self.end = now + 1000.0 * spring_end(x - to, self.v0, self.k, self.c, self.rest)
-  g().moving(self.id, self as &Moving)
+  g().moving(self.id, self as &Moving, what=what + " to \{to}", loc~)
 }
 
 ///|
@@ -157,10 +207,11 @@ pub impl Moving for SpringPath with rest_at(self, now, frame) {
 ///|
 /// Sent to `to` at this frame's time (`c`'s clock: no clock read by its caller), from where it is then, as fast as it
 /// goes then (or at `v` a second).
-pub fn SpringPath::go_at(self : SpringPath, c : Ctx, to : Double, v? : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn SpringPath::go_at(self : SpringPath, c : Ctx, to : Double, v? : Double, loc~ : SourceLoc) -> Unit {
   match v {
-    Some(v) => self.go(c.now, to, v~)
-    None => self.go(c.now, to)
+    Some(v) => self.go(c.now, to, v~, loc~)
+    None => self.go(c.now, to, loc~)
   }
 }
 

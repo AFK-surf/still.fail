@@ -160,6 +160,9 @@ pub fn Tester::new(
     notices: [],
     notice_opened: "",
     pdfs: {},
+    picks: [],
+    pick_asks: [],
+    keeps: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

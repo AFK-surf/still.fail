@@ -413,3 +413,15 @@ test "text field: typed in, its words the view's to read; Enter hands them on" {
   t.enter()
   assert_eq(sent.val, 1)
 }
+
+///|
+test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
+  t.click(@ui.Switch, label="Wi-Fi")
+  let rest = switch_rest("wifi")
+  assert_true(rest > t.time())
+  t.run_for(rest - t.time())
+  assert_eq(switch_rest("wifi"), -1.0)
+  t.assert_idle()
+}

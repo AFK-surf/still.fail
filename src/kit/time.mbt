@@ -182,6 +182,7 @@ pub let presence_out_ms : Double = 100.0
 /// Motion's AnimatePresence for one thing (see the file's head): `shown` comes in by `enter`, goes out by `exit`
 /// (Motion's `animate` and `exit` transitions) and is built until it is out. `initial`: shown from the start comes in
 /// too (Motion's `initial`); else it starts in.
+#callsite(autofill(loc))
 pub fn presence(
   c : @ui.Ctx,
   key : String,
@@ -189,13 +190,14 @@ pub fn presence(
   enter? : @motion.Spec = @motion.tween(presence_in_ms, ease=Out),
   exit? : @motion.Spec = @motion.tween(presence_out_ms, ease=LeaveFade),
   initial? : Bool = true,
+  loc~ : SourceLoc,
 ) -> Presence {
   let k = "\u{2}presence/" + key
   let a = @motion.anim(c, k, if shown && !initial { 1.0 } else { 0.0 })
   if shown {
-    a.follow(1.0, enter)
+    a.follow(1.0, enter, loc~)
   } else {
-    a.follow(0.0, exit)
+    a.follow(0.0, exit, loc~)
   }
   let t = a.get()
   { built: shown || t > 0.0 || a.moving(), shown, t }
@@ -204,11 +206,13 @@ pub fn presence(
 ///|
 /// A number going to `target` by `transition` (Motion's animate; by default a spring): from where it is, as fast as
 /// it goes, when told anew. Its value this frame. `key` in the scope it is asked in.
+#callsite(autofill(loc))
 pub fn animate(
   c : @ui.Ctx,
   key : String,
   target : Double,
   transition? : @motion.Spec = @motion.spring(),
+  loc~ : SourceLoc,
 ) -> Double {
-  @motion.animate(c, "\u{2}animate/" + key, target, spec=transition)
+  @motion.animate(c, "\u{2}animate/" + key, target, spec=transition, loc~)
 }

@@ -19,14 +19,18 @@
   window.__logs = [];
 
   // ---- frames ----
-  let frames = 0;
+  let frames = 0, inFrame = false;
   function tick() {
     pending = false;
     resize();
+    inFrame = true;
     cb.frame(cssW, cssH, dpr, performance.now());
+    inFrame = false;
     frames++;
   }
   H.requestFrame = () => {
+    // asked between frames (an event, a timer): not settled until a frame has taken it
+    if (!inFrame) appSettled = false;
     if (!pending && cb && window.__done === undefined) {
       pending = true;
       requestAnimationFrame(tick);
@@ -77,10 +81,11 @@
     }
     queueMicrotask(() => outside(kind, id, state));
   }
-  // Settled: as the last frame said, and no frame asked for since. What a screenshot waits for
+  // Settled: as the last frame said (a frame it asked for only by what never ends while shown, a cycle, leaves it
+  // settled), and no frame asked for since (requestFrame between frames). What a screenshot waits for
   // (page.waitForFunction(() => __mbhost.settled())); unsettled() says why it is not.
   // (not once the app has ended: a stable run that fails, an idle spin, ends itself with exit(3), its words logged)
-  H.settled = () => frames > 0 && appSettled && !pending && window.__done === undefined;
+  H.settled = () => frames > 0 && appSettled && window.__done === undefined;
   H.unsettled = () => ({ frames, settled: appSettled, pending, awaiting, why, done: window.__done,
     said: window.__logs.filter((l) => l.startsWith('SETTLE')).slice(-3) });
 

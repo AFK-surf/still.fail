@@ -67,6 +67,38 @@ test "sideways: it stops at its ends" {
 }
 
 ///|
+test "sideways: flung, it slows by a way solved once: at rest at a time of its own, the same at any frame rate" {
+  let run = fn(step : Double) -> (Double, Double) raise {
+    let at = Ref::new(0.0)
+    let t = sideways_view(at)
+    t.draw()
+    let (_, y, _, _) = t.rect_of("xxxx").unwrap()
+    // a quick move left, let go: flung on
+    t.drag(280.0, y + 5.0, 200.0, y + 5.0, steps=2)
+    let rest = t.rest_of("a fling")
+    assert_true(rest > t.time() && rest < @double.infinity)
+    let mid = t.time() + 100.0
+    while t.time() + step < mid {
+      t.frame(ms=step)
+    }
+    t.frame(ms=mid - t.time())
+    let x_mid = at.val
+    t.run_for(rest - t.time())
+    t.draw()
+    let x_end = at.val
+    t.run_for(@ui.scrollbar_hold_ms + @ui.scrollbar_fade_ms)
+    assert_eq(at.val, x_end)
+    t.assert_idle()
+    (x_mid, x_end)
+  }
+  let (m8, e8) = run(8.0)
+  let (m16, e16) = run(16.0)
+  assert_eq(m8, m16)
+  assert_eq(e8, e16)
+  assert_true(e16 > m16)
+}
+
+///|
 test "a node drawn as its top only: its bottom cut, its taps whole" {
   let cut = Ref::new(-1.0)
   let t = @ui.Tester::new(

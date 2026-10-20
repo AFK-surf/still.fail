@@ -199,3 +199,24 @@ test "nav_rest: a test runs to the end of the stacks' slides, holding none of th
   t.assert_idle()
   assert_eq(@ui.nav_rest(), -1.0)
 }
+
+///|
+test "a stack made before a Tester (as an app makes its own at start) slides to its end beside what else moves, in any Tester after another" {
+  for run in 0..<2 {
+    // made before the Tester's context, as still.fail's app.nav is
+    let nav = @ui.Nav::new(0)
+    let opened = Ref(false)
+    let t = @ui.Tester::new(fn(c) {
+      nav_view(nav)(c)
+      // something else that moves, told in the same frame as the push
+      let _ = c.spring("other", if opened.val { 1.0 } else { 0.0 })
+    })
+    nav.push(1)
+    opened.val = true
+    t.draw()
+    t.run_for(nav.rest() - t.time())
+    assert_eq(t.rect_of("title 1").unwrap().0, 0.0, msg="run \{run}")
+    t.run_for(t.rest_of("\"other\"") - t.time())
+    t.assert_idle()
+  }
+}

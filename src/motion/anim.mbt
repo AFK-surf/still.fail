@@ -26,8 +26,10 @@ pub struct Anim {
   /// the frame it was last stepped in, and last used in
   mut stepped : Int
   mut used : Int
-  /// what it is said to move by (Ctx::moving)
-  id : Int
+  /// what it is said to move by (Ctx::moving), and what it is said to be: its key, who told it to go
+  id : @ui.Mover
+  mut name : String
+  mut told : String
 }
 
 ///|
@@ -48,7 +50,9 @@ pub fn Anim::new(v : Double) -> Anim {
     running: false,
     stepped: -1,
     used: -1,
-    id: @ui.current().mover_id(),
+    id: @ui.Mover::new(),
+    name: "",
+    told: "",
   }
 }
 
@@ -74,7 +78,7 @@ fn Anim::step(self : Anim, c : @ui.Ctx) -> Unit {
     }
     self.start = c.now()
     // (said to move again: not read in the frame it was to start in, it had been let be)
-    c.moving(self.id, self as &@ui.Moving)
+    c.moving_as(self.id, self as &@ui.Moving, self.told)
   }
   let ms = c.now() - self.start
   match (self.gen, self.spec) {
@@ -163,7 +167,8 @@ pub fn Anim::target(self : Anim) -> Double {
 ///|
 /// Off to `target` by `spec`, from where it is now and as fast as it moves (or `velocity`, per second), from the next
 /// frame on (Animatable.animateTo).
-pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Double) -> Unit {
+#callsite(autofill(loc))
+pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Double, loc~ : SourceLoc) -> Unit {
   let c = @ui.current()
   self.step(c)
   self.from = self.value
@@ -195,19 +200,22 @@ pub fn Anim::animate(self : Anim, target : Double, spec : Spec, velocity? : Doub
   } else {
     self.running = true
     // said once, as it is told to go: frames until it is there (it starts at the next frame)
-    c.moving(self.id, self as &@ui.Moving)
+    self.told = (if self.name == "" { "an Anim" } else { "Anim \"" + self.name + "\"" }) +
+      " to \{target}, told at \{loc}"
+    c.moving_as(self.id, self as &@ui.Moving, self.told)
   }
 }
 
 ///|
 /// Off to `target`, unless it goes there already or is there (Motion.kt Follower.to; animate*AsState): told again
 /// mid-way it goes on from where it is, as fast as it goes.
-pub fn Anim::follow(self : Anim, target : Double, spec : Spec) -> Unit {
+#callsite(autofill(loc))
+pub fn Anim::follow(self : Anim, target : Double, spec : Spec, loc~ : SourceLoc) -> Unit {
   self.step(@ui.current())
   if target == self.target {
     return
   }
-  self.animate(target, spec)
+  self.animate(target, spec, loc~)
 }
 
 ///|
@@ -241,6 +249,9 @@ pub fn anim(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) ->
       a
     }
   }
+  if a.name == "" {
+    a.name = key
+  }
   a.used = c.frame_number()
   a.step(c)
   a
@@ -249,12 +260,14 @@ pub fn anim(c : @ui.Ctx, key : String, init : Double, global? : Bool = false) ->
 ///|
 /// A number that follows `target` by `spec` (Compose's animateFloatAsState): at `from` (or at the target) the first
 /// time, then on to each new target from where it is, as fast as it goes. Its value this frame.
+#callsite(autofill(loc))
 pub fn animate(
   c : @ui.Ctx,
   key : String,
   target : Double,
   spec? : Spec = spring(),
   from? : Double,
+  loc~ : SourceLoc,
 ) -> Double {
   let first = !anims.contains(c.id(key))
   let a = anim(c, key, match from {
@@ -262,9 +275,9 @@ pub fn animate(
     None => target
   })
   if first && a.value != target {
-    a.animate(target, spec)
+    a.animate(target, spec, loc~)
   } else {
-    a.follow(target, spec)
+    a.follow(target, spec, loc~)
   }
   if a.running && logging() {
     @ui.log("MOTION \{c.now()} \{key} value=\{a.value} to=\{a.target}")

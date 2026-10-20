@@ -255,3 +255,11 @@ pub fn toast_button(c : @ui.Ctx, key : String, text : String, label : String, ro
   c.semantics(i, Button, id~, label~, actions=[Activate])
   r.clicked
 }
+
+///|
+/// When the toasts of `key` (toaster) have done moving, those going away among them (their exit by `presence`): the
+/// frames' clock; -1 when none moves, +inf when one is told and has not started. What a test runs to after a toast
+/// goes (its time out, closed, swiped). Its time on screen is a timer, not a motion: `run_for` the toaster's duration.
+pub fn toast_rest(key : String) -> Double {
+  @ui.rest_of("\u{2}presence/" + key + "/")
+}

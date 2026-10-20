@@ -112,3 +112,140 @@ test "panic draw: a layout read back that moves at every frame does not converge
   let t = reading_back(1.0)
   t.draw()
 }
+
+///|
+test "the system's pickers are the test's: what it said they give, from the frame after the ask; called off, none" {
+  let got : Array[String] = []
+  let ask : Ref[@ui.Pick?] = Ref(None)
+  let asked = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    if asked.val && ask.val is None {
+      ask.val = @ui.pick(Files)
+    }
+    match ask.val {
+      Some(p) =>
+        match p.files() {
+          Some(fs) => {
+            for f in fs {
+              got.push(f.name + ":" + f.bytes.length().to_string())
+            }
+            ask.val = None
+            asked.val = false
+          }
+          None => ()
+        }
+      None => ()
+    }
+    c.text("files", wrap=false) |> ignore
+  })
+  t.picks([("photo.jpg", b"abcd"), ("notes.txt", b"hi")])
+  asked.val = true
+  t.draw()
+  assert_eq(got, ["photo.jpg:4", "notes.txt:2"])
+  assert_eq(t.pick_asks().length(), 1)
+  assert_true(t.pick_asks()[0] == Files)
+  // called off: nothing given
+  t.picks([])
+  asked.val = true
+  t.draw()
+  assert_eq(got.length(), 2)
+  assert_true(ask.val is None)
+  t.assert_idle()
+}
+
+///|
+test "what the app keeps on the device is the test's to read: its name, kind and bytes, kept from the frame after" {
+  let keep : Ref[@ui.Keep?] = Ref(None)
+  let states : Array[String] = []
+  let t = @ui.Tester::new(fn(c) {
+    match keep.val {
+      Some(k) =>
+        match k.kept() {
+          KeptAt(w) => {
+            states.push(w)
+            k.end()
+            keep.val = None
+          }
+          Keeping => states.push("keeping")
+          _ => states.push("failed")
+        }
+      None => ()
+    }
+    c.text("keep", wrap=false) |> ignore
+  })
+  match @ui.keep_begin("report.pdf", "application/pdf") {
+    Some(k) => {
+      assert_true(k.append(b"%PDF"))
+      assert_true(k.append(b"-1.7"))
+      k.finish()
+      keep.val = Some(k)
+    }
+    None => fail("a Tester keeps files")
+  }
+  t.draw()
+  assert_eq(states, ["Download/report.pdf"])
+  assert_eq(t.kept().map(fn(k) { (k.0, k.1, k.2.length()) }), [("report.pdf", "application/pdf", 8)])
+  t.assert_idle()
+}
+
+///|
+test "what moves says what it is and who told it; a test runs to it by its name" {
+  let to = Ref(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    let x = c.spring("knob", to.val)
+    c.box(w=Px(10.0), h=Px(10.0), tx=x, fn() {  }) |> ignore
+  })
+  t.draw()
+  assert_eq(t.moving(), [])
+  to.val = 100.0
+  t.draw()
+  let m = t.moving()
+  assert_eq(m.length(), 1)
+  assert_true(m[0].contains("c.spring \"knob\" to 100"))
+  assert_true(m[0].contains("told at src/ui/ctx.mbt") || m[0].contains("tester_api_test.mbt"))
+  let rest = t.rest_of("\"knob\"")
+  assert_true(rest > t.time() && rest < @double.infinity)
+  t.run_for(rest - t.time())
+  assert_eq(t.moving(), [])
+  assert_eq(t.rest_of("\"knob\""), -1.0)
+  t.assert_idle()
+}
+
+///|
+test "a scripted run waits for a picture decoded by its name, and a frame drawn after it" {
+  let t = @ui.Tester::new(
+    fn(c) { c.image("e2e-photo.jpg", w=Px(100.0), h=Px(100.0)) |> ignore },
+    images=[("e2e-photo.jpg", 400, 300)],
+  )
+  let log = t.drive("decoded e2e-photo.jpg\nexit")
+  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded e2e-photo.jpg") }), msg=log.join("\n"))
+  assert_true(log.iter().any(fn(l) { l.contains("DRIVE PASS") }), msg=log.join("\n"))
+  // what has ended is asked by its name
+  let rt = @ui.runtime()
+  assert_true(rt.outside_ended_since(0).iter().any(fn(w) { w.has_suffix("e2e-photo.jpg") }))
+}
+
+///|
+test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
+  let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
+  let log = t.drive("timeout 200\nanswered drive.read\nexit")
+  assert_true(log.iter().any(fn(l) { l.contains("DRIVE FAIL") }), msg=log.join("\n"))
+}
+
+///|
+test "a scripted run finds what it waits for however many others end before it looks (300 pictures in one frame)" {
+  let srcs = Array::makei(300, fn(k) { "p\{k}.jpg" })
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.column(fn() {
+        for s in srcs {
+          c.image(s, w=Px(2.0), h=Px(2.0)) |> ignore
+        }
+      })
+      |> ignore
+    },
+    images=srcs.map(fn(s) { (s, 40, 30) }),
+  )
+  let log = t.drive("decoded p0.jpg\nexit")
+  assert_true(log.iter().any(fn(l) { l.has_prefix("DRIVE ok decoded p0.jpg") }), msg=log.join("\n"))
+}

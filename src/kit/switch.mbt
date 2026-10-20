@@ -95,3 +95,9 @@ pub fn switch_look_of(
 ///|
 /// The default look: still.fail's switch, 36 by 22, its 18 knob white, the accent when on.
 pub let switch_look : (@ui.Ctx, SwitchState) -> Unit = switch_look_of()
+
+///|
+/// When the switch `key`'s knob is at rest after a turn (the frames' clock; -1: it is, +inf: told, not started).
+pub fn switch_rest(key : String) -> Double {
+  @ui.rest_of("\u{2}animate/" + key + "/knob")
+}

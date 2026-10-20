@@ -11,8 +11,15 @@ priv struct Sideways {
   /// how far it is scrolled (0 at its start) and how far it can be
   mut x : Double
   mut max : Double
-  /// flung on (px per ms), slowing; held by a finger
+  /// flung on: at `v0` (px per ms) from `x0`, slowing by sideways_friction, from `t0` (the frames' clock; +inf: it
+  /// starts at its first step), at rest at `rest` (-1: not flung) at `x_end`; held by a finger
   mut vel : Double
+  mut x0 : Double
+  mut v0 : Double
+  mut t0 : Double
+  mut rest : Double
+  mut x_end : Double
+  mover : Mover
   mut held : Bool
   /// the list (or whatever scrolls) it lies in, found as the finger went down
   mut outer : Int
@@ -64,22 +71,92 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
   let st = match sideways.get(id) {
     Some(s) => s
     None => {
-      let s = { vertical, x: 0.0, max: 0.0, vel: 0.0, held: false, outer: 0, box: -1, inner: -1, frame: -1 }
+      let s = {
+        vertical,
+        x: 0.0,
+        max: 0.0,
+        vel: 0.0,
+        x0: 0.0,
+        v0: 0.0,
+        t0: 0.0,
+        rest: -1.0,
+        x_end: 0.0,
+        mover: Mover::new(),
+        held: false,
+        outer: 0,
+        box: -1,
+        inner: -1,
+        frame: -1,
+      }
       sideways[id] = s
       s
     }
   }
-  if !st.held && st.vel != 0.0 {
-    let dt = self.dt
-    st.x = st.x + st.vel * dt
-    st.vel = st.vel * @math.pow(sideways_friction, dt)
-    if st.vel.abs() < 0.02 || st.x <= 0.0 || st.x >= st.max {
-      st.vel = 0.0
+  if !st.held && st.rest >= 0.0 {
+    if st.t0 == @double.infinity {
+      // its first step: it sets out now, its way solved once (where it stops, when)
+      st.fling_from(self.now)
     }
-    self.request_frame()
+    if self.now >= st.rest {
+      st.x = st.x_end
+      st.rest = -1.0
+      st.vel = 0.0
+    } else {
+      st.x = fling_at(st.x0, st.v0, self.now - st.t0)
+    }
   }
   st.x = dclamp(st.x, 0.0, dmax(st.max, 0.0))
   st
+}
+
+///|
+/// How far a fling at `v0` (px per ms) has gone `t` ms on, slowing by sideways_friction a ms: solved for the time, the
+/// same at any frame rate.
+fn fling_at(x0 : Double, v0 : Double, t : Double) -> Double {
+  let lf = @math.ln(sideways_friction)
+  x0 + v0 * (@math.pow(sideways_friction, t) - 1.0) / lf
+}
+
+///|
+/// Below this (px per ms) a fling has stopped.
+let sideways_stop_v : Double = 0.02
+
+///|
+/// Flung from where it is at `now`: when it stops (slowed below sideways_stop_v, or at an end it reaches first, whole
+/// ms) and where.
+fn Sideways::fling_from(self : Sideways, now : Double) -> Unit {
+  self.t0 = now
+  self.x0 = self.x
+  self.v0 = self.vel
+  let v = self.v0.abs()
+  if v <= sideways_stop_v {
+    self.rest = -1.0
+    self.vel = 0.0
+    return
+  }
+  let lf = @math.ln(sideways_friction)
+  let t_stop = @math.ln(sideways_stop_v / v) / lf
+  // the end it goes to, if it gets there first: f^t = 1 + d ln f / v0
+  let bound = if self.v0 > 0.0 { dmax(self.max, 0.0) } else { 0.0 }
+  let arg = 1.0 + (bound - self.x0) * lf / self.v0
+  let t_hit = if arg > 0.0 { @math.ln(arg) / lf } else { @double.infinity }
+  let t_end = if t_hit < t_stop { t_hit } else { t_stop }
+  self.rest = now + t_end.ceil()
+  self.x_end = if t_hit < t_stop { bound } else { dclamp(fling_at(self.x0, self.v0, t_stop), 0.0, dmax(self.max, 0.0)) }
+}
+
+///|
+/// A fling, at rest at its end (+inf until its first step: it sets out at the frame after it was let go).
+impl Moving for Sideways with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  if self.held {
+    -1.0
+  } else if self.rest >= 0.0 && self.t0 == @double.infinity {
+    @double.infinity
+  } else {
+    self.rest
+  }
 }
 
 ///|
@@ -116,6 +193,17 @@ pub fn Ctx::sideways_at(self : Ctx, key : String) -> Double {
   match sideways.get(self.id("\u{1}sideways\u{1}" + key)) {
     Some(s) => s.x
     None => 0.0
+  }
+}
+
+///|
+/// When the box `key` (Ctx::sideways, or Ctx::capped: `capped`), flung, stops (the frames' clock): -1 when it is not
+/// flung, +inf when let go and not set out yet (the next frame). What a test runs to after a swipe on it.
+pub fn Ctx::sideways_rest(self : Ctx, key : String, capped? : Bool = false) -> Double {
+  let k = if capped { "\u{1}capped\u{1}" } else { "\u{1}sideways\u{1}" }
+  match sideways.get(self.id(k + key)) {
+    Some(s) => s.rest_at(self.now, self.frame_no)
+    None => -1.0
   }
 }
 
@@ -171,6 +259,7 @@ fn sideways_down(c : Ctx, id : Int, x : Double, y : Double) -> Unit {
   match sideways.get(id) {
     Some(st) => {
       st.vel = 0.0
+      st.rest = -1.0
       st.outer = outer_scroll(c, x, y)
     }
     None => ()
@@ -210,11 +299,17 @@ fn sideways_move(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
 
 ///|
 /// Let go of scrolling box `id` after dragging it: flung on at the finger's speed (`vx`, `vy`, px per ms).
-fn sideways_up(id : Int, vx : Double, vy : Double) -> Unit {
+fn sideways_up(c : Ctx, id : Int, vx : Double, vy : Double) -> Unit {
   match sideways.get(id) {
     Some(st) => {
       st.held = false
       st.vel = if st.vertical { -vy } else { -vx }
+      // said once, as it is let go: it sets out at the next frame, its way solved there (fling_from)
+      if st.vel.abs() > sideways_stop_v {
+        st.rest = 0.0
+        st.t0 = @double.infinity
+        c.moving(st.mover, st as &Moving, what="a fling of a box scrolled inside a list")
+      }
       // in the motion log (MBUI_MOTION_LOG=1) as let go: where it is, how far it can go
       if sideways_logging() {
         h_log("MOTION \{h_now()} scrolled/\{if st.vertical { "down" } else { "across" }} at=\{st.x} max=\{st.max}")
@@ -236,6 +331,7 @@ fn sideways_wheel(id : Int, dx : Double, dy : Double) -> Bool {
         return false
       }
       st.vel = 0.0
+      st.rest = -1.0
       st.x = dclamp(st.x + along, 0.0, st.max)
       true
     }

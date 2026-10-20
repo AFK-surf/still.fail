@@ -41,6 +41,22 @@ jobs:
       - name: "The C step: the splitter on made-up C, and a MoonBit program built whole and split (scripts/mbc_test.py)"
         run: python3 scripts/mbc_test.py
 
+  native:
+    # the same tests on native, on macOS (Mini1, mbui's runner: the hosts' Objective-C linked in by scripts/cc_apple.sh)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit (the latest)
+        run: |
+          export MOON_HOME=$RUNNER_TEMP/moon
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
+        run: scripts/test_native.sh
+
   macos:
     runs-on: macos-15
     steps:
