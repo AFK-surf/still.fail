@@ -114,7 +114,8 @@ test "scrolling up keeps the row under the finger in place" {
   // dragging moves content with the finger, by the same distance
   let before = t.rows()
   t.drag(100.0, 100.0, 100.0, 160.0)
-  t.draw()
+  // a frame on, into the fling it was let go into (the drag's own moves, then what it carries)
+  t.run_for(@ui.drag_step_ms)
   let after = t.rows()
   let (i0, y0, _) = before[2]
   let mut moved = 0.0

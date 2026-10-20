@@ -395,7 +395,7 @@ fn Ctx::feed(self : Ctx, st : ListState, d : Double, source : Int) -> Unit {
     }
   }
   st.pending = st.pending + d
-  st.last_scroll = self.now
+  self.scrolled(st)
   if source == 1 {
     // a finger takes over from a glide to the end (Ctx::list_to_end)
     st.glide = false
@@ -511,7 +511,7 @@ fn Ctx::release(self : Ctx, st : ListState, v : Double) -> Unit {
 /// back.
 fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
   if st.vel != 0.0 {
-    st.last_scroll = self.now
+    self.scrolled(st)
     if st.fling == 1 {
       // Compose's decay animation: playtime 0 at its first frame, in whole ms
       if st.fling_t0 < 0.0 {
@@ -568,7 +568,7 @@ fn Ctx::step_scroll(self : Ctx, st : ListState) -> Unit {
     st.over_t = self.now
   }
   if st.over_state == 2 {
-    st.last_scroll = self.now
+    self.scrolled(st)
     if st.over_t < 0.0 {
       st.over_t = self.now
     }

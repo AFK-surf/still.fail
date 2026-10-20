@@ -328,7 +328,6 @@ pub fn Tester::unsettled(self : Tester) -> String {
 pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
   self.w = w
   self.h = h
-  self.frame()
   self.draw()
 }
 
@@ -336,7 +335,6 @@ pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
 pub fn Tester::tap(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
   on_pointer(2, x, y, 0)
-  self.frame()
   self.draw()
 }
 
@@ -354,18 +352,23 @@ pub fn Tester::drag(
   on_pointer(0, x0, y0, 0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
-    self.fake.time = self.fake.time + 16.0
+    // (a finger's moves come a display's frame apart: the drag takes steps × drag_step_ms)
+    self.fake.time = self.fake.time + drag_step_ms
     on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
     self.frame(ms=0.0)
   }
   on_pointer(2, x1, y1, 0)
-  self.frame()
+  self.draw()
 }
+
+///|
+/// How far apart a drag's moves come (ms): a 60 Hz display's frame, as a finger's moves reach an app. A drag of
+/// `steps` moves takes steps × drag_step_ms of the test's time; nothing else an input does takes any.
+pub let drag_step_ms : Double = 16.0
 
 ///|
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
   on_wheel(x, y, 0.0, dy, 0)
-  self.frame()
   self.draw()
 }
 
@@ -373,20 +376,19 @@ pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit
 /// Text committed by the input method (or typed on a hardware keyboard).
 pub fn Tester::type_text(self : Tester, s : String) -> Unit {
   on_text(0, s, 0, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
 /// The input method's composition, with the caret at its end.
 pub fn Tester::compose(self : Tester, s : String) -> Unit {
   on_text(1, s, s.length(), 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
 pub fn Tester::key(self : Tester, code : Int, mods? : Int = 0) -> Unit {
   on_key(code, mods)
-  self.frame()
   self.draw()
 }
 
@@ -626,7 +628,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
 /// The pointer moved to (x, y), no button down.
 pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(1, x, y, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -761,7 +763,6 @@ pub fn Tester::press(self : Tester, name : String) -> Unit {
 /// Back, as a back button (or the system's back with no gesture) asks.
 pub fn Tester::back(self : Tester) -> Unit {
   on_back(2, 0.0, 1.0, 0)
-  self.frame()
   self.draw()
 }
 
@@ -777,12 +778,12 @@ pub fn Tester::back_gesture(
 ) -> Unit {
   on_back(0, 0.0, 0.0, 0)
   for i in 1..=steps {
-    self.fake.time = self.fake.time + 16.0
+    self.fake.time = self.fake.time + drag_step_ms
     on_back(1, x * i.to_double() / steps.to_double(), 0.0, 0)
     self.frame(ms=0.0)
   }
   on_back(if commit { 2 } else { 3 }, x, 1.0, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -854,7 +855,7 @@ pub fn Tester::hold_drag(
   on_pointer(0, x0, y0, 0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
-    self.fake.time = self.fake.time + 16.0
+    self.fake.time = self.fake.time + drag_step_ms
     on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
     self.frame(ms=0.0)
   }
@@ -864,14 +865,14 @@ pub fn Tester::hold_drag(
 /// The finger let go at (x, y).
 pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(2, x, y, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
 /// The finger down at (x, y), held (a frame drawn so).
 pub fn Tester::press_at(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -1074,7 +1075,7 @@ pub fn Tester::drawn_images(self : Tester) -> Array[Array[Double]] {
 /// The host says the app is shown or not, in front or not (as a window's or an activity's changes are told).
 pub fn Tester::app_state(self : Tester, visible : Bool, focused : Bool) -> Unit {
   on_app_state((if visible { 1 } else { 0 }) | (if focused { 2 } else { 0 }))
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -1104,7 +1105,7 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 pub fn Tester::tap_once(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 0)
   on_pointer(2, x, y, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -1112,7 +1113,6 @@ pub fn Tester::tap_once(self : Tester, x : Double, y : Double) -> Unit {
 pub fn Tester::right_click(self : Tester, x : Double, y : Double) -> Unit {
   on_pointer(0, x, y, 2)
   on_pointer(2, x, y, 2)
-  self.frame()
   self.draw()
 }
 
@@ -1120,7 +1120,7 @@ pub fn Tester::right_click(self : Tester, x : Double, y : Double) -> Unit {
 /// The pointer gone out of the window.
 pub fn Tester::leave(self : Tester) -> Unit {
   on_pointer(7, -1.0, -1.0, 0)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -1128,7 +1128,7 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
   on_wheel(x, y, 0.0, dy, phase)
-  self.frame()
+  self.draw()
 }
 
 ///|
@@ -1218,7 +1218,6 @@ pub fn Tester::act(self : Tester, role : Role, action : Action, label? : String 
     fail("\{s.describe()} takes no action")
   }
   g().ask_action(s.id, action)
-  self.frame()
   self.draw()
 }
 

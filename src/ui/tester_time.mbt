@@ -109,7 +109,6 @@ pub fn Tester::field_words(self : Tester) -> String {
 pub fn Tester::paste(self : Tester, words : String) -> Unit {
   h_clipboard_set(words)
   on_text(0, words, 0, 0)
-  self.frame()
   self.draw()
 }
 
@@ -120,7 +119,6 @@ pub fn Tester::key_named(self : Tester, name : String) -> Bool {
   match key_named(name) {
     Some((code, mods)) => {
       on_key(code, mods)
-      self.frame()
       self.draw()
       true
     }
@@ -151,7 +149,6 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
       self.fake.notice_opened = self.fake.notices[k].opens
       // (the system takes it away as it is tapped)
       self.fake.notices.remove(k) |> ignore
-      self.frame()
       self.draw()
       true
     }
