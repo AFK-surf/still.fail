@@ -554,3 +554,47 @@ pub let viz_paper_dark : @ui.Color = Exact(0x26272BFFL)
 
 ///|
 pub let viz_full_in : @ui.Space = S4_5
+
+///|
+/// Marking a service's page (Preview.kt MarkMode, MarksOver, Note): its bar 30 high, 3 in at its end, 添加到对话's
+/// icon and words 5 apart; the dot's ring 13; the edit key's ground the accent's 14%, the ring's 22%, an open mark's
+/// 8%; what floats over the page frosted thick (the surface at 94%; dark, surface2's); a pin's number 11; what is said
+/// of a mark 26 high.
+pub let mark_bar_h : @ui.Len = Fixed(30.0)
+
+///|
+pub let mark_bar_end : @ui.Space = Exact(3.0)
+
+///|
+pub let mark_put_gap : @ui.Space = space_5
+
+///|
+pub let mark_ring : @ui.Len = Fixed(13.0)
+
+///|
+pub let mark_key_on : @ui.Color = A(Accent, Exact(0.14))
+
+///|
+pub let mark_ring_bg : @ui.Color = A(Accent, Exact(0.22))
+
+///|
+pub let mark_open_bg : @ui.Color = A(Accent, Exact(0.08))
+
+///|
+pub let mark_bubble : @ui.Color = A(Card, Exact(0.94))
+
+///|
+pub let mark_bubble_dark : @ui.Color = Exact(0x2C2D31F0L)
+
+///|
+pub let mark_pin_size : @ui.TextSize = Exact(11.0, 15.4)
+
+///|
+pub let mark_said_h : @ui.Len = Fixed(26.0)
+
+///|
+/// A size typed (Preview.kt CustomSize): its fields 72 wide, 10 round.
+pub let custom_field_w : @ui.Len = Fixed(72.0)
+
+///|
+pub let custom_field_r : @ui.Radius = Exact(10.0)

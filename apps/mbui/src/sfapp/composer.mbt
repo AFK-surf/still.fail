@@ -1051,7 +1051,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
         for q in x.2 {
           let id = next_pending.val
           next_pending.val += 1
-          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
+          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: x.3, file: if x.3 == "page" { x.0 } else { "" } })
           d.comments[id] = q.2
         }
       }

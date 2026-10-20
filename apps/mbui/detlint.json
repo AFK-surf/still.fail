@@ -94,7 +94,7 @@
       "src/sfapp/preview.mbt": 191,
       "src/sfapp/preview_marks.mbt": 114,
       "src/sfapp/recent.mbt": 14,
-      "src/sfapp/service.mbt": 127,
+      "src/sfapp/service.mbt": 114,
       "src/sfapp/settings/archive.mbt": 51,
       "src/sfapp/settings/connects.mbt": 33,
       "src/sfapp/settings/home.mbt": 50,
@@ -155,7 +155,8 @@
       "src/sfapp/preview.mbt": 76,
       "src/sfapp/preview_marks.mbt": 38,
       "src/sfapp/recent.mbt": 5,
-      "src/sfapp/service.mbt": 47,
+      "src/sfapp/service.mbt": 41,
+      "src/sfapp/service_marks.mbt": 1,
       "src/sfapp/settings/archive.mbt": 16,
       "src/sfapp/settings/connects.mbt": 17,
       "src/sfapp/settings/home.mbt": 22,
@@ -184,7 +185,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 15
+      "src/sf/tokens.mbt": 23
     },
     "build-effect": {},
     "unsettled-ok": {}
