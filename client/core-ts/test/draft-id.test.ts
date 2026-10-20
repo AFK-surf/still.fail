@@ -58,6 +58,8 @@ test("a_draft_has_a_name_from_the_core_kept_with_it_across_a_restart", async () 
   const t = await setup();
   try {
     const first = (await t.ask("draft.get", { key: "ws/st:ember:a" })).id;
+    // the core's name for it: `draft-` and hex (never sent up as it is: the app hashes it into an upload's id)
+    assert.match(first, /^draft-[0-9a-f]+$/);
     assert.match(first, /^[A-Za-z0-9_-]{8,64}$/);
     // written to: the same draft, whatever the page says its name is
     assert.equal((await t.ask("draft.put", { key: "ws/st:ember:a", ...draft })).id, first);

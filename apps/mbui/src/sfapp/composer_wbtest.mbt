@@ -262,6 +262,41 @@ test "a file going up keeps the id it was given as it went in, whatever comes to
 }
 
 ///|
+test "the same file twice in a draft is two uploads, and again after it was sent a third; none is the draft's name" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let _t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  // the core's name for the draft as it was last kept (the fake core's draft.put)
+  sent_draft(d, 1)
+  save_draft(src, d)
+  let named_as = d.id
+  assert_true(named_as != "")
+  let bytes = b"the same bytes"
+  let ids = fn() { named(calls, "station.upload.part").map(fn(m) { text(Some(m.params), "id") }) }
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  // sent: the draft emptied, kept so, named anew; the same file put in again
+  d.files.clear()
+  sent_draft(d, 2)
+  save_draft(src, d)
+  assert_true(d.id != named_as)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let all = ids()
+  assert_eq(all.length(), 3)
+  assert_true(all[0] != all[1])
+  assert_true(all[2] != all[0] && all[2] != all[1])
+  // each as the station takes an upload's id (32 hex digits), none the draft's name as it is
+  for id in all {
+    assert_eq(id.length(), 32)
+    assert_true(id.iter().all(fn(ch) { (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') }))
+    assert_true(id != named_as && id != d.id)
+  }
+}
+
+///|
 test "a long paste goes as a text file, up to the station, and with the message" {
   let calls : Array[Made] = []
   let t = fake_core(calls)
