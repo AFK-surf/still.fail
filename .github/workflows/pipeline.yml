@@ -319,7 +319,7 @@ jobs:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       MOON_HOME: ${{ github.workspace }}/../.moon
     steps:
@@ -357,12 +357,12 @@ jobs:
   # The mbui app's tests on native, on macOS (mini1-6, label mbui: its own runner on Mini1), as they run on js above:
   # a test's binary links mbui's hosts' Objective-C through mbui's scripts/cc_apple.sh (MOON_CC; a test package is
   # given no cc-link-flags). Only where native can differ from js (plan's mbui_native): the hosts, the FFI, the link
-  # options, the pinned mbui; on main, any change to the app. ~15 minutes on a busy Mini1 (2026-10-20).
+  # options, the pinned mbui; on main, any change to the app. 134-145 s (2026-10-20); 10 minutes at most, as every job.
   check-mbui-native:
     needs: plan
     if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui_native == 'true' }}
     runs-on: mbui
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
@@ -860,7 +860,7 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-mbui, check-mbui-native, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
+    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
