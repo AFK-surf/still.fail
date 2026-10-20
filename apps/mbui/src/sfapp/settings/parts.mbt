@@ -92,24 +92,7 @@ fn gap(c : @ui.Ctx, h : Double) -> Unit {
 ///|
 /// Back, in the accent colour, with where it goes back to (Parts.kt NavBack). True on the frame after a tap.
 fn nav_back(c : @ui.Ctx, label : String) -> Bool {
-  let t = @sf.theme()
-  let id = c.id("settings-back")
-  c.box(
-    dir=Row,
-    pr=6.0,
-    pt=4.0,
-    pb=4.0,
-    radius=8.0,
-    align=ACenter,
-    opacity=if c.pressed(id) { 0.6 } else { 1.0 },
-    id~,
-    fn() {
-      @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-      c.text(label, size=17.0, color=t.p.accent, wrap=false) |> ignore
-    },
-  )
-  |> ignore
-  hit(c, id)
+  @sf.nav_back(c, "settings-back", label)
 }
 
 ///|
@@ -163,35 +146,9 @@ fn nav_bar(
     }
     return
   }
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg=t.p.bg, fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, justify=JBetween, fn() {
-      if nav_back(c, back) {
-        (core.pop)()
-      }
-      match trailing {
-        Some(f) => f()
-        None => ()
-      }
-    })
-    |> ignore
-    c.layer(align=ACenter, fn() {
-      c.box(pl=84.0, pr=84.0, align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, fn() {
-          c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        })
-        |> ignore
-        gap(c, 2.0)
-        match sub {
-          Some(f) =>
-            c.box(dir=Row, ty=-4.0, gap=5.0, align=ACenter, fn() { f() }) |> ignore
-          None => ()
-        }
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=t.p.bg) {
+    (core.pop)()
+  }
 }
 
 ///|

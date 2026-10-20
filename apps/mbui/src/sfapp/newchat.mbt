@@ -93,45 +93,14 @@ fn fill_words(key : String, error : String) -> String {
 ///|
 /// The page's bar (Parts.kt NavBar): 取消 back, 新对话 in the middle.
 fn new_chat_bar(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
   // the wide frame's new chat has no bar (the sidebar's 新建对话 is lit): the page's top row only
   if wide_on.val {
     c.box(w=Fill(1.0), h=Px(45.0), fn() {  }) |> ignore
     return
   }
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg=t.p.bg, fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
-      let back = c.id("new/cancel")
-      if c.clicked(back) {
-        app.nav.pop() |> ignore
-      }
-      c.box(
-        dir=Row,
-        pr=6.0,
-        pt=4.0,
-        pb=4.0,
-        radius=8.0,
-        align=ACenter,
-        opacity=if c.pressed(back) { 0.6 } else { 1.0 },
-        id=back,
-        fn() {
-          @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-          c.text(tr("common.cancel"), size=17.0, color=t.p.accent, wrap=false) |> ignore
-        },
-      )
-      |> ignore
-      c.layer(align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, pl=84.0, pr=84.0, fn() {
-          c.text(tr("android-chat.new.title"), size=16.0, weight=600, color=t.p.text, wrap=false)
-          |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  if @sf.nav_bar(c, "new/cancel", tr("common.cancel"), tr("android-chat.new.title"), bg=@sf.theme().p.bg) {
+    app.nav.pop() |> ignore
+  }
 }
 
 ///|

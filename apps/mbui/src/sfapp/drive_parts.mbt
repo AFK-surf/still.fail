@@ -178,58 +178,14 @@ fn dv_surface() -> Int64 {
 // ── the bar ──────────────────────────────────────────────────────────────
 
 ///|
-/// Back, in the accent: a chevron and where to (Parts.kt NavBack).
-fn dv_nav_back(c : @ui.Ctx, key : String, label : String) -> Bool {
-  let t = @sf.theme()
-  let id = c.id(key)
-  c.box(
-    dir=Row,
-    pr=6.0,
-    pt=4.0,
-    pb=4.0,
-    radius=8.0,
-    align=ACenter,
-    opacity=if c.pressed(id) { 0.6 } else { 1.0 },
-    id~,
-    fn() {
-      @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-      c.box(max_w=dmax(80.0, c.width / 2.0 - 120.0), fn() {
-        c.text(label, size=17.0, color=t.p.accent, wrap=false) |> ignore
-      })
-      |> ignore
-    },
-  )
-  |> ignore
-  c.clicked(id)
-}
-
-///|
 /// A page's compact bar (Parts.kt NavBar): back and where to, the title in the middle, what it does at the right; no
 /// line under it. True on the frame after back was tapped.
 fn dv_nav_bar(c : @ui.Ctx, back : String, title : String, trailing : () -> Unit) -> Bool {
-  let t = @sf.theme()
   // the wide frame's page bar (wide_chat.mbt)
   if wide_on.val {
     return page_bar_wide(c, title, app.nav.depth() > 1, trailing)
   }
-  let mut went = false
-  c.box(w=Fill(1.0), bg=t.p.bg, pl=10.0, pr=16.0, pt=6.0, pb=10.0, fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
-      went = dv_nav_back(c, "dv-nav-back", back)
-      c.spacer()
-      c.box(dir=Row, h=Px(32.0), align=ACenter, trailing) |> ignore
-      c.layer(align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, pl=84.0, pr=84.0, fn() {
-          c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
-  went
+  @sf.nav_bar(c, "dv-nav-back", back, title, trailing~, back_max=dmax(80.0, c.width / 2.0 - 120.0), bg=@sf.theme().p.bg)
 }
 
 ///|

@@ -443,3 +443,17 @@ pub let files_row_end : @ui.Space = Exact(7.0)
 /// What waits in the composer, its corner where it is in none of the capsule's (Glass.kt InComposerFiles:
 /// concentric(ComposerCorner 26, ComposerFilesIn 10), what Android gives Smooth).
 pub let files_corner : @ui.Radius = Exact(18.0)
+
+///|
+/// A page's bar (Parts.kt NavBar): back's word (17) and the title (16), each on the font's own line; the title kept
+/// 84 clear of the bar's sides; the gap in the line under the title (5).
+pub let nav_back_size : @ui.TextSize = Exact(17.0, 0.0)
+
+///|
+pub let nav_title_size : @ui.TextSize = Exact(16.0, 0.0)
+
+///|
+pub let nav_title_clear : @ui.Space = Exact(84.0)
+
+///|
+pub let nav_sub_gap : @ui.Space = Exact(5.0)

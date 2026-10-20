@@ -223,51 +223,16 @@ fn service_note(c : @ui.Ctx, words : String) -> Unit {
 /// The page's compact bar (Parts.kt NavBar): 对话 back in the accent, the service's name and under it its station.
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, fn() {
-    c.box(w=Fill(1.0), fn() {
-      c.box(dir=Row, h=Px(32.0), align=ACenter, fn() {
-        let back = c.id("service/back")
-        if c.clicked(back) {
-          app.nav.pop() |> ignore
-        }
-        c.box(
-          dir=Row,
-          pr=6.0,
-          pt=4.0,
-          pb=4.0,
-          radius=8.0,
-          align=ACenter,
-          opacity=if c.pressed(back) { 0.6 } else { 1.0 },
-          id=back,
-          fn() {
-            @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-            c.text(svc("android-chat.preview.back"), size=17.0, color=t.p.accent, wrap=false) |> ignore
-          },
-        )
-        |> ignore
-      })
-      |> ignore
-      c.layer(align=ACenter, fn() {
-        c.box(pl=84.0, pr=84.0, align=ACenter, fn() {
-          c.box(h=Px(30.0), justify=JCenter, clip=true, fn() {
-            c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-          })
-          |> ignore
-          c.box(h=Px(2.0), fn() {  }) |> ignore
-          if station != "" {
-            c.box(ty=-4.0, fn() {
-              c.text(station, size=11.0, color=t.p.muted, wrap=false) |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
-      })
-      |> ignore
+  let went = if station != "" {
+    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, sub=fn() {
+      c.text(station, size=11.0, color=t.p.muted, wrap=false) |> ignore
     })
-    |> ignore
-  })
-  |> ignore
+  } else {
+    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title)
+  }
+  if went {
+    app.nav.pop() |> ignore
+  }
 }
 
 ///|
