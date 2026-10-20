@@ -109,7 +109,9 @@ export class ViewCalls {
         this.#views.outboxSent(station, thread, id, result.success);
         return { seq: result.success };
       }
-      this.#local.outboxState(station, thread, id, result.failure.message);
+      // A 400 is the station refusing the message as it is (a file it does not have: one that went up to another
+      // station): sent again, it would be refused again.
+      this.#local.outboxState(station, thread, id, result.failure.message, result.failure.status === 400);
       return yield* Effect.fail(result.failure);
     });
   }
@@ -241,7 +243,9 @@ export class ViewCalls {
     handlers.chatRetry = (_inner, call, _p, _at, ctx) => {
       const c = call as Of<"chatRetry">;
       return Effect.suspend(() => {
-        if (local.outboxGet(c.station, c.thread, c.id) === undefined) return Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
+        const entry = local.outboxGet(c.station, c.thread, c.id);
+        if (entry === undefined) return Effect.fail(CoreError.invalid(t("core-misc.call.no_outbox")));
+        if (entry.final === true) return Effect.fail(CoreError.invalid(t("core-misc.call.refused_for_good")));
         local.outboxState(c.station, c.thread, c.id, null);
         return this.deliver(c.station, c.thread, c.id, ctx, true);
       });

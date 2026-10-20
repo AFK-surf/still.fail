@@ -44,6 +44,7 @@
   "core-misc.call.no_option": "选项不存在",
   "core-misc.call.no_outbox": "待发消息不存在",
   "core-misc.call.push_unavailable": "{brand} cloud 尚不支持推送",
+  "core-misc.call.refused_for_good": "station 拒收了这条消息，原样重发还会被拒",
   "core-misc.call.reply_in_chat": "请在对话中回复此卡片",
   "core-misc.call.socket_closed": "此 WebSocket 已关闭",
   "core-misc.call.socket_open": "同名 WebSocket 已打开",

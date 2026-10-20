@@ -1952,6 +1952,9 @@ data class Outgoing (
 	val createdAt: Long,
 	val state: String,
 	val error: String? = null,
+	/// Failed for good: the station refused it as it is (a file it does not have), and sending it again would not
+	/// change that; it goes back to be written again. Absent otherwise.
+	val final: Boolean? = null,
 	val seq: Long? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null,

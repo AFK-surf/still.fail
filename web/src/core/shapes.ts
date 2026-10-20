@@ -1977,6 +1977,11 @@ export interface Outgoing {
 	createdAt: number;
 	state: string;
 	error?: string;
+	/**
+	 * Failed for good: the station refused it as it is (a file it does not have), and sending it again would not
+	 * change that; it goes back to be written again. Absent otherwise.
+	 */
+	final?: boolean;
 	seq?: number;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
