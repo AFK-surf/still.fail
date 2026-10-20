@@ -108,7 +108,7 @@ final class Picks {
     private static void done(int id, int state) {
         Ask k = asks.get(id);
         if (k != null) k.state = state;
-        Host.requestFrame();
+        Native.tell(Native.OUTSIDE_PICK, id, state);
     }
 
     /** MainActivity.onActivityResult: a picker answered. */

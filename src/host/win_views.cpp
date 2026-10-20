@@ -965,7 +965,7 @@ extern "C" void mb_views_tell(mb_outside_fn f) {
   while (!told.empty()) {
     std::pair<int, int> t = told.front();
     told.pop_front();
-    if (f) f(2, t.first, t.second);
+    if (f) f(MB_OUTSIDE_VIEW, t.first, t.second);
   }
 }
 

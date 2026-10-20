@@ -1184,7 +1184,10 @@ int32_t mb_host_reduce_motion(void) {
 // video's first frame shown, a sound that can play) or failed (state -1), or (a view, state 0: NView.askApp) waiting on
 // the app now, a player's read or a site's request: the host's work for it stops until the app answers. Told on the
 // GL thread, MoonBit's, between frames (each comes as a queued event, which GLSurfaceView runs before the next
-// onDrawFrame); ready or failed once per item.
+// onDrawFrame); ready or failed once per item. Also (Native.tell) what the pickers gave, the gallery read, marks
+// drawn, a video's frame grabbed, an update's progress: the kinds named as src/ui/hostcall.mbt's outside_* and
+// Native.java's OUTSIDE_*.
+enum { MB_OUTSIDE_IMAGE = 1, MB_OUTSIDE_VIEW = 2 };
 static void (*outside_cb)(int32_t, int32_t, int32_t);
 int32_t mb_host_set_outside(void (*f)(int32_t, int32_t, int32_t)) {
   outside_cb = f;
@@ -1340,7 +1343,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jin
   if (im->tex && im->tex != t) glDeleteTextures(1, &im->tex);
   *im = (mb_image){t ? 1 : -1, t, w, h, ow, oh, 1};
   if (told) return;
-  if (outside_cb) outside_cb(1, id, t ? 1 : -1);
+  if (outside_cb) outside_cb(MB_OUTSIDE_IMAGE, id, t ? 1 : -1);
 }
 
 // A sign-in in the browser that comes back here (host_native.mbt `browser_login`): dev.mbui.BrowserLogin, a loopback

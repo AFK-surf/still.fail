@@ -344,3 +344,38 @@ test "a native view between pixels is placed on whole device pixels, its hole an
     }
   }
 }
+
+///|
+test "a frame grab is waited on until its PNG is taken; then the view may grab again" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  v.grab_frame(40.0)
+  assert_true(@ui.runtime().awaited().iter().any(fn(a) { a.0.contains("a frame of view 1 grabbed") }))
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"89504e47\"}"))
+  t.draw()
+  assert_eq(v.grabbed(), Some(b"\x89PNG"))
+  assert_false(@ui.runtime().awaited().iter().any(fn(a) { a.0.contains("grabbed") }))
+  // taken: another may be asked
+  v.grab_frame(80.0)
+  assert_true(@ui.runtime().awaited().iter().any(fn(a) { a.0.contains("a frame of view 1 grabbed") }))
+}
+
+///|
+test "panic a second frame grab of a view before the first is taken" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let _ = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  v.grab_frame(40.0)
+  v.grab_frame(80.0)
+}

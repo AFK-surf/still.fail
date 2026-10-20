@@ -64,7 +64,7 @@ final class Marks {
             } finally {
                 if (b != null) b.recycle();
             }
-            Host.requestFrame();
+            Native.tell(Native.OUTSIDE_MARKS, id, j.state);
         }, "mbui-marks").start();
         return id;
     }

@@ -299,7 +299,7 @@ void mb_images_tell(mb_outside_fn f) {
     }
     LeaveCriticalSection(&lock);
     if (!id) return;
-    if (f) f(1, id, state);
+    if (f) f(MB_OUTSIDE_IMAGE, id, state);
   }
 }
 

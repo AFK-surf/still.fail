@@ -47,10 +47,20 @@ NSString *mb_ns_from_string(moonbit_string_t s);
 // shared helpers (per platform)
 double mb_now_ms(void);
 
-// What the host did for the app is done (host_native.mbt's set_outside): kind 1 an image or a PDF's page decoded
-// (id: the image), 2 a native view ready (a page loaded and its picture taken, a video's first frame); state 1 done,
-// -1 failed, 0 (a view) waiting on the app now (bytes a player reads, a site's answer): the host's work for it stops
-// until the app answers. On the main thread, between frames (per platform).
+// What the host did for the app is done (host_native.mbt's set_outside; its kinds named as src/ui/hostcall.mbt's
+// outside_*): an image or a PDF's page decoded (id: the image), a native view ready (a page loaded and its picture
+// taken, a video's first frame), what the pickers gave, marks drawn, a video's frame grabbed (id: its view); state 1
+// done, -1 failed, 0 (a view) waiting on the app now (bytes a player reads, a site's answer): the host's work for it
+// stops until the app answers. On the main thread, between frames (per platform).
+enum {
+  MB_OUTSIDE_IMAGE = 1,
+  MB_OUTSIDE_VIEW = 2,
+  MB_OUTSIDE_PICK = 3,
+  MB_OUTSIDE_GALLERY = 4,
+  MB_OUTSIDE_MARKS = 5,
+  MB_OUTSIDE_GRAB = 6,
+  MB_OUTSIDE_UPDATE = 7,
+};
 void mb_host_outside(int32_t kind, int32_t id, int32_t state);
 // whether a native view's picture for snapshots is being taken (apple_views.m): a snapshot waits for it
 int mb_views_snapping(void);

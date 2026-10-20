@@ -30,6 +30,12 @@ pub struct Pick {
 }
 
 ///|
+/// Its id, as the host's event names it when the system has answered (set_outside: kind 3).
+pub fn Pick::id(self : Pick) -> Int {
+  self.id
+}
+
+///|
 /// Asks the system for files of `kind`: None when this host cannot.
 pub fn pick(kind : PickKind) -> Pick? {
   let id = pk_start(

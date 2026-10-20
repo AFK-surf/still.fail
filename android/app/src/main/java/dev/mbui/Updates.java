@@ -26,7 +26,8 @@ import java.security.MessageDigest;
  * `<name>.part`, the rest asked for as a range, a few times over with a growing pause while each try gets further),
  * checked against its sha256, and handed to the system's installer, which installs it over this one once the person
  * agrees. Installing apps needs the person's leave (安装未知应用): without it the system's page for it opens instead. How
- * it goes is polled by the app (`state`, on the GL thread): the phase, how far, what went wrong.
+ * it goes the app reads (`state`, on the GL thread: the phase, how far, what went wrong), told each time it changes
+ * (`changed`).
  */
 final class Updates {
     /** idle | allow (the person's leave asked) | downloading | retrying | installing | handed | failed */
@@ -36,6 +37,14 @@ final class Updates {
     static Thread worker;
     /** Tries in a row that got no further before a download gives up (pauses 1, 2, 4, 8, 16 s between them). */
     static final int RETRIES = 6;
+
+    /**
+     * How it goes changed (Native.OUTSIDE_UPDATE): `state` 0 while the host works at it, 1 once it does no more (handed
+     * to the installer, the person's leave asked), -1 failed.
+     */
+    static void changed(int state) {
+        Native.tell(Native.OUTSIDE_UPDATE, 1, state);
+    }
 
     static int versionCode() {
         Context c = Host.activity;
@@ -63,18 +72,19 @@ final class Updates {
             Host.log("update: the person's leave to install apps asked for");
             c.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + c.getPackageName()))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            Host.requestFrame();
+            changed(1);
             return;
         }
         Context app = c.getApplicationContext();
         phase = "downloading";
         percent = -1;
         error = "";
+        changed(0);
         worker = new Thread(() -> {
             try {
                 File apk = download(app, url, sha256, (long) size, name);
                 phase = "installing";
-                Host.requestFrame();
+                changed(0);
                 installApk(app, apk);
                 phase = "handed";
                 Host.log("update: " + apk.getName() + " handed to the system's installer");
@@ -83,7 +93,7 @@ final class Updates {
                 error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 Host.log("update failed: " + error);
             }
-            Host.requestFrame();
+            changed(phase.equals("failed") ? -1 : 1);
         }, "mbui-update");
         worker.start();
     }
@@ -109,7 +119,7 @@ final class Updates {
                 if (part.length() > before) failures = 0;
                 if (++failures >= RETRIES) throw e;
                 phase = "retrying";
-                Host.requestFrame();
+                changed(0);
                 Thread.sleep(1000L << (failures - 1));
                 phase = "downloading";
             }
@@ -147,7 +157,7 @@ final class Updates {
                     int p = size > 0 ? (int) (done * 100 / size) : -1;
                     if (p != percent) {
                         percent = p;
-                        Host.requestFrame();
+                        changed(0);
                     }
                 }
             }
@@ -213,7 +223,7 @@ final class Updates {
                 phase = "failed";
                 error = m == null ? "install failed" : m;
                 Host.log("update: the installer failed: " + error);
-                Host.requestFrame();
+                changed(-1);
             }
         }
     }

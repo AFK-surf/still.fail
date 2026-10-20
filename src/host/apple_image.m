@@ -37,7 +37,7 @@ static void finish(int iid, int state, int w, int h, int ow, int oh, id<MTLTextu
     im.w = w; im.h = h; im.ow = ow; im.oh = oh;
     im.tex = tex;
     im.state = state;
-    mb_host_outside(1, iid, state);
+    mb_host_outside(MB_OUTSIDE_IMAGE, iid, state);
     mb_host_request_frame();
   });
 }

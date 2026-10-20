@@ -114,7 +114,7 @@ final class NativeViews {
                 if (told || closed) return;
                 told = true;
             }
-            Host.view.toGL(() -> Native.outside(2, id, st));
+            Host.view.toGL(() -> Native.outside(Native.OUTSIDE_VIEW, id, st));
         }
 
         /**
@@ -128,7 +128,7 @@ final class NativeViews {
                 synchronized (this) {
                     say = !told && !closed;
                 }
-                if (say) Native.outside(2, id, 0);
+                if (say) Native.outside(Native.OUTSIDE_VIEW, id, 0);
                 ask.run();
             });
         }
@@ -534,7 +534,7 @@ final class NativeViews {
                 } finally {
                     try { r.release(); } catch (Exception ignored) { }
                 }
-                Host.requestFrame();
+                Native.tell(Native.OUTSIDE_GRAB, id, stillState == 2 ? 1 : -1);
             }, "mbui-grab").start();
         }
 

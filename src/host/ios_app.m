@@ -801,6 +801,7 @@ static void pick_done(int32_t pid, NSArray<NSString *> *names, NSArray<NSData *>
     p[@"names"] = names;
     p[@"datas"] = datas;
     p[@"state"] = @(names.count > 0 ? 1 : -1);
+    mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
     [the_view requestFrame];
   });
 }

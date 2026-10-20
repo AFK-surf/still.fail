@@ -774,10 +774,16 @@ pub fn pdf_close(doc : Int) -> Unit {
 
 ///|
 pub fn view_text(id : Int, what : Int) -> String? {
-  ignore(id)
-  ignore(what)
-  None
+  match js_view_text(id, what) {
+    "" => None
+    s => Some(s)
+  }
 }
+
+///|
+/// What a view says (`what` 2: how its frame grab stands), "" none.
+extern "js" fn js_view_text(id : Int, what : Int) -> String =
+  #|(id, what) => (globalThis.__mbhost.viewText ? globalThis.__mbhost.viewText(id, what) : '') || ''
 
 ///|
 pub fn view_still(id : Int) -> Bytes {

@@ -333,6 +333,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
                                 wv.still = png;
                                 wv.stillState = png ? 2 : -1;
                               }
+                              mb_host_outside(MB_OUTSIDE_GRAB, vid, png ? 1 : -1);
                               mb_host_request_frame();
                             });
                           }];
@@ -386,7 +387,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   r.load = l;
   [self.pending addObject:r];
   // the player waits on the app's bytes now: not the host's work until they come (apple.h's mb_host_outside, 0)
-  mb_host_outside(2, self.vid, 0);
+  mb_host_outside(MB_OUTSIDE_VIEW, self.vid, 0);
   mb_host_request_frame();
 }
 
@@ -615,7 +616,7 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
 - (void)tell:(int)state {
   if (self.told && state > 0) return;
   self.told = state > 0;
-  mb_host_outside(2, self.vid, state);
+  mb_host_outside(MB_OUTSIDE_VIEW, self.vid, state);
 }
 
 - (void)pageFailed:(NSError *)e {
@@ -796,7 +797,7 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   if ([accept hasPrefix:@"text/html"]) page = YES;
   [v say:@{@"req" : @(q.rid), @"method" : r.HTTPMethod ?: @"GET", @"path" : path, @"headers" : hs, @"page" : @(page)}];
   // the site waits on the app's answer now (apple.h's mb_host_outside, 0)
-  mb_host_outside(2, v.vid, 0);
+  mb_host_outside(MB_OUTSIDE_VIEW, v.vid, 0);
 }
 
 - (void)webView:(WKWebView *)wv stopURLSchemeTask:(id<WKURLSchemeTask>)task {
@@ -1404,6 +1405,7 @@ int32_t mb_host_marks_start(moonbit_bytes_t image, moonbit_string_t marks) {
       vlog(@"marks: %@", png ? [NSString stringWithFormat:@"drawn (%lu bytes)", (unsigned long)png.length] : @"not drawn");
       j.png = png;
       j.state = png ? 1 : -1;
+      mb_host_outside(MB_OUTSIDE_MARKS, jid, j.state);
       mb_host_request_frame();
     });
   });

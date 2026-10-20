@@ -431,10 +431,45 @@ fn h_back_enabled(on : Bool) -> Unit {
 }
 
 // What the app waits on from the host (effect.mb's outside, src/effect/outside.mbt): an image or a PDF's page
-// decoding (kind 1), a native view until it is ready (kind 2: a page loaded, a video's first frame). Each is a ticket
-// of the window's runtime, ended by the host's event for it (@host.set_outside: kind, id, state) or when the app lets
-// it go; a run to a declared moment keeps its clock still while any is (@host.frame_awaiting). A host that sends no
-// such events (set_outside answers false) gets no tickets.
+// decoding, a native view until it is ready (a page loaded, a video's first frame), what the system's pickers give, the
+// gallery read, marks drawn onto an image, a video's frame grabbed, an update downloading (the kinds below, named as
+// the hosts name them). Each is a ticket of the window's runtime, ended by the host's event for it (@host.set_outside:
+// kind, id, state) or when the app lets it go or takes it; a run to a declared moment keeps its clock still while any
+// is (@host.frame_awaiting). A host that sends no such events (set_outside answers false) gets no tickets. An answer
+// the host tells (a pick, the gallery read, marks drawn, a frame grabbed, an update's word) asks for a frame: what it
+// brings is read as the next frame builds, not looked for frame after frame. Where a ticket of these ends: on a host,
+// at its event (or as the app takes the answer, if it read it first); under a Tester, whose fake host tells no event,
+// as the app takes the answer (Pick::files, MarkedImage::made, NativeView::grabbed): both are when the host's work for
+// it is over.
+
+///|
+/// An image or a PDF's page decoded (its image's id).
+let outside_image = 1
+
+///|
+/// A native view ready (its view's id), or (state 0) waiting on the app's answer.
+let outside_view = 2
+
+///|
+/// What the system's pickers give (@host.Pick's id).
+let outside_pick = 3
+
+///|
+/// The gallery's photos read (@host.GalleryRead's id).
+let outside_gallery = 4
+
+///|
+/// Marks drawn onto an image (@host.MarkedImage's id).
+let outside_marks = 5
+
+///|
+/// A video's frame grabbed (its view's id).
+let outside_grab = 6
+
+///|
+/// An update downloading (id 1): state 0 each time how it goes changes, while the host works at it; 1 once the host
+/// works at it no more (handed to the installer, waiting on the person's leave), -1 failed.
+let outside_update = 7
 
 ///|
 let outside_tickets : Map[Int64, Int] = Map::new()
@@ -474,24 +509,40 @@ let views_told : Map[Int, Bool] = Map::new()
 /// The host's event: what it did for the app is done (`state`: 1 done, -1 failed), or (a view, 0) it waits on the
 /// app now: the bytes a player reads, a site's answer. Until the app answers, the host does nothing for it.
 fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
-  if kind == 2 && state != 0 {
+  if kind == outside_update {
+    // (how it goes changed: held while the host works at it)
+    if state == 0 {
+      if !outside_tickets.contains(outside_key(kind, id)) {
+        outside_start(kind, id, "an update downloading")
+      }
+    } else {
+      outside_end(kind, id)
+    }
+    h_request_frame()
+    return
+  }
+  if kind == outside_view && state != 0 {
     views_told[id] = true
   }
   // a picture decoded: its sizes recorded now (hostrec.mbt), drawn or not (one never drawn is still asked of a Tester)
-  if kind == 1 && state == 1 && fake.val is None && text_recording() {
+  if kind == outside_image && state == 1 && fake.val is None && text_recording() {
     let out = FixedArray::make(4, 0.0)
     if @host.image_info(id, out) == 1 {
       rec_image_ready(id, out)
     }
   }
   outside_end(kind, id)
+  // an answer brought (what was picked, read, drawn, grabbed): read as the next frame builds
+  if kind == outside_pick || kind == outside_gallery || kind == outside_marks || kind == outside_grab {
+    h_request_frame()
+  }
 }
 
 ///|
 /// The app answered what a view waits on (a read, a site's request): the host's again, until ready or it asks more.
 fn outside_answered(id : Int) -> Unit {
-  if !views_told.contains(id) && !outside_tickets.contains(outside_key(2, id)) {
-    outside_start(2, id, "view \{id} (after the app's answer)")
+  if !views_told.contains(id) && !outside_tickets.contains(outside_key(outside_view, id)) {
+    outside_start(outside_view, id, "view \{id} (after the app's answer)")
   }
 }
 
@@ -534,7 +585,7 @@ fn h_image_load(src : String, max_px : Int) -> Int {
       id
     }
   }
-  outside_start(1, id, "image \{id} \{src}")
+  outside_start(outside_image, id, "image \{id} \{src}")
   id
 }
 
@@ -562,7 +613,7 @@ fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
       id
     }
   }
-  outside_start(1, id, "image \{id} (\{data.length()} bytes) \{src}")
+  outside_start(outside_image, id, "image \{id} (\{data.length()} bytes) \{src}")
   id
 }
 
@@ -594,7 +645,7 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
 
 ///|
 fn h_image_free(id : Int) -> Unit {
-  outside_end(1, id)
+  outside_end(outside_image, id)
   match fake.val {
     Some(f) => f.images.remove(id)
     None => @host.image_free(id)
@@ -625,7 +676,7 @@ fn h_view_open(kind : Int, arg : String) -> Int {
     }
     None => @host.view_open(kind, arg)
   }
-  outside_start(2, id, "view \{id} (kind \{kind}, \{view_kind_name(kind, arg)})")
+  outside_start(outside_view, id, "view \{id} (kind \{kind}, \{view_kind_name(kind, arg)})")
   id
 }
 
@@ -654,7 +705,7 @@ fn h_view_place(
 
 ///|
 fn h_view_close(id : Int) -> Unit {
-  outside_end(2, id)
+  outside_end(outside_view, id)
   views_told.remove(id)
   match fake.val {
     Some(f) => f.views.push("close \{id}")
@@ -1039,7 +1090,7 @@ fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
       id
     }
   }
-  outside_start(1, id, "image \{id} (PDF \{doc}, page \{page})")
+  outside_start(outside_image, id, "image \{id} (PDF \{doc}, page \{page})")
   id
 }
 

@@ -14,6 +14,12 @@ pub struct MarkedImage {
 }
 
 ///|
+/// Its id, as the host's event names it once drawn (set_outside: kind 5).
+pub fn MarkedImage::id(self : MarkedImage) -> Int {
+  self.id
+}
+
+///|
 /// `image` (its bytes, any format the system decodes) with `marks` drawn on it: None where the host cannot.
 pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
   match mk_start(image, marks) {

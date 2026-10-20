@@ -110,7 +110,7 @@ final class Gallery {
                 Host.log("gallery: " + e);
                 r.state = -1;
             }
-            Host.requestFrame();
+            Native.tell(Native.OUTSIDE_GALLERY, id, r.state);
         }, "mbui-gallery").start();
         return id;
     }

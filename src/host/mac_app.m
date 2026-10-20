@@ -1242,6 +1242,7 @@ static void pick_answer(int32_t pid, NSArray<NSURL *> *urls) {
       p[@"names"] = names;
       p[@"datas"] = datas;
       p[@"state"] = @(names.count > 0 ? 1 : -1);
+      mb_host_outside(MB_OUTSIDE_PICK, pid, names.count > 0 ? 1 : -1);
       [the_view requestFrame];
     });
   });
@@ -1273,6 +1274,7 @@ int32_t mb_host_pick_start(int32_t kind) {
       if (r == NSModalResponseOK) pick_answer(pid, panel.URLs);
       else {
         picks[@(pid)][@"state"] = @(-1);
+        mb_host_outside(MB_OUTSIDE_PICK, pid, -1);
         [the_view requestFrame];
       }
     };

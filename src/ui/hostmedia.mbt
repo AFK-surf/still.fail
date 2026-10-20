@@ -214,19 +214,43 @@ pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
       f.marks_out.push(f.marks_next.unwrap_or(marked_png))
       f.marks_next = None
       f.wants = true
-      Some({ host: None, fake: f.marks.length() - 1 })
+      let m : MarkedImage = { host: None, fake: f.marks.length() - 1 }
+      outside_start(outside_marks, m.outside_id(), "marks drawn \{m.outside_id()}")
+      Some(m)
     }
     None =>
       match @host.draw_marks(image, marks) {
-        Some(m) => Some({ host: Some(m), fake: -1 })
+        Some(h) => {
+          let m : MarkedImage = { host: Some(h), fake: -1 }
+          outside_start(outside_marks, m.outside_id(), "marks drawn \{m.outside_id()}")
+          Some(m)
+        }
         None => None
       }
   }
 }
 
 ///|
+/// Its id as the host's event names it (outside_marks), a Tester's its place, from 1.
+fn MarkedImage::outside_id(self : MarkedImage) -> Int {
+  match self.host {
+    Some(h) => h.id()
+    None => self.fake + 1
+  }
+}
+
+///|
 /// The PNG once drawn (Some(empty): it could not be), None while it is drawn; taken once.
 pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
+  let got = self.png()
+  if got is Some(_) {
+    outside_end(outside_marks, self.outside_id())
+  }
+  got
+}
+
+///|
+fn MarkedImage::png(self : MarkedImage) -> Bytes? {
   match self.host {
     Some(m) => m.made()
     None =>

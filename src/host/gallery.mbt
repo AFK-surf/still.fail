@@ -59,6 +59,12 @@ pub struct GalleryRead {
 }
 
 ///|
+/// Its id, as the host's event names it once read (set_outside: kind 4).
+pub fn GalleryRead::id(self : GalleryRead) -> Int {
+  self.id
+}
+
+///|
 /// The gallery's photos read (as many as the app may read): None where there is no gallery.
 pub fn gallery_read() -> GalleryRead? {
   match ga_read() {
