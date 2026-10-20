@@ -161,6 +161,8 @@ fn Rec::new() -> Rec {
 /// until when the rest wait to close over what left.
 priv struct ListMo {
   mut keys : Array[Int]
+  /// the same, as given (what a row's copy is named by as it leaves)
+  mut names : Array[String]
   mut changed_at : Double
   mut close_until : Double
   arrived : Map[Int, Double]
@@ -171,9 +173,11 @@ priv struct ListMo {
 }
 
 ///|
-/// A row gone from its list (the list's id), drawn as it was last drawn while it leaves.
+/// A row gone from its list (the list's id), drawn as it was last drawn while it leaves: its key's (layout_rest), its
+/// two Anims named by it ("<key> leaving": Tester::moving, rest_of).
 priv struct Ghost {
   list : Int
+  key : Int
   drawing : @ui.Drawing
   trans : Trans
   pf : Anim
@@ -467,22 +471,29 @@ fn scope_above(c : @ui.Ctx, i : Int) -> Moving? {
 
 ///|
 /// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
-/// its move's ends and its entrance's (Anim::ends_at); before now (-1) when it is at rest or the key is not known;
-/// +inf when told to move in the frame just drawn (it starts at the next: the frame owed, Tester::draw). Only read.
+/// its move's ends and its entrance's (Anim::ends_at); a row gone from its list, when its copy has left (its fade's
+/// and its move's ends); before now (-1) when it is at rest or the key is not known; +inf when told to move in the
+/// frame just drawn (it starts at the next: the frame owed, Tester::draw). Only read.
 pub fn layout_rest(key : String) -> Double {
-  match mo.recs.get(motion_key(key)) {
-    Some(r) => {
-      let mut e = -1.0
-      for a in [r.ox, r.oy, r.ef, r.em] {
-        let x = a.ends_at()
-        if x > e {
-          e = x
-        }
-      }
-      e
+  let k = motion_key(key)
+  let mut e = -1.0
+  let at = fn(a : Anim) {
+    let x = a.ends_at()
+    if x > e {
+      e = x
     }
-    None => -1.0
   }
+  match mo.recs.get(k) {
+    Some(r) => [r.ox, r.oy, r.ef, r.em].each(at)
+    None => ()
+  }
+  for gh in mo.ghosts {
+    if gh.key == k {
+      at(gh.pf)
+      at(gh.pm)
+    }
+  }
+  e
 }
 
 // ── a list's rows by key ────────────────────────────────────────────────
@@ -511,6 +522,7 @@ pub fn list_keys(
     None => {
       let l = {
         keys: ks,
+        names: keys,
         changed_at: -1.0e9,
         close_until: -1.0e9,
         arrived: {},
@@ -527,7 +539,9 @@ pub fn list_keys(
     return id
   }
   let before = lm.keys
+  let before_names = lm.names
   lm.keys = ks
+  lm.names = keys
   // nothing to move from: only where they are is kept
   if before.is_empty() || c.still() {
     return id
@@ -571,7 +585,7 @@ pub fn list_keys(
   }
   // the rows gone that showed leave by a copy of them
   let mut gone = false
-  for k in before {
+  for i, k in before {
     if fresh.contains(k) {
       continue
     }
@@ -585,9 +599,11 @@ pub fn list_keys(
           Some(t) => {
             let pf = Anim::new(0.0)
             let pm = Anim::new(0.0)
+            pf.name = before_names[i] + " leaving"
+            pm.name = pf.name
             pf.animate(1.0, t.fade_spec)
             pm.animate(1.0, t.spec)
-            mo.ghosts.push({ list: id, drawing: r.drawing.copy(), trans: t, pf, pm })
+            mo.ghosts.push({ list: id, key: k, drawing: r.drawing.copy(), trans: t, pf, pm })
           }
           None => ()
         }

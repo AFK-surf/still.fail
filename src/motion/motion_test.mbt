@@ -655,3 +655,41 @@ test "an Anim's start is its first frame's, whoever asks its end before or betwe
   asked.run_for(e - asked.time())
   asked.assert_idle()
 }
+
+///|
+test "layout_rest: a list's row gone, when its copy has left; its copy said to move by its key" {
+  let keys = Ref::new(["a", "b", "c"])
+  let t = @ui.Tester::new(
+    fn(c) {
+      let ks = keys.val
+      @motion.list_keys(c, "rows", ks.map(fn(k) { "row/" + k })) |> ignore
+      c.list("rows", ks.length(), 40.0, fn(i) {
+        let k = ks[i]
+        let n = c.box(w=Fill(1.0), h=Px(40.0), bg=0x202020FFL, id=c.id("row/" + k), fn() {
+          c.text(k) |> ignore
+        })
+        @motion.layout(c, n, "row/" + k, exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)))
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=400.0,
+  )
+  assert_eq(@motion.layout_rest("row/b"), -1.0)
+  keys.val = ["a", "c"]
+  t.draw()
+  // its copy's way said as it sets out: the same whenever asked, and as its two Anims say it
+  let end = @motion.layout_rest("row/b")
+  assert_true(end > t.time() && end < @double.infinity, msg="\{end} at \{t.time()}")
+  assert_eq(t.rest_of("row/b leaving"), end)
+  assert_true(t.moving().iter().any(fn(m) { m.contains("Anim \"row/b leaving\"") }), msg=t.moving().join("; "))
+  // half way
+  t.run_for(((end - t.time()) / 2.0).floor())
+  assert_eq(@motion.layout_rest("row/b"), end)
+  // (its copy drawn beside the two rows)
+  let leaving = t.instances()
+  // run to it: the copy gone, nothing of b left to wait for
+  t.run_for(end - t.time())
+  assert_eq(@motion.layout_rest("row/b"), -1.0)
+  assert_true(t.instances() < leaving, msg="\{t.instances()} \{leaving}")
+}
