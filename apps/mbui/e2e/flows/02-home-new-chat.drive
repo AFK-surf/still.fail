@@ -1,8 +1,0 @@
-# Home follows what happens elsewhere: alice's other device makes a chat, and its row comes in.
-timeout 90000
-until 端到端测试
-log do: peer create 另一台设备新建的对话 {T} post:新对话里的回复 {T}
-until 另一台设备新建的对话 {T}
-shot 1-new-row
-until =新对话里的回复 {T}
-shot 2-answered
