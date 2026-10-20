@@ -24,6 +24,9 @@ jobs:
           - { os: ubuntu-24.04, bin: moonbit-linux-x86_64.tar.gz, core: core-latest.tar.gz }
           - { os: macos-15, bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
           - { os: windows-latest, bin: moonbit-windows-x86_64.zip, core: core-latest.zip }
+          # (Mini1's own entry: a self-hosted runner's cache is not the same entry as macos-15's, its tar and
+          # compression another, so its jobs find none of macos-15's)
+          - { os: [self-hosted, mbui-render], bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
