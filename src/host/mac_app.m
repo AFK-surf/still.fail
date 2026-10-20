@@ -60,9 +60,12 @@ static BOOL in_app_frame;          // the app's frame is being built (what it as
 static BOOL script_wants;          // the script goes on (its next step)
 static int awaiting;               // what the app awaits from the host, as its last frame said
 static char awaited_what[2048];    // what it awaits, as its last frame said
+static int frame_rest;             // its last frame left nothing that ends to come (@ui's Ctx::at_rest)
+static char unrest_what[2048];     // else what kept it from it, as its last frame said
 static mb_outside_fn outside_cb;   // who is told as that is done (host_native.mbt's set_outside)
 static void pump_soon(void);
 static void script_next(void);
+static int settled_run(void);
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
@@ -648,13 +651,29 @@ static void run_script_step(int step) {
   } else if (strcmp(script, "shot") == 0) {
     // a stable run: the frame at a declared moment on its own clock (MBUI_SHOT_MS, 1000 by default: the frames 1/60 s
     // apart from 0, the clock still while the app awaits the host, above), as web/host.js's shot_at and Android's
-    // SHOT_AT; or at frame MBUI_SHOT_AT where a script says a frame. Not stable: at frame MBUI_SHOT_AT (30)
+    // SHOT_AT; MBUI_SHOT_MS=rest, the first frame that left nothing that ends to come (no motion short of its end, no
+    // wake owed, nothing of the app's runtime running: @ui's Ctx::at_rest; nothing posted that no frame took: post.h;
+    // a spinner turns on, at its clock's turn), a failure saying what kept it when none has by a minute on its clock;
+    // or at frame MBUI_SHOT_AT where a script says a frame. Not stable: at frame MBUI_SHOT_AT (30)
     static int at;
     static double at_ms = -1;
+    static int at_rest = -1;
     if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : settle ? -1 : 30;
-    if (at_ms < 0) at_ms = getenv("MBUI_SHOT_MS") ? atof(getenv("MBUI_SHOT_MS")) : 1000;
+    if (at_rest < 0) at_rest = getenv("MBUI_SHOT_MS") && strcmp(getenv("MBUI_SHOT_MS"), "rest") == 0;
+    if (at_ms < 0) at_ms = getenv("MBUI_SHOT_MS") && !at_rest ? atof(getenv("MBUI_SHOT_MS")) : 1000;
+    int rested = frame_rest && !mb_post_pending();
+    int never = strncmp(unrest_what, "never: ", 7) == 0;
+    if (settle && at <= 0 && at_rest && (never || (!rested && settle_clock >= 60000))) {
+      char why[2200];
+      if (never) snprintf(why, sizeof why, "at rest, but %s", unrest_what + 7);
+      else snprintf(why, sizeof why, "not at rest after 60 s on its clock: %s",
+                    frame_rest ? "a message posted that no frame took" : unrest_what);
+      fprintf(stdout, "SHOT FAIL: %s\n", why);
+      fprintf(stderr, "SHOT FAIL: %s\n", why);
+      exit(3);
+    }
     if (settle) {
-      if (at > 0 ? step >= at : settle_clock >= at_ms) {
+      if (at > 0 ? step >= at : at_rest ? rested : settle_clock >= at_ms) {
         fprintf(stderr, "SHOT %d %g\n", step, settle_clock);
         shot(getenv("MBUI_SHOT_NAME") ?: "main");
         exit(0);
@@ -735,7 +754,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   mb_cb = (mb_callbacks){frame, pointer, wheel, key, text};
   shot_path = getenv("MBUI_SHOT_DIR");
   script = getenv("MBUI_SCRIPT");
-  settle = script && !getenv("MBUI_RECORD") && getenv("MBUI_BENCH") && atoi(getenv("MBUI_BENCH")) < 0;
+  settle = settled_run();
   record_dir = getenv("MBUI_RECORD");
   if (getenv("MBUI_RECORD_FROM")) record_from = atoi(getenv("MBUI_RECORD_FROM"));
   if (getenv("MBUI_RECORD_FRAMES")) record_frames = atoi(getenv("MBUI_RECORD_FRAMES"));
@@ -822,8 +841,10 @@ int32_t mb_host_set_outside(mb_outside_fn f) {
   return 1;
 }
 
-void mb_host_frame_awaiting(int32_t n, moonbit_string_t what) {
+void mb_host_frame_awaiting(int32_t n, moonbit_string_t what, moonbit_string_t unrest) {
   awaiting = n;
+  frame_rest = Moonbit_array_length(unrest) == 0;
+  snprintf(unrest_what, sizeof unrest_what, "%s", mb_ns_from_string(unrest).UTF8String ?: "");
   snprintf(awaited_what, sizeof awaited_what, "%s", mb_ns_from_string(what).UTF8String ?: "");
 }
 
@@ -892,6 +913,15 @@ int32_t mb_host_open_url(moonbit_string_t s) {
   if (getenv("MBUI_SCRIPT") || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64")) return 1;
   return [NSWorkspace.sharedWorkspace openURL:url] ? 1 : 0;
 }
+
+// Whether the run is settled (above): a script's, in stable mode, not a recording's. From the environment, as it is
+// the same before the window runs (what the app starts before @ui.run asks it: own_clock) and after.
+static int settled_run(void) {
+  return getenv("MBUI_SCRIPT") && !getenv("MBUI_RECORD") && getenv("MBUI_BENCH") && atoi(getenv("MBUI_BENCH")) < 0;
+}
+
+// Whether the run is on its own clock (host_native.mbt's own_clock): a settled run's, asked before the window runs too.
+int32_t mb_host_own_clock(void) { return settled_run(); }
 
 int32_t mb_host_reduce_motion(void) {
   return NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion ? 1 : 0;

@@ -8,6 +8,8 @@
 //                                              stopped: its last words are not the next one's)
 //   mb_host_post_take / _next / _json / _bytes the frame's: all that is posted taken as it begins (host_native.mbt
 //                                              post_take), then handed on one at a time
+//   mb_post_pending()                          whether something is posted that no frame has taken (a run to its
+//                                              rest is not at it while one is)
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -96,6 +98,13 @@ void mb_post_drop(const char *channel) {
   post_tail = last;
   post_taken = post_drop_from(post_taken, channel, clen, &last);
   POST_UNLOCK();
+}
+
+static inline int mb_post_pending(void) {
+  POST_LOCK();
+  int n = post_head != NULL;
+  POST_UNLOCK();
+  return n;
 }
 
 int32_t mb_host_post_take(void) {

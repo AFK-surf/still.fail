@@ -177,7 +177,7 @@ case "${1:-build}" in
     if [ -n "${2:-}" ]; then
       $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity --es script "$2" ${ENV:+--es env "'$ENV'"} >/dev/null
     else
-      $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${SHOT_AT:+--ei shot_at $SHOT_AT} ${ENV:+--es env "'$ENV'"} >/dev/null
+      $ADB -s $SERIAL shell am start -n $APP_ID/dev.mbui.MainActivity ${BENCH:+--ei bench $BENCH} ${SHOT_AT:+$([ "$SHOT_AT" = rest ] && echo --es || echo --ei) shot_at $SHOT_AT} ${ENV:+--es env "'$ENV'"} >/dev/null
     fi
     ;;
   fling-test)

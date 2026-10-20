@@ -57,11 +57,15 @@
 //                               its words "ok" (or none): done; else what went wrong, and the run fails saying it.
 //                               Where the host watches no such directory (a Tester's, the web's, iOS's), it fails
 //                               at once
+//   rest                        the app at rest: a frame drawn since the step began left nothing that ends to come
+//                               (no motion short of its end, no wake owed, nothing awaited from outside or running:
+//                               Ctx::at_rest), within the timeout; what a run's end waits for of the app's own, in
+//                               place of a pause as long as one run's end took
 //   now STEP                    STEP (as written before steps waited for nothing: kept, the same as STEP)
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
 // frame just drawn has them, once they hold still from one frame to the next. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready, done), within the timeout. The run asks for no frame of its
+// for by name (until, gone, answered, decoded, ready, done, rest), within the timeout. The run asks for no frame of its
 // own: what it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake at that time.
 // `wait` stays a pause in real time, for what is outside the app (a command beside the run, the other device, the
 // station) that no `until` can see, and that the runner does not say it has done (`done`).
@@ -680,6 +684,21 @@ fn drive_steps(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not so after \{d.timeout.to_int()} ms")
+          return
+        } else {
+          return
+        }
+      }
+      "rest" => {
+        // (a frame drawn since it began: what the step before set off is in it)
+        if d.seen_frame < 0 {
+          d.seen_frame = c.frame_no
+        }
+        if c.frame_no > d.seen_frame && c.frame_rest {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+        } else if waited > d.timeout {
+          drive_fail(c, d, "not at rest after \{d.timeout.to_int()} ms: \{c.rest_why()}")
           return
         } else {
           return

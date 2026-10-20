@@ -545,6 +545,8 @@ int32_t mb_host_open_url(moonbit_string_t s) {
   return 1;
 }
 
+// Whether the run is on its own clock (host_native.mbt's own_clock): no run here is yet.
+int32_t mb_host_own_clock(void) { return 0; }
 int32_t mb_host_reduce_motion(void) { return UIAccessibilityIsReduceMotionEnabled() ? 1 : 0; }
 
 // What the host did for the app, told as it is done (apple.h's mb_host_outside: images, native views).
@@ -555,9 +557,10 @@ int32_t mb_host_set_outside(mb_outside_fn f) {
 }
 // How many of the app's asks are not answered yet, as the frame just built left it (host_native.mbt's
 // frame_awaiting): nothing here waits on it yet.
-void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
+void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what, moonbit_string_t unrest) {
   (void)awaiting;
   (void)what;
+  (void)unrest;
 }
 void mb_host_outside(int32_t kind, int32_t id, int32_t state) {
   if (outside_cb) outside_cb(kind, id, state);

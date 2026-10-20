@@ -147,6 +147,54 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
 }
 
 ///|
+/// Whether the frame being ended leaves nothing that ends to come, asked as it ends (on_frame, before what moves on
+/// asks for the next frame): no frame asked for, no motion said that is not at rest, no wake owed, nothing of the
+/// runtime running (a fiber ready or waiting for a frame, what is awaited from outside: the host's work, the core's
+/// answers as the app tracks them, a timer said once). What never ends while shown (Ctx::cycle) or comes again
+/// (Ctx::every) does not count: what it shows at that moment is its clock's. What a host has had posted and no frame
+/// has taken yet (post.h) is the host's to count. Where a run to its rest takes its picture (a host's `rest` shot:
+/// mac_app.m MBUI_SHOT_MS=rest, web/host.js shot_at=rest, MBView's), each moment of it a declared one.
+fn Ctx::at_rest(self : Ctx) -> Bool {
+  self.frame_by is None &&
+  !self.motion_left &&
+  !self.wants_frame &&
+  self.wake_waited < 0.0 &&
+  fx.val.unsettled() == ""
+}
+
+///|
+/// What keeps the frame being ended from its rest (Ctx::at_rest), in words, for a run to its rest that never comes
+/// to it ("SHOT FAIL"): "" when nothing does.
+fn Ctx::rest_why(self : Ctx) -> String {
+  let why = []
+  if self.frame_by is Some(_) {
+    why.push("a frame asked for" + by_of(self.frame_by))
+  } else if self.wants_frame {
+    why.push(
+      "a frame asked for" +
+      (if self.took_input {
+        " (an input's frame after)"
+      } else if self.read_back_moved {
+        " (what the view reads still changed: \{self.read_back_key})"
+      } else {
+        ""
+      }),
+    )
+  }
+  if self.motion_left {
+    why.push("a motion said is not at rest: " + self.moving_now().join("; "))
+  }
+  if self.wake_waited >= 0.0 {
+    why.push("a wake in \{(self.wake_waited - self.now).ceil().to_int()} ms" + by_of(self.wake_by))
+  }
+  let rt = fx.val.unsettled()
+  if rt != "" {
+    why.push(rt)
+  }
+  why.join("; ")
+}
+
+///|
 /// What comes again every so often while shown in the last frame (Ctx::every): its period and who reads it, a line each.
 pub fn Tester::periodic(self : Tester) -> Array[String] {
   ignore(self)
@@ -245,15 +293,21 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
 }
 
 ///|
-/// The next timer the app is waiting on (a wake said once: Ctx::wake_in, @kit.after), when it comes and who said it;
-/// None while none is. Not what comes again by itself (Ctx::every: Tester::periodic). What a run's end goes on to, as it
-/// goes on to a motion's declared end (Tester::rest_of).
+/// The next timer the app is waiting on (a wake said once: Ctx::wake_in, @kit.after; or its runtime's: a fiber's
+/// sleep, Runtime::after, a core's timer as its client says it), when it comes and who said it; None while none is.
+/// Not what comes again by itself (Ctx::every: Tester::periodic; a runtime's `later`). What a run's end goes on to, as
+/// it goes on to a motion's declared end (Tester::rest_of).
 pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
   ignore(self)
   let c = g()
-  if c.wake_waited < 0.0 {
-    None
-  } else {
-    Some((c.wake_waited, by_of(c.wake_by)))
+  let ui = if c.wake_waited < 0.0 { None } else { Some((c.wake_waited, by_of(c.wake_by))) }
+  let rt = match fx.val.next_due() {
+    Some((at, who)) => Some((at.to_double(), " (the runtime's: " + (if who == "" { "a timer" } else { who }) + ")"))
+    None => None
+  }
+  match (ui, rt) {
+    (Some(a), Some(b)) => if b.0 < a.0 { Some(b) } else { Some(a) }
+    (Some(a), None) => Some(a)
+    (None, b) => b
   }
 }

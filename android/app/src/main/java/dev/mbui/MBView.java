@@ -7,6 +7,7 @@ import android.text.InputType;
 import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.ViewTreeObserver;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -71,6 +72,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     // MS; that frame drawn, no other ("SHOT n t" on the log: adb's screencap takes it), and a frame the system asks
     // for after it drawn at the same moment. The clock stands still while the app awaits the host (an image decoding:
     // what its last frame said), so the picture is of the app at MS on its own clock, however fast the machine is.
+    // shot_at=rest (Host.shotRest): at the first frame that left nothing that ends to come (@ui's Ctx::at_rest), a
+    // failure ("SHOT FAIL") when none has by a minute on its clock.
     private double shotClock;
     private int shotFrames;
     private volatile boolean shotTaken;
@@ -85,13 +88,37 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             // the clock stands still; the host's answer asks for the next frame
             return;
         }
-        if (t >= Host.shotAt) {
+        if (Host.shotRest && !Native.atRest() && (t >= 60000 || Native.restWhy().startsWith("never: "))) {
+            shotTaken = true;
+            String why = Native.restWhy();
+            Host.log("SHOT FAIL: " + (why.startsWith("never: ") ? "at rest, but " + why.substring(7)
+                    : "not at rest after 60 s on its clock: " + why));
+            return;
+        }
+        if (Host.shotRest ? Native.atRest() : t >= Host.shotAt) {
             shotTaken = true;
             // said once it is on the screen: swapped as this returns, taken by the compositor at the next vsync,
             // shown by the one after
             final String said = "SHOT " + shotFrames + " " + t;
-            Host.main.post(() -> Choreographer.getInstance().postFrameCallback(a ->
-                    Choreographer.getInstance().postFrameCallback(b -> Host.log(said))));
+            // (and not before the window is the one shown: the system's starting window, its splash, is over the
+            // app's until the app's has drawn and taken the focus, a picture as early as the first frame would be of
+            // the splash)
+            Runnable say = () -> Choreographer.getInstance().postFrameCallback(a ->
+                    Choreographer.getInstance().postFrameCallback(b -> Host.log(said)));
+            Host.main.post(() -> {
+                if (hasWindowFocus()) {
+                    say.run();
+                    return;
+                }
+                getViewTreeObserver().addOnWindowFocusChangeListener(new ViewTreeObserver.OnWindowFocusChangeListener() {
+                    @Override
+                    public void onWindowFocusChanged(boolean focused) {
+                        if (!focused) return;
+                        getViewTreeObserver().removeOnWindowFocusChangeListener(this);
+                        say.run();
+                    }
+                });
+            });
             return;
         }
         shotClock = shotFrames * (1000.0 / 60.0);

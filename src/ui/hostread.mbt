@@ -11,6 +11,18 @@ pub fn now() -> Double {
 }
 
 ///|
+/// Whether the run is on a clock of its own, not the machine's: its frames', still while the app awaits the host (a
+/// picture's run: mac_app.m's settle, MBView's and web/host.js's shot_at; a Tester's). What runs beside the app on a
+/// clock of its own (a core's timers) goes on the app's clock there, its timers the runtime's (Runtime::after: seen by
+/// Tester::next_wake and Ctx::at_rest); elsewhere on the machine's.
+pub fn own_clock() -> Bool {
+  match fake.val {
+    Some(_) => true
+    None => @host.own_clock()
+  }
+}
+
+///|
 /// A frame again `ms` from now (Ctx::wake_in inside a view).
 pub fn wake_after(ms : Double) -> Unit {
   h_wake_after(ms)

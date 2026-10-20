@@ -27,7 +27,13 @@
   // its frame and time, "SHOT n t" on the log). The clock stands still while the app awaits the host (an image
   // decoding: what its last frame said), so the picture is of the app at MS on its own clock, however fast the
   // machine is. The app's timers and its reads of the clock are on that clock too.
-  const shotAt = params.has('shot_at') ? Number(params.get('shot_at')) : -1;
+  // shot_at=rest: at the first frame that left nothing that ends to come (no motion short of its end, no wake owed,
+  // nothing of the app's runtime running: @ui's Ctx::at_rest; nothing posted that no frame took; a spinner turns on, at
+  // its clock's turn), a failure saying what kept it (window.__shot.fail, "SHOT FAIL") when none has by a minute on
+  // its clock.
+  const shotRest = params.get('shot_at') === 'rest';
+  const shotAt = shotRest ? 0 : params.has('shot_at') ? Number(params.get('shot_at')) : -1;
+  let unrest = '-';
   let clock = 0;
   let frames = 0, inFrame = false;
   function tick() {
@@ -40,7 +46,15 @@
     frames++;
     if (shotAt < 0) return;
     if (awaiting > 0) return;  // the clock stands still; the host's answer asks for the next frame
-    if (t >= shotAt) {
+    const rested = unrest === '' && posted.length === 0;
+    if (shotRest && !rested && (t >= 60000 || unrest.startsWith('never: '))) {
+      const fail = unrest.startsWith('never: ') ? 'at rest, but ' + unrest.slice(7)
+        : 'not at rest after 60 s on its clock: ' + (unrest || 'a message posted that no frame took');
+      window.__shot = { frame: frames, t, fail };
+      H.log('SHOT FAIL: ' + fail);
+      return;
+    }
+    if (shotRest ? rested : t >= shotAt) {
       window.__shot = { frame: frames, t };
       H.log(`SHOT ${frames} ${t}`);
       return;
@@ -57,6 +71,7 @@
   // (a run to a declared moment draws every frame to it: its timers are on its clock, due at the frame they fall in)
   H.wakeAfter = (ms) => { if (shotAt < 0) setTimeout(H.requestFrame, ms); };
   H.now = () => (shotAt >= 0 ? clock : performance.now());
+  H.ownClock = () => shotAt >= 0;
   // the time of day (@host.wall_ms): a run to a declared moment's from a fixed day (@ui.tester_wall's), on with its
   // clock, so what it shows of it is the same each run
   H.wallMs = () => (shotAt >= 0 ? 1790000000000 + clock : Date.now());
@@ -96,7 +111,7 @@
   let outside = null, awaiting = 0, why = '';
   const told = new Set();
   H.setOutside = (f) => { outside = f; return true; };
-  H.frameAwaiting = (n, what) => { awaiting = n; why = what; };
+  H.frameAwaiting = (n, what, u) => { awaiting = n; why = what; unrest = u; };
   function tell(kind, id, state) {
     if (!outside) return;
     if (state !== 0) {

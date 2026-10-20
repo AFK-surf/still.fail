@@ -97,6 +97,20 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if c.read_back_moved {
     c.wants_frame = true
   }
+  // nothing that ends left to come (a run to its rest takes its picture at the first such frame); what keeps it from
+  // it said only in a run of its own clock (bench mode -1: a picture's), where a run that never comes to it says why;
+  // at rest with a native view shown that moves on its own (a video playing), "never: " and which: its picture would
+  // be of the host's clock, not the run's, and the run fails at once
+  c.frame_rest = c.at_rest()
+  let unrest = if c.frame_rest && c.views_moving.is_empty() {
+    ""
+  } else if !(bench.mode < 0 && outside_told.val) {
+    "-"
+  } else if c.frame_rest {
+    "never: a native view moving on its own: " + c.views_moving.join(", ")
+  } else {
+    c.rest_why()
+  }
   let held = bench.held
   bench.held = false
   if c.wants_frame || bench.mode > 0 || held {
@@ -110,11 +124,12 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     h_wake_after(dmax(c.wake_at - t, 1.0))
   }
   // what is still awaited from the host (an image decoding, a view loading): a run to a declared moment keeps its
-  // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is
+  // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is;
+  // and whether the frame left nothing that ends to come (Ctx::at_rest: a run to its rest is pictured there)
   if outside_told.val {
     let rt = runtime()
     let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
-    @host.frame_awaiting(rt.awaiting(), what)
+    @host.frame_awaiting(rt.awaiting(), what, unrest)
   }
 }
 

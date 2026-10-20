@@ -524,6 +524,7 @@ fn views_frame_start() -> Unit {
 fn Ctx::sync_views(self : Ctx) -> Unit {
   native_nodes.clear()
   picture_at.clear()
+  self.views_moving.clear()
   if open_views.length() == 0 {
     return
   }
@@ -577,6 +578,12 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       // a player playing moves on its own as the clock goes: its time shown as it plays, a cycle while it does (not
       // while it waits for what it needs: the host's event comes as it goes on)
       ignore(self.cycle(0.0))
+    }
+    // shown and moving on its own, by the host's clock, not the frames': no picture of a run to its rest is of it
+    if shown && v.playing() && !v.buffering() {
+      self.views_moving.push("view \{v.id} playing")
+    } else if shown && v.loading {
+      self.views_moving.push("view \{v.id} loading its page")
     }
     match v.serve {
       Some(serve) => v.take_site(serve)

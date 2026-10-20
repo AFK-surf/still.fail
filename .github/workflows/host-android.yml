@@ -27,6 +27,8 @@ on:
       - "test/marks/**"
       - "goldens/marks/android*"
       - "src/host/moon.pkg"
+      - "src/host/post.h"
+      - "src/ui/app.mbt"
   push:
     branches: [main]
     paths: *paths
@@ -111,7 +113,7 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           # (each when a pull request's files touch it: HOST, MARKS as the filter said; everything else, all)
-          script: if [ "$HOST" != false ]; then bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text && bash scripts/host_contract.sh android views && bash scripts/host_contract.sh android runner; fi; h=$?; m=0; if [ "$MARKS" != false ]; then bash scripts/host_contract.sh android marks || m=1; fi; [ $h = 0 ] && [ $m = 0 ]
+          script: if [ "$HOST" != false ]; then bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text && bash scripts/host_contract.sh android views && bash scripts/host_contract.sh android runner && bash scripts/host_contract.sh android rest; fi; h=$?; m=0; if [ "$MARKS" != false ]; then bash scripts/host_contract.sh android marks || m=1; fi; [ $h = 0 ] && [ $m = 0 ]
       - uses: actions/upload-artifact@v4
         if: always()
         with:

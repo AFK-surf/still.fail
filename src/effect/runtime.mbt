@@ -453,8 +453,14 @@ fn Runtime::add_timer(
 /// Calls `f` (sync code: a simulated host, a delivery) `ms` from now on the
 /// runtime's clock. `later`: a change some time later that what is shown does not wait for to be settled (a
 /// refresh); by default it does.
-pub fn Runtime::after(self : Runtime, ms : Int, f : () -> Unit, later? : Bool = false) -> Unit {
-  ignore(self.add_timer(self.now() + ms.to_int64(), f, later~))
+pub fn Runtime::after(
+  self : Runtime,
+  ms : Int,
+  f : () -> Unit,
+  later? : Bool = false,
+  who? : String = "",
+) -> Unit {
+  ignore(self.add_timer(self.now() + ms.to_int64(), f, later~, who~))
 }
 
 ///|
@@ -533,6 +539,21 @@ pub fn Runtime::run_ready(self : Runtime) -> Int {
     }
   }
   n
+}
+
+///|
+/// The next timer said once (not `later`: what is shown waits for it) that is due, when and who said it, if one is.
+pub fn Runtime::next_due(self : Runtime) -> (Int64, String)? {
+  let mut best : (Int64, String)? = None
+  for t in self.timers.items {
+    if t.live && !t.later {
+      match best {
+        Some((at, _)) if at <= t.at => ()
+        _ => best = Some((t.at, t.who))
+      }
+    }
+  }
+  best
 }
 
 ///|
