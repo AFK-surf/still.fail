@@ -289,3 +289,82 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   }
   sb.to_string()
 }
+
+///|
+/// Whether two draw lists are the same screen, across machines: line by line and word by word (split on blanks), the
+/// same words, but on the lines of numbers (window, clear, an instance's i) two numbers may be a share of 1e-9 of the
+/// larger apart (of 1 under 1); a glyph's, an image's and bytes' lines word for word: what a
+/// machine's last bits make of a sum or a sine (an arc's points on an arm64 Mac and on an x64 Linux), not what is
+/// drawn. What a list is compared with a reference kept in a file by (a snapshot another machine wrote); on one
+/// machine a list is the same to the byte, and compared as it is.
+pub fn drawlist_same(a : String, b : String) -> Bool {
+  drawlist_first_unlike(a, b) is None
+}
+
+///|
+/// The first line (from 1) where `a` and `b` are not the same (`drawlist_same`), with both of its texts ("" past the
+/// end of a list); None when they are.
+pub fn drawlist_first_unlike(a : String, b : String) -> (Int, String, String)? {
+  let la = a.split("\n").to_array()
+  let lb = b.split("\n").to_array()
+  let n = if la.length() > lb.length() { la.length() } else { lb.length() }
+  for i in 0..<n {
+    let x = la.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
+    let y = lb.get(i).map(fn(v) { v.to_string() }).unwrap_or("")
+    if i >= la.length() || i >= lb.length() || !dl_line_same(x, y) {
+      return Some((i + 1, x, y))
+    }
+  }
+  None
+}
+
+///|
+fn dl_line_same(x : String, y : String) -> Bool {
+  if x == y {
+    return true
+  }
+  let wx = x.split(" ").filter(fn(w) { w != "" }).to_array()
+  let wy = y.split(" ").filter(fn(w) { w != "" }).to_array()
+  if wx.length() != wy.length() {
+    return false
+  }
+  // (only the lines of numbers: a glyph's or an image's words, and bytes' base64, word for word)
+  match wx.get(0).map(fn(w) { w.to_string() }) {
+    Some("window") | Some("clear") | Some("i") => ()
+    _ => return false
+  }
+  for k in 0..<wx.length() {
+    let p = wx[k].to_string()
+    let q = wy[k].to_string()
+    if p == q {
+      continue
+    }
+    match (dl_number(p), dl_number(q)) {
+      (Some(u), Some(v)) => {
+        let most = dmax(1.0, dmax(u.abs(), v.abs()))
+        if (u - v).abs() > 1.0e-9 * most {
+          return false
+        }
+      }
+      _ => return false
+    }
+  }
+  true
+}
+
+///|
+/// A word of a draw list as the number it is (as dl_num writes them), None when it is not one.
+fn dl_number(w : String) -> Double? {
+  if w == "" {
+    return None
+  }
+  for ch in w {
+    if !((ch >= '0' && ch <= '9') || ch == '-' || ch == '+' || ch == '.' || ch == 'e' || ch == 'E') {
+      return None
+    }
+  }
+  match (try Some(@json.parse(w)) catch { _ => None }) {
+    Some(Number(d, ..)) => Some(d)
+    _ => None
+  }
+}
