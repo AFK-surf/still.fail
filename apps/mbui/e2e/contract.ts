@@ -57,10 +57,16 @@ const TIME_KEYS = /^(at|ts|w|set|changed|mtime|ago|full|until|when|since|time|ti
 /// Keys whose values are the machine's own (left out).
 const MACHINE_KEYS = /^(host|hostname|cpuModel|arch|os|version|latest|relay_url|origin|freeBytes|totalBytes|usedBytes|swapUsedBytes|emberRssBytes|load|cpuBusy|uptimeSec|runtimeSessionId|processText|processesText|code|device|clientKey|identity|loginCommand|machineLogins)$/;
 /// Places whose values are the machine's, by their path: where the station's parts are installed.
-const MACHINE_PATHS = [/\.overview\.updates\[\d+\]\.note$/];
-/// Places whose values are the run's timing, by topic and path: whether the mesh has met a station yet (its row's
-/// words, "正在连接" until then).
-const TIMING_PATHS: Record<string, RegExp[]> = { stations: [/^\[\d+\]\.(summary|line)$/] };
+const MACHINE_PATHS = [
+  /\.overview\.updates\[\d+\]\.note$/,
+  // how the station's machine searches files (Spotlight on a Mac, a walk elsewhere)
+  /\.overview\.search\.files$/,
+  // a station's row's words (its machine: "空闲 · Apple M4 · 16 GB · macOS 26.5"), wherever a station is listed
+  /(^|\.station|\.stations\[\d+\]|^\[\d+\])\.(summary|line)$/,
+];
+/// Places whose values are the run's timing alone, by topic and path. (A station's row's words, "正在连接" until the
+/// mesh met it, are the machine's: MACHINE_PATHS.)
+const TIMING_PATHS: Record<string, RegExp[]> = {};
 /// Ids made anew each run, found in words: learned from the live answers, put in the tape's asks.
 const TOKENS: [string, RegExp][] = [
   ["key", /\b[0-9a-f]{64}\b/g],
