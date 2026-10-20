@@ -26,7 +26,8 @@
         _build), a file only written when its content changed, so that moon, which goes by mtimes, builds anew only
         what changed (scripts/win.sh: the copies of the modules it makes afresh each build). Gone from STAGE: gone.
 
-moonbit_init (every global's initial value, tens of thousands of lines, run once) is a unit of its own, compiled with
+moonbit_init (every global's initial value, tens of thousands of lines, run once) is units of its own (with group
+stable, one for each package's pieces of it: an mbui bumped compiles mbui's again, not the app's), compiled with
 --init-flags (MBC_INIT_FLAGS) after the others' flags: by default -O0 (/Od), as optimising it is most of the time
 the whole program takes to compile at any level (still.fail's: clang -O1 9 s, -O0 2 s, the other units 3 s each;
 MSVC, moonbitlang/moon#2254: cl /O2 takes minutes). It runs once, at the start; its frame at -O0 is some 43 KB.
@@ -436,6 +437,11 @@ def run_jobs(jobs, j, label):
     return [x.obj for x in jobs if x.ok]
 
 
+def is_init(unit):
+    """moonbit_init's units (scripts/csplit.py): init.c, and its packages' pieces, init.<package>.c"""
+    return unit == 'init.c' or unit.startswith('init.')
+
+
 def split_jobs(c_file, objdir, cc, flags, gen_flags, init_flags, units, msvc, lto=False):
     """Split c_file into objdir/src and the jobs compiling its units into objdir."""
     srcdir = os.path.join(objdir, 'src')
@@ -489,12 +495,12 @@ def split_jobs(c_file, objdir, cc, flags, gen_flags, init_flags, units, msvc, lt
         if not name.endswith('.c'):
             continue
         # the units but moonbit_init's as ThinLTO's bitcode (lto): the link inlines across them as the whole file did
-        f = flags + gen_flags + (init_flags if name == 'init.c' else lto_compile(msvc) if lto else [])
+        f = flags + gen_flags + (init_flags if is_init(name) else lto_compile(msvc) if lto else [])
         src = os.path.join(srcdir, name)
         obj = os.path.join(objdir, 'u_' + name[:-2] + ext)
         argv, dep = compile_args(cc, f, src, obj, msvc)
         # moonbit_init first: the slowest to compile at any level
-        weight = size * (4 if name == 'init.c' else 1)
+        weight = size * (4 if is_init(name) else 1)
         jobs.append(Job(src, obj, argv, depfile=dep, weight=weight, cc=cc))
     return jobs, manifest
 

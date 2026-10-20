@@ -276,6 +276,174 @@ class Split(unittest.TestCase):
         finally:
             csplit.content_hash = real
 
+    def test_init_pieces(self):
+        """moonbit_init in its packages' pieces: a global's temporaries and what lets them go with it, a local two
+        share keeping them one, blocks whole; package b changed, package a's unit the same."""
+        def init(n, b_value):
+            return textwrap.dedent(f'''\
+                void moonbit_init() {{
+                  moonbit_layout_table = moonbit_layout_table_data;
+                  int32_t _M0L6_2atmpS{n};
+                  int32_t _M0L6_2atmpS{n + 1};
+                  int32_t _M0L1iS{n + 2};
+                  struct _M0TP11a1T _M0L6_2atmpS{n + 3};
+                  _M0L6_2atmpS{n} = 7;
+                  _M0FP11a1x = _M0L6_2atmpS{n} + 1;
+                  moonbit_decref(_M0L6_2atmpS{n});
+                  _M0L6_2atmpS{n + 3} = (struct _M0TP11a1T){{
+                    .x = 1
+                  }};
+                  Moonbit_object_header(_M0FP11a1y)->meta = _M0L6_2atmpS{n + 3}.x;
+                  _M0L1iS{n + 2} = 0;
+                  while (1) {{
+                    if (_M0L1iS{n + 2} < 3) {{
+                      _M0FP11b1z[_M0L1iS{n + 2}] = {b_value};
+                    }} else {{
+                      break;
+                    }}
+                    _M0L1iS{n + 2} += 1;
+                  }}
+                  _M0FP11b1w = 0;
+                  do {{
+                    _M0FP11b1w += 1;
+                  }} while (_M0FP11b1w < 2);
+                  _M0L6_2atmpS{n + 1} = 5;
+                  _M0FP11a1v = _M0L6_2atmpS{n + 1};
+                  _M0FP11b1u = _M0L6_2atmpS{n + 1};
+                  _M0FP11c1t = 1;
+                }}
+                ''')
+        pieces = csplit.init_pieces(init(10, 4))
+        self.assertEqual([p for p, _, _ in pieces], ['a', 'b', 'a', 'c'])
+        a, b, ab, c = pieces
+        self.assertTrue(a[2].lstrip().startswith('moonbit_layout_table ='))
+        self.assertIn('moonbit_decref(_M0L6_2atmpS10)', a[2])  # (with the global its temporary was for)
+        self.assertIn('int32_t _M0L6_2atmpS10;', a[1])
+        self.assertIn('struct _M0TP11a1T _M0L6_2atmpS13;', a[1])
+        self.assertIn('_M0L1iS12 = 0;', b[2])  # (before the global it is for)
+        self.assertIn('} else {', b[2])
+        self.assertIn('} while (_M0FP11b1w < 2);', b[2])
+        self.assertIn('_M0FP11b1u =', ab[2])  # a local two packages' globals share: one piece, the first's
+        self.assertEqual(c[2].strip(), '_M0FP11c1t = 1;')
+        self.assertIsNone(csplit.init_pieces('void moonbit_init() {\n  if (x) {\n}\n'))
+
+        def prog(n, b_value):
+            return PRELUDE + '\n' + textwrap.dedent('''\
+                struct _M0TP11a1T;
+
+                struct _M0TP11a1T {
+                  int32_t x;
+                };
+
+                static uint32_t const moonbit_layout_table_data[1] = { 0 };
+
+                uint32_t const* moonbit_layout_table;
+
+                int32_t _M0FP11a1x;
+
+                int32_t _M0FP11a1v;
+
+                int32_t _M0FP11b1z[3];
+
+                int32_t _M0FP11b1w;
+
+                int32_t _M0FP11b1u;
+
+                int32_t _M0FP11c1t;
+
+                struct { uint32_t meta; } _M0FP11a1y_obj;
+
+                #define Moonbit_object_header(p) (&_M0FP11a1y_obj)
+                #define _M0FP11a1y 0
+                #define moonbit_decref(x) ((void)(x))
+
+                ''') + init(n, b_value) + textwrap.dedent('''\
+
+                int main(int argc, char** argv) {
+                  moonbit_init();
+                  printf("%d %d %d %d %d %d %u\\n", _M0FP11a1x, _M0FP11a1v, _M0FP11b1z[2], _M0FP11b1w, _M0FP11b1u,
+                         _M0FP11c1t, _M0FP11a1y_obj.meta);
+                  return 0;
+                }
+                ''')
+        one, m = csplit.split(prog(10, 4), 2, 'stable')
+        two, _ = csplit.split(prog(90, 6), 2, 'stable')
+        self.assertEqual(m['stats']['init_pieces'], 4)
+        inits = sorted(n for n in one if n.startswith('init.') and n != 'init.c')
+        self.assertEqual(inits, ['init.s0.c'])  # (small: together)
+        apart = {}
+        real = csplit.INIT_SMALL
+        csplit.INIT_SMALL = 0
+        try:
+            apart = [csplit.split(prog(10, 4), 2, 'stable')[0], csplit.split(prog(90, 6), 2, 'stable')[0]]
+        finally:
+            csplit.INIT_SMALL = real
+        self.assertEqual(sorted(n for n in apart[0] if n.startswith('init.') and n != 'init.c'), ['init.a.c', 'init.b.c', 'init.c.c'])
+        self.assertEqual(apart[0]['init.a.c'], apart[1]['init.a.c'])  # (its locals numbered apart from moonc's)
+        self.assertEqual(apart[0]['init.c.c'], apart[1]['init.c.c'])
+        self.assertNotEqual(apart[0]['init.b.c'], apart[1]['init.b.c'])
+        self.assertEqual(apart[0]['init.c'], apart[1]['init.c'])
+        if CC:
+            with tempfile.TemporaryDirectory() as t:
+                src = os.path.join(t, 'p.c')
+                with open(src, 'w') as f:
+                    f.write(prog(10, 4))
+                run([CC, src, '-o', os.path.join(t, 'whole')])
+                objs = run([sys.executable, os.path.join(HERE, 'mbc.py'), 'compile', '--cc', CC, '--obj',
+                            os.path.join(t, 'o'), src]).split()
+                run([CC] + objs + ['-o', os.path.join(t, 'split')])
+                self.assertEqual(run([os.path.join(t, 'whole')]), run([os.path.join(t, 'split')]))
+                self.assertEqual(run([os.path.join(t, 'split')]).strip(), '8 5 4 2 5 1 1')
+
+    def test_declared_only(self):
+        """A struct a unit only passes by pointer is declared there, not defined: its members changed, that unit is
+        the same; a function type is named by its definition, not by the name moonc gave it."""
+        def prog(members, fn_name):
+            return PRELUDE + '\n' + textwrap.dedent(f'''\
+                struct _M0TP11a3Big;
+
+                struct {fn_name};
+
+                struct _M0TP11a3Big {{
+                  MEMBERS
+                }};
+
+                struct {fn_name} {{
+                  int32_t(* code)(struct {fn_name}*, int32_t);
+                }};
+
+                int32_t _M0FP11a3get(struct _M0TP11a3Big*);
+
+                int32_t _M0FP11b4pass(struct _M0TP11a3Big*, struct {fn_name}*);
+
+                int32_t _M0FP11a3get(struct _M0TP11a3Big* _M0L1bS3) {{
+                  return _M0L1bS3->$0;
+                }}
+
+                int32_t _M0FP11b4pass(struct _M0TP11a3Big* _M0L1bS5, struct {fn_name}* _M0L1fS6) {{
+                  return _M0FP11a3get(_M0L1bS5) + _M0L1fS6->code(_M0L1fS6, 1);
+                }}
+
+                void moonbit_init() {{
+                }}
+
+                int main(int argc, char** argv) {{
+                  moonbit_init();
+                  return 0;
+                }}
+                ''').replace('MEMBERS', members)
+        one = csplit.split(prog('int32_t $0;', '_M0TWuEu'), 2, 'stable', unit_bytes=2)[0]
+        two = csplit.split(prog('int32_t $0;\n  int32_t $1;', '_M0TWiEu'), 2, 'stable', unit_bytes=2)[0]
+        unit = lambda files, p: next(t for n, t in files.items() if re.match(p + r'(_\d+)?\.c$', n))
+        a, b = unit(one, 'a'), unit(one, 'b')
+        self.assertIn('int32_t $0;', a)  # (a reaches a member: defined)
+        self.assertNotIn('int32_t $0;', b)  # (b passes it on: declared)
+        self.assertIn('struct _Mz0__M0TP0a0Big;', b)
+        self.assertIn('(* code)', b)  # (b calls through the function type: defined)
+        self.assertNotIn('TWuEu', b)
+        self.assertEqual(b, unit(two, 'b'))
+        self.assertNotEqual(a, unit(two, 'a'))
+
     def refuse(self, src, words):
         with self.assertRaises(csplit.SplitError) as e:
             csplit.split(src, 2)

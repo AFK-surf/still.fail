@@ -20,7 +20,10 @@ and `main`. The split:
              each unit in moonc's order (groups 'size' and 'package')
   <pkg>.c    with group 'stable' (scripts/mbc.py's default): moonc's made-up names made stable, a package's functions
              (or a piece of them, s<k>.c: small packages together), with the prelude and only the declarations and
-             externs they use, in moonc's order: see split_stable
+             externs they use (a struct they only pass by pointer declared, not defined: defined_needed), in
+             moonc's order: see split_stable; and moonbit_init in its packages' pieces
+             (init_pieces), each package's in init.<package>.c (small ones together, init.s<k>.c), init.c calling
+             them in order
 
 `static` on moonc's items (moonc 0.10.16 makes most functions static) becomes CSPLIT_INTERNAL (hidden visibility:
 not exported, still the link's to drop or inline), so that what one unit defines the others can call; the
@@ -566,7 +569,40 @@ def by_content(contents, prefix):
     return out
 
 
-def stable_names(names, data_text):
+FN_TYPE = re.compile(r'\b(_M0TW[A-Za-z0-9_$]*)\b')
+
+
+def fn_type_names(defs):
+    """{name: its stable name} for moonc's function types (struct _M0TW…: a closure's code pointer, the arguments
+    after it), by their definitions: moonc makes one struct of the function types that are the same in C ((Unit) ->
+    Unit and (Int) -> Unit both int32_t) and names it after the first it meets, so that a new one met earlier anywhere
+    in the program renamed it in every unit."""
+    keys = {}
+
+    def key(n, stack):
+        if n in keys:
+            return keys[n]
+        if n in stack:
+            return 'cycle'
+
+        def sub(m):
+            t = m.group(1)
+            return 'self' if t == n else key(t, stack | {n}) if t in defs else t
+        k = content_hash(FN_TYPE.sub(sub, defs[n]))
+        keys[n] = k
+        return k
+    for n in defs:
+        key(n, frozenset())
+    named = by_content([keys[n] for n in sorted(defs)], '_Mw')
+    out, seen = {}, {}
+    for n in sorted(defs, key=lambda n: (keys[n], n)):
+        w = named[keys[n]]
+        seen[w] = seen.get(w, 0) + 1
+        out[n] = w if seen[w] == 1 else f'{w}_x{seen[w]}'
+    return out
+
+
+def stable_names(names, data_text, fn_defs=None):
     """{name: its stable name} for moonc's globals `names` (in moonc's order): those whose names differ only in their
     numbers in one group, numbered in the order of their numbers; a string literal by its content."""
     groups = {}
@@ -583,6 +619,7 @@ def stable_names(names, data_text):
         for k, name in enumerate(members):
             out[name] = f'_Mz{k}_{flat}'
     # a string literal by its content (two the same, which moonc does not make: numbered apart, in its order)
+    out.update(fn_type_names({n: fn_defs[n] for n in fn_defs if n in out}) if fn_defs else {})
     named = by_content([c for _, c in literals], '_Ms')
     seen = {}
     for name, c in literals:
@@ -643,6 +680,163 @@ def flatten(text):
     return '\n'.join(out) + '\n'
 
 
+INIT_DECL = re.compile(r'\s*(?:const\s+)?(?:struct\s+|union\s+|enum\s+)?' + IDENT + r'(?:\s*\*\s*|\s+)(?:\*\s*)*('
+                       + IDENT + r')\s*;\s*$')
+# a package's pieces of moonbit_init under this many bytes: with the other small ones in a unit
+INIT_SMALL = 16 * 1024
+INIT_OWNER = re.compile(r'\s*(?:Moonbit_object_header\s*\(\s*)?(_M0F' + r'[A-Za-z0-9_$]*)')
+
+
+def init_pieces(text):
+    """moonbit_init (moonc's names) in pieces, each a run of it that is one package's: [(package, declarations,
+    statements)], in its order, or None when it is not as this expects. A statement setting a global (moonc's _M0F…,
+    or its object's header) is the global's package's, with what came before it since the one before (its
+    temporaries); the locals moonc declares at the start go to the piece that uses them, and pieces between two that
+    share a local are one. Each piece, its own function, is then the same text while its package's globals are."""
+    b = blank(text)
+    start = b.find('{')
+    end = b.rfind('}')
+    if start < 0 or end <= start:
+        return None
+    stmts = []
+    depth = paren = 0
+    s = start + 1
+    i = s
+    while i < end:
+        c = b[i]
+        if c in '([':
+            paren += 1
+        elif c in ')]':
+            paren -= 1
+        elif c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0 and paren == 0:
+                # (a block's end ends its statement, unless what follows goes on with it: else, a do's while, the ;
+                # of an initialiser)
+                j = i + 1
+                while j < end and b[j].isspace():
+                    j += 1
+                nxt = re.match(r'[A-Za-z_]+', b[j:j + 8])
+                go_on = b[j] in ';,)' or (nxt and (nxt.group() == 'else' or
+                                                   (nxt.group() == 'while' and b[s:i].lstrip().startswith('do'))))
+                if not go_on:
+                    stmts.append(text[s:i + 1])
+                    s = i + 1
+        elif c == ';' and depth == 0 and paren == 0:
+            stmts.append(text[s:i + 1])
+            s = i + 1
+        i += 1
+    if depth or paren or text[s:end].strip() or not stmts:
+        return None
+    # the locals moonc declares (no initial value), and the statements in runs by the package they set
+    floating = {}  # local: its declaration
+    runs = []  # [package, [statements], {locals}]
+    pending, pending_locals = [], set()
+    for st in stmts:
+        bst = blank(st)
+        m = INIT_DECL.match(bst)
+        if m and LOCAL.match(m.group(1)) and '=' not in bst:
+            floating[m.group(1)] = st
+            continue
+        loc = {n for n in idents(bst) if LOCAL.match(n)}
+        o = INIT_OWNER.match(bst)
+        if not o and not pending and runs and loc <= runs[-1][2]:
+            # (right after a global set, what lets its temporaries go or goes on with it: the global's too)
+            runs[-1][1].append(st)
+            continue
+        pending.append(st)
+        pending_locals |= loc
+        if o:
+            p = package_of(o.group(1))
+            if runs and runs[-1][0] == p:
+                runs[-1][1].extend(pending)
+                runs[-1][2] |= pending_locals
+            else:
+                runs.append([p, pending, pending_locals])
+            pending, pending_locals = [], set()
+    if pending:
+        if not runs:
+            runs.append(['', [], set()])
+        runs[-1][1].extend(pending)
+        runs[-1][2] |= pending_locals
+    # pieces sharing a local are one, and the pieces between them (the order kept)
+    last = {}
+    for k, r in enumerate(runs):
+        for n in r[2]:
+            last[n] = k
+    merged = []
+    k = 0
+    while k < len(runs):
+        p, sts, locs = runs[k][0], list(runs[k][1]), set(runs[k][2])
+        reach = max([last[n] for n in locs] + [k])
+        while k < reach:
+            k += 1
+            sts.extend(runs[k][1])
+            locs |= runs[k][2]
+            reach = max([last[n] for n in runs[k][2]] + [reach])
+        if merged and merged[-1][0] == p:
+            merged[-1][1].extend(sts)
+            merged[-1][2] |= locs
+        else:
+            merged.append([p, sts, locs])
+        k += 1
+    out = []
+    for p, sts, locs in merged:
+        decls = ''.join(floating[n].strip('\n') + '\n' for n in floating if n in locs)
+        out.append((p, decls, ''.join(sts)))
+    return out
+
+
+# a variable of a struct type or a pointer to one, where it is declared (a parameter, a local, an extern)
+DECL_VAR = re.compile(r'\b(?:struct|union)\s+(' + IDENT + r')\s*(\**)\s*(' + IDENT + r')\s*(?=[;,)=\[])')
+SIZEOF = re.compile(r'\bsizeof\s*\(\s*(?:struct|union)\s+(' + IDENT + r')\s*\)')
+VAR_USE = re.compile(r'(?<![A-Za-z0-9_$])([A-Za-z_$][A-Za-z0-9_$]*)(?![A-Za-z0-9_$])\s*(->|\[|\.)')
+CAST_ACCESS = re.compile(r'\(\s*\(\s*(?:struct|union)\s+(' + IDENT + r')\s*\*\s*\)\s*' + IDENT + r'\s*\)\s*->')
+HEADER_OF = re.compile(r'Moonbit_object_header\s*\([^()]*\)\s*->')
+
+
+ACCESS = re.compile(r'(?<![A-Za-z0-9_$])([A-Za-z_$][A-Za-z0-9_$]*)(?![A-Za-z0-9_$])((?:\s*(?:->|\.)\s*[A-Za-z_$][A-Za-z0-9_$]*(?![A-Za-z0-9_$]))+)')
+STEP = re.compile(r'(->|\.)\s*(' + IDENT + r')')
+
+
+def defined_needed(texts, globals_, fields=None):
+    """The struct types that functions' `texts` need defined, not only declared: by value (a local, a parameter, a
+    compound literal), sizeof, a member or an element through a variable declared as one or a pointer to one (moonc
+    reaches a member only through a variable); None when that cannot be told (a member through anything else).
+    `globals_`: {name: (type, pointers)} of the externs. A unit that holds a struct by pointer only then has its
+    declaration alone, and its members changed (mbui's Ctx: two more) do not change the unit."""
+    need = set()
+    for t in texts:
+        b = HEADER_OF.sub('', blank(t))
+        # (a member through a cast: ((struct X*)v)->$0, an enum's case's)
+        need |= set(CAST_ACCESS.findall(b))
+        if re.search(r'[)\]]\s*(->|\.)', CAST_ACCESS.sub('', b)):
+            return None
+        need |= set(SIZEOF.findall(b))
+        need |= {n for n in BY_VALUE.findall(b) if not re.match(r'\s*enum\b', n)}
+        local = {}
+        for m in DECL_VAR.finditer(b):
+            local[m.group(3)] = (m.group(1), len(m.group(2)))
+
+        def type_of(n):
+            return local.get(n) or globals_.get(n)
+        for m in VAR_USE.finditer(b):
+            v = type_of(m.group(1))
+            if v and (v[1] == 0 or (v[1] == 1 and m.group(2) in ('->', '['))):
+                need.add(v[0])
+        # (a member's member: through the struct's definition, the member's type)
+        for m in ACCESS.finditer(b):
+            v = type_of(m.group(1))
+            for op, member in STEP.findall(m.group(2)):
+                if not v or (op == '->') != (v[1] == 1):
+                    break
+                need.add(v[0])
+                v = (fields or {}).get(v[0], {}).get(member)
+    return need
+
+
 def unit_label(pkg):
     return re.sub(r'[^A-Za-z0-9]+', '_', pkg).strip('_') or 'main'
 
@@ -680,7 +874,12 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     for n in [f[0] for f in funcs] + list(data_text):
         if n in statics:
             add(n)
-    names = stable_names(own, data_text)
+    fn_defs = {}
+    for d in decls:
+        m = re.match(r'\s*struct\s+(_M0TW[A-Za-z0-9_$]*)\s*\{', blank(d))
+        if m:
+            fn_defs[m.group(1)] = d
+    names = stable_names(own, data_text, fn_defs)
     stats['renamed'] = len(names)
 
     # the declarations (and the externs) renamed, each with what it declares and what it uses
@@ -849,13 +1048,41 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
             key = (os.path.basename(m.group(1)) if m else new).encode('utf-8', 'surrogateescape')
             unit = unit_label(p) + (f'_{zlib.crc32(key) % k}' if k > 1 else '')
         fun.append((unit, t, used, new))
-    # (moonbit_init too: what it makes, the layouts its objects have, then the same each time it is)
-    init_text, init_used = rename(inits[0][1], names, file_ids, body_scan)
-    init_text, init_layouts = name_layouts(init_text)
-    init_used |= init_layouts
-    # (and without its #line's: every global's initialiser says where it is in its file, so a line added anywhere
-    # above one changed moonbit_init, the slowest unit to compile (15-30 s on macos-15); it runs once, at the start)
-    init_text = flatten(LINE_DIRECTIVE.sub('', init_text))
+    def init_part(text):
+        # (moonbit_init too: what it makes, the layouts its objects have, then the same each time it is)
+        t, used = rename(text, names, file_ids, body_scan)
+        t, lused = name_layouts(t)
+        # (and without its #line's: every global's initialiser says where it is in its file, so a line added anywhere
+        # above one changed moonbit_init, the slowest unit to compile (15-30 s on macos-15); it runs once, at the start)
+        return flatten(LINE_DIRECTIVE.sub('', t)), used | lused
+    # moonbit_init in its packages' pieces (init_pieces), each a function in its package's init unit (init.<package>.c;
+    # those under INIT_SMALL together, init.s<k>.c): a package changed compiles its own again, not every global's
+    # initialiser of the program; moonbit_init itself (init.c) calls them in order. MBC_INIT_SPLIT=0: one unit, as it was
+    pieces = init_pieces(inits[0][1]) if os.environ.get('MBC_INIT_SPLIT', '1') != '0' else None
+    init_units = {}  # unit: [[(name, text)], used]
+    init_calls = []
+    if pieces:
+        psize = {}
+        for p, d, body in pieces:
+            psize[p] = psize.get(p, 0) + len(d) + len(body)
+        small = [p for p, v in psize.items() if v < INIT_SMALL]
+        nsmall_i = 1
+        while nsmall_i * INIT_SMALL * 4 < sum(psize[p] for p in small):
+            nsmall_i *= 2
+        count = {}
+        for p, d, body in pieces:
+            label = unit_label(p)
+            k = count[label] = count.get(label, -1) + 1
+            fname = f'csplit_init_{label}_{k}x'
+            t, used = init_part(d + body)
+            unit = f'init.s{zlib.crc32(p.encode()) % nsmall_i}' if p in small else f'init.{label}'
+            u = init_units.setdefault(unit, [[], set()])
+            u[0].append((fname, f'CSPLIT_INTERNAL void {fname}(void) {{\n{t}}}\n'))
+            u[1] |= used
+            init_calls.append(fname)
+        stats['init_pieces'] = len(pieces)
+    else:
+        init_text, init_used = init_part(inits[0][1])
 
     units = {}
     for unit, t, used, new in fun:
@@ -870,8 +1097,25 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     for k in always_pp:
         pp_uses |= ditems[k][2]
 
-    def closure(used):
-        want_d, want_e = set(), set()
+    def closure(used, need=None):
+        # (need: the struct types to define, by defined_needed; None: every one used. With it, what they hold by
+        # value too, and the others declared only: struct X;)
+        if need is not None:
+            need = set(need)
+            for n in used:
+                for kind, k in by_name.get(n, ()):
+                    if kind == 'd' and kinds[k] == 'proto':
+                        need |= {t for t in BY_VALUE.findall(blank(ditems[k][0])) if t in struct_tags}
+            for n in used & typedef_names:
+                need |= typedef_of.get(n, set())
+            todo = list(need)
+            while todo:
+                for k in type_of.get(todo.pop(), ()):
+                    for j in needs[k]:
+                        for t in ditems[j][1] - need:
+                            need.add(t)
+                            todo.append(t)
+        want_d, want_e, declared = set(), set(), set()
         todo = list(used | pp_uses)
         seen = set()
         while todo:
@@ -881,13 +1125,25 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
             seen.add(n)
             for kind, k in by_name.get(n, ()):
                 if kind == 'd' and k not in want_d:
+                    if need is not None and k in struct_defs and not ditems[k][1] & need:
+                        declared |= ditems[k][1]
+                        continue
                     want_d.add(k)
                     todo.extend(ditems[k][2])
                 elif kind == 'e' and k not in want_e:
                     want_e.add(k)
                     todo.extend(eitems[k][2])
         want_d |= always_pp
-        return want_d, want_e
+        if need is not None:
+            # (a type defined holds by value what it holds by value, defined too: again with those)
+            held = {t for k in want_d if k in needs for j in needs[k] for t in ditems[j][1]}
+            # (and an extern's type, a struct written out (a closure's object), what it holds by value)
+            held |= {t for k in want_e for t in extern_by_value[k]}
+            held -= need
+            if held:
+                return closure(used, need | held)
+        fwd_made = sorted(n for n in declared if not any(kinds[k] == 'fwd' for _, k in by_name.get(n, ())))
+        return want_d, want_e, fwd_made
 
     # a unit's declarations in an order of their own, not moonc's (which moves its types about as the program
     # changes): the directives (in moonc's order: #define's FFI names before what they rename), the structs declared,
@@ -918,6 +1174,30 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
             held = set(BY_VALUE.findall(b))
             held |= {n for n in ditems[k][2] & typedef_names if re.search(r'\b' + re.escape(n) + r'\b(?!\s*\*)', b)}
             needs[k] = {j for n in held for j in type_of.get(n, ()) if j != k}
+
+    # (struct and union definitions, which a unit may have as a declaration alone; what a typedef names)
+    struct_defs = {k for k, kind in enumerate(kinds) if kind == 'type' and '{' in ditems[k][0]
+                   and re.match(r'\s*(?:struct|union)\b', blank(ditems[k][0]))}
+    struct_tags = {n for k in struct_defs for n in ditems[k][1]}
+    typedef_of = {}
+    for k, kind in enumerate(kinds):
+        if kind == 'type' and blank(ditems[k][0]).lstrip().startswith('typedef'):
+            for n in ditems[k][1]:
+                typedef_of[n] = ditems[k][2] & struct_tags
+    fields = {}
+    for k in struct_defs:
+        b = blank(ditems[k][0])
+        inner = b[b.find('{') + 1:b.rfind('}')]
+        f = {}
+        for m in DECL_VAR.finditer(inner):
+            f[m.group(3)] = (m.group(1), len(m.group(2)))
+        for n in ditems[k][1]:
+            fields[n] = f
+    extern_by_value = [{t for t in BY_VALUE.findall(blank(e)) if t in struct_tags} for e, _, _ in eitems]
+    globals_ = {}
+    for t, declares, _ in eitems:
+        for m in DECL_VAR.finditer(blank(t)):
+            globals_[m.group(3)] = (m.group(1), len(m.group(2)))
 
     def canonical(want):
         import heapq
@@ -962,18 +1242,29 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     }
     loads = []
 
-    def unit_text(used, body):
-        """A unit: the prelude, the declarations and externs `used` needs (in an order of their own), then `body`."""
-        want_d, want_e = closure(used)
+    def unit_text(used, body, texts=None):
+        """A unit: the prelude, the declarations and externs `used` needs (in an order of their own), then `body`;
+        with `texts` (its functions), the structs they need defined, the others declared only."""
+        need = defined_needed(texts, globals_, fields) if texts is not None and os.environ.get('MBC_DECLARE_ONLY', '1') != '0' \
+            else None
+        want_d, want_e, fwd_made = closure(used, need)
         d = ''.join(t if t.endswith('\n') else t + '\n' for t in canonical(want_d))
+        d = ''.join(f'struct {n};\n' for n in fwd_made) + d
         e = ''.join(t for t in sorted(eitems[k][0] for k in want_e))
         e += ''.join(f'extern CSPLIT_INTERNAL const uint32_t {n};\n' for n in sorted(used & layout_names))
         return head + INTERNAL + prelude + '\n' + d + e + '\n' + body + '\n'
     # moonbit_init too: with all of decls.h it was compiled again for any type changed anywhere (15-30 s on macos-15)
-    files['init.c'] = unit_text(init_used, init_text)
+    if pieces:
+        files['init.c'] = unit_text(set(), ''.join(f'CSPLIT_INTERNAL void {f}(void);\n' for f in init_calls)
+                                    + 'void moonbit_init() {\n' + ''.join(f'{f}();\n' for f in init_calls) + '}\n', [])
+        for unit in sorted(init_units):
+            texts, used = init_units[unit]
+            files[f'{unit}.c'] = unit_text(used, '\n'.join(t for _, t in texts), [t for _, t in texts])
+    else:
+        files['init.c'] = unit_text(init_used, init_text)
     for unit in sorted(units):
         texts, used = units[unit]
-        files[f'{unit}.c'] = unit_text(used, '\n'.join(t for _, t in sorted(texts)))
+        files[f'{unit}.c'] = unit_text(used, '\n'.join(t for _, t in sorted(texts)), [t for _, t in texts])
         loads.append(sum(len(t) for _, t in texts))
     accounted = len(data) + len(funcs) + (len(decls) - stats['pp'] - stats['prototypes_added'])
     if accounted != len(items) - stats['pp']:
@@ -987,7 +1278,7 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
         'unit_loads': loads,
         'largest_function': max((len(f[1]), f[0]) for f in rest)[1],
         # moonc's statics, global in the split: by their names and as renamed (scripts/mbc.py check)
-        'made_global': sorted(static_names | {names[n] for n in statics if n in names} | layout_names),
+        'made_global': sorted(static_names | {names[n] for n in statics if n in names} | layout_names | set(init_calls)),
     }
     return files, manifest
 
