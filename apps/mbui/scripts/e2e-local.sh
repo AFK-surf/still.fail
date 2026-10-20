@@ -91,7 +91,7 @@ native() { (cd $E && node scripts/native.ts file $1); }
 # cloud again, nothing made anew
 start_cloud() {
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
-    AUTH_KEY=$(cat $RUN/auth-key) ${1:+RESUME=1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
+    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
   wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
 }
 
