@@ -7,6 +7,8 @@ name: host-ios
 on:
   pull_request:
     paths: &paths
+      - "src/ui/native.mbt"
+      - "src/kitdemo/viewcheck.mbt"
       - "src/host/apple_*"
       - "src/host/apple.h"
       - "src/host/ios_app.m"
@@ -50,6 +52,8 @@ jobs:
         with:
           filters: |
             host:
+              - "src/ui/native.mbt"
+              - "src/kitdemo/viewcheck.mbt"
               - "src/host/apple_*"
               - "src/host/apple.h"
               - "src/host/ios_app.m"
@@ -97,6 +101,9 @@ jobs:
       - name: "The text's contract: ios_controls = Core Text's"
         if: steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh ios text
+      - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh ios views
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/ios.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh ios marks

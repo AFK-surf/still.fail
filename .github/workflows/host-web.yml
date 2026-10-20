@@ -6,6 +6,8 @@ name: host-web
 on:
   pull_request:
     paths: &paths
+      - "src/ui/native.mbt"
+      - "src/kitdemo/viewcheck.mbt"
       - "web/**"
       - "src/host/host_js.mbt"
       - "src/host/textref_js.mbt"
@@ -41,6 +43,9 @@ jobs:
         run: scripts/host_contract.sh web record
       - name: "The text's contract: web_controls = the browser's text"
         run: scripts/host_contract.sh web text
+      - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
+        if: success() || failure()
+        run: scripts/host_contract.sh web views
       - uses: actions/upload-artifact@v4
         if: always()
         with:

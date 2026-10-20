@@ -11,8 +11,12 @@ fn main {
   let check = @ui.env("MBUI_TEXTCHECK")
   // MBUI_MARKS (with MBUI_MARKS_IMAGE): marks drawn by the host onto a picture, the PNG on the log (markscheck.mbt)
   let marked = @ui.env("MBUI_MARKS")
+  // MBUI_VIEWCHECK=1: a native view placed between pixels, where the host put it on the log (viewcheck.mbt)
+  let viewed = @ui.env("MBUI_VIEWCHECK") == "1"
   @ui.run("mbui kit", fn(c) {
-    if marked != "" {
+    if viewed {
+      view_check_run(c)
+    } else if marked != "" {
       marks_run(c, marked, @ui.env("MBUI_MARKS_IMAGE"))
     } else if check != "" {
       text_check_run(c, check)

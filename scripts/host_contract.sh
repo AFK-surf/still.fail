@@ -12,6 +12,9 @@
 #        test/marks/base.png (@host.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
 #        the same to the byte (out/host/HOST/marks.png), and the same as goldens/marks/HOST.png, on what drew it
 #        (goldens/marks/HOST.txt's checked lines: the system's build, its fonts; out/host/HOST/marks.txt this run's)
+#   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
+#        src/kitdemo/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
+#        to (VIEWTOLD), on whole device pixels, or it fails
 #   scripts/host_contract.sh ios free|done      (iOS) before the runs: the simulator not in another's use (booted with an
 #        app of its running: this fails, saying so); after them: shut down again when these runs booted it
 #
@@ -125,7 +128,7 @@ run() {
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="$(echo "$1" | tr ' ' ';');MBUI_LOG_FILE=run.log" \
         bash scripts/android.sh run
       # the app's own named end (or its crash) as logcat has it; its whole log is the file it wrote (Host.log)
-      $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -135,7 +138,7 @@ run() {
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
       # own, @host.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
-      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)" --pid $pid \
+      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       "$PY" scripts/logwait.py --pid $pid ;;
   esac
@@ -257,6 +260,42 @@ case $CMD in
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
+  views)
+    # a native view placed between pixels (kitdemo's MBUI_VIEWCHECK, src/kitdemo/viewcheck.mbt): where the host put it
+    # (VIEWAT, in device pixels) is where the app told it to (VIEWTOLD), on whole device pixels: its edges the hole's,
+    # none half covered (else that row shows what is under the canvas, a line along a video's picture)
+    run "MBUI_DRAW_LOG=1 MBUI_VIEWCHECK=1" $O/views.log || true
+    grep -aq "VIEWCHECK done" $O/views.log || { echo "views contract ($H): the run did not end its check"; tail -20 $O/views.log; exit 1; }
+    "$PY" - "$O/views.log" "$H" <<'PYEOF'
+import re, sys
+told, at = {}, {}
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    for key, out in (("VIEWTOLD ", told), ("VIEWAT ", at)):
+        i = line.find(key)
+        if i >= 0:
+            p = line[i + len(key):].split()
+            out[p[0]] = [float(x) for x in p[1:9]]
+names = ["x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1"]
+bad = []
+if not told or not at:
+    bad.append(f"told {len(told)}, placed {len(at)}: the app or the host said nothing")
+for v, t in told.items():
+    a = at.get(v)
+    if a is None:
+        bad.append(f"view {v}: told {t}, the host said not where it put it")
+        continue
+    for n, tv, av in zip(names, t, a):
+        if abs(tv - round(tv)) > 1e-3:
+            bad.append(f"view {v}: told {n} {tv}, not on a device pixel")
+        if abs(tv - av) > 1e-3:
+            bad.append(f"view {v}: {n} told {tv}, put at {av}")
+if bad:
+    print(f"views contract ({sys.argv[2]}): " + "; ".join(bad))
+    sys.exit(1)
+print(f"views contract ({sys.argv[2]}): {len(told)} native view put where it was told, on whole device pixels: " +
+      " ".join(f"{x:g}" for x in next(iter(at.values()))))
+PYEOF
+    ;;
   marks)
     # (Windows and the web draw no marks: @host.draw_marks is None there)
     case $H in mac|ios|android) ;; *) echo "marks contract: $H draws no marks (@host.draw_marks is None there)"; exit 1 ;; esac

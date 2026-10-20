@@ -239,12 +239,20 @@ static void apply_place(View *v) {
   D2D_RECT_F clip = {0, 0, 0, 0};
   if (v->shown) clip = {0, 0, (float)fmax(0, round(v->cx1 * s) - bx), (float)fmax(0, round(v->cy1 * s) - by)};
   v->box->SetClip(clip);
-  v->content->SetOffsetX((float)(round(v->x * s) - bx));
-  v->content->SetOffsetY((float)(round(v->y * s) - by));
-  RECT r = {0, 0, (LONG)lround(fmax(0, v->w) * s), (LONG)lround(fmax(0, v->h) * s)};
+  // its content's edges each on the device pixel nearest it (right minus left, not its width rounded: that can land a
+  // pixel off the hole's edge)
+  double px0 = round(v->x * s), py0 = round(v->y * s);
+  double pw = fmax(0, round((v->x + fmax(0, v->w)) * s) - px0), ph = fmax(0, round((v->y + fmax(0, v->h)) * s) - py0);
+  v->content->SetOffsetX((float)(px0 - bx));
+  v->content->SetOffsetY((float)(py0 - by));
+  RECT r = {0, 0, (LONG)pw, (LONG)ph};
   v->ctl->put_Bounds(r);
   v->ctl->put_IsVisible(v->shown ? TRUE : FALSE);
   mb_render_commit();
+  // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
+  if (v->shown)
+    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by, bx + clip.right,
+         by + clip.bottom);
 }
 
 // ---- its picture for snapshots ----

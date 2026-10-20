@@ -211,6 +211,11 @@ final class NativeViews {
             }
             v.clip.setVisibility(shown && cw > 0 && ch > 0 ? View.VISIBLE : View.GONE);
             v.moved();
+            // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
+            if (shown) {
+                Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d", id, to[0], to[1],
+                        to[2], to[3], l, t, l + cw, t + ch));
+            }
         });
     }
 

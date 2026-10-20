@@ -533,6 +533,15 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         v.told[j] = v.at[j]
       }
       v.told_shown = shown
+      // on a run's log (MBUI_DRAW_LOG): where it was told to go, in device pixels, for the host's own saying where it
+      // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views)
+      if draw_logging() && fake.val is None && shown {
+        let px = StringBuilder()
+        for j in 0..<8 {
+          px.write_string(" " + (v.at[j] * self.scale).to_string())
+        }
+        h_log("VIEWTOLD \{v.id}" + px.to_string())
+      }
       h_view_place(
         v.id,
         v.at[0],

@@ -172,7 +172,13 @@ Only for these, which the framework knows by itself:
   (`draw_marks` is None there), so they have no such contract.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
-  placed is checked (a Tester's `views`).
+  placed is checked (a Tester's `views`). The app puts a view's content, its clip and the hole it shows through on
+  whole device pixels by one rule (src/ui/native.mbt `device_px`), so their edges meet on the same pixel row: put
+  between pixels, the row its edge half covers would show what is under the canvas (a line along a video's picture).
+  **The native views' contract** (`scripts/host_contract.sh HOST views`, a step of each host's workflow): kitdemo's
+  MBUI_VIEWCHECK places a video's view between pixels (src/kitdemo/viewcheck.mbt); where the app told the host to
+  put it (VIEWTOLD, device pixels) is where the host says it put it (VIEWAT, each host's own: its views' code), on
+  whole device pixels, or it fails.
 
 ## What is left, in order
 

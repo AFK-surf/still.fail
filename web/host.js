@@ -700,6 +700,15 @@
     Object.assign(v.clip.style, { left: cx0 + 'px', top: cy0 + 'px', width: Math.max(0, cx1 - cx0) + 'px',
       height: Math.max(0, cy1 - cy0) + 'px', display: shown ? 'block' : 'none' });
     Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px' });
+    // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
+    if (shown && H.log) {
+      const d = window.devicePixelRatio || 1, r = v.el.getBoundingClientRect(), k = v.clip.getBoundingClientRect();
+      const cv = (H.canvas || document.querySelector('canvas'));
+      const o = cv ? cv.getBoundingClientRect() : { left: 0, top: 0 };
+      const f = (n) => n.toFixed(4);
+      H.log(`VIEWAT ${id} ${f((r.left - o.left) * d)} ${f((r.top - o.top) * d)} ${f(r.width * d)} ${f(r.height * d)} ` +
+        `${f((k.left - o.left) * d)} ${f((k.top - o.top) * d)} ${f((k.right - o.left) * d)} ${f((k.bottom - o.top) * d)}`);
+    }
   };
   H.viewClose = (id) => {
     const v = views.get(id);

@@ -877,6 +877,19 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
   [CATransaction commit];
+  // where it is now, in device pixels: its content and its clip (scripts/host_contract.sh HOST views compares it with
+  // what the app told: VIEWTOLD)
+  if (s) {
+#if TARGET_OS_OSX
+    double px = views_root.window ? views_root.window.backingScaleFactor : NSScreen.mainScreen.backingScaleFactor;
+#else
+    double px = UIScreen.mainScreen.scale;
+#endif
+    CGRect b = v.box.frame, c = v.content.frame;
+    vlog(@"VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, (b.origin.x + c.origin.x) * px,
+         (b.origin.y + c.origin.y) * px, c.size.width * px, c.size.height * px, b.origin.x * px, b.origin.y * px,
+         (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px);
+  }
   if (resized && v.kind >= 2) [v refreshSnap];
 }
 
