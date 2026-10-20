@@ -42,43 +42,44 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 13416:6939e2e7
-    #|waiting wide 13696:827d4fc6
-    #|waiting-dark narrow 13606:55e1046e
-    #|waiting-dark wide 13829:d97ef636
-    #|finding narrow 9180:8ea4c76d
-    #|finding wide 9558:47465ca2
-    #|finding-dark narrow 9241:9676d6d6
-    #|finding-dark wide 9478:89ed600b
-    #|code narrow 10523:d7420693
-    #|code wide 10985:70696b66
-    #|code-dark narrow 10637:4b4e60d7
-    #|code-dark wide 10856:326e1098
-    #|wrong narrow 11872:2898b235
-    #|wrong wide 12394:77569902
-    #|wrong-dark narrow 12034:59b5d685
-    #|wrong-dark wide 12259:42319a40
-    #|checking narrow 11154:21e710a7
-    #|checking wide 11622:87dbbcce
-    #|checking-dark narrow 11256:1d87454a
-    #|checking-dark wide 11489:b8089c2a
-    #|none narrow 12930:fc40a51f
-    #|none wide 13188:a776a1cb
-    #|none-dark narrow 13112:47f45520
-    #|none-dark wide 13333:26bb1f45
-    #|failed narrow 9026:8375a88b
-    #|failed wide 9116:586c3a8d
-    #|failed-dark narrow 9144:2342a766
-    #|failed-dark wide 9365:eec0e297
-    #|refused narrow 11202:f265669c
-    #|refused wide 11366:60b04fe2
-    #|refused-dark narrow 11356:78e7709d
-    #|refused-dark wide 11597:b58355a4
-    #|nocode narrow 12192:355aaeb0
-    #|nocode wide 12462:f265d4a
-    #|nocode-dark narrow 12412:869e1b27
-    #|nocode-dark wide 12605:8a5641d4
+    #|waiting narrow 13303:cd3af78d
+    #|waiting wide 13570:ff17694c
+    #|waiting-dark narrow 13493:daa5b238
+    #|waiting-dark wide 13703:9507ad4a
+    #|finding narrow 9181:f6695278
+    #|finding wide 9559:b93a9091
+    #|finding-dark narrow 9242:79990343
+    #|finding-dark wide 9479:72550c72
+    #|code narrow 10589:20b966d6
+    #|code wide 11052:c1a375bb
+    #|code-dark narrow 10703:94687670
+    #|code-dark wide 10923:3d23f923
+    #|wrong narrow 11914:e592ac13
+    #|wrong wide 12320:4562b8fc
+    #|wrong-dark narrow 12076:b2cb4509
+    #|wrong-dark wide 12185:b18e6d9a
+    #|checking narrow 11242:58eabbf
+    #|checking wide 11582:2aa46407
+    #|checking-dark narrow 11344:73ce27f4
+    #|checking-dark wide 11449:44843109
+    #|none narrow 12825:339cd555
+    #|none wide 13083:624a7054
+    #|none-dark narrow 13007:7a6b9f36
+    #|none-dark wide 13228:66411f42
+    #|failed narrow 8985:f2550dfa
+    #|failed wide 9075:ed814e5e
+    #|failed-dark narrow 9103:34343d4f
+    #|failed-dark wide 9324:74b2dd20
+    #|refused narrow 11125:da8df9bf
+    #|refused wide 11289:1d82ebd5
+    #|refused-dark narrow 11279:39f3d4a2
+    #|refused-dark wide 11520:4d83fe75
+    #|nocode narrow 12059:82a19513
+    #|nocode wide 12329:185d3c95
+    #|nocode-dark narrow 12279:9d0b0124
+    #|nocode-dark wide 12472:9c75e855
     #|
+
   ))
 }
 

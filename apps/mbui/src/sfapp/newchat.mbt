@@ -263,7 +263,7 @@ fn new_chat_on(
         @sf.drawable(c, if t.dark { "illus_new_chat_dark" } else { "illus_new_chat" }, 230.0)
         |> ignore
         c.box(pt=6.0, fn() {
-          c.text(tr("android-chat.new.heading"), size=22.0, weight=700, color=t.p.text, wrap=false, line=30.0)
+          c.text(tr("android-chat.new.heading"), size=22.0, weight=700, color=t.p.text, wrap=false, line=30.8)
           |> ignore
         })
         |> ignore

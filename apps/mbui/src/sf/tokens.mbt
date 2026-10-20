@@ -370,15 +370,40 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 // nowhere else; a value off mbui's scale is one of the few `Exact`s below.
 
 ///|
-/// still.fail's sizes of words on mbui's scale (Tailwind's names): Xs a note (12/18), Sm the meta line (13/18), Base
-/// the body (15/22), Xl2 a title (22/28), as the pages say them now.
+/// still.fail's sizes of words on mbui's scale (Tailwind's names), as the Android app has them: where a `Text` there
+/// says no `lineHeight`, its line is the theme's (ui/Theme.kt WebType: 1.4em, the web phone's root.css.ts). Xs a
+/// note in lines (12/18, Security.kt:110), Sm the meta line (13/18), Base the body (15/21: 15sp with no line, 206
+/// places), Xl2 a title (22/30.8: 22sp bold with no line, Security.kt:473, NewChat.kt:183, Usage.kt:130,
+/// Workspaces.kt:191). The other sizes Android has for their own roles: below.
 pub let text_scale : @ui.TextScale = {
   ..@ui.TextScale::tailwind(),
   xs: (12.0, 18.0),
   sm: (13.0, 18.0),
-  base: (15.0, 22.0),
-  xl2: (22.0, 28.0),
+  base: (15.0, 21.0),
+  xl2: (22.0, 30.8),
 }
+
+///|
+/// A page's lead, a security page's account of itself (15/22: Security.kt:105, 106, 286; a quote's comment,
+/// Composer.kt:562, 708).
+pub let lead_size : @ui.TextSize = Exact(15.0, 22.0)
+
+///|
+/// A file's or a link's card's name (15/20: Composer.kt:781, 803; ChatFiles.kt:567; DriveScreen.kt:408).
+pub let card_title_size : @ui.TextSize = Exact(15.0, 20.0)
+
+///|
+/// A message's words (15/24.75: Chat.kt:1363, 1367, 1374).
+pub let message_size : @ui.TextSize = Exact(15.0, 24.75)
+
+///|
+/// Small words with no line said (12/16.8: 12sp with no line, 120 places).
+pub let caption_size : @ui.TextSize = Exact(12.0, 16.8)
+
+///|
+/// A row's line of small words under its title, in a list (12/16: OpenJobs.kt:98, AgentSheet.kt:217,
+/// DriveScreen.kt:409, Attach.kt:197).
+pub let row_caption_size : @ui.TextSize = Exact(12.0, 16.0)
 
 ///|
 /// The code face's size in a line of its own, its line the font's own (mono).

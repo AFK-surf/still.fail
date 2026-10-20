@@ -3,19 +3,35 @@
 // it lacks is added here, for every page, not named after one.
 
 ///|
-/// A page's title (22/28, bold).
+/// A page's title (22/30.8, bold: Security.kt:473, NewChat.kt:183, Usage.kt:130, Workspaces.kt:191).
 pub let title : @ui.TextStyle = @ui.text_style(size=Xl2, weight=Bold, color=Fg)
 
 ///|
-/// What is said under a title, before the rest (15/22, quieter).
-pub let lead : @ui.TextStyle = @ui.text_style(size=Base, color=Subtle)
+/// What is said under a title, before the rest (15/22, quieter: Security.kt:105, 106, 474).
+pub let lead : @ui.TextStyle = @ui.text_style(size=lead_size, color=Subtle)
 
 ///|
-/// Words of the body (15/22).
+/// Words of the body, a row's title (15/21: Android's 15sp with no line).
 pub let body : @ui.TextStyle = @ui.text_style(size=Base, color=Fg)
 
 ///|
-/// A note: a small line that says how things stand (12/18, quiet).
+/// A file's or a link's card's name (15/20).
+pub let card_title : @ui.TextStyle = @ui.text_style(size=card_title_size, color=Fg)
+
+///|
+/// A message's words (15/24.75).
+pub let message : @ui.TextStyle = @ui.text_style(size=message_size, color=Fg)
+
+///|
+/// Small words (12/16.8: Android's 12sp with no line).
+pub let caption : @ui.TextStyle = @ui.text_style(size=caption_size, color=Muted)
+
+///|
+/// A row's one line of small words in a list (12/16).
+pub let row_caption : @ui.TextStyle = @ui.text_style(size=row_caption_size, color=Muted, wrap=false)
+
+///|
+/// A note: small words in lines that say how things stand (12/18, quiet: Security.kt:110, 485).
 pub let note : @ui.TextStyle = @ui.text_style(size=Xs, color=Subtle)
 
 ///|
