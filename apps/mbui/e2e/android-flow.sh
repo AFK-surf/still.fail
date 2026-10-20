@@ -14,11 +14,13 @@ PKG=${E2E_PKG:-fail.still.mbui.debug}
 mkdir -p $OUT
 . ${E2E_WORK:-$(cd $ROOT/.. && pwd)/e2e-local}/run/e2e-env.sh
 DIR=/data/data/$PKG/files/e2e
-ENVS="MBUI_CLOUD=$MBUI_CLOUD;MBUI_CORE_ACCOUNT_B64=${E2E_ACCOUNT_B64:-$MBUI_CORE_ACCOUNT_B64};MBUI_DRIVE_B64=$(base64 < $SCRIPT | tr -d '\n');MBUI_PICK_FILES=$DIR/e2e-photo.jpg|$DIR/e2e-data.bin;MBUI_IME_LOG=1;MBUI_CALL_LOG=1;MBUI_MOTION_LOG=1"
+ENVS="MBUI_DONE_DIR=/data/data/$PKG/files/done;MBUI_CLOUD=$MBUI_CLOUD;MBUI_CORE_ACCOUNT_B64=${E2E_ACCOUNT_B64:-$MBUI_CORE_ACCOUNT_B64};MBUI_DRIVE_B64=$(base64 < $SCRIPT | tr -d '\n');MBUI_PICK_FILES=$DIR/e2e-photo.jpg|$DIR/e2e-data.bin;MBUI_IME_LOG=1;MBUI_CALL_LOG=1;MBUI_MOTION_LOG=1"
 # a flow's `#env K=V` lines, for this run
 EXTRA=$(grep '^#env ' $SCRIPT | sed 's/^#env //' | tr '\n' ';')
 [ -n "$EXTRA" ] && ENVS="$ENVS;${EXTRA%;}"
 $ADB shell am force-stop $PKG
+# (an earlier run's word of what it did, not this one's)
+$ADB shell "run-as $PKG rm -rf files/done" 2>/dev/null
 $ADB logcat -c
 $ADB shell "screenrecord --time-limit 180 /sdcard/e2e-$NAME.mp4" >/dev/null 2>&1 &
 REC=$!
@@ -35,6 +37,7 @@ $ADB logcat -v raw -s mbui:I StillFailCore:I AndroidRuntime:E DEBUG:I libc:F > $
 LCAT=$!
 seen=0
 done_=0
+dos=0
 while [ $done_ = 0 ] && [ $(date +%s) -lt $deadline ]; do
   sleep 0.3
   n=$(wc -l < $CAT | tr -d ' ')
@@ -53,7 +56,9 @@ while [ $done_ = 0 ] && [ $(date +%s) -lt $deadline ]; do
     echo "$line" >> $LOG
     case "$line" in
       "SHOT "*) n_=${line#SHOT }; $ADB exec-out screencap -p < /dev/null > $OUT/$n_.png ;;
-      "DRIVE LOG do: "*) "$ROOT/scripts/e2e-local.sh" ${line#DRIVE LOG do: } < /dev/null >> $LOG 2>&1 & ;;
+      # (done beside the run, then said done to the app: the n-th do's file, e2e/runner-do.sh)
+      "DRIVE LOG do: "*) dos=$((dos + 1))
+        ADB="$ADB" PKG=$PKG "$D/runner-do.sh" $dos android ${line#DRIVE LOG do: } >> $LOG 2>&1 & ;;
       "DRIVE PASS"*) result=0; done_=1 ;;
       "DRIVE FAIL on screen"*) sleep 1; $ADB exec-out screencap -p < /dev/null > $OUT/fail.png; done_=1 ;;
     esac

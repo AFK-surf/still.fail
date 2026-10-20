@@ -11,7 +11,8 @@
 #     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
 #     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
 #
-# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
+# A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed),
+# then says so to the app (e2e/runner-do.sh: the drive's `done N-WORD` waits for that);
 # `#only PLATFORM…` runs it on those platforms only (mac, android, ios);
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
 # WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
@@ -199,6 +200,8 @@ run_flow() {
   local files=$FILES; [ $PLATFORM = android ] && files=/data/data/$E2E_PKG/files/e2e
   sed "s/{T}/$TAG/g; s/{SVC}/$SVC/g; s|{FILES}|$files|g; s/{PKG}/${E2E_PKG:-}/g" $2 > $script
   mkdir -p $OUT/$name
+  # (an earlier run's word of what it did, not this one's: e2e/runner-do.sh)
+  rm -rf $OUT/$name/done
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   # (a starting point's run: the trace says which, scripts/trace.py keeps it as its first line)
   [ -n "${E2E_START:-}" ] && printf 'CORETRACE {"start":"%s"}\n' "$E2E_START" >> $log
@@ -211,16 +214,17 @@ run_flow() {
   if [ $PLATFORM = mac ]; then
     # (a phone's window unless the flow's #env says otherwise: the wide flows' MBUI_WIN=1280x800)
     env MBUI_WIN=390x844 $extra MBUI_CLOUD=$MBUI_CLOUD MBUI_CORE_ACCOUNT_B64=$E2E_ACCOUNT_B64 MBUI_CORE_DATA=$CORE MBUI_KEYS_IN_FILES=1 \
-      MBUI_SHOT_DIR=$OUT/$name MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
+      MBUI_SHOT_DIR=$OUT/$name MBUI_DONE_DIR=$OUT/$name/done MBUI_DRIVE_B64=$(base64 < $script | tr -d '\n') \
       MBUI_PICK_FILES="$FILES/e2e-photo.jpg|$FILES/e2e-data.bin" MBUI_CALL_LOG=1 MBUI_MOTION_LOG=1 \
       MBUI_DOWNLOADS_DIR=$OUT/$name/downloads \
-      timeout ${E2E_FLOW_TIMEOUT:-300} "$EXE" 2>&1 | while IFS= read -r line; do
+      timeout ${E2E_FLOW_TIMEOUT:-300} "$EXE" 2>&1 | { n=0; while IFS= read -r line; do
         echo "$line" >> $log
         case "$line" in
-          "DRIVE LOG do: "*) step_line "${line#DRIVE LOG do: }" >> $log
-            "$ROOT/scripts/e2e-local.sh" ${line#DRIVE LOG do: } < /dev/null >> $log 2>&1 & ;;
+          # (done beside the run, then said done to the app: the n-th do's file, e2e/runner-do.sh)
+          "DRIVE LOG do: "*) step_line "${line#DRIVE LOG do: }" >> $log; n=$((n + 1))
+            "$D/runner-do.sh" $n $OUT/$name/done ${line#DRIVE LOG do: } >> $log 2>&1 & ;;
         esac
-      done
+      done; }
     grep -q "^DRIVE PASS" $log
   elif [ $PLATFORM = ios ]; then
     "$D/ios-flow.sh" $name $script $log

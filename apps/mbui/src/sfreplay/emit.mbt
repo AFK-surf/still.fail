@@ -78,23 +78,23 @@ fn emit_end() -> Unit {
 /// the station frozen…): said on the script's log there (`log do: WORDS`), nothing here, where the trace has what came
 /// of it.
 pub fn Flow::peer(self : Flow, words : String) -> Unit {
+  ignore(self)
   emit("log do: " + words)
-  // (the station frozen or thawed: the run's runner does it beside the script, not waited for, e2e/run.sh starting it
-  // in the background, and a send right after it would go before it is done: the script, and only the script, gives
-  // it the time the flows' own scripts gave it. Here the step after it is taken when the run took it: Flow::start)
-  if words == "freeze" || words == "thaw" {
-    match script.val {
-      // det-ok(flow-wait): 等 done（mbui#done）
-      Some(s) => s.push("wait \{peer_ms}")
-      None => ()
+  // (the runner does it beside the script (e2e/runner-do.sh) and says when it has: the script waits for its word, the
+  // n-th do's and its first word's (mbui's drive `done`), a send after the station is frozen not going before it is;
+  // here the step after it is taken when the run took it: Flow::start)
+  match script.val {
+    Some(s) => {
+      let n = s.iter().filter(fn(l) { l.has_prefix("log do: ") }).count()
+      let first = match words.split(" ").next() {
+        Some(w) => w.to_string()
+        None => words
+      }
+      emit("done \{n}-\{first}")
     }
+    None => ()
   }
 }
-
-///|
-/// How long a scripted run gives its runner to freeze or thaw the station (Flow::peer) before its next step.
-// det-ok(flow-wait): 等 done（mbui#done）
-let peer_ms : Int = 2000
 
 ///|
 /// What a live run does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, a chat made elsewhere):
