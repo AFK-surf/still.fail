@@ -125,6 +125,17 @@ pub fn Value::is_animating(self : Value) -> Bool {
 }
 
 ///|
+/// When its animation has it there (whole ms, the frames' clock): its start (the moment it was told) and its length,
+/// as it was told; before now (-1) when nothing moves it. A read of what it was told: the same whoever asks it, and
+/// when (a spring of Motion's may come to rest a little before, never after).
+pub fn Value::ends_at(self : Value) -> Double {
+  match self.run {
+    Some(r) => r.start.to_double() + r.dur.ceil()
+    None => -1.0
+  }
+}
+
+///|
 /// Where its animation has it at `now` (ms, the runtime's clock), and how fast: what an animation taking it over
 /// starts from, the same whichever ran first at that instant.
 fn Value::sample(self : Value, now : Int64) -> (Double, Double) {

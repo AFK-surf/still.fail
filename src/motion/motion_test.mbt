@@ -105,6 +105,7 @@ test "a tween goes by whole milliseconds on its curve, after its delay" {
 test "an animated value starts the frame after it is asked, and follows its target" {
   let shown = Ref::new(false)
   let seen : Array[Double] = []
+  let kept : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     let v = @motion.animate(
       c,
@@ -117,6 +118,8 @@ test "an animated value starts the frame after it is asked, and follows its targ
       spec=@motion.tween(160.0, ease=Linear),
     )
     seen.push(v)
+    // (the Anim it plays, to ask its end)
+    kept.val = Some(@motion.anim(c, "k", 0.0))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   // at its target the first time, without motion
@@ -141,17 +144,23 @@ test "an animated value starts the frame after it is asked, and follows its targ
   assert_true(near(back, 0.6, 1.0e-9), msg="\{back}")
   t.frame()
   assert_true(seen[seen.length() - 1] < back)
-  let frames = t.settle()
-  assert_true(frames > 0)
+  // on its way still, to its own end
+  let end = kept.val.unwrap().ends_at()
+  assert_true(end > t.time())
+  t.run_for(end - t.time())
   assert_eq(seen[seen.length() - 1], 0.0)
+  t.assert_idle()
 }
 
 ///|
 test "a spring told anew mid-way goes on as fast as it went" {
   let to = Ref::new(0.0)
   let seen : Array[Double] = []
+  let kept : Ref[@motion.Anim?] = Ref(None)
   let t = @ui.Tester::new(fn(c) {
     seen.push(@motion.animate(c, "s", to.val, spec=@motion.row_spring))
+    // (the Anim it plays, to ask its end)
+    kept.val = Some(@motion.anim(c, "s", 0.0))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   to.val = 100.0
@@ -168,8 +177,10 @@ test "a spring told anew mid-way goes on as fast as it went" {
   let d = seen[seen.length() - 1]
   // no stop: the step after is at least as long as the one before
   assert_true(d - c1 >= (b - a) * 0.9, msg="\{a} \{b} \{c1} \{d}")
-  t.settle() |> ignore
+  // the spring's own end, asked
+  t.run_for(kept.val.unwrap().ends_at() - t.time())
   assert_eq(seen[seen.length() - 1], 200.0)
+  t.assert_idle()
 }
 
 ///|
@@ -200,25 +211,47 @@ test "a keyed node moved by its layout is drawn from where it was, then goes the
   let y2 = drawn_y(t, 0xFF0000FFL)
   assert_true(y2 < 40.0 && y2 > 0.0, msg="\{y2}")
   assert_eq(t.ctx().rect_of(id).unwrap().1, 0.0)
-  t.settle() |> ignore
+  // its move's own end (its spring's), asked by its key
+  t.run_for(@motion.layout_rest("moved") - t.time())
   assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
+  t.assert_idle()
+}
+
+///|
+test "layout_rest: a keyed node's move ends when its spring says, the same whenever asked; -1 at rest" {
+  let before = Ref::new(true)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      if before.val {
+        c.box(w=Px(50.0), h=Px(40.0), fn() {  }) |> ignore
+      }
+      let i = c.box(w=Px(50.0), h=Px(20.0), bg=0xFF0000FFL, fn() {  })
+      @motion.layout(c, i, "moved", listed=false)
+    })
+    |> ignore
+  })
+  assert_eq(@motion.layout_rest("moved"), -1.0)
+  assert_eq(@motion.layout_rest("nothing of that name"), -1.0)
+  before.val = false
+  // the frame that moves it, and the one after it (its spring's first), at this moment
+  t.draw()
+  let end = @motion.layout_rest("moved")
+  assert_true(end > t.time() && end < 1.0e300, msg="\{end}")
+  t.run_for((end - t.time()) / 2.0)
+  assert_eq(@motion.layout_rest("moved"), end)
+  t.run_for(end - t.time())
+  assert_eq(drawn_y(t, 0xFF0000FFL), 0.0)
+  assert_eq(@motion.layout_rest("moved"), -1.0)
+  t.assert_idle()
 }
 
 ///|
 test "shown and hidden: in by its enter, out by its exit, then gone" {
   let shown = Ref::new(false)
   let looks : Array[@ui.Look?] = []
-  let t = @ui.Tester::new(fn(c) {
-    looks.push(
-      @motion.presence(
-        c,
-        "pill",
-        shown.val,
-        enter=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css)),
-        exit=@motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css)),
-      ),
-    )
-  })
+  let enter = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(220.0), fade_spec=@motion.tween(180.0, ease=Css))
+  let exit = @motion.trans(fade=0.0, scale=0.6, dy=18.0, spec=@motion.tween(180.0), fade_spec=@motion.tween(150.0, ease=Css))
+  let t = @ui.Tester::new(fn(c) { looks.push(@motion.presence(c, "pill", shown.val, enter~, exit~)) })
   assert_eq(looks[looks.length() - 1], None)
   shown.val = true
   t.frame()
@@ -227,7 +260,8 @@ test "shown and hidden: in by its enter, out by its exit, then gone" {
     Some(l) => assert_eq((l.alpha, l.sx, l.dy), (0.0, 0.6, 18.0))
     None => fail("shown")
   }
-  t.settle() |> ignore
+  // from its first frame, just drawn: the enter's own length
+  t.run_for(trans_ms(enter))
   match looks[looks.length() - 1] {
     Some(l) => assert_eq(l, @ui.look(ox=0.5, oy=0.5))
     None => fail("shown")
@@ -235,8 +269,23 @@ test "shown and hidden: in by its enter, out by its exit, then gone" {
   shown.val = false
   t.frame()
   assert_true(looks[looks.length() - 1] is Some(_))
-  t.settle() |> ignore
+  // the frame after (the exit's first, at this moment), then the exit's own length
+  t.draw()
+  t.run_for(trans_ms(exit))
   assert_eq(looks[looks.length() - 1], None)
+  t.assert_idle()
+}
+
+///|
+/// How long a transition takes: the longer of its fade's and its move's (their specs' own lengths).
+fn trans_ms(tr : @motion.Trans) -> Double {
+  let f = tr.fade_spec.duration(0.0, 1.0, 0.0)
+  let m = tr.spec.duration(0.0, 1.0, 0.0)
+  if f > m {
+    f
+  } else {
+    m
+  }
 }
 
 ///|
@@ -280,19 +329,31 @@ test "a list's row gone leaves by a copy; the rest close over it, late" {
   assert_eq(c_y, 80.0)
   // tapped where it is laid out already
   assert_eq(t.ctx().rect_of(ids["c"]).unwrap().1, 40.0)
-  t.settle() |> ignore
+  // c's own close over b, to its end (d's the same; b's copy gone before)
+  t.run_for(@motion.layout_rest("row/c") - t.time())
   assert_eq(t.drawn_of("c").unwrap().1, 40.0)
+  assert_eq(@motion.layout_rest("row/d"), -1.0)
   // a row new to the list comes in
   keys.val = ["e", "a", "c", "d"]
   t.frame()
-  t.settle() |> ignore
+  // (the frame after: their motions' first, at this moment) to the end of e's entrance and of a's move
+  t.draw()
+  let e_end = @motion.layout_rest("row/e")
+  let a_end = @motion.layout_rest("row/a")
+  t.run_for((if e_end > a_end { e_end } else { a_end }) - t.time())
   assert_eq(t.drawn_of("a").unwrap().1, 40.0)
   // one going ahead of the others is lifted over them
   keys.val = ["d", "e", "a", "c"]
   t.frame()
+  let lifted_at = t.time()
   assert_true(@motion.lifted(t.ctx(), t.ctx().id("rows"), "row/d") >= 0.0)
-  t.settle() |> ignore
+  // (the frame after: its move's first) to the end of d's move
+  t.draw()
+  t.run_for(@motion.layout_rest("row/d") - t.time())
   assert_eq(t.drawn_of("d").unwrap().1, 0.0)
+  // and of its lift over the others
+  t.run_for(lifted_at + @motion.lift_ms - t.time())
+  t.assert_idle()
 }
 
 ///|

@@ -465,6 +465,26 @@ fn scope_above(c : @ui.Ctx, i : Int) -> Moving? {
   None
 }
 
+///|
+/// When the node keyed `key` (layout, entering) is at its place and in (whole ms, the frames' clock): the latest of
+/// its move's ends and its entrance's (Anim::ends_at); before now (-1) when it is at rest or the key is not known;
+/// +inf when told to move in the frame just drawn (it starts at the next: the frame owed, Tester::draw). Only read.
+pub fn layout_rest(key : String) -> Double {
+  match mo.recs.get(motion_key(key)) {
+    Some(r) => {
+      let mut e = -1.0
+      for a in [r.ox, r.oy, r.ef, r.em] {
+        let x = a.ends_at()
+        if x > e {
+          e = x
+        }
+      }
+      e
+    }
+    None => -1.0
+  }
+}
+
 // ── a list's rows by key ────────────────────────────────────────────────
 
 ///|

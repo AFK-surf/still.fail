@@ -1209,8 +1209,11 @@ test "Motion.kt's motionSpring is Motion's spring by visual duration and bounce"
 test "animate plays a Motion spring as its generator says, from the frame after it is asked" {
   let to = Ref::new(0.0)
   let seen : Array[Double] = []
+  let kept : Ref[@motion.Anim?] = Ref::new(None)
   let t = @ui.Tester::new(fn(c) {
     seen.push(@motion.animate(c, "m", to.val, spec=@motion.spring_to(stiffness=300.0, damping=20.0)))
+    // (the Anim it plays, to ask its end)
+    kept.val = Some(@motion.anim(c, "m", 0.0))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   to.val = 100.0
@@ -1224,8 +1227,10 @@ test "animate plays a Motion spring as its generator says, from the frame after 
     let want = g.next(16.0 * i.to_double()).value
     assert_true((seen[seen.length() - 1] - want).abs() < 1.0e-9, msg="\{i}: \{seen[seen.length() - 1]} \{want}")
   }
-  t.settle() |> ignore
+  // the spring's own end, asked
+  t.run_for(kept.val.unwrap().ends_at() - t.time())
   assert_eq(seen[seen.length() - 1], 100.0)
+  t.assert_idle()
 }
 
 ///|
@@ -1241,19 +1246,24 @@ test "animate plays inertia to where it ends, not to the target asked" {
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   go.val = true
-  t.frame()
-  t.settle() |> ignore
+  // the frame it is told in, and the one after (its first), at this moment
+  t.draw()
   match a.val {
-    // 420 a second at power 1 would end at 420: the snap point nearest is 400
-    Some(v) => assert_eq(v.get(), 400.0)
+    // 420 a second at power 1 would end at 420: the snap point nearest is 400 (where it is at its own end)
+    Some(v) => {
+      t.run_for(v.ends_at() - t.time())
+      assert_eq(v.get(), 400.0)
+    }
     None => fail("animated")
   }
+  t.assert_idle()
 }
 
 ///|
 test "animate plays keyframes through their values" {
   let seen : Array[Double] = []
   let on = Ref::new(false)
+  let kept : Ref[@motion.Anim?] = Ref::new(None)
   let t = @ui.Tester::new(fn(c) {
     seen.push(
       @motion.animate(
@@ -1263,6 +1273,8 @@ test "animate plays keyframes through their values" {
         spec=@motion.keyframes_to([10.0, 5.0], duration=160.0, ease=@motion.linear),
       ),
     )
+    // (the Anim it plays, to ask its end)
+    kept.val = Some(@motion.anim(c, "k", 0.0))
     c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
   })
   on.val = true
@@ -1271,8 +1283,10 @@ test "animate plays keyframes through their values" {
   t.frame(ms=80.0)
   // halfway: at the middle value
   assert_true((seen[seen.length() - 1] - 10.0).abs() < 1.0e-9, msg="\{seen[seen.length() - 1]}")
-  t.settle() |> ignore
+  // to the keyframes' own end
+  t.run_for(kept.val.unwrap().ends_at() - t.time())
   assert_eq(seen[seen.length() - 1], 5.0)
+  t.assert_idle()
 }
 
 // ── the expected keyframes of Motion's inertia tests ─────────────────────

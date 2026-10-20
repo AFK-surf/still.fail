@@ -31,43 +31,77 @@ test "animate: the value the view reads at frame n is the transition's generator
   for k in 1..=20 {
     assert_true(same(seen[k], g.next(16.0 * k.to_double()).value), msg="frame \{k}: \{seen[k]}")
   }
-  // and it stops asking for frames once it is there
-  ignore(t.settle())
+  // and it stops asking for frames once it is there: at the spring's own end
+  t.run_for(x.val.ends_at() - t.time())
   assert_eq(x.val.get(), 100.0)
   assert_true(!x.val.is_animating())
   assert_true(!t.ctx().wants_frame)
+  t.assert_idle()
+}
+
+///|
+test "Value::ends_at: its start and its length, as it was told; -1 when nothing moves it" {
+  let tween_ms = 200.0
+  let x = Ref(@motion.Value::new(0.0))
+  let go = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    x.val = @motion.value(c, "x", 0.0)
+    if go.val {
+      go.val = false
+      ignore(x.val.start(100.0, @motion.tween_to(duration=tween_ms, ease=@motion.linear)))
+    }
+  })
+  // told in the first frame, at its moment
+  let end = x.val.ends_at()
+  assert_eq(end, t.time() + tween_ms)
+  // asked again half-way, the same
+  t.run_for(tween_ms / 2.0)
+  assert_eq(x.val.ends_at(), end)
+  t.run_for(end - t.time())
+  assert_eq(x.val.get(), 100.0)
+  assert_eq(x.val.ends_at(), -1.0)
+  t.assert_idle()
 }
 
 ///|
 test "a timeline: each animation awaited in turn; the next starts the frame the last one ends" {
   let log : Array[String] = []
+  let x_ms = 64.0
+  let y_ms = 32.0
   let t = @ui.Tester::new(fn(c) {
     let x = @motion.value(c, "x", 0.0)
     let y = @motion.value(c, "y", 0.0)
     c.effect("seq", async fn(_s) {
-      ignore(x.animate(10.0, @motion.tween_to(duration=64.0, ease=@motion.linear)))
+      ignore(x.animate(10.0, @motion.tween_to(duration=x_ms, ease=@motion.linear)))
       log.push("x there at \{@effect.now()}")
-      ignore(y.animate(10.0, @motion.tween_to(duration=32.0, ease=@motion.linear)))
+      ignore(y.animate(10.0, @motion.tween_to(duration=y_ms, ease=@motion.linear)))
       log.push("y there at \{@effect.now()}")
     })
     log.push("\{x.get()} \{y.get()}")
   })
-  ignore(t.settle())
+  // the timeline's own length: x's, then y's (told at its first frame's moment, 1016)
+  t.run_for(x_ms + y_ms)
   assert_eq(log, [
     "0 0", "2.5 0", "5 0", "7.5 0", "x there at 1080", "10 0", "10 5", "y there at 1112",
     "10 10",
   ])
+  t.assert_idle()
 }
 
 ///|
 test "in parallel (all) both move from the same frame; staggered, each `each` ms after the last" {
   let starts : Array[(Int, Int64)] = []
+  let n = 4
+  let each = 50
+  let tween_ms = 100.0
+  let values : Ref[Array[@motion.Value]] = Ref([])
   let t = @ui.Tester::new(fn(c) {
-    let vs = Array::makei(4, i => @motion.value(c, "v\{i}", 0.0))
+    let vs = Array::makei(n, i => @motion.value(c, "v\{i}", 0.0))
+    values.val = vs
     c.effect("go", async fn(_s) {
-      @motion.stagger(4, 50, i => {
+      @motion.stagger(n, each, i => {
         starts.push((i, @effect.now()))
-        ignore(vs[i].animate(1.0, @motion.tween_to(duration=100.0)))
+        ignore(vs[i].animate(1.0, @motion.tween_to(duration=tween_ms)))
       })
       ignore(
         @effect.all([
@@ -77,9 +111,16 @@ test "in parallel (all) both move from the same frame; staggered, each `each` ms
       )
     })
   })
-  ignore(t.settle())
+  // the stagger's own length: its last start, `each` ms after each other, and that one's tween
+  t.run_for(((n - 1) * each).to_double() + tween_ms)
   starts.sort_by_key(s => s.0)
   assert_eq(starts, [(0, 1016L), (1, 1066L), (2, 1116L), (3, 1166L)])
+  // then the two springs at once, told as the stagger ended: to their own ends
+  let vs = values.val
+  assert_true(vs[0].is_animating() && vs[1].is_animating())
+  let springs_end = if vs[0].ends_at() > vs[1].ends_at() { vs[0].ends_at() } else { vs[1].ends_at() }
+  t.run_for(springs_end - t.time())
+  t.assert_idle()
   // from the centre: the middle first, the ends last
   let from_centre : Array[(Int, Int64)] = []
   let t2 = @ui.Tester::new(fn(c) {
@@ -100,9 +141,11 @@ test "in parallel (all) both move from the same frame; staggered, each `each` ms
 /// spring's own: the values the view reads, frame by frame.
 fn interrupted(seed : Int, k : Int) -> Array[Double] {
   let seen : Array[Double] = []
+  let xv = Ref(@motion.Value::new(0.0))
   let t = @ui.Tester::new(
     fn(c) {
       let x = @motion.value(c, "x", 0.0)
+      xv.val = x
       c.effect("go", async fn(_s) { ignore(x.animate(100.0, @motion.spring_to(stiffness=200.0, damping=15.0))) })
       c.effect("back", async fn(_s) {
         for _ in 0..<k {
@@ -114,7 +157,16 @@ fn interrupted(seed : Int, k : Int) -> Array[Double] {
     },
     seed~,
   )
-  ignore(t.settle())
+  // (the fibers forked in the first frame run at the next)
+  t.frame()
+  // to the first spring's own end: the one back took it over at frame k, well before
+  t.run_for(xv.val.ends_at() - t.time())
+  if xv.val.target() != 0.0 {
+    abort("the spring back had not taken over by the first one's end")
+  }
+  // to the spring back's own end
+  t.run_for(xv.val.ends_at() - t.time())
+  t.assert_idle()
   seen
 }
 
@@ -141,8 +193,10 @@ test "interrupted, an animation hands on where the value is and how fast it goes
 ///|
 test "the animation taken over says so: animate gives false, the new one true" {
   let got : Array[String] = []
+  let xv = Ref(@motion.Value::new(0.0))
   let t = @ui.Tester::new(fn(c) {
     let x = @motion.value(c, "x", 0.0)
+    xv.val = x
     c.effect("a", async fn(_s) {
       let ok = x.animate(100.0, @motion.tween_to(duration=200.0))
       got.push("a \{ok}")
@@ -158,8 +212,11 @@ test "the animation taken over says so: animate gives false, the new one true" {
   })
   run_frames(t, 3)
   t.tap_text("back")
-  ignore(t.settle())
+  // b took it over as the tap was taken: to b's own end
+  assert_eq(xv.val.target(), 0.0)
+  t.run_for(xv.val.ends_at() - t.time())
   assert_eq(got, ["a false", "b true"])
+  t.assert_idle()
 }
 
 ///|
@@ -202,9 +259,10 @@ test "presence: enter as it comes; hidden, its exit runs in its scope's finalize
   })
   assert_eq(t.find("sheet"), None)
   shown.val = true
-  // a change made outside the view asks for no frame by itself: one is drawn, then the enter's run out
-  t.frame()
-  ignore(t.settle())
+  // a change made outside the view asks for no frame by itself: the frames it causes drawn (the enter forked, then
+  // run), then the enter to its own end
+  t.draw()
+  t.run_for(alpha.val.ends_at() - t.time())
   assert_eq(alpha.val.get(), 1.0)
   assert_true(t.find("sheet") is Some(_))
   shown.val = false
@@ -213,10 +271,12 @@ test "presence: enter as it comes; hidden, its exit runs in its scope's finalize
   t.frame()
   assert_true(alpha.val.get() < 1.0)
   assert_eq(built[built.length() - 1], true)
-  ignore(t.settle())
+  // the exit to its own end
+  t.run_for(alpha.val.ends_at() - t.time())
   assert_eq(alpha.val.get(), 0.0)
   assert_eq(built[built.length() - 1], false)
   assert_eq(t.find("sheet"), None)
+  t.assert_idle()
 }
 
 ///|
@@ -237,7 +297,9 @@ test "presence: shown again while it leaves, it comes back from where the exit h
       ),
     )
   })
-  ignore(t.settle())
+  // (the enter forked in the first frame runs at the next: the frame owed), then to its own end
+  t.draw()
+  t.run_for(o.val.ends_at() - t.time())
   shown.val = false
   run_frames(t, 4)
   let mid = o.val.get()
@@ -252,9 +314,11 @@ test "presence: shown again while it leaves, it comes back from where the exit h
   // on its way back up from where the exit had it, never down to 0
   assert_true(a > 0.5 && a <= mid, msg="\{a} \{mid}")
   assert_true(b > a && c > b, msg="\{a} \{b} \{c}")
-  ignore(t.settle())
+  // the enter again, to its own end
+  t.run_for(o.val.ends_at() - t.time())
   assert_eq(o.val.get(), 1.0)
   assert_true(t.find("menu") is Some(_))
+  t.assert_idle()
 }
 
 ///|
@@ -267,14 +331,17 @@ test "hover and press start and interrupt the value's animation" {
     @motion.while_hover(c, id, s.val, rest=1.0, to=1.2)
   })
   t.move(50.0, 50.0)
-  ignore(t.settle())
+  // the spring the hover told, to its own end
+  t.run_for(s.val.ends_at() - t.time())
   assert_true(same(s.val.get(), 1.2))
   t.move(300.0, 300.0)
   t.frame()
   t.frame()
   assert_true(s.val.get() < 1.2)
-  ignore(t.settle())
+  // the spring back, to its own end
+  t.run_for(s.val.ends_at() - t.time())
   assert_true(same(s.val.get(), 1.0))
+  t.assert_idle()
 }
 
 ///|
@@ -291,9 +358,11 @@ test "drag: the value follows the finger, then goes on by momentum and is caught
   let let_go = x.val.get()
   assert_true(let_go > 60.0)
   assert_true(x.val.is_animating())
-  ignore(t.settle())
+  // the momentum, to its own end
+  t.run_for(x.val.ends_at() - t.time())
   assert_true(x.val.get() > let_go)
   assert_true(x.val.get() <= 200.0 + 1.0)
+  t.assert_idle()
 }
 
 ///|
