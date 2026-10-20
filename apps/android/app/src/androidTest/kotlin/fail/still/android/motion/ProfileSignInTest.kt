@@ -1,9 +1,10 @@
 // A subscription's sign-in on its Profile page (Profiles.kt SignIn, LoginSteps), on the fake core: signed in (重新登录),
-// signed out (登录), a device code to approve (Grok) and a code to paste back (Claude). Pictures:
-// motion/signin-{signed-in,needed,grok-code,claude-code}-{light,dark}.
+// signed out (登录), a device code to approve (Grok), a page only to confirm, with no code (Cursor) and a code to paste back
+// (Claude). Pictures: motion/signin-{signed-in,needed,grok-code,cursor-confirm,claude-code}-{light,dark}.
 package fail.still.android.motion
 
 import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -35,8 +36,8 @@ class ProfileSignInTest {
 
     private fun job(runtime: String, state: String) = LoginJob(
         profile = "p1", runtime = runtime, state = state,
-        url = if (runtime == "grok") "https://accounts.x.ai/device" else "https://claude.ai/oauth/authorize?code=true",
-        userCode = if (state == "needs_approval") "QXRT-7KMB" else null, startedAt = Fixtures.NOW, expiresAt = Fixtures.NOW + 600_000,
+        url = when (runtime) { "grok" -> "https://accounts.x.ai/device"; "cursor" -> "https://cursor.com/loginDeepControl?challenge=x&uuid=y&mode=login"; else -> "https://claude.ai/oauth/authorize?code=true" },
+        userCode = if (state == "needs_approval" && runtime != "cursor") "QXRT-7KMB" else null, startedAt = Fixtures.NOW, expiresAt = Fixtures.NOW + 600_000,
     )
 
     private fun shot(p: Profile, name: String, dark: Boolean): Harness {
@@ -72,6 +73,16 @@ class ProfileSignInTest {
         shot(profile("grok", "login", job("grok", "needs_approval")), "grok-code", dark)
         rule.onNodeWithText("QXRT-7KMB").assertIsDisplayed()
         rule.onNodeWithText("复制代码并打开登录页").assertIsDisplayed()
+        rule.onNodeWithText("取消登录").assertIsDisplayed()
+    }
+
+    @Test fun cursorConfirmLight() = cursorConfirm(false)
+    @Test fun cursorConfirmDark() = cursorConfirm(true)
+    private fun cursorConfirm(dark: Boolean) {
+        shot(profile("cursor", "login", job("cursor", "needs_approval")), "cursor-confirm", dark)
+        rule.onNodeWithText("打开授权页面").assertIsDisplayed()
+        rule.onNodeWithText("在打开的 Cursor 页面登录并确认", substring = true).assertIsDisplayed()
+        rule.onAllNodesWithText("复制代码", substring = true).assertCountEquals(0)
         rule.onNodeWithText("取消登录").assertIsDisplayed()
     }
 

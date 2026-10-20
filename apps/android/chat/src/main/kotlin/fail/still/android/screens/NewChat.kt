@@ -316,7 +316,8 @@ private fun tripleLabel(p: PickView): String {
     return listOfNotNull(
         p.valueOption?.name ?: v.model ?: t("android-chat.pick.model"),
         if (!p.runtimeFixed && (p.valueOption?.runtimes?.size ?: 0) > 1) RUNTIME_LABEL[v.runtime] ?: v.runtime else null,
-        v.effort ?: t("android-chat.pick.effort.default"),
+        // None where the runtime sets no effort (Cursor).
+        v.effort ?: if (p.efforts.isNotEmpty()) t("android-chat.pick.effort.default") else null,
         p.fastText,
         p.account?.text,
     ).joinToString(" · ")
@@ -379,8 +380,11 @@ private fun openRunPicker(app: AppState, station: String) {
                     CascadeLabel(t("android-chat.new.runtime"))
                     v.runtimes.forEach { r -> CascadeOption(RUNTIME_LABEL[r] ?: r, null, draft.runtime == r, leading = { MakerIcon(null, r, 16.dp) }) { set { put("runtime", r) } } }
                 }
-                CascadeLabel(t("android-chat.new.effort"))
-                (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: t("android-chat.pick.default"), null, draft.effort == e) { set { put("effort", e) } } }
+                // No efforts where the runtime sets none (Cursor).
+                if (v.efforts.isNotEmpty()) {
+                    CascadeLabel(t("android-chat.new.effort"))
+                    (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: t("android-chat.pick.default"), null, draft.effort == e) { set { put("effort", e) } } }
+                }
                 if (v.fastAvailable == true) {
                     CascadeLabel(t("android-chat.new.speed"))
                     listOf<Boolean?>(null, false, true).forEach { fast ->
