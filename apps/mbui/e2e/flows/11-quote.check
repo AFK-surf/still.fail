@@ -1,2 +1,0 @@
-check "the station has the comment as the quote's, with the agent's words quoted" 'sql "select quotes from entries where quotes like '"'"'%对这条回复的说明 $TAG%'"'"'" | grep -q "\"text\":\"这句话会被引用 $TAG\".*\"comment\":\"对这条回复的说明 $TAG\""'
-check "the quote says whose words they were (the agent's)" 'sql "select quotes from entries where quotes like '"'"'%对这条回复的说明 $TAG%'"'"'" | grep -q "\"role\":\"agent\""'
