@@ -1676,8 +1676,11 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // Run from the source (Electron's own app with this directory, dev.sh), the links open it with the directory. One
-  // tried apart (STILLFAIL_USER_DATA) leaves the links to the app in use.
-  for (const scheme of process.env.STILLFAIL_USER_DATA ? [] : SCHEMES) {
+  // tried apart (STILLFAIL_USER_DATA) leaves the links to the app in use. Outside macOS the links would name the
+  // directory itself, often a worktree that is gone later, leaving every link to a launcher that cannot start: there a
+  // run from the source takes them only when asked (STILLFAIL_DEV_LINKS=1).
+  const devLinks = app.isPackaged || process.platform === "darwin" || process.env.STILLFAIL_DEV_LINKS === "1";
+  for (const scheme of process.env.STILLFAIL_USER_DATA || !devLinks ? [] : SCHEMES) {
     if (app.isPackaged) app.setAsDefaultProtocolClient(scheme);
     else app.setAsDefaultProtocolClient(scheme, process.execPath, [app.getAppPath()]);
   }
