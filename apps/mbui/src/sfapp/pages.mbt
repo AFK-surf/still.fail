@@ -5,7 +5,6 @@
 ///|
 /// A page's compact bar (Parts.kt NavBar): back to the chats, in the accent; its title in the middle.
 fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
-  let t = @sf.theme()
   // the wide frame's page bar (wide_chat.mbt)
   if wide_on.val {
     if page_bar_wide(c, title, app.nav.depth() > 1, fn() {  }) {
@@ -13,39 +12,9 @@ fn nav_bar(c : @ui.Ctx, title : String) -> Unit {
     }
     return
   }
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
-      let back = c.id("nav-back")
-      if c.clicked(back) {
-        app.nav.pop() |> ignore
-      }
-      c.box(
-        dir=Row,
-        pr=6.0,
-        pt=4.0,
-        pb=4.0,
-        radius=8.0,
-        align=ACenter,
-        opacity=if c.pressed(back) { 0.6 } else { 1.0 },
-        id=back,
-        fn() {
-          @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-          c.text(tr("android-misc.bar.place.chats"), size=17.0, color=t.p.accent, wrap=false)
-          |> ignore
-        },
-      )
-      |> ignore
-      c.layer(align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, pl=84.0, pr=84.0, fn() {
-          c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  if @sf.nav_bar(c, "nav-back", tr("android-misc.bar.place.chats"), title) {
+    app.nav.pop() |> ignore
+  }
 }
 
 ///|

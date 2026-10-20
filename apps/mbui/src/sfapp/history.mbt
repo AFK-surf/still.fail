@@ -14,41 +14,9 @@
 /// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
 /// what is at its end.
 fn page_bar(c : @ui.Ctx, key : String, back : String, title : String, trailing : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=10.0, pr=16.0, pt=6.0, pb=10.0, bg=t.p.bg, fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Px(32.0), align=ACenter, fn() {
-      let id = c.id(key + "/back")
-      if c.clicked(id) {
-        app.nav.pop() |> ignore
-      }
-      c.box(
-        dir=Row,
-        pr=6.0,
-        pt=4.0,
-        pb=4.0,
-        radius=8.0,
-        align=ACenter,
-        opacity=if c.pressed(id) { 0.6 } else { 1.0 },
-        id~,
-        fn() {
-          @sf.icon(c, "chevron-left", size=22.0, color=t.p.accent) |> ignore
-          c.text(back, size=17.0, color=t.p.accent, wrap=false) |> ignore
-        },
-      )
-      |> ignore
-      c.spacer()
-      trailing()
-      c.layer(align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, pl=84.0, pr=84.0, fn() {
-          c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
-        })
-        |> ignore
-      })
-      |> ignore
-    })
-    |> ignore
-  })
-  |> ignore
+  if @sf.nav_bar(c, key + "/back", back, title, trailing~, bg=@sf.theme().p.bg) {
+    app.nav.pop() |> ignore
+  }
 }
 
 ///|

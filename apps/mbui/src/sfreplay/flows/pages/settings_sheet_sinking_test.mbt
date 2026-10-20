@@ -5,7 +5,10 @@
 ///|
 test "53-settings-sheet-sinking" {
   @sfreplay.orders(fn(seed) raise {
-    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_sheet_sinking, seed~)
+    // (memory.get: in the run, one of the taps below that went through once the sheet was down landed on the station
+    // page's 记忆 row and opened it; the page's bar is now as tall as Android's NavBar with its line under the title,
+    // the rows 16 lower, and that tap lands under the row)
+    let f = @sfreplay.Flow::start(@sfreplay.trace_settings_sheet_sinking, seed~, skip=["client.device", "memory.get"])
     f.tap("icon:settings")
     f.run_for(@ui.nav_push_ms)
     f.tap("=Station")
