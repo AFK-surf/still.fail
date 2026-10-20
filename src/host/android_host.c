@@ -1194,12 +1194,11 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint 
   if (outside_cb) outside_cb(kind, id, state);
 }
 
-// How the frame just built stands (host_native.mbt's frame_settled): settled, how many of the app's asks are not
-// answered yet, and what they are. Nothing waits on its being settled; a run to a declared moment keeps its clock
-// still while the app awaits the host (MBView's shotFrame, Native.awaiting).
+// How many of the app's asks are not answered yet, and what they are, as the frame just built left it
+// (host_native.mbt's frame_awaiting): a run to a declared moment keeps its clock still while any is (MBView's
+// shotFrame, Native.awaiting).
 static int awaiting_n;
-void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
-  (void)settled;
+void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
   (void)what;
   awaiting_n = awaiting;
 }

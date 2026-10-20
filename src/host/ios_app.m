@@ -550,8 +550,9 @@ int32_t mb_host_set_outside(mb_outside_fn f) {
   outside_cb = f;
   return 1;
 }
-void mb_host_frame_settled(int32_t settled, int32_t awaiting, moonbit_string_t what) {
-  (void)settled;
+// How many of the app's asks are not answered yet, as the frame just built left it (host_native.mbt's
+// frame_awaiting): nothing here waits on it yet.
+void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
   (void)awaiting;
   (void)what;
 }

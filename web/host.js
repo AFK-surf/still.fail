@@ -49,8 +49,6 @@
     H.requestFrame();
   }
   H.requestFrame = () => {
-    // asked between frames (an event, a timer): not settled until a frame has taken it
-    if (!inFrame) appSettled = false;
     if (!pending && cb && window.__done === undefined && window.__shot === undefined) {
       pending = true;
       requestAnimationFrame(tick);
@@ -87,13 +85,12 @@
   // image), 2 a native view ready (a page loaded, a video's first frame showable); state 1 done, -1 failed, once an
   // item; and (a view, 0) each time it waits on the app instead (a player's read asked of it): not the host's work
   // until the app answers. Always from the event loop, never inside a call of the app's (a frame, a read answered).
-  // Each frame says at its end whether what it shows is settled (ui's Ctx::settled: no frame asked for, nothing
-  // awaited of the host, no timer set that what is shown waits for), how many of its asks the host has not answered
-  // and, when not settled, why (what it awaits, who asked for the frame or the wake it waits for).
-  let outside = null, appSettled = false, awaiting = 0, why = '';
+  // Each frame says at its end how many of its asks the host has not answered and what they are: a run to a declared
+  // moment (shot_at) keeps its clock still while any is.
+  let outside = null, awaiting = 0, why = '';
   const told = new Set();
   H.setOutside = (f) => { outside = f; return true; };
-  H.frameSettled = (settled, n, what) => { appSettled = !!settled; awaiting = n; why = what; };
+  H.frameAwaiting = (n, what) => { awaiting = n; why = what; };
   function tell(kind, id, state) {
     if (!outside) return;
     if (state !== 0) {
@@ -103,14 +100,6 @@
     }
     queueMicrotask(() => outside(kind, id, state));
   }
-  // Settled: as the last frame said (a frame it asked for only by what never ends while shown, a cycle, leaves it
-  // settled), and no frame asked for since (requestFrame between frames). What a screenshot waits for
-  // (page.waitForFunction(() => __mbhost.settled())); unsettled() says why it is not.
-  // (not once the app has ended: a stable run that fails, an idle spin, ends itself with exit(3), its words logged)
-  H.settled = () => frames > 0 && appSettled && window.__done === undefined;
-  H.unsettled = () => ({ frames, settled: appSettled, pending, awaiting, why, done: window.__done,
-    said: window.__logs.filter((l) => l.startsWith('SETTLE')).slice(-3) });
-
   function resize() {
     dpr = window.devicePixelRatio || 1;
     cssW = canvas.clientWidth;

@@ -19,7 +19,8 @@ priv struct Row {
 ///|
 priv struct State {
   mut page : Int
-  mut frames : Int
+  // the page drawn, its pictures due at the frame its time is up at (textdiff_page_ms later)
+  mut drawn : Bool
   // rows of each page: the first and the end, made for the window's height
   starts : Array[Int]
   mut laid_h : Double
@@ -270,8 +271,12 @@ fn draw_native(c : @ui.Ctx, rows : Array[Row], page : Int, a : Int, b : Int) -> 
 }
 
 ///|
+/// How long each page is shown before its pictures are taken: a frame of its own after the one that drew it (a host's
+/// window, its glyph atlas, take what that frame uploaded).
+let textdiff_page_ms : Double = 50.0
+
+///|
 fn view(c : @ui.Ctx, rows : Array[Row], st : State) -> Unit {
-  c.request_frame()
   if st.starts.length() == 0 || st.laid_h != c.height {
     // the window's height known (and settled): the pages made for it, started again
     st.starts.clear()
@@ -280,37 +285,34 @@ fn view(c : @ui.Ctx, rows : Array[Row], st : State) -> Unit {
     }
     st.laid_h = c.height
     st.page = 0
-    st.frames = 0
+    st.drawn = false
     @host.log(
       "TXD start {\"rows\":\{rows.length()},\"pages\":\{st.starts.length() - 1},\"w\":\{num(c.width)},\"h\":\{num(c.height)},\"scale\":\{num(c.scale)},\"platform\":\{@host.platform()}}",
     )
   }
   let pages = st.starts.length() - 1
+  // the page the frame before drew is on the window (as drawn last): its pictures, then the next page
+  if st.drawn {
+    @host.ref_frame("p\{st.page}-mbui") |> ignore
+    draw_native(c, rows, st.page, st.starts[st.page], st.starts[st.page + 1])
+    st.page = st.page + 1
+    st.drawn = false
+  }
   if st.page >= pages {
     @host.log("TXD done")
     @host.exit(0)
     return
   }
-  let a = st.starts[st.page]
-  let b = st.starts[st.page + 1]
-  draw_page(c, rows, a, b)
-  st.frames = st.frames + 1
-  // a few frames for the window and the atlas to settle, then both pictures of the page (the window's as drawn last,
-  // or next: the same page either way)
-  if st.frames == 8 {
-    @host.ref_frame("p\{st.page}-mbui") |> ignore
-    draw_native(c, rows, st.page, a, b)
-  }
-  if st.frames == 12 {
-    st.page = st.page + 1
-    st.frames = 0
-  }
+  draw_page(c, rows, st.starts[st.page], st.starts[st.page + 1])
+  // its pictures at a frame of its own, a declared time on
+  st.drawn = true
+  c.wake_in(textdiff_page_ms)
 }
 
 ///|
 fn main {
   let rows = corpus_rows(@ui.env("MBUI_TEXTDIFF_ONLY"))
-  let st = { page: 0, frames: 0, starts: [], laid_h: -1.0 }
+  let st = { page: 0, drawn: false, starts: [], laid_h: -1.0 }
   @ui.run("textdiff", fn(c) {
     // drawn in the colours Core Text's side is (iOS's)
     c.set_theme(@ui.Theme::ios_light())

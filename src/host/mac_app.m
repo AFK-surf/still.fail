@@ -50,7 +50,7 @@ static const char *script;
 // decoding, a view loading — effect.mb's outside, told here by mb_host_awaiting; the host's events for them,
 // mb_host_outside, end it): the app's time stands still until what it waits on is in, so what a frame shows does not
 // hang on how fast the machine is. The app's timers (wake_after) are on that clock too. The script's
-// steps count those frames; `shot` takes its picture once the app is settled (below).
+// steps count those frames; `shot` takes its picture of the frame at a declared moment on that clock (below).
 static int settle;
 static double settle_clock;        // ms, the frames' clock
 static double settle_wake = -1;    // when the app asked to be woken, on that clock (-1: not)
@@ -58,7 +58,6 @@ static BOOL app_wants;             // the app (or the host for it) asked for a f
 static BOOL in_app_frame;          // the app's frame is being built (what it asks for there, its frame's end says)
 static BOOL script_wants;          // the script goes on (its next step)
 static int awaiting;               // what the app awaits from the host, as its last frame said
-static BOOL app_settled;           // whether what it shows is settled, as its last frame said (ui's Ctx::settled)
 static char awaited_what[2048];    // what it awaits, as its last frame said
 static mb_outside_fn outside_cb;   // who is told as that is done (host_native.mbt's set_outside)
 static void pump_soon(void);
@@ -128,8 +127,6 @@ static void run_script_step(int step);
   self.wantFrame = YES;
   if (settle) {
     app_wants = YES;
-    // asked between frames (an event, a timer): not settled until a frame has taken it
-    if (!in_app_frame) app_settled = NO;
     pump_soon();
     return;
   }
@@ -209,11 +206,6 @@ static void script_next(void) {
   script_wants = YES;
   pump_soon();
 }
-
-// Whether the app has nothing to do now, as its last frame said (ui's Ctx::settled: no frame asked for but by what
-// never ends while shown, no fiber waiting for one or for the host, no timer set that what is shown waits for), and
-// nothing asked for since (requestFrame between frames).
-static BOOL settled(void) { return app_settled; }
 
 static void pump(void) {
   MBView *v = the_view;
@@ -653,20 +645,18 @@ static void run_script_step(int step) {
     }
     script_next();
   } else if (strcmp(script, "shot") == 0) {
-    // settled (a stable run): once the app is (settled, above), from frame MBUI_SHOT_AT on (1); else at frame
-    // MBUI_SHOT_AT (30): later for what waits on something, as the core's first answers
+    // a stable run: the frame at a declared moment on its own clock (MBUI_SHOT_MS, 1000 by default: the frames 1/60 s
+    // apart from 0, the clock still while the app awaits the host, above), as web/host.js's shot_at and Android's
+    // SHOT_AT; or at frame MBUI_SHOT_AT where a script says a frame. Not stable: at frame MBUI_SHOT_AT (30)
     static int at;
-    if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : settle ? 1 : 30;
+    static double at_ms = -1;
+    if (!at) at = getenv("MBUI_SHOT_AT") ? atoi(getenv("MBUI_SHOT_AT")) : settle ? -1 : 30;
+    if (at_ms < 0) at_ms = getenv("MBUI_SHOT_MS") ? atof(getenv("MBUI_SHOT_MS")) : 1000;
     if (settle) {
-      if (step >= at && settled()) {
+      if (at > 0 ? step >= at : settle_clock >= at_ms) {
+        fprintf(stderr, "SHOT %d %g\n", step, settle_clock);
         shot(getenv("MBUI_SHOT_NAME") ?: "main");
         exit(0);
-      }
-      // ten seconds of the app's own time and still not settled (an animation that never ends, a timer set again and
-      // again that is not `later`): a failure, said, not a picture
-      if (step >= at + 600) {
-        fprintf(stderr, "SETTLE FAIL: not settled after %d frames: %s\n", step, awaited_what);
-        exit(3);
       }
     } else {
       if (step == at) shot(getenv("MBUI_SHOT_NAME") ?: "main");
@@ -825,8 +815,7 @@ int32_t mb_host_set_outside(mb_outside_fn f) {
   return 1;
 }
 
-void mb_host_frame_settled(int32_t settled_now, int32_t n, moonbit_string_t what) {
-  app_settled = settled_now != 0;
+void mb_host_frame_awaiting(int32_t n, moonbit_string_t what) {
   awaiting = n;
   snprintf(awaited_what, sizeof awaited_what, "%s", mb_ns_from_string(what).UTF8String ?: "");
 }

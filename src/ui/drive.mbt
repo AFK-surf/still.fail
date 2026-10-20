@@ -33,7 +33,7 @@
 //   drag X Y DX DY [MS]         a finger down at X Y (negative: from the right, the bottom), moved by DX DY over MS
 //                               (300 by default), a move a frame, then lifted there
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, once it holds still
-//   shot NAME                   the window's picture, once settled, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
+//   shot NAME                   the window's picture, as the frame just drawn, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
 //                               "SHOT NAME" is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
 //   noticed TEXT                one of the app's notifications (the system's, @host.notice_show) holds TEXT in its
 //                               title or words, within the timeout       nonotice TEXT   none does
@@ -49,19 +49,14 @@
 //                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
-//   now STEP                    STEP as soon as it is due, the app settled or not (below): what is looked at or done
-//                               while something still moves (a tap on what a sheet going down only draws, a shot of
-//                               it on its way; after a `wait` into the motion)
-// A step that looks at the screen or acts on it (until, untiln, gone, field, empty, clear, tap, tap1, tapxy, hold,
-// type, mark, enter, backspace, back, paste, pasten, wheel, wheelat, move, hover, rightclick, key, resize, drag,
-// dragon, shot; exit and the script's end too) first waits, within its timeout, for the app to be settled
-// (Ctx::settled: the frame just drawn asks for no other, nothing is awaited from the host — an image decoding, a page
-// loading — or, where the app says so, from its core, and no timer or wake is set that is not `later`), so that a
-// page sliding in, a sheet opening, a list scrolling or a picture coming needs no `wait`; a check holds once it is so
-// at a settled frame. One the app never settles for fails, saying why (Ctx::unsettled: what is awaited since when,
-// who asked for a frame or a wake); one waiting more than a second says so on the log (DRIVE waiting …). `wait`
-// stays a pause in real time, for what is outside the app (a command beside the run, the other device, the station)
-// that no `until` can see, or for a point inside a motion (then `now` steps).
+//   now STEP                    STEP (as written before steps waited for nothing: kept, the same as STEP)
+// No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
+// host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
+// frame just drawn has them, once they hold still from one frame to the next. What comes later than a frame is waited
+// for by name (until, gone, answered, decoded, ready), within the timeout. The run asks for no frame of its own: what
+// it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake at that time. `wait` stays
+// a pause in real time, for what is outside the app (a command beside the run, the other device, the station) that no
+// `until` can see.
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
 
 ///|
@@ -89,11 +84,6 @@ priv struct Driver {
   // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
   mut mark : Int
   mut seen_frame : Int
-  // frames in a row the app was settled at; whether this step's waiting for it was told (on the log, after a second)
-  mut calm : Int
-  /// whether steps first wait for the app to be settled (a host's run: MBUI_DRIVE_SETTLED=1; under the Tester, yes)
-  settles : Bool
-  mut told : Bool
   dir : String
 }
 
@@ -105,14 +95,12 @@ let driver : Ref[Driver?] = { val: None }
 fn drive_init() -> Unit {
   let script = @host.env_text("MBUI_DRIVE")
   if script != "" {
-    // (on a host only when asked for, for now: an app with what moves for ever where a flow looks, a placeholder's
-    // breath, never settles there; the frames' reasons the framework is to know first)
-    drive_start(script, @host.env("MBUI_SHOT_DIR"), settles=@host.env("MBUI_DRIVE_SETTLED") == "1")
+    drive_start(script, @host.env("MBUI_SHOT_DIR"))
   }
 }
 
 ///|
-fn drive_start(script : String, dir : String, settles? : Bool = true) -> Unit {
+fn drive_start(script : String, dir : String) -> Unit {
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
   driver.val = Some({
     steps,
@@ -133,9 +121,6 @@ fn drive_start(script : String, dir : String, settles? : Bool = true) -> Unit {
     shot_at: -1.0,
     mark: runtime().outside_ended(),
     seen_frame: -1,
-    calm: 0,
-    settles,
-    told: false,
     dir,
   })
   h_log("DRIVE start: \{steps.length()} lines")
@@ -348,65 +333,51 @@ fn press(x : Double, y : Double, up : Bool) -> Unit {
 }
 
 ///|
-/// The steps that look at the screen or act on it: each first waits for the app to be settled (unless `now`).
-fn settles_first(cmd : String) -> Bool {
-  match cmd {
-    "until" | "untiln" | "gone" | "field" | "empty" | "clear" | "tap" | "tap1" | "tapxy" | "hold" | "type"
-    | "mark" | "enter" | "backspace" | "back" | "paste" | "pasten" | "wheel" | "wheelat" | "move" | "hover"
-    | "rightclick" | "key" | "resize" | "drag" | "dragon" | "shot" | "exit" => true
-    _ => false
-  }
-}
-
-///|
-/// The words a step looks for on screen, if it looks for some (for a failure's report).
-fn target_of(cmd : String, arg : String) -> String? {
-  let after_first = fn() {
-    match arg.find(" ") {
-      Some(i) => arg.unsafe_substring(start=i + 1, end=arg.length())
-      None => arg
-    }
-  }
-  match cmd {
-    "until" | "gone" | "tap" | "tap1" | "hover" | "rightclick" => Some(arg)
-    "untiln" | "wheelat" => Some(after_first())
-    "hold" =>
-      match arg.find(" ") {
-        Some(i) if number(arg.unsafe_substring(start=0, end=i)) > 0.0 => Some(after_first())
-        _ => Some(arg)
-      }
-    "dragon" => {
-      let words = arg.split(" ").map(fn(v) { v.to_string() }).to_array()
-      if words.length() >= 4 {
-        Some(words[3:].to_owned().join(" "))
-      } else {
-        None
-      }
-    }
-    _ => None
-  }
-}
-
-///|
 /// Runs the script's steps due this frame (after it was drawn): steps that only look run on at once; one that acts
-/// ends the frame's turn, so the app sees it before the next.
+/// ends the frame's turn, so the app sees it before the next (its input's frames). The run asks for no frame of its
+/// own: what it waits for on screen comes with a frame (an input's, a message's, a motion's, the host's event); what
+/// it waits for in time (a step's timeout, a hold let go, a pause, a shot taken by another) is a wake at that time.
 fn drive_frame(c : Ctx) -> Unit {
+  drive_steps(c)
   guard driver.val is Some(d) else { return }
-  // settled as the app left this frame, before the run asks for the next (it does, every frame, while it goes on);
-  // two frames running: the one that took the last step's input, then one built after it
-  let settled_now = c.settled()
-  d.calm = if settled_now { d.calm + 1 } else { 0 }
-  let calm = !d.settles || d.calm >= 2
-  // why not, as the app left it (before the run's own ask for a frame)
-  let why_not = if settled_now { "" } else { c.unsettled() }
-  c.request_frame()
+  let now = h_now()
+  let mut at = @double.infinity
+  let soon = fn(t : Double) { if t < at { at = t } }
+  if d.release_at >= 0.0 {
+    soon(d.release_at)
+  }
+  if d.shot_at >= 0.0 {
+    soon(d.shot_at + shot_taker_ms)
+  }
+  if d.since >= 0.0 && d.at < d.steps.length() {
+    soon(d.since + d.timeout)
+    let line = d.steps[d.at]
+    if line.has_prefix("wait ") {
+      soon(d.since + number(line.unsafe_substring(start=5, end=line.length())))
+    }
+    // what it saw end wants a frame drawn after it; a target seen once, its next place to see it hold still
+    if d.seen_frame >= 0 || d.seen_x >= 0.0 {
+      soon(now)
+    }
+  }
+  if at < @double.infinity {
+    c.wake_at_time(dmax(at, now), later=true)
+  }
+}
+
+///|
+/// How long a shot the host cannot take itself is left for whoever takes it (adb's screencap: "SHOT NAME").
+let shot_taker_ms : Double = 1500.0
+
+///|
+fn drive_steps(c : Ctx) -> Unit {
+  guard driver.val is Some(d) else { return }
   let now = h_now()
   if d.release_at >= 0.0 {
     if now < d.release_at {
       return
     }
     on_pointer(2, d.rx, d.ry, 0)
-    d.calm = 0
     d.release_at = -1.0
     d.at = d.at + 1
     d.since = -1.0
@@ -422,7 +393,6 @@ fn drive_frame(c : Ctx) -> Unit {
     on_pointer(1, x, y, 0)
     if f >= 1.0 {
       on_pointer(2, x, y, 0)
-      d.calm = 0
       d.gms = 0.0
       d.at = d.at + 1
       d.since = -1.0
@@ -438,11 +408,11 @@ fn drive_frame(c : Ctx) -> Unit {
       d.seen_frame = -1
     }
     let waited = now - d.since
-    // `now STEP`: the step as it is due, settled or not
-    let (at_once, line) = if line.has_prefix("now ") {
-      (true, line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_string())
+    // (`now STEP`: STEP)
+    let line = if line.has_prefix("now ") {
+      line.unsafe_substring(start=4, end=line.length()).trim(chars=" ").to_string()
     } else {
-      (false, line)
+      line
     }
     let (cmd, arg) = match line.find(" ") {
       Some(i) =>
@@ -458,34 +428,11 @@ fn drive_frame(c : Ctx) -> Unit {
       d.seen_x = -1.0
       d.seen_y = -1.0
       d.shot_at = -1.0
-      d.told = false
     }
-    // a step that acted: what it set off is seen settled only from the frame after the one that took it (a press
-    // changes what that frame built after the part pressed; its picture may not show it yet)
+    // a step that acted: its input's frames come next; what it set off from outside is counted from here
     let acted = fn() {
       next()
-      d.calm = 0
       d.mark = runtime().outside_ended()
-    }
-    if !at_once && !calm && settles_first(cmd) && d.shot_at < 0.0 {
-      if waited > d.timeout {
-        let seen = match target_of(cmd, arg) {
-          Some(w) =>
-            if on_screen(c, w).length() > 0 {
-              " (\{w} is on screen)"
-            } else {
-              " (\{w} is not on screen)"
-            }
-          None => ""
-        }
-        let why = if why_not == "" { "settled only now" } else { why_not }
-        drive_fail(c, d, "the app did not settle in \{d.timeout.to_int()} ms\{seen}: " + why)
-      } else if waited > 1000.0 && !d.told && why_not != "" {
-        // (said once a step, for whoever reads the log: what a slow step waits on)
-        d.told = true
-        h_log("DRIVE waiting for the app to settle (line \{d.at + 1}): " + why_not)
-      }
-      return
     }
     match cmd {
       "" => next()
@@ -534,7 +481,7 @@ fn drive_frame(c : Ctx) -> Unit {
           h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
           next()
         } else if waited > d.timeout {
-          drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaited: " + c.unsettled() + ")")
+          drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaiting \{runtime().awaiting()} from outside)")
           return
         } else {
           return
@@ -811,7 +758,7 @@ fn drive_frame(c : Ctx) -> Unit {
             d.shot_at = now
             return
           }
-        } else if now - d.shot_at >= 1500.0 {
+        } else if now - d.shot_at >= shot_taker_ms {
           next()
         } else {
           return
@@ -847,33 +794,16 @@ fn drive_frame(c : Ctx) -> Unit {
       }
     }
   }
-  // the script's end, as `exit`: once settled (what the last steps set off is done, a call to the core answered), so
-  // the app does not end under it
-  if d.since < 0.0 {
-    d.since = now
-  }
-  if !calm {
-    if now - d.since > d.timeout {
-      let why = if why_not == "" { "settled only now" } else { why_not }
-      drive_fail(c, d, "the app did not settle in \{d.timeout.to_int()} ms: " + why)
-    }
-    return
-  }
+  // the script's end, as `exit`
   drive_end(0)
 }
 
 ///|
 /// Runs `script` (as MBUI_DRIVE would) over the tester's view, a frame each 16 ms, until it ends (or `max` frames):
-/// what it logged. `settles` false: its steps wait for nothing settling, as a host's do (MBUI_DRIVE_SETTLED unset): a
-/// run seen again as it was recorded there.
-pub fn Tester::drive(
-  self : Tester,
-  script : String,
-  max? : Int = 3000,
-  settles? : Bool = true,
-) -> Array[String] {
+/// what it logged.
+pub fn Tester::drive(self : Tester, script : String, max? : Int = 3000) -> Array[String] {
   self.fake.logs.clear()
-  drive_start(script, "", settles~)
+  drive_start(script, "")
   let mut n = 0
   while driver.val is Some(_) && n < max {
     self.frame()

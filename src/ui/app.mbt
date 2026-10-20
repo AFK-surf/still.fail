@@ -99,17 +99,12 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   } else if c.wake_at > 0.0 {
     h_wake_after(dmax(c.wake_at - t, 1.0))
   }
-  // (once what it asks for is known: a frame asked for only by what never ends while shown, a cycle, leaves it
-  // settled, as Tester::assert_idle has it)
-  // whether what is shown is settled, and what is still awaited from the host: a scripted run's clock stands still
-  // while any is, and its screenshot waits for settled (mac_app.m)
+  // what is still awaited from the host (an image decoding, a view loading): a run to a declared moment keeps its
+  // clock still while any is (mac_app.m, MBView, web/host.js), so its picture does not hang on how fast the machine is
   if outside_told.val {
     let rt = runtime()
-    let n = rt.awaiting()
-    let settled = c.settled()
-    // what it awaits, or (settled or not) why it is not: what a run that never settles says
-    let what = if settled { "" } else { c.unsettled() }
-    @host.frame_settled(settled, n, what)
+    let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
+    @host.frame_awaiting(rt.awaiting(), what)
   }
 }
 
