@@ -1,0 +1,58 @@
+# still.fail mbui's iOS smoke flows (signed in, a message sent, the agent's answer: apps/mbui/scripts/ios-smoke.sh) on
+# Mini1's iOS simulator, against a local still.fail of its own. Only for what iOS has of its own: its packing, its
+# scripts, the core's Apple engine, the smoke flows and their runner, the pinned mbui (its iOS host). What else the
+# app does is the same MoonBit as on the other hosts, checked by check-mbui's Tester replays (pipeline.yml).
+# On mini1-6 (label mbui), after the job before it there; once there, it waits for Mini1 to be able to take it (the
+# simulator not running another's app, the load under 12) and fails saying so after 20 minutes, rather than run
+# over another or on a machine loaded past where the simulator crashed (2026-10-20).
+name: mbui-ios
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mbui/mbui.rev"
+      - "apps/mbui/ios/**"
+      - "apps/mbui/scripts/ios*.sh"
+      - "apps/mbui/src/sfcore/apple_*"
+      - "apps/mbui/src/*/core_engine.m"
+      - "apps/mbui/e2e/ios-flow.sh"
+      - "apps/mbui/e2e/flows/01-signin.*"
+      - "apps/mbui/e2e/flows/03-send-text.*"
+      - "apps/mbui/e2e/flows/05-agent-reply.*"
+      - ".github/workflows/mbui-ios.yml"
+  workflow_dispatch:
+concurrency:
+  group: mbui-ios-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  smoke:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: mbui
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-mac
+      - name: Mini1 free to take it (the simulator, the load)
+        run: bash apps/mbui/scripts/ios-smoke.sh gate
+      - name: Tools (MoonBit, mbui, the core's packages)
+        run: bash apps/mbui/scripts/beta.sh tools
+      - name: The app for the simulator
+        run: bash apps/mbui/scripts/ios-smoke.sh build
+      - name: The smoke flows (01, 03, 05)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/mbui/scripts/ios-smoke.sh run
+      - name: The simulator shut down (when this run booted it)
+        if: always()
+        run: bash apps/mbui/scripts/ios-smoke.sh done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: mbui-ios-${{ github.sha }}
+          path: |
+            apps/mbui/out/e2e/ios/
+            apps/mbui/out/e2e/ios.txt
+          if-no-files-found: ignore
+          retention-days: 7
