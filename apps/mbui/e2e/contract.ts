@@ -1,20 +1,21 @@
 // The core's contract: what the kept conversations (e2e/traces/*.trace, the tapes the Tester's flows are given again:
-// src/sfreplay) say the core answers, a real core answers now. Each tape's asks, in its order, are put to ember's TS
-// core (client/core-ts hosts/node.ts) signed in to the local still.fail scripts/e2e-local.sh started (as alice, the
-// tapes' person), and each answer is compared with the tape's (the rules below). A difference fails, naming the ask
-// and the place in its answer, and says how to record the tape again: then the tapes the Tester runs on are what the
-// core does now, not what it did once.
+// src/sfreplay) say the core answers, a real core answers now. Each tape is put to ember's TS core (client/core-ts
+// hosts/node.ts) from the same starting point as every other (the local still.fail scripts/e2e-local.sh started, alice
+// signed in: `restore`), on a copy of that point's core data, its asks in their order and its steps (what was done
+// beside the app: alice's other device, a folder seeded) where they were taken; each answer is compared with the
+// tape's (the rules below). A difference fails, naming the ask and the place in its answer, and says how to record the
+// tape again: then the tapes the Tester runs on are what the core does now, not what it did once. The tapes stand
+// alone: none needs another put before it, one failing fails alone.
 //
-//   node e2e/contract.ts [NAME…]     every tape (in the order they were recorded: the world they made goes on from one
-//                                    to the next, as in the run) or those named; e2e/contract.sh runs it
-//   node e2e/contract.ts --runs      the tapes by the run they were recorded in, a line each (a run's tapes are put to
-//                                    a still.fail of their own: e2e/contract.sh starts one for each line)
+//   node e2e/contract.ts [NAME…]     every tape, or those named; e2e/contract.sh runs it
+//   node e2e/contract.ts --start DIR the starting point's core data made in DIR: alice signed in (as the app's first
+//                                    start is given her: MBUI_CORE_ACCOUNT_B64), the system asked about notices (as
+//                                    the app does then, sfapp notices.mbt)
 //
-// E2E_EMBER (this checkout), E2E_ORIGIN (the local cloud), E2E_CORE_DATA (a directory of its own: the cores' data),
-// E2E_STATION (the test station's directory: its home is where the drive's tapes' folders are), E2E_SEED (a command
-// run with a tape's world: `drive TAG [FILE…]`, the drive folder of that tag with those files put in it; `peer ARGS`,
-// alice's other device doing so). The tapes of one recorded run share a core's data, restarted for each as the app
-// was; signed in once, as the run's first flow was.
+// E2E_EMBER (the core's checkout), E2E_ORIGIN (the local cloud), E2E_CORE_DATA (a directory of its own: each tape's
+// core data), E2E_START_CORE (the starting point's core data, copied for each tape), E2E_STATION (the test station's
+// directory: its home is where the drive's tapes' folders are), E2E_SEED (a command: `restore`, back to the starting
+// point; `step WORDS`, a tape's step: scripts/e2e-local.sh WORDS).
 //
 // What is compared, and how (the rules a tape's answers are normalized by):
 // - Ids made anew each run (a workspace's, a station's, a chat's, a notice's, a ULID, a 64-hex key, a thread's number,
@@ -30,7 +31,7 @@
 //   (waited for by the value, never by a time: the deadline only fails it; how many pushes it took is the station's
 //   timing). The same: no key the tape has that the live answer lacks, or the other way, no value of another type,
 //   no list of another length, no other words.
-import { mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -39,16 +40,15 @@ type J = any;
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ember = process.env.E2E_EMBER!;
 const origin = process.env.E2E_ORIGIN!;
-const work = process.env.E2E_CORE_DATA!;
+const work = process.env.E2E_CORE_DATA ?? "";
+const startCore = process.env.E2E_START_CORE ?? "";
 const stationDir = process.env.E2E_STATION!;
 const seed = process.env.E2E_SEED;
 /// How long a tape's answer may take to come before the contract fails on it: a deadline, never what is waited for.
 const DEADLINE_MS = Number(process.env.E2E_CONTRACT_MS ?? 90_000);
 
-// (not for --runs, which needs no core)
-const listing = process.argv.includes("--runs");
-const { start } = listing ? { start: null } : await import(pathToFileURL(join(ember, "client/core-ts/src/hosts/node.ts")).href);
-const { applyKeyed } = listing ? { applyKeyed: null } : await import(pathToFileURL(join(ember, "client/core-ts/src/collections.ts")).href);
+const { start } = await import(pathToFileURL(join(ember, "client/core-ts/src/hosts/node.ts")).href);
+const { applyKeyed } = await import(pathToFileURL(join(ember, "client/core-ts/src/collections.ts")).href);
 
 // ---- the rules
 
@@ -82,71 +82,29 @@ const NUMBER_IDS = new Set(["thread"]);
 
 // ---- a tape
 
-type Ev = { out: true; msg: J } | { out: false; id: number; msg: J; bytes: boolean };
-type Tape = { name: string; evs: Ev[]; first: number; tag: string | null; home: string | null; run: string };
+type Ev = { out: true; msg: J } | { out: false; id: number; msg: J; bytes: boolean } | { step: string };
+type Tape = { name: string; evs: Ev[]; start: string | null; home: string | null };
 
 function readTape(name: string): Tape {
   const text = readFileSync(join(HERE, "traces", `${name}.trace`), "utf8");
   const evs: Ev[] = [];
-  let first = Infinity;
+  let start: string | null = null;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const e = JSON.parse(line);
     if (e.out) evs.push({ out: true, msg: e.out });
-    else if (e.in) {
-      evs.push({ out: false, id: e.in.id, msg: e.in, bytes: typeof e.b === "string" });
-      if (typeof e.w === "number") first = Math.min(first, e.w);
-    }
+    else if (e.in) evs.push({ out: false, id: e.in.id, msg: e.in, bytes: typeof e.b === "string" });
+    else if (typeof e.step === "string") evs.push({ step: e.step });
+    else if (typeof e.start === "string") start = e.start;
   }
   // the station's home the tape's run had (its drive folder's path: …/home/e2e-TAG)
-  const m = /"(\/[^"]*?)\/home\/e2e-(\d{6})/.exec(text);
-  // the run it was recorded in (its workspace's id): the tapes of one run share a core's data, as the run's app did
-  const run = /[0-9A-HJKMNP-TV-Z]{26}/.exec(evs.filter((e) => e.out).map((e) => JSON.stringify(e.msg)).join("\n"))?.[0] ?? name;
-  return { name, evs, first, tag: m ? m[2] : null, home: m ? m[1] : null, run };
-}
-
-/// What the tape's world needs before it is put (a run's earlier flows' doings that no tape has): the drive folder of
-/// its tag, and what 18-drive-upload put in it, for the drive's tapes after it.
-function world(t: Tape): string[][] {
-  // 02-home-new-chat, before the chat's tapes: a chat made on alice's other device, answered there
-  if (t.name === "send-text") {
-    const tag = /另一台设备新建的对话 (\d{6})/.exec(JSON.stringify(t.evs))?.[1];
-    if (tag) return [["peer", "create", `另一台设备新建的对话 ${tag} post:新对话里的回复 ${tag}`]];
-  }
-  if (!t.tag) return [];
-  if (t.name === "drive-lend" || t.name === "drive-list") return [["drive", t.tag]];
-  if (t.name === "drive-read") return [];
-  if (t.name === "drive-rename") return [["drive", t.tag, "e2e-photo.jpg", "e2e-data.bin"]];
-  // 91-drive-download-many's folder, after drive-delete took the photo
-  if (t.name === "station-file-sent") return [["drive-big", t.tag]];
-  return [];
+  const m = /"(\/[^"]*?)\/home\/e2e-\d{6}/.exec(text);
+  return { name, evs, start, home: m ? m[1] : null };
 }
 
 // ---- the live core
 
 type Live = { msgs: J[]; values: J[]; bytes: boolean[] };
-
-/// The core of each recorded run's data: one for all its tapes, each tape a client of its own (as each of the run's
-/// flows was the app started again). Not closed and started again between them: closing lets go of what it had not
-/// written yet (a reading place, put on the device a moment after it is told), which an app that keeps running keeps.
-const cores = new Map<string, { core: J; to: Map<number, (m: J, bytes?: Uint8Array) => void> }>();
-function coreOf(dir: string) {
-  let c = cores.get(dir);
-  if (!c) {
-    const to = new Map<number, (m: J, bytes?: Uint8Array) => void>();
-    const core = start(dir, origin, (client: number, json: string, bytes?: Uint8Array) => {
-      const m = JSON.parse(json);
-      if (m.fatal) {
-        console.error("core fatal:", m.fatal);
-        process.exit(3);
-      }
-      to.get(client)?.(m, bytes);
-    });
-    c = { core, to };
-    cores.set(dir, c);
-  }
-  return c;
-}
 
 class Run {
   core: J;
@@ -156,12 +114,14 @@ class Run {
   numbers = new Map<string, Map<number, number>>();
   prefix: [string, string] | null = null;
   changed: () => void = () => {};
-  /// A client of its own of the run's core (`cores`: one a recorded run, its data kept from tape to tape).
+  /// A core of its own over `dir`, and a client of it.
   constructor(dir: string) {
-    const c = coreOf(dir);
-    this.core = c.core;
-    this.client = this.core.connect();
-    c.to.set(this.client, (m: J, bytes?: Uint8Array) => {
+    this.core = start(dir, origin, (_client: number, json: string, bytes?: Uint8Array) => {
+      const m = JSON.parse(json);
+      if (m.fatal) {
+        console.error("core fatal:", m.fatal);
+        process.exit(3);
+      }
       if (typeof m.id !== "number") return;
       const l = this.live.get(m.id) ?? { msgs: [], values: [], bytes: [] };
       this.live.set(m.id, l);
@@ -171,6 +131,7 @@ class Run {
       l.values.push("value" in m ? m.value : "delta" in m ? applyKeyed(prev, m.delta) : m);
       this.changed();
     });
+    this.client = this.core.connect();
   }
   send(msg: J) {
     this.core.receive(this.client, JSON.stringify(msg));
@@ -366,31 +327,29 @@ function describe(msg: J): string {
   return JSON.stringify(msg).slice(0, 80);
 }
 
-const signedIn = new Set<string>();
+/// A tape's own core data: a copy of the starting point's.
+function coreFor(t: Tape): string {
+  const dir = join(work, t.name);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(work, { recursive: true });
+  cpSync(startCore, dir, { recursive: true });
+  return dir;
+}
+
+function seedRun(...args: string[]) {
+  if (!seed) throw new Error("E2E_SEED is not given");
+  execFileSync(seed, args, { stdio: ["ignore", "ignore", "inherit"] });
+}
 
 async function play(t: Tape): Promise<string[]> {
-  const dir = join(work, t.run);
-  const fresh = !signedIn.has(t.run);
-  if (fresh) {
-    rmSync(dir, { recursive: true, force: true });
-    mkdirSync(dir, { recursive: true });
-  }
-  for (const w of world(t)) if (seed) execFileSync(seed, w, { stdio: ["ignore", "ignore", "inherit"] });
-  const r = new Run(dir);
+  if (!t.start) return [`${t.name}: the tape says no starting point (its first line {"start":…}): record it again from one (e2e/run.sh with E2E_START)`];
+  seedRun("restore");
+  const r = new Run(coreFor(t));
   if (t.home) r.prefix = [t.home, stationDir];
-  // signed in as the tape's run was before its first ask (the environment's account: the app's MBUI_CORE_ACCOUNT_B64),
-  // and the system asked about notifications as the app does the first time it is signed in (sfapp notices.mbt)
-  if (fresh) {
-    const account = await (await fetch(`${origin}/__dev/account?user=alice`)).json();
-    for (const [id, call, params] of [[1_000_000, "migrate", { accounts: [account] }], [1_000_001, "notify.set", { asked: true }]] as const) {
-      r.send({ id, call, params });
-      await r.until(() => `${t.name}: ${call} was not answered`, () => r.live.has(id));
-    }
-    signedIn.add(t.run);
-  }
 
   const asks = new Map<number, Ask>();
   for (const e of t.evs) {
+    if ("step" in e) continue;
     if (e.out) {
       if (typeof e.msg.id === "number") {
         asks.set(e.msg.id, { id: e.msg.id, kind: e.msg.call ? "call" : e.msg.subscribe ? "subscribe" : "other", topic: e.msg.subscribe?.topic ?? "", what: describe(e.msg), answers: [] });
@@ -411,21 +370,23 @@ async function play(t: Tape): Promise<string[]> {
       if (a.kind === "subscribe" && l.values.length > 0) for (const v of recValues) learn(r, v, l.values[l.values.length - 1]);
     }
   };
-  const inner = r.changed;
-  void inner;
-
   const seen = new Map<number, number>(); // the tape's answers per id met so far
   for (const e of t.evs) {
-    if (!e.out) {
+    if (!("step" in e) && !e.out) {
       seen.set(e.id, (seen.get(e.id) ?? 0) + 1);
       continue;
     }
-    // what this ask came after: each ask's first answer that came before it in the tape
+    // what this ask (or step) came after: each ask's first answer that came before it in the tape
+    const what = "step" in e ? `the step ${e.step}` : describe(e.msg);
     const after = [...seen.keys()].filter((id) => asks.has(id));
     await r.until(
-      () => `${t.name}: before ${describe(e.msg)}, no answer yet to ${after.filter((id) => !r.live.has(id)).map((id) => asks.get(id)!.what).join(", ")}`,
+      () => `${t.name}: before ${what}, no answer yet to ${after.filter((id) => !r.live.has(id)).map((id) => asks.get(id)!.what).join(", ")}`,
       () => { learnFrom(); return after.every((id) => r.live.has(id)); },
     );
+    if ("step" in e) {
+      seedRun("step", e.step);
+      continue;
+    }
     await r.until(
       () => `${t.name}: ${describe(e.msg)} holds ids no live answer gave: ${pending(r, e.msg).join(", ")}`,
       () => { learnFrom(); return pending(r, e.msg).length === 0; },
@@ -463,6 +424,7 @@ async function play(t: Tape): Promise<string[]> {
     if (recBytes !== l.bytes.some(Boolean)) faults.push(`${t.name} #${a.id} ${a.what}: bytes ${recBytes ? "in the tape, not from the core" : "from the core, not in the tape"}`);
   }
   r.core.disconnect(r.client);
+  await r.core.close();
   return faults;
 
   /// Where the tape's last answer to `a` and the live core's differ: a call's one answer; of a subscription's values the
@@ -495,16 +457,22 @@ function values(answers: Ev[]): J[] {
 
 // ---- every tape
 
-const names = process.argv.slice(2).filter((a) => a !== "--runs");
-const tapes = (names.length > 0 ? names : readdirSync(join(HERE, "traces")).filter((f) => f.endsWith(".trace")).map((f) => f.slice(0, -6)))
-  .map(readTape)
-  .sort((a, b) => a.first - b.first);
-if (listing) {
-  const runs = new Map<string, string[]>();
-  for (const t of tapes) runs.set(t.run, [...(runs.get(t.run) ?? []), t.name]);
-  for (const r of runs.values()) console.log(r.join(" "));
+if (process.argv[2] === "--start") {
+  // the starting point's core data: alice signed in, the system asked about notices, as the app's first start leaves it
+  const r = new Run(process.argv[3]);
+  const account = await (await fetch(`${origin}/__dev/account?user=alice`)).json();
+  for (const [id, call, params] of [[1, "migrate", { accounts: [account] }], [2, "notify.set", { asked: true }]] as const) {
+    r.send({ id, call, params });
+    await r.until(() => `the starting point: ${call} was not answered`, () => r.live.has(id));
+    const m = r.live.get(id)!.msgs[0];
+    if ("error" in m) throw new Error(`the starting point: ${call}: ${JSON.stringify(m.error)}`);
+  }
+  r.core.disconnect(r.client);
+  await r.core.close();
   process.exit(0);
 }
+const names = process.argv.slice(2);
+const tapes = (names.length > 0 ? names : readdirSync(join(HERE, "traces")).filter((f) => f.endsWith(".trace")).map((f) => f.slice(0, -6))).map(readTape);
 let failed = 0;
 for (const t of tapes) {
   let faults: string[];
@@ -518,7 +486,7 @@ for (const t of tapes) {
     failed++;
     console.log(`FAIL ${t.name}`);
     for (const f of faults) console.log(`  ${f}`);
-    console.log(`  the core answers otherwise than the tape: if the core changed, record it again (e2e/run.sh mac with MBUI_CORE_TRACE=1, then scripts/trace.py out/e2e/mac/<flow>.log ${t.name})`);
+    console.log(`  the core answers otherwise than the tape: if the core changed, record it again (E2E_START=base MBUI_CORE_TRACE=1 e2e/run.sh mac <flow>, then scripts/trace.py out/e2e/mac/<flow>.log ${t.name})`);
   }
 }
 console.log(`${tapes.length - failed} of ${tapes.length} tapes are what the core answers`);
