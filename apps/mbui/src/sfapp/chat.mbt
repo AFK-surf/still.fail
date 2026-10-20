@@ -100,11 +100,16 @@ priv struct Reading {
   /// drawn; the rows new to it since, until they show
   known : Map[String, Bool]
   mut drawn : Bool
+  /// the frame its page was last built in, and its own data last taken in (chat_tick: what comes out of its avatars
+  /// played on, its activities' lingering)
+  mut shown_frame : Int
+  mut played : Int
+  mut ticked : Int
   fresh : Map[String, Bool]
   /// the outbox entries messages were sent from here as, by seq (their rows go on being those: Chat.kt sentAs)
   sent : Map[Double, String]
-  /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220), since when
-  linger : Map[String, (Agent, Double)]
+  /// agents whose turn ended, still shown a moment (Chat.kt lingering: 600 ms, then fading 220): Lingering
+  linger : Map[String, Lingering]
   /// the agents running as last drawn
   running : Map[String, Agent]
   /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
@@ -142,6 +147,9 @@ fn reading_of(key : String) -> Reading {
         bench_present: [],
         known: {},
         drawn: false,
+        shown_frame: -10,
+        played: -10,
+        ticked: -10,
         fresh: {},
         sent: {},
         linger: {},
@@ -291,23 +299,11 @@ fn messages(
   let rd = reading_of(r.station + "\u{1}" + r.session)
   // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
   // wait out of the list (emit.mbt, ChatMotion.kt)
+  // (taken and played on, before the page is built, by linger_tick)
   let ek = r.station + "\u{1}" + r.session
   let em = emits_of(ek)
-  // (once under way, it goes on while the end is near: the answer coming in grows the list under the reader, who is
-  // a moment short of its end until the list follows; only scrolled away, as the way to the newest shows, it ends)
-  let playing = em.current is Some(_) || em.queue.length() > 0
-  em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
-  let showing : Map[String, Bool] = {}
-  for a in v.agents {
-    if a.status == "running" {
-      showing[a.key] = true
-    }
-  }
-  for k, _ in rd.linger {
-    showing[k] = true
-  }
-  emit_take(c, em, v, showing)
-  emit_step(c, em)
+  rd.shown_frame = c.frame_number()
+  chat_tick(c, ek, rd, v, shown=true)
   let read = if em.queue.length() > 0 || em.current is Some(_) {
     read.filter(fn(e) {
       match e {
@@ -318,7 +314,7 @@ fn messages(
   } else {
     read
   }
-  let list = with_lingering(c, rd, v, read, keeps=emit_keeps(em))
+  let list = with_lingering(rd, read)
   let keys = row_keys(c, rd, v, list, key)
   let dkey = draft_key(r)
   flight_frame(c, dkey)
@@ -392,7 +388,7 @@ fn messages(
               open.animate(1.0, @motion.tween(220.0, ease=Out))
             }
             let leaving = match rd.linger.get(a.key) {
-              Some((_, at)) => c.now() - at >= linger_fade_ms
+              Some(l) => l.leaving
               None => false
             }
             let fade = @motion.animate(
@@ -678,15 +674,46 @@ let linger_out_ms : Double = 220.0
 pub let linger_ms : Double = linger_fade_ms + linger_out_ms
 
 ///|
-/// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
-fn with_lingering(
-  c : @ui.Ctx,
-  rd : Reading,
-  v : ChatView,
-  list : Array[Entry],
-  keeps? : Map[String, Bool] = {},
-) -> Array[Entry] {
-  let now = c.now()
+/// An agent whose turn ended, its activity still shown (with_lingering): its moment's count (anew each time its
+/// messages stop coming out of its avatar), past its 600 ms (fading).
+struct Lingering {
+  agent : Agent
+  mut n : Int
+  mut leaving : Bool
+}
+
+///|
+/// Each frame, before any page is built, whatever page shows: from each chat kept's own data (its agents running, its
+/// messages coming out of an avatar), whose activity stays a moment as its turn ends, and how long, counted by the
+/// framework (@kit.after) from the build that sees the turn over; a chat under another page lingers on the time that
+/// goes by, as Chat.kt's. The chat's page draws what it says.
+fn linger_tick(c : @ui.Ctx, src : Source) -> Unit {
+  for rk, rd in readings {
+    // every chat kept whose data the page read: its activities linger on the time that goes by, its page shown or not
+    if !read_chats.contains(rk) {
+      continue
+    }
+    let (station, session) = match rk.find("\u{1}") {
+      Some(i) => (rk.view(end_offset=i).to_owned(), rk.view(start_offset=i + 1).to_owned())
+      None => continue
+    }
+    match view_of_chat(src, { station, session, title: "", station_name: "" }).0 {
+      Some(v) => chat_tick(c, rk, rd, v, shown=rd.shown_frame >= c.frame_number() - 1)
+      None => ()
+    }
+  }
+}
+
+///|
+/// A chat's own data, once a frame, before its page is built (linger_tick; its page the first frame it shows): what
+/// comes out of its avatars played on, whose activity stays a moment and how long.
+fn chat_tick(c : @ui.Ctx, rk : String, rd : Reading, v : ChatView, shown~ : Bool) -> Unit {
+  let frame = c.frame_number()
+  let lingered = rd.ticked == frame
+  let played = rd.played == frame
+  if lingered && (played || !shown) {
+    return
+  }
   let running : Map[String, Agent] = {}
   if !v.newer {
     for a in v.agents {
@@ -695,32 +722,70 @@ fn with_lingering(
       }
     }
   }
+  // an agent's messages said while its activity shows come out of its avatar, one at a time; until their turn they
+  // wait out of the list (emit.mbt, ChatMotion.kt). (Once under way, it goes on while the end is near: the answer
+  // coming in grows the list under the reader, who is a moment short of its end until the list follows; only
+  // scrolled away, as the way to the newest shows, it ends.)
+  // (played on while its page shows: under another page it waits where it is, as before)
+  let em = emits_of(rk)
+  if shown && !played {
+    rd.played = frame
+    let playing = em.current is Some(_) || em.queue.length() > 0
+    em.watched = (rd.at_end || (playing && !rd.jump)) && !v.newer && app_in_front()
+    let showing : Map[String, Bool] = {}
+    for k, _ in running {
+      showing[k] = true
+    }
+    for k, _ in rd.linger {
+      showing[k] = true
+    }
+    emit_take(c, em, v, showing)
+    emit_step(c, em)
+  }
+  if lingered {
+    return
+  }
+  rd.ticked = frame
+  // its turn over: it stays a moment
   for k, a in rd.running {
     if !running.contains(k) && !rd.linger.contains(k) {
-      rd.linger[k] = (a, now)
+      rd.linger[k] = { agent: a, n: 0, leaving: false }
     }
-  }
-  let over : Array[String] = []
-  // an agent whose messages are still coming out of its avatar stays (ChatMotion.keeps)
-  for k, l in rd.linger {
-    if keeps.contains(k) && !running.contains(k) {
-      rd.linger[k] = (l.0, now)
-    }
-  }
-  for k, l in rd.linger {
-    if running.contains(k) || now - l.1 >= linger_ms {
-      over.push(k)
-    } else {
-      c.wake_in(if now - l.1 < linger_fade_ms { linger_fade_ms - (now - l.1) } else { linger_ms - (now - l.1) })
-    }
-  }
-  for k in over {
-    rd.linger.remove(k)
   }
   rd.running.clear()
   for k, a in running {
     rd.running[k] = a
   }
+  // while its messages still come out of its avatar it stays whole (ChatMotion.keeps): each build they are still coming
+  // it takes a new count (`n`, its timers' keys), so the count it keeps, asked first in the last of those builds, runs
+  // from there (linger_wbtest: fading 600 ms, gone 820 after the last frame they came)
+  let keeps = emit_keeps(em)
+  let over : Array[String] = []
+  for k, l in rd.linger {
+    if running.contains(k) {
+      over.push(k)
+      continue
+    }
+    if keeps.contains(k) {
+      l.n += 1
+    }
+    let at = "linger/" + rk + "/" + k + "/\{l.n}"
+    let held = keeps.contains(k)
+    // (asked while held too: its count starts at the last build they were still coming)
+    let faded = @kit.after(c, at + "/fade", true, linger_fade_ms)
+    l.leaving = !held && faded
+    if @kit.after(c, at + "/gone", true, linger_ms) && !held {
+      over.push(k)
+    }
+  }
+  for k in over {
+    rd.linger.remove(k)
+  }
+}
+
+///|
+/// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).
+fn with_lingering(rd : Reading, list : Array[Entry]) -> Array[Entry] {
   if rd.linger.is_empty() {
     return list
   }
@@ -731,7 +796,7 @@ fn with_lingering(
     _ => None
   }
   for _, l in rd.linger {
-    out.push(Working(l.0))
+    out.push(Working(l.agent))
   }
   match foot {
     Some(f) => out.push(f)

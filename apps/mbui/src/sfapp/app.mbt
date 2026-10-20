@@ -338,6 +338,7 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   wide_on.val = is_wide(c)
   @settings.wide.val = wide_on.val
   track_press(c)
+  linger_tick(c, src)
   // det-ok(build-effect): a page left is built no more: where it was left is what a later build would see too
   pages_left(src)
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
