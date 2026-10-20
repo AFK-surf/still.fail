@@ -4,12 +4,10 @@ import {
 }
 
 import {
-  "moonbitlang/core/test",
   "moonbitlang/core/json",
 } for "wbtest"
 
 options(
-  targets: { "kept_js_wbtest.mbt": [ "js" ], "kept_native_wbtest.mbt": [ "native", "wasm", "wasm-gc", "llvm" ] },
   "pre-build": [
     {
       "input": "../../screens/text-mac.textrec",
