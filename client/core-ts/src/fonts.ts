@@ -3,9 +3,10 @@
 // own face (text: as ui). Beside the system's: the faces still.fail keeps in the releases bucket (scripts/fonts.py makes
 // them, fonts/<id>/<version>/), and on a computer one installed there (`local:<family>`, the page lists them).
 import { current } from "./i18n.ts";
-import { isObject } from "./util.ts";
 
 export const PLACES = ["ui", "text", "code"] as const;
+// Not util.ts's isObject: the web reads this file itself (its demo, its stories), under its stricter settings.
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 export type Place = (typeof PLACES)[number];
 
 /// A face's file for the Android app: a weight (0: one variable file for all), gzipped, its size so and the hash of it
