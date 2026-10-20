@@ -36,6 +36,8 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// clip's edge cuts through another's rounded corner, not at its corner (a card scrolled part way out of a list, its
 /// corner's curve across the list's edge), that corner is square, showing what lies between the curve and the
 /// corner (at most (1 - π/4) r² of it); no stencil is kept.
+// kept across runs: every clip a paint pushes it pops in the same paint, so between frames only its base level is
+// left, the same in every run
 let clip_stack : Array[Double] = [0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0]
 
 ///|

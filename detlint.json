@@ -74,9 +74,7 @@
     "host-read": {},
     "builtin-hash": {},
     "hash-order": {},
-    "globals": {
-      "src/ui/scene.mbt": 1
-    },
+    "globals": {},
     "style-literal": {
       "src/demo/main.mbt": 47,
       "src/effectdemo/demo.mbt": 3,
