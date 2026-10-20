@@ -536,6 +536,30 @@ test("failed_upload_keeps_the_message_and_retry_uploads_before_delivery", async 
   t.core.close();
 });
 
+test("a_message_the_station_refuses_as_it_is_fails_for_good_and_is_not_sent_again", async () => {
+  const t = await setup();
+  let posts = 0;
+  // A file this station does not have (one that went up to another): refused as it is, again and again.
+  (t.core.inner.stations as J).post = () => { posts++; return Effect.fail(new CoreError("http_400", "Attachment isn't in uploads", 400)); };
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "look", attachments: [{ name: "shot.png", path: "/mini/uploads/shot.png", size: 3 }] });
+  await t.settle();
+  const failed = t.core.inner.views.local.outbox("ws/st", 7)[0];
+  assert.deepEqual([failed.state, failed.final, posts], ["failed", true, 1]);
+  call(t.core, t.ui, 502, "chat.retry", { station: "ws/st", thread: 7, id: failed.id });
+  await t.settle();
+  assert.equal(posts, 1);
+  // Another failure (the station not reached) stays one to send again.
+  (t.core.inner.stations as J).post = () => { posts++; return Effect.fail(new CoreError("unreachable", "offline")); };
+  call(t.core, t.ui, 503, "chat.send", { station: "ws/st", thread: 8, text: "later" });
+  await t.settle();
+  const unsent = t.core.inner.views.local.outbox("ws/st", 8)[0];
+  assert.deepEqual([unsent.state, unsent.final], ["failed", undefined]);
+  call(t.core, t.ui, 504, "chat.retry", { station: "ws/st", thread: 8, id: unsent.id });
+  await t.settle();
+  assert.equal(posts, 3);
+  t.core.close();
+});
+
 test("discarding_a_message_waiting_for_upload_never_sends_it", async () => {
   const t = await queuedUpload();
   t.send(501);

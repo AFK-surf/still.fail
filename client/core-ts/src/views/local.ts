@@ -470,9 +470,10 @@ export class Local {
     return this.outbox(station, thread).find((m) => m.id === id);
   }
 
-  /// Marks an outgoing message `sending` again, or `failed` with the error's message.
-  outboxState(station: string, thread: number, id: string, failed: string | null): void {
-    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed } : m));
+  /// Marks an outgoing message `sending` again, or `failed` with the error's message (`final`: refused as it is, not to
+  /// be sent again).
+  outboxState(station: string, thread: number, id: string, failed: string | null, final = false): void {
+    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined } : m));
     this.#outboxPut(station, thread, list);
     this.onChange({ kind: "outbox", station, thread });
   }

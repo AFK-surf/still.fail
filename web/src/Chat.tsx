@@ -327,6 +327,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
+  const draftKey = useContext(DraftKey);
   // Each turns in its icon's place while it goes; failed, a red mark there a few seconds, why on hover.
   const retry = useDoingState("chat.retry", { station, id: o.id });
   const drop = useDoingState("chat.discard", { station, id: o.id });
@@ -345,11 +346,21 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
             <Tip label={o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.notSent")}>
-              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{t("web-main.chat.unsent")}</span>
+              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{o.final && o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.unsent")}</span>
             </Tip>
-            <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
-              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
-              <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
+            {o.final
+              // Refused as it is (a file this station does not have): sent again it would be again. Its words go back to
+              // the composer, to be sent anew.
+              ? <button type="button" className={css.msgUnsentBtn} disabled={locked || busy || !draftKey}
+                  onClick={() => {
+                    if (to === null || !draftKey) return;
+                    if (!offerToDraft(draftKey, { files: [], text: o.text, quotes: o.quotes.map((q, i) => ({ ...q, id: `${o.id}-${i}` })) })) return;
+                    sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) })));
+                  }}>
+                  <Edit size={12} strokeWidth={2} />{t("common.edit")}</button>
+              : <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
+                  onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
+                  <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>}
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
               <DoingShown state={drop} inline idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>

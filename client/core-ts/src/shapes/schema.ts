@@ -2210,6 +2210,7 @@ export const SHAPES: Record<string, Shape> = {
     ["createdAt", "i64", { client: "I54" }],
     ["state", "String"],
     ["error", opt("String")],
+    ["final", opt("bool"), { doc: "Failed for good: the station refused it as it is (a file it does not have), and sending it again would not\nchange that; it goes back to be written again. Absent otherwise." }],
     ["seq", opt("i64"), { client: opt("I54") }],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`, `lastActiveAt`, …)." }],
     ["followed", opt("bool"), { doc: "Another sent soon after it: as a message's `followed` (sending, it says so under the last only)." }],
