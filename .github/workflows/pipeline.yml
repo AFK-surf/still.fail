@@ -57,6 +57,7 @@ jobs:
       windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
       windows_natives: ${{ steps.plan.outputs.windows_natives }}
+      mbui: ${{ steps.plan.outputs.mbui }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -120,6 +121,9 @@ jobs:
           # change to what they are made of.
           windows_natives=false
           if has '^(client/shell/|client/Cargo\.(toml|lock)$|vendor/|apps/mbui/engine/|scripts/native\.ts$)'; then windows_natives=true; fi
+          # The mbui app's own tests (check-mbui): for a change to it, or to the mbui it pins (apps/mbui/mbui.rev).
+          mbui=false
+          if has '^apps/mbui/'; then mbui=true; fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -134,6 +138,7 @@ jobs:
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
             echo "windows_natives=$windows_natives"
+            echo "mbui=$mbui"
           } >> "$GITHUB_OUTPUT"
           echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
 
@@ -293,6 +298,51 @@ jobs:
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the fixtures, the media
+  # screens, the core client, and the end-to-end flows seen again over their recorded cores, src/sfreplay), on the
+  # JavaScript target against mbui's fake host: no window, no station; the native target type-checked. A merge's evidence and main's, apart from the
+  # app's beta (mbui.yml), which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit, as mbui's own
+  # CI has it; the mbui apps/mbui/mbui.rev pins, cloned by apps/mbui/scripts/mbui.sh.
+  check-mbui:
+    needs: plan
+    if: ${{ !cancelled() && !failure() && needs.plan.outputs.mbui == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      MOON_HOME: ${{ github.workspace }}/../.moon
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: The mbui app's check (detlint, then js and native type-checked)
+        run: moon version && bash apps/mbui/scripts/check.sh
+      # (native too once its tests link: a test's binary is not given the Apple frameworks mbui's host needs, as only
+      # an app's main package is; on GitHub's macOS they fail to link)
+      - name: The mbui app's tests and the flows seen again (js)
+        run: |
+          set -o pipefail
+          LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
+          subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
+          echo "::error title=check-mbui failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          {
+            echo "### check-mbui failed at $subject"
+            echo
+            echo '```'
+            printf '%s\n' "${failed:-(no test named: the check or the build failed, see the log)}"
+            echo '```'
+            [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
@@ -776,7 +826,7 @@ jobs:
 
   # main, once all of it is out: the tag the next run's range starts from, and what is left to do by hand.
   done:
-    needs: [plan, natives, check, check-linux, check-browser, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
+    needs: [plan, natives, check, check-linux, check-browser, check-mbui, check-android, check-android-lint, api, static, station, modules, android, desktop, desktop-win, desktop-web, put]
     if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.natives.result) && needs.check.result == 'success' && needs.check-linux.result == 'success' && needs.check-browser.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.check-android.result) && contains(fromJSON('["success","skipped"]'), needs.check-android-lint.result) && contains(fromJSON('["success","skipped"]'), needs.api.result) && contains(fromJSON('["success","skipped"]'), needs.static.result) && contains(fromJSON('["success","skipped"]'), needs.station.result) && contains(fromJSON('["success","skipped"]'), needs.modules.result) && contains(fromJSON('["success","skipped"]'), needs.android.result) && contains(fromJSON('["success","skipped"]'), needs.put.result) && contains(fromJSON('["success","skipped"]'), needs.desktop.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-win.result) && contains(fromJSON('["success","skipped"]'), needs.desktop-web.result)
     runs-on: [self-hosted, quick]
     timeout-minutes: 10
