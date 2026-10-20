@@ -83,6 +83,8 @@ export interface AdminWorkspace {
   plan?: PlanName | "enterprise";
   /** Emails added that have not signed in yet (a company's owners, at first). Missing from a cloud from before. */
   added?: AddedView[];
+  /** Whether the admin may put a station in it: made for a company, none of its owners signed in yet. */
+  enrollable?: boolean;
 }
 /** What a bug report is about (feedback.ts). */
 export type FeedbackArea = "station" | "web" | "android" | "desktop" | "slack" | "cloud" | "unknown";

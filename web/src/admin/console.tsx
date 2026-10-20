@@ -66,7 +66,7 @@ type UserPage = Timed & {
 type WorkspacePage = Timed & {
   id: string; title: string; creator: { id: string; title: string } | null; people: string;
   /** Missing from a core from before. */
-  stationCount?: string; plan?: string | null; limits?: { members: number; stations: number } | null;
+  stationCount?: string; plan?: string | null; limits?: { members: number; stations: number } | null; enrollable?: boolean;
   members: (Timed & { id: string; title: string; person: PersonLike; role: string })[];
   /** Emails added that have not signed in yet. */
   added?: (Timed & { id: string; email: string; line: string })[];
@@ -478,7 +478,7 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
         ))}
       </>}
       <div className={css.actions}>
-        <Button icon={Plus} onClick={() => setEnrolling(true)}>{t("web-pages.admin.ws.addStation")}</Button>
+        {w.enrollable && <Button icon={Plus} onClick={() => setEnrolling(true)}>{t("web-pages.admin.ws.addStation")}</Button>}
         {w.limits && <Button onClick={() => setLimiting(true)}>{t("web-pages.admin.ws.limits")}</Button>}
         <Button variant="danger" onClick={() => setDeleting(true)}>{t("web-pages.settings.workspace.delete")}</Button>
       </div>

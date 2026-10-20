@@ -449,7 +449,7 @@ test("the admin makes a workspace for a company: its owners by email, limits of 
     const made = await (await aliceAdmin("POST", "/v1/admin/workspaces", acme)).json() as any;
     assert.deepEqual([made.joined, made.added], [[], ["boss@example.test"]], "the owner has not signed in yet");
     let w = await listed(made.id);
-    assert.deepEqual([w.plan, w.seats, w.station_seats, w.members, w.added.map((a: any) => [a.email, a.role])], ["enterprise", 3, 1, [], [["boss@example.test", "owner"]]]);
+    assert.deepEqual([w.plan, w.seats, w.station_seats, w.members, w.added.map((a: any) => [a.email, a.role]), w.enrollable], ["enterprise", 3, 1, [], [["boss@example.test", "owner"]], true]);
     assert.equal(w.created_by.email, "alice@example.test");
     // The admin made it, but is not in it.
     assert.ok(!((await (await alice("GET", "/v1/me")).json()) as any).workspaces.some((x: any) => x.id === made.id));
@@ -457,6 +457,10 @@ test("the admin makes a workspace for a company: its owners by email, limits of 
 
     // A station, put in by the admin; the second is one more than it holds, until the limit is raised.
     assert.equal((await aliceAdmin("POST", "/v1/admin/workspaces/nope/enrollments", { name: "Mac mini" })).status, 404);
+    // Not one that is not a company's: its owners put their stations in.
+    const own = await (await bob("POST", "/v1/workspaces", { name: "Bob's" })).json() as any;
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${own.id}/enrollments`, { name: "Mac mini" })).status, 409);
+    assert.equal((await listed(own.id)).enrollable, false);
     assert.equal((await bobAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Mac mini" })).status, 404);
     assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "" })).status, 400);
     const first = await (await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Mac mini" })).json() as any;
@@ -476,6 +480,11 @@ test("the admin makes a workspace for a company: its owners by email, limits of 
     const boss = h.as(await h.login("boss"));
     const theirs = ((await (await boss("GET", "/v1/me")).json()) as any).workspaces.find((x: any) => x.id === made.id);
     assert.equal(theirs.role, "owner");
+    // From now on its stations are theirs to put in, not the admin's.
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/limits`, { members: 3, stations: 3 })).status, 200);
+    assert.equal((await aliceAdmin("POST", `/v1/admin/workspaces/${made.id}/enrollments`, { name: "Third" })).status, 409);
+    assert.equal((await listed(made.id)).enrollable, false);
+    assert.equal((await boss("POST", `/v1/workspaces/${made.id}/enrollments`, { name: "Third" })).status, 200);
     assert.equal((await boss("POST", `/v1/workspaces/${made.id}/members`, { role: "member", emails: ["bob@example.test", "carol@example.test"] })).status, 200);
     assert.equal((await boss("POST", `/v1/workspaces/${made.id}/members`, { role: "member", emails: ["dave@example.test"] })).status, 429);
     assert.ok(((await (await bob("GET", "/v1/me")).json()) as any).workspaces.some((x: any) => x.id === made.id));
