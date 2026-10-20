@@ -1150,6 +1150,29 @@ opens it here, any other goes out; 无法打开此链接 when nothing takes it),
 listens for its callback, `machineLogin.open`; LoginCards.kt), a service page's link elsewhere (PreviewWeb.kt leave).
 The Android app opens a login's page in a Custom Tab; here it is the browser (no Custom Tabs in the host yet).
 
+## iOS (branch mbui-ios, 2026-10-19)
+
+`APP=stillfail scripts/ios.sh build | run` builds still.fail mbui for the iOS simulator and runs it on a simulator of
+its own (`MBUI_IOS_DEVICE`, default ios-mbui-sf): the same pages as Android and macOS, the core in Hermes (the same
+`core.hbc`, src/host/apple_core.mm built for aarch64-apple-ios-sim with the Rust shell built for that target, Hermes's
+xcframework slice in the app's Frameworks; core/README.md, "iOS"). mbui's scripts/ios.sh takes an app of this module
+(MBUI_APP_MOD, a hook as Android's: scripts/ios-core.sh) and its host (ios_app.m) does what still.fail asks of it:
+
+- The safe areas: the app's view is inside them (as Android's is inside the system bars), what shows round it the
+  page's ground, light or dark (`@host.set_dark`, with the status bar's words to match).
+- The keyboard: the view ends at the keyboard's top (UIKeyboardLayoutGuide), following it as it moves, so the composer
+  rides on it and the list keeps its end in view.
+- Back: the left edge's swipe is the app's own (src/ui/nav.mbt), as on every host; iOS has no system back of its own.
+- `secure.*` in the Keychain; the sign-in through ASWebAuthenticationSession (`stillfail` scheme), as on macOS.
+- Pictures and files picked (PHPickerViewController, UIDocumentPickerViewController), the share sheet
+  (UIActivityViewController), the app in front or not (`@host.set_app_state`), the edit menu's paste.
+- Scripted runs (src/ui/drive.mbt): the keyboard's calls on the view, the paste, the app's picture, notifications
+  tapped; the log on stderr (`simctl launch --stderr`).
+
+Not yet, against Android: notifications shown by the system and pushes (APNs: kept and logged here, as on macOS), a
+share extension (sharing in), the camera tile, turning sideways for a film, a signed build for a device and TestFlight
+(they need the Apple developer account), updates (the App Store's, not the app's).
+
 ## What the hosts need (platform)
 
 Hermes + shell on Android; secure storage with biometrics (`secure.*`);

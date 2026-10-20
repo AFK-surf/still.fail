@@ -10,6 +10,7 @@
 #   scripts/e2e-local.sh up         the cloud, relay, station, the chat (prints what the app needs: e2e-env.sh)
 #   scripts/e2e-local.sh mac        the mac flows (e2e/flows/*.drive) against what `up` started, pass/fail per flow
 #   scripts/e2e-local.sh android    the same on an emulator of our own (AVD, EMU_PORT), with a screen recording
+#   scripts/e2e-local.sh ios        the same on an iOS simulator of our own (MBUI_IOS_DEVICE), recorded
 #   scripts/e2e-local.sh down       stops what `up` started
 #   scripts/e2e-local.sh snapshot NAME [CORE]   a starting point: the cloud's, the station's, the peer's and the app's
 #                                   core data (CORE) as they are now ($E2E_WORK/snapshots/NAME)
@@ -446,6 +447,7 @@ case "${1:-all}" in
   release-seed) release_seed ;;
   mac) shift; "$ROOT/e2e/run.sh" mac "$@" ;;
   android) shift; "$ROOT/e2e/run.sh" android "$@" ;;
+  ios) shift; "$ROOT/e2e/run.sh" ios "$@" ;;
   all)
     trap down EXIT
     up

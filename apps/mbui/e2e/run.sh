@@ -7,9 +7,12 @@
 #   e2e/run.sh android [NAME…]    the same on the emulator (AVD, EMU_PORT; scripts/android.sh), recorded
 #     E2E_APK=FILE E2E_PKG=PACKAGE: that APK instead of a debug build (the beta app: fail.still.mbui; not debuggable, so
 #     the files to attach are not put in it and the core's store is not read back: flows that need them fail)
+#   e2e/run.sh ios [NAME…]        the same on the iOS simulator (a simulator of our own: MBUI_IOS_DEVICE, default
+#     ios-mbui-sf, as mbui's; scripts/ios.sh; on Mini1: Studio's simulators open no app), the app installed afresh, its
+#     log followed (e2e/ios-flow.sh), recorded; with no NAME its smoke flows only (01, 03, 05)
 #
 # A flow's `log do: WORDS` runs `scripts/e2e-local.sh WORDS` beside it (a peer's words, the station frozen or thawed);
-# `#only PLATFORM…` runs it on those platforms only;
+# `#only PLATFORM…` runs it on those platforms only (mac, android, ios);
 # its `#env K=V` lines are given to the app (as MBUI_OPEN_PAGE=decisions: a page opened at the start), its `#before
 # WORDS` lines run as `scripts/e2e-local.sh WORDS` before the app starts.
 # The flows run in order on one sign-in (a fresh core data directory per run); later ones lean on earlier ones' chat.
@@ -125,6 +128,9 @@ check() {  # check WHAT COMMAND…: a line of the flow's verdict
 }
 
 flows=$(ls $D/flows/*.drive | sort)
+# iOS runs its smoke flows only (signed in, a message sent, the agent's answer): what else the app does is the same
+# MoonBit as on the other hosts, checked in the Tester (02 and 04 among them) and on macOS and Android
+[ $PLATFORM = ios ] && [ $# -eq 0 ] && set -- 01-signin 03-send-text 05-agent-reply
 if [ $# -gt 0 ]; then
   pick=""
   for f in $flows; do
@@ -156,6 +162,18 @@ if [ $PLATFORM = android ]; then
       $ADB exec-in run-as $E2E_PKG sh -c "cat > files/e2e/$f" < $FILES/$f
     done
   fi
+fi
+if [ $PLATFORM = ios ]; then
+  # our own simulator (never another agent's), the app built and installed afresh (a fresh core: its data is $CORE,
+  # this Mac's path, as on macOS); 127.0.0.1 in the simulator is this Mac's, so the local still.fail needs no forwarding
+  export MBUI_IOS_DEVICE=${MBUI_IOS_DEVICE:-ios-mbui-sf}
+  export E2E_PKG=${E2E_PKG:-fail.still.mbui.debug}
+  [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/ios.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
+  IOS_DEV=$(scripts/ios.sh device 2>$OUT/device.log | tail -1)
+  [ -n "$IOS_DEV" ] || { cat $OUT/device.log; exit 1; }
+  export IOS_DEV CORE FILES
+  xcrun simctl uninstall $IOS_DEV $E2E_PKG >/dev/null 2>&1
+  xcrun simctl install $IOS_DEV out/ios/MBUI.app || exit 1
 fi
 if [ $PLATFORM = mac ]; then
   [ -n "${E2E_NOBUILD:-}" ] || APP=stillfail scripts/mac.sh build >$OUT/build.log 2>&1 || { tail -30 $OUT/build.log; exit 1; }
@@ -200,6 +218,8 @@ run_flow() {
         esac
       done
     grep -q "^DRIVE PASS" $log
+  elif [ $PLATFORM = ios ]; then
+    "$D/ios-flow.sh" $name $script $log
   else
     "$D/android-flow.sh" $name $script $log
     local r=$?
