@@ -77,7 +77,9 @@ class Rules(unittest.TestCase):
                     c.text("b", style=title) |> ignore
                   }) |> ignore
                   c.box(style=card, id=7, aspect=1.5, fn() {  }) |> ignore
+                  c.text("c", style=title, max_lines=2, tracking=0.5) |> ignore
                 }
+                let clamp : @ui.TextStyle = @ui.text_style(max_lines=2, tracking=Tight)
                 """,
             "src/app/tokens.mbt": """
                 pub let title : @ui.TextStyle = @ui.text_style(size=Exact(15.0, 21.0))
@@ -94,9 +96,11 @@ class Rules(unittest.TestCase):
             lit = t.findings("style-literal")
             # Exact(22.0) once (its number not again), Fixed's 14.0, pad 12.0, size 13.0, the colour: not the token
             # file's, nor the test's, nor aspect (not a look) nor id
-            self.assertEqual(sorted(f.line for f in lit), [2, 2, 4, 5, 5], "\n".join(f.what for f in lit))
-            # the two calls said loosely (pad=, size=); a box with a style and behaviour alone (id, aspect) is not
-            self.assertEqual(sorted(f.line for f in t.findings("box-loose")), [4, 5])
+            # tracking's 0.5; not max_lines (a count, not a look's value) in either
+            self.assertEqual(sorted(f.line for f in lit), [2, 2, 4, 5, 5, 9], "\n".join(f.what for f in lit))
+            # the calls said loosely (pad=, size=, max_lines= and tracking=); a box with a style and behaviour alone
+            # (id, aspect) is not
+            self.assertEqual(sorted(f.line for f in t.findings("box-loose")), [4, 5, 9])
             # every Exact made, in the token file too
             self.assertEqual(sorted((f.file, f.line) for f in t.findings("style-exact")),
                              [("src/app/tokens.mbt", 2), ("src/app/view.mbt", 2)])

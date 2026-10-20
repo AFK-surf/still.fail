@@ -26,6 +26,9 @@ struct Shaped {
   len : Int
   // the text's bidirectional levels, when any is not 0 (None: all left to right)
   bidi : @text.Bidi?
+  // with letter spacing: how far each cluster's piece is drawn in from where it starts (half the spacing, the
+  // other half after it; every advance has the whole of it)
+  pad : Double
   // the last layout made of it (with no indent), for the next one asked
   // for with the same line height and wrapping, in a width it fits
   mut lay : TextLayout?
@@ -63,11 +66,12 @@ struct Glyph {
 }
 
 ///|
-/// The strings shaped in one font (size, weight, style).
+/// The strings shaped in one font (size, weight, style) with one letter spacing.
 struct FontShapes {
   size : Double
   weight : Int
   style : Int
+  spacing : Double
   map : Map[String, Shaped]
 }
 
@@ -126,14 +130,14 @@ fn font_metrics(
 
 ///|
 /// The shapes of one font: looked up by the string alone, no key to build.
-fn font_shapes(size : Double, weight : Int, style : Int) -> Map[String, Shaped] {
+fn font_shapes(size : Double, weight : Int, style : Int, spacing : Double) -> Map[String, Shaped] {
   for f in text_cache.fonts {
-    if f.size == size && f.weight == weight && f.style == style {
+    if f.size == size && f.weight == weight && f.style == style && f.spacing == spacing {
       return f.map
     }
   }
   let map = Map::new()
-  text_cache.fonts.push({ size, weight, style, map })
+  text_cache.fonts.push({ size, weight, style, spacing, map })
   map
 }
 
@@ -151,8 +155,11 @@ fn clear_shapes() -> Unit {
 }
 
 ///|
-fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped {
-  let shapes = font_shapes(size, weight, style)
+/// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
+/// after), shaped with no ligatures (@host.style_no_ligatures): a ligature's letters would not be spaced.
+fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
+  let style = if spacing != 0.0 { style | @host.style_no_ligatures } else { style }
+  let shapes = font_shapes(size, weight, style, spacing)
   match shapes.get(text) {
     Some(s) => s
     None => {
@@ -277,6 +284,13 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
         c = e
       }
       let n = starts.length()
+      if spacing != 0.0 {
+        for k in 0..<n {
+          if !is_nl(cu[k]) {
+            adv[k] = adv[k] + spacing
+          }
+        }
+      }
       let brk = Array::make(n, 0)
       if n > 1 {
         match lb {
@@ -317,6 +331,7 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0) -> Shaped
         brk,
         len: text.length(),
         bidi: bd,
+        pad: spacing / 2.0,
         lay: None,
         lay_max: 0.0,
         lay_line: 0.0,
@@ -523,8 +538,9 @@ fn layout_text(
   wrap : Bool,
   indent? : Double = 0.0,
   line? : Double = 0.0,
+  spacing? : Double = 0.0,
 ) -> TextLayout {
-  let s = shape(text, size, weight)
+  let s = shape(text, size, weight, spacing~)
   // greedy wrapping gives the same lines in any width from the widest
   // line up to the one they were made in (as Node::text_layout)
   if indent == 0.0 {

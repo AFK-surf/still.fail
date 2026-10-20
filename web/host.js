@@ -889,15 +889,20 @@
     // to and with it ends, less its own width: kerning moves it as the browser does, the spacing the browser trims
     // between CJK punctuation is trimmed, and the word ends where the canvas ends it (letters that join)
     const blank = (c) => /^\s+$/.test(c);
+    // no ligatures (style & 8, words with letter spacing): a canvas has no font-variant-ligatures, so the word is
+    // measured with a zero width non-joiner between its clusters, which keeps the browser from making one
+    const upTo = style & 8
+      ? (w, i) => segs.slice(w, i + 1).map((s) => s.segment).join('\u200C')
+      : (w, i) => text.slice(segs[w].index, segs[i].index + segs[i].segment.length);
     const xs = new Array(segs.length);
     let word = 0;
     for (let i = 0; i < segs.length; i++) {
-      const s = segs[i], c = s.segment;
+      const c = segs[i].segment;
       if (blank(c)) {
-        word = s.index + c.length;
+        word = i + 1;
         continue;
       }
-      xs[i] = width(f, text.slice(word, s.index + c.length)) - width(f, c);
+      xs[i] = width(f, upTo(word, i)) - width(f, c);
     }
     let k = 0;
     word = 0;
@@ -909,10 +914,10 @@
         adv = width(f, c);
       } else {
         const last = i + 1 >= segs.length || blank(segs[i + 1].segment);
-        const end = last ? width(f, text.slice(word, s.index + c.length)) : xs[i + 1];
+        const end = last ? width(f, upTo(word, i)) : xs[i + 1];
         adv = Math.max(0, end - xs[i]);
       }
-      if (blank(c)) word = s.index + c.length;
+      if (blank(c)) word = i + 1;
       let key = -1;
       if (c === '\n') adv = 0;
       else if (c !== ' ' && c !== '\t') key = textKey(c, size, weight, style);

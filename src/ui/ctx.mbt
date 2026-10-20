@@ -782,6 +782,7 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 ///|
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
+/// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis.
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -793,6 +794,8 @@ pub fn Ctx::text(
   w? : Size,
   line? : Double,
   center? : Bool,
+  tracking? : Double,
+  max_lines? : Int,
 ) -> Int {
   let st = self.text_patch(style)
   let (s_size, s_line) = self.text_sizes(st)
@@ -806,6 +809,12 @@ pub fn Ctx::text(
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
   n.wrap = first(wrap, st.wrap).unwrap_or(true)
   n.w = first(w, opt_size(st.w)).unwrap_or(Auto)
+  n.spacing = match (tracking, st.tracking) {
+    (Some(v), _) => v
+    (None, Some(t)) => t.px(n.font_size)
+    (None, None) => 0.0
+  }
+  n.max_lines = first(max_lines, st.max_lines).unwrap_or(0)
   i
 }
 

@@ -29,7 +29,13 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     max_w,
     self.wrap,
     line=self.line_h,
+    spacing=self.spacing,
   )
+  let tl = if self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines {
+    cut_to_lines(self, tl, max_w)
+  } else {
+    tl
+  }
   self.full = Some(tl)
   self.full_max = max_w
   tl
@@ -39,7 +45,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 /// One-line text cut to fit `w`, ending in an ellipsis.
 fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
   let room = w - dots.w
   let mut end = 0
   while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
@@ -51,7 +57,34 @@ fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h)
+  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
+}
+
+///|
+/// Wrapped text cut after its `max_lines`th line in `w`, as Android's maxLines with an ellipsis: the last line has
+/// what follows of the paragraph up to what fits with the ellipsis after it. The lines before stay as they were
+/// (greedy wrapping makes each of what precedes it). Like a whole layout, the cut serves every width from its widest
+/// line up to the one it was made in (Node::text_layout): the lines before are the same in any of them, and what did
+/// not fit the last line in the widest does not in a narrower one, what did still does.
+fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
+  let s = tl.shaped
+  let count = s.starts.length()
+  let a = tl.line_start[n.max_lines - 1]
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
+  let room = w - dots.w
+  let mut x = 0.0
+  let mut end = a
+  while end < count && !is_nl(s.cu[end]) && x + s.adv[end] <= room + 0.01 {
+    x = x + s.adv[end]
+    end = end + 1
+  }
+  // no space left before the dots
+  while end > a && s.cu[end - 1] == 32 {
+    end = end - 1
+  }
+  let cut = if end < count { s.starts[end] } else { s.len }
+  let text = n.text.view(end_offset=cut).to_string() + "…"
+  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, spacing=n.spacing)
 }
 
 ///|
@@ -143,6 +176,7 @@ fn rich_same(a : Rich?, b : Rich?) -> Bool {
       a.line == b.line &&
       a.wrap == b.wrap &&
       a.code_scale == b.code_scale &&
+      a.spacing == b.spacing &&
       a.code_bg == b.code_bg &&
       (physical_equal(a.runs, b.runs) || a.runs == b.runs)
     (None, None) => true
@@ -413,12 +447,16 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_size != n.font_size ||
         n.lk_weight != n.weight ||
         n.lk_line != n.line_h ||
-        n.lk_wrap != n.wrap {
+        n.lk_wrap != n.wrap ||
+        n.lk_spacing != n.spacing ||
+        n.lk_max_lines != n.max_lines {
         n.lk_text = n.text
         n.lk_size = n.font_size
         n.lk_weight = n.weight
         n.lk_line = n.line_h
         n.lk_wrap = n.wrap
+        n.lk_spacing = n.spacing
+        n.lk_max_lines = n.max_lines
         n.full = None
         ch = true
       }

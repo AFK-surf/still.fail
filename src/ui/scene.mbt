@@ -343,7 +343,7 @@ fn Ctx::emit_text(
     } else {
       0.0
     }
-    let gx = ((ox + dx + tl.xs[c] + g.ox) * sc).round() / sc
+    let gx = ((ox + dx + tl.xs[c] + s.pad + g.ox) * sc).round() / sc
     let gy = ((top + tl.ascent + g.oy) * sc).round() / sc
     let adaptive = glass_paint.ink_r > 0.0 && !g.color
     self.push_inst(

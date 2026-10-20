@@ -260,10 +260,11 @@ fn h_shape(
         out[k * 4] = i.to_double()
         out[k * 4 + 1] = len.to_double()
         out[k * 4 + 2] = adv
-        // U+E000 plays a ligature's second letter: drawn as part of the cluster before it
+        // U+E000 plays a ligature's second letter: drawn as part of the cluster before it (unless shaped with no
+        // ligatures)
         out[k * 4 + 3] = if c == 32 || c == 10 {
           -1.0
-        } else if c == 0xE000 && k > 0 {
+        } else if c == 0xE000 && k > 0 && (style & @host.style_no_ligatures) == 0 {
           -2.0
         } else {
           c.to_double()

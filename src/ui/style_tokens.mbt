@@ -234,6 +234,33 @@ pub(all) enum TextSize {
 } derive(Eq, Show, Debug)
 
 ///|
+/// Letter spacing (Tailwind's tracking, in ems of the words' size), or `Exact(px)` in pixels: added to each
+/// cluster's advance, half before it and half after (Android's letterSpacing).
+pub(all) enum Tracking {
+  Tighter
+  Tight
+  Normal
+  Wide
+  Wider
+  Widest
+  Exact(Double)
+} derive(Eq, Show, Debug)
+
+///|
+/// The spacing in pixels, for words of `size`.
+pub fn Tracking::px(self : Tracking, size : Double) -> Double {
+  match self {
+    Tighter => -0.05 * size
+    Tight => -0.025 * size
+    Normal => 0.0
+    Wide => 0.025 * size
+    Wider => 0.05 * size
+    Widest => 0.1 * size
+    Exact(v) => v
+  }
+}
+
+///|
 /// How heavy words are.
 pub(all) enum Weight {
   Normal

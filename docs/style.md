@@ -24,6 +24,7 @@ node is built, so one style is a constant and right in light and dark, wide and 
 | `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl2` `Xl3` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default) |
 | `TextSize` (size and line) | `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default) |
 | `Weight` | `Normal` `Medium` `Semibold` `Bold` | 400 … 700 |
+| `Tracking` (letter spacing) | `Tighter` `Tight` `Normal` `Wide` `Wider` `Widest` | Tailwind's, in ems of the words' size; `Exact(px)` in pixels |
 | `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields |
 | `Opacity` | `O0` `O5` … `O95` `O100` | |
 | `Stroke` (an edge) | `B0` `B1` `B2` `B4` `B8` | |
@@ -45,7 +46,11 @@ another under part of a view.
 
 A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `pt` `pb`, `gap`, `align`, `justify`,
 `bg`, `radius`, `border`, `border_color`, `shadow`, `clip`, `opacity`. Words: `size` (with its line), `weight`, `color`,
-`w`, `center`, `wrap` (false: one line, cut with an ellipsis). Behaviour is not a style (`id`, `glass`, `notch_*`,
+`w`, `center`, `wrap` (false: one line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
+many lines, the last ending in an ellipsis: what follows of its paragraph up to what fits with it, as Android's
+`maxLines`; a count, so no style-literal). Letter spacing is Android's: each cluster's advance has it, its piece drawn
+half of it in; words with it are shaped with no ligatures (`@host.style_no_ligatures`), each cluster spaced on its own.
+Rich text (`Ctx::rich`) has letter spacing, in every run, not `max_lines` yet. Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`).
 
 `radius=Inner`: the corner of the container the corner rule measures against (`Tester::corner_faults`: the nearest

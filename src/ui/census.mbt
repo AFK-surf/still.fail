@@ -3,7 +3,7 @@
 
 ///|
 /// The values the last frame used, each kind's distinct values sorted: words' sizes with their lines' heights
-/// (`15/22`; `/0` the font's own), weights, paddings and gaps, corners, colours (a ground, an edge, words; hex).
+/// (`15/22`; `/0` the font's own; `32/44.8 -0.6` with letter spacing), weights, paddings and gaps, corners, colours (a ground, an edge, words; hex).
 pub(all) struct Census {
   text : Array[String]
   weight : Array[String]
@@ -53,7 +53,10 @@ pub fn Tester::census(self : Tester) -> Census {
   for i in 0..<c.count {
     let n = c.nodes[i]
     if n.kind == kind_text || n.kind == kind_rich {
-      text[census_num(n.font_size) + "/" + census_num(n.line_h)] = true
+      text[census_num(n.font_size) +
+        "/" +
+        census_num(n.line_h) +
+        (if n.spacing != 0.0 { " " + census_num(n.spacing) } else { "" })] = true
       weight[n.weight.to_string()] = true
       color[census_hex(n.color)] = true
       continue

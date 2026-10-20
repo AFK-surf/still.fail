@@ -94,8 +94,13 @@ void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *ou
   out[2] = round(size * 1.42);
 }
 
-static CTLineRef make_line(NSString *s, CTFontRef f) {
-  NSDictionary *attrs = @{
+// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own)
+static CTLineRef make_line(NSString *s, CTFontRef f, int style) {
+  NSDictionary *attrs = (style & 8) ? @{
+    (__bridge id)kCTFontAttributeName : (__bridge id)f,
+    (__bridge id)kCTForegroundColorFromContextAttributeName : @YES,
+    (__bridge id)kCTLigatureAttributeName : @0,
+  } : @{
     (__bridge id)kCTFontAttributeName : (__bridge id)f,
     (__bridge id)kCTForegroundColorFromContextAttributeName : @YES,
   };
@@ -216,7 +221,7 @@ static CFIndex glyph_count(CTLineRef line) {
 static double ascii_adv(ascii_metrics *m, CTFontRef f, unichar c) {
   int a = c - ascii_first;
   if (!m->adv_known[a]) {
-    CTLineRef line = make_line([NSString stringWithCharacters:&c length:1], f);
+    CTLineRef line = make_line([NSString stringWithCharacters:&c length:1], f, m->style);
     m->adv[a] = CTLineGetOffsetForStringIndex(line, 1, NULL);
     m->adv_known[a] = 1;
     CFRelease(line);
@@ -231,7 +236,7 @@ static double ascii_kern(ascii_metrics *m, CTFontRef f, unichar c1, unichar c2, 
   if (!m->pair[k]) {
     double a1 = ascii_adv(m, f, c1), a2 = ascii_adv(m, f, c2);
     unichar both[2] = {c1, c2};
-    CTLineRef line = make_line([NSString stringWithCharacters:both length:2], f);
+    CTLineRef line = make_line([NSString stringWithCharacters:both length:2], f, m->style);
     double o1 = CTLineGetOffsetForStringIndex(line, 1, NULL);
     double o2 = CTLineGetOffsetForStringIndex(line, 2, NULL);
     m->pair[k] = glyph_count(line) == 2 && fabs(o2 - o1 - a2) < 1e-9 ? 1 : 2;
@@ -261,7 +266,7 @@ static int32_t shape_slow(moonbit_string_t text, int32_t len, double size, int32
                           double *out, int32_t cap) {
   NSString *s = [[NSString alloc] initWithCharacters:(const unichar *)text length:len];
   CTFontRef f = font_for(size, weight, style);
-  CTLineRef line = make_line(s, f);
+  CTLineRef line = make_line(s, f, style);
   // where Core Text's glyphs come from in the text: a cluster none comes from is part of the glyph before it (a
   // ligature), drawn by that cluster (-2 tells MoonBit, which gives the ligature to the first of them)
   uint8_t *from = calloc((size_t)len + 1, 1);
@@ -395,7 +400,7 @@ static void rasterize(int key) {
   e->done = 1;
   NSString *cluster = texts[key];
   CTFontRef f = font_for(e->size, e->weight, e->style);
-  CTLineRef line = make_line(cluster, f);
+  CTLineRef line = make_line(cluster, f, e->style);
   double sc = mb_text_scale;
   // is it drawn from a color font (emoji)? slanted, from a face with no italic?
   int color = 0, oblique = 0;
@@ -541,7 +546,7 @@ void mb_host_ref_text(moonbit_string_t text, double size, int32_t weight, int32_
   @autoreleasepool {
     for (int i = 0; i < 5; i++) out[i] = 0;
     if (!ref_ctx) return;
-    CTLineRef line = make_line(mb_ns_from_string(text), font_for(size, weight, style));
+    CTLineRef line = make_line(mb_ns_from_string(text), font_for(size, weight, style), style);
     CGContextSetRGBFillColor(ref_ctx, ((color >> 16) & 255) / 255.0, ((color >> 8) & 255) / 255.0,
                              (color & 255) / 255.0, 1);
     CGContextSetTextMatrix(ref_ctx, CGAffineTransformIdentity);

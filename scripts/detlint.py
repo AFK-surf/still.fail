@@ -772,7 +772,9 @@ def lint_mbt(f, cfg, out, returns, readers):
 BOX_LOOK = {"dir", "w", "h", "pad", "padx", "pady", "pl", "pr", "pt", "pb", "gap", "align", "justify", "bg", "radius",
             "border", "border_color", "shadow", "shadow_color", "shadow_y", "min_w", "max_w", "min_h", "max_h", "clip",
             "opacity"}
-TEXT_LOOK = {"size", "weight", "color", "wrap", "w", "line", "center"}
+TEXT_LOOK = {"size", "weight", "color", "wrap", "w", "line", "center", "tracking", "max_lines"}
+# a count, not a look's value: no style-literal
+COUNTS = {"max_lines"}
 LOOSE_CALLS = {"box": BOX_LOOK, "row": BOX_LOOK, "column": BOX_LOOK, "layer": BOX_LOOK, "text": TEXT_LOOK,
                "rich": TEXT_LOOK}
 STYLE_MAKERS = {"style", "patch", "text_style", "text_patch"}
@@ -817,7 +819,7 @@ def lint_style(f, cfg, out):
                 add("box-loose", c.at, line_text)
         maker = c.name in STYLE_MAKERS and (c.kind == "pkg" and c.qual == "@ui" or c.kind == "bare")
         for label, a in c.args:
-            if not maker and (look is None or label not in look):
+            if not maker and (look is None or label not in look) or label in COUNTS:
                 continue
             for i in a:
                 if toks[i].kind == "num" and i not in counted:

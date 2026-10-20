@@ -287,7 +287,8 @@ fn Style::resolve(
 }
 
 ///|
-/// What words look like, every property optional. `wrap=false`: one line, cut with an ellipsis.
+/// What words look like, every property optional. `wrap=false`: one line, cut with an ellipsis; `max_lines`: wrapped
+/// words cut after that many lines, the last ending in an ellipsis; `tracking`: letter spacing.
 pub(all) struct TextPatch {
   size : TextSize?
   weight : Weight?
@@ -295,6 +296,8 @@ pub(all) struct TextPatch {
   w : Len?
   center : Bool?
   wrap : Bool?
+  tracking : Tracking?
+  max_lines : Int?
 }
 
 ///|
@@ -313,8 +316,10 @@ pub fn text_patch(
   w? : Len,
   center? : Bool,
   wrap? : Bool,
+  tracking? : Tracking,
+  max_lines? : Int,
 ) -> TextPatch {
-  { size, weight, color, w, center, wrap }
+  { size, weight, color, w, center, wrap, tracking, max_lines }
 }
 
 ///|
@@ -325,10 +330,12 @@ pub fn text_style(
   w? : Len,
   center? : Bool,
   wrap? : Bool,
+  tracking? : Tracking,
+  max_lines? : Int,
   narrow? : TextPatch,
   dark? : TextPatch,
 ) -> TextStyle {
-  { base: { size, weight, color, w, center, wrap }, narrow, dark }
+  { base: { size, weight, color, w, center, wrap, tracking, max_lines }, narrow, dark }
 }
 
 ///|
@@ -340,6 +347,8 @@ pub fn TextPatch::then(self : TextPatch, o : TextPatch) -> TextPatch {
     w: or_else(o.w, self.w),
     center: or_else(o.center, self.center),
     wrap: or_else(o.wrap, self.wrap),
+    tracking: or_else(o.tracking, self.tracking),
+    max_lines: or_else(o.max_lines, self.max_lines),
   }
 }
 

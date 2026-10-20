@@ -114,6 +114,8 @@ struct Rich {
   code_color : Int64
   code_bg : Int64
   code_scale : Double
+  // letter spacing, in pixels, in every run (Ctx::text's)
+  spacing : Double
   // the id its links' ids come from
   base : Int
   // its words picked with the pointer (Ctx::selectable: a desktop's page)
@@ -232,7 +234,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     let size = r.run_size(run)
     let weight = r.run_weight(run)
     let style = run_style(run)
-    let s = shape(run.text, size, weight, style~)
+    let s = shape(run.text, size, weight, style~, spacing=r.spacing)
     let (a, d, _) = font_metrics(size, weight, style~)
     let l = lh * size / r.size
     let lasc = (l - a - d) / 2.0 + a
@@ -253,10 +255,10 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
       starts.push(s.starts[i] + off)
       lens.push(s.lens[i])
       let mut a = s.adv[i]
-      let mut p = 0.0
+      let mut p = s.pad
       if i == 0 {
         a = a + room
-        p = room
+        p = p + room
       }
       if i == n - 1 {
         a = a + room
@@ -605,7 +607,8 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// behind them while held; tapped, `on_link` is told where they lead. Code
 /// runs: the code face at `code_scale`, in `code_color` (0: the
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
-/// from another paragraph's with the same words.
+/// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
+/// `Tracking` in ems of `size`); a style's `max_lines` is not kept yet.
 pub fn Ctx::rich(
   self : Ctx,
   runs : Array[Run],
@@ -622,6 +625,7 @@ pub fn Ctx::rich(
   code_color? : Int64 = 0L,
   code_bg? : Int64 = 0x7676801FL,
   code_scale? : Double = 0.9,
+  tracking? : Double,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
 ) -> Int {
@@ -634,6 +638,11 @@ pub fn Ctx::rich(
   let line = first(line, s_line).unwrap_or(0.0)
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
+  let spacing = match (tracking, st.tracking) {
+    (Some(v), _) => v
+    (None, Some(t)) => t.px(size)
+    (None, None) => 0.0
+  }
   let sb = StringBuilder()
   for r in runs {
     sb.write_string(r.text)
@@ -681,6 +690,7 @@ pub fn Ctx::rich(
   n.wrap = wrap
   n.line_h = line
   n.w = w
+  n.spacing = spacing
   n.rich = Some({
     runs,
     size,
@@ -693,6 +703,7 @@ pub fn Ctx::rich(
     code_color,
     code_bg,
     code_scale,
+    spacing,
     base,
     select: desk.selecting,
   })

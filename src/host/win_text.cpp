@@ -104,6 +104,19 @@ static IDWriteTextFormat *format_for(double size, int weight, int style) {
   return f;
 }
 
+// style & 8: no ligatures (words with letter spacing, each cluster spaced on its own): liga and clig off
+static IDWriteTypography *no_ligatures;
+
+static void set_style_features(IDWriteTextLayout *l, int len, int style) {
+  if (!(style & 8)) return;
+  if (!no_ligatures) {
+    dw->CreateTypography(&no_ligatures);
+    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_STANDARD_LIGATURES, 0});
+    no_ligatures->AddFontFeature({DWRITE_FONT_FEATURE_TAG_CONTEXTUAL_LIGATURES, 0});
+  }
+  l->SetTypography(no_ligatures, {0, (UINT32)len});
+}
+
 static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int weight, int style) {
   IDWriteTextLayout *l = NULL;
   dw->CreateTextLayout(s, (UINT32)len, format_for(size, weight, style), 1e6f, 1e6f, &l);
@@ -112,6 +125,7 @@ static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int 
     l2->SetFontFallback(fallback);
     l2->Release();
   }
+  set_style_features(l, len, style);
   return l;
 }
 
@@ -479,6 +493,7 @@ extern "C" void mb_host_ref_text(moonbit_string_t text, double size, int32_t wei
     l2->SetFontFallback(fallback);
     l2->Release();
   }
+  set_style_features(l, len, style);
   DWRITE_LINE_METRICS lm;
   UINT32 nl = 0;
   l->GetLineMetrics(&lm, 1, &nl);
