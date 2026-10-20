@@ -128,6 +128,10 @@ for platform in $platforms; do
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json.
       ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release ${beta:+--beta} --tasks :app:assembleRelease
       apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
+      # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
+      # and passed over, until 2026-10-20)
+      "${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner" verify "$apk" \
+        || { echo "release.sh: $apk does not verify (apksigner): not released" >&2; exit 1; }
       name="stillfail${beta:+-beta}-$build.apk"
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \
