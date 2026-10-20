@@ -214,8 +214,8 @@ fn draft_key(r : ChatRef) -> String {
 
 ///|
 /// The chat's draft, its kept words asked of the core the first time (`draft.get`).
-fn draft_of(src : Source, r : ChatRef) -> Draft {
-  draft_by(src, draft_key(r))
+fn draft_of(c : @ui.Ctx, src : Source, r : ChatRef) -> Draft {
+  draft_by(c, src, draft_key(r))
 }
 
 ///|
@@ -228,7 +228,7 @@ priv struct Fresh {
 
 ///|
 /// The draft kept as `key`, its words asked of the core the first time (`draft.get`).
-fn draft_by(src : Source, key : String) -> Draft {
+fn draft_by(c : @ui.Ctx, src : Source, key : String) -> Draft {
   match drafts.get(key) {
     Some(d) => d
     None => {
@@ -248,7 +248,8 @@ fn draft_by(src : Source, key : String) -> Draft {
         id: "",
       }
       drafts[key] = d
-      (src.call)("draft.get", { "key": Json::string(key) }, fn(res) {
+      // (asked of the core once the frame's builds are over)
+      c.tell("draft.get/" + key, fn() { (src.call)("draft.get", { "key": Json::string(key) }, fn(res) {
         match res {
           Ok(Object(_) as v) if draft_empty(d) => fill_draft(d, v)
           _ => ()
@@ -259,7 +260,7 @@ fn draft_by(src : Source, key : String) -> Draft {
         }
         d.loaded = true
         d.kept = draft_sig(d)
-      })
+      }) })
       d
     }
   }
@@ -953,8 +954,7 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
 fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
   let t = @sf.theme()
-  // det-ok(build-effect): asked once, by the draft's key alone: nothing a build changes
-  let d = draft_by(src, match fresh {
+  let d = draft_by(c, src, match fresh {
     Some(f) => f.key
     None => draft_key(r)
   })

@@ -18,7 +18,7 @@ let memories : Map[String, MemoryRead] = Map::new()
 ///|
 /// A station's memory, asked for once each time one of its pages comes (it changes as agents write it, not while it is
 /// looked at).
-fn memory_of(core : Core, address : String) -> MemoryRead {
+fn memory_of(c : @ui.Ctx, core : Core, address : String) -> MemoryRead {
   let m = match memories.get(address) {
     Some(m) => m
     None => {
@@ -27,9 +27,14 @@ fn memory_of(core : Core, address : String) -> MemoryRead {
       m
     }
   }
+  // (asked once the frame's builds are over, once: each build asks while it is not)
   if !m.asked {
-    m.asked = true
-    (core.call)("memory.get", obj([("station", str(address))]), fn(r) {
+    c.after_build("memory/" + address, fn() {
+      if m.asked {
+        return
+      }
+      m.asked = true
+      (core.call)("memory.get", obj([("station", str(address))]), fn(r) {
       match r {
         Ok(v) => {
           m.value = Some(v)
@@ -37,6 +42,7 @@ fn memory_of(core : Core, address : String) -> MemoryRead {
         }
         Err(e) => m.error = error_text(e)
       }
+    })
     })
   }
   m
@@ -181,8 +187,7 @@ fn memory_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit 
       name = text(Some(s), "name")
     }
   }
-  // det-ok(build-effect): asked once, by the station's address: nothing a build changes
-  let read = memory_of(core, address)
+  let read = memory_of(c, core, address)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     nav_bar(c, core, name, tr("android-misc.memory.title"), sub=fn() {
       c.text(tr("android-misc.memory.sub"), size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
@@ -320,8 +325,7 @@ let doc_picked : Map[String, Int] = Map::new()
 /// files (`skill`), or the global memory a part at a time (from `at`); the parts as pills across the top.
 fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, at : Int) -> Unit {
   let t = @sf.theme()
-  // det-ok(build-effect): asked once, by the station's address: nothing a build changes
-  let read = memory_of(core, address)
+  let read = memory_of(c, core, address)
   let m = read.value
   let k = if skill == "" {
     None

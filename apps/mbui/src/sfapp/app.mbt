@@ -342,8 +342,10 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   @settings.wide.val = wide_on.val
   track_press(c)
   linger_tick(c, src)
-  // det-ok(build-effect): a page left is built no more: where it was left is what a later build would see too
-  pages_left(src)
+  // pages left: where they were left told once the frame's builds are over (a later build would see them left too)
+  if left_pages.length() > 0 {
+    c.after_build("pages-left", fn() { pages_left(src) })
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {

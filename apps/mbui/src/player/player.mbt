@@ -115,6 +115,8 @@ pub struct Player {
   priv mut view : @ui.NativeView?
   priv mut start_at : Double
   priv mut started : Bool
+  /// the place it opens at, owed to the player once the frame's builds are over (Player::view)
+  priv mut seek_owed : Bool
   priv mut speed : Double
   priv mut subs_on : Bool
   priv mut subtitle : Bool
@@ -141,6 +143,7 @@ pub fn Player::new(key? : String = "player") -> Player {
     view: None,
     start_at: 0.0,
     started: false,
+    seek_owed: false,
     speed: 1.0,
     subs_on: true,
     subtitle: false,
@@ -390,9 +393,15 @@ pub fn Player::view(
     @ui.log("player: \{name} ready, \{s.duration.to_int()} ms long, \{read} bytes read")
     // the place it opens at, once more where the player took no seek before it was ready
     if p.start_at > 0.0 && s.position < p.start_at - 1000.0 {
-      // det-ok(build-effect): by the host's say of its player, the same in each build of the frame
-      p.seek(p.start_at)
+      p.seek_owed = true
     }
+  }
+  // (told the player once the frame's builds are over: by the host's say of it, once)
+  if p.seek_owed {
+    c.after_build("player-seek", fn() {
+      p.seek_owed = false
+      p.seek(p.start_at)
+    })
   }
   let phase = p.phase(s)
   let known_audio = match p.track {

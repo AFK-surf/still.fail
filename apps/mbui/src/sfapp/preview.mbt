@@ -982,8 +982,8 @@ fn Viewer::fetch(self : Viewer, c : @ui.Ctx, src : Source) -> Unit {
             }
           })
         })
-        // det-ok(build-effect): the view just made, played once: nothing a build changes
-        n.play()
+        // the view just made, played once the frame's builds are over
+        c.tell("preview-play", fn() { n.play() })
         v.video = Some(n)
       }
       return
@@ -1226,12 +1226,12 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   |> ignore
   // (one going takes back no more: it is the page's)
   if !v.closing {
-    c.take_back(fn() { if marking.on { marks_back(c) } else { v.close(c) } })
+    c.take_back(fn() { if marking.on { marks_back(c) } else { v.shut(c) } })
   }
 }
 
 ///|
-fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
+fn Viewer::shut(self : Viewer, c : @ui.Ctx) -> Unit {
   if !self.closing {
     self.closing = true
     // closed at once: the one going is only drawn (what was going before it, gone)
@@ -1260,8 +1260,8 @@ fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
     }
     // the views under the canvas go at once (they cannot fade)
     match self.video {
-      // det-ok(build-effect): closed as the back is taken or the marks are put (Viewer::marks_frame), once
-      Some(n) => n.pause()
+      // (once the frame's builds are over: closed as the back is taken or the marks are put, once)
+      Some(n) => c.tell("preview-pause", fn() { n.pause() })
       None => ()
     }
   }
@@ -1383,8 +1383,7 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             marked_into[key] = list
             marks_leave()
             say(c, pv("android-chat.preview.put.done"))
-            // det-ok(build-effect): the host's picture of the marks, said once
-            self.close(c)
+            self.shut(c)
           } else {
             // (the host's picture of the marks, said once)
             keep_bytes(c, marking.job_name, "image/png", png)
@@ -2822,7 +2821,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           }
         }
         if picture_button(c, "preview/close", "close", tint, on || true) {
-          v.close(c)
+          v.shut(c)
         }
       },
     )

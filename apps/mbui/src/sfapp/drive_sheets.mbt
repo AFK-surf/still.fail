@@ -504,8 +504,8 @@ fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> 
     Some(p) => params["path"] = Json::string(p)
     None => ()
   }
-  // det-ok(build-effect): asked as the sheet opens (once: picker_asking) or a folder is tapped; a later ask supersedes it
-  (src.call)("drive.folders", Json::object(params), fn(r) {
+  // (asked once the frame's builds are over: as the sheet opens, once, or a folder is tapped; a later ask supersedes it)
+  c.tell("drive.folders", fn() { (src.call)("drive.folders", Json::object(params), fn(r) {
     if serial != dv.picker_serial {
       return
     }
@@ -522,7 +522,7 @@ fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> 
           dv.picker_error = dv_error(e)
         }
     }
-  })
+  }) })
 }
 
 ///|
