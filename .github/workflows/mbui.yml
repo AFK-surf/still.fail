@@ -316,9 +316,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           MBUI_CACHE: ${{ runner.temp }}/mbui-release
         run: |
-          # (beta.sh's python3: Windows' is `python`)
+          # (beta.sh's python3: Windows' is `python`, UTF-8 for the feed's news; its shasum -a 256: Git Bash's sha256sum)
           mkdir -p "$RUNNER_TEMP/bin" && printf '#!/bin/sh\nexec python "$@"\n' > "$RUNNER_TEMP/bin/python3" && chmod +x "$RUNNER_TEMP/bin/python3"
-          export PATH="$RUNNER_TEMP/bin:$PATH"
+          printf '#!/bin/sh\n[ "$1" = -a ] && shift 2\nexec sha256sum "$@"\n' > "$RUNNER_TEMP/bin/shasum" && chmod +x "$RUNNER_TEMP/bin/shasum"
+          export PATH="$RUNNER_TEMP/bin:$PATH" PYTHONUTF8=1
           bash apps/mbui/scripts/beta.sh win
           bash apps/mbui/scripts/beta.sh publish win
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
