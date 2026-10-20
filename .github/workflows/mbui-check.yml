@@ -1,0 +1,95 @@
+# The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh), on js and on native: a branch's in its pipeline
+# (pipeline.yml's check-mbui calls this, its gate waits for it), main's here on its own (on a push to the app). On main
+# they hold nothing back (the app's beta is mbui.yml's, done waits for neither) and were the last of its pipeline run
+# in half of them: as part of it, the run after waited for them, 16 of 40 runs a median 88 s (2026-10-20).
+name: mbui-check
+on:
+  workflow_call:
+    inputs:
+      native: { type: boolean, default: true, description: "the tests on native too (pipeline.yml's plan: mbui_native)" }
+  push:
+    branches: [main]
+    paths: ["apps/mbui/**", ".github/workflows/mbui-check.yml"]
+# main: one run at a time, the newest waiting (a red one seen, as every commit's was in the pipeline); called, the
+# pipeline's own (a branch's newest push stops its run before).
+concurrency:
+  group: ${{ github.event_name == 'push' && format('mbui-check-{0}', github.ref) || format('mbui-check-call-{0}-{1}', github.run_id, github.run_attempt) }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the fixtures, the media
+  # screens, the core client, and the end-to-end flows seen again over their recorded cores, src/sfreplay), on the
+  # JavaScript target against mbui's fake host: no window, no station; the native target type-checked. A merge's evidence and main's, apart from the
+  # app's beta (mbui.yml), which its tests do not hold back (as asked, 2026-10-19). The latest MoonBit, as mbui's own
+  # CI has it; the mbui apps/mbui/mbui.rev pins, cloned by apps/mbui/scripts/mbui.sh. Its tests' two parts
+  # (scripts/test.sh's PARTS) on a runner each, the check with the app's: on one, ~30 s and ~50 s of a 93 s job (2026-10-20).
+  js:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [app, replay]
+    env:
+      MOON_HOME: ${{ github.workspace }}/../.moon
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: The mbui app's check (detlint, then js and native type-checked)
+        if: matrix.part == 'app'
+        run: moon version && bash apps/mbui/scripts/check.sh
+      # (native: check-mbui-native)
+      - name: The mbui app's tests and the flows seen again (js, ${{ matrix.part }})
+        run: |
+          set -o pipefail
+          PARTS=${{ matrix.part }} LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
+          subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
+          echo "::error title=check-mbui (${{ matrix.part }}) failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          {
+            echo "### check-mbui (${{ matrix.part }}) failed at $subject"
+            echo
+            echo '```'
+            printf '%s\n' "${failed:-(no test named: the check or the build failed, see the log)}"
+            echo '```'
+            [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+  # The mbui app's tests on native, on macOS, as they run on js above: a test's binary links mbui's hosts' Objective-C
+  # through mbui's scripts/cc_apple.sh (MOON_CC; a test package is given no cc-link-flags). Only where native can differ
+  # from js (plan's mbui_native): the hosts, the FFI, the link options, the pinned mbui; on main, any change to the app.
+  # On GitHub's macos-15 (free for a public repository): it needs nothing of Mini1's, whose mbui runner (mini1-6) is
+  # main's beta's. ~3.7 min there: building its tests 28 s, running the app's 71 s and the core's and flows' 108 s on
+  # its three cores (2026-10-20). On one runner, not shared out as check-mbui's are: the organization runs 5 macOS jobs
+  # at once (GitHub's Team plan), and two of them for each run had a few branches' runs waiting minutes for one.
+  # done waits for neither. 10 minutes at most.
+  native:
+    if: ${{ github.event_name == 'push' || inputs.native }}
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Tools (MoonBit, mbui)
+        run: bash apps/mbui/scripts/beta.sh tools
+      - name: The mbui app's tests and the flows seen again (native)
+        run: |
+          set -o pipefail
+          TARGETS=native LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-native.log"
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-native.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          echo "::error title=check-mbui-native failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
