@@ -1396,15 +1396,15 @@ let file_card_radius : Double = 16.0
 let file_card_pad : Double = 10.0
 
 ///|
-/// The × of a card in the composer, in the card's top right corner: as far from both edges as the card's room,
-/// concentric with it.
+/// The round × of a card in the composer, in the card's top right corner: as far from both edges as the card's room
+/// (a whole circle: round by what it is).
 fn card_close(c : @ui.Ctx, remove : Int) -> Unit {
   let t = @sf.theme()
   c.box(h=Fill(1.0), fn() {
     c.box(
       w=Px(22.0),
       h=Px(22.0),
-      radius=@sf.concentric(file_card_radius, file_card_pad),
+      radius=11.0,
       bg=@sf.alpha(t.p.text, 0.06),
       align=ACenter,
       justify=JCenter,

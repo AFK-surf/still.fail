@@ -367,10 +367,11 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
 fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, Bool)], busy : Int) -> Int? {
   let t = @sf.theme()
   let mut picked : Int? = None
-  // (the number's disc in the card's corner: concentric with it, docs/ui-panels.md)
+  // (the number's disc in the card's corner, a whole circle: the card's corner drawn round it, docs/ui-panels.md)
   let card_pad = 8.0
   let row_pad = 7.0
-  let card_radius = 18.0 + card_pad / 1.25
+  let disc = 22.0
+  let card_radius = @sf.around(card_pad + row_pad, disc / 2.0)
   c.box(w=Fill(1.0), pad=card_pad, radius=card_radius, bg=t.p.chip, fn() {
     for i, o in options {
       if i > 0 {
@@ -396,9 +397,9 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
         id~,
         fn() {
           c.box(
-            w=Px(22.0),
-            h=Px(22.0),
-            radius=@sf.concentric(card_radius, card_pad + row_pad),
+            w=Px(disc),
+            h=Px(disc),
+            radius=disc / 2.0,
             bg=if o.2 { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
             align=ACenter,
             justify=JCenter,
