@@ -115,7 +115,8 @@ priv struct TextReading {
   parts : Array[Bytes]
   mut failed : String?
   mut novel : Novel?
-  mut ready_at : Double
+  /// the book come anew: its wait for where it was left counted from here (reader_place_ms)
+  mut ready_n : Int
   mut started : Bool
   mut chunk : Int
   mut within : Double
@@ -125,7 +126,8 @@ priv struct TextReading {
   mut closing : ReaderPanel
   mut query : String
   mut searched : String
-  mut typed_at : Double
+  /// each change typed into the search: the search waits reader_search_ms after the last
+  mut typed_n : Int
   mut matches : Array[TextMatch]
   mut hit : Int
   /// a jump: its block, the offset in it, whether a little before it shows too; its step (0 none, 1 the block put at
@@ -155,7 +157,7 @@ fn reading_for(key : String) -> TextReading {
         parts: [],
         failed: None,
         novel: None,
-        ready_at: -1.0,
+        ready_n: 0,
         started: false,
         chunk: 0,
         within: 0.0,
@@ -165,7 +167,7 @@ fn reading_for(key : String) -> TextReading {
         closing: NoPanel,
         query: "",
         searched: "",
-        typed_at: 0.0,
+        typed_n: 0,
         matches: [],
         hit: -1,
         jump: (0, 0, false),
@@ -242,7 +244,7 @@ fn reader_build(at : DriveAt, r : TextReading) -> Unit {
   }
   r.parts.clear()
   r.novel = Some(build_novel(dv_name(at.path), Bytes::from_array(whole[:]), r.of > r.got))
-  r.ready_at = -1.0
+  r.ready_n += 1
 }
 
 ///|
@@ -283,11 +285,7 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     match (r.novel, r.failed) {
       (Some(novel), _) => {
         // where it was left on this device (held here a moment: no wait for a station)
-        if r.ready_at < 0.0 {
-          r.ready_at = c.now()
-        }
         if !r.started {
-          let waited = c.now() - r.ready_at
           match place.value {
             Some(v) => {
               r.started = true
@@ -300,10 +298,9 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
               }
             }
             None =>
-              if waited >= reader_place_ms || place.error is Some(_) {
+              if place.error is Some(_) ||
+                @kit.after(c, "reader-place/\{r.ready_n}", true, reader_place_ms) {
                 r.started = true
-              } else {
-                c.wake_in(reader_place_ms - waited)
               }
 
           }
@@ -515,12 +512,10 @@ fn reader_book(
       r.searched = r.query
       r.matches = []
       r.hit = -1
-    } else if c.now() - r.typed_at >= reader_search_ms {
+    } else if @kit.after(c, "reader-search/\{r.typed_n}", true, reader_search_ms) {
       r.searched = r.query
       r.matches = search_chunks(novel.chunks, r.query)
       r.hit = -1
-    } else {
-      c.wake_in(reader_search_ms - (c.now() - r.typed_at))
     }
   }
   let size = prefs.size.to_double()
@@ -1129,7 +1124,7 @@ fn reader_panels(
             )
             if res.text != r.query {
               r.query = res.text
-              r.typed_at = c.now()
+              r.typed_n += 1
             }
           })
           |> ignore

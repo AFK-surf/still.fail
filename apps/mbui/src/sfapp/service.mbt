@@ -261,7 +261,7 @@ fn service_body(
           if !@ui.open_url(url) {
             c.copy_text(url)
             app.toast = svc("android-chat.link.failed") + " · " + svc("common.copied")
-            app.toast_at = -1.0
+            app.toast_n += 1
           }
         },
       )

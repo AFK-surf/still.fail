@@ -168,22 +168,14 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   let sys = fake_system()
   let t = notify_core(calls, sys)
   sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
-  // the chat pushed and put in place, then gone to
-  let mut lit = 0.0
-  let mut seen = false
-  for _ in 0..<200 {
-    t.frame()
-    if flashing.val.0 == "ts2" {
-      seen = true
-      if flashing.val.1 > lit {
-        lit = flashing.val.1
-      }
-    }
-  }
-  assert_true(seen)
-  assert_true(lit > 0.99)
-  t.frame(ms=2000.0)
-  t.frame()
+  // the chat pushed and put in place, then gone to: its flash in, held (the middle of its hold), then gone
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  t.run_for((flash_in_ms + flash_held_ms) / 2.0)
+  assert_eq(flashing.val.0, "ts2")
+  assert_true(flashing.val.1 > 0.99)
+  t.run_for(flash_ms)
+  t.draw()
   assert_eq(flashing.val.1, 0.0)
   t.assert_idle()
 }

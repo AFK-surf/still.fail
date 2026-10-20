@@ -145,7 +145,7 @@ fn download_drive_file(
           Some(e) => {
             k.end()
             app.toast = fill("android-misc.drive.fetchFailed", [("name", name), ("error", dv_error(e))])
-            app.toast_at = -1.0
+            app.toast_n += 1
           }
         }
       })
@@ -190,7 +190,7 @@ fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String
       }
       Err(e) => {
         app.toast = fill("android-misc.drive.fetchFailed", [("name", dv_name(path)), ("error", dv_error(e))])
-        app.toast_at = -1.0
+        app.toast_n += 1
       }
     }
   })

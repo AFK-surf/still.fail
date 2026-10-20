@@ -136,7 +136,7 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
     Some(granted) => {
       if !granted && nt.from_switch {
         app.toast = fill("android-misc.notify.allowInSettings", [("app", "still.fail")])
-        app.toast_at = -1.0
+        app.toast_n += 1
       }
       nt.from_switch = false
       (src.call)(

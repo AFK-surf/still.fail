@@ -171,7 +171,7 @@ fn update_install(src : Source) -> Unit {
 fn up_say(words : String) -> Unit {
   if words != "" {
     app.toast = words
-    app.toast_at = -1.0
+    app.toast_n += 1
   }
 }
 

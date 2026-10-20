@@ -46,7 +46,7 @@
   "counts": {
     "frame-request": {
       "src/sfapp/chat.mbt": 1,
-      "src/sfapp/composer.mbt": 4,
+      "src/sfapp/composer.mbt": 2,
       "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/pick.mbt": 2,
       "src/sfapp/recent.mbt": 1,
@@ -96,27 +96,20 @@
       "scripts/web-shots.mjs": 1
     },
     "page-settle": {},
-    "frame-count": {
-      "src/sfapp/cards_wbtest.mbt": 1,
-      "src/sfapp/notices_wbtest.mbt": 1
-    },
-    "literal-time": {
-      "src/sfapp/notices_wbtest.mbt": 1
-    },
+    "frame-count": {},
+    "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {
-      "src/sfapp/app.mbt": 5,
       "src/sfapp/bar.mbt": 1,
       "src/sfapp/chat.mbt": 5,
       "src/sfapp/chat_fixture.mbt": 1,
       "src/sfapp/composer.mbt": 2,
-      "src/sfapp/decide.mbt": 3,
       "src/sfapp/decisions.mbt": 3,
-      "src/sfapp/drive_reader.mbt": 7,
+      "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/emit.mbt": 5,
       "src/sfapp/home.mbt": 2,
-      "src/sfapp/preview.mbt": 9
+      "src/sfapp/preview.mbt": 1
     },
     "wall-clock": {
       "src/coredemo/shelf.mbt": 1,

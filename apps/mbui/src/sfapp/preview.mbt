@@ -461,9 +461,10 @@ priv struct Viewer {
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
-  /// the bars shown, and when they go
+  /// the bars shown, and how long they stay when left alone (-1: till a tap), counted anew each time they wake
   mut awake : Bool
-  mut rest_at : Double
+  mut rest_len : Double
+  mut rest_n : Int
   /// whether they fade when left alone after it opens (not in the fixture's shots, which come when they come)
   mut rests : Bool
   zoom : Zoom
@@ -663,7 +664,8 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     asked: false,
     save_after: false,
     awake: true,
-    rest_at: -1.0,
+    rest_len: -1.0,
+    rest_n: 0,
     rests: true,
     zoom: Zoom::new(),
     vzoom: Zoom::new(),
@@ -1123,10 +1125,10 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
         None => return
       }
   }
-  let now = c.now()
   if !v.started {
     v.started = true
-    v.rest_at = if v.rests && bars_rest() { now + rest_ms } else { -1.0 }
+    v.rest_n += 1
+    v.rest_len = if v.rests && bars_rest() { rest_ms } else { -1.0 }
     // it comes up in the keyboard's place: what was being typed into lets go of it first
     c.blur()
     // an image grows from its thumbnail when the chat shows it and its size is known here (FilePreview.kt ViewerLayer)
@@ -1181,12 +1183,8 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     v.ask_save(c)
   }
   // the bars fade when left alone (not while it comes, nor over a page whose taps are its own)
-  if v.awake && v.rest_at > 0.0 {
-    if now >= v.rest_at {
-      v.awake = false
-    } else {
-      c.wake_in(v.rest_at - now)
-    }
+  if v.awake && v.rest_len > 0.0 && @kit.after(c, "pv-rest/\{v.rest_n}", true, v.rest_len) {
+    v.awake = false
   }
   let t = @sf.theme()
   let kind = v.shown_kind()
@@ -1279,19 +1277,20 @@ fn step_log(i : Int, frames : Int) -> Unit {
 
 ///|
 /// A tap on the stage shows or hides the bars.
-fn Viewer::toggle(self : Viewer, now : Double) -> Unit {
+fn Viewer::toggle(self : Viewer) -> Unit {
   if self.awake {
     self.awake = false
-    self.rest_at = -1.0
+    self.rest_len = -1.0
   } else {
-    self.wake(now, tap_rest_ms)
+    self.wake(tap_rest_ms)
   }
 }
 
 ///|
-fn Viewer::wake(self : Viewer, now : Double, ms : Double) -> Unit {
+fn Viewer::wake(self : Viewer, ms : Double) -> Unit {
   self.awake = true
-  self.rest_at = if bars_rest() { now + ms } else { -1.0 }
+  self.rest_n += 1
+  self.rest_len = if bars_rest() { ms } else { -1.0 }
 }
 
 ///|
@@ -1439,7 +1438,7 @@ fn Viewer::content(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Uni
 /// Taps on the stage (not on what is over it) show or hide the bars.
 fn tap_stage(c : @ui.Ctx, v : Viewer, stage : Int) -> Unit {
   if c.clicked(stage) {
-    v.toggle(c.now())
+    v.toggle()
   }
 }
 
@@ -1622,7 +1621,6 @@ fn Viewer::draw_flight(self : Viewer, c : @ui.Ctx, picture : String, to : (Doubl
 /// comes, the chat's thumbnail (or its likeness) stands in its place.
 fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) -> Unit {
   let v = self
-  let now = c.now()
   let picture = v.picture(src)
   if v.image != "" && @ui.image_state(v.image) == -1 {
     tap_stage(c, v, stage)
@@ -1961,7 +1959,7 @@ fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Do
       // shown at once: no fade; a step wakes the bars (FilePreview.kt: LaunchedEffect(file.path) { wake() })
       n.started = true
       n.fade.set(1.0)
-      n.wake(c.now(), rest_ms)
+      n.wake(rest_ms)
       viewer.val = Some(n)
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
@@ -2085,13 +2083,13 @@ fn Viewer::gestures(
     if now - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
-      v.toggle(now)
+      v.toggle()
       z.double_tap(px, py)
     } else {
       v.tap_at = now
       v.tap_x = px
       v.tap_y = py
-      v.toggle(now)
+      v.toggle()
     }
   }
   let dy = @ui.wheel(c, stage)
@@ -2165,7 +2163,6 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
     Some(n) => n
     None => return
   }
-  let now = c.now()
   let on = v.bars_shown()
   let dur = n.duration()
   let pos = n.position()
@@ -2215,7 +2212,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
   }
   let controls = c.id("preview/video-controls")
   if c.pressed(controls) {
-    v.wake(now, tap_rest_ms)
+    v.wake(tap_rest_ms)
   }
   c.box(w=Fill(1.0), pad=8.0, opacity=if on { shown } else { 0.0 }, fn() {
     c.box(
@@ -2235,7 +2232,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
               n.seek(start_of(at - 1))
               n.pause()
               step_log(at - 1, frames)
-              v.wake(now, tap_rest_ms)
+              v.wake(tap_rest_ms)
             }
             if picture_button(c, "preview/play", if n.playing() { "pause" } else { "play" }, dark_muted, on) {
               if n.playing() {
@@ -2243,13 +2240,13 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
               } else {
                 n.play()
               }
-              v.wake(now, tap_rest_ms)
+              v.wake(tap_rest_ms)
             }
             if picture_button(c, "preview/next", "chevron-right", dark_muted, on) {
               n.seek(start_of(at + 1))
               n.pause()
               step_log(at + 1, frames)
-              v.wake(now, tap_rest_ms)
+              v.wake(tap_rest_ms)
             }
           })
           |> ignore
@@ -2288,7 +2285,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
             }
             v.rate = rates[(i + rates.length() - 1) % rates.length()]
             n.rate(v.rate)
-            v.wake(now, tap_rest_ms)
+            v.wake(tap_rest_ms)
           }
           let r = if v.rate == 1.0 {
             "1"
@@ -2319,13 +2316,13 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
             v.grabbing = true
             v.grab_frame = at
             n.grab_frame(start_of(at))
-            v.wake(now, tap_rest_ms)
+            v.wake(tap_rest_ms)
           }
           // 横屏: the phone turned for it (and back as the viewer closes)
           if picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on) {
             v.turned = !v.turned
             @host.set_sideways(v.turned)
-            v.wake(now, tap_rest_ms)
+            v.wake(tap_rest_ms)
           }
         })
         |> ignore
@@ -2370,15 +2367,12 @@ fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Dou
   if held {
     // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
     v.awake = true
-    v.rest_at = -1.0
+    v.rest_len = -1.0
     v.scrubbing = true
   } else if v.scrubbing {
     // let go: the bars rest from now
     v.scrubbing = false
-    v.wake(c.now(), tap_rest_ms)
-    if v.rest_at > 0.0 {
-      c.wake_in(tap_rest_ms)
-    }
+    v.wake(tap_rest_ms)
   }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)
@@ -2769,7 +2763,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
             let z = v.zoom
             if picture_button(c, "preview/zoom-out", "minus", tint, on, enabled=z.scale > z.min_scale() + 0.0001) {
               z.zoom_to(z.scale / 1.25, z.bw / 2.0, z.bh / 2.0, true)
-              v.wake(c.now(), tap_rest_ms)
+              v.wake(tap_rest_ms)
             }
             let pct = c.id("preview/zoom-reset")
             if c.clicked(pct) && on {
@@ -2781,7 +2775,7 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
             |> ignore
             if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < max_scale - 0.0001) {
               z.zoom_to(z.scale * 1.25, z.bw / 2.0, z.bh / 2.0, true)
-              v.wake(c.now(), tap_rest_ms)
+              v.wake(tap_rest_ms)
             }
             // 标注图片: once its whole picture is here (ImageMarks.kt)
             if v.bytes is Some(_) && picture_button(c, "preview/mark", "edit", tint, on) {

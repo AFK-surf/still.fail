@@ -26,8 +26,10 @@ priv struct Decide {
   doing : Map[String, Bool]
   /// asks let go here, before the core says so (Chat.kt AskDismiss `gone`), by station, thread and post
   gone : Map[String, Bool]
-  /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, when
-  failed : Map[String, Double]
+  /// what failed a moment ago (the core's doing, `stage: failed`, kept 6 s: DoingMark's red mark), by its key, which
+  /// failure it is (failed_serial: each its own 6 s)
+  failed : Map[String, Int]
+  mut failed_n : Int
   /// the sheet open; the one going (its motion is @kit.sheet's)
   mut sheet : Sheet?
   mut leaving : Sheet?
@@ -75,6 +77,7 @@ let dui : Decide = {
   doing: {},
   gone: {},
   failed: {},
+  failed_n: 0,
   sheet: None,
   leaving: None,
   jobs_all: false,
@@ -139,7 +142,7 @@ fn decide_reset() -> Unit {
 /// Says `words` in the toast from the next frame on (from a call's answer, between frames).
 fn toast_later(words : String) -> Unit {
   app.toast = words
-  app.toast_at = -1.0
+  app.toast_n += 1
 }
 
 ///|
@@ -169,8 +172,8 @@ fn act(
       dui.doing.remove(key)
     }
     if key != "" && res is Err(_) {
-      // stamped by the frame that first shows it (failed_lately)
-      dui.failed[key] = -1.0
+      // its 6 s from the frame that first shows it (failed_lately)
+      dui.failed[key] = failed_next()
     }
     match res {
       Ok(v) => {
@@ -220,25 +223,21 @@ let failed_ms : Double = 6000.0
 /// Whether `key` failed within the last 6 s (AppState.failedOf); a frame asked for when its mark is to go.
 fn failed_lately(c : @ui.Ctx, key : String) -> Bool {
   match dui.failed.get(key) {
-    Some(was) => {
-      let at = if was < 0.0 {
-        dui.failed[key] = c.now()
-        c.now()
-      } else {
-        was
-      }
-      let left = at + failed_ms - c.now()
-      if left <= 0.0 {
-        dui.failed.remove(key)
-        false
-      } else {
-        // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
-        c.wake_in(left, later=true)
-        true
-      }
+    // (its going is not what is shown waits for: a screenshot of it failing shows the mark)
+    Some(n) if @kit.after(c, "failed/\{key}/\{n}", true, failed_ms, later=true) => {
+      dui.failed.remove(key)
+      false
     }
+    Some(_) => true
     None => false
   }
+}
+
+///|
+/// Each failure told its own number (dui.failed): the same key failing again is a new 6 s.
+fn failed_next() -> Int {
+  dui.failed_n += 1
+  dui.failed_n
 }
 
 ///|
