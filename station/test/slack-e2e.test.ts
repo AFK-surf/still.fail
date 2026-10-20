@@ -73,7 +73,13 @@ test("an app_mention over Socket Mode starts a turn; the agent's chat_post lands
     while (store.lastTurn(key)?.endedAt == null) await new Promise((r) => setTimeout(r, 25));
     const posts = slackStandIn.calls("chat.postMessage");
     assert.equal(posts.length, 1, JSON.stringify(posts.map((p) => p.params)));
-    assert.deepEqual(posts[0]!.params, { channel: "C1", thread_ts: "1700000000.000100", text: "hello from the agent", unfurl_links: "false" });
+    assert.deepEqual(posts[0]!.params, {
+      channel: "C1",
+      thread_ts: "1700000000.000100",
+      text: "hello from the agent",
+      blocks: '[{"type":"markdown","text":"hello from the agent"}]',
+      unfurl_links: "false",
+    });
     assert.equal(posts[0]!.auth, "xoxb-e2e");
     // Recorded in the thread once Slack took it, under the ts Slack gave it.
     const thread = store.threadAt("slack:T1", "C1", "1700000000.000100")!;

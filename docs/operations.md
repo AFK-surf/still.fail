@@ -67,6 +67,8 @@ station 必须加入 workspace 才接 Slack、运行 agent。数据默认在 `~/
 - `@名字 <任务>`：开始一个会话（单会话连接则把这个 thread 带进它的会话）。
 - 同一个 thread 里可以 @ 多个连接，它们各自有独立的会话。
 - `-stop`：中断当前 turn。
+- agent 的消息以 `markdown` 块发出：Slack 照 still.fail chat 的 Markdown 画（粗体、链接、多级列表、标题、表格、带语言的代码块），agent 不再写 mrkdwn；@人仍是 `<@USER_ID>`。消息的 `text` 是同一段原文，通知和读回历史用它。
+- 问题卡片（chat_post 的 `card`，`options` 或 `text`）：一条消息，正文下面是单选（推荐的排最后、默认选中，`detail` 是选项下的灰字；有一项超过 75 字时，全部选项连同说明列在正文后，单选里只留标题）加「确定」，或一个输入框加「发送」。按下后经 Socket Mode 的 `interactive` 信封送来（不需要公网地址），当作这个人在 thread 里说了选中的标签（addressed，ts 是这次操作的 `action_ts`），卡片改成「✓ 谁 回答：什么」不再能点；没选就按、或卡片已答过，只回一条他自己看得到的消息。app 要打开 interactivity：新建的 app 自带，旧 app 在连接页保存一次设置就会加上。login 卡片不在 Slack 里出。
 
 ## 开发
 

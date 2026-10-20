@@ -195,7 +195,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     throw new Error(
       chat.cards === true
         ? 'a login card is shown only in still.fail chats (EMBER/…); here post its link in the text and end with kind "need_human"'
-        : 'cards (options, a text field) are shown only in still.fail and Feishu chats; in a Slack thread, write the choices or the question in the text and end with kind "need_human"',
+        : 'cards (options, a text field) are not shown here; write the choices or the question in the text and end with kind "need_human"',
     );
   }
   if (card !== null && text === "") throw new Error("text is required with a card: what it asks and the facts it turns on, so it can be answered from this message alone");
