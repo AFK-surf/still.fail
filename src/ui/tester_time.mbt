@@ -243,3 +243,17 @@ pub fn Tester::tap_notice(self : Tester, text : String) -> Bool {
     None => false
   }
 }
+
+///|
+/// The next timer the app is waiting on (a wake said once: Ctx::wake_in, @kit.after), when it comes and who said it;
+/// None while none is. Not what comes again by itself (Ctx::every: Tester::periodic). What a run's end goes on to, as it
+/// goes on to a motion's declared end (Tester::rest_of).
+pub fn Tester::next_wake(self : Tester) -> (Double, String)? {
+  ignore(self)
+  let c = g()
+  if c.wake_waited < 0.0 {
+    None
+  } else {
+    Some((c.wake_waited, by_of(c.wake_by)))
+  }
+}

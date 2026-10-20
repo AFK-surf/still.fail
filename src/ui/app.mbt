@@ -234,12 +234,6 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   for t in tells {
     (t.1)()
   }
-  // what any of its builds said to tell, once each (Ctx::tell)
-  let told = c.told.copy()
-  c.told.clear()
-  for t in told {
-    (t.1)()
-  }
   if scroll_logging() {
     c.log_scroll()
   }
@@ -275,6 +269,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   let hc = c.hit_clips
   c.hit_clips = c.next_hit_clips
   c.next_hit_clips = hc
+  // (what said its presses are another's, under a Tester: that one takes them there)
+  c.check_press_owners()
   let si = c.scroll_ids
   c.scroll_ids = c.next_scroll_ids
   c.next_scroll_ids = si
@@ -341,6 +337,7 @@ fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.group_cur = 0
   c.count = 0
   c.cur = -1
+  c.press_owners.clear()
   c.back_next = None
   c.back_node_next = -1
   let root = c.alloc(kind_box)
@@ -949,24 +946,5 @@ pub fn Ctx::bench_frames(self : Ctx, on : Bool) -> Unit {
   ignore(self)
   if on && bench.host == bench_app && fake.val is None {
     bench.held = true
-  }
-}
-
-///|
-/// What an input or an event a build took (a tap, the host's answer, a view just made) tells outside of it (a call to
-/// a core, a player told to play, bytes kept): told once the frame's builds are over, once by its `key` (the last said
-/// under it this frame), whichever of its builds said it. A frame built again (a layout read back) sees no input its
-/// first build took and says it no more: kept here, it is neither lost nor told twice. What every build of the frame
-/// works out alike (asked while it is not yet: a page's next part, a page left) is Ctx::after_build's, the last
-/// build's alone: tell is for what one build alone sees, once. Outside a build (an event's handler), told at once.
-pub fn Ctx::tell(self : Ctx, key : String, f : () -> Unit) -> Unit {
-  if building.val {
-    let id = stable_hash(key).to_int()
-    match self.told.search_by(fn(t) { t.0 == id }) {
-      Some(k) => self.told[k] = (id, f)
-      None => self.told.push((id, f))
-    }
-  } else {
-    f()
   }
 }

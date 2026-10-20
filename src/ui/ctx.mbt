@@ -218,6 +218,8 @@ pub struct Ctx {
   words_reads : Map[String, Bool]
   laid_watch : Map[Int, Int]
   laid_rects : Map[Int, (Double, Double, Double, Double)]
+  /// the boxes whose presses another takes (Ctx::presses_to), by node: that one's id and where it was said
+  press_owners : Map[Int, (Int, SourceLoc)]
   mut nav_rest : Double
   /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
   clear : (Double, Double, Double)
@@ -280,9 +282,6 @@ pub struct Ctx {
   /// what the view tells outside of what it built, by key, this build's (Ctx::after_build): done once the frame's
   /// builds are over
   tells : Array[(Int, () -> Unit)]
-  /// what the frame's builds said to tell outside, by its key, the last said of each kept, whichever build said it
-  /// (Ctx::tell)
-  told : Array[(Int, () -> Unit)]
   mut layer_cur : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
@@ -374,6 +373,7 @@ fn Ctx::new() -> Ctx {
     words_reads: Map::new(),
     laid_watch: Map::new(),
     laid_rects: Map::new(),
+    press_owners: Map::new(),
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
     host_rec: HostRec::new(),
@@ -413,7 +413,6 @@ fn Ctx::new() -> Ctx {
     last_layers: [],
     layers_opened: [],
     tells: [],
-    told: [],
     layer_cur: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),

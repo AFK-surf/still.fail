@@ -207,7 +207,11 @@ pub fn sheet(
   let o = c.overlay(key, modal=true, scrim=@ui.alpha(scrim.unwrap_or(th.scrim), scrim_t), inert=!now, fn() {
     let i = c.box(w=Fill(1.0), h=Px(hx), ty=total - hx + bx, fn() {
       look(c, { t: scrim_t, h: hx, below: bx }, fn() {
-        // behind what it shows (its buttons take their taps), over the sheet (it takes the drags)
+        // behind what it shows (its buttons take their taps), over the sheet (it takes the drags): what lies on it
+        // (its title, its grabber) pressed through it, while it takes presses (not as it sinks away)
+        if now {
+          c.presses_to(top_id)
+        }
         c.layer(fn() { c.drag_area(top_id, axis=Vertical, w=Fill(1.0), h=Px(drag_h), fn() {  }) |> ignore }) |> ignore
         body()
       })

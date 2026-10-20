@@ -220,8 +220,65 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 /// (theirs, or what holds them), or nothing; not words under what lies over them (a composer over a list's last row,
 /// a sheet, a scrim): a step waits for them to come out from under it, as someone would.
 fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
-  on_screen_nodes(c, what).filter(fn(p) { !under_another(c, p.2, p.0, p.1) }).map(fn(p) { (p.0, p.1) })
+  let at = []
+  for p in on_screen_nodes(c, what) {
+    match reach_point(c, p.2, p.0, p.1) {
+      Some(q) => at.push(q)
+      None => ()
+    }
+  }
+  at
 }
+
+///|
+/// Where a finger reaches node `i`'s words, (x, y) their middle: there, else the point of them in sight nearest it that
+/// a press goes to them at (part of them out from under what lies over the rest: a link half under a composer), the
+/// same each run (on a grid of reach_step, the nearest first, then the higher, then the one further left). None: no
+/// point of them in sight is theirs to press.
+fn reach_point(c : Ctx, i : Int, x : Double, y : Double) -> (Double, Double)? {
+  if !under_another(c, i, x, y) {
+    return Some((x, y))
+  }
+  let n = c.nodes[i]
+  // what of it is in sight: its box, cut by what clips it and by the window
+  let mut x0 = dmax(n.x, 0.0)
+  let mut y0 = dmax(n.y, 0.0)
+  let mut x1 = dmin(n.x + n.fw, c.width)
+  let mut y1 = dmin(n.y + n.fh, c.height)
+  let mut j = n.parent
+  let mut up = 0
+  while j >= 0 && j < c.count && up < c.count {
+    let a = c.nodes[j]
+    if a.clip {
+      x0 = dmax(x0, a.x)
+      y0 = dmax(y0, a.y)
+      x1 = dmin(x1, a.x + a.fw)
+      y1 = dmin(y1, a.y + a.fh)
+    }
+    j = a.parent
+    up += 1
+  }
+  let mut best : (Double, Double)? = None
+  let mut best_d = @double.infinity
+  let mut py = y0 + reach_step / 2.0
+  while py < y1 {
+    let mut px = x0 + reach_step / 2.0
+    while px < x1 {
+      let d = (px - x) * (px - x) + (py - y) * (py - y)
+      if d < best_d && !under_another(c, i, px, py) {
+        best = Some((px, py))
+        best_d = d
+      }
+      px = px + reach_step
+    }
+    py = py + reach_step
+  }
+  best
+}
+
+///|
+/// How far apart the points of words in sight are tried for one a finger reaches (reach_point), in points.
+let reach_step : Double = 4.0
 
 ///|
 /// Whether (x, y), where node `i` is, is another's to press: the hit target there neither the node nor what holds it.
@@ -233,7 +290,8 @@ fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
   let mut j = i
   let mut up = 0
   while j >= 0 && j < c.count && up < c.count {
-    if c.nodes[j].id == top {
+    // (it, what holds it, or what takes the presses on either: Ctx::presses_to)
+    if c.nodes[j].id == top || (c.press_owners.get(j) is Some((a, _)) && a == top) {
       return false
     }
     j = c.nodes[j].parent
@@ -300,7 +358,8 @@ fn not_reachable(c : Ctx, what : String, ms : Double) -> String {
     "not on screen after \{ms.to_int()} ms"
   } else {
     "on screen but under something else to press (what lies over it: a composer, a sheet, a scrim) after " +
-    "\{ms.to_int()} ms"
+    "\{ms.to_int()} ms: " +
+    on_screen_nodes(c, what).map(fn(p) { over_it(c, p.0, p.1) }).join("; ")
   }
 }
 
@@ -1071,4 +1130,42 @@ fn outside_named(cmd : String, arg : String, what : String) -> Bool {
         what.has_prefix("view ") && what.has_suffix(", " + arg + ")")
       }
   }
+}
+
+///|
+/// What a press at (x, y) goes to, for a failure's report: the hit target there, what kind it is, where it is laid out
+/// and the first words in it (or nothing there).
+fn over_it(c : Ctx, x : Double, y : Double) -> String {
+  let top = hit_in(c.hit_ids, c.hit_rects, x, y)
+  if top == 0 {
+    return "nothing at \{x.to_int()},\{y.to_int()}"
+  }
+  let what = if drags.contains(top) { "a drag area" } else { "a box taking presses" }
+  for k in 0..<c.count {
+    let n = c.nodes[k]
+    if n.id == top {
+      let words = first_words(c, k)
+      return "at \{x.to_int()},\{y.to_int()} \{what} \{n.x.to_int()},\{n.y.to_int()} \{n.fw.to_int()}x\{n.fh.to_int()}" +
+        (if words == "" { "" } else { " holding \"" + words + "\"" })
+    }
+  }
+  "at \{x.to_int()},\{y.to_int()} \{what} not built this frame"
+}
+
+///|
+/// The first words under node `i` (itself, then its children in order), "" when none.
+fn first_words(c : Ctx, i : Int) -> String {
+  let n = c.nodes[i]
+  if (n.kind == kind_text || n.kind == kind_rich) && n.text != "" {
+    return n.text
+  }
+  let mut k = n.first
+  while k >= 0 {
+    let w = first_words(c, k)
+    if w != "" {
+      return w
+    }
+    k = c.nodes[k].next
+  }
+  ""
 }
