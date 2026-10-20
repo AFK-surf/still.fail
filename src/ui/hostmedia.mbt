@@ -274,3 +274,71 @@ pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool 
 pub fn Tester::shared_out(self : Tester) -> Array[(String, String, String, Bytes)] {
   self.fake.shares
 }
+
+///|
+/// What a real host said of a native view as a run recorded it (@ui.trace_views' line, as JSON), said again by the
+/// fake host from now on: a video's frames' times or a grab's state (`{"view":{"view":N,"what":W,"text":T}}`: what
+/// view_text answers until it is said again), or a frame grabbed (`{"still":{"view":N},"b":HEX}`: its grab ready, the
+/// bytes what the next view_still gives). What is not said is not known (NativeView::frames None, no frame grabbed).
+/// False for a line that is neither.
+pub fn Tester::view_said(self : Tester, line : String) -> Bool {
+  let j : Json = @json.parse(line) catch { _ => return false }
+  let num = fn(o : Map[String, Json], k : String) -> Int? {
+    match o.get(k) {
+      Some(Number(n, ..)) => Some(n.to_int())
+      _ => None
+    }
+  }
+  match j {
+    Object(m) =>
+      match (m.get("view"), m.get("still")) {
+        (Some(Object(v)), _) =>
+          match (num(v, "view"), num(v, "what"), v.get("text")) {
+            (Some(id), Some(what), Some(String(text))) => {
+              self.fake.view_texts[(id, what)] = text
+              self.fake.wants = true
+              true
+            }
+            _ => false
+          }
+        (_, Some(Object(v))) =>
+          match (num(v, "view"), m.get("b")) {
+            (Some(id), Some(String(hex))) => {
+              let q = match self.fake.view_stills.get(id) {
+                Some(q) => q
+                None => {
+                  let q = []
+                  self.fake.view_stills[id] = q
+                  q
+                }
+              }
+              q.push(bytes_of_hex(hex))
+              self.fake.view_texts[(id, 2)] = "2"
+              self.fake.wants = true
+              true
+            }
+            _ => false
+          }
+        _ => false
+      }
+    _ => false
+  }
+}
+
+///|
+fn bytes_of_hex(hex : String) -> Bytes {
+  let digit = fn(c : Char) {
+    let n = c.to_int()
+    if n >= '0'.to_int() && n <= '9'.to_int() {
+      n - '0'.to_int()
+    } else if n >= 'a'.to_int() && n <= 'f'.to_int() {
+      n - 'a'.to_int() + 10
+    } else if n >= 'A'.to_int() && n <= 'F'.to_int() {
+      n - 'A'.to_int() + 10
+    } else {
+      0
+    }
+  }
+  let cs = hex.to_array()
+  Bytes::makei(cs.length() / 2, fn(i) { (digit(cs[2 * i]) * 16 + digit(cs[2 * i + 1])).to_byte() })
+}

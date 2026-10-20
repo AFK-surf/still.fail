@@ -86,6 +86,10 @@ struct FakeHost {
   mut marks_next : Bytes?
   /// what the app handed to the system's share sheet (@ui.share), oldest first
   shares : Array[(String, String, String, Bytes)]
+  /// what a real host said of its views as a run recorded it (Tester::view_said): a video's frames' times, by (view,
+  /// what) (view_text), and the frames grabbed, by view, oldest first (view_still)
+  view_texts : Map[(Int, Int), String]
+  view_stills : Map[Int, Array[Bytes]]
 }
 
 ///|
@@ -756,18 +760,92 @@ fn h_view_site_state(id : Int) -> String {
 ///|
 fn h_view_text(id : Int, what : Int) -> String? {
   match fake.val {
-    // the fake player's video: three frames a 30th of a second apart
-    Some(_) => if what == 1 { Some("0,33.333,66.667") } else { Some("0") }
-    None => @host.view_text(id, what)
+    // as the run recorded the host's saying it (Tester::view_said); not said yet: not known (a grab: none asked)
+    Some(f) =>
+      match f.view_texts.get((id, what)) {
+        Some(t) => Some(t)
+        None => if what == 2 { Some("0") } else { None }
+      }
+    None => {
+      let t = @host.view_text(id, what)
+      match t {
+        Some(text) => view_told(id, what, text)
+        None => ()
+      }
+      t
+    }
   }
 }
 
 ///|
 fn h_view_still(id : Int) -> Bytes {
   match fake.val {
-    Some(_) => b""
-    None => @host.view_still(id)
+    // the oldest grabbed, taken (the grab's state back to none asked, as a host's)
+    Some(f) => {
+      let b = match f.view_stills.get(id) {
+        Some(q) if q.length() > 0 => q.remove(0)
+        _ => b""
+      }
+      if f.view_texts.get((id, 2)) == Some("2") {
+        f.view_texts[(id, 2)] = "0"
+      }
+      b
+    }
+    None => {
+      let b = @host.view_still(id)
+      match views_tracer.val {
+        Some(t) => t({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(hex_of(b)) })
+        None => ()
+      }
+      b
+    }
   }
+}
+
+///|
+/// Who is told what the host says of its views (@ui.trace_views): a run's record of it.
+// kept across runs: the app's own, set once as it starts (a Tester's host says nothing to it)
+let views_tracer : Ref[((Map[String, Json]) -> Unit)?] = Ref::new(None)
+
+///|
+/// What was last told of each view's answers (view, what), so that each is told once as it changes.
+let views_told_text : Map[(Int, Int), String] = {}
+
+///|
+/// What a real host says of its native views from now on given to `line`, a JSON object a time, as it changes: a
+/// video's frames' times and a grab's state (`{"view":{"view":N,"what":W,"text":T}}`) and a frame grabbed, its bytes
+/// in hex (`{"still":{"view":N},"b":HEX}`): what a run keeps beside its other messages (its own clock added), for a
+/// Tester to be told again (Tester::view_said). Under a Tester, nothing.
+pub fn trace_views(line : (Map[String, Json]) -> Unit) -> Unit {
+  views_tracer.val = Some(line)
+}
+
+///|
+fn view_told(id : Int, what : Int, text : String) -> Unit {
+  guard views_tracer.val is Some(t) else { return }
+  if views_told_text.get((id, what)) == Some(text) {
+    return
+  }
+  views_told_text[(id, what)] = text
+  t({
+    "view": Json::object({
+      "view": Json::number(id.to_double()),
+      "what": Json::number(what.to_double()),
+      "text": Json::string(text),
+    }),
+  })
+}
+
+///|
+fn hex_of(b : Bytes) -> String {
+  let digits = "0123456789abcdef"
+  let out = StringBuilder::new()
+  for i in 0..<b.length() {
+    let v = b[i].to_int()
+    out.write_char(digits.get_char(v >> 4).unwrap())
+    out.write_char(digits.get_char(v & 15).unwrap())
+  }
+  out.to_string()
 }
 
 ///|

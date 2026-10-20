@@ -253,3 +253,32 @@ test "a player's state is read before the frame is built: set, one frame shows i
   assert_eq(t.frames - before, 1)
   assert_true(t.find("at 2 s") is Some(_))
 }
+
+///|
+test "a video's frames' times and a frame grabbed are what the run said the host said: not known until said" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() {
+      @ui.NativeView::video("video/mp4", fn(_offset, _length, answer) { answer(b"", -1.0) })
+    })
+    c.native(v, h=Px(220.0)) |> ignore
+  })
+  let v = cell.val.unwrap()
+  // nothing said of its frames yet: not known
+  assert_eq(v.frames(), None)
+  assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,40,80.5\"}}"))
+  t.draw()
+  assert_eq(v.frames(), Some([0.0, 40.0, 80.5]))
+  // a grab: none until the run's host had it, then its bytes once
+  v.grab_frame(40.0)
+  t.draw()
+  assert_eq(v.grabbed(), None)
+  assert_true(t.view_said("{\"still\":{\"view\":1},\"b\":\"89504e47\"}"))
+  t.draw()
+  assert_eq(v.grabbed(), Some(b"\x89PNG"))
+  assert_eq(v.grabbed(), None)
+  // a grab that failed, as said
+  assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":2,\"text\":\"-1\"}}"))
+  assert_eq(v.grabbed(), Some(b""))
+  assert_false(t.view_said("{\"in\":{\"id\":1}}"))
+}
