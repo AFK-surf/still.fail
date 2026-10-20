@@ -3,7 +3,7 @@
 # the media screens' parts and the core client's, then the flows seen again over their runs' cores
 # (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run on (js by default; CI's
 # check-mbui: js; check-mbui-native: native). PARTS: which of the two (app: the design system, the pages, gallery and
-# player; replay: the core and the flows seen again), both by default; check-mbui-native runs each on a runner of its
+# player; replay: the core and the flows seen again), both by default; check-mbui runs each on a runner of its
 # own. mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
