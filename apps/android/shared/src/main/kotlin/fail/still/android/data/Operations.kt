@@ -827,6 +827,27 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
         values["workspace"] = JsonPrimitive(workspace)
         return call("admin.deleteWorkspace", JsonObject(values))
     }
+    suspend fun adminCreateWorkspace(name: String, owners: List<String>, members: Long, stations: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["name"] = JsonPrimitive(name)
+        values["owners"] = JsonArray(owners.map(::JsonPrimitive))
+        values["members"] = JsonPrimitive(members)
+        values["stations"] = JsonPrimitive(stations)
+        return call("admin.createWorkspace", JsonObject(values))
+    }
+    suspend fun adminSetLimits(workspace: String, members: Long, stations: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["workspace"] = JsonPrimitive(workspace)
+        values["members"] = JsonPrimitive(members)
+        values["stations"] = JsonPrimitive(stations)
+        return call("admin.setLimits", JsonObject(values))
+    }
+    suspend fun adminEnroll(workspace: String, name: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["workspace"] = JsonPrimitive(workspace)
+        values["name"] = JsonPrimitive(name)
+        return call("admin.enroll", JsonObject(values))
+    }
     class AdminFeedbackStatusFields : OperationFields() {
         var status: String? by field<String>("status") { JsonPrimitive(it) }
     }

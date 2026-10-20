@@ -121,6 +121,9 @@ export interface OperationParams {
   "admin.setPending": { email: string; beta?: boolean | null | undefined; may_create?: boolean | null | undefined };
   "admin.removePending": { email: string };
   "admin.deleteWorkspace": { workspace: string };
+  "admin.createWorkspace": { name: string; owners: string[]; members: number; stations: number };
+  "admin.setLimits": { workspace: string; members: number; stations: number };
+  "admin.enroll": { workspace: string; name: string };
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
@@ -256,6 +259,9 @@ export function bindCloudOperations(call: Call) {
     adminSetPending: <T = unknown>(params: OperationParams["admin.setPending"]) => call("admin.setPending", params) as Promise<T>,
     adminRemovePending: <T = unknown>(params: OperationParams["admin.removePending"]) => call("admin.removePending", params) as Promise<T>,
     adminDeleteWorkspace: <T = unknown>(params: OperationParams["admin.deleteWorkspace"]) => call("admin.deleteWorkspace", params) as Promise<T>,
+    adminCreateWorkspace: <T = unknown>(params: OperationParams["admin.createWorkspace"]) => call("admin.createWorkspace", params) as Promise<T>,
+    adminSetLimits: <T = unknown>(params: OperationParams["admin.setLimits"]) => call("admin.setLimits", params) as Promise<T>,
+    adminEnroll: <T = unknown>(params: OperationParams["admin.enroll"]) => call("admin.enroll", params) as Promise<T>,
     adminFeedbackStatus: <T = unknown>(params: OperationParams["admin.feedbackStatus"]) => call("admin.feedbackStatus", params) as Promise<T>,
   };
 }

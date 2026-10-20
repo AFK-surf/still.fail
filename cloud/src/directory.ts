@@ -139,6 +139,11 @@ export class Directory extends DurableObject<Env> {
     for (const column of ["emoji TEXT", "icon TEXT"]) {
       if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
     }
+    // Nor had workspaces limits of their own (people, stations; both or neither), before the admin could make one for
+    // a company: one without holds what its creator's plan lets it (#limits).
+    for (const column of ["max_members INTEGER", "max_stations INTEGER"]) {
+      if (!marked.has(column.split(" ")[0]!)) this.#run(`ALTER TABLE workspaces ADD COLUMN ${column}`);
+    }
     this.migrateFreePlan();
     this.migrateStationMembers();
   }
@@ -307,9 +312,12 @@ export class Directory extends DurableObject<Env> {
     const mine = this.#role(sub, workspace, MANAGERS);
     if (!ROLES.includes(role)) fail(400, "invalid_role");
     if (role === "owner" && mine !== "owner") fail(403, "forbidden");
-    const given = Array.isArray(emails) ? emails : [];
-    const wanted = [...new Set(given.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
-    if (wanted.length === 0 || wanted.some((e) => !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(e))) fail(400, "invalid_email");
+    const { joined, added, already } = this.#addEmails(sub, workspace, role, emailsOf(emails));
+    return { joined, added, already, view: this.workspace(sub, workspace) };
+  }
+
+  /** addMembers once allowed: each email a member now, or as soon as it first signs in. */
+  #addEmails(by: string, workspace: string, role: Role, wanted: string[]): { joined: string[]; added: string[]; already: string[] } {
     const joined: string[] = [];
     const added: string[] = [];
     const already: string[] = [];
@@ -335,13 +343,13 @@ export class Directory extends DurableObject<Env> {
           joined.push(email);
         } else {
           this.#run(`INSERT INTO added (workspace, email, role, added_by, added_at) VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT (workspace, email) DO UPDATE SET role = excluded.role, added_by = excluded.added_by`, workspace, email, role, sub, nowSeconds());
+            ON CONFLICT (workspace, email) DO UPDATE SET role = excluded.role, added_by = excluded.added_by`, workspace, email, role, by, nowSeconds());
           added.push(email);
         }
       }
     });
     this.#changed(workspace, true, joined.flatMap((e) => this.#byEmail(e)));
-    return { joined, added, already, view: this.workspace(sub, workspace) };
+    return { joined, added, already };
   }
 
   /** Takes back an email added but not signed in yet. */
@@ -374,7 +382,8 @@ export class Directory extends DurableObject<Env> {
    */
   createWorkspace(sub: string, name: string, admin: boolean, code: unknown): WorkspaceView {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
-    const made = this.#one("SELECT COUNT(*) AS n FROM workspaces WHERE created_by = ?", sub)!.n as number;
+    // Those the admin made for others (with limits of their own) are not the admin's to count.
+    const made = this.#one("SELECT COUNT(*) AS n FROM workspaces WHERE created_by = ? AND max_members IS NULL", sub)!.n as number;
     const standard = admin || this.#standard(sub);
     const given = typeof code === "string" && code.trim() !== "";
     // A code given on the free plan is redeemed even while a free workspace is left: it is what the person asked for.
@@ -412,9 +421,17 @@ export class Directory extends DurableObject<Env> {
     return isAdmin(this.env, creator.email as string) ? "admin" : this.#standard(creator.sub as string) ? "standard" : "free";
   }
 
+  /** How many people and stations a workspace may hold: its own limits (one the admin made for a company), or its plan's. */
+  #limits(workspace: string): { members: number; stations: number } {
+    const own = this.#one("SELECT max_members, max_stations FROM workspaces WHERE id = ?", workspace);
+    if (own && own.max_members !== null && own.max_stations !== null) return { members: own.max_members as number, stations: own.max_stations as number };
+    const plan = PLANS[this.#plan(workspace)];
+    return { members: plan.members, stations: plan.stations };
+  }
+
   /** How many people a workspace may hold, its creator among them. */
   #memberCap(workspace: string): number {
-    return PLANS[this.#plan(workspace)].members;
+    return this.#limits(workspace).members;
   }
 
   /** Who a workspace holds or has let in: members, emails added but not signed in yet, and, with `invited`, open invitations. */
@@ -669,6 +686,11 @@ export class Directory extends DurableObject<Env> {
 
   deleteWorkspace(sub: string, id: string): void {
     this.#role(sub, id, ["owner"]);
+    this.#remove(id);
+  }
+
+  /** A workspace gone: its people told, its stations let go. */
+  #remove(id: string): void {
     const told = [...this.#members(id), ...this.#invitees(id)];
     const stations = this.#stationsIn(id).map((station) => ({ station, home: this.#memberships(station)[0] }));
     this.ctx.storage.transactionSync(() => {
@@ -844,6 +866,10 @@ export class Directory extends DurableObject<Env> {
 
   async createEnrollment(sub: string, workspace: string, name: string): Promise<{ token: string; expires_at: number }> {
     this.#role(sub, workspace, MANAGERS);
+    return this.#enrollment(sub, workspace, name);
+  }
+
+  async #enrollment(sub: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
     const clean = cleanName(name) ?? fail(400, "invalid_name");
     if (this.#stationsFull(workspace)) fail(429, "too_many_stations");
     const token = randomSecret();
@@ -855,7 +881,7 @@ export class Directory extends DurableObject<Env> {
 
   #stationsFull(workspace: string): boolean {
     const stations = this.#one("SELECT COUNT(*) AS n FROM station_members WHERE workspace = ?", workspace)!.n as number;
-    return stations >= PLANS[this.#plan(workspace)].stations;
+    return stations >= this.#limits(workspace).stations;
   }
 
   /**
@@ -1134,11 +1160,39 @@ export class Directory extends DurableObject<Env> {
     return Boolean(this.#one("SELECT beta FROM users WHERE sub = ?", sub)?.beta);
   }
 
-  /** The operator removes a workspace as its owner would (the admin token's route). */
+  /** The operator removes a workspace as its owner would; one made for a company may have no owner signed in yet. */
   adminDeleteWorkspace(id: string): void {
-    const owner = this.#one("SELECT sub FROM members WHERE workspace = ? AND role = 'owner' LIMIT 1", id);
-    if (!owner) fail(404, "workspace_not_found");
-    this.deleteWorkspace(owner!.sub as string, id);
+    if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", id)) fail(404, "workspace_not_found");
+    this.#remove(id);
+  }
+
+  /**
+   * The admin makes a workspace for a company (docs/cloud.md「企业 workspace」): its owners by email, members at once or
+   * when they first sign in, and limits of its own, the creator's plan aside. The admin is its creator but not in it.
+   */
+  adminCreateWorkspace(by: string, input: { name?: unknown; owners?: unknown; members?: unknown; stations?: unknown }): { id: string; joined: string[]; added: string[] } {
+    const name = cleanName(input.name) ?? fail(400, "invalid_name");
+    const owners = emailsOf(input.owners);
+    const limits = limitsOf(input);
+    if (owners.length > limits.members) fail(429, "too_many_members");
+    const id = ulid();
+    this.#run("INSERT INTO workspaces (id, name, created_by, created_at, max_members, max_stations) VALUES (?, ?, ?, ?, ?, ?)", id, name, by, nowSeconds(), limits.members, limits.stations);
+    const { joined, added } = this.#addEmails(by, id, "owner", owners);
+    return { id, joined, added };
+  }
+
+  /** The admin sets how many people and stations a workspace may hold; what it holds beyond them stays, nothing more is let in. */
+  adminSetLimits(workspace: string, input: { members?: unknown; stations?: unknown }): { members: number; stations: number } {
+    if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", workspace)) fail(404, "workspace_not_found");
+    const limits = limitsOf(input);
+    this.#run("UPDATE workspaces SET max_members = ?, max_stations = ? WHERE id = ?", limits.members, limits.stations, workspace);
+    return limits;
+  }
+
+  /** An enrollment the admin makes for any workspace, without being in it: a station installed for a company. */
+  async adminEnrollment(by: string, workspace: string, name: unknown): Promise<{ token: string; expires_at: number }> {
+    if (!this.#one("SELECT 1 AS x FROM workspaces WHERE id = ?", workspace)) fail(404, "workspace_not_found");
+    return this.#enrollment(by, workspace, name);
   }
 
   adminWorkspaces(): AdminWorkspace[] {
@@ -1158,10 +1212,11 @@ export class Directory extends DurableObject<Env> {
     const stations = group<StationView>(this.#stationViews(null) as unknown as Row[]);
     const invitations = group<AdminWorkspace["invitations"][number]>(this.#rows(`SELECT i.workspace, i.id, i.role, i.email, i.created_by, i.expires_at,
       COALESCE(NULLIF(u.name, ''), u.email, '') AS inviter FROM invitations i LEFT JOIN users u ON u.sub = i.created_by WHERE i.expires_at > ? ORDER BY i.expires_at`, now));
+    const added = group<AddedView>(this.#rows("SELECT workspace, email, role, added_by, added_at FROM added ORDER BY added_at"));
     // As #plan has it, in the same read.
     const plan = (w: Row): Plan => w.sub === null ? "free" : isAdmin(this.env, w.email as string) ? "admin"
       : w.admitted === "code" || w.admitted === "granted" || (w.admitted === null && w.member) ? "standard" : "free";
-    return this.#rows(`SELECT w.id, w.name, w.created_at, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
+    return this.#rows(`SELECT w.id, w.name, w.created_at, w.max_members, w.max_stations, u.sub, u.email, u.name AS user_name, u.picture, u.admitted,
       EXISTS (SELECT 1 FROM members m WHERE m.sub = u.sub) AS member FROM workspaces w
       LEFT JOIN users u ON u.sub = w.created_by ORDER BY w.created_at DESC`).map((w) => ({
       id: w.id as string,
@@ -1171,8 +1226,11 @@ export class Directory extends DurableObject<Env> {
       members: members.get(w.id as string) ?? [],
       stations: stations.get(w.id as string) ?? [],
       invitations: invitations.get(w.id as string) ?? [],
-      seats: PLANS[plan(w)].members,
-      plan: plan(w),
+      added: added.get(w.id as string) ?? [],
+      // As #limits has it: its own, or its creator's plan's.
+      ...(w.max_members !== null && w.max_stations !== null
+        ? { seats: w.max_members as number, station_seats: w.max_stations as number, plan: "enterprise" as const }
+        : { seats: PLANS[plan(w)].members, station_seats: PLANS[plan(w)].stations, plan: plan(w) }),
     }));
   }
 
@@ -1474,6 +1532,23 @@ function cleanName(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const clean = value.trim().replace(/\s+/g, " ");
   return clean && clean.length <= 80 ? clean : null;
+}
+
+/** Emails as addMembers takes them: lowercased, each once, at least one; fails when one is no email. */
+function emailsOf(value: unknown): string[] {
+  const given = Array.isArray(value) ? value : [];
+  const wanted = [...new Set(given.map((e) => String(e).trim().toLowerCase()).filter(Boolean))];
+  if (wanted.length === 0 || wanted.some((e) => !/^[^\s@]{1,64}@[^\s@]{1,190}$/.test(e))) fail(400, "invalid_email");
+  return wanted;
+}
+
+/** The most a company's workspace may be given: people, stations. */
+export const LIMITS_MAX = { members: 1000, stations: 256 } as const;
+
+/** A workspace's own limits as the admin gives them: whole numbers from 1 to LIMITS_MAX. */
+function limitsOf(input: { members?: unknown; stations?: unknown }): { members: number; stations: number } {
+  const whole = (v: unknown, max: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= max ? v : fail(400, "invalid_limits"));
+  return { members: whole(input.members, LIMITS_MAX.members), stations: whole(input.stations, LIMITS_MAX.stations) };
 }
 
 /**

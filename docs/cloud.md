@@ -43,6 +43,16 @@ still.fail 以 p2p 为主：设备直接连 station，看 station 在不在线�
 
 账号按邮箱合并（Directory `accountFor`）：验证码登录时，这个邮箱已有账号（包括 Google 的）就登进那个；Google 登录时，Google `sub` 还没有账号而这个邮箱已有（先用邮箱注册的），也进那个。App Store 审核账号（`pw-`）不参与。没有 `EMAIL` 绑定或 `EMAIL_FROM` 时不出选择页，直接去 Google，和以前一样。
 
+## 企业 workspace
+
+给企业预先建好 workspace 和专属 station（比如一台为它准备的 Mac mini），由管理后台（admin.still.fail）做，不需要运维账号加入那个 workspace：
+
+- **新建**：`POST /v1/admin/workspaces {name, owners: [email], members, stations}`。owner 按邮箱加：已有账号的立刻成为 owner，没有的进 `added`，首次用这个邮箱登录时成为 owner。创建人记为管理员，但管理员不是成员；这类 workspace 不计入管理员自己的 workspace 数。
+- **自己的上限**：`workspaces.max_members` / `max_stations`（两个一起设，1–1000 人、1–256 台），有值就用它，不看创建人的套餐（`#limits`）；没有的照旧按创建人的套餐。`POST /v1/admin/workspaces/:id/limits {members, stations}` 修改：已超出的保留，只是不能再加入新的。后台列表里标「企业版」（`plan: "enterprise"`，带 `seats`、`station_seats` 和还没登录的 `added`）。
+- **装 station**：`POST /v1/admin/workspaces/:id/enrollments {name}` 给任意 workspace 出一条一次性登记命令（正式版安装器，1 小时有效），在那台机器上执行即加入。
+- owner 一直没登录的，管理后台也能删除（`/v1/admin/workspaces/:id/delete` 不再要求有 owner 成员）。
+- 企业 owner 开了安全模式之后，cloud 不能再往里加人、加 station，预建要在开之前做完。
+
 ## station 登记
 
 1. admin 在 workspace 里点「添加 station」，得到一条一次性、1 小时有效的登记命令。
