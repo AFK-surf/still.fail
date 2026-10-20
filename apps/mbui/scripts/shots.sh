@@ -1,8 +1,7 @@
 #!/bin/bash
 # Screenshots of still.fail's screens in mbui on macOS (the Mac's host: a window each) and in a browser, to look at:
-# out/shots/<name>.png. Not a check, and no references kept for them: the screens' pixels are checked against
-# goldens/render/macos15 by scripts/screens.sh render (offscreen, no window; CI's mbui-render), whose references a
-# change to what a screen draws updates with it.
+# out/shots/<name>.png. Not a check, and no references kept for them: what still.fail's screens are held to is
+# Android's app, the original.
 #   apps/mbui/scripts/shots.sh [kit home chat composer drive decide glass newchat preview settings web-kit web-home …]
 # Each one-picture shot is of the first frame at the app's rest, on its own clock (mbui's MBUI_SHOT_MS=rest, the web's
 # shot_at=rest: no motion short of its end, no wake owed, nothing awaited; a spinner turns on at its clock's turn), or
