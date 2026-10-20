@@ -117,17 +117,50 @@ jobs:
       # the natives' keys are git's blobs: the checkout as git has it
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/setup
+      # Node alone first (the natives' fetch, the build's scripts): the rest of the setup (pnpm, its store) is done while
+      # cl compiles the app
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
       - uses: ilammy/msvc-dev-cmd@v1
+      # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
+      # core, a HEAD each, as beta.sh's moon_tools asks): installed (~20 s, most of it bundling the core) only when
+      # either changed. No answer: no key, installed as before.
+      - name: MoonBit's latest release
+        id: moon
+        run: |
+          tag=$( { curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/moonbit-windows-x86_64.zip || true
+                   curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.zip || true; } \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
+          if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c)" = 4 ]; then
+            echo "key=moon-windows-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.moon.outputs.key != ''
+        uses: actions/cache@v4
+        id: moon-cache
+        with:
+          path: ~/.moon
+          key: ${{ steps.moon.outputs.key }}
       - name: Tools (MoonBit; MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
         run: |
           echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
-          powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
+          if [ "${{ steps.moon-cache.outputs.cache-hit }}" != true ] || ! [ -x "$USERPROFILE/.moon/bin/moon.exe" ]; then
+            powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
+          fi
           echo "$USERPROFILE\.moon\bin" >> "$GITHUB_PATH"
       - name: The Windows engine and shell, prebuilt (never built on CI)
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
+      # The app (APP=stillfail) built in the background from here on: cl /O2 of its C (some 46 MB) is ~55 s on the
+      # runner's four cores, and needs nothing of what the steps after it do (pnpm, the packages, the core's bytecode),
+      # which were ~60 s before it, one after another (2026-10-20). "Build (APP=stillfail)" waits for it.
+      - name: Build (APP=stillfail), started
+        run: |
+          moon version --all
+          sh apps/mbui/scripts/mbui.sh > /dev/null # (the pinned mbui, linked before anything else asks for it)
+          B=$RUNNER_TEMP/build; mkdir -p "$B"
+          nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$0/log" 2>&1; echo $? > "$0/status"' "$B" > /dev/null 2>&1 &
+      - uses: ./.github/actions/setup
       - name: Packages (the core's, the cloud's; the test station built)
         run: |
           # (the packages' scripts in bash, not cmd: the station's build is sh)
@@ -136,10 +169,20 @@ jobs:
           (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
           (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
+      - name: The core's bytecode (Hermes)
+        run: bash apps/mbui/scripts/win.sh core
       - name: Build (APP=stillfail)
         run: |
-          moon version --all
-          bash apps/mbui/scripts/win.sh build
+          B=$RUNNER_TEMP/build
+          t0=$SECONDS
+          while [ ! -s "$B/status" ]; do
+            [ $((SECONDS - t0)) -lt 420 ] || { echo "the build took over 7 minutes"; cat "$B/log"; exit 1; }
+            sleep 1
+          done
+          echo "(waited $((SECONDS - t0)) s for it)"
+          cat "$B/log"
+          [ "$(cat "$B/status")" = 0 ] || exit 1
+          bash apps/mbui/scripts/win.sh put
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
         run: bash apps/mbui/e2e/win.sh
       - if: always()
