@@ -4,6 +4,7 @@ import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_pro
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
 import { basename, delimiter, join } from "node:path";
+import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
@@ -11,6 +12,9 @@ import { holder } from "./processes.ts";
 import { field, firstWord, output, parseF64, parseLsof, parseU64, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
+/// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
 const run = promisify(execFile);
 
 const executable = (p: string) => {
@@ -340,6 +344,15 @@ export const unix: Platform = {
     isDrivePath: () => false,
   },
 
+  async disks(home) {
+    const found: { name: string; path: string }[] = [];
+    for (const mounts of ["/Volumes", join("/media", basename(home)), "/mnt"]) {
+      for (const name of (await readdir(mounts).catch(() => [] as string[])).sort((a, b) => collator.compare(a, b))) {
+        if (!name.startsWith(".")) found.push({ name, path: join(mounts, name) });
+      }
+    }
+    return found;
+  },
   linkRefused: () => false,
   syncsDirectories: true,
   shareFile(target, link) {

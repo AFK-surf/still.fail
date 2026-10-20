@@ -8,7 +8,7 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { unix } from "../src/platform/unix.ts";
-import { cmdPath, readShim, windows } from "../src/platform/windows.ts";
+import { cmdPath, drives, readShim, windows } from "../src/platform/windows.ts";
 
 const src = fileURLToPath(new URL("../src", import.meta.url));
 
@@ -92,6 +92,14 @@ test("a path inside a root is told by whole components, as each machine compares
   assert.equal(windows.paths.relativeIn("C:\\w\\s", "D:\\w\\s\\a"), null);
   assert.ok(windows.paths.within(windows.paths.key("C:\\W\\S\\a"), windows.paths.key("c:\\w\\s")));
   assert.ok(!unix.paths.within("/w/sx", "/w/s"));
+});
+
+test("Windows' disks are its drives there, C: to Z:, by their letter", async () => {
+  const asked: string[] = [];
+  const there = await drives(async (path) => (asked.push(path), path === "C:\\" || path === "E:\\"));
+  assert.deepEqual(there, [{ name: "C:", path: "C:\\" }, { name: "E:", path: "E:\\" }]);
+  assert.equal(asked.length, 24);
+  assert.ok(!asked.includes("A:\\") && !asked.includes("B:\\"));
 });
 
 test("a drive's path is a local link's on Windows only", () => {

@@ -6,6 +6,7 @@ import { copyFileSync, existsSync, linkSync, lstatSync, readFileSync, readlinkSy
 import { cpus as cpuList, freemem, release, totalmem, uptime as osUptime, version as osVersion } from "node:os";
 import { delimiter, dirname, join, win32 } from "node:path";
 import { createConnection } from "node:net";
+import { stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { holder, pidAlive, runnerBinary } from "./processes.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
@@ -324,6 +325,14 @@ function startInstaller(script: string, runDir: string, env: Record<string, stri
   });
 }
 
+/// The drives `isDir` finds, `C:\` to `Z:\`, each named by its letter (`A:` and `B:` are floppies', left alone: asking
+/// one with no disk in it waits on the drive). All asked at once, so one slow (a network drive away) is the only wait.
+export async function drives(isDir: (path: string) => Promise<boolean>): Promise<{ name: string; path: string }[]> {
+  const letters = [..."CDEFGHIJKLMNOPQRSTUVWXYZ"];
+  const there = await Promise.all(letters.map((l) => isDir(`${l}:\\`)));
+  return letters.flatMap((l, i) => (there[i] ? [{ name: `${l}:`, path: `${l}:\\` }] : []));
+}
+
 export const windows: Platform = {
   os: "windows",
   buildOs: "win32",
@@ -396,6 +405,7 @@ export const windows: Platform = {
     isDrivePath: (text) => /^[A-Za-z]:[\\/]/.test(text),
   },
 
+  disks: () => drives((path) => stat(path).then((s) => s.isDirectory(), () => false)),
   linkRefused: (error) => (error as NodeJS.ErrnoException).code === "EPERM",
   syncsDirectories: false,
   /// A symbolic link needs a privilege most users lack (Developer Mode gives it): a hard link then, the same file as
