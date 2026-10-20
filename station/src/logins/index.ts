@@ -30,7 +30,9 @@ const HISTORY_MOST = 50;
 
 export type Person = { email: string; name: string };
 /// Who started a login: an agent (its session `chat`, its chat's title, in its chat's workspace; `by` its chat's starter).
-export type Starter = { by: Person; workspace: string | null; chat?: string | null; chatTitle?: string | null };
+/// One on another station of the workspace (its `login` tool's `station`): `peer`, that station and the agent's session
+/// there, told as this station's own agents are (logins/module.ts).
+export type Starter = { by: Person; workspace: string | null; chat?: string | null; chatTitle?: string | null; peer?: { station: string; session: string } };
 
 export type Login = {
   id: string;
@@ -150,6 +152,11 @@ export class Logins {
     const all = [...this.#entries.values()];
     const live = [...all.filter((e) => e.run.active), ...all.filter((e) => !e.run.active).reverse()].map((e) => this.#shown(e));
     return [...live, ...this.history().filter((h) => !this.#entries.has(h.id))];
+  }
+
+  /// Who started a login under way or ended lately (null: none such, or put away).
+  starterOf(id: string): Starter | null {
+    return this.#entries.get(id)?.starter ?? null;
   }
 
   get(id: string): Login | null {

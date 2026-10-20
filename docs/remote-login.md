@@ -230,12 +230,12 @@ step    = loopback | device | open | terminal          // 现在要人做的那�
 
 ### station 之间
 
-agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑）：`login {station: "B"}` 走 `stillfail/station/1` 的新方法 `login.start` / `login.get` / `login.cancel`，B 起登录，回登录链接，卡片照样由 A 上的 agent 发。权限和远程任务一样（同 workspace 的 station 就能调，见 station-peers.md）。旧 station 不认这些方法，回「需要更新」。放在第二步。
+agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑，比如它用 station_task 在 B 上跑的命令要登录）：`login {station: "B", …}`（名字或 id，和 station_task 一样认）。A 把这次调用原样经 `stillfail/station/1` 的 `login.call` 交给 B（带上 A 上的会话、chat 的发起人和标题），B 在自己的 `Logins` 上做（`tools/login.ts` 的 `act`：起、看、答、取消），把给 agent 的那段话回给 A：话里说登录在 B 上（「on <B 的名字>」），卡片要带 `"station": "<B 的 key>"`，链接是 B 的。B 记下发起它的是 A 的哪个会话（`Starter.peer`），只让 A 动它自己起的登录；B 上没有这次登录的 chat。登录再问问题、结束时，B 经 `login.told` 告诉 A：A 关掉这个 id 的卡片（结束时），给那个会话发 station 通知。权限和远程任务一样（同 workspace 的 station 就能调，见 station-peers.md）。旧 station 不认 `login.call`，A 告诉 agent 那台要更新。
 
 ## agent 的 `login` 工具
 
 ```
-login {command, station?}           // 跑工具自己的登录命令；等它停下，回状态、屏幕（网址和码遮掉）、它在等什么
+login {command, station?}           // 跑工具自己的登录命令（station：在另一台上）；等它停下，回状态、屏幕（网址和码遮掉）、它在等什么
 login {id}                          // 现在怎样了，同上
 login {id, input?, key?}            // 答它的提示：文字和/或一个键（enter、up、down、tab、ctrl-c…），等它再停下
 login {id, cancel: true}            // 结束它
