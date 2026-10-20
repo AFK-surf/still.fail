@@ -16,12 +16,41 @@ fn claim_chain(c : Ctx, x : Double, y : Double) -> Array[Int] {
   let mut k = ids.length() - 1
   while k >= 0 {
     let r = k * 4
-    if x >= rects[r] && x < rects[r + 2] && y >= rects[r + 1] && y < rects[r + 3] && !out.contains(ids[k]) {
+    if x >= rects[r] &&
+      x < rects[r + 2] &&
+      y >= rects[r + 1] &&
+      y < rects[r + 3] &&
+      !out.contains(ids[k]) &&
+      claim_in_shape(c, ids[k], x, y) {
       out.push(ids[k])
     }
     k = k - 1
   }
   out
+}
+
+///|
+/// Whether (x, y) is within drag area `id`'s box as drawn, its rounded corners too (as a tap on it: in_round_clip); what
+/// else scrolls, by its rect.
+fn claim_in_shape(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
+  if !drags.contains(id) {
+    return true
+  }
+  let ids = c.hit_ids
+  let rects = c.hit_rects
+  let mut k = ids.length() - 1
+  while k >= 0 {
+    if ids[k] == id {
+      let r = k * 4
+      return x >= rects[r] &&
+        x < rects[r + 2] &&
+        y >= rects[r + 1] &&
+        y < rects[r + 3] &&
+        in_round_clip(c.hit_clips, k, x, y)
+    }
+    k = k - 1
+  }
+  true
 }
 
 ///|

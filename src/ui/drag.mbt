@@ -50,17 +50,11 @@ pub(all) struct Drag {
 let drags : Map[Int, Drag] = Map([])
 
 ///|
-/// A box that takes the drags landing on it (see the file's head), as `Ctx::box` otherwise lays out what it holds;
-/// what the finger does with it is `drag_of(id)`'s. Its id is a hit target as well, so a tap on it is `clicked`.
-pub fn Ctx::drag_area(
-  self : Ctx,
-  id : Int,
-  axis? : DragAxis = Vertical,
-  w? : Size = Auto,
-  h? : Size = Auto,
-  ty? : Double = 0.0,
-  body : () -> Unit,
-) -> Int {
+/// Box `id` a drag area along `axis` (see the file's head): the view draws the box itself, with whatever look it has
+/// (a clip, rounded corners), as `Ctx::box(id=…)` in this frame; it adds no node. What the finger does with it is
+/// `drag_of(id)`'s; where a press lands on it is where that box is drawn (its clip and its corners). A frame that says
+/// this but draws no box `id` has no drag area there: nothing to press. Told another axis, it starts anew.
+pub fn Ctx::drag_on(self : Ctx, id : Int, axis? : DragAxis = Vertical) -> Unit {
   match drags.get(id) {
     Some(d) if d.axis.same(axis) => ()
     _ => {
@@ -82,6 +76,22 @@ pub fn Ctx::drag_area(
       self.own(id)
     }
   }
+}
+
+///|
+/// A box that takes the drags landing on it (Ctx::drag_on over a box of its own), as `Ctx::box` otherwise lays out
+/// what it holds; what the finger does with it is `drag_of(id)`'s. Its id is a hit target as well, so a tap on it is
+/// `clicked`.
+pub fn Ctx::drag_area(
+  self : Ctx,
+  id : Int,
+  axis? : DragAxis = Vertical,
+  w? : Size = Auto,
+  h? : Size = Auto,
+  ty? : Double = 0.0,
+  body : () -> Unit,
+) -> Int {
+  self.drag_on(id, axis~)
   self.box(w~, h~, ty~, id~, body)
 }
 

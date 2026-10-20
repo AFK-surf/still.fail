@@ -161,3 +161,114 @@ test "a press no one takes is a tap: the row's" {
   assert_eq(moved.val, 0.0)
   assert_eq(t.list_offset(), 0.0)
 }
+
+///|
+/// A rounded, clipped box 200 × 120 at (50, 50), made a drag area across (Ctx::drag_on) when `on`, drawn when `drawn`.
+fn shaped_view(on : Ref[Bool], drawn : Ref[Bool], moved : Ref[Double], taps : Ref[Int]) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      let id = c.id("shaped")
+      if on.val {
+        c.drag_on(id, axis=Horizontal)
+      }
+      c.box(w=Fill(1.0), h=Fill(1.0), pl=50.0, pt=50.0, fn() {
+        if drawn.val {
+          c.box(w=Px(200.0), h=Px(120.0), radius=40.0, clip=true, bg=0x336699FFL, id~, fn() {
+            c.text("held", size=10.0) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+      match c.drag_of(id) {
+        Some(d) => {
+          moved.val = moved.val + d.take_move().0
+          if d.take_tap() {
+            taps.val += 1
+          }
+        }
+        None => ()
+      }
+    },
+    w=300.0,
+    h=300.0,
+  )
+}
+
+///|
+test "drag_on: a box drawn as it is, rounded and clipped, a drag area with no node of its own" {
+  let on = Ref::new(false)
+  let drawn = Ref::new(true)
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = shaped_view(on, drawn, moved, taps)
+  t.draw()
+  let plain = t.dump()
+  on.val = true
+  t.draw()
+  // the same nodes as the box alone
+  assert_eq(t.dump(), plain)
+  t.drag(220.0, 110.0, 80.0, 110.0)
+  t.draw()
+  assert_true(moved.val < -100.0)
+  t.press_at(150.0, 110.0)
+  t.release(150.0, 110.0)
+  assert_eq(taps.val, 1)
+}
+
+///|
+test "drag_on: a press where a rounded clip cut it away is not its, as a tap there is not" {
+  // the drag area's box filling a card rounded 40 and clipped: its top left corner, the card's cut away
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let id = c.id("in-card")
+      c.drag_on(id, axis=Horizontal)
+      c.box(w=Fill(1.0), h=Fill(1.0), pl=50.0, pt=50.0, fn() {
+        c.box(w=Px(200.0), h=Px(120.0), radius=40.0, clip=true, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=0x336699FFL, id~, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+      match c.drag_of(id) {
+        Some(d) => {
+          moved.val = moved.val + d.take_move().0
+          if d.take_tap() {
+            taps.val += 1
+          }
+        }
+        None => ()
+      }
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  // within the card's rect, outside its corner's curve
+  t.drag(53.0, 53.0, 200.0, 53.0)
+  t.draw()
+  assert_eq(moved.val, 0.0)
+  t.press_at(53.0, 53.0)
+  t.release(53.0, 53.0)
+  assert_eq(taps.val, 0)
+  // inside it: its
+  t.drag(150.0, 110.0, 60.0, 110.0)
+  t.draw()
+  assert_true(moved.val < -50.0)
+}
+
+///|
+test "drag_on without its box drawn that frame: nothing there to press" {
+  let on = Ref::new(true)
+  let drawn = Ref::new(false)
+  let moved = Ref::new(0.0)
+  let taps = Ref::new(0)
+  let t = shaped_view(on, drawn, moved, taps)
+  t.draw()
+  t.drag(220.0, 110.0, 80.0, 110.0)
+  t.draw()
+  assert_eq(moved.val, 0.0)
+  assert_eq(taps.val, 0)
+}
