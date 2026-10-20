@@ -168,7 +168,7 @@ pub fn toolbar(
       pad=3.0,
       align=ACenter,
       bg=t.faint,
-      radius=t.radius + 3.0,
+      radius=@ui.concentric_out(t.radius, 3.0),
       fn() { c.roving(key, orientation~, wrap=true, body) },
     )
   })

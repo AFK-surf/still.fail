@@ -1,11 +1,12 @@
 // Metal renderer: one pipeline, one instanced quad per scene instance.
 #import "apple.h"
+#include "corner_sl.h"
 #import <ImageIO/ImageIO.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 int mb_atlas_size = 2048;
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 28
+#define MB_INST 32
 
 static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
@@ -36,8 +37,9 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
-"// scene.mbt's 28 numbers: clip and rc the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii)\n"
-"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; };\n"
+"// scene.mbt's 32 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
+"// how smooth they are)\n"
+"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
 "// bounds, shapes and corners, how many\n"
@@ -57,11 +59,10 @@ static NSString *shader_src = @
 "  o.p = pos; o.iid = iid;\n"
 "  return o;\n"
 "}\n"
+MB_CORNER_SL
 "static float sd_rr(float2 p, float4 r, float rad) {\n"
 "  float2 hs = r.zw * 0.5;\n"
-"  float rr = min(rad, min(hs.x, hs.y));\n"
-"  float2 q = abs(p - r.xy - hs) - hs + rr;\n"
-"  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+"  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
 "}\n"
 "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
 "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -92,15 +93,14 @@ static NSString *shader_src = @
 "  return bd.sample(s, uv).rgb;\n"
 "}\n"
 "static float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }\n"
-"// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
-"// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
-"static float clip_cover(float2 p, float4 c, float4 r, float scale) {\n"
+"// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise; s: how smooth\n"
+"// each is), its edge covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
+"static float clip_cover(float2 p, float4 c, float4 r, float4 s, float scale) {\n"
 "  float2 hs = (c.zw - c.xy) * 0.5;\n"
 "  float2 m = c.xy + hs;\n"
 "  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
-"  rr = min(rr, min(hs.x, hs.y));\n"
-"  float2 q = abs(p - m) - hs + rr;\n"
-"  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+"  float ss = p.x < m.x ? (p.y < m.y ? s.x : s.w) : (p.y < m.y ? s.y : s.z);\n"
+"  float d = mb_sd_corner(p - m, hs, min(rr, min(hs.x, hs.y)), ss, 1.0 + 2.0 / scale);\n"
 "  return clamp(0.5 - d * scale, 0.0, 1.0);\n"
 "}\n"
 "fragment float4 fmain(VOut in [[stage_in]], const device Inst* inst [[buffer(0)]],\n"
@@ -111,7 +111,7 @@ static NSString *shader_src = @
 "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
 "  float cover = 1.0;\n"
 "  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
-"    cover = clip_cover(p, I.clip, I.rc, u.scale);\n"
+"    cover = clip_cover(p, I.clip, I.rc, I.rs, u.scale);\n"
 "    if (cover <= 0.0) discard_fragment();\n"
 "  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard_fragment();\n"
 "  int kind = int(I.p.y + 0.5);\n"
@@ -164,9 +164,9 @@ static NSString *shader_src = @
 "  }\n"
 "  float2 hs = I.rect.zw * 0.5;\n"
 "  float2 c = I.rect.xy + hs;\n"
-"  float r = min(I.p.x, min(hs.x, hs.y));\n"
-"  float2 q = abs(p - c) - hs + r;\n"
-"  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+"  // worked out as near the curve as its cover, its edge or its blur reaches\n"
+"  float band = 1.0 + 2.0 / u.scale + (kind == 2 ? max(I.p.w, 0.5) : max(I.p.z, 0.0));\n"
+"  float d = mb_sd_box(p - c, hs, I.p.x, band);\n"
 "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pad);\n"
 "  if (kind == 9) { if (d > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
 "  if (kind == 4) {\n"
@@ -179,8 +179,7 @@ static NSString *shader_src = @
 "    float a = 1.0 - smoothstep(-b, b, d);\n"
 "    // glass's: only outside its box (c2.y above it)\n"
 "    if (I.c2.x > 0.5) {\n"
-"      float2 qb = abs(p - c + float2(0.0, I.c2.y)) - hs + r;\n"
-"      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
+"      float db = mb_sd_box(p - c + float2(0.0, I.c2.y), hs, I.p.x, band);\n"
 "      a *= clamp(0.5 + db * u.scale, 0.0, 1.0);\n"
 "    }\n"
 "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"

@@ -636,7 +636,7 @@ pub fn menu_item_look(c : @ui.Ctx, s : MenuItemState) -> Unit {
     pady=7.0,
     gap=8.0,
     align=ACenter,
-    radius=t.radius_lg - 6.0,
+    radius=@ui.concentric(t.radius_lg, 6.0),
     bg=pick((s.lit || s.open) && !e.disabled, t.hover, 0L),
     fn() {
       if marks {

@@ -1,12 +1,13 @@
 // A box with `clip` and a `radius` cuts what it holds to its rounded rect (Compose's clip(RoundedCornerShape)): the
-// instances of what it holds carry that rounded rect (scene.mbt 16-19 and the corners' radii 24-27), the renderers
-// cover their edge as the box's own ground's, and a press in a corner it cut away reaches nothing there.
+// instances of what it holds carry that rounded rect (scene.mbt 16-19, the corners' radii 24-27 and how smooth they
+// are 28-31), the renderers cover their edge as the box's own ground's, and a press in a corner it cut away reaches
+// nothing there.
 
 ///|
 let red : Int64 = 0xFF3B30FFL
 
 ///|
-/// The instances of the last frame: (their 28 numbers) each.
+/// The instances of the last frame: (their 32 numbers) each.
 fn insts() -> Array[Array[Double]] {
   let c = g()
   Array::makei(c.ninst, fn(k) { Array::makei(inst_size, fn(j) { c.inst[k * inst_size + j] }) })
@@ -68,28 +69,47 @@ test "what a rounded clipping box holds is cut to its rounded rect: its rect and
   assert_true(within.iter().all(fn(b) { b[24] == 12.0 && b[25] == 12.0 && b[26] == 12.0 && b[27] == 12.0 }))
   // what is outside it is not cut so
   assert_true(insts().filter(fn(b) { b[16] != 20.0 }).iter().all(fn(b) { b[24] == 0.0 && b[27] == 0.0 }))
-  // the draw list carries them (mbui-dl 3: an instance's 28 numbers)
+  // wholly smooth: the box (80 by 40) has room (20) for 12 a quarter longer
+  assert_eq([a[28], a[29], a[30], a[31]], [1.0, 1.0, 1.0, 1.0])
+  // the draw list carries them (mbui-dl 4: an instance's 32 numbers)
   let dl = t.drawlist()
-  assert_true(dl.has_prefix("mbui-dl 3\n"))
+  assert_true(dl.has_prefix("mbui-dl 4\n"))
   let line = dl.split("\n").filter(fn(l) { l.has_prefix("i 20 20 80 40 0 0 ") }).collect()
   assert_eq(line.length(), 1)
-  assert_true(line[0].has_suffix(" 20 20 100 60 0 0 0 0 12 12 12 12"))
+  assert_true(line[0].has_suffix(" 20 20 100 60 0 0 0 0 12 12 12 12 1 1 1 1"))
+}
+
+///|
+test "a capsule's clip is round, not smooth; one with a little more room than its radius, smooth as far as that goes" {
+  let view = fn(radius : Double) {
+    fn(c : Ctx) {
+      c.box(pad=20.0, align=AStart, fn() {
+        c.box(w=Px(80.0), h=Px(40.0), radius~, clip=true, fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), bg=red, fn() { () }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  }
+  let t = Tester::new(view(20.0), w=200.0, h=120.0)
+  t.draw()
+  let a = rect_of_color(red)
+  assert_eq([a[24], a[28]], [20.0, 0.0])
+  // room 20 for 18: (20 - 18) / (18 / 4)
+  let t = Tester::new(view(18.0), w=200.0, h=120.0)
+  t.draw()
+  let a = rect_of_color(red)
+  assert_eq(a[24], 18.0)
+  assert_true((a[28] - 2.0 / 4.5).abs() < 1.0e-12)
 }
 
 ///|
 /// How much of the pixel centred at `p` an instance `a` (a rect, kind 0) covers, as the renderers say (scene.mbt's
 /// shader): its own rounded rect's edge, times its clip's when that is rounded.
 fn covered(a : Array[Double], px : Double, py : Double, scale : Double) -> Double {
-  let sd = fn(cx : Double, cy : Double, hx : Double, hy : Double, r : Double) {
-    let rr = dmin(r, dmin(hx, hy))
-    let qx = (px - cx).abs() - hx + rr
-    let qy = (py - cy).abs() - hy + rr
-    let ox = dmax(qx, 0.0)
-    let oy = dmax(qy, 0.0)
-    (ox * ox + oy * oy).sqrt() + dmin(dmax(qx, qy), 0.0) - rr
-  }
   let cover = fn(d : Double) { dclamp(0.5 - d * scale, 0.0, 1.0) }
-  let own = cover(sd(a[0] + a[2] / 2.0, a[1] + a[3] / 2.0, a[2] / 2.0, a[3] / 2.0, a[4]))
+  let own = cover(sd_box(px - (a[0] + a[2] / 2.0), py - (a[1] + a[3] / 2.0), a[2] / 2.0, a[3] / 2.0, a[4]))
   if dmax(dmax(a[24], a[25]), dmax(a[26], a[27])) <= 0.0 {
     return if px < a[16] || py < a[17] || px > a[18] || py > a[19] { 0.0 } else { own }
   }
@@ -97,18 +117,18 @@ fn covered(a : Array[Double], px : Double, py : Double, scale : Double) -> Doubl
   let hy = (a[19] - a[17]) / 2.0
   let mx = a[16] + hx
   let my = a[17] + hy
-  let r = if px < mx {
+  let j = if px < mx {
     if py < my {
-      a[24]
+      0
     } else {
-      a[27]
+      3
     }
   } else if py < my {
-    a[25]
+    1
   } else {
-    a[26]
+    2
   }
-  own * cover(sd(mx, my, hx, hy, r))
+  own * cover(sd_corner(px - mx, py - my, hx, hy, dmin(a[24 + j], dmin(hx, hy)), a[28 + j]))
 }
 
 ///|
@@ -138,8 +158,9 @@ test "a child filling a rounded clipping box covers its four corners pixel by pi
       }
     }
   }
-  // the corners are cut: of each 576 pixels, what the curve leaves out (about (1 - π/4) of it, less the edge's)
-  assert_true(cut_away > 4 * 100)
+  // the corners are cut: of each 900 pixels (12 smooth: 15 long, at 2×), what the curve leaves out (about 13% of it,
+  // the superellipse's 1 - Γ(1 + 1/n)² / Γ(1 + 2/n), less the edge's)
+  assert_true(cut_away > 4 * 70, msg="\{cut_away}")
 }
 
 ///|
@@ -147,7 +168,8 @@ test "a press just outside a rounded clip's corner misses what it holds; just in
   let taps = Ref(0)
   let t = Tester::new(rounded_view(true, taps), w=200.0, h=120.0)
   t.draw()
-  // the top left corner's curve is about (32, 32), 12 round: (22, 22) is 14.1 from it, (25, 25) 9.9
+  // the top left corner's curve is about (35, 35), 12 smooth (15 long): it crosses the diagonal at 23.26, so (22, 22)
+  // is outside it and (25, 25) in
   t.tap(22.0, 22.0)
   t.draw()
   assert_eq(taps.val, 0)
@@ -186,6 +208,8 @@ test "a rect clip inside a rounded one: its corners round where they are the rou
   let a = rect_of_color(red)
   assert_eq([a[16], a[17], a[18], a[19]], [20.0, 40.0, 100.0, 100.0])
   assert_eq([a[24], a[25], a[26], a[27]], [0.0, 0.0, 12.0, 12.0])
+  // as smooth as the card had room for (40 of it, for 12), not as the list's rect (60 high) would be
+  assert_eq([a[28], a[29], a[30], a[31]], [0.0, 0.0, 1.0, 1.0])
 }
 
 ///|

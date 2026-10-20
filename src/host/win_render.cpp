@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "win.h"
+#include "corner_sl.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -68,7 +69,7 @@ static size_t last_cap;
 static float last_bg[3];
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 28
+#define MB_INST 32
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
@@ -80,11 +81,12 @@ static const char *shader_src =
     "Texture2D bd : register(t2);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
-    "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; uint vid : SV_VertexID; };\n"
+    "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; uint vid : SV_VertexID; };\n"
     "struct VOut { float4 pos : SV_Position; float2 p : POS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
     "  nointerpolation float4 color : INST2; nointerpolation float4 c2 : INST3;\n"
-    "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6; };\n"
+    "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6;\n"
+    "  nointerpolation float4 rs : INST7; };\n"
     "VOut vmain(VIn I) {\n"
     "  uint vid = I.vid;\n"
     "  float2 corner = float2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0,\n"
@@ -95,14 +97,13 @@ static const char *shader_src =
     "  if (kind == 6) pos = lerp(ggb.xy, ggb.zw, corner);\n"
     "  VOut o;\n"
     "  o.pos = float4(pos.x / vp.x * 2.0 - 1.0, 1.0 - pos.y / vp.y * 2.0, 0.0, 1.0);\n"
-    "  o.p = pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc;\n"
+    "  o.p = pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs;\n"
     "  return o;\n"
     "}\n"
+    MB_CORNER_SL
     "float sd_rr(float2 p, float4 r, float rad) {\n"
     "  float2 hs = r.zw * 0.5;\n"
-    "  float rr = min(rad, min(hs.x, hs.y));\n"
-    "  float2 q = abs(p - r.xy - hs) - hs + rr;\n"
-    "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -131,15 +132,15 @@ static const char *shader_src =
     "  return bd.SampleLevel(samp, clamp(p * gmap.xy + gmap.zw, guvc.xy, guvc.zw), 0).rgb;\n"
     "}\n"
     "float luma(float3 c) { return dot(c, float3(0.2126, 0.7152, 0.0722)); }\n"
-    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
-    "// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
-    "float clip_cover(float2 p, float4 c, float4 r, float sc) {\n"
+    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise; s: how smooth\n"
+    "// each is), its edge covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts\n"
+    "// it\n"
+    "float clip_cover(float2 p, float4 c, float4 r, float4 s, float sc) {\n"
     "  float2 hs = (c.zw - c.xy) * 0.5;\n"
     "  float2 m = c.xy + hs;\n"
     "  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
-    "  rr = min(rr, min(hs.x, hs.y));\n"
-    "  float2 q = abs(p - m) - hs + rr;\n"
-    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  float ss = p.x < m.x ? (p.y < m.y ? s.x : s.w) : (p.y < m.y ? s.y : s.z);\n"
+    "  float d = mb_sd_corner(p - m, hs, min(rr, min(hs.x, hs.y)), ss, 1.0 + 2.0 / sc);\n"
     "  return saturate(0.5 - d * sc);\n"
     "}\n"
     "float4 fmain(VOut I) : SV_Target {\n"
@@ -147,7 +148,7 @@ static const char *shader_src =
     "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
     "  float cover = 1.0;\n"
     "  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
-    "    cover = clip_cover(p, I.clip, I.rc, scale);\n"
+    "    cover = clip_cover(p, I.clip, I.rc, I.rs, scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
@@ -198,9 +199,9 @@ static const char *shader_src =
     "  }\n"
     "  float2 hs = I.rect.zw * 0.5;\n"
     "  float2 c = I.rect.xy + hs;\n"
-    "  float r = min(I.prm.x, min(hs.x, hs.y));\n"
-    "  float2 q = abs(p - c) - hs + r;\n"
-    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
+    "  float band = 1.0 + 2.0 / scale + (kind == 2 ? max(I.prm.w, 0.5) : max(I.prm.z, 0.0));\n"
+    "  float d = mb_sd_box(p - c, hs, I.prm.x, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pd);\n"
     "  if (kind == 4) {\n"
     "    float2 uv = I.c2.xy + saturate((p - I.rect.xy) / I.rect.zw) * I.c2.zw;\n"
@@ -211,8 +212,7 @@ static const char *shader_src =
     "    float a = 1.0 - smoothstep(-b, b, d);\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (I.c2.x > 0.5) {\n"
-    "      float2 qb = abs(p - c + float2(0.0, I.c2.y)) - hs + r;\n"
-    "      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
+    "      float db = mb_sd_box(p - c + float2(0.0, I.c2.y), hs, I.prm.x, band);\n"
     "      a *= saturate(0.5 + db * scale);\n"
     "    }\n"
     "    return (float4(col.rgb, 1.0) * col.a * a) * cover;\n"
@@ -391,11 +391,11 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  // the instance's seven float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii
-  D3D11_INPUT_ELEMENT_DESC el[7];
-  for (UINT i = 0; i < 7; i++)
+  // the instance's eight float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth
+  D3D11_INPUT_ELEMENT_DESC el[8];
+  for (UINT i = 0; i < 8; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 7, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 8, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);

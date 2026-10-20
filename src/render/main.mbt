@@ -11,7 +11,7 @@
 
 ///|
 /// The numbers of an instance (src/ui/scene.mbt).
-let inst_size = 28
+let inst_size = 32
 
 ///|
 priv struct Dl {
@@ -25,7 +25,7 @@ priv struct Dl {
   images : Map[Int, (Int, String, Int)]
   carried : Map[Int, String]
   inst : Array[Array[String]]
-  /// the format's version (the head's): this renderer draws mbui-dl 3
+  /// the format's version (the head's): this renderer draws mbui-dl 4 (and 3, its clips round)
   mut version : Int
 }
 
@@ -134,8 +134,8 @@ fn parse(text : String) -> Dl {
       }
       "bytes" if t.length() >= 3 => dl.carried[num(t[1]).to_int()] = t[2]
       "mbui-dl" if t.length() >= 2 => dl.version = num(t[1]).to_int()
-      // i N0 … N27
-      "i" if t.length() == inst_size + 1 => dl.inst.push(t)
+      // i N0 … N31 (mbui-dl 3: N0 … N27, its clip's corners round)
+      "i" if t.length() == inst_size + 1 || t.length() == inst_size - 3 => dl.inst.push(t)
       _ => ()
     }
   }
@@ -155,8 +155,8 @@ fn main {
     return
   }
   let dl = parse(read_text(path))
-  if dl.version != 3 {
-    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 (scene.mbt's instances, \{inst_size} numbers each)")
+  if dl.version != 3 && dl.version != 4 {
+    say("mbui-render: \{path}: mbui-dl \{dl.version}, not 3 or 4 (scene.mbt's instances, \{inst_size} numbers each)")
     return
   }
   if dl.w <= 0.0 || dl.inst.is_empty() {
@@ -214,7 +214,8 @@ fn main {
   let inst = FixedArray::make(n * inst_size, 0.0)
   let mut resized = 0
   for k, t in dl.inst {
-    for j in 0..<inst_size {
+    // (3's 28: how smooth its clip's corners are, 28-31, left 0: round)
+    for j in 0..<(t.length() - 1) {
       inst[k * inst_size + j] = num(t[j + 1])
     }
     let kind = inst[k * inst_size + 5]

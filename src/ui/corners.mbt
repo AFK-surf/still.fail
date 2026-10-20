@@ -1,7 +1,9 @@
 // still.fail's corner rule, measured (its docs/ui-panels.md, "所有带圆角的东西"): what has a ground of its own (a
 // button, a row, a field, a block) and lies in the corner of a rounded container stands as far from the two edges of
-// that corner, and its corner is the container's less that distance (concentric); a circle or a capsule there is as
-// far from both, and the container's corner that distance more than its own (the container's fault when not). A
+// that corner, and its corner is concentric with the container's (smooth.mbt concentric: the container's less that
+// distance over 1.25, both corners smooth); a circle or a capsule there is as far from both, and the container's corner
+// that distance more than its own (ui-panels.md: not over 1.25, which would leave a crescent by the capsule; the
+// container's fault when not). A
 // container's corner is its own ground's, or a ground of its size laid under it as a layer. A test asks the frame it
 // drew (Tester::corner_faults); the gallery's components keep to it.
 
@@ -74,15 +76,19 @@ pub fn Tester::corner_faults(self : Tester) -> Array[String] {
       let even = (dx - dy).abs() <= 0.5
       // a round one at a corner: it is the container whose corner follows it (ui-panels.md: 外圆角 = 距离 + 半高), the
       // fault the container's when it does not
-      let concentric = (rb - (ra - dmax(dx, dy))).abs() <= 0.5
-      if !(even && concentric) {
+      let in_step = if round {
+        (ra - (dmax(dx, dy) + rb)).abs() <= 0.5
+      } else {
+        (rb - concentric(ra, dmax(dx, dy))).abs() <= 0.5
+      }
+      if !(even && in_step) {
         let corner = ["top left", "top right", "bottom left", "bottom right"][k]
         out.push(
           if round && even {
             "\{c.named(p)} (corner \{ra}): wants corner \{dmax(dx, dy) + rb}, for \{c.named(i)} (round, corner \{rb}) in its \{corner}, \{dx} from both edges"
           } else {
             "\{c.named(i)} (corner \{rb}) in the \{corner} of \{c.named(p)} (corner \{ra}): \{dx} and \{dy} from its edges" +
-            (if concentric || round { "" } else { ", wants corner \{ra - dmax(dx, dy)}" })
+            (if in_step || round { "" } else { ", wants corner \{concentric(ra, dmax(dx, dy))}" })
           },
         )
       }
@@ -222,8 +228,9 @@ let inner_even : Double = 0.5
 /// The corners said `Inner` (style.mbt), from where their boxes lie as laid out (the covers moved: after
 /// covers_after_layout, before anything is painted or its clip and hit target recorded): the corner of the container
 /// the corner rule measures against (corner_container: through boxes with no corner, a ground laid beside as a layer)
-/// less the box's distance from that container's edges it is near (nearer than the container's corner is round),
-/// those distances the same; so the box is concentric with it by how it is written, and corner_faults finds nothing
+/// concentric with it across the box's distance from that container's edges it is near (nearer than the container's
+/// corner is round), those distances the same (smooth.mbt concentric); so the box is concentric with it by how it is
+/// written, and corner_faults finds nothing
 /// in it. In the order they were built, a container `Inner` itself worked out first. A box in no rounded container,
 /// near none of its edges, or near edges at different distances (the window narrowed, a max_w come into force) is
 /// drawn square, and said so: corner_faults lists it, so a test fails where a person's screen would not.
@@ -266,37 +273,45 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
       )
       continue
     }
-    n.radius = dmax(ra - d, 0.0)
+    n.radius = concentric(ra, d)
   }
 }
 
 ///|
-/// Whether what shows at node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is the arc of a
-/// box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
-/// its own): the node's own arc there lies wholly outside the cut's circle (within half a pixel), so the cut's arc
-/// bounds it (a square corner flush along its edge, a capsule's fill as round as it). Its arc measured at 16 fixed
-/// directions over the quarter toward the corner; one point inside the cut's circle and its own arc shows: checked as
-/// any other.
+/// Whether what shows at node `i`'s corner `k` (0 top left, 1 top right, 2 bottom left, 3 bottom right) is the curve of
+/// a box between it and its container `p` (`p` included) that cuts what it holds with a rounded corner (clip, a corner of
+/// its own): the node's own corner there lies wholly outside the cut's curve (within half a pixel), so the cut's bounds
+/// it (a square corner flush along its edge, a capsule's fill as round as it). Both corners as drawn (smooth.mbt: each
+/// as smooth as its box has room for); the node's measured at 16 fixed directions over the quarter toward the corner,
+/// one point inside the cut's curve and its own shows: checked as any other.
 fn Ctx::cut_round_at(self : Ctx, i : Int, p : Int, k : Int) -> Bool {
   let b = self.nodes[i]
   let rb = b.corner()
+  let sb = smoothness(rb, dmin(b.fw, b.fh) / 2.0)
+  let nb = 2.0 + (smooth_exponent - 2.0) * sb
+  let big = rb * (1.0 + (smooth_scale - 1.0) * sb)
   let mut q = b.parent
   while q >= 0 {
     let n = self.nodes[q]
     let r = n.corner()
     if n.clip && r >= 0.5 {
-      // the corner's own frame: the cut's corner at the origin, inward positive; the cut's circle about (r, r)
+      // the corner's own frame: the cut's corner at the origin, inward positive
       let dx = if k == 0 || k == 2 { b.x - n.x } else { n.x + n.fw - (b.x + b.fw) }
       let dy = if k < 2 { b.y - n.y } else { n.y + n.fh - (b.y + b.fh) }
-      if dx >= -0.5 && dy >= -0.5 && dx < r && dy < r {
+      let hx = n.fw / 2.0
+      let hy = n.fh / 2.0
+      let sn = smoothness(r, dmin(hx, hy))
+      if dx >= -0.5 && dy >= -0.5 && dx < r * (1.0 + (smooth_scale - 1.0) * sn) && dy < r * (1.0 + (smooth_scale - 1.0) * sn) {
         let mut outside = true
         for j in 0..<cut_arc_steps {
           let a = half_pi * j.to_double() / (cut_arc_steps - 1).to_double()
-          let px = dx + rb - rb * @math.cos(a)
-          let py = dy + rb - rb * @math.sin(a)
-          let ex = px - r
-          let ey = py - r
-          if (ex * ex + ey * ey).sqrt() < r - 0.5 {
+          let c = @math.cos(a)
+          let s = @math.sin(a)
+          let rho = 1.0 / det_pow(det_pow(c, nb) + det_pow(s, nb), 1.0 / nb)
+          let px = dx + big - big * rho * c
+          let py = dy + big - big * rho * s
+          // (from the cut's middle, toward this corner)
+          if sd_corner(hx - px, hy - py, hx, hy, r, sn) < -0.5 {
             outside = false
             break
           }

@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 28;
+  const INST = 32;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -131,11 +131,12 @@
   layout(location=4) in vec4 a_clip;
   layout(location=5) in vec4 a_pad;
   layout(location=6) in vec4 a_rc;
+  layout(location=7) in vec4 a_rs;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
   out vec2 v_pos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
-  flat out vec4 v_rc;
+  flat out vec4 v_rc; flat out vec4 v_rs;
   void main() {
     int vid = gl_VertexID;
     vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);
@@ -144,13 +145,13 @@
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
     gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc;
+    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;
   }`;
   const FS = `#version 300 es
   precision highp float;
   in vec2 v_pos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
-  flat in vec4 v_rc;
+  flat in vec4 v_rc; flat in vec4 v_rs;
   uniform float u_scale;
   uniform sampler2D u_atlas;
   uniform sampler2D u_img;
@@ -163,11 +164,56 @@
   uniform vec4 u_rad[2];
   uniform int u_n;
   out vec4 o;
+  // corner.sl begin (scripts/corner_sl.py: not edited here)
+  #define float2 vec2
+  // mbui's corners (src/ui/smooth.mbt: these are its smoothness, sd_corner and sd_box, number for number), the one copy
+  // every renderer draws by: Metal's, Direct3D's and both GLs' shaders take it in as it is (corner_sl.h; web/host.js
+  // between its "corner.sl" lines), written in what the four have in common (float2: GLSL's vec2, defined so before it).
+  // Made into those by scripts/corner_sl.py, which CI runs with --check.
+  //
+  // How smooth a corner of radius r is where room is half its box's shorter side: 0 a circle's or a capsule's end, 1
+  // superellipse(1.5) over r a quarter longer; between, as far as the room goes.
+  float mb_smoothness(float r, float room) {
+    return r <= 0.0 ? 0.0 : clamp((room - r) / (0.25 * r), 0.0, 1.0);
+  }
+  // The signed distance of p (from a box's middle) from that box, hs its half sides, its corners r (at most the shorter
+  // half) s smooth: |x|^n + |y|^n = R^n about each corner's centre, n from 2 to 2^1.5 and R from r to 1.25 r as s goes
+  // from 0 to 1. 0 on the curve; off it, the curve's value over how fast it grows there (along its normal, to first
+  // order). At s = 0 a round corner's, as before. Only within band of the curve is it worked out (two powers a pixel):
+  // the curve lies between the circle of R and that of R 2^(1/2 - 1/n) (under 1.107 R), and further than band inside
+  // the one or outside the other the round distance has its sign and is as far, which is all a cover, an edge band
+  // wide or a shadow that blurred says of it.
+  float mb_sd_corner(float2 p, float2 hs, float r, float s, float band) {
+    float R = min(r * (1.0 + 0.25 * s), min(hs.x, hs.y));
+    float2 q = abs(p) - hs + R;
+    float2 m = max(q, 0.0);
+    float l = length(m);
+    if (s <= 0.0 || min(m.x, m.y) <= 0.0 || l <= R - band || l >= 1.107 * R + band) return l + min(max(q.x, q.y), 0.0) - R;
+    float hi = max(m.x, m.y);
+    float t = min(m.x, m.y) / hi;
+    if (s >= 1.0) {
+      // wholly smooth (nearly every corner): the two factors below as polynomials in t, no power (smooth.mbt
+      // smooth_a, smooth_b: within 2e-5 of them, a hundredth of a pixel over a radius of 200)
+      float A = 1.0000098 + t * (-0.00106380035 + t * (0.0390446602 + t * (1.21491043 + t * (-1.49650831 + t * (1.90947795 + t * (-2.77580972 + t * (2.11536546 + t * -0.591224537)))))));
+      float B = 1.00001404 + t * (-0.00136262193 + t * (0.039570688 + t * (0.648050719 + t * (-0.725922772 + t * (0.327888394 + t * (-0.914717465 + t * (1.13728689 + t * -0.403984265)))))));
+      return hi * A - R * B;
+    }
+    float n = 2.0 + 0.8284271247461903 * s;
+    float tn1 = pow(t, n - 1.0);
+    float tn = tn1 * t;
+    float u = pow(1.0 + tn, 1.0 / n);
+    return (hi * u - R) * (1.0 + tn) / (u * sqrt(1.0 + tn1 * tn1));
+  }
+  // A box's own corners: r at most its shorter half, as smooth as its size has room for (band: mb_sd_corner's).
+  float mb_sd_box(float2 p, float2 hs, float r, float band) {
+    float room = min(hs.x, hs.y);
+    float rr = min(r, room);
+    return mb_sd_corner(p, hs, rr, mb_smoothness(rr, room), band);
+  }
+  // corner.sl end
   float sd_rr(vec2 p, vec4 r, float rad) {
     vec2 hs = r.zw * 0.5;
-    float rr = min(rad, min(hs.x, hs.y));
-    vec2 q = abs(p - r.xy - hs) - hs + rr;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+    return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);
   }
   // a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its
   // radius), met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle
@@ -195,15 +241,14 @@
     return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;
   }
   float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
-  // how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge
-  // covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it
-  float clip_cover(vec2 p, vec4 c, vec4 r, float scale) {
+  // how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise; s: how smooth
+  // each is), its edge covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it
+  float clip_cover(vec2 p, vec4 c, vec4 r, vec4 s, float scale) {
     vec2 hs = (c.zw - c.xy) * 0.5;
     vec2 m = c.xy + hs;
     float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);
-    rr = min(rr, min(hs.x, hs.y));
-    vec2 q = abs(p - m) - hs + rr;
-    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;
+    float ss = p.x < m.x ? (p.y < m.y ? s.x : s.w) : (p.y < m.y ? s.y : s.z);
+    float d = mb_sd_corner(p - m, hs, min(rr, min(hs.x, hs.y)), ss, 1.0 + 2.0 / scale);
     return clamp(0.5 - d * scale, 0.0, 1.0);
   }
   // what it shows at p, as if uncut
@@ -257,9 +302,9 @@
     }
     vec2 hs = v_rect.zw * 0.5;
     vec2 c = v_rect.xy + hs;
-    float r = min(v_p.x, min(hs.x, hs.y));
-    vec2 q = abs(p - c) - hs + r;
-    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+    // worked out as near the curve as its cover, its edge or its blur reaches
+    float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));
+    float d = mb_sd_box(p - c, hs, v_p.x, band);
     if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);
     if (kind == 4) {
       vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;
@@ -271,8 +316,7 @@
       float a = 1.0 - smoothstep(-b, b, d);
       // glass's: only outside its box (c2.y above it)
       if (v_c2.x > 0.5) {
-        vec2 qb = abs(p - c + vec2(0.0, v_c2.y)) - hs + r;
-        float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;
+        float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);
         a *= clamp(0.5 + db * u_scale, 0.0, 1.0);
       }
       o = vec4(col.rgb, 1.0) * col.a * a;
@@ -309,7 +353,7 @@
     vec2 p = v_pos;
     float cover = 1.0;
     if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {
-      cover = clip_cover(p, v_clip, v_rc, u_scale);
+      cover = clip_cover(p, v_clip, v_rc, v_rs, u_scale);
       if (cover <= 0.0) discard;
     } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
     shade(p);
@@ -386,9 +430,9 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       const loc = i;
-      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii (vec4 each)
+      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth (vec4 each)
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
@@ -569,7 +613,7 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+          for (let i = 0; i < 8; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
@@ -579,7 +623,7 @@
       const im = tid ? images.get(tid) : null;
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 7; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+      for (let i = 0; i < 8; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);
@@ -937,7 +981,7 @@
 
   H.glyph = (key, out) => {
     const e = entries[key];
-    if (!e) { for (let i = 0; i < 7; i++) out[i] = 0; return; }
+    if (!e) { for (let i = 0; i < 8; i++) out[i] = 0; return; }
     if (!e.done) rasterize(e);
     out[0] = e.u || 0; out[1] = e.v || 0; out[2] = e.w || 0; out[3] = e.h || 0;
     out[4] = e.ox || 0; out[5] = e.oy || 0; out[6] = e.color || 0;

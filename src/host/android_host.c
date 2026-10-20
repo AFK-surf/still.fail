@@ -13,6 +13,7 @@
 #include <zlib.h>
 #include "moonbit.h"
 #include "post.h"
+#include "corner_sl.h"
 
 #define LOG(...) __android_log_print(ANDROID_LOG_INFO, "mbui", __VA_ARGS__)
 
@@ -240,7 +241,7 @@ static int image_new(void) {
 // Renderer: the same instances and shader as Metal and WebGL2.
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 28
+#define MB_INST 32
 
 static const char *VS =
     "#version 300 es\n"
@@ -251,11 +252,12 @@ static const char *VS =
     "layout(location=4) in vec4 a_clip;\n"
     "layout(location=5) in vec4 a_pad;\n"
     "layout(location=6) in vec4 a_rc;\n"
+    "layout(location=7) in vec4 a_rs;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
     "out vec2 v_pos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
-    "flat out vec4 v_rc;\n"
+    "flat out vec4 v_rc; flat out vec4 v_rs;\n"
     "void main() {\n"
     "  int vid = gl_VertexID;\n"
     "  vec2 corner = vec2((vid == 1 || vid == 4 || vid == 5) ? 1.0 : 0.0, (vid == 2 || vid == 3 || vid == 5) ? 1.0 : 0.0);\n"
@@ -264,7 +266,7 @@ static const char *VS =
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);\n"
     "  gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc;\n"
+    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;\n"
     "}\n";
 
 static const char *FS =
@@ -272,7 +274,7 @@ static const char *FS =
     "precision highp float;\n"
     "in vec2 v_pos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
-    "flat in vec4 v_rc;\n"
+    "flat in vec4 v_rc; flat in vec4 v_rs;\n"
     "uniform float u_scale;\n"
     "uniform sampler2D u_atlas;\n"
     "uniform sampler2D u_img;\n"
@@ -285,11 +287,11 @@ static const char *FS =
     "uniform vec4 u_rad[2];\n"
     "uniform int u_n;\n"
     "out vec4 o;\n"
+    "#define float2 vec2\n"
+    MB_CORNER_SL
     "float sd_rr(vec2 p, vec4 r, float rad) {\n"
     "  vec2 hs = r.zw * 0.5;\n"
-    "  float rr = min(rad, min(hs.x, hs.y));\n"
-    "  vec2 q = abs(p - r.xy - hs) - hs + rr;\n"
-    "  return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  return mb_sd_box(p - r.xy - hs, hs, rad, 1e9);\n"
     "}\n"
     "// a notch cut into the top edge (scene.mbt 21-23): a circle about the top's middle (pad.y below it, pad.z its radius),\n"
     "// met by the edge through fillets (pad.w): the rounded intersection with what is outside the circle\n"
@@ -317,15 +319,14 @@ static const char *FS =
     "  return texture(u_bd, clamp(p * u_map.xy + u_map.zw, u_uvc.xy, u_uvc.zw)).rgb;\n"
     "}\n"
     "float luma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }\n"
-    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise), its edge\n"
-    "// covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
-    "float clip_cover(vec2 p, vec4 c, vec4 r, float scale) {\n"
+    "// how much of the pixel at p its rounded clip keeps (r: the corners' radii, top left, then clockwise; s: how smooth\n"
+    "// each is), its edge covered as a box's own (0.5 - d * scale), so what it cuts meets the ground of the box that cuts it\n"
+    "float clip_cover(vec2 p, vec4 c, vec4 r, vec4 s, float scale) {\n"
     "  vec2 hs = (c.zw - c.xy) * 0.5;\n"
     "  vec2 m = c.xy + hs;\n"
     "  float rr = p.x < m.x ? (p.y < m.y ? r.x : r.w) : (p.y < m.y ? r.y : r.z);\n"
-    "  rr = min(rr, min(hs.x, hs.y));\n"
-    "  vec2 q = abs(p - m) - hs + rr;\n"
-    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr;\n"
+    "  float ss = p.x < m.x ? (p.y < m.y ? s.x : s.w) : (p.y < m.y ? s.y : s.z);\n"
+    "  float d = mb_sd_corner(p - m, hs, min(rr, min(hs.x, hs.y)), ss, 1.0 + 2.0 / scale);\n"
     "  return clamp(0.5 - d * scale, 0.0, 1.0);\n"
     "}\n"
     "// what it shows at p, as if uncut\n"
@@ -379,9 +380,9 @@ static const char *FS =
     "  }\n"
     "  vec2 hs = v_rect.zw * 0.5;\n"
     "  vec2 c = v_rect.xy + hs;\n"
-    "  float r = min(v_p.x, min(hs.x, hs.y));\n"
-    "  vec2 q = abs(p - c) - hs + r;\n"
-    "  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;\n"
+    "  // worked out as near the curve as its cover, its edge or its blur reaches\n"
+    "  float band = 1.0 + 2.0 / u_scale + (kind == 2 ? max(v_p.w, 0.5) : max(v_p.z, 0.0));\n"
+    "  float d = mb_sd_box(p - c, hs, v_p.x, band);\n"
     "  if (kind == 0 || kind == 5) d = notch_cut(d, p, v_rect, v_pad);\n"
     "  if (kind == 4) {\n"
     "    vec2 uv = v_c2.xy + clamp((p - v_rect.xy) / v_rect.zw, 0.0, 1.0) * v_c2.zw;\n"
@@ -393,8 +394,7 @@ static const char *FS =
     "    float a = 1.0 - smoothstep(-b, b, d);\n"
     "    // glass's: only outside its box (c2.y above it)\n"
     "    if (v_c2.x > 0.5) {\n"
-    "      vec2 qb = abs(p - c + vec2(0.0, v_c2.y)) - hs + r;\n"
-    "      float db = length(max(qb, 0.0)) + min(max(qb.x, qb.y), 0.0) - r;\n"
+    "      float db = mb_sd_box(p - c + vec2(0.0, v_c2.y), hs, v_p.x, band);\n"
     "      a *= clamp(0.5 + db * u_scale, 0.0, 1.0);\n"
     "    }\n"
     "    o = vec4(col.rgb, 1.0) * col.a * a;\n"
@@ -431,7 +431,7 @@ static const char *FS =
     "  vec2 p = v_pos;\n"
     "  float cover = 1.0;\n"
     "  if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {\n"
-    "    cover = clip_cover(p, v_clip, v_rc, u_scale);\n"
+    "    cover = clip_cover(p, v_clip, v_rc, v_rs, u_scale);\n"
     "    if (cover <= 0.0) discard;\n"
     "  } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
     "  shade(p);\n"
@@ -538,7 +538,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
@@ -776,7 +776,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
         main_state();
       }
       if (shows) {
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 8; i++)
           glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
         // liquid: the group as one shape, drawn once
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * MB_INST + 5] + 0.5f) == 6 ? 1 : end - start);
@@ -788,7 +788,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     if (t) {  // 0: lost with the context, decoding again
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 7; i++)
+      for (int i = 0; i < 8; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
       if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);

@@ -6,6 +6,9 @@
 //   (kinds 0 and 5: its circle's middle below the top, its radius, its
 //   fillets'; 0 none: Ctx::box notch_r) · 24-27 the clip's corners' radii
 //   (top left, top right, bottom right, bottom left: 16-19 is a rounded rect)
+//   · 28-31 how smooth those corners are (smooth.mbt: 0 round, 1 wholly
+//   smooth; as the box whose corner it is had room for). A shape's own
+//   corner is as smooth as its rect has room for: the renderers say.
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -13,7 +16,7 @@
 // (written transparent, without blending: native.mbt).
 
 ///|
-let inst_size = 28
+let inst_size = 32
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -24,8 +27,10 @@ fn Ctx::grow(self : Ctx) -> Unit {
 }
 
 ///|
-/// What cuts what is painted now, a level per clipping node: 8 numbers each, its rect (x0 y0 x1 y1) and its corners'
-/// radii (top left, top right, bottom right, bottom left), what each instance carries (16-19, 24-27). A box with
+/// What cuts what is painted now, a level per clipping node: 12 numbers each, its rect (x0 y0 x1 y1), its corners'
+/// radii (top left, top right, bottom right, bottom left) and how smooth each is (smooth.mbt: as the box whose corner it
+/// is has room for, kept as the corner is, so a list cut by a card's corners is cut as the card's ground is drawn), what
+/// each instance carries (16-19, 24-31). A box with
 /// `clip` and a `radius` cuts to its rounded rect (Compose's clip(RoundedCornerShape)), what it holds covered at the
 /// edge as its own ground is (the renderers: 0.5 - d · scale of the rounded rect's distance; a clip with no rounded
 /// corner cuts hard, at pixel centres, as before), and presses in what it cut away miss (Ctx::hit_clips).
@@ -38,11 +43,11 @@ fn Ctx::grow(self : Ctx) -> Unit {
 /// corner (at most (1 - π/4) r² of it); no stencil is kept.
 // kept across runs: every clip a paint pushes it pops in the same paint, so between frames only its base level is
 // left, the same in every run
-let clip_stack : Array[Double] = [0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0]
+let clip_stack : Array[Double] = [0.0, 0.0, 1.0e9, 1.0e9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 ///|
 /// The numbers a level of `clip_stack` has.
-let clip_n = 8
+let clip_n = 12
 
 ///|
 /// Where the clip painted in now starts in `clip_stack`.
@@ -51,16 +56,16 @@ fn clip_top() -> Int {
 }
 
 ///|
-/// The radius of the clip `k` (in `clip_stack`) at its corner `corner` (0 top left, then clockwise) where (`x`, `y`) is
-/// that corner, else 0.
-fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> Double {
+/// The corner of the clip `k` (in `clip_stack`) at its corner `corner` (0 top left, then clockwise) where (`x`, `y`) is
+/// that corner: its radius and how smooth it is, else square (0, 0).
+fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> (Double, Double) {
   let s = clip_stack
   let cx = if corner == 0 || corner == 3 { s[k] } else { s[k + 2] }
   let cy = if corner < 2 { s[k + 1] } else { s[k + 3] }
   if x == cx && y == cy {
-    s[k + 4 + corner]
+    (s[k + 4 + corner], s[k + 8 + corner])
   } else {
-    0.0
+    (0.0, 0.0)
   }
 }
 
@@ -68,32 +73,35 @@ fn clip_corner_r(k : Int, corner : Int, x : Double, y : Double) -> Double {
 /// A clip of its own rect (x0 y0 x1 y1, as given) pushed: its corners round where they are the clip it is in's.
 fn push_clip(x0 : Double, y0 : Double, x1 : Double, y1 : Double) -> Unit {
   let k = clip_top()
-  let tl = clip_corner_r(k, 0, x0, y0)
-  let tr = clip_corner_r(k, 1, x1, y0)
-  let br = clip_corner_r(k, 2, x1, y1)
-  let bl = clip_corner_r(k, 3, x0, y1)
-  push_clip_r(x0, y0, x1, y1, tl, tr, br, bl)
+  let (tl, stl) = clip_corner_r(k, 0, x0, y0)
+  let (tr, s_tr) = clip_corner_r(k, 1, x1, y0)
+  let (br, sbr) = clip_corner_r(k, 2, x1, y1)
+  let (bl, sbl) = clip_corner_r(k, 3, x0, y1)
+  push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
 ///|
+/// A clip pushed: its rect (x0 y0 x1 y1), its corners' radii and how smooth each is (top left, then clockwise).
 fn push_clip_r(
   x0 : Double,
   y0 : Double,
   x1 : Double,
   y1 : Double,
-  tl : Double,
-  tr : Double,
-  br : Double,
-  bl : Double,
+  r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
 ) -> Unit {
   clip_stack.push(x0)
   clip_stack.push(y0)
   clip_stack.push(x1)
   clip_stack.push(y1)
-  clip_stack.push(tl)
-  clip_stack.push(tr)
-  clip_stack.push(br)
-  clip_stack.push(bl)
+  clip_stack.push(r.0)
+  clip_stack.push(r.1)
+  clip_stack.push(r.2)
+  clip_stack.push(r.3)
+  clip_stack.push(sm.0)
+  clip_stack.push(sm.1)
+  clip_stack.push(sm.2)
+  clip_stack.push(sm.3)
 }
 
 ///|
@@ -111,25 +119,25 @@ fn push_round_clip(
   let y0 = dmax(y, s[k + 1])
   let x1 = dmin(x + w, s[k + 2])
   let y1 = dmin(y + h, s[k + 3])
-  // as round as its ground's corners are (the renderers cap a radius at half the shorter side)
-  let r = dmax(dmin(radius, dmin(w, h) / 2.0), 0.0)
-  let mine = fn(cx : Double, cy : Double, ox : Double, oy : Double) {
-    if r > 0.0 && cx == ox && cy == oy {
-      r
+  // as round, and as smooth, as its ground's corners are (the renderers cap a radius at half the shorter side, and
+  // smooth it as far as the box has room for)
+  let room = dmin(w, h) / 2.0
+  let r = dmax(dmin(radius, room), 0.0)
+  let sm = smoothness(r, room)
+  // where a corner is both's, the rounder
+  let corner = fn(j : Int, cx : Double, cy : Double, ox : Double, oy : Double) {
+    let (pr, ps) = clip_corner_r(k, j, cx, cy)
+    if r > 0.0 && cx == ox && cy == oy && r >= pr {
+      (r, sm)
     } else {
-      0.0
+      (pr, ps)
     }
   }
-  push_clip_r(
-    x0,
-    y0,
-    x1,
-    y1,
-    dmax(mine(x0, y0, x, y), clip_corner_r(k, 0, x0, y0)),
-    dmax(mine(x1, y0, x + w, y), clip_corner_r(k, 1, x1, y0)),
-    dmax(mine(x1, y1, x + w, y + h), clip_corner_r(k, 2, x1, y1)),
-    dmax(mine(x0, y1, x, y + h), clip_corner_r(k, 3, x0, y1)),
-  )
+  let (tl, stl) = corner(0, x0, y0, x, y)
+  let (tr, s_tr) = corner(1, x1, y0, x + w, y)
+  let (br, sbr) = corner(2, x1, y1, x + w, y + h)
+  let (bl, sbl) = corner(3, x0, y1, x, y + h)
+  push_clip_r(x0, y0, x1, y1, (tl, tr, br, bl), (stl, s_tr, sbr, sbl))
 }
 
 ///|
@@ -140,15 +148,21 @@ fn pop_clip() -> Unit {
 }
 
 ///|
-/// The clip `k` (in `clip_stack`): its rect and its corners' radii.
-fn clip_at(k : Int) -> ((Double, Double, Double, Double), (Double, Double, Double, Double)) {
+/// The clip `k` (in `clip_stack`): its rect, its corners' radii and how smooth they are.
+fn clip_at(
+  k : Int,
+) -> ((Double, Double, Double, Double), (Double, Double, Double, Double), (Double, Double, Double, Double)) {
   let s = clip_stack
-  ((s[k], s[k + 1], s[k + 2], s[k + 3]), (s[k + 4], s[k + 5], s[k + 6], s[k + 7]))
+  (
+    (s[k], s[k + 1], s[k + 2], s[k + 3]),
+    (s[k + 4], s[k + 5], s[k + 6], s[k + 7]),
+    (s[k + 8], s[k + 9], s[k + 10], s[k + 11]),
+  )
 }
 
 ///|
-/// Instance `b`'s clip moved to (`m0` `m1` `m2` `m3`), then cut to the clip `c` (rounded by `r`): where that moves a
-/// corner, the corner is `c`'s (its radius) or square.
+/// Instance `b`'s clip moved to (`m0` `m1` `m2` `m3`), then cut to the clip `c` (rounded by `r`, as smooth as `sm`):
+/// where that moves a corner, the corner is `c`'s (its radius, its smoothness) or square.
 fn clamp_inst_clip(
   a : FixedArray[Double],
   b : Int,
@@ -158,21 +172,34 @@ fn clamp_inst_clip(
   m3 : Double,
   c : (Double, Double, Double, Double),
   r : (Double, Double, Double, Double),
+  sm : (Double, Double, Double, Double),
 ) -> Unit {
   let (c0, c1, c2, c3) = c
   a[b + 16] = dmax(m0, c0)
   a[b + 17] = dmax(m1, c1)
   a[b + 18] = dmin(m2, c2)
   a[b + 19] = dmin(m3, c3)
-  let corner = fn(j : Int, xi : Int, yi : Int, mx : Double, my : Double, cx : Double, cy : Double, cr : Double) {
+  let corner = fn(
+    j : Int,
+    xi : Int,
+    yi : Int,
+    mx : Double,
+    my : Double,
+    cx : Double,
+    cy : Double,
+    cr : Double,
+    cs : Double,
+  ) {
     if a[b + xi] != mx || a[b + yi] != my {
-      a[b + 24 + j] = if a[b + xi] == cx && a[b + yi] == cy { cr } else { 0.0 }
+      let theirs = a[b + xi] == cx && a[b + yi] == cy
+      a[b + 24 + j] = if theirs { cr } else { 0.0 }
+      a[b + 28 + j] = if theirs { cs } else { 0.0 }
     }
   }
-  corner(0, 16, 17, m0, m1, c0, c1, r.0)
-  corner(1, 18, 17, m2, m1, c2, c1, r.1)
-  corner(2, 18, 19, m2, m3, c2, c3, r.2)
-  corner(3, 16, 19, m0, m3, c0, c3, r.3)
+  corner(0, 16, 17, m0, m1, c0, c1, r.0, sm.0)
+  corner(1, 18, 17, m2, m1, c2, c1, r.1, sm.1)
+  corner(2, 18, 19, m2, m3, c2, c3, r.2, sm.2)
+  corner(3, 16, 19, m0, m3, c0, c3, r.3, sm.3)
 }
 
 ///|
@@ -223,6 +250,10 @@ fn Ctx::push_inst(
   a[b + 25] = clip_stack[k + 5]
   a[b + 26] = clip_stack[k + 6]
   a[b + 27] = clip_stack[k + 7]
+  a[b + 28] = clip_stack[k + 8]
+  a[b + 29] = clip_stack[k + 9]
+  a[b + 30] = clip_stack[k + 10]
+  a[b + 31] = clip_stack[k + 11]
   a[b + 20] = 0.0 // the image it shows, if any
   // a rect's or frosted glass's notch (none); liquid glass and glyphs in it set theirs after
   a[b + 21] = 0.0

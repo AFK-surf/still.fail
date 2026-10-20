@@ -189,7 +189,7 @@ test "corners: a container whose ground is a layer of its size: what is in its c
         c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), bg=0xEEEEEEFFL, radius=26.0, fn() {  }) |> ignore })
         |> ignore
         c.box(pl=10.0, pt=top, fn() {
-          c.box(w=Px(56.0), h=Px(56.0), bg=0x3366FFFFL, radius=16.0, fn() {  }) |> ignore
+          c.box(w=Px(56.0), h=Px(56.0), bg=0x3366FFFFL, radius=18.0, fn() {  }) |> ignore
         })
         |> ignore
       })
@@ -202,7 +202,7 @@ test "corners: a container whose ground is a layer of its size: what is in its c
   let faults = t.corner_faults()
   assert_eq(faults.length(), 1)
   assert_true(faults[0].contains("10 and 14 from its edges"))
-  // 10 from both, its corner 26 less 10: no fault
+  // 10 from both, its corner concentric with 26's (26 less 10 over 1.25: 18, still.fail's attachment): no fault
   let t = @ui.Tester::new(fn(c) { composer(c, 10.0) })
   t.draw()
   assert_eq(t.corner_faults(), [])

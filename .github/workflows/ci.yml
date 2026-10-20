@@ -19,6 +19,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (scripts/detlint.py, docs/detlint.md)"
         run: python3 scripts/detlint_test.py && python3 scripts/detlint.py
+      - name: "The renderers' corners are src/host/corner.sl's (scripts/corner_sl.py)"
+        run: python3 scripts/corner_sl.py --check
       - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/textrec_test.py --check)"
         run: python3 scripts/textrec_test.py --check
       - name: Install MoonBit

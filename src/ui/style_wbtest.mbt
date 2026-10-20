@@ -214,20 +214,20 @@ fn inner_card(pad : Style) -> (Ctx) -> Unit {
 }
 
 ///|
-test "style: radius=Inner is the container's corner less how far in it lies, through a column with no corner" {
+test "style: radius=Inner is concentric with the container's corner across how far in it lies, through a column with no corner" {
   let t = Tester::new(inner_card(style(p=S2)))
   t.draw()
   let c = g()
   for i in 4..<7 {
-    assert_eq(c.nodes[i].radius, 16.0)
+    assert_eq(c.nodes[i].radius, concentric(24.0, 8.0))
   }
   assert_eq(t.corner_faults(), [])
   // the edges it is near at one distance, the far one not: the near ones are what count (the card taller than its
   // rows: none is near its bottom)
   let t = Tester::new(inner_card(style(px=S2, pt=S2, pb=S6, h=S96)))
   t.draw()
-  assert_eq(g().nodes[4].radius, 16.0)
-  assert_eq(g().nodes[6].radius, 16.0)
+  assert_eq(g().nodes[4].radius, concentric(24.0, 8.0))
+  assert_eq(g().nodes[6].radius, concentric(24.0, 8.0))
   assert_eq(t.corner_faults(), [])
 }
 
@@ -247,7 +247,7 @@ test "style: radius=Inner in a container whose corner is a ground laid beside it
   t.draw()
   let c = g()
   let row = c.count - 1
-  assert_eq(c.nodes[row].radius, 12.0)
+  assert_eq(c.nodes[row].radius, concentric(20.0, 8.0))
   assert_eq(t.corner_faults(), [])
 }
 
@@ -279,7 +279,7 @@ test "corners: flush against a rounded clip's edge, whose arc shows decides" {
   // c: as far from the top as from the sides, Inner: concentric
   let t = Tester::new(clip_card_row(Inner, 8.0))
   t.draw()
-  assert_eq(g().nodes[g().count - 1].radius, 16.0)
+  assert_eq(g().nodes[g().count - 1].radius, concentric(24.0, 8.0))
   assert_eq(t.corner_faults(), [])
 }
 
@@ -427,6 +427,6 @@ test "style: radius=Inner leaves out an edge it reaches past (cut there, in a ro
   })
   t.draw()
   let c = g()
-  assert_eq(c.nodes[c.count - 1].radius, 16.0)
+  assert_eq(c.nodes[c.count - 1].radius, concentric(24.0, 8.0))
   assert_eq(t.corner_faults(), [])
 }

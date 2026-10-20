@@ -470,7 +470,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     return true
   }
   let n = self.nodes[i]
-  let (outer, outer_r) = clip_at(clip_top())
+  let (outer, outer_r, outer_s) = clip_at(clip_top())
   let i0 = self.ninst
   let h0 = self.next_hit_ids.length()
   let s0 = self.next_scroll_ids.length()
@@ -492,10 +492,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
       oy + (c1 - dy - oy) / look.sy,
       ox + (c2 - dx - ox) / look.sx,
       oy + (c3 - dy - oy) / look.sy,
-      outer_r.0 / sm,
-      outer_r.1 / sm,
-      outer_r.2 / sm,
-      outer_r.3 / sm,
+      (outer_r.0 / sm, outer_r.1 / sm, outer_r.2 / sm, outer_r.3 / sm),
+      outer_s,
     )
   }
   if cutting {
@@ -533,7 +531,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
     self.next_scroll_rects.truncate(s0 * 4)
   }
   if !look.is_still() {
-    self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r)
+    self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
   }
   match e.keep {
     Some(d) if e.keep_rel >= 0 => {
@@ -568,8 +566,8 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
 
 ///|
 /// Instances `i0` to `i1` moved and scaled: about (`ox`, `oy`) by `sx`, `sy`, then by `dx`, `dy`; what their subtree
-/// cut them to moves with them (its corners' radii scaled as their radii are), within what cut the node itself (`outer`,
-/// its corners rounded by `outer_r`).
+/// cut them to moves with them (its corners' radii scaled as their radii are, as smooth), within what cut the node itself
+/// (`outer`, its corners rounded by `outer_r`, as smooth as `outer_s`).
 fn Ctx::transform_insts(
   self : Ctx,
   i0 : Int,
@@ -582,6 +580,7 @@ fn Ctx::transform_insts(
   dy : Double,
   outer : (Double, Double, Double, Double),
   outer_r : (Double, Double, Double, Double),
+  outer_s : (Double, Double, Double, Double),
 ) -> Unit {
   let a = self.inst
   let (c0, c1, c2, c3) = outer
@@ -622,6 +621,7 @@ fn Ctx::transform_insts(
         oy + (a[b + 19] - oy) * sy + dy,
         outer,
         outer_r,
+        outer_s,
       )
     }
   }
@@ -680,7 +680,7 @@ pub fn Ctx::paint_rect(
 /// painted now.
 pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Unit {
   let n = self.nodes[rel]
-  let (cut, cut_r) = clip_at(clip_top())
+  let (cut, cut_r, cut_s) = clip_at(clip_top())
   let count = d.insts.length() / inst_size
   while (self.ninst + count + 1) * inst_size > self.inst.length() {
     self.grow()
@@ -695,7 +695,7 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     let b = base + j * inst_size
     a[b] = a[b] + n.x
     a[b + 1] = a[b + 1] + n.y
-    clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r)
+    clamp_inst_clip(a, b, a[b + 16] + n.x, a[b + 17] + n.y, a[b + 18] + n.x, a[b + 19] + n.y, cut, cut_r, cut_s)
     a[b + 11] = a[b + 11] * look.alpha
     a[b + 15] = if a[b + 5] == 0.0 { a[b + 15] * look.alpha } else { a[b + 15] }
   }
@@ -713,6 +713,7 @@ pub fn Ctx::draw_drawing(self : Ctx, d : Drawing, rel : Int, look : Look) -> Uni
     look.dx,
     look.dy,
     (-1.0e9, -1.0e9, 1.0e9, 1.0e9),
+    (0.0, 0.0, 0.0, 0.0),
     (0.0, 0.0, 0.0, 0.0),
   )
 }

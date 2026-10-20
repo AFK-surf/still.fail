@@ -12,6 +12,8 @@ on:
       - "src/render/**"
       - "src/ui/drawlist.mbt"
       - "src/ui/scene.mbt"
+      - "src/ui/smooth.mbt"
+      - "src/host/corner*"
       - "goldens/render/web*"
       - "scripts/render_dl.sh"
       - "scripts/render_web.sh"

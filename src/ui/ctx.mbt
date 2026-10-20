@@ -145,7 +145,7 @@ pub struct Ctx {
   mut hit_rects : Array[Double]
   mut next_hit_ids : Array[Int]
   mut next_hit_rects : Array[Double]
-  // what cut each hit target where it was drawn, 8 numbers each (scene.mbt clip_stack): a press in a corner its
+  // what cut each hit target where it was drawn, 12 numbers each (scene.mbt clip_stack): a press in a corner its
   // rounded clip cut away misses it
   mut hit_clips : Array[Double]
   mut next_hit_clips : Array[Double]
@@ -939,32 +939,32 @@ fn hit_in(ids : Array[Int], rects : Array[Double], x : Double, y : Double) -> In
 
 ///|
 /// Whether (x, y), in hit target `k`'s rect, is within the rounded corners of what cut it (`clips`, Ctx::hit_clips):
-/// a corner as round as the renderers cut it (its radius at most half the clip's shorter side).
+/// a corner as round, and as smooth, as the renderers cut it (smooth.mbt sd_corner; its radius at most half the clip's
+/// shorter side).
 fn in_round_clip(clips : Array[Double], k : Int, x : Double, y : Double) -> Bool {
-  let b = k * 8
-  if b + 8 > clips.length() {
+  let b = k * clip_n
+  if b + clip_n > clips.length() {
     return true
   }
   let (x0, y0, x1, y1) = (clips[b], clips[b + 1], clips[b + 2], clips[b + 3])
-  let cap = dmax(dmin(x1 - x0, y1 - y0) / 2.0, 0.0)
-  let outside = fn(r : Double, cx : Double, cy : Double, sx : Double, sy : Double) {
-    let r = dmin(r, cap)
-    if r <= 0.0 {
-      return false
+  let hx = dmax((x1 - x0) / 2.0, 0.0)
+  let hy = dmax((y1 - y0) / 2.0, 0.0)
+  let mx = x0 + hx
+  let my = y0 + hy
+  // the corner of the quarter it is in (top left, then clockwise)
+  let j = if x < mx {
+    if y < my {
+      0
+    } else {
+      3
     }
-    // within its corner's square: further than r from the curve's middle
-    let ox = cx + sx * r
-    let oy = cy + sy * r
-    let dx = x - ox
-    let dy = y - oy
-    dx * sx < 0.0 && dy * sy < 0.0 && dx * dx + dy * dy > r * r
+  } else if y < my {
+    1
+  } else {
+    2
   }
-  !(
-    outside(clips[b + 4], x0, y0, 1.0, 1.0) ||
-    outside(clips[b + 5], x1, y0, -1.0, 1.0) ||
-    outside(clips[b + 6], x1, y1, -1.0, -1.0) ||
-    outside(clips[b + 7], x0, y1, 1.0, -1.0)
-  )
+  let r = dmin(clips[b + 4 + j], dmin(hx, hy))
+  r <= 0.0 || sd_corner(x - mx, y - my, hx, hy, r, clips[b + 8 + j]) <= 0.0
 }
 
 ///|

@@ -11,6 +11,8 @@ on:
       - "src/render/**"
       - "src/ui/drawlist.mbt"
       - "src/ui/scene.mbt"
+      - "src/ui/smooth.mbt"
+      - "src/host/corner*"
       - "goldens/render/**"
       - "scripts/render_offscreen.sh"
       - ".github/workflows/render.yml"
@@ -22,6 +24,8 @@ on:
       - "src/render/**"
       - "src/ui/drawlist.mbt"
       - "src/ui/scene.mbt"
+      - "src/ui/smooth.mbt"
+      - "src/host/corner*"
       - "goldens/render/**"
   workflow_dispatch:
 
