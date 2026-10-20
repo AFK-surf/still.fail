@@ -83,6 +83,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import fail.still.android.ui.PickRow
+import fail.still.android.ui.UiFont
 
 /** A device's name as people know it: its label, or what kind of client it is. */
 private fun deviceName(kind: String, label: String, older: Boolean = false): String = when {
@@ -306,7 +307,7 @@ private fun NameField(value: String, onChange: (String) -> Unit) {
     BasicTextField(
         value, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-        textStyle = TextStyle(color = C.ink, fontSize = 15.sp),
+        textStyle = TextStyle(fontFamily = UiFont, color = C.ink, fontSize = 15.sp),
         modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused }
             .border(1.dp, C.ink.copy(alpha = if (focused) 0.32f else 0.18f), Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 11.dp),
     )

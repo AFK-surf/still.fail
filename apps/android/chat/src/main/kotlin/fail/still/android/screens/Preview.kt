@@ -135,6 +135,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import fail.still.android.ui.Field
 import fail.still.android.ui.rememberStationName
+import fail.still.android.ui.UiFont
 
 /** `service`: its job's id. */
 @Composable
@@ -424,7 +425,7 @@ private fun PreviewBar(
             // Nowhere else to go (a visualization): the address is only its name.
             if (!fixed) BasicTextField(
                 typed, { typed = it }, singleLine = true,
-                textStyle = TextStyle(fontSize = 16.sp, color = if (editing) C.ink else C.muted),
+                textStyle = TextStyle(fontFamily = UiFont, fontSize = 16.sp, color = if (editing) C.ink else C.muted),
                 cursorBrush = SolidColor(C.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go, keyboardType = KeyboardType.Uri),
                 keyboardActions = KeyboardActions(onGo = {
@@ -743,7 +744,7 @@ private fun CustomSize(viewport: Viewport?, set: (Viewport?) -> Unit, turn: () -
             if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = C.subtle)
             BasicTextField(
                 value, { change(it.filter(Char::isDigit).take(4)) }, singleLine = true,
-                textStyle = TextStyle(fontSize = 15.sp, color = C.ink, textAlign = TextAlign.Start), cursorBrush = SolidColor(C.accent),
+                textStyle = TextStyle(fontFamily = UiFont, fontSize = 15.sp, color = C.ink, textAlign = TextAlign.Start), cursorBrush = SolidColor(C.accent),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { commit(); focus.clearFocus() }),
                 modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) typing = true else if (typing) { typing = false; commit() } },
@@ -875,7 +876,7 @@ private fun Note(mark: Mark, x: Float, y: Float, stageW: Float, onDone: () -> Un
                 if (mark.comment.isEmpty()) Text(t("android-chat.preview.mark.comment", "kind" to mark.picked.kind), fontSize = 13.sp, color = C.muted, maxLines = 1)
                 BasicTextField(
                     mark.comment, { mark.comment = it }, singleLine = true,
-                    textStyle = TextStyle(fontSize = 13.sp, color = C.ink), cursorBrush = SolidColor(C.accent),
+                    textStyle = TextStyle(fontFamily = UiFont, fontSize = 13.sp, color = C.ink), cursorBrush = SolidColor(C.accent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { onDone() }),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )

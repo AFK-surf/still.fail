@@ -36,8 +36,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -308,9 +310,14 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
     }
     val doc = ready?.takeIf { it.first == text }?.second
     val blocks = remember(doc, size, placing, fillTables, screens) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables, screens), tight = false) } }
-    Box(modifier) {
-        if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
-        else Stack(blocks)
+    // What was written, in the text face chosen (ui/Fonts.kt); code in the code face, said where it is.
+    val face = TextFont
+    val style = LocalTextStyle.current
+    CompositionLocalProvider(LocalTextStyle provides if (face == null) style else style.copy(fontFamily = face)) {
+        Box(modifier) {
+            if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
+            else Stack(blocks)
+        }
     }
 }
 

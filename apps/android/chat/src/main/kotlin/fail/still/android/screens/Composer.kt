@@ -169,6 +169,7 @@ import fail.still.android.ui.chatInk
 import fail.still.android.ui.chatMuted
 import fail.still.android.ui.chatSubtle
 import fail.still.android.ui.quoteGround
+import fail.still.android.ui.TextFont
 // ── the draft ──────────────────────────────────────────────────────────
 
 /**
@@ -707,7 +708,7 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp)) {
                         if (q.comment.isEmpty()) Text(t("android-chat.quote.comment"), color = chatSubtle(), fontSize = 15.sp, lineHeight = 22.sp)
                         BasicTextField(
-                            q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 22.sp), cursorBrush = SolidColor(C.accent),
+                            q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(fontFamily = TextFont, color = C.ink, fontSize = 15.sp, lineHeight = 22.sp), cursorBrush = SolidColor(C.accent),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { draft.focus++ }),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus),
                         )
@@ -889,7 +890,7 @@ fun ComposerBar(
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
-    val style = SendTextStyle.copy(color = C.ink)
+    val style = SendTextFaced.copy(color = C.ink)
     val locked = draft.locked || draft.starting
     val expanded = draft.composerExpanded
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.

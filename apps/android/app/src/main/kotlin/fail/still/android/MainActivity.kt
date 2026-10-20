@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
         ListKeys.onDuplicate = { list, key -> Crashes.duplicateKey(applicationContext, list, key) }
         StillFailCore.restartedText = { t("android-misc.core.restarted") }
         fail.still.android.data.I18n.load(applicationContext)
+        fail.still.android.ui.FaceFiles.init(applicationContext)
         lifecycleScope.launch {
             val core = StillFailCore.start(applicationContext, BuildConfig.CLOUD_ORIGIN, BuildConfig.BETA)
             val shared = getSharedPreferences("stillfail", Context.MODE_PRIVATE)
@@ -191,7 +192,7 @@ class MainActivity : ComponentActivity() {
                 // ground follows it here, as the theme's resources would not.
                 window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable((if (dark) fail.still.android.ui.Dark else fail.still.android.ui.Light).bg.toArgb()))
             }
-            StillFailTheme(dark) {
+            StillFailTheme(dark, fail.still.android.ui.rememberFonts(current?.kept?.faces)) {
                 // The app's state made in a moment: the same buddy as the app starting (App.kt), so startup is one picture.
                 if (current == null) fail.still.android.ui.Splash()
                 else CompositionLocalProvider(LocalApp provides current, LocalUi provides current) { StillFailApp(current) }

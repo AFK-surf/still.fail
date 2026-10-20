@@ -2,6 +2,7 @@ import "./renamed.ts";
 import "./styles/index.ts";
 import "./viewer/whole.ts";
 import { followAppearance } from "./theme.ts";
+import { followFonts } from "./fonts.ts";
 import { startScrollbars } from "./scrollbars.ts";
 import { followWindowColors } from "./titleBar.ts";
 import { StrictMode, useEffect } from "react";
@@ -20,6 +21,7 @@ if (import.meta.env.PROD) webUpdates.start();
 // In development, what is off (a corner, a small panel's padding) outlined in red as it shows (dev/offs.ts).
 if (import.meta.env.DEV) void import("./dev/offs.ts").then((m) => m.watchOffs());
 followAppearance();
+followFonts();
 startScrollbars();
 followWindowColors();
 // The desktop app's 「复制图片」 on a chat's thumbnail copies the image it stands in for.

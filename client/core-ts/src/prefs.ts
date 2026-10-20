@@ -1,6 +1,7 @@
 // What this device keeps of how its person likes it (the `prefs` topic; prefs.rs): one record in the data center
 // (table `prefs`, key `device`), written by `prefs.set`; with it, what the device is (`client.device`) and what follows.
 import * as brand from "./brand.ts";
+import * as fonts from "./fonts.ts";
 import { conform } from "./conform.ts";
 import type { Data } from "./data.ts";
 import { CoreError } from "./error.ts";
@@ -8,7 +9,7 @@ import { fromLocale, follows, setCurrent, t, tr, type Lang } from "./i18n.ts";
 import { ofAddress } from "./workspace.ts";
 import { equal, isObject } from "./util.ts";
 
-const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy"];
+const FIELDS = ["onlyMine", "onlyWatching", "onlyDecisions", "listFilter", "appearance", "motion", "rowPicture", "absoluteTime", "language", "keys", "workspace", "lastChat", "chatTabs", "dropFiles", "dropAs", "archiveHint", "screenTouch", "driveViews", "resume", "invite", "badge", "badgeKinds", "reader", "lockNotice", "rail", "rails", "bars", "barsBy", "fonts"];
 const MAPS = ["listFilter", "keys", "lastChat", "chatTabs", "dropFiles", "driveViews", "resume", "lockNotice", "rails", "barsBy"];
 const TABS_KEPT = 200;
 const DEFERRED_KEPT = 200;
@@ -80,11 +81,11 @@ export function barsOf(v: unknown): { sets: string[][]; current: number } {
   return { sets, current: Math.min(sets.length - 1, Math.max(0, n)) };
 }
 
-/// The prefs as they go out: the reader's settings whole, and the bottom bars (each workspace's too).
+/// The prefs as they go out: the reader's settings whole, the bottom bars (each workspace's too), and the faces.
 export function shown(v: unknown): unknown {
   if (!isObject(v)) return v;
   const by = isObject(v.barsBy) ? Object.fromEntries(Object.entries(v.barsBy).map(([ws, b]) => [ws, barsOf(b)])) : {};
-  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by };
+  return { ...v, reader: readerOf(v.reader), bars: barsOf(v.bars), barsBy: by, fonts: fonts.chosen(v.fonts), faces: fonts.shown(v.fonts) };
 }
 
 /// What is kept, as kept (no defaults filled in).
@@ -108,6 +109,12 @@ export function set(data: Data, patch: unknown, fill: boolean, now: number): voi
     } else if (field === "reader" && isObject(value)) {
       // Only what is said changes: one setting of the 排版 sheet at a time.
       prefs.reader = readerOf({ ...(isObject(prefs.reader) ? prefs.reader : {}), ...value });
+    } else if (field === "fonts" && isObject(value)) {
+      // Only the places said change; a face not there is an error.
+      const put = fonts.put(prefs.fonts, value);
+      if (typeof put === "string") throw CoreError.invalid(t("core-misc.params.invalid", { error: `fonts.${put}` }));
+      if (Object.keys(put).length) prefs.fonts = put;
+      else delete prefs.fonts;
     } else if (field === "badgeKinds" && isObject(value)) {
       // Kept whole: what is not said stays as the badge counts now (as the older `badge` says, first).
       prefs.badgeKinds = badgeKindsOf({ ...prefs, badgeKinds: { ...(isObject(prefs.badgeKinds) ? prefs.badgeKinds : {}), ...value } });

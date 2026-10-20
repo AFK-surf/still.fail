@@ -5,6 +5,7 @@ import { Cause, Effect, type Clock, type Fiber } from "effect";
 import type { AccountView } from "./accounts.ts";
 import { type AccountProvider, type AccountProviderFactory, type AccountSessions, stillfailAccountProvider } from "./account-provider.ts";
 import * as brand from "./brand.ts";
+import * as fonts from "./fonts.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
@@ -150,6 +151,7 @@ export class Core {
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
       inner.host = new WakingHost(host, inner.wakes);
       brand.setTestChannel(inner.host.testChannel());
+      fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
       inner.status = new Status(inner.host, inner.runner);
       inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });

@@ -23,6 +23,7 @@ import { useChangelog } from "../changelog.ts";
 import { standalone } from "../standalone.ts";
 import { download, downloadsOffered, onAndroid } from "../downloads.ts";
 import { Presence } from "./Connects.tsx";
+import { FontRows } from "./Fonts.tsx";
 import { railLabel } from "../Rail.tsx";
 import { useBars, type BarPlace } from "./Bar.tsx";
 import { Avatar, Card, LargeTitle, ListCard, ListRow, SectionHeader, Seg, TopBack } from "./parts.tsx";
@@ -175,7 +176,7 @@ function Telemetry() {
   );
 }
 
-/** How this device shows still.fail: its theme, and its motion (the wide screen's 外观 page has the same). */
+/** How this device shows still.fail: its theme, its motion and its fonts (the wide screen's 外观 page has the same). */
 export function AppearanceScreen() {
   const app = useApp();
   const [appearance, setAppearance] = useAppearance();
@@ -190,6 +191,7 @@ export function AppearanceScreen() {
         <Seg options={themes().map(([, label]) => label)} selected={Math.max(0, themes().findIndex(([v]) => v === appearance))}
           onSelect={(i) => setAppearance(themes()[i]![0])} height={34} fill />
       </div>
+      <FontRows />
       <SectionHeader title={t("web-pages.appearance.motion.title")} start={24} />
       <div style={{ padding: "0 12px" }}>
         <Seg options={motions.map(([, label]) => label)} selected={Math.max(0, motions.findIndex(([v]) => v === motion))}

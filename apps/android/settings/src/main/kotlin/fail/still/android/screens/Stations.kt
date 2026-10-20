@@ -126,6 +126,7 @@ import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import fail.still.android.ui.stationName
+import fail.still.android.ui.UiFont
 
 /** Where a station this workspace joined is at home (docs/multi-workspace.md), as grey words before what is said of it; null for one at home here. */
 internal fun joinedMark(s: StationView): String? =
@@ -536,7 +537,7 @@ private class EnvColours(private val read: AgentEnvDraft, private val palette: L
 internal fun NetLine(net: StationNet, modifier: Modifier = Modifier) {
     val c = C
     val tone = { f: NetFigure -> when (f.level) { "red" -> c.red; "amber" -> c.warn; else -> c.ink } }
-    val figure = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+    val figure = TextStyle(fontFamily = UiFont, fontSize = 13.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

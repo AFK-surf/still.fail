@@ -143,6 +143,7 @@ import fail.still.android.data.arranged
 import fail.still.android.data.freeName
 import fail.still.android.data.picked
 import fail.still.android.screens.Elsewhere
+import fail.still.android.ui.UiFont
 
 // ── what an entry is ────────────────────────────────────────────────────
 
@@ -949,7 +950,7 @@ private fun PickFilter(text: String, onChange: (String) -> Unit) {
             if (text.isEmpty()) Text(t("android-misc.drive.pick.filter"), fontSize = 15.sp, color = C.muted, maxLines = 1)
             BasicTextField(
                 text, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
-                textStyle = TextStyle(fontSize = 15.sp, color = C.ink),
+                textStyle = TextStyle(fontFamily = UiFont, fontSize = 15.sp, color = C.ink),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = t("android-misc.drive.pick.filter") },
             )

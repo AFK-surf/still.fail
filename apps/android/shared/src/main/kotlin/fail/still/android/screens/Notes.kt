@@ -53,6 +53,7 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.floating
 import fail.still.android.ui.floatingStill
+import fail.still.android.ui.TextFont
 
 /** A numbered note, as its box and card show it (NoteBox, Card): a passage of a message's, or a mark on an image (ImageMarks.kt). */
 interface NoteLike {
@@ -102,7 +103,7 @@ fun NoteBox(note: NoteLike, modifier: Modifier, onDone: () -> Unit, onRemove: ()
                 if (note.comment.isEmpty()) Text(t("android-chat.annotate.write"), fontSize = 16.sp, lineHeight = 21.sp, color = C.subtle)
                 BasicTextField(
                     note.comment, { note.comment = it }, Modifier.fillMaxWidth().focusRequester(focus),
-                    textStyle = TextStyle(fontSize = 16.sp, lineHeight = 21.sp, color = C.ink), cursorBrush = SolidColor(C.accent), maxLines = 8,
+                    textStyle = TextStyle(fontFamily = TextFont, fontSize = 16.sp, lineHeight = 21.sp, color = C.ink), cursorBrush = SolidColor(C.accent), maxLines = 8,
                 )
             }
             Box(Modifier.size(36.dp).clip(CircleShape).background(C.ink).clickable(onClick = onDone).semantics { contentDescription = t("android-chat.annotate.done") }, contentAlignment = Alignment.Center) { IconIn(Icons.Check, 18.dp, C.bg) }

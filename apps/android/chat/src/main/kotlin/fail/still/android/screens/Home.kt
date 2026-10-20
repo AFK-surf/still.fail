@@ -141,6 +141,7 @@ import kotlinx.coroutines.launch
 import fail.still.android.ui.initial
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.DoingMark
+import fail.still.android.ui.UiFont
 
 @Composable
 fun HomeScreen(current: WorkspaceEntry) {
@@ -688,7 +689,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
             Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) { IconIn(icon, 14.dp, tint, Modifier.requiredSize(14.dp)) }
             if (rest.isNotEmpty()) Text(
                 rest, fontSize = 14.sp, lineHeight = 20.sp, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
                     androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
                 )),
             )
@@ -703,7 +704,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
     }
     Text(
         text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (lead != null) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
     )
@@ -720,7 +721,7 @@ private val watchLead = Regex("^(?:监控中|Watching)(?:：|: |$)")
 private fun LastMessage(item: ChatItem) {
     Text(
         item.last!!.preview, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
     )

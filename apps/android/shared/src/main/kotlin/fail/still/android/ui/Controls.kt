@@ -133,10 +133,10 @@ fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: 
     Box(
         modifier.fillMaxWidth().clip(Smooth(corner)).background(C.surface).border(1.dp, C.line, Smooth(corner)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
+        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else UiFont)
         BasicTextField(
             value, { onChange(if (lines > 1) it else it.take(max)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null), modifier = Modifier.fillMaxWidth(),
+            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else UiFont), modifier = Modifier.fillMaxWidth(),
         )
     }
 }

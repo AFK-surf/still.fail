@@ -98,6 +98,11 @@ const APP_FILES: [RegExp, string][] = [
   // and its Windows app (apps/mbui/scripts/beta.sh win: the .exe with its DLLs and core.hbc, zipped)
   [/^win\/mbui\/latest\.json$/, "application/json"],
   [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
+  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
+  // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9]+\.ttf\.gz$/, "application/gzip"],
   // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
   // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
   // there).

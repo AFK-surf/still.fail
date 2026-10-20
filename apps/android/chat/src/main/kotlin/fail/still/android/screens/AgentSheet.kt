@@ -63,6 +63,7 @@ import fail.still.android.ui.Smooth
 import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
 import kotlinx.coroutines.delay
+import fail.still.android.ui.UiFont
 
 private val ChatAgent.working get() = status == "running" || status == "queued"
 
@@ -212,7 +213,7 @@ internal fun AgentTiles(card: AgentCardView?, modifier: Modifier = Modifier.padd
                     .semantics(mergeDescendants = true) { contentDescription = "$name $figure" },
             ) {
                 Box(Modifier.height(26.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(figure, fontSize = if (figure.length > LONG) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+                    Text(figure, fontSize = if (figure.length > LONG) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"))
                 }
                 Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

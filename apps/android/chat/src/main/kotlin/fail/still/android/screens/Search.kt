@@ -101,6 +101,7 @@ import fail.still.android.ui.WaitLine
 import fail.still.android.data.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import fail.still.android.ui.UiFont
 
 /** The field's height, and the room over it in the search's bar (as the home bar's: 8dp under the status bar). */
 private val FIELD = 38.dp
@@ -195,7 +196,7 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
                     if (query.isEmpty()) Text(t("android-chat.search.field"), fontSize = 16.sp, color = C.muted, maxLines = 1)
                     BasicTextField(
                         query, { query = it }, singleLine = true, cursorBrush = SolidColor(C.accent),
-                        textStyle = TextStyle(fontSize = 16.sp, color = C.ink),
+                        textStyle = TextStyle(fontFamily = UiFont, fontSize = 16.sp, color = C.ink),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = t("android-chat.search.field") },
                     )
