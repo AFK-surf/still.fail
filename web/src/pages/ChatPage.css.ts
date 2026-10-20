@@ -227,7 +227,8 @@ export const sideBar = style({
     },
   },
 });
-globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
+// The tab list itself takes a tabindex (Radix's roving focus) and fills the bar: it stays a handle, only its tabs don't.
+globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]):not([role="tablist"])`, { WebkitAppRegion: "no-drag" });
 // While the panel narrows, its remaining width only covers part of the window controls. The chat's bar reserves
 // the rest, including the final animation frame before the panel unmounts. At rest the panel covers them all.
 globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain} > ${pageBar}`, {
