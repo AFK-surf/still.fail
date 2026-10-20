@@ -123,8 +123,8 @@ pub fn Flow::tap(self : Flow, what : String, top? : Bool = false) -> Unit {
 ///|
 /// A tap at (x, y) (negative: from the right, the bottom).
 pub fn Flow::tap_at(self : Flow, x : Double, y : Double) -> Unit {
-  let t = self.t
-  t.tap(if x < 0.0 { t.w + x } else { x }, if y < 0.0 { t.h + y } else { y })
+  let (w, h) = self.t.size()
+  self.t.tap(if x < 0.0 { w + x } else { x }, if y < 0.0 { h + y } else { y })
   self.core()
 }
 
@@ -170,7 +170,9 @@ pub fn Flow::paste(self : Flow, s : String) -> Unit {
 ///|
 /// A key by name, with what is held before it (as a flow's `key`: esc, enter, cmd+k, shift+enter).
 pub fn Flow::key(self : Flow, name : String) -> Unit {
-  self.t.key_named(name)
+  if !self.t.key_named(name) {
+    self.fail("no such key: " + name)
+  }
   self.core()
 }
 
