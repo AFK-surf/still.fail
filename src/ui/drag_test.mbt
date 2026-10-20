@@ -272,3 +272,24 @@ test "drag_on without its box drawn that frame: nothing there to press" {
   assert_eq(moved.val, 0.0)
   assert_eq(taps.val, 0)
 }
+
+///|
+test "pointer_at: each event by its own time, down, moved, up, not by the frames that take them" {
+  let t = @ui.Tester::new(fn(c) { c.box(w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore }, w=200.0, h=200.0)
+  t.draw()
+  let gap_ms = 8.0
+  let start = t.time()
+  t.touch(0, 50.0, 50.0)
+  assert_eq(t.ctx().pointer_at(), start)
+  // two moves 8 ms apart, no frame between them
+  t.advance(gap_ms)
+  t.touch(1, 60.0, 50.0)
+  let first = t.ctx().pointer_at()
+  t.advance(gap_ms)
+  t.touch(1, 70.0, 50.0)
+  assert_eq(t.ctx().pointer_at() - first, gap_ms)
+  t.advance(gap_ms)
+  t.touch(2, 70.0, 50.0)
+  assert_eq(t.ctx().pointer_at(), start + 3.0 * gap_ms)
+  t.draw()
+}

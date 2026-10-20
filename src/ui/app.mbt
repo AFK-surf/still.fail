@@ -451,6 +451,7 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
   c.py = y
   // the event's own time: events handled together happened apart
   let t = h_event_time()
+  c.pointer_t = t
   if scroll_logging() {
     h_log("TOUCH \{kind} \{t} \{x} \{y} \{h_now()}")
   }

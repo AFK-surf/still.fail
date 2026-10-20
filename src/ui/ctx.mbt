@@ -170,6 +170,8 @@ pub struct Ctx {
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
   mut press_at : Double
+  /// when the pointer's latest event (down, moved, up) came, its own time (Ctx::pointer_at)
+  mut pointer_t : Double
   mut held_told : Double
   /// a tap this frame (a press let go without dragging, not taken by the app: Ctx::tapped_anywhere), and the press
   /// the app took (Ctx::take_press)
@@ -328,6 +330,7 @@ fn Ctx::new() -> Ctx {
     dragging: false,
     press_x: 0.0,
     press_at: -1.0,
+    pointer_t: 0.0,
     held_told: -1.0,
     tapped: None,
     taken_at: -1.0,
@@ -944,6 +947,14 @@ pub fn Ctx::frame_ms(self : Ctx) -> Double {
 ///|
 pub fn Ctx::present_ms(self : Ctx) -> Double {
   self.t_present
+}
+
+///|
+/// When the pointer's latest event came (pressed, moved, let go), by its own time: the host's time of the event on a
+/// device, the clock as the event was handed in under a Tester. For how fast and how far apart what a finger did was
+/// (a swipe's speed, a double tap's gap), not how far apart the frames that took it are.
+pub fn Ctx::pointer_at(self : Ctx) -> Double {
+  self.pointer_t
 }
 
 ///|
