@@ -41,6 +41,10 @@ let send_flight : Ref[SendFlight?] = { val: None }
 let flight_ms : Double = 600.0
 
 ///|
+/// How long the words wait over the field for their row; it not come by then, they go.
+let flight_wait_ms : Double = 2000.0
+
+///|
 let flight_fly : Double = 0.8
 
 ///|
@@ -82,7 +86,7 @@ fn flight_start(c : @ui.Ctx, chat : String, words : String, v : ChatView, room :
         placed_at: -1.0,
         started_at: -1.0,
       })
-      c.request_frame()
+      // (sent from a tap or a key: that input's frames draw it, flight_frame asks for the rest)
     }
     None => ()
   }
@@ -134,7 +138,7 @@ fn flight_ground(p : Double) -> Double {
 fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
   match flight_of(chat) {
     Some(f) => {
-      if f.placed_at < 0.0 && c.now() - f.sent_at > 2000.0 {
+      if f.placed_at < 0.0 && c.now() - f.sent_at >= flight_wait_ms {
         send_flight.val = None
         return
       }

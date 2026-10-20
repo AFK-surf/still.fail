@@ -165,9 +165,9 @@ fn pickable(
   // sliding on: widened by words from the word first held
   if pk.ts == ts && pk.widening {
     if !down {
-      // lifted: the bar comes back (a frame for it: this is the rows' layout, after the bar was built)
+      // lifted: the bar comes back (the lifting's input frame and the one after it draw it: the bar was built before
+      // the rows)
       pk.widening = false
-      c.request_frame()
     } else {
       match c.words_of(key) {
         Some(w) => {
@@ -235,20 +235,17 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       draft_quote(draft_of(src, r), pk.author, text, pk.ts, pk.role)
     }
     pick_clear()
-    c.request_frame()
     return
   }
   if c.clicked(copy) {
     c.copy_text(words.slice(pk.a, pk.b))
     say(c, tr("android-chat.annotate.copied"))
     pick_clear()
-    c.request_frame()
     return
   }
   if c.clicked(all) {
     pk.a = 0
     pk.b = words.text.length()
-    c.request_frame()
   }
   let first = lines[0]
   let last = lines[lines.length() - 1]
@@ -270,7 +267,6 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   if pk.handle != 0 {
     if !down {
       pk.handle = 0
-      c.request_frame()
     } else {
       let at = words.offset_at(px + pk.grab_x, py + pk.grab_y)
       if pk.handle == 1 {
@@ -288,7 +284,6 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
       !in_rect(ends[0], tx, ty) &&
       !in_rect(ends[1], tx, ty) => {
       pick_clear()
-      c.request_frame()
       return
     }
     _ => ()

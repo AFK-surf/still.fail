@@ -289,6 +289,18 @@ fn save_draft(src : Source, d : Draft) -> Unit {
 }
 
 ///|
+/// The capsule changes shape over this long (Composer.kt Morph).
+let composer_morph_ms : Double = 260.0
+
+///|
+/// Typing warms the agent's runtime at most this often.
+let warm_every_ms : Double = 60000.0
+
+///|
+/// How long after a change to the draft it is kept.
+let draft_keep_ms : Double = 400.0
+
+///|
 /// A change kept a moment after it is made (the core writes it down then too), and at once as the chat is left.
 fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
   if !d.loaded || src.read_only {
@@ -302,11 +314,12 @@ fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
     d.changed_at = c.now()
   }
   let age = c.now() - d.changed_at
-  if age >= 400.0 {
+  if age >= draft_keep_ms {
     d.changed_at = 0.0
     save_draft(src, d)
   } else {
-    c.wake_in(400.0 - age)
+    // nothing shown waits for it
+    c.wake_in(draft_keep_ms - age, later=true)
   }
 }
 
@@ -709,7 +722,6 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
   // the reader goes to the chat's end with what was sent (Chat.kt: by the composer as it sends); with words flying
   // there at once, the rows above going up with them (flight.mbt)
   c.list_to_end(list_key(r), glide=flight_of(d.key) is None)
-  c.request_frame()
 }
 
 // ── the composer ────────────────────────────────────────────────────────
@@ -771,7 +783,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
   }
   let morph = match natural {
     Some(h) if !c.stable() =>
-      Some(@motion.animate(c, "composer/morph", dmax(h, held), spec=@motion.tween(260.0, ease=Out)))
+      Some(@motion.animate(c, "composer/morph", dmax(h, held), spec=@motion.tween(composer_morph_ms, ease=Out)))
     _ => None
   }
   let mut content = -1
@@ -1095,13 +1107,12 @@ fn composer_bar(
           None => ()
         }
         if res.text != d.text {
-          // drawn again: what shows (opened, send ready) follows the words at once
-          c.request_frame()
+          // what shows (opened, send ready) follows the words: the typing's own frames draw it
           d.text = res.text
           // typing starts the agent's runtime, so a cold start overlaps the writing (once a minute)
           match v {
             Some(view) if !locked && !src.read_only && view.agents.length() > 0 &&
-              c.now() - d.warmed > 60000.0 => {
+              c.now() - d.warmed > warm_every_ms => {
               d.warmed = c.now()
               (src.call)(
                 "session.warm",
@@ -1118,7 +1129,6 @@ fn composer_bar(
         match res.pasted {
           Some(words) => {
             paste_as_file(src, d, r.station, words)
-            c.request_frame()
           }
           None => ()
         }
