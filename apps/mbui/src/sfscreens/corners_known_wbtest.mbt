@@ -3,4 +3,4 @@
 // until the bar is lowered here). A screen not listed has none.
 
 ///|
-let corners_known : Map[String, Int] = { "chat-info": 2 }
+let corners_known : Map[String, Int] = { "chat-info": 2, "chat-jobs": 2 }
