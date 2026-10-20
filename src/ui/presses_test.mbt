@@ -135,3 +135,54 @@ test "the next wake the app waits on: when, and who said it; none once it has co
   t.draw()
   assert_eq(t.next_wake(), None)
 }
+
+///|
+/// A paragraph with a link after words that lead nowhere (as a chat's markdown has it), the link's right part under a
+/// box that takes presses from `cover` on (none: at 1000, past it all).
+fn link_after_words(went : Array[String], cover : Ref[Double]) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      c.box(w=Px(300.0), h=Px(20.0), fn() {
+        c.rich(
+          [@ui.plain("详见 "), @ui.link("example.com/e2e", "https://example.com/e2e")],
+          size=10.0,
+          wrap=false,
+          on_link=fn(href) { went.push(href) },
+        )
+        |> ignore
+        c.layer(fn() {
+          c.row(fn() {
+            c.box(w=Px(cover.val), h=Fill(1.0), fn() {  }) |> ignore
+            c.drag_area(c.id("cover"), axis=Free, w=Fill(1.0), h=Fill(1.0), fn() {  }) |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+}
+
+///|
+test "a link in a paragraph is tapped on the link, its own target, not on the words beside it" {
+  let went = []
+  let t = link_after_words(went, Ref::new(1000.0))
+  let log = t.drive("timeout 300\ntap example.com/e2e\nexit")
+  assert_eq(went, ["https://example.com/e2e"], msg=log.join("\n"))
+}
+
+///|
+test "a link half under what takes presses is tapped on its part in sight, not on the words beside it" {
+  let went = []
+  let cover = Ref::new(1000.0)
+  let t = link_after_words(went, cover)
+  t.draw()
+  let (x, _, w, _) = t.run_rects("example.com/e2e")[0]
+  cover.val = x + w * 0.6
+  t.draw()
+  let log = t.drive("timeout 300\ntap example.com/e2e\nexit")
+  assert_eq(went, ["https://example.com/e2e"], msg=log.join("\n"))
+}

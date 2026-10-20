@@ -222,7 +222,7 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
 fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
   let at = []
   for p in on_screen_nodes(c, what) {
-    match reach_point(c, p.2, p.0, p.1) {
+    match reach_point(c, p.2, p.0, p.1, p.3) {
       Some(q) => at.push(q)
       None => ()
     }
@@ -231,20 +231,27 @@ fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
 }
 
 ///|
-/// Where a finger reaches node `i`'s words, (x, y) their middle: there, else the point of them in sight nearest it that
-/// a press goes to them at (part of them out from under what lies over the rest: a link half under a composer), the
-/// same each run (on a grid of reach_step, the nearest first, then the higher, then the one further left). None: no
-/// point of them in sight is theirs to press.
-fn reach_point(c : Ctx, i : Int, x : Double, y : Double) -> (Double, Double)? {
+/// Where a finger reaches node `i`'s words, (x, y) their middle, `box` where they are (x0, y0, x1, y1: in a paragraph
+/// the words' own, not the paragraph's): there, else the point of them in sight nearest it that a press goes to them
+/// at (part of them out from under what lies over the rest: a link half under a composer), the same each run (on a
+/// grid of reach_step, the nearest first, then the higher, then the one further left). None: no point of them in
+/// sight is theirs to press.
+fn reach_point(
+  c : Ctx,
+  i : Int,
+  x : Double,
+  y : Double,
+  box : (Double, Double, Double, Double),
+) -> (Double, Double)? {
   if !under_another(c, i, x, y) {
     return Some((x, y))
   }
   let n = c.nodes[i]
-  // what of it is in sight: its box, cut by what clips it and by the window
-  let mut x0 = dmax(n.x, 0.0)
-  let mut y0 = dmax(n.y, 0.0)
-  let mut x1 = dmin(n.x + n.fw, c.width)
-  let mut y1 = dmin(n.y + n.fh, c.height)
+  // what of them is in sight: their box, cut by what clips it and by the window
+  let mut x0 = dmax(box.0, 0.0)
+  let mut y0 = dmax(box.1, 0.0)
+  let mut x1 = dmin(box.2, c.width)
+  let mut y1 = dmin(box.3, c.height)
   let mut j = n.parent
   let mut up = 0
   while j >= 0 && j < c.count && up < c.count {
@@ -281,11 +288,19 @@ fn reach_point(c : Ctx, i : Int, x : Double, y : Double) -> (Double, Double)? {
 let reach_step : Double = 4.0
 
 ///|
-/// Whether (x, y), where node `i` is, is another's to press: the hit target there neither the node nor what holds it.
+/// Whether (x, y), where node `i` is, is another's to press: the hit target there neither the node (a paragraph's
+/// links its own) nor what holds it.
 fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
   let top = hit_in(c.hit_ids, c.hit_rects, x, y)
   if top == 0 {
     return false
+  }
+  if c.nodes[i].rich is Some(r) {
+    for k, run in r.runs {
+      if run.link != "" && link_id(r.base, k) == top {
+        return false
+      }
+    }
   }
   let mut j = i
   let mut up = 0
@@ -301,8 +316,11 @@ fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
 }
 
 ///|
-/// The words looked for on screen with their node: (x, y, node).
-fn on_screen_nodes(c : Ctx, what : String) -> Array[(Double, Double, Int)] {
+/// The words looked for on screen with their node: (x, y, node, where they are: x0 y0 x1 y1).
+fn on_screen_nodes(
+  c : Ctx,
+  what : String,
+) -> Array[(Double, Double, Int, (Double, Double, Double, Double))] {
   let found = []
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
@@ -330,21 +348,28 @@ fn on_screen_nodes(c : Ctx, what : String) -> Array[(Double, Double, Int)] {
     }
     if hit && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {
       // where it is laid out: where it is tapped (a look moves only what is drawn: draw.mbt); in rich text, the
-      // middle of the words looked for (a link in a paragraph, a word in a long line of code)
-      let (x, y) = match (n.rl, exact) {
+      // middle of the words looked for (a link in a paragraph, a word in a long line of code), and their box
+      let whole = (n.x, n.y, n.x + n.fw, n.y + n.fh)
+      let (x0, y0, x1, y1) = match (n.rl, exact) {
         (Some(rl), None) =>
           match n.text.find(what) {
             Some(k) =>
               match rl.rects(k, k + what.length()).get(0) {
-                Some(r) => (n.x + n.pad_l + r.0 + r.2 / 2.0, n.y + n.pad_t + r.1 + r.3 / 2.0)
-                None => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+                Some(r) => {
+                  let rx = n.x + n.pad_l + r.0
+                  let ry = n.y + n.pad_t + r.1
+                  (rx, ry, rx + r.2, ry + r.3)
+                }
+                None => whole
               }
-            None => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+            None => whole
           }
-        _ => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
+        _ => whole
       }
+      let x = (x0 + x1) / 2.0
+      let y = (y0 + y1) / 2.0
       if x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
-        found.push((x, y, i))
+        found.push((x, y, i, (x0, y0, x1, y1)))
       }
     }
   }
