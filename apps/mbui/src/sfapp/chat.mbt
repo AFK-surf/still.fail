@@ -488,6 +488,9 @@ fn messages(
       rd.placed = true
       rd.placed_at = c.now()
     }
+    // put in place this build: the list scrolled there is laid out again in this frame (mbui's same-frame rebuild: a
+    // list scrolled is a read changed), and what goes by where it is waits for that build
+    let mut put_now = false
     if rd.placed && !rd.put && !at_end_asked() {
       rd.put = true
       let mut line = -1
@@ -503,6 +506,7 @@ fn messages(
           _ => ()
         }
       }
+      put_now = line >= 0 || at >= 0
       if line >= 0 {
         c.list_scroll_to(key, line, offset=-(chat_bar_h + 14.0 + 85.0))
       } else if at >= 0 {
@@ -513,12 +517,13 @@ fn messages(
         )
       }
     }
-    // opened at a message (a notification's), once the list is in place (a frame after): there, its top under the bar,
+    // opened at a message (a notification's), once the list is in place (the build after it was put there, in the same
+    // frame): there, its top under the bar,
     // flashing; the pages before brought in until it is (none left, or it is gone: where the chat opened). Chat.kt
     // LaunchedEffect(host.goTo)
     let gk = r.station + "\u{1}" + r.session
     match go_tos.get(gk) {
-      Some(target) if rd.placed && c.now() > rd.placed_at => {
+      Some(target) if rd.placed && !put_now => {
         let mut at = -1
         let mut first = -1.0
         for i, e in list {
