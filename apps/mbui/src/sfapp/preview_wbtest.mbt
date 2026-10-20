@@ -36,22 +36,22 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (to where its glide said it ends: zoom_glide_ms from its start)
-  run_out(t, v.zoom.glide)
+  // (its glide: zoom_glide_ms from the tap)
+  t.run_for(zoom_glide_ms)
   assert_true((v.zoom.scale - 1.525).abs() < 0.01)
   // (the next two taps a double tap of their own)
   t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
   t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  // (to where its glide said it ends: zoom_glide_ms from its start)
-  run_out(t, v.zoom.glide)
+  // (its glide: zoom_glide_ms from the tap)
+  t.run_for(zoom_glide_ms)
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
   assert_true(viewer.val is None)
   // to where its way out said it ends (fly_close_ms or pv_fade_ms from when it set out)
-  run_out(t, if v.flies { v.fly } else { v.fade })
+  t.run_for(if v.flies { fly_close_ms } else { pv_fade_ms })
   assert_true(t.find("界面草图.png") is None)
   t.assert_idle()
 }
@@ -75,7 +75,7 @@ test "a video plays in a native view, its bytes read through the core; its contr
   t.back()
   assert_true(viewer.val is None)
   // faded out (pv_fade_ms from when it set out), its view closed
-  run_out(t, v.fade)
+  t.run_for(pv_fade_ms)
   assert_true(t.views().contains("close 1"))
 }
 
@@ -190,16 +190,6 @@ test "marking: a box drawn on the picture is numbered, its note kept, its quote 
 }
 
 ///|
-/// Frames on to where `a` has said it ends (its first frame drawn first: it starts at the one after it was told).
-fn run_out(t : @ui.Tester, a : @motion.Anim) -> Unit {
-  t.draw()
-  let e = a.ends_at()
-  if e > t.time() && e < 1.0e9 {
-    t.run_for(e - t.time())
-  }
-}
-
-///|
 test "a picture of the chat grows from its thumbnail; back closes it at once and it flies back into the thumbnail, then nothing moves" {
   reset()
   let src = fixture("chat")
@@ -223,7 +213,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let v = viewer.val.unwrap()
   assert_eq(v.file.name, "compare.png")
   assert_true(v.flies && !v.fly_back)
-  run_out(t, v.fly)
+  // grown in: fly_open_ms from the tap
+  t.run_for(fly_open_ms)
   assert_true(!v.flies)
   // where its thumbnail is in the chat under it
   let th = thumb_of(t.ctx(), v.id()).unwrap()
@@ -238,9 +229,8 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   // the last one on it
   let mut last = 1.0e9
   let mut frames = 0
-  t.draw()
-  let end = v.fly.ends_at()
-  assert_true(end < 1.0e9)
+  // its way back: fly_close_ms from back
+  let end = t.time() + fly_close_ms
   while t.time() < end {
     t.frame()
     let p = v.flying()

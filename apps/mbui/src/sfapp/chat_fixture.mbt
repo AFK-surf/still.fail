@@ -333,31 +333,35 @@ fn fixture_file(name : String) -> String {
   match fixture_pictures.get(name) {
     Some(k) => k
     None => {
-      let (w, h, a, b) = match name {
-        "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
-        "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
-        _ => (120, 80, (0x2F, 0x8F, 0x5B), (0xE8, 0xE4, 0xDC))
-      }
-      let rgba = FixedArray::make(w * h * 4, b'\x00')
-      for y in 0..<h {
-        for x in 0..<w {
-          let k = (x + y).to_double() / (w + h - 2).to_double()
-          let i = (y * w + x) * 4
-          let mix = fn(p : Int, q : Int) -> Byte {
-            (p.to_double() + (q - p).to_double() * k).round().to_int().to_byte()
-          }
-          rgba[i] = mix(a.0, b.0)
-          rgba[i + 1] = mix(a.1, b.1)
-          rgba[i + 2] = mix(a.2, b.2)
-          rgba[i + 3] = b'\xFF'
-        }
-      }
       let key = "mem:fixture/" + name
-      @ui.add_image(key, @sf.png(w, h, rgba))
+      @ui.add_image(key, fixture_file_png(name))
       fixture_pictures[name] = key
       key
     }
   }
+}
+
+///|
+/// A made-up file's picture as PNG bytes: the same one its thumbnail in the chat shows and the preview opens.
+fn fixture_file_png(name : String) -> Bytes {
+  let (w, h, a, b) = match name {
+    "home-after.png" => (60, 130, (0xF5, 0xF3, 0xEF), (0xE5, 0x70, 0x4A))
+    "compare.png" => (160, 90, (0x5B, 0x7B, 0xB2), (0xF2, 0xB0, 0x1E))
+    _ => (120, 80, (0x2F, 0x8F, 0x5B), (0xE8, 0xE4, 0xDC))
+  }
+  let rgba = FixedArray::make(w * h * 4, b'\x00')
+  for y in 0..<h {
+    for x in 0..<w {
+      let k = (x + y).to_double() / (w + h - 2).to_double()
+      let i = (y * w + x) * 4
+      let mix = fn(p : Int, q : Int) -> Byte { (p.to_double() + (q - p).to_double() * k).round().to_int().to_byte() }
+      rgba[i] = mix(a.0, b.0)
+      rgba[i + 1] = mix(a.1, b.1)
+      rgba[i + 2] = mix(a.2, b.2)
+      rgba[i + 3] = b'\xFF'
+    }
+  }
+  @sf.png(w, h, rgba)
 }
 
 ///|
