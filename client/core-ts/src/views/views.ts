@@ -1433,12 +1433,7 @@ export class Views implements Owner {
       const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
       if (isObject(m)) (m as J).asked = true;
     }
-    if (row !== undefined && present.archivable(row) && view.archived !== true) {
-      view.archivable = true;
-      if (present.offered(row, archiveHintOf(this.ok({ topic: "prefs" }) ?? null))) view.archiveOffered = true;
-    }
-    const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
-    if (check !== null) view.archiveCheck = check;
+    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     return { ok: view };
   }
 
@@ -1774,7 +1769,7 @@ const pinnedAt = new WeakMap<object, number>();
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
-/// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
+/// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
 function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
@@ -1815,19 +1810,6 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   });
   view.messages = messages;
   if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
-  // Under the agent's last post, at the chat's end (not a window short of it), once it said it is all done.
-  let lastAt = -1;
-  for (let i = messages.length - 1; i >= 0 && view.newer !== true; i--) {
-    if (messages[i].authorKind === "agent" && messages[i].system !== true) { lastAt = i; break; }
-  }
-  if (lastAt >= 0 && messages[lastAt].ending === "all_done") {
-    const last: J = { ...messages[lastAt] };
-    if (view.archiveOffered === true && view.offline !== true && isObject(view.thread)) last.archive = true;
-    if (isObject(view.archiveCheck)) last.archiveCheck = view.archiveCheck;
-    // Offered with no review behind it: why, all the same.
-    else if (last.archive === true) last.archiveCheck = { text: t("core-views.policy.allDone"), recommended: true, failed: false };
-    messages[lastAt] = last;
-  }
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));

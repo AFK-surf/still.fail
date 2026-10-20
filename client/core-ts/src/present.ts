@@ -320,8 +320,8 @@ export function archivable(row: J): boolean {
   return get(row, "archiveReviewed") !== true || get(row, "archiveRecommended") === true;
 }
 
-/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day, 归档
-/// under its last all-done post. off: never; reviewed: only once its station's archive review recommended it; done: as
+/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day.
+/// off: never; reviewed: only once its station's archive review recommended it; done: as
 /// it is archivable.
 export function offered(row: J, hint: prefsMod.ArchiveHint): boolean {
   if (hint === "off" || !archivable(row)) return false;
@@ -1040,18 +1040,6 @@ function archivePolicy(policy: J, c: Clock): J {
 
 /// The station's reasons for what a profile can decide with (station/src/sessions/decision.ts), each said in words.
 const DECISION_REASONS = ["no_probabilities", "signed_out", "address", "found", "none_verified", "changed"];
-
-/// What the archive check made of a chat (its row's `archiveCheck`), in a line under the agent's all-done post.
-export function archiveCheck(v: J): J | null {
-  if (!isObject(v)) return null;
-  if (typeof v.error === "string") return { text: t("core-views.policy.checkFailed"), recommended: false, failed: true };
-  const name = str(v.name);
-  if (name === "") return null;
-  const recommended = v.recommended === true;
-  // Counted as archive yet not recommended: the model was not sure enough.
-  const what = recommended ? t("core-views.policy.archive") : v.archive === true ? t("core-views.policy.unsure") : t("core-views.policy.keep");
-  return { text: `${name} · ${what}`, recommended, failed: false };
-}
 
 /// A runtime the station does not have (a chat's notice says so, or a plan's sign-in runs its command): installing it
 /// there, as the station's updates (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the

@@ -1035,9 +1035,6 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
           {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
           {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={false} />}
         </>}
-      {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
-      {/* Coming and going in one motion (settling.tsx), as the phone's does. */}
-      {options && chat && <Settles shown={!!m.archive}><ArchiveOption thread={m.thread} chat={chat} /></Settles>}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.thread === b.thread && a.options === b.options && sameMessage(a.message, b.message));
@@ -1077,33 +1074,6 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     </OthersMessage>
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
-
-/**
- * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
- * message, in the accent. Turns while the archive is under way (doing.ts).
- */
-function ArchiveOption({ thread, chat }: { thread: number; chat: string }) {
-  const station = useStation().address;
-  const busy = useDoing("chat.archive", { station, thread, archived: true });
-  const keepState = useDoingState("chat.keep", { station, thread });
-  const keeping = keepState.running;
-  const api = useApi();
-  const act = useAct();
-  return (
-    <div className={decisionsCss.archiveOptions}>
-      <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
-        aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), t("web-main.chat.keep.what"), t("web-main.chat.keep.done"))}>
-        <span className={decisionsCss.optionLabel}>{t("web-main.chat.keep")}</span>
-        <DoingShown state={keepState} className={decisionsCss.optionSpinner} inline />
-      </button>
-      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
-        aria-busy={busy || undefined} onClick={() => chatPage.archive(chat)}>
-        <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
-        {busy && <Spinner inline className={decisionsCss.optionSpinner} />}
-      </button>
-    </div>
-  );
-}
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
 export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {

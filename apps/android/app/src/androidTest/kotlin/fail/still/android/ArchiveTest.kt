@@ -2,7 +2,7 @@
 // DecisionsTest), on the app over a fake core: on the home list an archivable row swiped left past the threshold is
 // archived (chat.archive) and leaves; short of it, it springs back; up or down is the list's (it scrolls); a tap opens
 // the chat; a row that cannot be archived does not move; its 归档 chip archives it too, and stays on it as it leaves. In a chat that can be archived,
-// 归档此 chat under the agent's last all-done post archives it. `shots` pictures them (light) into files/shots.
+// its bar's 归档 archives it, and nothing offers it under the agent's last all-done post. `shots` pictures them (light) into files/shots.
 package fail.still.android
 
 import android.graphics.Bitmap
@@ -14,13 +14,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onRoot
 import androidx.test.platform.app.InstrumentationRegistry
 import fail.still.android.data.ChatDay
@@ -252,47 +249,23 @@ class ArchiveTest {
             if (name == "chat.archive") putChats(h, listOf(busy, alsoDone))
             JsonNull
         }
-        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, archiveOffered = true, key = done.session))
+        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = true, key = done.session))
         h.launch(listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of)), dark = dark)
         return h
     }
 
-    @Test fun archiveExitLight() = archiveExit(false)
-    @Test fun archiveExitDark() = archiveExit(true)
+    /** The chat's bar's 归档 (exactly so: the list's chips say whose they are). */
+    private fun barArchive(): Rect = rule.onAllNodesWithContentDescription("归档").fetchSemanticsNodes().map { it.boundsInRoot }.first { it.width > 0f }
 
-    private fun archiveExit(dark: Boolean) {
-        val h = chat(dark)
-        val of = ChatOf.Thread(Fixtures.THREAD)
-        val r = h.record(if (dark) "archive-exit-dark" else "archive-exit-light")
-        // The core's reply after sending: the same last post, but this chat has work again.
-        h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = false, key = done.session))
-        h.deliver()
-        r.frames(5)
-        assertEquals("exit retains the real button while it moves", 1, rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes().size)
-        rule.onNodeWithText("归档此对话").assertIsNotEnabled()
-        assertTrue("leaving button cannot archive", h.fake.calls.none { it.first == "chat.archive" })
-        r.frames(20)
-        r.end()
-        assertTrue("button removed after exit", rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes().isEmpty())
+    @Test fun nothingUnderTheDonePost() {
+        chat().settle()
+        assertTrue("no 归档此对话", rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes().isEmpty())
+        assertTrue("no 保留", rule.onAllNodesWithText("保留").fetchSemanticsNodes().isEmpty())
     }
 
-    @Test fun chatKeepStaysInChat() {
+    @Test fun barArchives() {
         val h = chat()
-        val before = h.app.stack.toList()
-        rule.onNodeWithText("保留").performClick()
-        h.settle()
-        assertTrue(h.fake.calls.any { it.first == "chat.keep" })
-        assertTrue(h.fake.calls.none { it.first == "chat.archive" })
-        assertEquals(before, h.app.stack.toList())
-    }
-
-    @Test fun chatButtonArchives() {
-        val h = chat()
-        val buttons = rule.onAllNodesWithText("归档此对话").fetchSemanticsNodes()
-        assertEquals("one button", 1, buttons.size)
-        // Under the last all-done post, not the earlier one.
-        assertTrue(buttons[0].boundsInRoot.top > bounds("这件做完了").top)
-        tap(buttons[0].boundsInRoot.center)
+        tap(barArchive().center)
         assertArchived(h, done.session)
         assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
     }
@@ -300,7 +273,7 @@ class ArchiveTest {
     @Test fun chatArchiveSlidesBackToList() {
         val h = chat()
         val r = h.record("archive-back")
-        rule.onNodeWithText("归档此对话").performClick()
+        tap(barArchive().center)
         r.frames(32)
         r.end()
         assertEquals("back to the chat list", listOf<Screen>(Screen.Home), h.app.stack)
@@ -313,7 +286,7 @@ class ArchiveTest {
             JsonNull
         }
         val before = h.app.stack
-        tap(bounds("归档此对话").center)
+        tap(barArchive().center)
         h.settle()
         assertEquals("failed archive keeps the chat open", before, h.app.stack)
         assertTrue("failure is visible", h.app.toast?.contains("归档失败") == true)
@@ -348,28 +321,6 @@ class ArchiveTest {
         release(start)
         h.settle(2000)
         assertTrue("archived: ${h.archived()}", h.archived().isEmpty())
-    }
-
-    @Test fun shotsKeepDark() = shotsKeep(true)
-    @Test fun shotsKeepLight() = shotsKeep(false)
-
-    private fun shotsKeep(dark: Boolean) {
-        val h = chat(dark)
-        val name = if (dark) "keep-dark" else "keep-light"
-        shot(name)
-        val of = ChatOf.Thread(Fixtures.THREAD)
-        h.fake.answer = { name, _ ->
-            if (name == "chat.keep") h.fake.put(Topics.chat(Fixtures.STATION, of), Fixtures.chat(talk, title = done.title).copy(archivable = false, key = done.session))
-            JsonNull
-        }
-        val recording = h.record(name)
-        rule.onNodeWithText("保留").performClick()
-        recording.frames(32)
-        recording.end()
-        h.settle()
-        shot("$name-kept")
-        assertTrue(rule.onAllNodesWithText("保留").fetchSemanticsNodes().isEmpty())
-        assertEquals(2, h.app.stack.size)
     }
 
     @Test fun shotsChat() {
