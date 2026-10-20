@@ -19,16 +19,16 @@ node is built, so one style is a constant and right in light and dark, wide and 
 
 | token | names | values |
 |---|---|---|
-| `Space` (padding, gaps) | `S0` `SPx` `S0_5` `S1` … `S12` `S14` `S16` `S20` … `S96` | Tailwind v3.4's: a step 4 px |
+| `Space` (padding, gaps) | `S0` `SPx` `S0_5` `S1` `S1_25` `S1_5` … `S4` `S4_5` `S5` … `S12` `S14` `S16` `S20` … `S96` | Tailwind v3.4's: a step 4 px; v4's quarter steps where still.fail says them (5, 18) |
 | `Len` (sizes) | `Hug` (what it holds), `Full`, `Grow(k)`, `Fixed(v)`, and every `Space` name | |
-| `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl2` `Xl3` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default) |
-| `TextSize` (size and line) | `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default) |
-| `Leading` (a line's height said apart from the size's) | `L3` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px) |
+| `Radius` | `Sharp` `Sm` `Base` `Md` `Lg` `Xl` `Xl1_5` `Xl2` `Xl3` `Xl4` `Full` (a pill) `Inner` | `Theme.radii` (Tailwind's by default; `Xl1_5` 14, `Xl4` 32) |
+| `TextSize` (size and line) | `Xs3` `Xs2` `Xs` `Sm` `Base` `Lg` `Xl` `Xl2` `Xl3` `Xl4` | `Theme.text` (Tailwind's by default; `Xs2` 11 on 16, `Xs3` 10 on 14) |
+| `Leading` (a line's height said apart from the size's) | `L3` `L4` `L4_75` `L5` … `L10`, `Font` (the font's own) | `Theme.leading` (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40 px; `L4_75` 19) |
 | `Weight` | `Normal` `Medium` `Semibold` `Bold` | 400 … 700 |
 | `Tracking` (letter spacing) | `Tighter` `Tight` `Normal` `Wide` `Wider` `Widest` | Tailwind's, in ems of the words' size; `Exact(px)` in pixels |
-| `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields |
+| `Color` | `Bg` `Surface` `Raised` `Card` `Fg` `Muted` `Subtle` `Faint` `Line` `Border` `Accent` `AccentText` `AccentBg` `OnAccent` `Primary` `OnPrimary` `Positive` `Danger` `DangerBg` `OnDanger` `Neutral` `Hover` `Selected` `Focus` `Scrim` `Link` `ShadowC` `Warn` `Tint` `TintStrong` `Floating` `Veil` `VeilDeep` `OnVeil` `Lifted` `Theater` `Wash` `Clear`; `A(c, o)` at an opacity, `Over(under, top)` | the theme's fields (`Tint` the words' colour at 6%, `TintStrong` at 8%, `Floating` Raised at 72% over Bg, `Veil` black at 62%, `VeilDeep` at 92%, `OnVeil` white, `Lifted` a segmented choice's thumb, `Theater` black, `Wash` a quiet wash under what comes onto it: #322D24 at 6.5%, white at 5% in the dark) |
 | `Opacity` | `O0` `O5` … `O95` `O100` | |
-| `Stroke` (an edge) | `B0` `B1` `B2` `B4` `B8` | |
+| `Stroke` (an edge) | `B0` `B0_5` (a hairline) `B1` `B2` `B4` `B8` | |
 | `Shadow` | `NoShadow` `Sm` `Base` `Md` `Lg` `Xl` | Tailwind's first layer, in `Theme.shadow` |
 
 `Exact(…)` is a value off the scale. It belongs in an app's token file (detlint's `style.tokens`), named:

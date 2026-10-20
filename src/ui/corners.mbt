@@ -236,6 +236,8 @@ let inner_even : Double = 0.5
 /// drawn square, and said so: corner_faults lists it, so a test fails where a person's screen would not.
 fn Ctx::corners_after_layout(self : Ctx) -> Unit {
   self.inner_faults.clear()
+  // the containers whose corner is what lies in it (`Around`), before the boxes worked out from their containers
+  self.arounds_after_layout()
   if self.inners.is_empty() {
     return
   }
@@ -336,3 +338,88 @@ let cut_arc_steps : Int = 16
 
 ///|
 let half_pi : Double = 1.5707963267948966
+
+///|
+/// The corners said `Around`, from where what lies in their corners is as laid out (corners_after_layout, first): the
+/// box in the container's corner (the nearest to two of its edges of the boxes with a corner of their own in it, through
+/// boxes with none: a key's round, filled or not, a button) as far from both; the container's corner that distance more
+/// than a circle's or a capsule's own (ui-panels.md: 外圆角 = 距离 + 半高; still.fail's Android Smooth(8.dp + 17.dp)), or
+/// concentric round a smooth one (smooth.mbt concentric_out, Android's concentricOut). As corner_faults checks it,
+/// the other way round. A box with nothing with a corner in its corner, one at different distances from the two edges,
+/// or one whose corner is `Inner` itself (each worked out from the other) is drawn square, and said so.
+fn Ctx::arounds_after_layout(self : Ctx) -> Unit {
+  for p in self.arounds {
+    let a = self.nodes[p]
+    a.radius = 0.0
+    // (corner index, the box, its distances from the corner's two edges)
+    let mut best : (Int, Int, Double, Double)? = None
+    let mut best_d = 1.0e9
+    for i in 0..<self.count {
+      let b = self.nodes[i]
+      if i == p ||
+        b.kind != kind_box ||
+        b.layer ||
+        (b.radius < 0.5 && !self.inners.contains(i)) ||
+        b.fw <= 0.0 ||
+        b.fh <= 0.0 {
+        continue
+      }
+      if !self.lies_in_bare(i, p) {
+        continue
+      }
+      let l = b.x - a.x
+      let t = b.y - a.y
+      let r = a.x + a.fw - (b.x + b.fw)
+      let d = a.y + a.fh - (b.y + b.fh)
+      for k, (dx, dy) in [(l, t), (r, t), (l, d), (r, d)] {
+        if dx < -inner_even || dy < -inner_even {
+          continue
+        }
+        let far = dmax(dx, dy)
+        if far < best_d {
+          best_d = far
+          best = Some((k, i, dx, dy))
+        }
+      }
+    }
+    match best {
+      None => self.inner_faults.push("\{self.named(p)}: radius=Around, nothing with a corner in its corners")
+      Some((k, i, dx, dy)) => {
+        let corner = ["top left", "top right", "bottom left", "bottom right"][k]
+        if self.inners.contains(i) {
+          self.inner_faults.push(
+            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, whose corner is Inner: each worked out from the other",
+          )
+          continue
+        }
+        if (dx - dy).abs() > inner_even {
+          self.inner_faults.push(
+            "\{self.named(p)}: radius=Around round \{self.named(i)} in its \{corner}, at different distances from its edges: \{dx} and \{dy}",
+          )
+          continue
+        }
+        let b = self.nodes[i]
+        let rb = b.corner()
+        let round = rb >= dmin(b.fw, b.fh) / 2.0 - 0.5
+        a.radius = if round { dx + rb } else { concentric_out(rb, dx) }
+      }
+    }
+  }
+}
+
+///|
+/// Whether box `i` lies in `p` with nothing between them that has a corner of its own (what `Around` reads a corner
+/// round, as corner_container finds `p` from it).
+fn Ctx::lies_in_bare(self : Ctx, i : Int, p : Int) -> Bool {
+  let mut q = self.nodes[i].parent
+  while q >= 0 {
+    if q == p {
+      return true
+    }
+    if self.nodes[q].radius >= 0.5 {
+      return false
+    }
+    q = self.nodes[q].parent
+  }
+  false
+}

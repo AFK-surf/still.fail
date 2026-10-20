@@ -458,3 +458,93 @@ test "style: radius=Inner leaves out an edge it reaches past (cut there, in a ro
   assert_eq(c.nodes[c.count - 1].radius, concentric(24.0, 8.0))
   assert_eq(t.corner_faults(), [])
 }
+
+///|
+/// A panel rounded `Around`, 8 in at its top and end, holding a row whose end is a key (a circle of 34, filled or not)
+/// and, when `smooth`, a button rounded 12 in its corner instead.
+fn around_panel(smooth : Bool, filled : Bool, pt? : Double = 8.0, pb? : Double = 8.0) -> (Ctx) -> Unit {
+  fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(style=style(w=Fixed(300.0), radius=Around, bg=Card), fn() {
+        c.box(dir=Row, w=Fill(1.0), pl=18.0, pr=8.0, pt~, pb~, gap=12.0, fn() {
+          c.box(w=Fill(1.0), h=Px(20.0), fn() {  }) |> ignore
+          if smooth {
+            c.box(w=Px(60.0), h=Px(34.0), radius=12.0, bg=0xD0D4DAFFL, fn() {  }) |> ignore
+          } else {
+            c.box(style=style(w=Fixed(34.0), h=Fixed(34.0), radius=Full), bg=if filled { 0xD0D4DAFFL } else { 0L }, fn() {  })
+            |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+}
+
+///|
+test "style: radius=Around is a circle's distance from the two edges and its half (Android's Smooth(8.dp + 17.dp))" {
+  for filled in [true, false] {
+    let t = Tester::new(around_panel(false, filled))
+    t.draw()
+    let c = g()
+    assert_eq(c.nodes[c.arounds[0]].radius, 25.0)
+    assert_eq(t.corner_faults(), [])
+  }
+}
+
+///|
+test "style: radius=Around round a smooth box is concentric with it (concentricOut)" {
+  let t = Tester::new(around_panel(true, true))
+  t.draw()
+  assert_eq(g().nodes[g().arounds[0]].radius, concentric_out(12.0, 8.0))
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "style: radius=Around with what is in its corner at different distances from the two edges is square, and said" {
+  // 8 from its end, 12 from its top and its foot: in neither corner evenly
+  let t = Tester::new(around_panel(false, true, pt=12.0, pb=12.0))
+  t.draw()
+  assert_eq(g().nodes[g().arounds[0]].radius, 0.0)
+  let faults = t.corner_faults()
+  assert_eq(faults.length(), 1)
+  assert_true(faults[0].contains("radius=Around"))
+  assert_true(faults[0].contains("different distances"))
+}
+
+///|
+test "style: radius=Around round a box whose corner is Inner is each worked out from the other: square, and said" {
+  let t = Tester::new(fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(style=style(w=Fixed(200.0), p=S2, radius=Around, bg=Card), fn() {
+        c.box(style=style(w=Full, h=S10, radius=Inner, bg=Faint), fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_true(t.corner_faults().iter().any(fn(f) { f.contains("each worked out from the other") }))
+}
+
+///|
+test "style: Wash the same on every width, #322D24 at 6.5% (white at 5% in the dark); Xs2 11 on 16, Xs3 10 on 14" {
+  let s = style(bg=Wash)
+  let view = fn(c : Ctx) {
+    c.set_theme(Theme::light(), narrow=Theme::narrow_light(), narrow_below=700.0)
+    c.box(style=s, fn() {  }) |> ignore
+  }
+  assert_eq(style_node(view, w=390.0).bg, 0x322D2411L)
+  assert_eq(style_node(view, w=700.0).bg, 0x322D2411L)
+  let dark = fn(c : Ctx) {
+    c.set_theme(Theme::dark(), narrow=Theme::narrow_dark(), narrow_below=700.0)
+    c.box(style=s, fn() {  }) |> ignore
+  }
+  assert_eq(style_node(dark, w=390.0).bg, 0xFFFFFF0DL)
+  assert_eq(style_node(dark, w=700.0).bg, 0xFFFFFF0DL)
+  let th = Theme::light()
+  assert_eq(th.text_size(Xs2), (11.0, 16.0))
+  assert_eq(th.text_size(Xs3), (10.0, 14.0))
+}

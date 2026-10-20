@@ -6,19 +6,21 @@
 // changed is the other value from the frame that sees it, as an app's own `if c.pressed(id)` was.
 
 ///|
-/// Spacing, Tailwind's scale (v3.4: a step 4 px): padding, gaps, a size. `Exact(v)` a value off the scale, said in an
-/// app's token file only (detlint's `style-literal` counts it anywhere else, `style-exact` everywhere).
+/// Spacing, Tailwind's scale (v3.4: a step 4 px; v4's quarter steps where still.fail's Android app says them: S1_25 5,
+/// S4_5 18): padding, gaps, a size. `Exact(v)` a value off the scale, said in an app's token file only (detlint's `style-literal` counts it anywhere else, `style-exact` everywhere).
 pub(all) enum Space {
   S0
   SPx
   S0_5
   S1
+  S1_25
   S1_5
   S2
   S2_5
   S3
   S3_5
   S4
+  S4_5
   S5
   S6
   S7
@@ -55,12 +57,14 @@ pub fn Space::px(self : Space) -> Double {
     SPx => 1.0
     S0_5 => 2.0
     S1 => 4.0
+    S1_25 => 5.0
     S1_5 => 6.0
     S2 => 8.0
     S2_5 => 10.0
     S3 => 12.0
     S3_5 => 14.0
     S4 => 16.0
+    S4_5 => 18.0
     S5 => 20.0
     S6 => 24.0
     S7 => 28.0
@@ -103,12 +107,14 @@ pub(all) enum Len {
   SPx
   S0_5
   S1
+  S1_25
   S1_5
   S2
   S2_5
   S3
   S3_5
   S4
+  S4_5
   S5
   S6
   S7
@@ -144,12 +150,14 @@ fn Len::space(self : Len) -> Space? {
     SPx => Some(SPx)
     S0_5 => Some(S0_5)
     S1 => Some(S1)
+    S1_25 => Some(S1_25)
     S1_5 => Some(S1_5)
     S2 => Some(S2)
     S2_5 => Some(S2_5)
     S3 => Some(S3)
     S3_5 => Some(S3_5)
     S4 => Some(S4)
+    S4_5 => Some(S4_5)
     S5 => Some(S5)
     S6 => Some(S6)
     S7 => Some(S7)
@@ -202,9 +210,10 @@ fn Len::bound(self : Len, none_is : Double) -> Double {
 }
 
 ///|
-/// A corner, the theme's scale (Tailwind's names), a pill (`Full`: half the shorter side), or `Inner`: the corner of
+/// A corner, the theme's scale (Tailwind's names, and Xl1_5 between Xl and Xl2, Xl4 past Xl3), a pill (`Full`: half the shorter side), or `Inner`: the corner of
 /// the rounded container it lies in less how far in it lies, so that what lies in a container's corner is concentric
-/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout).
+/// with it by how it is written (worked out once laid out: corners.mbt's corners_after_layout); `Around` the other way
+/// round, the container's own corner from what lies in it.
 pub(all) enum Radius {
   Sharp
   Sm
@@ -212,16 +221,24 @@ pub(all) enum Radius {
   Md
   Lg
   Xl
+  Xl1_5
   Xl2
   Xl3
+  Xl4
   Full
   Inner
+  /// the other way from `Inner`: the corner round what lies in its corner, worked out once laid out (a circle or a
+  /// capsule there: its distance from the two edges and its own corner; a smooth one: smooth.mbt concentric_out)
+  Around
   Exact(Double)
 } derive(Eq, Show, Debug)
 
 ///|
-/// A size of words with its line's height, the theme's scale (Tailwind's names), or `Exact(size, line)`.
+/// A size of words with its line's height, the theme's scale (Tailwind's names, and Xs2, Xs3 under Xs, as Xl2, Xl3
+/// over Xl), or `Exact(size, line)`.
 pub(all) enum TextSize {
+  Xs3
+  Xs2
   Xs
   Sm
   Base
@@ -235,11 +252,12 @@ pub(all) enum TextSize {
 
 ///|
 /// A line's height said apart from the words' size (which has one of its own, TextSize): the theme's scale
-/// (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40), `Font` the font's own, or `Exact(px)`.
+/// (Tailwind's leading-3 … leading-10 by default: 12, 16 … 40; L4_75, 19), `Font` the font's own, or `Exact(px)`.
 pub(all) enum Leading {
   Font
   L3
   L4
+  L4_75
   L5
   L6
   L7
@@ -387,15 +405,36 @@ pub(all) enum Color {
   Scrim
   Link
   ShadowC
+  /// someone else at the controls, a wait to look at (still.fail's Theme.kt C.warn)
+  Warn
+  /// a quiet ground over whatever is under it (a key, a Seg's track, a remove button): the words' colour at 6%; a
+  /// stronger one at 8% (a progress's track)
+  Tint
+  TintStrong
+  /// what floats still over the page, nothing blurred under it (Glass.kt floatingStill: Raised at 72% over the page)
+  Floating
+  /// what a picture gone dark is under (a remote screen ended: black at 62% over its last frame, 92% over none), and
+  /// what is said on it (white)
+  Veil
+  VeilDeep
+  OnVeil
+  /// the ground a picture is shown on alone, edge to edge (a video's, a remote screen's in 全屏): black
+  Theater
+  /// what is lifted out of a tinted track (a segmented choice's thumb: white; in the dark a step over the card)
+  Lifted
+  /// a quiet wash under what comes onto it (still.fail's Android app's way of the web's --hover: a screen's preview
+  /// before its picture, ScreenLinks.kt; the offline note, Chat.kt), the same on every width
+  Wash
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)
 } derive(Eq, Show, Debug)
 
 ///|
-/// An edge's width (Tailwind's border widths).
+/// An edge's width (Tailwind's border widths, and a hairline: B0_5).
 pub(all) enum Stroke {
   B0
+  B0_5
   B1
   B2
   B4
@@ -406,6 +445,7 @@ pub(all) enum Stroke {
 fn Stroke::px(self : Stroke) -> Double {
   match self {
     B0 => 0.0
+    B0_5 => 0.5
     B1 => 1.0
     B2 => 2.0
     B4 => 4.0

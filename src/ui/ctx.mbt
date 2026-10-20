@@ -258,6 +258,8 @@ pub struct Ctx {
   // the boxes built this frame whose corner is `Inner` (style.mbt): worked out once laid out (corners.mbt), and
   // those that could not be (Tester::corner_faults says them)
   inners : Array[Int]
+  // the boxes built this frame whose corner is `Around`: worked out from what lies in their corner (corners.mbt)
+  arounds : Array[Int]
   inner_faults : Array[String]
   mut direction : Direction
   // what the widgets built this frame say they are (semantics.mbt), and how deep in a part hidden from it the view
@@ -404,6 +406,7 @@ fn Ctx::new() -> Ctx {
     narrow_below: 700.0,
     narrow: false,
     inners: [],
+    arounds: [],
     inner_faults: [],
     direction: Ltr,
     sems: [],
@@ -663,6 +666,10 @@ pub fn Ctx::box(
   // a corner said `Inner` (and not said here): worked out once laid out (corners.mbt)
   if radius is None && st.radius is Some(Inner) {
     self.inners.push(i)
+  }
+  // `Around`: from what lies in its corner, once laid out
+  if radius is None && st.radius is Some(Around) {
+    self.arounds.push(i)
   }
   n.border_w = first(
     border,

@@ -84,6 +84,12 @@ pub(all) struct Theme {
   selected : Int64
   /// links
   link : Int64
+  /// someone else at the controls (Color's Warn)
+  warn : Int64
+  /// what is lifted out of a tinted track (Color's Lifted)
+  lifted : Int64
+  /// a quiet wash under what comes onto it (Color's Wash)
+  wash : Int64
   /// the sizes of words with their lines' heights (style.mbt's TextSize), the lines' heights said on their own
   /// (Leading), and the corners (Radius)
   text : TextScale
@@ -94,6 +100,8 @@ pub(all) struct Theme {
 ///|
 /// The sizes of words, each with its line's height (size, line).
 pub(all) struct TextScale {
+  xs3 : (Double, Double)
+  xs2 : (Double, Double)
   xs : (Double, Double)
   sm : (Double, Double)
   base : (Double, Double)
@@ -108,6 +116,8 @@ pub(all) struct TextScale {
 /// Tailwind's (v3.4).
 pub fn TextScale::tailwind() -> TextScale {
   {
+    xs3: (10.0, 14.0),
+    xs2: (11.0, 16.0),
     xs: (12.0, 16.0),
     sm: (14.0, 20.0),
     base: (16.0, 24.0),
@@ -120,10 +130,11 @@ pub fn TextScale::tailwind() -> TextScale {
 }
 
 ///|
-/// The heights of lines said on their own (Leading's L3 … L10), in pixels.
+/// The heights of lines said on their own (Leading's L3 … L10, and L4_75), in pixels.
 pub(all) struct LeadingScale {
   l3 : Double
   l4 : Double
+  l4_75 : Double
   l5 : Double
   l6 : Double
   l7 : Double
@@ -133,9 +144,9 @@ pub(all) struct LeadingScale {
 }
 
 ///|
-/// Tailwind's (v3.4: leading-3 … leading-10, 0.75rem … 2.5rem).
+/// Tailwind's (v3.4: leading-3 … leading-10, 0.75rem … 2.5rem; leading-4.75, 19).
 pub fn LeadingScale::tailwind() -> LeadingScale {
-  { l3: 12.0, l4: 16.0, l5: 20.0, l6: 24.0, l7: 28.0, l8: 32.0, l9: 36.0, l10: 40.0 }
+  { l3: 12.0, l4: 16.0, l4_75: 19.0, l5: 20.0, l6: 24.0, l7: 28.0, l8: 32.0, l9: 36.0, l10: 40.0 }
 }
 
 ///|
@@ -146,14 +157,16 @@ pub(all) struct RadiusScale {
   md : Double
   lg : Double
   xl : Double
+  xl1_5 : Double
   xl2 : Double
   xl3 : Double
+  xl4 : Double
 }
 
 ///|
 /// Tailwind's (v3.4).
 pub fn RadiusScale::tailwind() -> RadiusScale {
-  { sm: 2.0, base: 4.0, md: 6.0, lg: 8.0, xl: 12.0, xl2: 16.0, xl3: 24.0 }
+  { sm: 2.0, base: 4.0, md: 6.0, lg: 8.0, xl: 12.0, xl1_5: 14.0, xl2: 16.0, xl3: 24.0, xl4: 32.0 }
 }
 
 ///|
@@ -200,6 +213,10 @@ pub fn Theme::light() -> Theme {
     neutral: 0xEDEFF1FFL,
     selected: 0xEBE7E1FFL,
     link: 0x1559C4FFL,
+    warn: 0xD9962BFFL,
+    lifted: 0xFFFFFFFFL,
+    // #322D24 at 6.5%
+    wash: 0x322D2411L,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     radii: RadiusScale::tailwind(),
@@ -239,6 +256,9 @@ pub fn Theme::dark() -> Theme {
     neutral: 0x2A2B2FFFL,
     selected: 0x323338FFL,
     link: 0x81AEFAFFL,
+    lifted: 0x3A3B40FFL,
+    // white at 5%
+    wash: 0xFFFFFF0DL,
   }
 }
 
@@ -339,6 +359,10 @@ pub fn Theme::ios_light() -> Theme {
     neutral: 0xE5E5EAFFL,
     selected: 0xD1D1D6FFL,
     link: 0x0A84FFFFL,
+    warn: 0xFF9F0AFFL,
+    lifted: 0xFFFFFFFFL,
+    // #322D24 at 6.5%
+    wash: 0x322D2411L,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
     radii: RadiusScale::tailwind(),
@@ -374,6 +398,9 @@ pub fn Theme::ios_dark() -> Theme {
     neutral: 0x3A3A3CFFL,
     selected: 0x3A3A3CFFL,
     link: 0x409CFFFFL,
+    lifted: 0x636366FFL,
+    // white at 5%
+    wash: 0xFFFFFF0DL,
   }
 }
 
@@ -462,6 +489,16 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     Scrim => self.scrim
     Link => self.link
     ShadowC => self.shadow
+    Warn => self.warn
+    Tint => alpha(self.fg, 0.06)
+    TintStrong => alpha(self.fg, 0.08)
+    Floating => over(self.bg, alpha(self.raised, 0.72))
+    Veil => 0x0000009EL
+    VeilDeep => 0x000000EBL
+    OnVeil => 0xFFFFFFFFL
+    Lifted => self.lifted
+    Wash => self.wash
+    Theater => 0x000000FFL
     A(c, o) => alpha(self.color(c), o.value())
     Over(u, t) => over(self.color(u), self.color(t))
     Exact(v) => v
@@ -472,6 +509,8 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
 /// A size of words in this theme: (size, line).
 pub fn Theme::text_size(self : Theme, s : TextSize) -> (Double, Double) {
   match s {
+    Xs3 => self.text.xs3
+    Xs2 => self.text.xs2
     Xs => self.text.xs
     Sm => self.text.sm
     Base => self.text.base
@@ -491,6 +530,7 @@ pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
     Font => None
     L3 => Some(self.leading.l3)
     L4 => Some(self.leading.l4)
+    L4_75 => Some(self.leading.l4_75)
     L5 => Some(self.leading.l5)
     L6 => Some(self.leading.l6)
     L7 => Some(self.leading.l7)
@@ -502,17 +542,19 @@ pub fn Theme::leading(self : Theme, l : Leading) -> Double? {
 }
 
 ///|
-/// A corner in this theme (`Inner` is worked out once laid out: 0 here).
+/// A corner in this theme (`Inner` and `Around` are worked out once laid out: 0 here).
 pub fn Theme::corner(self : Theme, r : Radius) -> Double {
   match r {
-    Sharp | Inner => 0.0
+    Sharp | Inner | Around => 0.0
     Sm => self.radii.sm
     Base => self.radii.base
     Md => self.radii.md
     Lg => self.radii.lg
     Xl => self.radii.xl
+    Xl1_5 => self.radii.xl1_5
     Xl2 => self.radii.xl2
     Xl3 => self.radii.xl3
+    Xl4 => self.radii.xl4
     Full => 1.0e6
     Exact(v) => exact_ok(v, "Radius")
   }
