@@ -36,11 +36,12 @@ core node "$D/contract.ts" --start "$OUT/start-core" || { echo "contract: no sta
 "$L" snapshot $START "$OUT/start-core" >/dev/null || exit 1
 cat > "$OUT/seed.sh" <<SEED
 #!/bin/bash
-# for e2e/contract.ts: restore (back to the starting point) or step WORDS (a tape's step: scripts/e2e-local.sh WORDS)
+# for e2e/contract.ts: restore [TAG…] (back to the starting point, each tag's drive folder seeded) or step WORDS (a tape's step: scripts/e2e-local.sh WORDS)
 set -e
 export E2E_WORK=$E2E_WORK E2E_STATION=$E2E_STATION E2E_PORT=$E2E_PORT E2E_RELAY=$E2E_RELAY
 case "\$1" in
-  restore) "$L" restore $START >/dev/null ;;
+  restore) "$L" restore $START >/dev/null
+           for tag in "\${@:2}"; do "$L" drive-seed "\$tag" >/dev/null; done ;;
   step) "$L" \$2 >/dev/null ;;
   *) echo "seed: \$1?" >&2; exit 1 ;;
 esac
