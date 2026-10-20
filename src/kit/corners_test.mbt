@@ -146,3 +146,108 @@ test "corners: a circle or a capsule in a corner: as far from both edges, the co
   assert_eq(faults.length(), 1)
   assert_true(faults[0].contains("16 and 12 from its edges"))
 }
+
+///|
+test "corners: a round thing centred in its container is not set in a corner" {
+  // a card's trailing ×, centred up and down in a row: near the top right corner, but not in it
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=20.0, fn() {
+      c.box(dir=Row, w=Px(236.0), h=Px(52.0), pl=12.0, pr=10.0, align=ACenter, bg=0xEEEEEEFFL, radius=16.0, fn() {
+        c.box(w=Fill(1.0), fn() { c.text("build.log", size=13.0) |> ignore }) |> ignore
+        c.box(w=Px(22.0), h=Px(22.0), bg=0x3366FFFFL, radius=11.0, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // the same × put at the top right by the layout (the row's items at its start, 10 from the top and the right): the
+  // corner rule holds, and the card's corner of 16 is not the 21 it wants
+  let t = @ui.Tester::new(fn(c) {
+    c.column(pad=20.0, fn() {
+      c.box(dir=Row, w=Px(236.0), h=Px(52.0), pl=12.0, pr=10.0, pt=10.0, align=AStart, bg=0xEEEEEEFFL, radius=16.0, fn() {
+        c.box(w=Fill(1.0), fn() { c.text("build.log", size=13.0) |> ignore }) |> ignore
+        c.box(w=Px(22.0), h=Px(22.0), bg=0x3366FFFFL, radius=11.0, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let faults = t.corner_faults()
+  assert_eq(faults.length(), 1)
+  assert_true(faults[0].contains("wants corner 21"))
+}
+
+///|
+test "corners: a container whose ground is a layer of its size: what is in its corner as far from both edges" {
+  // a composer: its glass a layer under it, the attachment's tile 10 from the left and 14 from the top: a fault
+  let composer = fn(c : @ui.Ctx, top : Double) {
+    c.column(pad=20.0, fn() {
+      c.box(w=Px(370.0), h=Px(160.0), fn() {
+        c.layer(fn() { c.box(w=Fill(1.0), h=Fill(1.0), bg=0xEEEEEEFFL, radius=26.0, fn() {  }) |> ignore })
+        |> ignore
+        c.box(pl=10.0, pt=top, fn() {
+          c.box(w=Px(56.0), h=Px(56.0), bg=0x3366FFFFL, radius=16.0, fn() {  }) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(fn(c) { composer(c, 14.0) })
+  t.draw()
+  let faults = t.corner_faults()
+  assert_eq(faults.length(), 1)
+  assert_true(faults[0].contains("10 and 14 from its edges"))
+  // 10 from both, its corner 26 less 10: no fault
+  let t = @ui.Tester::new(fn(c) { composer(c, 10.0) })
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
+
+///|
+test "corners: the container's own fill drawn on over its corner is its shape, not a thing in its corner" {
+  // a grouped row: its rounded ground, a square patch of the same fill over its bottom corners: no fault
+  let row = fn(c : @ui.Ctx, patch : Int64) {
+    c.column(pad=20.0, fn() {
+      c.box(w=Px(366.0), h=Px(58.0), bg=0xEEEEEEFFL, radius=16.0, fn() {
+        c.box(h=Px(42.0), fn() {  }) |> ignore
+        c.box(w=Fill(1.0), h=Px(16.0), bg=patch, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(fn(c) { row(c, 0xEEEEEEFFL) })
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+  // a band of another fill there (a table's foot): its square corners show past the card's: both corners fault
+  let t = @ui.Tester::new(fn(c) { row(c, 0x3366FFFFL) })
+  t.draw()
+  assert_eq(t.corner_faults().length(), 2)
+}
+
+///|
+test "corners: a round thing centred in a capsule sits in its round end" {
+  // a switch's knob centred up and down in its track (44×26, corner 13), 5 from the left, 3 from top and bottom: a
+  // fault, centred or not
+  let knob = fn(c : @ui.Ctx, side : Double, pad : Double) {
+    c.column(pad=20.0, fn() {
+      c.box(dir=Row, w=Px(44.0), h=Px(26.0), pl=pad, align=ACenter, bg=0xDDDDDDFFL, radius=13.0, fn() {
+        c.box(w=Px(side), h=Px(side), bg=0xFFFFFFFFL, radius=side / 2.0, fn() {  }) |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  }
+  let t = @ui.Tester::new(fn(c) { knob(c, 20.0, 5.0) })
+  t.draw()
+  assert_eq(t.corner_faults().length(), 2)
+  // a knob of 22, 2 from every edge: concentric with the track's end, no fault
+  let t = @ui.Tester::new(fn(c) { knob(c, 22.0, 2.0) })
+  t.draw()
+  assert_eq(t.corner_faults(), [])
+}
