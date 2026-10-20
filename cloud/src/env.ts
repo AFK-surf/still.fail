@@ -40,8 +40,6 @@ export interface Env {
   RELAY_LOAD: DurableObjectNamespace<RelayLoad>;
   /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
   RELAY?: DurableObjectNamespace<Relay>;
-  /** What the relays on machines of their own send their counters with (POST /v1/relays/load); unset, they are refused. */
-  RELAY_LOAD_TOKEN?: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;

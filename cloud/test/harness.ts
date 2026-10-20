@@ -51,8 +51,6 @@ export async function harness(
     /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
     relayUrls?: string;
     relayNames?: Record<string, string>;
-    /** What relays send their counters with (RELAY_LOAD_TOKEN): one made now unless given. */
-    relayLoadToken?: string;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -95,8 +93,7 @@ export async function harness(
   /** still.fail cloud's time, in seconds: what a station signs with, say. */
   const now = () => Math.floor((options.clock === "real" ? Date.now() : NOW_MS) / 1000);
   const signingKey = options.signingKey ?? randomSecret(),
-    adminToken = randomSecret(),
-    relayLoadToken = options.relayLoadToken ?? randomSecret();
+    adminToken = randomSecret();
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = {
     ...(await exportJWK(publicKey)),
@@ -163,7 +160,6 @@ export async function harness(
         GOOGLE_CLIENT_SECRET: randomSecret(),
         AUTH_SIGNING_KEY: signingKey,
         ADMIN_TOKEN: adminToken,
-        RELAY_LOAD_TOKEN: relayLoadToken,
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
@@ -329,7 +325,6 @@ export async function harness(
     grantJwk,
     grantPublicJwk,
     adminToken,
-    relayLoadToken,
     signingKey,
     codes,
     mails,

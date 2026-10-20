@@ -122,7 +122,7 @@ station 在哪、怎么连，设备自己找，不经过 still.fail cloud：
 - 网页版要求 relay 用公开签发的证书（如 Let's Encrypt，iroh-relay 自带 ACME，也可以给裸 IP 签短期证书）。
 - 不做访问控制：relay 只转发端到端加密的 QUIC，看不到内容；谁能用它由部署者自己在 iroh-relay 里配。
 
-**中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数和负载 `POST /v1/relays/load`（`RELAY_LOAD_TOKEN`，deploy.py 由 `ADMIN_TOKEN` 算出（`relay_load_token`）；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
+**中继负载**（管理后台的「中继」页）：still.fail 自己的几台 relay（`RELAY_URLS`）各自的计数大约每分钟记一次，存在 `RelayLoad`（`cloud/src/relay-load.ts`，保留 8 天），`GET /v1/admin/relays` 按需算出当前速率、在线连接、丢包率、今日用量和 24 小时 / 7 天的曲线（`relay-load-view.ts`）。Cloudflare 那台由 API Worker 每分钟的 cron 读 relay 进程的 metrics（跨 Worker 绑定 stillfail-relay 的 `Relay`，进程没在运行就不记）；北京、香港两台由机器上的 systemd timer 跑 `cloud/relay-load.sh`，把 iroh-relay 的 metrics 加上网卡字节数和负载 `POST /v1/relays/load`（中继以 IP 为名，cloud 只认 Cloudflare 看到的来源地址就是那个 IP 的；装法写在脚本开头）。core 只在页面打开时每分钟重读一次（`client/core-ts/src/sync/admin-relays.ts`）。
 
 几处 iroh 相关库的修补（多网卡、mDNS 反射、macOS 回包源地址、晚到的地址立即补发握手包）在 `vendor/`，原因见 `vendor/README.md`。
 

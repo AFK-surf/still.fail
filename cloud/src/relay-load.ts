@@ -1,9 +1,9 @@
 // How loaded still.fail's relays are, for the admin's console (its 中继 page, GET /v1/admin/relays): each relay's
 // counters (relay-metrics.ts Load) about a minute apart, kept a week. The relays on machines of their own send theirs
-// (POST /v1/relays/load, relay-load.sh run by a timer there); Cloudflare's is read by this Worker's cron from the
+// (POST /v1/relays/load, relay-load.sh run by a timer there, believed by the address they send from); Cloudflare's is read by this Worker's cron from the
 // relay process (index.ts). What is shown is worked out from the counters when asked (relay-load-view.ts).
 import { DurableObject } from "cloudflare:workers";
-import { bearerToken, denied, digest, nowSeconds, reply } from "./auth";
+import { nowSeconds, reply } from "./auth";
 import type { Env } from "./env";
 import { LIMITS } from "./limits";
 import { relayLoad, type Load } from "./relay-metrics";
@@ -42,14 +42,15 @@ const MAX_METRICS = 256 * 1024;
 
 /**
  * A relay's counters, from relay-load.sh on its machine: its metrics as iroh-relay gives them, with node_rx, node_tx and
- * node_load1 lines for the machine's; `x-stillfail-relay` says which relay (its URL among RELAY_URLS).
+ * node_load1 lines for the machine's; `x-stillfail-relay` says which relay (its URL among RELAY_URLS). Ours are named by
+ * their IP, which is where they send from: one is believed when Cloudflare saw the request come from its own address.
  */
 export async function receiveLoad(request: Request, env: Env): Promise<Response> {
-  const supplied = bearerToken(request);
-  if (!env.RELAY_LOAD_TOKEN || env.RELAY_LOAD_TOKEN.length < 43 || !supplied || (await digest(supplied)) !== (await digest(env.RELAY_LOAD_TOKEN))) return denied();
   const named = request.headers.get("x-stillfail-relay") ?? "";
   const url = relayUrls(env).find((u) => sameUrl(u) === sameUrl(named));
   if (!url) return reply({ error: "unknown_relay" }, 400);
+  const from = request.headers.get("cf-connecting-ip");
+  if (!from || new URL(url).hostname.replace(/^\[|\]$/g, "") !== from) return reply({ error: "not_from_relay" }, 403);
   if (Number(request.headers.get("content-length") ?? 0) > MAX_METRICS) return reply({ error: "too_large" }, 413);
   const text = await request.text();
   if (text.length > MAX_METRICS) return reply({ error: "too_large" }, 413);
