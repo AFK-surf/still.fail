@@ -17,6 +17,5 @@ MBUI_DL=$PWD/$O/controls.dl MBUI_DL_PNG=$PWD/$O/controls.png ./_build/native/rel
   echo "draw list $(md5 -q $O/controls.dl)"
   echo "picture $(md5 -q $O/controls.png)"
   echo "system $(sw_vers -productVersion) $(sw_vers -buildVersion)"
-  echo "cpu $(sysctl -n machdep.cpu.brand_string)"
-  echo "image ${ImageOS:-} ${ImageVersion:-}"
+  echo "gpu $(system_profiler SPDisplaysDataType 2>/dev/null | sed -n 's/^ *Chipset Model: //p' | head -1)"
 } | tee $O/machine.txt

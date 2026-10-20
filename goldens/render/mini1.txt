@@ -1,0 +1,5 @@
+# The renderer's pixel references (docs/determinism.md): made and checked on Mini1 (mbui's runner mini1-mbui), on
+# this macOS and this GPU only. Another (Mini1 updated): every reference made again in one PR (the render
+# workflow's artifact), said there.
+system 26.5 25F71
+gpu Apple M4

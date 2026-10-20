@@ -88,14 +88,16 @@ Only for these, which the framework knows by itself:
 - **Offscreen is the picture.** A Tester's draw list drawn offscreen by `mbui-render` is the host's own picture of
   that screen to the byte (scripts/render_check.sh: kitdemo's controls page, on Mini1 and on Studio). When offscreen
   is wrong it is fixed, not replaced by what a window shows.
-- **Pixel references belong to one kind of machine: GitHub's `macos-15` runner, offscreen.** The same draw list drawn
-  offscreen is the same picture to the byte on every run there (three runs, two jobs at once among them), and another
-  on every other kind of machine (Mini1, M4 on macOS 26.5: 149 pixels of a 960×720 page apart; Studio, M2 Max on
-  macOS 27.0.1: 6910). So the references (goldens/render/macos15-*.png) are made and checked there only, on the
-  runner image they were made on (goldens/render/macos15.txt: `macos15 20260907.0337.1`, macOS 15.7.9, Apple M1
-  (Virtual)); the render workflow fails when the image is another, and then every reference is made again in one PR
-  from its artifact, saying so. Other machines check draw lists only. A PR that changes references commits the
-  workflow's artifact and lists each changed picture and why.
+- **Pixel references belong to one machine: Mini1, offscreen.** The same draw list drawn offscreen is the same picture
+  to the byte on every run on one machine, and another on another kind (Mini1, M4 on macOS 26.5, and Studio, M2 Max on
+  macOS 27.0.1: 6910 pixels of a 960×720 page apart; GitHub's macOS runner: 149 from Mini1). The references
+  (goldens/render/mini1-*.png) are made and checked on Mini1 only, by mbui's own runner there (`mini1-mbui`, label
+  `mbui-render`: the render workflow), on the macOS and GPU they were made on (goldens/render/mini1.txt); the workflow
+  fails when either is another (Mini1 updated), and then every reference is made again in one PR from its artifact,
+  saying so. Other machines check draw lists only. A PR that changes references commits the workflow's artifact and
+  lists each changed picture and why. (Not GitHub's hosted runners: decided against.) The runner takes no pull request
+  from a fork (the job's condition) and the repository asks before running any outside contributor's workflow: the
+  repository is public, and a fork's workflow on that runner would run whatever its author wrote on our machine.
 - **The other hosts' references belong to a GitHub runner of theirs, offscreen, each the same way:** made and checked
   there only, by a workflow of their own that runs when that host's drawing changes. Each run draws the list twice,
   in each of two jobs at once; all the pictures are the same to the byte, on whatever CPU the jobs land (AMD EPYC
@@ -118,8 +120,8 @@ Only for these, which the framework knows by itself:
   - An image a list names is decoded by the host while the renderer waits (Android: its uploads done on the GL
     thread as it asks; Windows: WIC's pool); in the browser nothing is told while the page's one thread draws, so a
     list with images is drawn without them there (the fixed list has none).
-- **On screen = offscreen** is checked on Mini1 (scripts/render_check.sh; GitHub's runner cannot open a window that
-  large), by still.fail's mbui CI on its own runner, when mbui is bumped there and the bump changes the macOS drawing
+- **On screen = offscreen** is checked on Mini1 (scripts/render_check.sh), by still.fail's mbui CI on its own runner,
+  when mbui is bumped there and the bump changes the macOS drawing
   (src/host/apple_render.m, apple_text.m): rarely.
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
@@ -132,8 +134,19 @@ The migration ends when each of detlint's rules is at 0 (docs/detlint.md). What 
 1. The tests' `settle` (mbui's, still.fail's): each to `draw`, `run_for(<a declared time>)`, `finish(<a ticket>)`,
    and `assert_idle` at its end.
 2. still.fail's `c.stable()`: gone with `Ctx::stable` (mbui #36); the app draws in a screenshot's run as in any.
-3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the GitHub `macos-15`
+3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the Mini1
    references; then its Mac real-window screenshots and the end-to-end drive's waits for settled are deleted.
-4. Last: `Tester::settle`, `Tester::settled`, `Ctx::settled`, `Runtime::settle` / `settled` deleted, and with them
+4. A Tester's outside work finished by the test only (`finish`, a seed for the order): `auto_finish` off by default.
+5. `wake_in(…, later=true)` gone: a wake is a timed event, and `assert_idle` asks only whether one is due.
+6. `request_frame` out of an app's reach: the moment still.fail's `frame-request` count is 0, `Ctx::request_frame`
+   (and `@ui.request_frame`) are made the framework's own (not `pub`), so the compiler stops what the lint did.
+7. Last: `Tester::settle`, `Tester::settled`, `Ctx::settled`, `Runtime::settle` / `settled` deleted, and with them
    the tests of those (effecttest's `outside_test.mbt`, `scheduler_test.mbt`: they live and die with the API). The
    `settle` rule is then at 0.
+
+## Where it stops
+
+- **The core's own clock.** The core (still.fail's TypeScript core in Hermes) times its own work by Hermes's clock
+  (`CLOCK_MONOTONIC`), not by mbui's frames' clock. Under a Tester this does not matter: the core is its tape, and
+  its answers come at frames the tape says. A real run end to end does depend on it (a retry's delay, a timeout in
+  the core): there the times are the machine's. Not changed yet; said here so nothing assumes otherwise.

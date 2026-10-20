@@ -1,7 +1,7 @@
-# The renderer's pixels (docs/determinism.md, "Pixel references belong to one kind of machine"): a Tester's draw list
-# drawn offscreen on GitHub's macOS runner, against its reference (goldens/render/macos15-*.png) to the byte, on the
-# runner image the references were made on (goldens/render/macos15.txt). The pictures drawn are the artifact: what a
-# PR that changes them commits, saying which and why.
+# The renderer's pixels (docs/determinism.md, "Pixel references belong to one machine"): a Tester's draw list drawn
+# offscreen on Mini1 (mbui's runner there, label mbui-render), against its reference (goldens/render/mini1-*.png) to
+# the byte, on the macOS and GPU the references were made on (goldens/render/mini1.txt). The pictures drawn are the
+# artifact: what a PR that changes them commits, saying which and why.
 name: render
 on:
   pull_request:
@@ -25,17 +25,23 @@ on:
       - "goldens/render/**"
   workflow_dispatch:
 
-env:
-  MOON_HOME: ${{ github.workspace }}/../.moon
+concurrency:
+  group: render-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   offscreen:
-    runs-on: macos-15
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Install MoonBit
+      - name: Install MoonBit (the latest, as the other jobs)
         run: |
+          export MOON_HOME=$RUNNER_TEMP/moon
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "MOON_HOME=$MOON_HOME" >> $GITHUB_ENV
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: A Tester's draw list drawn offscreen (scripts/render_offscreen.sh)
         run: scripts/render_offscreen.sh
@@ -44,19 +50,21 @@ jobs:
         with:
           name: render
           path: out/render/
-      - name: The runner's image the references were made on
+      - name: The macOS and the GPU the references were made on
         run: |
-          want=$(sed -n 's/^image //p' goldens/render/macos15.txt)
-          have="$ImageOS $ImageVersion"
-          if [ "$want" != "$have" ]; then
-            echo "the runner's image is $have, the references were made on $want: make them all again in one PR (this run's artifact), saying so"
-            exit 1
-          fi
+          for k in system gpu; do
+            want=$(sed -n "s/^$k //p" goldens/render/mini1.txt)
+            have=$(sed -n "s/^$k //p" out/render/machine.txt)
+            if [ "$want" != "$have" ]; then
+              echo "$k is $have here, the references were made on $want: make them all again in one PR (this run's artifact), saying so"
+              exit 1
+            fi
+          done
       - name: Against the references, to the byte
         run: |
-          if cmp -s out/render/controls.png goldens/render/macos15-controls.png; then
+          if cmp -s out/render/controls.png goldens/render/mini1-controls.png; then
             echo "the same to the byte"
           else
-            echo "goldens/render/macos15-controls.png: not what this runner draws now (this run's artifact has it)"
+            echo "goldens/render/mini1-controls.png: not what Mini1 draws now (this run's artifact has it)"
             exit 1
           fi
