@@ -200,3 +200,21 @@ test "shuffled: what may come at once in an order drawn from the seed, each ask'
   // and more than one order among them
   assert_true(orders.length() > 1)
 }
+
+///|
+test "an ask the run's timing made, dropped with what came for it" {
+  let r = @core.Replay::parse((
+    #|{"out":{"id":1,"subscribe":{"topic":"a"},"keyed":true}}
+    #|{"out":{"id":2,"call":"client.focus","params":{"end":false}}}
+    #|{"in":{"id":2,"ok":null},"w":10}
+    #|{"in":{"id":1,"value":1},"w":11}
+  ))
+  assert_eq(r.drop("\"end\":false"), 1)
+  let c = r.client()
+  let a = c.subscribe("a")
+  assert_eq(r.deliver(), 1)
+  assert_eq(a.value.map(fn(v) { v.stringify() }), Some("1"))
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade().length(), 0)
+  assert_eq(r.drop("nothing like this"), 0)
+}
