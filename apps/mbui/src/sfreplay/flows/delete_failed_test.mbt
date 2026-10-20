@@ -15,7 +15,7 @@ test "13-delete-failed" {
     f.see("未发送")
     f.tap("=删除")
     f.gone("这条没发出去就删掉 082947")
-    // its row fades out where it was (out_leave_ms)
+    // its row's leaving copy fades where it was (out_leave_ms: mbui has no rest to ask for a list's leaving copies)
     f.run_for(@sfapp.out_leave_ms)
     f.end()
   })

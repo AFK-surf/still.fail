@@ -8,8 +8,8 @@ test "02-home-new-chat" {
     f.see("端到端测试")
     f.see("另一台设备新建的对话 082947")
     f.see("=新对话里的回复 082947")
-    // its row grows in from where it came (Home's row_in_after_ms, then row_in_ms), the rows under it moved down meanwhile
-    f.run_for(@sfapp.row_in_after_ms + @sfapp.row_in_ms)
+    // its row grown in, the rows under it moved down: to the end of their motions, as each set out
+    f.run_to(@sfapp.home_rest())
     f.end()
   })
 }

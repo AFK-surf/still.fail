@@ -29,6 +29,9 @@ test "74-markdown" {
     f.see("=已复制链接")
     assert_true(f.t.clipboard().has_prefix("https://example.com/e2e/"))
     assert_true(f.t.opened().length() == 0)
-    f.end(unsettled_ok="mbui src/ui/sideways.mbt:79 横向滑动松手后的惯性自己要帧（mbui 的，没有声明的终点）")
+    // the code's sideways fling, the link's menu going, the toast coming: to their ends, as each set out
+    let rests = [f.t.rest_of("a fling"), f.t.rest_of("link-menu"), f.t.rest_of("presence/toast")]
+    f.run_to(rests.fold(init=-1.0, fn(a, b) { if b > a { b } else { a } }))
+    f.end()
   })
 }

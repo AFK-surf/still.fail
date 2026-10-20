@@ -483,7 +483,7 @@ fn Spr::ride_on(self : Spr, tension : Double, anchor : (Double) -> Double, still
   self.tension = tension
   self.friction = friction
   let c = @ui.current()
-  c.moving(c.mover_id(), r as &@ui.Moving)
+  c.moving(@ui.Mover::new(), r as &@ui.Moving, what="the ball's ride")
 }
 
 ///|

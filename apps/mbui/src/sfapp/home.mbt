@@ -204,7 +204,9 @@ fn home_page(
   // only the days and rows count (ListMotion.kt update): the list's first rows, after it waited, come as they are,
   // not growing in (nothing moves the first time)
   let moved = keys.filter(fn(k) { k.has_prefix("h/") || k.has_prefix("r/") })
-  let lid = @motion.list_keys(c, key, moved.map(fn(k) { key + "\u{1}" + k }), liftable=fn(k) { !k.contains("\u{1}h/") })
+  let row_keys = moved.map(fn(k) { key + "\u{1}" + k })
+  home_rows.val = row_keys
+  let lid = @motion.list_keys(c, key, row_keys, liftable=fn(k) { !k.contains("\u{1}h/") })
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     c.list(key, list.length(), 66.0, fn(i) {
       match list[i] {
@@ -449,11 +451,23 @@ fn item_key(it : Item) -> String {
 }
 
 ///|
-/// How long a row new to Home takes to grow in, and how long after it came it starts.
-pub let row_in_ms : Double = 240.0
+/// Home's rows and days' headings as last built, by their motion keys (home_rest).
+let home_rows : Ref[Array[String]] = Ref([])
 
 ///|
-pub let row_in_after_ms : Double = 100.0
+/// When Home's rows and headings are in their places and in (the frames' clock: the latest of their moves' and
+/// entrances' ends, @motion.layout_rest; -1 when all are at rest): what a test of the app over its pages
+/// (src/sfreplay) runs to at its end.
+pub fn home_rest() -> Double {
+  let mut e = -1.0
+  for k in home_rows.val {
+    let r = @motion.layout_rest(k)
+    if r > e {
+      e = r
+    }
+  }
+  e
+}
 
 ///|
 /// How a row or day's heading moves as the list changes (Home.kt Moving, Leaving): from where it was to where it is
@@ -466,7 +480,7 @@ fn moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit 
     i,
     list + "\u{1}" + key,
     spec=@motion.row_spring,
-    enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(row_in_ms, ease=Out, delay=row_in_after_ms)),
+    enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out, delay=100.0)),
     exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
   )
   if @motion.lifted(c, lid, list + "\u{1}" + key) >= 0.0 {
