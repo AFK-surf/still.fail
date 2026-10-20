@@ -890,7 +890,7 @@ let bar_radius : Double = 26.0
 let bar_side : Double = 6.0
 
 ///|
-let bar_foot : Double = 4.0
+let bar_foot : Double = 6.0
 
 ///|
 let key_size : Double = 40.0
