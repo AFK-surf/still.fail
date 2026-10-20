@@ -383,7 +383,12 @@ export const unix: Platform = {
     process.kill(pid, ({ handover: "SIGUSR2", drain: "SIGUSR1", hup: "SIGHUP" } as const)[op]);
   },
   claudeInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] },
-  devinInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://cli.devin.ai/install.sh | bash"] },
+  /// The Devin CLI's own installer, without the `devin setup` it ends with (a sign-in of the machine's own, which wants
+  /// a terminal: here it ends "Login canceled" and the install with it; a profile signs in itself).
+  devinInstall: {
+    program: "/bin/sh",
+    args: ["-c", `set -e; s=$(curl -fsSL https://cli.devin.ai/install.sh); printf '%s\\n' "$s" | sed -E '/^"[^"]*" setup[[:space:]]*$/d' | bash`],
+  },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",

@@ -461,10 +461,11 @@ export const windows: Platform = {
     program: "powershell",
     args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://claude.ai/install.ps1 | iex"],
   },
-  /// The Devin CLI's own installer on Windows, as its documentation gives it.
+  /// The Devin CLI's own installer on Windows, as its documentation gives it, without the `devin setup` it ends with (as
+  /// on macOS and Linux: a sign-in that wants a terminal).
   devinInstall: {
     program: "powershell",
-    args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "irm https://cli.devin.ai/install.ps1 | iex"],
+    args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", "$s = irm https://cli.devin.ai/install.ps1; iex ($s -replace '(?m)^\\s*&\\s*\\S+\\s+setup\\s*$', '')"],
   },
   installerExt: "ps1",
   startInstaller,

@@ -23,7 +23,7 @@ A folder of the session's own, `<profile home>/devin/station/<hash of the key>/`
 
 ## Installed
 
-By its own installer (`curl -fsSL https://cli.devin.ai/install.sh | bash`; on Windows its install.ps1), into `~/.local/bin/devin`, a link to `~/.local/share/devin/cli/_versions/<version>/bin/devin`. Its latest version is its manifest's (`https://static.devin.ai/cli/current/manifest.json`); updated with `devin update`.
+By its own installer (`curl -fsSL https://cli.devin.ai/install.sh | bash`; on Windows its install.ps1), into `~/.local/bin/devin`, a link to `~/.local/share/devin/cli/_versions/<version>/bin/devin`. Its latest version is its manifest's (`https://static.devin.ai/cli/current/manifest.json`); updated by running the installer again. The station runs the installer without its last line, `devin setup` (a sign-in of the machine's own that wants a terminal: without one it ends "Login canceled" and the install with it); `devin update` wants a terminal too (without one it ends at once, nothing done).
 
 ## History and usage
 
