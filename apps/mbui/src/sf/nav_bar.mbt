@@ -1,8 +1,10 @@
 // A page's compact bar, the one every pushed page of the phone has (Android Parts.kt NavBar, web mobile/parts.css.ts
 // mNavbar): back with where it goes, in the accent, at its start; a centred title (and a line under it, `sub`); what
-// it does at its end. The back word and what is at the end share one 32 line at the bar's top, the title's first line
-// set in it 1 higher (30, standing on the back word's baseline); a title's second line hangs below it, the bar taller
-// by it. The title is in the middle of the bar inside its padding (10 at the start, 16 at the end) and keeps 84 clear
+// it does at its end. The back word, the title's first line and what is at the end share one 32 line at the bar's top,
+// each in its middle; a title's second line hangs below it, the bar taller by it. (NavBar sets the title's line 30, 1
+// higher, to stand on the back word's baseline, with 2 under it: on the Mac's text its letters then stood 1 over the
+// back word's. Here the title's line is the 32 and nothing under it: the line under the title and the bar's height
+// are NavBar's.) The title is in the middle of the bar inside its padding (10 at the start, 16 at the end) and keeps 84 clear
 // at either side.
 
 ///|
@@ -55,11 +57,10 @@ pub fn nav_bar(
     c.box(w=Fill(1.0), align=ACenter, fn() {
       // the title, in the flow: as tall as its lines make the bar
       c.box(pl=84.0, pr=84.0, align=ACenter, fn() {
-        c.box(h=Px(30.0), justify=JCenter, clip=true, fn() {
+        c.box(h=Px(32.0), justify=JCenter, clip=true, fn() {
           c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false) |> ignore
         })
         |> ignore
-        c.box(h=Px(2.0), fn() {  }) |> ignore
         match sub {
           Some(f) => c.box(dir=Row, ty=-4.0, gap=5.0, align=ACenter, fn() { f() }) |> ignore
           None => ()
