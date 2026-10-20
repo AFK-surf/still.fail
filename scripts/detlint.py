@@ -35,6 +35,11 @@ The rules (see RULES below for each one's words):
                    bytes) outside the host that provides them
     poll           a frame or a wake asked for under a condition that reads the host or the layout (a frame each
                    until it says yes): the host's answer, or the layout, is an event
+    builtin-hash   a value made from MoonBit's own hash (x.hash(), Hash::hash, an `impl Hash` of one's own): it is seeded
+                   anew in each process and differs between js and native; @ui.stable_hash (FNV-1a) is the same
+                   everywhere. A Map's own keys are not this: only a hash taken out as data
+    hash-order     a @hashmap / @hashset: gone through, its order is its hash's, the process's; a Map (in the order
+                   put) or a sorted list
     host-read      the app reads where it runs from @host (now, wake_after, platform, system_dark, window_inset, env),
                    not through @ui, which a Tester answers
     globals        a mutable global (a top-level let of a Ref, Map, Array or struct) that its package's reset (reset,
@@ -532,6 +537,9 @@ RULES = {
     "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
     "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
     "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
+    "builtin-hash": "a value made from MoonBit's own hash (seeded anew in each process, not the same on js and "
+                    "native): @ui.stable_hash",
+    "hash-order": "a @hashmap / @hashset, its order the process's hash's: a Map (in the order put), or sort it",
     "globals": "a mutable global its package's reset does not put back, nor says `// kept across runs: why`",
     "style-literal": "a number where a style is said (a box's or words' look, @ui.style…), or an Exact(…) outside "
                      "the token files: name it with a token (docs/style.md)",
@@ -669,6 +677,10 @@ def lint_mbt(f, cfg, out, returns, readers):
                 if q and not (timed and q.split(" ")[-1] == "pressed"):
                     add("poll", c.at, f"{line_text}   (under: {q})")
                     break
+        # 8. MoonBit's own hash taken out as a value (x.hash(), Hash::hash(x)): seeded per process
+        if c.name == "hash" and not test and ((c.kind == "method" and not c.args) or (c.kind == "type" and
+                                                                                     c.qual == "Hash")):
+            add("builtin-hash", c.at, line_text)
         # 7a. @host's reads in the app
         if c.kind == "pkg" and c.qual == "@host" and c.name in HOST_READS and app and not test:
             add("host-read", c.at, line_text)
@@ -684,6 +696,16 @@ def lint_mbt(f, cfg, out, returns, readers):
                     j += 1
                 if j < len(toks) and toks[j].text == "(" and toks[j].end == j + 1:
                     add("wall-clock", k, f.lines[t.line - 1].strip())
+    # an `impl Hash for T` of one's own (its hash a value of the process's seed), and the hashed collections (their
+    # order the process's)
+    for k, t in enumerate(toks):
+        if f.in_test(k):
+            continue
+        if t.kind == "ident" and t.text == "impl" and k + 2 < len(toks) and toks[k + 1].text == "Hash" and \
+                toks[k + 2].text == "for":
+            add("builtin-hash", k, f.lines[t.line - 1].strip())
+        if t.kind == "at" and t.text in ("@hashmap", "@hashset"):
+            add("hash-order", k, f.lines[t.line - 1].strip())
     # 3. a fixed count of frames in a test
     for k, t in enumerate(toks):
         if t.kind == "ident" and t.text == "for" and f.in_test(k):

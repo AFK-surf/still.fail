@@ -256,7 +256,7 @@ fn hash_mix(a : Int, b : Int) -> Int {
 /// A motion key: the same string is the same thing wherever it is built (a row moving from one index of its list to
 /// another keeps its key).
 fn motion_key(key : String) -> Int {
-  hash_mix(0x6d6f7469, key.hash())
+  hash_mix(0x6d6f7469, @ui.stable_hash(key).to_int())
 }
 
 ///|

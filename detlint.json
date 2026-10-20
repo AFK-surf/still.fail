@@ -129,6 +129,8 @@
     "host-read": {
       "src/textdiff/main.mbt": 1
     },
+    "builtin-hash": {},
+    "hash-order": {},
     "globals": {
       "src/kit/form.mbt": 1,
       "src/kit/time.mbt": 1,
@@ -244,6 +246,8 @@
     "wall-clock": {},
     "poll": {},
     "host-read": {},
+    "builtin-hash": {},
+    "hash-order": {},
     "globals": {},
     "style-literal": {},
     "box-loose": {},

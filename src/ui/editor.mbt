@@ -460,7 +460,7 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
           let x = st.ox + cx
           let y = st.oy + cl.to_double() * tl.line_h
           let (a, b) = st.sel()
-          let sig = "\{x.to_int()},\{y.to_int()},\{a},\{b},\{st.text.length()},\{st.text.hash()}"
+          let sig = "\{x.to_int()},\{y.to_int()},\{a},\{b},\{st.text.length()},\{stable_hash(st.text)}"
           if sig != self.ime_sig {
             self.ime_sig = sig
             h_set_ime(true, x, y, 2.0, tl.line_h, st.text, a, b)

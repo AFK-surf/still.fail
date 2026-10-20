@@ -25,10 +25,7 @@ fn HostRec::new() -> HostRec {
 ///|
 /// Bytes as one number (FNV-1a, 64 bits), in hex: what names a picture or a PDF handed over by its bytes.
 fn bytes_name(data : Bytes) -> String {
-  let mut h = -3750763034362895579L
-  for b in data {
-    h = (h ^ b.to_int64()) * 1099511628211L
-  }
+  let h = stable_hash_bytes(data)
   let hex = "0123456789abcdef"
   let sb = StringBuilder()
   for k in 0..<16 {

@@ -470,6 +470,24 @@ class Retired(unittest.TestCase):
         found(self, good, "retired-api", 0)
 
 
+    def test_builtin_hash_taken_out_as_a_value(self):
+        bad = {"src/app/upload.mbt": "fn upload_id(name : String) -> Int {\n  name.hash() + Hash::hash(name)\n}\n"
+                                     "impl Hash for Seed with hash_combine(self, h) {\n  ()\n}\n"}
+        found(self, bad, "builtin-hash", 3)
+        # the stable one; a Map's keys; a test comparing two
+        good = {"src/app/upload.mbt": "fn upload_id(name : String) -> Int64 {\n  @ui.stable_hash(name)\n}\n"
+                                      "fn kept(m : Map[String, Int], k : String) -> Int? {\n  m.get(k)\n}\n",
+                "src/app/upload_test.mbt": "test \"same\" {\n  assert_eq(a.hash(), a.hash())\n}\n"}
+        found(self, good, "builtin-hash", 0)
+
+    def test_hashed_collections_order_by_the_process(self):
+        bad = {"src/app/rows.mbt": "fn rows() -> Unit {\n  let seen = @hashset.HashSet::new()\n"
+                                   "  let by = @hashmap.HashMap::new()\n}\n"}
+        found(self, bad, "hash-order", 2)
+        good = {"src/app/rows.mbt": "fn rows() -> Unit {\n  let by : Map[String, Int] = {}\n}\n"}
+        found(self, good, "hash-order", 0)
+
+
 class Bar(unittest.TestCase):
     FILES = {"src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  c.request_frame()\n  c.request_frame()\n}\n"}
 

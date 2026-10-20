@@ -400,7 +400,7 @@ fn mix(a : Int, b : Int) -> Int {
 ///|
 /// A widget id from a key, unique within the current scope.
 pub fn Ctx::id(self : Ctx, key : String) -> Int {
-  mix(self.id_seed, key.hash())
+  mix(self.id_seed, stable_hash(key).to_int())
 }
 
 ///|
