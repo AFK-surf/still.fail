@@ -1,7 +1,8 @@
 // What the system's media and sharing do for the app (as @host's views, share-in and marks have them), through the
 // framework, so that under a Tester they are the test's: a player's reads of the app's bytes and its state
-// (Tester::view_reads, set_player), what another app shares in (Tester::share_in), the marks drawn onto an image
-// (Tester::marks_drawn), each at the next frame, as a host's event comes at a frame's boundary.
+// (Tester::view_reads, set_player), what another app shares in (Tester::share_in) and what the app shares out
+// (Tester::shared_out), the marks drawn onto an image (Tester::marks_drawn), each at the next frame, as a host's event
+// comes at a frame's boundary.
 
 ///|
 /// A player's ask for the app's bytes (view_read_next): `length` from `offset`.
@@ -243,4 +244,23 @@ pub fn MarkedImage::made(self : MarkedImage) -> Bytes? {
 /// The marks the app had drawn onto images (draw_marks' JSON), oldest first.
 pub fn Tester::marks_drawn(self : Tester) -> Array[String] {
   self.fake.marks.map(fn(m) { m.0 })
+}
+
+///|
+/// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet
+/// (@host.share): false where there is none. Under a Tester the sheet takes it, kept for the test (Tester::shared_out).
+pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
+  match fake.val {
+    Some(f) => {
+      f.shares.push((text, name, mime, data))
+      true
+    }
+    None => @host.share(text, name, mime, data)
+  }
+}
+
+///|
+/// What the app handed to the system's share sheet, oldest first: (its words, a file's name, its kind, its bytes).
+pub fn Tester::shared_out(self : Tester) -> Array[(String, String, String, Bytes)] {
+  self.fake.shares
 }

@@ -205,3 +205,11 @@ test "marks drawn onto an image are kept for the test, a PNG made by the next fr
     None => fail("no PNG made")
   }
 }
+
+///|
+test "what the app shares out is handed to the system's sheet, kept for the test" {
+  let t = @ui.Tester::new(fn(c) { c.text("share", wrap=false) |> ignore })
+  assert_eq(@ui.share("", "a.png", "image/png", b"\x89PNG"), true)
+  assert_eq(@ui.share("a link: https://example.test", "", "", b""), true)
+  assert_eq(t.shared_out(), [("", "a.png", "image/png", b"\x89PNG"), ("a link: https://example.test", "", "", b"")])
+}

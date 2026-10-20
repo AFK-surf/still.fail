@@ -179,6 +179,7 @@ pub fn Tester::new(
     share: None,
     share_files: [],
     marks: [],
+    shares: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -1125,6 +1126,49 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
     }
   }
   None
+}
+
+///|
+/// How the node keyed `what` (its id's key, as built: c.id(what)), else the first text node containing `what`, was
+/// drawn in the last frame over how it is laid out: its scale across and down and its opacity, its own look's and all
+/// its ancestors' together (a card shrunk to 90% as it goes: (0.9, 0.9, 1.0)). None when there is no such node.
+pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
+  ignore(self)
+  let c = g()
+  let id = c.id(what)
+  let mut found = -1
+  for i in 0..<c.count {
+    if c.nodes[i].id == id {
+      found = i
+      break
+    }
+  }
+  if found < 0 {
+    for i in 0..<c.count {
+      let n = c.nodes[i]
+      if (n.kind == kind_text || n.kind == kind_rich) && n.text.contains(what) {
+        found = i
+        break
+      }
+    }
+  }
+  guard found >= 0 else { return None }
+  let mut sx = 1.0
+  let mut sy = 1.0
+  let mut alpha = 1.0
+  let mut p = found
+  while p >= 0 {
+    match c.drawn_entry(p) {
+      Some(e) => {
+        sx = sx * e.look.sx
+        sy = sy * e.look.sy
+        alpha = alpha * e.look.alpha
+      }
+      None => ()
+    }
+    p = c.nodes[p].parent
+  }
+  Some((sx, sy, alpha))
 }
 
 ///|

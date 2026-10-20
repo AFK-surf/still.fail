@@ -326,3 +326,25 @@ test "the system's say on notifications is the test's: refused, the app's ask an
   assert_eq(answers, [false])
   assert_true(t.find("unknown") is Some(_))
 }
+
+///|
+test "how a node is drawn over its layout: its scale and opacity, with what holds it" {
+  let shrink = Ref::new(1.0)
+  let down = Ref::new(1.0)
+  let t = @ui.Tester::new(fn(c) {
+    let card = c.box(w=Px(200.0), h=Px(80.0), id=c.id("card"), fn() { c.text("a card", wrap=false) |> ignore })
+    c.look(card, @ui.look(scale=shrink.val, sy=down.val * shrink.val, alpha=0.5))
+  })
+  assert_eq(t.look_of("card"), Some((1.0, 1.0, 0.5)))
+  shrink.val = 0.9
+  t.draw()
+  // the card's, and its words' (held by it)
+  assert_eq(t.look_of("card"), Some((0.9, 0.9, 0.5)))
+  assert_eq(t.look_of("a card"), Some((0.9, 0.9, 0.5)))
+  // shrunk down only: across as it was
+  shrink.val = 1.0
+  down.val = 0.85
+  t.draw()
+  assert_eq(t.look_of("card"), Some((1.0, 0.85, 0.5)))
+  assert_eq(t.look_of("nothing of that name"), None)
+}
