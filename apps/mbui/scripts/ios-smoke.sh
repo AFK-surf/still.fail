@@ -126,6 +126,19 @@ case "${1:-}" in
     [ "$st" = Booted ] || touch "$STATE/booted-here"
     echo "ios-smoke: $MBUI_IOS_DEVICE is this run's ($ME): ${st:-to be made}" ;;
   boot)
+    # SIM_DATA (CI): the simulator made here as mbui's scripts/ios.sh makes it, its data an earlier run's when that one's
+    # was of the same runtime and device: its first boot's work (the data's migration, every widget's and service's
+    # first run) done, a 3-core runner's load in the hundreds for minutes otherwise (2026-10-21)
+    if [ -n "${SIM_DATA:-}" ] && [ -z "$(device)" ]; then
+      rt=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']];print(r[-1]['identifier'])")
+      dt=$(xcrun simctl list devicetypes -j | python3 -c "import json,sys;t=[x for x in json.load(sys.stdin)['devicetypes'] if x['name'].startswith('iPhone 1') and 'Pro' in x['name'] and 'Max' not in x['name']];print(t[-1]['identifier'])")
+      id=$(xcrun simctl create "$MBUI_IOS_DEVICE" "$dt" "$rt") || exit 1
+      echo "$rt $dt" > "$STATE/sim-kind"
+      if [ -d "$SIM_DATA/data" ] && [ "$(cat "$SIM_DATA/kind" 2>/dev/null)" = "$rt $dt" ]; then
+        dir=$HOME/Library/Developer/CoreSimulator/Devices/$id
+        rm -rf "$dir/data" && mv "$SIM_DATA/data" "$dir/data" && echo "ios-smoke: $MBUI_IOS_DEVICE with an earlier run's data ($(du -sh "$dir/data" | cut -f1))"
+      fi
+    fi
     bash "$D/ios.sh" device > "$STATE/boot.log" 2>&1 &
     echo $! > "$STATE/boot.pid"
     echo "ios-smoke: $MBUI_IOS_DEVICE booting ($STATE/boot.log)" ;;
@@ -159,8 +172,15 @@ case "${1:-}" in
   done)
     read -r id st <<< "$(device)"
     if [ -f "$STATE/booted-here" ] && [ -n "$id" ]; then
+      [ -z "${SIM_SAVE:-}" ] || xcrun simctl uninstall "$id" fail.still.mbui.debug 2>/dev/null || true
       xcrun simctl shutdown "$id" 2>/dev/null || true
       echo "ios-smoke: $MBUI_IOS_DEVICE ($id) shut down"
+      # (SIM_SAVE: its data kept for the next run's `boot`, the app gone from it; a copy by APFS's clone)
+      if [ -n "${SIM_SAVE:-}" ] && [ -n "${SIM_DATA:-}" ] && [ -f "$STATE/sim-kind" ]; then
+        rm -rf "$SIM_DATA" && mkdir -p "$SIM_DATA" && cp -cR "$HOME/Library/Developer/CoreSimulator/Devices/$id/data" "$SIM_DATA/data" \
+          && cp "$STATE/sim-kind" "$SIM_DATA/kind" && echo "ios-smoke: its data kept ($(du -sh "$SIM_DATA" | cut -f1))" \
+          && { [ -z "${GITHUB_ENV:-}" ] || echo SIM_KEPT=1 >> "$GITHUB_ENV"; }
+      fi
     fi
     rm -f "$STATE/booted-here"
     [ "$(head -1 "$LOCK/owner" 2>/dev/null)" = "$ME" ] && rm -rf "$LOCK" && echo "ios-smoke: the simulator's lock given back"
