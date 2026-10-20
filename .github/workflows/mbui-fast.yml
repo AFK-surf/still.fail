@@ -67,7 +67,8 @@ jobs:
           python3 - build/reports/profile/*.html <<'PY'
           import re, sys, html
           t = open(sys.argv[1]).read()
-          rows = re.findall(r'<td>(:[^<]+)</td>\s*<td class="numeric">([0-9.]+)s</td>\s*<td>([^<]*)</td>', t)
+          rows = re.findall(r'<td>(:[\w:]+)</td>\s*<td[^>]*>([0-9.]+)s</td>\s*<td[^>]*>([^<]*)</td>', t)
+          if not rows: print(re.sub(r'\s+', ' ', t[t.find('Task Execution'):][:3000]))
           rows.sort(key=lambda r: -float(r[1]))
           for task, s, res in rows[:15]:
               print(f'{float(s):6.2f} s  {task}  {res}')
@@ -116,3 +117,45 @@ jobs:
           L=$RUNNER_TEMP/build.log
           EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build > $L 2>&1 || { grep -av '│\|Warning\|╭\|╰\|warning:' $L | tail -60; exit 1; }
           grep -a '^mac-app.sh\|^mac.sh\|^core\|compiled (\|units in\|Finished\|cargo\|Compiling stillfail' $L | cut -c1-240 | tail -20
+
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          echo "MOON_HOME=$HOME/.moon" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/.ci/mbc-store
+            ${{ github.workspace }}/.ci/hbc
+          key: mbui-fast-ios-${{ github.sha }}
+          restore-keys: mbui-fast-ios-
+      - name: mbui with a device's build (zzj3720/mbui ios-device)
+        run: |
+          git clone -q --depth 1 -b ios-device https://github.com/zzj3720/mbui.git "$RUNNER_TEMP/mbui"
+          echo "MBUI=$RUNNER_TEMP/mbui" >> $GITHUB_ENV
+      - name: The core's packages
+        run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
+      - name: Rust (the core's shell, for a device)
+        run: rustup target add aarch64-apple-ios
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mbui/out/core
+            ~/Library/Caches/stillfail-build
+          key: mbui-core-ios-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/core/**') }}
+      - name: The iOS app for a device (unsigned), as an .ipa
+        run: |
+          L=$RUNNER_TEMP/build.log
+          t0=$SECONDS
+          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build > $L 2>&1 || { grep -av '│\|Warning\|╭\|╰\|warning:' $L | tail -60; exit 1; }
+          grep -a '^built\|compiled (\|units in\|^the core\|^engine\|^hermes' $L | cut -c1-240 | tail -12
+          cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/ && zip -qry stillfail-mbui.ipa Payload
+          ls -la stillfail-mbui.ipa; echo "ipa in $((SECONDS - t0)) s"
