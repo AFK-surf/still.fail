@@ -17,7 +17,8 @@ fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
   }
   open_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.settle(unsettled_ok=true) |> ignore
+  // the pages opened slid in
+  t.run_for(@ui.nav_push_ms)
   t
 }
 
@@ -33,12 +34,12 @@ test "an option tapped in the chat answers its card (decision.answer)" {
     t.wheel(195.0, 400.0, -300.0)
   }
   t.tap_text("把首页和聊天页的截图都更新")
-  t.settle() |> ignore
   let made = named(calls, "decision.answer")
   assert_eq(made.length(), 1)
   assert_eq(text(Some(made[0].params), "option"), "一起换")
   assert_eq(number(Some(made[0].params), "seq"), 8.0)
   assert_eq(number(Some(made[0].params), "thread"), 7.0)
+  t.assert_idle()
 }
 
 ///|
@@ -53,9 +54,10 @@ test "忽略 lets the ask go (decision.dismiss), gone at once" {
     t.wheel(195.0, 400.0, -300.0)
   }
   t.tap_text("忽略")
-  t.settle() |> ignore
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  assert_true(t.find("忽略") is None)
+  // let go at once (what it showed only drawn as it closes up)
+  assert_eq(dui.gone.length(), 1)
+  // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
 }
 
 ///|
@@ -63,17 +65,17 @@ test "归档此对话 archives the chat and goes home; 保留 keeps it" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat")
   t.tap_text("保留")
-  t.settle() |> ignore
   let kept = named(calls, "chat.keep")
   assert_eq(kept.length(), 1)
   assert_eq(number(Some(kept[0].params), "thread"), 7.0)
   t.tap_text("归档此对话")
-  t.settle(unsettled_ok=true) |> ignore
   let archived = named(calls, "chat.archive")
   assert_eq(archived.length(), 1)
   assert_eq(text(Some(archived[0].params), "session"), "s-c1")
   assert_true(flag(Some(archived[0].params), "archived"))
   assert_eq(app.nav.depth(), 1)
+  t.run_for(@ui.nav_push_ms)
+  // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
 }
 
 ///|
@@ -83,16 +85,14 @@ test "the chat's own sheet: its agents, pinning it, and on to the agent's card a
   assert_true(t.find("复制会话链接") is Some(_))
   assert_true(t.find("Claude · Opus 5.5") is Some(_))
   t.tap_text("固定到列表顶部")
-  t.settle() |> ignore
   let pinned = named(calls, "chat.pin")
   assert_eq(pinned.length(), 1)
   assert_true(flag(Some(pinned[0].params), "pinned"))
   t.tap_text("Claude · Opus 5.5")
-  t.settle() |> ignore
   assert_true(t.find("费用估算") is Some(_))
   assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
   t.tap_text("8 轮 · 共干了 1 小时 12 分")
-  t.settle() |> ignore
+  t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
     History(r, key) => {
       assert_eq(r.session, "s-c1")
@@ -101,6 +101,7 @@ test "the chat's own sheet: its agents, pinning it, and on to the agent's card a
     _ => fail("not the history")
   }
   assert_true(t.find("执行历史") is Some(_))
+  // (not idle yet: the chat's sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
 }
 
 ///|
@@ -112,12 +113,11 @@ test "the history: a group opens to its steps, a step to its call and what came 
   assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
   // a step closed again
   t.tap_text("跑一遍列表的测试")
-  t.settle() |> ignore
   assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
   t.tap_text("详情")
-  t.settle() |> ignore
   assert_true(t.find("Claude Code 2.1.3") is Some(_))
   assert_true(t.find("Mac Studio · macOS 26 · M2 Max") is Some(_))
+  t.assert_idle()
 }
 
 ///|
@@ -127,16 +127,14 @@ test "the 奏 page: an option answers the card in front, the next comes in" {
   assert_true(t.find("1 / 2") is Some(_))
   assert_true(t.find("整理发布清单") is Some(_))
   t.tap_text("把首页和聊天页的截图都更新")
-  for _ in 0..<40 {
-    t.frame(ms=16.0)
-  }
-  t.settle() |> ignore
+  // answered at once, out of the deck: the text card in front now (the answered one only drawn going up)
   let made = named(calls, "decision.answer")
   assert_eq(made.length(), 1)
   assert_eq(text(Some(made[0].params), "option"), "一起换")
-  // the text card in front now
   assert_true(t.find("1 / 1") is Some(_))
   assert_true(t.find("第 4 个：支付的测试") is Some(_))
+  t.run_for(card_up_ms)
+  t.assert_idle()
 }
 
 ///|
@@ -148,12 +146,13 @@ test "the 奏 page: swiped right, a decision is dismissed; none left, the day so
   let calls2 : Array[Made] = []
   let t2 = decide_core(calls2, "decisions")
   t2.drag(100.0, 400.0, 360.0, 400.0)
-  for _ in 0..<40 {
-    t2.frame(ms=16.0)
-  }
-  t2.settle() |> ignore
+  // let go: dismissed at once, the next in front
+  t2.draw()
   assert_eq(named(calls2, "decision.dismiss").length(), 1)
+  assert_eq(named(calls2, "decision.answer").length(), 0)
   assert_true(t2.find("1 / 1") is Some(_))
+  t2.run_for(card_off_ms)
+  t2.assert_idle()
 }
 
 ///|
