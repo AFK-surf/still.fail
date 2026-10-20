@@ -162,6 +162,10 @@ class Split(unittest.TestCase):
 
                 #define _M0FP11b3ffi b_real
 
+                #ifndef Moonbit_unused
+                #define Moonbit_unused _M0FP11c3zzz
+                #endif
+
                 int32_t b_real(int32_t);
 
                 {extra}
@@ -214,6 +218,10 @@ class Split(unittest.TestCase):
         self.assertIn('int32_t x;', apart['a.c'])
         self.assertNotIn('int32_t y;', apart['a.c'])
         self.assertIn('int32_t b_real(int32_t);', apart['s0.c'])  # what an FFI name stands for
+        # a directive group in the units that use what it defines only (the test driver's FFI name is each program's)
+        self.assertIn('#define _M0FP11b3ffi b_real', apart['s0.c'])
+        self.assertNotIn('#define _M0FP11b3ffi', apart['a.c'])
+        self.assertNotIn('Moonbit_unused', apart['a.c'] + apart['s0.c'])
 
     def test_by_content_apart(self):
         """String literals and layouts named by their content: two contents whose hashes are the same named apart,
@@ -356,6 +364,45 @@ class Kept(unittest.TestCase):
             self.assertEqual(compiled('-O2'), (0, total))
             wrapper('two')
             self.assertEqual(compiled('-O2'), (total, total))  # the compiler (its wrapper here)
+
+
+@unittest.skipUnless(CC, 'no C compiler')
+class Store(unittest.TestCase):
+    def test_shared_between_programs(self):
+        """MBC_STORE: the same unit of another program (the same text, command and compiler) taken, not compiled; a
+        header it includes changed, compiled."""
+        with tempfile.TemporaryDirectory() as t:
+            with open(os.path.join(t, 'h.h'), 'w') as f:
+                f.write('#define H 1\n')
+            with open(os.path.join(t, 'p.c'), 'w') as f:
+                f.write(SRC)
+            extra = os.path.join(t, 'x.c')
+            with open(extra, 'w') as f:
+                f.write('#include "h.h"\nint x_value(void) { return H; }\n')
+            env = dict(os.environ, MBC_STORE=os.path.join(t, 'store'))
+
+            def compiled(objdir):
+                p = subprocess.run([sys.executable, os.path.join(HERE, 'mbc.py'), 'compile', '--cc', CC, '--cflags=-O1',
+                                    '--extra', extra, '--obj', os.path.join(t, objdir), os.path.join(t, 'p.c')],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+                self.assertEqual(p.returncode, 0, p.stderr.decode())
+                m = re.search(r'(\d+) of (\d+) compiled', p.stderr.decode())
+                return int(m.group(1)), int(m.group(2))
+            n, total = compiled('a')
+            self.assertEqual(n, total)
+            self.assertEqual(compiled('b'), (0, total))  # another program's objects: all from the store
+            with open(os.path.join(t, 'h.h'), 'w') as f:
+                f.write('#define H 2\n')
+            self.assertEqual(compiled('c'), (1, total))  # x.c's header changed: x.c compiled
+            # two programs at once (moon builds them side by side): each unit compiled by one of them
+            env['MBC_STORE'] = os.path.join(t, 'store2')
+            cmd = lambda objdir: [sys.executable, os.path.join(HERE, 'mbc.py'), 'compile', '--cc', CC, '--cflags=-O1',
+                                  '--extra', extra, '--obj', os.path.join(t, objdir), os.path.join(t, 'p.c')]
+            ps = [subprocess.Popen(cmd(o), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env) for o in ('d', 'e')]
+            done = [p.communicate()[1].decode() for p in ps]
+            self.assertTrue(all(p.returncode == 0 for p in ps), done)
+            n = sum(int(re.search(r'(\d+) of \d+ compiled', e).group(1)) for e in done)
+            self.assertEqual(n, total)
 
 
 @unittest.skipUnless(CC and shutil.which('moon'), 'no moon or C compiler')

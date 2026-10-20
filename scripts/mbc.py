@@ -286,6 +286,7 @@ class Job:
         self.cc = list(cc) if cc else argv[:1]
         self.secs = 0.0
         self.cached = False
+        self.shared = False
         self.ok = True
         self.err = ''
 
@@ -305,6 +306,52 @@ class Job:
         except OSError:
             return False
 
+    def write_stamp(self, deps):
+        try:
+            with open(self.stamp(), 'w', encoding='utf-8') as f:
+                json.dump({'argv': self.argv, 'cc': tool_identity(self.cc), 'deps': {d: file_hash(d) for d in deps}}, f)
+        except OSError:
+            pass
+
+    def store_key(self):
+        """The object's key in MBC_STORE: its command (but for where it reads and writes), its compiler and its
+        source's content."""
+        argv = [{self.src: '<src>', self.obj: '<obj>', self.depfile: '<dep>'}.get(x, x) for x in self.argv]
+        return hashlib.sha1('\0'.join(argv + [tool_identity(self.cc), file_hash(self.src)])
+                            .encode('utf-8', 'surrogateescape')).hexdigest()
+
+    def from_store(self, store):
+        """The object another program's unit of the same text, command and compiler made, when what else it read
+        (every header its depfile named, by content) is as it was."""
+        d = os.path.join(store, self.store_key()[:2], self.store_key())
+        try:
+            with open(os.path.join(d, 'deps.json'), encoding='utf-8') as f:
+                deps = json.load(f)
+            if not all(file_hash(p) == h for p, h in deps.items()):
+                return False
+            tmp = self.obj + '.tmp'
+            shutil.copyfile(os.path.join(d, 'obj'), tmp)
+            os.replace(tmp, self.obj)
+            os.utime(d)  # (used: what a store keeps is what was used since a time, mbc_test / CI's prune)
+        except (OSError, ValueError):
+            return False
+        self.write_stamp([self.src] + list(deps))
+        return True
+
+    def to_store(self, store, deps):
+        d = os.path.join(store, self.store_key()[:2], self.store_key())
+        tmp = f'{d}.tmp{os.getpid()}.{id(self)}'
+        try:
+            os.makedirs(tmp, exist_ok=True)
+            shutil.copyfile(self.obj, os.path.join(tmp, 'obj'))
+            with open(os.path.join(tmp, 'deps.json'), 'w', encoding='utf-8') as f:
+                json.dump({p: file_hash(p) for p in deps if os.path.abspath(p) != os.path.abspath(self.src)}, f)
+            if os.path.isdir(d):
+                shutil.rmtree(d, ignore_errors=True)
+            os.replace(tmp, d)
+        except OSError:
+            shutil.rmtree(tmp, ignore_errors=True)
+
     def run(self):
         if self.up_to_date():
             self.cached = True
@@ -313,6 +360,34 @@ class Job:
             os.remove(self.stamp())
         except OSError:
             pass
+        # MBC_STORE: objects by what they are made of, shared by every program built with it (a package's unit is
+        # the same text in each of a module's tests that has the same of its functions)
+        store = os.environ.get('MBC_STORE')
+        if store and self.from_store(store):
+            self.cached = self.shared = True
+            return self
+        if not store:
+            return self.compile(store)
+        # another program compiling the same unit at the same time (moon builds a module's tests side by side): its
+        # object waited for, not made again. A lock the system lets go when its holder ends however it ends (flock):
+        # the wait is for that, no time (detlint's script-wait)
+        d = os.path.join(store, self.store_key()[:2], self.store_key())
+        os.makedirs(os.path.dirname(d), exist_ok=True)
+        try:
+            import fcntl
+        except ImportError:  # (Windows: no flock; each compiles its own)
+            return self.compile(store)
+        with open(d + '.lock', 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                if self.from_store(store):
+                    self.cached = self.shared = True
+                    return self
+                return self.compile(store)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+
+    def compile(self, store):
         t0 = time.time()
         p = subprocess.run(self.argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.secs = time.time() - t0
@@ -322,11 +397,9 @@ class Job:
             deps = [self.src]
             if self.depfile and os.path.exists(self.depfile):
                 deps = depfile_paths(self.depfile)
-            try:
-                with open(self.stamp(), 'w', encoding='utf-8') as f:
-                    json.dump({'argv': self.argv, 'cc': tool_identity(self.cc), 'deps': {d: file_hash(d) for d in deps}}, f)
-            except OSError:
-                pass
+            self.write_stamp(deps)
+            if store:
+                self.to_store(store, deps)
         return self
 
 
@@ -353,8 +426,10 @@ def run_jobs(jobs, j, label):
             sys.stderr.write(x.err)
             log(f'{x.src} did not compile: ' + ' '.join(shlex.quote(w) for w in x.argv))
     built = [x for x in jobs if not x.cached]
+    shared = sum(1 for x in jobs if x.shared)
     slow = sorted(built, key=lambda x: -x.secs)[:3]
-    log(f'{label}: {len(built)} of {len(jobs)} compiled ({len(jobs) - len(built)} up to date) in {wall:.1f} s on '
+    log(f'{label}: {len(built)} of {len(jobs)} compiled ({len(jobs) - len(built)} up to date'
+        f'{", " + str(shared) + " of them from MBC_STORE" if shared else ""}) in {wall:.1f} s on '
         f'{j} jobs' + (('; slowest ' + ', '.join(f'{os.path.basename(x.src)} {x.secs:.1f} s' for x in slow)) if slow else ''))
     if bad:
         sys.exit(1)

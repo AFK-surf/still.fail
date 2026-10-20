@@ -619,6 +619,30 @@ def rename(text, names, local_ok=None, scan=None):
     return (scan or SCAN).sub(sub, text), used
 
 
+def flatten(text):
+    """A function's text with its lines as moonc broke them joined (a directive and what ends in a // comment keep
+    theirs): moonc breaks a line by its length, which its made-up names' lengths changed, so that one function came
+    out differently from one program to the next."""
+    out, cur = [], []
+    for line in text.split('\n'):
+        st = line.strip()
+        if not st:
+            continue
+        if st.startswith('#'):
+            if cur:
+                out.append(' '.join(cur))
+                cur = []
+            out.append(st)
+            continue
+        cur.append(st)
+        if '//' in st or st.endswith('\\'):
+            out.append(' '.join(cur))
+            cur = []
+    if cur:
+        out.append(' '.join(cur))
+    return '\n'.join(out) + '\n'
+
+
 def unit_label(pkg):
     return re.sub(r'[^A-Za-z0-9]+', '_', pkg).strip('_') or 'main'
 
@@ -696,6 +720,29 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     for k, (_, declares, _, _) in enumerate(ditems):
         for n in declares:
             by_name.setdefault(n, []).append(('d', k))
+    # moonc's directives in groups (an #ifndef X … #define X Y … #endif, or a #define alone), a unit taking a group
+    # when it uses a name the group defines (an FFI name: the test driver's is each test program's own, and in every
+    # unit it made every unit each program's); a group defining nothing, in every unit
+    always_pp = set()
+    group, depth = [], 0
+    for k, (kind, _) in enumerate(decl_kinds):
+        if kind != 'pp':
+            continue
+        d = ditems[k][0].strip()
+        group.append(k)
+        if re.match(r'#\s*(if|ifdef|ifndef)\b', d):
+            depth += 1
+        elif re.match(r'#\s*endif\b', d):
+            depth -= 1
+        if depth == 0:
+            defined = {m.group(1) for j in group for m in [re.match(r'#\s*define\s+(' + IDENT + r')', ditems[j][0].strip())] if m}
+            if defined:
+                for n in defined:
+                    by_name.setdefault(n, []).extend(('d', j) for j in group)
+            else:
+                always_pp.update(group)
+            group = []
+    always_pp.update(group)
     for k, (_, declares, _) in enumerate(eitems):
         for n in declares:
             by_name.setdefault(n, []).append(('e', k))
@@ -763,9 +810,8 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
 
     # (a function's scan looks only at what may be renamed or declared for it: moonc's names (_…), what ends in a
     # number (a string literal, a local), and what the declarations declare otherwise; not int32_t, moonbit_incref…)
-    plain = sorted({n for _, declares, _, _ in ditems for n in declares if not n.startswith('_') and not n[-1:].isdigit()}
-                   | {n for n in names if not n.startswith('_') and not n[-1:].isdigit()}
-                   | {n for _, declares, _ in eitems for n in declares if not n.startswith('_') and not n[-1:].isdigit()},
+    # (by_name: what the declarations, the externs and the directives' groups declare or define)
+    plain = sorted({n for n in set(by_name) | set(names) if not n.startswith('_') and not n[-1:].isdigit()},
                    key=lambda n: (-len(n), n))
     body_scan = re.compile(r'//[^\n]*|/\*.*?\*/|"(?:\\.|[^"\\\n])*"|\'(?:\\.|[^\'\\\n])*\'|(?<![A-Za-z0-9_$])('
                            + '|'.join([r'_[A-Za-z0-9_$]*', r'[A-Za-z$][A-Za-z0-9_$]*\d'] + [re.escape(n) for n in plain])
@@ -790,6 +836,7 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     for p, (name, text, line) in zip(pk, rest):
         t, used = rename(text, names, file_ids, body_scan)
         t, lused = name_layouts(t)
+        t = flatten(t)
         used |= lused
         new = names.get(name, name)
         if sizes[p] < target // 2:
@@ -808,7 +855,7 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     init_used |= init_layouts
     # (and without its #line's: every global's initialiser says where it is in its file, so a line added anywhere
     # above one changed moonbit_init, the slowest unit to compile (15-30 s on macos-15); it runs once, at the start)
-    init_text = LINE_DIRECTIVE.sub('', init_text)
+    init_text = flatten(LINE_DIRECTIVE.sub('', init_text))
 
     units = {}
     for unit, t, used, new in fun:
@@ -816,15 +863,12 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
         u[0].append((new, t))
         u[1] |= used
 
-    # the directives are in every unit (#define's FFI names, their #ifndef guards): what they name too (the C
-    # function an FFI name stands for)
-    pp_uses = set()
-    for it in ditems:
-        if it[3]:
-            pp_uses |= it[2]
-    # and what the prelude's own macros name of moonc's (MSVC's Moonbit_v128_*: functions moonc declares, a unit
-    # calling them through the macro alone; MSVC takes a call to one undeclared for an int's)
-    pp_uses |= prelude_ids & set(by_name)
+    # what the prelude's own macros name of moonc's (MSVC's Moonbit_v128_*: functions moonc declares, a unit calling
+    # them through the macro alone; MSVC takes a call to one undeclared for an int's), and what the directives in every
+    # unit name
+    pp_uses = prelude_ids & set(by_name)
+    for k in always_pp:
+        pp_uses |= ditems[k][2]
 
     def closure(used):
         want_d, want_e = set(), set()
@@ -842,9 +886,7 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
                 elif kind == 'e' and k not in want_e:
                     want_e.add(k)
                     todo.extend(eitems[k][2])
-        for k, it in enumerate(ditems):
-            if it[3]:
-                want_d.add(k)
+        want_d |= always_pp
         return want_d, want_e
 
     # a unit's declarations in an order of their own, not moonc's (which moves its types about as the program
