@@ -155,7 +155,6 @@ fn pickable(
         pk.picked_frame = cui.down_frame
         // the press is the pick's: the list holds still, lifting it taps nothing
         c.take_press()
-        c.request_frame()
       }
       _ => ()
     }

@@ -124,10 +124,6 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
   if s.kind == NoSheet && !r.shown {
     s.shown = NoSheet
   }
-  // what it shows may have closed it or asked another (a row tapped): drawn again at once
-  if (s.kind != NoSheet) != r.open || (s.kind != NoSheet && s.kind != kind) {
-    c.request_frame()
-  }
 }
 
 // The grabber and a sheet's head (Sheet.kt SheetGrab, SheetHead) are decide.mbt's `sheet_grab`, `sheet_head`.
