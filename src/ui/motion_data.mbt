@@ -56,7 +56,7 @@ fn Ctx::motion_owed(self : Ctx) -> Bool {
 
 ///|
 /// When the last of what is said to move is at rest (-1: none moves).
-pub fn Ctx::motion_end(self : Ctx) -> Double {
+fn Ctx::motion_end(self : Ctx) -> Double {
   let mut e = -1.0
   self.movers.each(fn(_, m) {
     let r = m.rest_at(self.now, self.frame_no)

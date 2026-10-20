@@ -23,8 +23,9 @@ test "a spring's frames are drawn until its end, then none; retargeted, it goes 
   t.assert_idle()
   target.val = 100.0
   t.draw()
-  let e = g().motion_end()
-  assert_true(e > t.time())
+  // the spring's own end (its way said as it set out)
+  let end = fn() { g().springs.values().fold(init=-1.0, fn(e, s) { if s.end() > e { s.end() } else { e } }) }
+  assert_true(end() > t.time())
   // a moment mid-way
   let mid_way = 50.0
   t.run_for(mid_way)
@@ -34,7 +35,7 @@ test "a spring's frames are drawn until its end, then none; retargeted, it goes 
   target.val = 50.0
   t.draw()
   assert_true((seen.val - mid).abs() < 0.000001)
-  t.run_for(g().motion_end() - t.time())
+  t.run_for(end() - t.time())
   assert_true((seen.val - 50.0).abs() < 0.001)
   t.assert_idle()
 }

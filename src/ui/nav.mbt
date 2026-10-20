@@ -59,6 +59,9 @@ struct Nav[P] {
   mut vel : Double
   track : Tracker
   on_leave : (P) -> Unit
+  /// what its motion is said to move by (Ctx::moving), and the frame it was told to move in
+  mover : Int
+  mut asked : Int
 }
 
 ///|
@@ -80,6 +83,8 @@ pub fn[P] Nav::new(root : P, on_leave? : (P) -> Unit = fn(_) {  }) -> Nav[P] {
     vel: 0.0,
     track: Tracker::new(),
     on_leave,
+    mover: g().mover_id(),
+    asked: -1,
   }
 }
 
@@ -122,6 +127,33 @@ fn[P] Nav::go(self : Nav[P], mode : Int, p1 : Double, dur : Double, curve : Curv
   self.dur = dur
   self.curve = curve
   self.t0 = -1.0
+  // said once, as it sets out: frames until it is there (it starts at the next frame)
+  self.asked = g().frame_no
+  g().moving(self.mover, self as &Moving)
+}
+
+///|
+/// When its slide is over, asked at each frame's end while it slides: read only, the same whoever asks first. Told to
+/// go, it starts at the first frame after that builds it (Ctx::nav sets its start): until then +inf; not built in
+/// that frame, at rest, said to move again as Ctx::nav starts it.
+impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
+  ignore(now)
+  if self.mode != 1 && self.mode != 2 && self.mode != 4 {
+    -1.0
+  } else if self.t0 >= 0.0 {
+    self.t0 + self.dur
+  } else if frame <= self.asked {
+    1.0 / 0.0
+  } else {
+    -1.0
+  }
+}
+
+///|
+/// When this stack's slide is over (the frames' clock; +inf: told to go, not started yet; -1: it is not sliding): what
+/// a test runs to.
+pub fn[P] Nav::rest(self : Nav[P]) -> Double {
+  self.rest_at(g().now, g().frame_no)
 }
 
 ///|
@@ -302,14 +334,14 @@ pub fn[P] Ctx::nav(
   nav.gone.clear()
   if nav.mode == 1 || nav.mode == 2 || nav.mode == 4 {
     if nav.t0 < 0.0 {
+      // it starts now: said to move again (not built in the frame it was to start in, it had been let be)
       nav.t0 = self.now
+      self.moving(nav.mover, nav as &Moving)
     }
     let t = if nav.dur <= 0.0 { 1.0 } else { (self.now - nav.t0) / nav.dur }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()
-    } else {
-      self.request_frame()
     }
   }
   let n = nav.pages.length()

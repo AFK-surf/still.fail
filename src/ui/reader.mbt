@@ -478,6 +478,16 @@ pub fn Ctx::pager(
 }
 
 ///|
+/// When pager `key`'s slide (a turn, a drag let go) is at rest, on the frames' clock (before now: it is): asked where
+/// `key` would be (in the scope the pager is built in).
+pub fn Ctx::pager_rest(self : Ctx, key : String) -> Double {
+  match pagers.get(self.id(key)) {
+    Some(st) => st.slide.end()
+    None => -1.0
+  }
+}
+
+///|
 /// Turns `dir` pages (±1) with a slide, as far as there are pages.
 fn Ctx::turn(self : Ctx, st : PagerState, dir : Int) -> Unit {
   let next = st.index + dir

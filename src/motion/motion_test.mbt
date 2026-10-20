@@ -548,17 +548,18 @@ fn drawn_xy(t : @ui.Tester, color : Int64) -> (Double, Double) {
 }
 
 ///|
-/// An Anim told to go to 100 in the first frame, its end asked (Ctx::motion_end) in that frame when `ask`.
-fn told_once(ask : Bool, fade_ms : Double) -> @ui.Tester {
+/// An Anim told to go to 100 in the first frame (kept in `kept`), its end asked in that frame when `ask`.
+fn told_once(ask : Bool, fade_ms : Double, kept : Ref[@motion.Anim?]) -> @ui.Tester {
   let go = Ref(true)
   @ui.Tester::new(fn(c) {
     let v = @motion.anim(c, "a", 0.0)
     if go.val {
       go.val = false
       v.animate(100.0, @motion.tween(fade_ms))
+      kept.val = Some(v)
       if ask {
         // not yet started: no end to say
-        if c.motion_end() <= 1.0e300 {
+        if v.ends_at() <= 1.0e300 {
           abort("an Anim not started yet said an end")
         }
       }
@@ -570,18 +571,26 @@ fn told_once(ask : Bool, fade_ms : Double) -> @ui.Tester {
 ///|
 test "an Anim's start is its first frame's, whoever asks its end before or between" {
   let fade_ms = 200.0
-  let quiet = told_once(false, fade_ms)
+  let a1 : Ref[@motion.Anim?] = Ref(None)
+  let quiet = told_once(false, fade_ms, a1)
   quiet.draw()
-  let asked = told_once(true, fade_ms)
+  let a2 : Ref[@motion.Anim?] = Ref(None)
+  let asked = told_once(true, fade_ms, a2)
   asked.draw()
+  let end = fn(r : Ref[@motion.Anim?]) {
+    match r.val {
+      Some(a) => a.ends_at()
+      None => -1.0
+    }
+  }
   // started at the frame after it was told (drawn at the same moment here): its end from there
-  let e = asked.motion_end()
-  assert_eq(e, quiet.motion_end())
-  assert_eq(asked.motion_end(), e)
+  let e = end(a2)
+  assert_eq(e, end(a1))
+  assert_eq(end(a2), e)
   assert_eq(e, asked.time() + fade_ms)
   // asked again half-way, the same
   asked.run_for(fade_ms / 2.0)
-  assert_eq(asked.motion_end(), e)
+  assert_eq(end(a2), e)
   asked.run_for(e - asked.time())
   asked.assert_idle()
 }

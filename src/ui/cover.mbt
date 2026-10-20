@@ -27,9 +27,20 @@ struct CoverAsk {
 }
 
 ///|
+/// A cover's spring (Ctx::spring's: 420 stiff, 32 damped), from 0 (where it set out) to 1 (the item it goes to): at
+/// rest within 1/2000 of the way.
+fn cover_spring() -> SpringPath {
+  SpringPath::new(1.0, k=420.0, c=32.0, rest=0.0005)
+}
+
+///|
+/// How long a cover takes from one item to another (ms): the same however far, its way being from 0 to 1.
+pub let cover_slide_ms : Double = 1000.0 * spring_end(-1.0, 0.0, 420.0, 32.0, 0.0005)
+
+///|
 /// A box over item `at` of `items` (the items' nodes, built this frame), built by `look` (given its width and height)
 /// in `holder` (a node built before the items, drawn behind them: a layer over their ground). Placed once they are
-/// laid out, in this frame, where the item is; to another item on a spring (`stiffness`, `damping`) when `at` is
+/// laid out, in this frame, where the item is; to another item on its spring when `at` is
 /// another than it was. One not shown last frame is where it is at once.
 pub fn Ctx::cover(
   self : Ctx,
@@ -38,8 +49,6 @@ pub fn Ctx::cover(
   items : Array[Int],
   at : Int,
   look : (Ctx, Double, Double) -> Unit,
-  stiffness? : Double = 420.0,
-  damping? : Double = 32.0,
 ) -> Unit {
   let id = self.id(key)
   let s = match self.covers.get(id) {
@@ -48,7 +57,7 @@ pub fn Ctx::cover(
       let s = {
         from: [(at, 1.0)],
         to: at,
-        path: SpringPath::new(1.0, k=stiffness, c=damping, rest=0.0005),
+        path: cover_spring(),
         seen: self.frame_no,
       }
       self.covers[id] = s

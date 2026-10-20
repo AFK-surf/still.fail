@@ -50,9 +50,7 @@
       "src/kit/look.mbt": 1,
       "src/kit/menu.mbt": 1,
       "src/kit/popover.mbt": 1,
-      "src/kit/progress.mbt": 1,
       "src/kitdemo/foundation.mbt": 1,
-      "src/motion/layer.mbt": 2,
       "src/textdiff/main.mbt": 1,
       "src/ui/code_field.mbt": 1,
       "src/ui/desktop.mbt": 3,
@@ -63,7 +61,7 @@
       "src/ui/inputrec.mbt": 1,
       "src/ui/list.mbt": 8,
       "src/ui/native.mbt": 3,
-      "src/ui/nav.mbt": 5,
+      "src/ui/nav.mbt": 4,
       "src/ui/overlay.mbt": 5,
       "src/ui/reader.mbt": 1,
       "src/ui/scroll.mbt": 6,
@@ -140,11 +138,7 @@
     "stable-mode": {
       "src/demo/main.mbt": 1
     },
-    "retired-api": {
-      "src/kit/controls_test.mbt": 1,
-      "src/ui/motion_data_wbtest.mbt": 1,
-      "src/ui/reader_test.mbt": 1
-    },
+    "retired-api": {},
     "app-clock": {
       "src/effectdemo/demo.mbt": 1,
       "src/kit/menu.mbt": 2,

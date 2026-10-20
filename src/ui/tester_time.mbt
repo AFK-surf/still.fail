@@ -63,14 +63,6 @@ fn by_of(l : SourceLoc?) -> String {
 }
 
 ///|
-/// When the last motion said is at rest (the frames' clock, as `time`; -1: none moves): a test runs to it by
-/// run_for(motion_end() - time()).
-pub fn Tester::motion_end(self : Tester) -> Double {
-  ignore(self)
-  g().motion_end()
-}
-
-///|
 /// Where the words (or `=WORDS` exactly, `icon:NAME` an @sf icon, `img:NAME` an image by the end of its source) are
 /// on screen, as a scripted run's steps find them (drive.mbt): the middle of each, laid out inside the window.
 pub fn Tester::locate(self : Tester, what : String) -> Array[(Double, Double)] {

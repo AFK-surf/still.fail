@@ -161,3 +161,25 @@ test "nav_flat: the top page alone, in place; a page left is forgotten and told"
   assert_eq(left, ["chat"])
   assert_true(t.find("home") is Some(_))
 }
+
+///|
+test "a stack's slide starts at its first frame, whoever asks its end before or between" {
+  let quiet_nav = @ui.Nav::new(0)
+  let quiet = @ui.Tester::new(nav_view(quiet_nav))
+  quiet_nav.push(1)
+  quiet.draw()
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  nav.push(1)
+  // asked before its first frame: it has not started, no end to say
+  assert_true(nav.rest() > 1.0e300)
+  t.draw()
+  let e = nav.rest()
+  assert_eq(e, quiet_nav.rest())
+  assert_eq(e, t.time() + @ui.nav_push_ms)
+  // asked again half-way, the same
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_eq(nav.rest(), e)
+  t.run_for(e - t.time())
+  t.assert_idle()
+}

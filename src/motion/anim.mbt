@@ -110,8 +110,8 @@ fn Anim::finish(self : Anim) -> Unit {
 }
 
 ///|
-/// When it is there (whole ms, as its time goes), asked at each frame's end while it moves (and by whoever wants the
-/// last end: Tester::motion_end): read only, the same whoever asks first. Told to go, it starts at the first frame
+/// When it is there (whole ms, as its time goes), asked at each frame's end while it moves: read only, the same
+/// whoever asks first. Told to go, it starts at the first frame
 /// after (its first step there): until then +inf; not read in that frame (nothing shows it), at rest, said to move
 /// again by its first step.
 pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
@@ -124,6 +124,19 @@ pub impl @ui.Moving for Anim with rest_at(self, now, frame) {
     @double.infinity
   } else {
     -1.0
+  }
+}
+
+///|
+/// When it is there (whole ms, the frames' clock): +inf while it has not started yet (it starts at the first frame
+/// after it was told to go), before now (-1) when it is at rest.
+pub fn Anim::ends_at(self : Anim) -> Double {
+  if !self.running {
+    -1.0
+  } else if self.start >= 0.0 {
+    self.start + self.dur.ceil()
+  } else {
+    @double.infinity
   }
 }
 

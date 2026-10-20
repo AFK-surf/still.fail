@@ -224,7 +224,7 @@ test "another item pressed: the thumb on its way between the two, and another ch
   t.draw()
   let after = thumb_of(t)
   assert_true((after.0 - before.0).abs() < 0.000001 && (after.2 - before.2).abs() < 0.000001)
-  t.run_for(t.motion_end() - t.time())
+  t.run_for(@ui.cover_slide_ms)
   assert_true(thumb_on(t, "Middle"))
   t.assert_idle()
 }

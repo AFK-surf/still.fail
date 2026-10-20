@@ -2,7 +2,8 @@
 // along it). And an avatar (Radix's Avatar): a picture, or its fallback (initials) while it has none.
 
 ///|
-/// What a progress bar's look is given: how far (0 … 1), or None not known; the time (for what runs while unknown).
+/// What a progress bar's look is given: how far (0 … 1), or None not known; the time. What runs while it is not
+/// known is a cycle of the look's own (Ctx::cycle: its phase, and frames while it is shown), not this time.
 pub(all) struct ProgressState {
   t : Double?
   now : Double
@@ -22,12 +23,9 @@ pub fn progress(
     Some(v) => Some(if max <= 0.0 { 0.0 } else if v <= 0.0 { 0.0 } else if v >= max { 1.0 } else { v / max })
     None => None
   }
-  // a band runs while it is not known: the next frame is wanted (not where nothing moves: a screenshot, motion
-  // reduced — the band stands at its start)
+  // (a band runs while it is not known: the look's cycle, Ctx::cycle; where nothing moves, a screenshot or motion
+  // reduced, it stands where the look puts it)
   let still = c.still()
-  if t is None && !still {
-    c.request_frame()
-  }
   let i = c.box(w~, fn() { look(c, { t, now: if still { 0.0 } else { c.now() } }) })
   match (value, t) {
     (Some(v), Some(k)) =>
@@ -64,8 +62,8 @@ pub fn progress_look_of(
           let f = if c.still() {
             0.3
           } else {
-            let x = s.now / period - (s.now / period).floor()
-            0.5 - 0.5 * @math.cos(3.141592653589793 * x)
+            // a cycle of `period` (Ctx::cycle: drawn a frame each frame while shown)
+            0.5 - 0.5 * @math.cos(3.141592653589793 * c.cycle(period))
           }
           let start = -0.4 + 1.4 * f
           if start > 0.0 {
