@@ -35,10 +35,20 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
   assert_true(rd.jump)
   assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
+  // it comes up growing (its presence, "chat-jump"): tapped once it is there, as a person can only tap what shows
+  t.run_for(t.rest_of("chat-jump") - t.time())
   // over the send button, the composer's room under it
   t.tap(390.0 - 18.0 - 18.0, 844.0 - 112.0 - 18.0)
+  // back at its end by the list's own rest (mbui's list_to_end: a glide solved in time, or at once from further than
+  // its rows; and its scroll bar faded): what it says of itself
+  let rest = t.rest_of("a list")
+  assert_true(rest < @double.infinity)
+  if rest > t.time() {
+    t.run_for(rest - t.time())
+  }
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
   assert_true(!rd.jump)
+  t.assert_idle()
 }
 
 ///|

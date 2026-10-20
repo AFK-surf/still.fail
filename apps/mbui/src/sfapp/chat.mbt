@@ -923,6 +923,8 @@ fn jump_to_latest(
   shown : Bool,
 ) -> Unit {
   let t = @sf.theme()
+  // (whether it shows, said before it may be gone: gone, nothing below is built, and what it was would stay)
+  rd.jump = shown
   // it comes up growing and goes the way it came (Chat.kt JumpToLatest, web mJump: from 18 down at 60%; its opacity
   // 180 ms, CSS's ease, the rest 220 on the standard curve; going, 150 and 180), turned back mid-way from where it is
   let look = match
@@ -936,7 +938,6 @@ fn jump_to_latest(
     Some(l) => l
     None => return
   }
-  rd.jump = shown
   let count = if v.newer && v.unread > 0.0 { Some(v.unread.to_int()) } else { None }
   let id = c.id("chat-jump")
   if c.clicked(id) && shown {
