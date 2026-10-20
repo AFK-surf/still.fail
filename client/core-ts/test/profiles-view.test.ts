@@ -68,10 +68,11 @@ test("the same account signed in on two stations each is one row, each station a
   assert.equal(two.items.length, 2);
 });
 
-test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, then keys", () => {
+test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, Devin's, then keys", () => {
   const view = workspaceProfiles([
     station(A, "studio", true, [
       profile("key", { access: { kind: "api-provider" } }),
+      profile("dev", { email: "d@x.test", runtime: "devin" }),
       profile("cur", { email: "c@x.test", runtime: "cursor" }),
       profile("super", { email: "s@x.test", runtime: "grok" }),
       profile("gpt", { email: "g@x.test", runtime: "codex" }),
@@ -85,6 +86,7 @@ test("the list is grouped by kind of account: Claude's subscriptions, ChatGPT's,
     ["chatgpt", "ChatGPT 订阅", "gpt"],
     ["grok", "SuperGrok 订阅", "super"],
     ["cursor", "Cursor 订阅", "cur"],
+    ["devin", "Devin 订阅", "dev"],
     ["key", "API Key", "key"],
   ]);
 });

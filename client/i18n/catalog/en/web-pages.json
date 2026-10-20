@@ -692,6 +692,8 @@
   "web-pages.profiles.signingIn": "Signing in to {provider}",
   "web-pages.profiles.signingInNote": "Finish within 15 minutes, or it's canceled automatically",
   "web-pages.profiles.step1": "Open the auth page, sign in with the Claude account for {name}, and approve",
+  "web-pages.profiles.step1Devin": "Open the auth page and sign in with the Devin account for {name}",
+  "web-pages.profiles.step2Devin": "After signing in, the page shows a code. Paste it here:",
   "web-pages.profiles.step2": "After approving, the page shows a code. Paste it here:",
   "web-pages.profiles.subscriptionNote": "Sign-in happens on the machine hosting {name}; you only need to authorize in the browser. The profile is added once sign-in succeeds.",
   "web-pages.profiles.subscriptionSignIn": "{provider} sign-in",

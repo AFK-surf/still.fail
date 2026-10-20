@@ -239,6 +239,7 @@
   "android-settings.login.signIn": "Sign in",
   "android-settings.login.signInTo": "Sign in to {provider}",
   "android-settings.login.step1Short": "On the page, sign in with the Claude account {app} should use and agree",
+  "android-settings.login.step1ShortDevin": "On the page, sign in with the Devin account {app} should use",
   "android-settings.login.step2Short": "Paste the code the page shows here",
   "android-settings.login.finishShort": "Finish",
   "android-settings.login.manualShort": "Sign in on the machine",

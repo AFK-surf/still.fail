@@ -676,6 +676,7 @@
   "web-mobile.home.searchMore": "查看更多",
   "web-mobile.home.searchAll": "全部结果",
   "web-mobile.profiles.step1Short": "在打开的页面用 {name} 要使用的 Claude 账号登录，并同意授权",
+  "web-mobile.profiles.step1ShortDevin": "在打开的页面用 {name} 要使用的 Devin 账号登录",
   "web-mobile.profiles.step2Short": "把页面上显示的授权码粘贴到这里",
   "web-mobile.profiles.finishShort": "完成",
   "web-mobile.profiles.manualShort": "在机器上手动登录"
