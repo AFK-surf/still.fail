@@ -17,10 +17,11 @@ import android.service.notification.StatusBarNotification;
  * Notifier): one channel ("messages", named as the app says), one notification per tag (the same id for all, the tag
  * telling them apart: a newer one for a chat replaces the older), tapped it opens MainActivity with what it was shown
  * with ({@link #OPENS}), which the app reads once ({@link #text} 0). POST_NOTIFICATIONS is asked for from the activity
- * (Android 13 on); its answer comes back through {@link MainActivity#onRequestPermissionsResult}. No push service is
- * linked (no Firebase in this build): no token, no push delivered.
+ * (Android 13 on); its answer comes back through {@link MainActivity#onRequestPermissionsResult}. A push service is
+ * the app's own (an app linking Firebase Cloud Messaging: still.fail's Push.java): it hands this the device's token
+ * ({@link #token}) and each push delivered while the app runs ({@link #pushed}); with none, no token and no push.
  */
-final class Notices {
+public final class Notices {
     private static final String CHANNEL = "messages";
     /** Every notification has this id; its tag tells them apart. */
     private static final int ID = 1;
@@ -47,8 +48,24 @@ final class Notices {
     static void show(String channel, String tag, String title, String body, String opens) {
         Context c = context();
         if (c == null) return;
+        manager(c).createNotificationChannel(new NotificationChannel(CHANNEL, channel, NotificationManager.IMPORTANCE_HIGH));
+        show(c, tag, title, body, opens);
+    }
+
+    /**
+     * Shown from outside the app's run (a push service with no activity up): the channel as the app last named it
+     * (made with `channel` only if it never was), replacing any of the same tag; tapped, it opens the app with `opens`.
+     */
+    public static void show(Context c, String channel, String tag, String title, String body, String opens) {
         NotificationManager m = manager(c);
-        m.createNotificationChannel(new NotificationChannel(CHANNEL, channel, NotificationManager.IMPORTANCE_HIGH));
+        if (m.getNotificationChannel(CHANNEL) == null) {
+            m.createNotificationChannel(new NotificationChannel(CHANNEL, channel, NotificationManager.IMPORTANCE_HIGH));
+        }
+        show(c, tag, title, body, opens);
+    }
+
+    private static void show(Context c, String tag, String title, String body, String opens) {
+        NotificationManager m = manager(c);
         Intent open = new Intent(c, MainActivity.class).putExtra(OPENS, opens)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
         // one each tag (its extras alone would not tell two apart)
@@ -105,8 +122,34 @@ final class Notices {
         }
     }
 
-    /** 0: a notification tapped, once; 1: the push token; 2: a push delivered, once (none: no push service here). */
+    /** The device's push token as the app's push service last gave it ("" none). */
+    private static volatile String pushToken = "";
+    /** The pushes delivered and not yet taken by the app (their data as JSON), the oldest first. */
+    private static final java.util.concurrent.ConcurrentLinkedQueue<String> pushes = new java.util.concurrent.ConcurrentLinkedQueue<>();
+
+    /**
+     * The device's push token, from the app's push service (its first, or a new one): the app is asked for a frame, so
+     * it registers the token as it next looks ({@code push_token}).
+     */
+    public static void token(String token) {
+        pushToken = token == null ? "" : token;
+        // (called on the push service's thread)
+        Host.main.post(Host::requestFrame);
+    }
+
+    /** A push delivered while the app runs (its data, as a JSON object of strings): taken by the app once. */
+    public static void pushed(String data) {
+        pushes.add(data);
+        Host.main.post(Host::requestFrame);
+    }
+
+    /** 0: a notification tapped, once; 1: the push token; 2: a push delivered, once ("" none). */
     static String text(int what) {
+        if (what == 1) return pushToken;
+        if (what == 2) {
+            String p = pushes.poll();
+            return p == null ? "" : p;
+        }
         if (what != 0) return "";
         String o = opened;
         opened = "";
