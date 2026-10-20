@@ -10,6 +10,13 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  # the compiled units by content (scripts/mbc.py's store), kept between runs by actions/cache
+  MBC_STORE: ${{ github.workspace }}/../mbc-store
+  HBC_CACHE: ${{ github.workspace }}/../hbc
 jobs:
   android:
     runs-on: ubuntu-24.04
@@ -25,6 +32,14 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          echo "MOON_HOME=$HOME/.moon" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/../mbc-store
+            ${{ github.workspace }}/../hbc
+          key: mbui-fast-${{ runner.os }}-${{ github.sha }}
+          restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
         run: sh apps/mbui/scripts/mbui.sh
       - name: The Android engine and shell, prebuilt
@@ -34,7 +49,9 @@ jobs:
       - name: The core's packages
         run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
       - name: APK (APP=stillfail, release, unsigned key)
-        run: APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build 2>&1 | tail -30
+        run: |
+          set -o pipefail
+          APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build 2>&1 | grep -av '│\|Warning\|╭\|╰' | tail -30
 
   mac:
     runs-on: macos-15
@@ -47,11 +64,26 @@ jobs:
         run: |
           curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash > /dev/null
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
+          echo "MOON_HOME=$HOME/.moon" >> $GITHUB_ENV
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/../mbc-store
+            ${{ github.workspace }}/../hbc
+          key: mbui-fast-${{ runner.os }}-${{ github.sha }}
+          restore-keys: mbui-fast-${{ runner.os }}-
       - name: mbui at mbui.rev
         run: sh apps/mbui/scripts/mbui.sh
       - name: The core's packages
         run: cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null
       - name: Rust (the core's shell)
         run: rustup target add aarch64-apple-darwin aarch64-apple-ios
+      # the core's parts (its Rust shell, the engine, Hermes): by what they are made of
+      - uses: actions/cache@v4
+        with:
+          path: apps/mbui/out/core
+          key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/core/**') }}
       - name: The macOS app (built, ad hoc signed)
-        run: EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build 2>&1 | tail -30
+        run: |
+          set -o pipefail
+          EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build 2>&1 | grep -av '│\|Warning\|╭\|╰' | tail -30
