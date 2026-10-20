@@ -21,8 +21,6 @@ priv struct Sideways {
   mut x_end : Double
   mover : Mover
   mut held : Bool
-  /// the list (or whatever scrolls) it lies in, found as the finger went down
-  mut outer : Int
   /// this frame's box and what it holds (node indices), for their widths once laid out
   mut box : Int
   mut inner : Int
@@ -83,7 +81,6 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         x_end: 0.0,
         mover: Mover::new(),
         held: false,
-        outer: 0,
         box: -1,
         inner: -1,
         frame: -1,
@@ -260,7 +257,6 @@ fn sideways_down(c : Ctx, id : Int, x : Double, y : Double) -> Unit {
     Some(st) => {
       st.vel = 0.0
       st.rest = -1.0
-      st.outer = outer_scroll(c, x, y)
     }
     None => ()
   }
@@ -279,7 +275,8 @@ fn sideways_move(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
   let dx = x - c.press_x
   let dy = y - c.press_y
   let slop = touch_slop()
-  // along its way, past the slop, and it can go that way: its drag
+  // along its way, past the slop, and it can go that way: its drag (taken: claim.mbt; up or down first, or at its
+  // end, the press was the list's)
   let (along, across) = if st.vertical { (dy, dx) } else { (dx, dy) }
   let can = if along < 0.0 { st.x < st.max } else { st.x > 0.0 }
   if along.abs() > slop && along.abs() >= across.abs() && can {
@@ -288,11 +285,6 @@ fn sideways_move(c : Ctx, id : Int, x : Double, y : Double) -> Bool {
     st.held = true
     let past = if along > 0.0 { along - slop } else { along + slop }
     st.x = dclamp(st.x - past, 0.0, st.max)
-    return false
-  }
-  if along.abs() > slop || across.abs() > slop {
-    c.drag_scroll = st.outer
-    return true
   }
   false
 }

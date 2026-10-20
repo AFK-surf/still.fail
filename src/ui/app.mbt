@@ -483,14 +483,18 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     track_y.reset()
     track_x.add(t, x)
     track_y.add(t, y)
-    c.drag_scroll = hit_in(c.scroll_ids, c.scroll_rects, x, y)
-    sideways_down(c, c.drag_scroll, x, y)
+    // what lies under it waits for the finger's way (claim.mbt); the innermost meanwhile
+    claim_down(c, x, y)
+    for id in c.press_chain {
+      sideways_down(c, id, x, y)
+    }
     c.editor_drag = false
     c.edge = if c.on_edge(x, y) { 1 } else { 0 }
-    // a drag area (a sheet's top, the bottom bar) is the finger's from here: no edge swipe under it
-    if drag_down(c.drag_scroll, x, y) {
-      c.edge = 0
-      drag_find_outer(c, c.drag_scroll, x, y)
+    // a drag area under it (a sheet's top, the bottom bar, a row or a card swiped across): no edge swipe under it
+    for id in c.press_chain {
+      if drag_down(id, x, y) {
+        c.edge = 0
+      }
     }
     // a desktop's page: the mouse drags no list and swipes no page back (the wheel scrolls; Ctx::mouse_drags_lists)
     if !desk.mouse_drags {
@@ -503,6 +507,12 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       // a list moving on its own (flung, springing back from an end) is
       // caught: the finger drags it from there, and presses nothing in it
       Some(st) if st.moving() => {
+        c.claimed = true
+        for other in c.press_chain {
+          if other != c.drag_scroll {
+            drag_cancel(other)
+          }
+        }
         st.catch_up()
         st.held = true
         c.dragging = true
@@ -553,11 +563,14 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
             }
           None => ()
         }
+      } else if !claim_move(c, x, y) {
+        // no one's yet: nothing moves
+        ()
       } else if sideways.contains(c.drag_scroll) &&
         !sideways_move(c, c.drag_scroll, x, y) {
         // dragged sideways (or not yet past the slop); moved up or down first, the list takes it below
         ()
-      } else if drags.contains(c.drag_scroll) && !drag_yield(c, c.drag_scroll, x, y) {
+      } else if drags.contains(c.drag_scroll) {
         if drag_move(c.drag_scroll, x, y) && !c.dragging {
           c.dragging = true
           c.active = 0
@@ -607,6 +620,12 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
     if !c.dragging && c.taken_at != c.press_at {
       c.tapped = Some((x, y))
     }
+    // taken by none: the innermost's tap (as a press on it alone); the others let it go
+    for other in c.press_chain {
+      if other != c.drag_scroll {
+        drag_cancel(other)
+      }
+    }
     if drags.contains(c.drag_scroll) {
       drag_up(
         c.drag_scroll,
@@ -647,6 +666,9 @@ fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
       c.back_gesture(3, x, t)
     }
     c.edge = 0
+    for id in c.press_chain {
+      drag_cancel(id)
+    }
     if drags.contains(c.drag_scroll) {
       drag_up(c.drag_scroll, x, y, 0.0, 0.0, true)
     }

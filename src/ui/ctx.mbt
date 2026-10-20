@@ -162,6 +162,10 @@ pub struct Ctx {
   mut focus : Int
   clicked : Array[Int]
   mut drag_scroll : Int
+  /// what scrolls or is dragged under the press, innermost first (claim.mbt): until one claims it (`claimed`), the
+  /// press is none of theirs; `drag_scroll` is the innermost meanwhile
+  mut press_chain : Array[Int]
+  mut claimed : Bool
   mut dragging : Bool
   mut press_x : Double
   /// when the press under way went down (ms), and the press a link's hold was last told of
@@ -319,6 +323,8 @@ fn Ctx::new() -> Ctx {
     focus: 0,
     clicked: [],
     drag_scroll: 0,
+    press_chain: [],
+    claimed: true,
     dragging: false,
     press_x: 0.0,
     press_at: -1.0,
