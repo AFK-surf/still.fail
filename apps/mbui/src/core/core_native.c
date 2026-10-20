@@ -15,6 +15,7 @@
 #include "core_client.h"
 
 // mbui's (src/host/post_api.h): a message for the next frame, from any thread; what is posted and not handed on, gone
+// (mbui/host, imported for it: linked with this package's own tests too)
 void mb_post(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
 void mb_post_drop(const char *channel);
 
