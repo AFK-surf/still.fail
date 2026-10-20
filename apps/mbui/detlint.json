@@ -72,7 +72,6 @@
       "e2e/flows/29-glass.drive": 3,
       "e2e/flows/38-preview.drive": 10,
       "e2e/flows/40-notice-wait.drive": 3,
-      "e2e/flows/41-notice-failed.drive": 1,
       "e2e/flows/42-notice-looking.drive": 3,
       "e2e/flows/43-notify-off.drive": 6,
       "e2e/flows/45-drive-play.drive": 3,
