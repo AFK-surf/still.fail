@@ -948,8 +948,9 @@ fn place_empty(c : @ui.Ctx, words : String, note? : String = "") -> Unit {
 let place_empty_box : @ui.Style = @ui.style(w=Full, px=S8, py=S10, gap=S2, align=ACenter)
 
 ///|
-/// A button (Controls.kt Button): 38 high, round; primary in ink (red when `danger`), else the chip's grey; a spinner
-/// before its words while `busy`. True on the frame after a tap (not while busy or off).
+/// A button (Controls.kt Button): 38 high, round; primary in ink (red when `danger`; off: the line's grey, its words
+/// muted), else the chip's grey; a spinner before its words while `busy`. True on the frame after a tap (not while
+/// busy or off).
 fn button(
   c : @ui.Ctx,
   key : String,
@@ -961,7 +962,10 @@ fn button(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  let ink = if primary && danger && enabled {
+  // (a solid one not yet to be pressed: its words muted on its pale ground, not paper on paper)
+  let ink = if primary && !enabled {
+    t.p.muted
+  } else if primary && danger {
     0xFFFFFFFFL
   } else if primary {
     t.p.bg
@@ -998,9 +1002,9 @@ fn button(
 }
 
 ///|
-/// A button: a capsule, 16 in, a spinner 8 before its words.
+/// A button: a capsule, 16 in, a spinner 8 before its words, they in its middle (where it is made wider).
 // kept across runs: a value (no field of it changes)
-let button_box : @ui.Style = @ui.style(row=true, px=S4, gap=S2, radius=Full, align=ACenter)
+let button_box : @ui.Style = @ui.style(row=true, px=S4, gap=S2, radius=Full, align=ACenter, justify=JCenter)
 
 ///|
 // kept across runs: a value (no field of it changes)
