@@ -23,6 +23,7 @@ on:
       - "scripts/release-put.sh"
       - "cloud/test/dev.ts"
       - ".github/workflows/mbui.yml"
+      - ".github/actions/setup/**"
   workflow_dispatch:
 # main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
 concurrency:
@@ -151,6 +152,22 @@ jobs:
         run: |
           node scripts/native.ts fetch shell win32-x64
           node scripts/native.ts fetch engine win32-x64
+      # The app's build as the last run on main left it (the pinned mbui's copy, ~/.cache/stillfail-mbui/<rev>: moon's
+      # _build, the split C and its objects, the .exe): of main's pushes that run this job, three in four leave the app's C
+      # as it was (tests, docs, client/, media/; 96 of 129, 2026-10-18 to 20), and then moonc writes the same C again,
+      # scripts/mbc.py finds every unit's object made of the same inputs (by content) and the same link made already:
+      # nothing is compiled (with an mbui whose win.sh mirrors its copies and makes cl, link and lib reproducible, mbui#49:
+      # the build's step ~19 s and the job ~2 min, against ~3.2, 2026-10-20). A C that changed compiles as before; nothing
+      # here is taken for this commit's but by content.
+      - name: The pinned mbui
+        id: pin
+        run: echo "rev=$(tr -d ' \n' < apps/mbui/mbui.rev)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: ~/.cache/stillfail-mbui/${{ steps.pin.outputs.rev }}
+          key: mbui-win-build-${{ steps.pin.outputs.rev }}-${{ github.sha }}
+          restore-keys: mbui-win-build-${{ steps.pin.outputs.rev }}-
       # The app (APP=stillfail) built in the background from here on: cl /O2 of its C (some 46 MB) is ~55 s on the
       # runner's four cores, and needs nothing of what the steps after it do (pnpm, the packages, the core's bytecode),
       # which were ~60 s before it, one after another (2026-10-20). "Build (APP=stillfail)" waits for it.
@@ -183,6 +200,16 @@ jobs:
           cat "$B/log"
           [ "$(cat "$B/status")" = 0 ] || exit 1
           bash apps/mbui/scripts/win.sh put
+          # the cache's key: the app's C by its content (a C as the restored one was is not saved again)
+          d=$(sh apps/mbui/scripts/mbui.sh)
+          c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
+          echo "BUILD_KEY=mbui-win-build-${{ steps.pin.outputs.rev }}-$c" >> "$GITHUB_ENV"
+      # main's, saved when its C is new (a branch reads main's: its own would be its alone)
+      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/stillfail-mbui/${{ steps.pin.outputs.rev }}
+          key: ${{ env.BUILD_KEY }}
       - name: Signed in against a local still.fail, then Home (e2e/win.sh)
         run: bash apps/mbui/e2e/win.sh
       - if: always()
