@@ -81,11 +81,6 @@ pub fn source() -> @sfapp.Source {
 let the_source : @sfapp.Source = source()
 
 ///|
-/// The account the run's environment gave its app (MBUI_CORE_ACCOUNT, as its trace's `migrate` has it), "" for none:
-/// what this app is started with (Flow::start).
-pub let run_account : Ref[String] = Ref::new("")
-
-///|
 /// Whether this Tester's app has been started (sfcore.begin), as src/stillfail's is before its first frame.
 let started : Ref[Bool] = Ref::new(false)
 
@@ -96,11 +91,12 @@ fn init {
 
 ///|
 /// The app as src/stillfail draws it, over `source()`: a Tester's view. Started as src/stillfail's is (sfcore.begin:
-/// the device told, the run's account taken in) as its first frame begins, before anything it asks.
+/// the device told, what its environment (the run's, Flow::start) asks of signing in) as its first frame begins,
+/// before anything it asks.
 pub fn app(c : @ui.Ctx) -> Unit {
   if !started.val {
     started.val = true
-    @sfcore.begin(account=run_account.val)
+    @sfcore.begin()
   }
   @sfcore.frame(@core.subscribe("accounts"))
   @sfapp.view(c, the_source)

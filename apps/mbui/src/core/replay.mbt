@@ -59,6 +59,8 @@ pub struct Replay {
   priv asked : Array[String]
   /// the calls set aside (Replay::skip)
   priv skipped : Array[String]
+  /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
+  priv run_env : Array[(String, String)]
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
@@ -84,6 +86,7 @@ let reports : Array[String] = ["client.focus", "chat.place", "draft.put"]
 /// lines are left out.
 pub fn Replay::parse(log : String) -> Replay {
   let evs : Array[Ev] = []
+  let run_env : Array[(String, String)] = []
   for v in log.split("\n") {
     let line = v.to_owned()
     let start = match line.find("CORETRACE ") {
@@ -120,7 +123,13 @@ pub fn Replay::parse(log : String) -> Replay {
         evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
       }
       _ =>
-        if m.contains("view") || m.contains("still") || m.contains("info") {
+        if m.get("env") is Some(Object(vars)) {
+          for k, v in vars {
+            if v is String(s) {
+              run_env.push((k, s))
+            }
+          }
+        } else if m.contains("view") || m.contains("still") || m.contains("info") {
           let (wall, has_wall) = match m.get("w") {
             Some(Number(d, ..)) => (d, true)
             _ => (0.0, false)
@@ -200,6 +209,7 @@ pub fn Replay::parse(log : String) -> Replay {
     asked: [],
     host_said: None,
     skipped: [],
+    run_env,
   }
   r.advance()
   r
@@ -996,12 +1006,7 @@ pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
 }
 
 ///|
-/// The params of the run's first call `call` (as its trace keeps them), None when it made none.
-pub fn Replay::first_params(self : Replay, call : String) -> Json? {
-  for e in self.evs {
-    if e.out && e.msg is Object(m) && kind_of(m) == "call" && name_of(m) == call {
-      return m.get("params")
-    }
-  }
-  None
+/// What the run's app was started with, as its trace keeps it (`{"env":…}`): for a replay's to be started the same.
+pub fn Replay::env(self : Replay) -> Array[(String, String)] {
+  self.run_env
 }

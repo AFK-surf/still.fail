@@ -63,18 +63,17 @@ pub fn start() -> Bool {
     @core.start()
   }
   if started {
-    // (a local cloud's run: its account taken in)
-    begin(account=if cloud != "" { @host.env_text("MBUI_CORE_ACCOUNT") } else { "" })
+    begin()
   }
   started
 }
 
 ///|
 /// What follows the core's start, its engine's or a replay's (src/sfreplay): the device told (`client.device`), and
-/// what the environment asks of signing in read; `account` (a local cloud's run's, MBUI_CORE_ACCOUNT) taken in as
-/// signed in (`migrate`) once the accounts are read.
-pub fn begin(account? : String = "") -> Unit {
-  state.account = account
+/// what the environment asks of signing in read (`started_by`): a local cloud's run's account (MBUI_CORE_ACCOUNT)
+/// taken in as signed in (`migrate`) once the accounts are read.
+pub fn begin() -> Unit {
+  state.account = if @ui.env("MBUI_CLOUD") != "" { env_text("MBUI_CORE_ACCOUNT") } else { "" }
   tell_device()
   state.auto = @ui.env("MBUI_CORE_SIGNIN") == "1"
   state.login = @ui.env("MBUI_AUTH_LOGIN") == "1"
@@ -327,4 +326,23 @@ pub fn sign_in() -> Unit {
       Err(e) => str(Some(e), "message")
     }
   })
+}
+
+///|
+/// What the app's start reads of its environment (begin): what a run's trace keeps it was started with, for a
+/// replay's app to be started with the same (src/stillfail's CORETRACE env, src/sfreplay's Flow::start).
+pub let started_by : Array[String] = [
+  "MBUI_CLOUD", "MBUI_CORE_ACCOUNT", "MBUI_CORE_SIGNIN", "MBUI_AUTH_LOGIN", "MBUI_AUTH_BEGIN", "MBUI_AUTH_COMPLETE",
+]
+
+///|
+/// An environment variable (a Tester's, as its test gives it, the host's else), or the same name with `_B64` given as
+/// base64 ("" when neither is set): @host.env_text, through @ui.env.
+pub fn env_text(name : String) -> String {
+  let plain = @ui.env(name)
+  if plain != "" {
+    plain
+  } else {
+    @host.from_base64(@ui.env(name + "_B64"))
+  }
 }

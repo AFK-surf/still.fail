@@ -31,6 +31,12 @@ for line in open(src, encoding="utf-8", errors="replace"):
     if i < 0:
         continue
     ev = scrub(json.loads(line[i + 10:]))
+    # (what the app was started with: its account's tokens put as "-" as a migrate's are)
+    if isinstance(ev.get("env"), dict) and "MBUI_CORE_ACCOUNT" in ev["env"]:
+        try:
+            ev["env"]["MBUI_CORE_ACCOUNT"] = json.dumps(scrub(json.loads(ev["env"]["MBUI_CORE_ACCOUNT"])), ensure_ascii=False, separators=(",", ":"))
+        except ValueError:
+            ev["env"]["MBUI_CORE_ACCOUNT"] = "-"
     # (a frame the host kept, whole: what the app uploads of it is compared with it)
     if "still" not in ev and len(ev.get("b", "")) > MAX_BYTES * 2:
         # (how many there were kept: a part read comes as that many, so what reads on asks for the next)
