@@ -144,7 +144,9 @@
     "frame-request": {},
     "settle": {},
     "flow-wait": {},
-    "script-wait": {},
+    "script-wait": {
+      "scripts/ios-smoke.sh": 1
+    },
     "page-settle": {},
     "frame-count": {},
     "literal-time": {},
