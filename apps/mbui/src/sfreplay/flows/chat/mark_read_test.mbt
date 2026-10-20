@@ -5,6 +5,9 @@
 test "14-mark-read" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_mark_read, seed~)
+    f.see("端到端测试")
+    // (alice's other device asks: a live run's step beside the app)
+    f.peer("peer send 再问一次 post:这一条应当显示为未读 082947")
     f.see("=这一条应当显示为未读 082947")
     f.tap("=这一条应当显示为未读 082947")
     f.run_for(@ui.nav_push_ms)

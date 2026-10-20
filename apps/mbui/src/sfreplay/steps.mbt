@@ -41,6 +41,13 @@ pub fn Flow::start(
       abort("flow: nothing in the run holds " + text + " to drop")
     }
   }
+  // (writing the steps as a scripted run, FLOW_EMIT: the reports an older build of the app made, where its list was
+  // and what it kept, waited for by nothing, so a trace the app has outgrown takes the steps on)
+  if seed == 0 && emit_path() != "" {
+    for call in ["client.focus", "chat.place", "draft.put"] {
+      r.skip(call)
+    }
+  }
   r.shuffle(seed)
   r.attach()
   emit_start(seed, w, h, env)
@@ -409,6 +416,19 @@ pub fn Flow::drag(self : Flow, what : String, dx : Double, dy : Double, steps? :
   emit("dragon \{dx.to_int()} \{dy.to_int()} \{(steps.to_double() * @ui.drag_step_ms).to_int()} " + what)
   guard self.spot(what) is Some((x, y)) else { return }
   self.t.drag(x, y, x + dx, y + dy, steps~)
+  self.t.draw()
+  self.core()
+}
+
+///|
+/// Another app shares `text` (a link) titled `title` into the app (the Tester's share_in; a scripted run's
+/// MBUI_SHARE_TEXT and MBUI_SHARE_TITLE, `#env` lines its run starts the app with), taken by the frame after.
+pub fn Flow::share_in(self : Flow, text : String, title? : String = "") -> Unit {
+  emit("#env MBUI_SHARE_TEXT=" + text)
+  if title != "" {
+    emit("#env MBUI_SHARE_TITLE=" + title)
+  }
+  self.t.share_in(text, title~)
   self.t.draw()
   self.core()
 }
