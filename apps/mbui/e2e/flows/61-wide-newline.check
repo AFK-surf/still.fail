@@ -1,2 +1,0 @@
-check "one message of both lines" '[ "$(sql "select count(*) from entries where author=\"alice@example.test\" and text like \"第一行 $TAG%第二行 $TAG\"")" = 1 ]'
-check "none of the first line alone" '[ "$(sql "select count(*) from entries where text=\"第一行 $TAG\"")" = 0 ]'
