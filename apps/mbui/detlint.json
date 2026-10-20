@@ -260,7 +260,7 @@
       "src/sf/tokens.mbt": 2
     },
     "unsettled-ok": {
-      "src/sfreplay/flows/offline_retry_test.mbt": 1,
+      "src/sfreplay/flows/chat/offline_retry_test.mbt": 1,
       "src/sfreplay/steps.mbt": 1
     }
   },

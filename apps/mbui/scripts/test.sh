@@ -22,7 +22,7 @@ for t in ${TARGETS:-js}; do
   [ ${PIPESTATUS[0]} = 0 ] || code=1
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
-  moon test --target $t -p stillfail/core -p stillfail/sfreplay -p stillfail/sfreplay/flows 2>&1 | grep -v "$F" | tail -${LINES_OUT:-8}
+  moon test --target $t -p stillfail/core -p stillfail/sfreplay $(for g in src/sfreplay/flows/*/; do printf -- '-p stillfail/sfreplay/flows/%s ' "$(basename "$g")"; done) 2>&1 | grep -v "$F" | tail -${LINES_OUT:-8}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
   fi
 done
