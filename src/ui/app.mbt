@@ -214,6 +214,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
       break
     }
   }
+  // what the last build said to tell outside, told now, once (Ctx::after_build)
+  let tells = c.tells.copy()
+  c.tells.clear()
+  for t in tells {
+    (t.1)()
+  }
   if scroll_logging() {
     c.log_scroll()
   }
@@ -272,6 +278,23 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
 }
 
 ///|
+/// `f`, what the view tells outside of what it builds (a call to its core: the chat shown and its end seen), done once
+/// the frame's builds are over, as the last of them says it: a frame is built again while what the view read changes
+/// (frame_body), and what an earlier build said, from what it read then, is let go. By `key` in the scope it is said
+/// in: said twice in a build, the later. Said outside a frame's build, at once.
+pub fn Ctx::after_build(self : Ctx, key : String, f : () -> Unit) -> Unit {
+  if !building.val {
+    f()
+    return
+  }
+  let id = self.id("\u{2}after-build/" + key)
+  match self.tells.search_by(fn(t) { t.0 == id }) {
+    Some(k) => self.tells[k] = (id, f)
+    None => self.tells.push((id, f))
+  }
+}
+
+///|
 /// The most times a frame is built (frame_body): what the view read still changing after them is built again at the
 /// next frame (a frame asked for), and a Tester's draw says whose it is (Ctx::read_back_key).
 let frame_passes_most = 3
@@ -285,6 +308,8 @@ let building : Ref[Bool] = Ref::new(false)
 /// The view built (a pass of frame_body): what each build collects begins from nothing; the root, the window's size.
 fn frame_build(c : Ctx, w : Double, h : Double) -> Int {
   c.inners.clear()
+  // (what an earlier build of this frame said to tell outside is let go: this one says it again, or not)
+  c.tells.clear()
   drawing_begin()
   desk_build_start()
   c.layers.clear()

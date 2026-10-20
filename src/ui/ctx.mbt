@@ -261,6 +261,9 @@ pub struct Ctx {
   mut last_layers : Array[Layer]
   /// the layers this frame has given the focus as they opened (their ids): once a frame, at the first build they are in
   layers_opened : Array[Int]
+  /// what the view tells outside of what it built, by key, this build's (Ctx::after_build): done once the frame's
+  /// builds are over
+  tells : Array[(Int, () -> Unit)]
   mut layer_cur : Int
   dismissals : Map[Int, Dismiss]
   layer_return : Map[Int, Int]
@@ -380,6 +383,7 @@ fn Ctx::new() -> Ctx {
     layers: [],
     last_layers: [],
     layers_opened: [],
+    tells: [],
     layer_cur: 0,
     dismissals: Map::new(),
     layer_return: Map::new(),

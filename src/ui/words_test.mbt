@@ -212,3 +212,29 @@ test "words: under a Tester over a host's kept text, the host's own word as it s
   ignore(@ui.word_at("中文分词很好", 5))
   assert_true(t.text_missing().iter().any(fn(m) { m.contains("wa|") }))
 }
+
+///|
+test "what the view tells outside is told once a frame's builds are over, from the last: not what an earlier one read" {
+  let dx = Ref::new(0.0)
+  let told : Array[Double] = []
+  let t = @ui.Tester::new(
+    fn(c) {
+      // (what it tells: where its words were, as read while building)
+      let at = match c.words_of("m") {
+        Some(w) => w.pieces[0].x
+        None => -1.0
+      }
+      c.after_build("place", fn() { told.push(at) })
+      let b = c.box(tx=dx.val, fn() { c.rich([@ui.plain("abc")], size=10.0) |> ignore })
+      c.words(b, "m")
+    },
+    w=300.0,
+    h=300.0,
+  )
+  let x0 = t.ctx().words_of("m").unwrap().pieces[0].x
+  told.clear()
+  dx.val = 10.5
+  // built again in the frame (its words laid out elsewhere): told once, where they are now
+  t.frame(ms=0.0)
+  assert_eq(told, [x0 + 10.5])
+}
