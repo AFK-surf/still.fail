@@ -22,6 +22,9 @@ test "22-answer-option" {
     f.gone("=先不换 083209")
     // the options gone, 你 选择了「…」 in their place
     f.run_to(@sfapp.under_rest())
+    // the answer handed to the agent, its turn on it to its end (the fake's own posts nothing: the station says so),
+    // the chat's mark at work gone with it
+    f.see("本轮 agent 未在对话中回复")
     f.end()
   })
 }
