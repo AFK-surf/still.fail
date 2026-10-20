@@ -37,6 +37,14 @@ static int bench_mode;
 // desktop app's hiddenInset window)
 static double setup_w, setup_h, setup_min_w, setup_min_h;
 static int setup_inset;
+// MBUI_SAFE=<top>,<bottom> (points), in a scripted run only: a phone's system bars round the app's view, as Android's
+// MainActivity and the iOS host lay the app inside them (its view that much smaller, the bands in the page's ground)
+static double safe_top, safe_bottom;
+static int ground_dark;
+// MBUI_GROUND=#<light>,#<dark> with it: the page's grounds as the app's Android manifest says them (dev.mbui.ground,
+// the same value); else the hosts' own (F5F5F7, 1B1C1F)
+static uint32_t ground_light = 0xF5F5F7, ground_of_dark = 0x1B1C1F;
+static NSView *the_box;
 // the pointer's shape (@host.set_cursor), and the press under way (what @host.window_drag drags the window with)
 static int cursor_kind;
 static NSEvent *down_event;
@@ -66,6 +74,7 @@ static mb_outside_fn outside_cb;   // who is told as that is done (host_native.m
 static void pump_soon(void);
 static void script_next(void);
 static int settled_run(void);
+static void set_ground(void);
 
 double mb_now_ms(void) { return CACurrentMediaTime() * 1000.0; }
 
@@ -780,10 +789,24 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
       w.titlebarAppearsTransparent = YES;
       w.titleVisibility = NSWindowTitleHidden;
     }
-    // the content: the native views' view, the canvas's over it, both its size
+    // MBUI_SAFE: the bars' bands, only where the run is a script's (a picture to put beside a phone's)
+    const char *safe = getenv("MBUI_SAFE");
+    if (safe && (getenv("MBUI_SCRIPT") || getenv("MBUI_DRIVE") || getenv("MBUI_DRIVE_B64") || getenv("MBUI_RECORD"))) {
+      sscanf(safe, "%lf,%lf", &safe_top, &safe_bottom);
+      const char *ground = getenv("MBUI_GROUND");
+      unsigned int gl, gd;
+      if (ground && sscanf(ground, "#%6x,#%6x", &gl, &gd) == 2) {
+        ground_light = gl;
+        ground_of_dark = gd;
+      }
+    }
+    // the content: the native views' view, the canvas's over it, both its size (inside the bars' bands)
     NSView *box = [[NSView alloc] initWithFrame:r];
     box.wantsLayer = YES;
-    NSRect inside = NSMakeRect(0, 0, ww, wh);
+    the_box = box;
+    set_ground();
+    // (AppKit's y up: the bottom band first)
+    NSRect inside = NSMakeRect(0, safe_bottom, ww, wh - safe_top - safe_bottom);
     NSView *under = mb_views_root(NSRectToCGRect(inside));
     under.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [box addSubview:under];
@@ -915,6 +938,17 @@ int32_t mb_host_open_url(moonbit_string_t s) {
   return [NSWorkspace.sharedWorkspace openURL:url] ? 1 : 0;
 }
 
+// The ground under MBUI_SAFE's bands: the dark page's or the light one's (MBUI_GROUND, as the Android host takes them
+// from the manifest's dev.mbui.ground), as the hosts put under their system bars; in snapshots too.
+static void set_ground(void) {
+  if (safe_top <= 0 && safe_bottom <= 0) return;
+  uint32_t g = ground_dark ? ground_of_dark : ground_light;
+  CGColorRef c = CGColorCreateSRGB(((g >> 16) & 0xFF) / 255.0, ((g >> 8) & 0xFF) / 255.0, (g & 0xFF) / 255.0, 1);
+  the_box.layer.backgroundColor = c;
+  CGColorRelease(c);
+  mb_render_set_bands(safe_top, safe_bottom, g);
+}
+
 // Whether the run is settled (above): a script's, in stable mode, not a recording's. From the environment, as it is
 // the same before the window runs (what the app starts before @ui.run asks it: own_clock) and after.
 static int settled_run(void) {
@@ -1037,6 +1071,8 @@ void mb_host_set_sideways(int32_t on) { (void)on; }
 void mb_host_set_dark(int32_t dark) {
   NSWindow *w = the_view.window;
   if (w) w.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];
+  ground_dark = dark != 0;
+  set_ground();
 }
 
 // ---- notifications (notify.mbt) ----

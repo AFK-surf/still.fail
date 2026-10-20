@@ -32,6 +32,9 @@ void mb_render_set_size(double w, double h, double scale);
 void mb_render_present(const double *inst, int32_t count, double r, double g, double b);
 // renders the last presented frame again into memory and writes a PNG
 int mb_render_snapshot(const char *path);
+// bands above and under the app's view (points) filled with `ground` (0xRRGGBB) in what snapshots write: a phone's
+// system bars round a scripted run's window (mac_app.m MBUI_SAFE)
+void mb_render_set_bands(double top, double bottom, uint32_t ground);
 void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);
 extern int mb_atlas_size;
 

@@ -538,6 +538,16 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   [cb commit];
 }
 
+// MBUI_SAFE's bands (mac_app.m), in points, and their ground
+static double band_top, band_bottom;
+static uint32_t band_ground;
+
+void mb_render_set_bands(double top, double bottom, uint32_t ground) {
+  band_top = top;
+  band_bottom = bottom;
+  band_ground = ground;
+}
+
 int mb_render_snapshot(const char *path) {
   int w = (int)round(vw * vscale), h = (int)round(vh * vscale);
   MTLTextureDescriptor *td = [MTLTextureDescriptor
@@ -575,6 +585,21 @@ int mb_render_snapshot(const char *path) {
     CGImageRelease(img);
     img = CGBitmapContextCreateImage(under);
     CGContextRelease(under);
+  }
+  if (band_top > 0 || band_bottom > 0) {
+    // the window as it shows: the bands above and under the app's view in their ground
+    int bt = (int)round(band_top * vscale), bb = (int)round(band_bottom * vscale);
+    int fh = h + bt + bb;
+    CGContextRef whole = CGBitmapContextCreate(NULL, w, fh, 8, bpr, cs,
+        kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
+    CGContextSetRGBFillColor(whole, ((band_ground >> 16) & 0xFF) / 255.0, ((band_ground >> 8) & 0xFF) / 255.0,
+                             (band_ground & 0xFF) / 255.0, 1);
+    CGContextFillRect(whole, CGRectMake(0, 0, w, fh));
+    // (a bitmap context's y up: the bottom band first)
+    CGContextDrawImage(whole, CGRectMake(0, bb, w, h), img);
+    CGImageRelease(img);
+    img = CGBitmapContextCreateImage(whole);
+    CGContextRelease(whole);
   }
   CFURLRef url = CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path, strlen(path), false);
   CGImageDestinationRef dst = CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, NULL);
