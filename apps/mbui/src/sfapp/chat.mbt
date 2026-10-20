@@ -73,9 +73,8 @@ priv struct Reading {
   /// the first message's entry and where it was in the list, the last frame
   mut head : String
   mut head_at : Int
-  /// put in place once (the unread line, where it was opened, or the end), and when
+  /// put in place once (the unread line, where it was opened, or the end)
   mut placed : Bool
-  mut placed_at : Double
   mut put : Bool
   /// the first message when the page before was asked for (once per page)
   mut asked : Double
@@ -127,7 +126,6 @@ fn reading_of(key : String) -> Reading {
         head: "",
         head_at: -1,
         placed: false,
-        placed_at: 0.0,
         put: false,
         asked: -1.0,
         asked_newer: -1.0,
@@ -325,6 +323,9 @@ fn messages(
   let dkey = draft_key(r)
   flight_frame(c, dkey)
   let flight = flight_of(dkey)
+  // half a second after it was put in place (shown), what comes at its end may glide: asked each frame it is drawn
+  // (later: nothing shown waits for it)
+  let glides = @kit.after(c, "glide/" + key, rd.placed, glide_after_place_ms, later=true)
   @motion.list_keys(c, key, keys.map(fn(k) { key + "\u{1}" + k })) |> ignore
   let here = { station: r.station, session: r.session, view: v }
   // the first message's row: the page before come in above it, it stays where it is (Chat.kt: the list keeps its
@@ -479,14 +480,13 @@ fn messages(
       stick_end=true,
       // what comes at the end while it follows is glided after (Follow.kt), half a second after it was put in place,
       // not while words sent fly (they put the list in place)
-      glide_on_growth=rd.placed && flight is None && c.now() - rd.placed_at > 500.0,
+      glide_on_growth=glides && flight is None,
     )
     |> ignore
     // put in place once: at the unread line (a few lines of what came before it in view), else where the core opened
     // it, else at its end (where the list starts)
     if !rd.placed && v.messages.length() > 0 && !v.unread_above {
       rd.placed = true
-      rd.placed_at = c.now()
     }
     // put in place this build: the list scrolled there is laid out again in this frame (mbui's same-frame rebuild: a
     // list scrolled is a read changed), and what goes by where it is waits for that build
@@ -661,6 +661,10 @@ fn messages(
 ///|
 /// How long what leaves the chat from the outbox (sent, or deleted) takes to fade.
 pub let out_leave_ms : Double = 200.0
+
+///|
+/// How long after a chat is put in place what comes at its end glides after it (Follow.kt).
+let glide_after_place_ms : Double = 500.0
 
 ///|
 /// An activity whose agent's turn ended stays this long, then fades (`linger_out_ms`), then is gone.
