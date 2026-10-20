@@ -170,7 +170,12 @@ const everyKind: DemoExtension = {
         as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
         as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
         as("cursor", "cursor", "Cursor 订阅", { name: "lin@acme.dev", runtime: "cursor", runtimes: ["cursor"], quota: null }),
-        as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: null }),
+        // A key with an allowance of several windows: they take a line of their own, under its name and where it is.
+        as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: { checkedAt: 0, state: "ok", windows: [
+          { label: "5 小时", mark: "5H", left: 100, level: "ok", usedPercent: 0 },
+          { label: "每周", mark: "W", left: 64, level: "ok", usedPercent: 36 },
+          { label: "每月", mark: "M", left: 8, level: "red", usedPercent: 92 },
+        ] } }),
       ],
     };
   },
