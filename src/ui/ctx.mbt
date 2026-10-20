@@ -137,7 +137,7 @@ pub struct Ctx {
   /// the earliest wake asked for this frame that what is shown waits for (not `later`): -1 none
   mut wake_waited : Double
   /// who asked for the next frame first this frame (Ctx::request_frame's caller), and for the wake it waits for
-  /// (Ctx::wake_in's): what an unsettled run says (Ctx::unsettled)
+  /// (Ctx::wake_in's): what Tester::assert_idle says of what is left
   mut frame_by : SourceLoc?
   mut wake_by : SourceLoc?
   // hit targets of the last frame, in paint order, and those being collected
@@ -1090,9 +1090,9 @@ pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
 ///|
 /// A frame again `ms` from now (for what changes then: words that say
 /// "copied" for a while), without frames in between. `later`: what is shown
-/// does not wait for it to be settled (Ctx::settled: words going back after a
-/// while, a refresh); by default it does (a press held long enough, a menu
-/// opening once the pointer rests).
+/// does not wait for it (Tester::assert_idle does not count it: words going
+/// back after a while, a refresh); by default it does (a press held long
+/// enough, a menu opening once the pointer rests).
 #callsite(autofill(loc))
 pub fn Ctx::wake_in(self : Ctx, ms : Double, later? : Bool = false, loc~ : SourceLoc) -> Unit {
   if !later && self.wake_by is None {

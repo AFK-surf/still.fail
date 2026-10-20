@@ -583,19 +583,6 @@ pub fn Runtime::advance(self : Runtime, ms : Int) -> Unit {
 }
 
 ///|
-/// Runs until nothing is ready and no timer is set (true), moving virtual
-/// time from timer to timer, at most `max_ms` on (false when it stopped there).
-pub fn Runtime::settle(self : Runtime, max_ms? : Int = 3_600_000) -> Bool {
-  guard self.clock is None else { abort("effect: settle on the host's clock") }
-  let limit = self.time + max_ms.to_int64()
-  ignore(self.run_ready())
-  while self.next_timer() is Some(at) && at <= limit {
-    self.fire_until(at)
-  }
-  self.ready.is_empty() && self.next_timer() is None
-}
-
-///|
 /// The host's turn (Runtime::live): fires what is due on its clock and runs
 /// what is ready. It then sets a timer for `next_timer()`, if any.
 pub fn Runtime::tick(self : Runtime) -> Unit {

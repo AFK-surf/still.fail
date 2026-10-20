@@ -182,14 +182,16 @@ The migration ends when each of detlint's rules is at 0 (docs/detlint.md). What 
    and `assert_idle` at its end.
 2. still.fail's `c.stable()`: gone with `Ctx::stable` (mbui #36); the app draws in a screenshot's run as in any.
 3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the Mini1
-   references; then its Mac real-window screenshots and the end-to-end drive's waits for settled are deleted.
+   references; its Mac real-window screenshots are taken at a declared moment, and the end-to-end drive waits for
+   nothing settling (mbui#91).
 4. A Tester's outside work finished by the test only (`finish`, a seed for the order): `auto_finish` off by default.
 5. `wake_in(…, later=true)` gone: a wake is a timed event, and `assert_idle` asks only whether one is due.
 6. `request_frame` out of an app's reach: the moment still.fail's `frame-request` count is 0, `Ctx::request_frame`
    (and `@ui.request_frame`) are made the framework's own (not `pub`), so the compiler stops what the lint did.
-7. Last: `Tester::settle`, `Tester::settled`, `Ctx::settled`, `Runtime::settle` / `settled` deleted, and with them
-   the tests of those (effecttest's `outside_test.mbt`, `scheduler_test.mbt`: they live and die with the API). The
-   `settle` rule is then at 0.
+7. Done (mbui#91, and the PR after it): `Tester::settle`, `Tester::settled`, `Tester::unsettled`, `Ctx::settled`,
+   `Ctx::unsettled`, `Runtime::settle` / `settled` deleted; the hosts are told only what the app awaits of them
+   (`@host.frame_awaiting`); a Mac picture is taken at a declared moment, a script's steps wait for named things only,
+   textdiff turns its pages on a declared time. The `settle` rule is at 0, forbidden.
 
 ## Where it stops
 

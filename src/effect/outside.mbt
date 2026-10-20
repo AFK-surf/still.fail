@@ -63,16 +63,6 @@ pub fn Runtime::awaited(self : Runtime) -> Array[(String, Int64)] {
 }
 
 ///|
-/// Settled: nothing ready, no fiber waiting for a frame, nothing awaited from outside, and no timer set that what is
-/// shown waits for (every timer but those set `later`: a refresh, a blink, words going back after a while).
-pub fn Runtime::settled(self : Runtime) -> Bool {
-  self.ready.is_empty() &&
-  self.frame_waiters.is_empty() &&
-  self.awaited.is_empty() &&
-  !self.timers.items.iter().any(t => t.live && !t.later)
-}
-
-///|
 /// Waits on something outside as a fiber: `start` asks for it and is given the way to answer (a host's callback,
 /// once); the answer is the result. Awaited (`awaited`) until then; given up if the fiber is interrupted.
 pub async fn[X] outside(what : String, start : ((X) -> Unit) -> Unit) -> X {

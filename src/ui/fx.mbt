@@ -71,7 +71,6 @@ fn fx_frame_end(c : Ctx) -> Unit {
     c.request_frame()
   }
   c.fiber_frame = rt.wants_frame()
-  // (whether what is shown waits for it is the runtime's to say: Ctx::settled asks it)
   match rt.next_timer() {
     Some(at) => c.wake_at_time(at.to_double(), later=true)
     None => ()
@@ -115,49 +114,3 @@ pub fn Ctx::effect(self : Ctx, key : String, f : async (@effect.Scope) -> Unit) 
   }
 }
 
-///|
-/// What is shown is settled: the frame just built asks for no other, no wake is due that it waits for (Ctx::wake_in
-/// without `later`), and the window's runtime is settled — no fiber waits for a frame or for the host (an image
-/// decoding, a view loading: hostcall.mbt's tickets), no timer set that is not `later`. What a scripted step or a
-/// screenshot waits for.
-pub fn Ctx::settled(self : Ctx) -> Bool {
-  // (what never ends while shown, a cycle, does not keep it from being settled: as Tester::assert_idle has it)
-  !self.wants_more() && self.wake_waited < 0.0 && fx.val.settled()
-}
-
-///|
-/// A frame asked for by more than what never ends while shown (a cycle): an input's frame after, a motion said, a
-/// layout read back, a frame asked for.
-fn Ctx::wants_more(self : Ctx) -> Bool {
-  self.wants_frame &&
-  (!self.cycling || self.motion_left || self.read_back_moved || self.took_input || self.frame_by is Some(_))
-}
-
-///|
-/// Why what is shown is not settled (Ctx::settled), said: "" when it is.
-pub fn Ctx::unsettled(self : Ctx) -> String {
-  let why : Array[String] = []
-  if self.wants_more() {
-    why.push(
-      "a frame asked for" +
-      (match self.frame_by {
-        Some(l) => " (by \{l})"
-        None => ""
-      }),
-    )
-  }
-  if self.wake_waited >= 0.0 {
-    why.push(
-      "a wake in \{(self.wake_waited - self.now).ceil().to_int()} ms it waits for" +
-      (match self.wake_by {
-        Some(l) => " (by \{l})"
-        None => ""
-      }),
-    )
-  }
-  let rt = fx.val.unsettled()
-  if rt != "" {
-    why.push(rt)
-  }
-  why.join("; ")
-}

@@ -49,10 +49,7 @@
       "src/ui/native.mbt": 3,
       "src/ui/nav.mbt": 4
     },
-    "settle": {
-      "src/effecttest/outside_test.mbt": 10,
-      "src/effecttest/scheduler_test.mbt": 2
-    },
+    "settle": {},
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},

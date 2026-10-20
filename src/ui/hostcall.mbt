@@ -432,8 +432,8 @@ fn h_back_enabled(on : Bool) -> Unit {
 // What the app waits on from the host (effect.mb's outside, src/effect/outside.mbt): an image or a PDF's page
 // decoding (kind 1), a native view until it is ready (kind 2: a page loaded, a video's first frame). Each is a ticket
 // of the window's runtime, ended by the host's event for it (@host.set_outside: kind, id, state) or when the app lets
-// it go; what is shown is settled (Ctx::settled) once none is left. A host that sends no such events (set_outside
-// answers false) gets no tickets: there, settled says nothing of its work.
+// it go; a run to a declared moment keeps its clock still while any is (@host.frame_awaiting). A host that sends no
+// such events (set_outside answers false) gets no tickets.
 
 ///|
 let outside_tickets : Map[Int64, Int] = Map::new()

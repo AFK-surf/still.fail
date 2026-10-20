@@ -76,23 +76,23 @@ test "sleep waits on the virtual clock: advance fires each timer at its time" {
 }
 
 ///|
-test "settle runs from timer to timer until nothing is left" {
+test "advance runs from timer to timer: five naps, each in its turn" {
   let rt = @effect.Runtime::new(start=1000L)
   let n = Ref(0)
+  let nap = 30_000
   ignore(
     rt.fork(async fn() {
       for _ in 0..<5 {
-        @effect.sleep(30_000)
+        @effect.sleep(nap)
         n.val += 1
       }
     }),
   )
-  assert_true(rt.settle())
+  ignore(rt.run_ready())
+  // to the last one's end
+  rt.advance(5 * nap)
   assert_eq(n.val, 5)
   assert_eq(rt.now(), 151_000L)
-  // a fiber that sleeps for ever: settle stops at its limit
-  ignore(rt.fork(async fn() { while true { @effect.sleep(1000) } }))
-  assert_true(!rt.settle(max_ms=10_000))
 }
 
 ///|

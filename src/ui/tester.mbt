@@ -285,13 +285,6 @@ pub fn Tester::finished_order(self : Tester) -> Array[(Int, Int)] {
 }
 
 ///|
-/// Whether what is shown is settled, as the last frame left it (Ctx::settled).
-pub fn Tester::settled(self : Tester) -> Bool {
-  ignore(self)
-  g().settled()
-}
-
-///|
 /// What the app awaits from the host, as effect.mb's outside says it (what it is), oldest first.
 pub fn Tester::awaited(self : Tester) -> Array[String] {
   ignore(self)
@@ -348,39 +341,6 @@ pub fn Tester::frame(self : Tester, ms? : Double = 16.0) -> Unit {
   self.frames = self.frames + 1
   // what the outside the test stands for has said meanwhile, posted for the next frame (messages.mbt)
   frame_ended_outside()
-}
-
-///|
-/// Draws frames until nothing asks for another (animations, scrolling and
-/// re-layouts have finished); returns how many it took. Still asked for after
-/// `max`, the test fails, saying why and who asked (Ctx::unsettled);
-/// `unsettled_ok`: it goes on instead (a test of what runs on; the inputs' own, Tester::tap and the like: whether what
-/// is shown settles is the test's settle to say).
-#callsite(autofill(loc))
-pub fn Tester::settle(
-  self : Tester,
-  max? : Int = 600,
-  unsettled_ok? : Bool = false,
-  loc~ : SourceLoc,
-) -> Int {
-  let mut n = 0
-  while n < max && (g().wants_frame || self.fake.wants) {
-    self.frame()
-    n = n + 1
-  }
-  if !unsettled_ok && n >= max && (g().wants_frame || self.fake.wants) {
-    let why = "Tester::settle (\{loc}): not settled after \{max} frames: " + g().unsettled()
-    println(why)
-    abort(why)
-  }
-  n
-}
-
-///|
-/// Why what is shown is not settled (Ctx::unsettled): "" when it is.
-pub fn Tester::unsettled(self : Tester) -> String {
-  ignore(self)
-  g().unsettled()
 }
 
 ///|
