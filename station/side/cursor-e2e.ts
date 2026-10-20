@@ -139,7 +139,7 @@ const ends = (s: Station) => transcript(s).filter((l) => l.type === "end");
 function posted(s: Station): string[] {
   const db = new DatabaseSync(join(s.data, "stillfail.db"), { readOnly: true });
   try {
-    return (db.prepare("SELECT body FROM entries").all() as { body: string }[]).map((r) => r.body).filter((b) => b.includes('"agent"') || b.includes("chat_post"));
+    return (db.prepare("SELECT text FROM entries WHERE author_kind = 'agent'").all() as { text: string | null }[]).map((r) => r.text ?? "");
   } catch {
     return [];
   } finally {
@@ -198,7 +198,7 @@ async function main() {
   await owner.call("chat.send", { station, session, text: "Also say the number 4242." });
   await until(async () => ends(A).length >= 2, "the second turn's end", 1500);
   const second = transcript(A).slice(first.length);
-  const sleeps = second.filter((l) => l.type === "tool" && JSON.stringify(l.args ?? {}).includes("sleep 25"));
+  const sleeps = second.filter((l) => l.type === "tool" && l.name === "shell" && String(l.args?.command ?? "").includes("sleep 25"));
   const steered = second.filter((l) => l.type === "user" && l.steered === true);
   const said = JSON.stringify(second.filter((l) => l.type === "tool" && l.args?.toolName === "chat_post").map((l) => l.args?.args));
   check("the second message steered into the running turn", steered.map((l) => l.text).join(" | ") || "none", steered.some((l) => l.text.includes("4242")));
