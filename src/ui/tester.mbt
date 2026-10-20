@@ -157,6 +157,7 @@ pub fn Tester::new(
     app_version,
     notices: [],
     notice_opened: "",
+    pdfs: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)

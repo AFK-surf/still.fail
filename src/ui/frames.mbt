@@ -30,10 +30,11 @@ fn drawn_text() -> String {
   let c = g()
   let sb = StringBuilder()
   dump_node(sb, 0, 0)
+  let named = image_numbers(c)
   for k in 0..<c.ninst {
     sb.write_string("inst")
     for j in 0..<inst_size {
-      sb.write_string(" \{(c.inst[k * inst_size + j] * 64.0).round().to_int64()}")
+      sb.write_string(" \{(inst_named(c, named, k, j) * 64.0).round().to_int64()}")
     }
     sb.write_char('\n')
   }
@@ -41,11 +42,42 @@ fn drawn_text() -> String {
 }
 
 ///|
+/// The pictures the last frame drew, numbered as first drawn (their host's ids, which depend on what was decoded
+/// before, are not what was drawn).
+fn image_numbers(c : Ctx) -> Map[Int, Int] {
+  let named : Map[Int, Int] = {}
+  for k in 0..<c.ninst {
+    let b = k * inst_size
+    if c.inst[b + 5] == 4.0 {
+      let id = c.inst[b + 20].to_int()
+      if !named.contains(id) {
+        named[id] = named.length()
+      }
+    }
+  }
+  named
+}
+
+///|
+/// Instance `k`'s number `j` as compared: a picture's id its number as first drawn.
+fn inst_named(c : Ctx, named : Map[Int, Int], k : Int, j : Int) -> Double {
+  let b = k * inst_size
+  if j == 20 && c.inst[b + 5] == 4.0 {
+    named.get(c.inst[b + 20].to_int()).unwrap_or(-1).to_double()
+  } else {
+    c.inst[b + j]
+  }
+}
+
+///|
 fn drawn_hash() -> Int64 {
   let c = g()
   let mut h = -3750763034362895579L
-  for k in 0..<(c.ninst * inst_size) {
-    h = hash_mix(h, (c.inst[k] * 64.0).round().to_int64())
+  let named = image_numbers(c)
+  for k in 0..<c.ninst {
+    for j in 0..<inst_size {
+      h = hash_mix(h, (inst_named(c, named, k, j) * 64.0).round().to_int64())
+    }
   }
   let sb = StringBuilder()
   dump_node(sb, 0, 0)

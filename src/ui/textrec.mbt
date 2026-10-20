@@ -16,6 +16,8 @@ priv struct TextTable {
   keys : Map[String, Int]
   glyphs : Map[Int, Array[Double]]
   missing : Array[String]
+  /// what the host answered of pictures and PDFs (hostrec.mbt), by their lines' heads
+  answers : Map[String, Json]
 }
 
 ///|
@@ -147,6 +149,7 @@ fn text_table_of(lines : String) -> TextTable {
     keys: Map([]),
     glyphs: Map([]),
     missing: [],
+    answers: host_answers_of(lines),
   }
   for v in lines.split("\n") {
     let line = v.to_owned()

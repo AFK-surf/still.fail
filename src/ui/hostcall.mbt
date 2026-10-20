@@ -56,6 +56,8 @@ struct FakeHost {
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
   notices : Array[Notice]
   mut notice_opened : String
+  /// the PDFs opened, by their ids: their bytes' name and length (what their kept answers are by)
+  pdfs : Map[Int, (String, Int)]
 }
 
 ///|
@@ -65,6 +67,14 @@ priv struct FakeImage {
   h : Double
   ow : Double
   oh : Double
+}
+
+///|
+fn fake_image_sized(f : FakeHost, w : Double, h : Double, ow : Double, oh : Double) -> Int {
+  let id = f.images.length() + 1
+  f.wants = true
+  f.images[id] = { state: if ow > 0.0 { 0 } else { -1 }, w, h, ow, oh }
+  id
 }
 
 ///|
@@ -423,18 +433,34 @@ fn h_log(s : String) -> Unit {
 
 ///|
 fn h_image_load(src : String, max_px : Int) -> Int {
+  let head : Json = [Json::string(src), Json::number(max_px.to_double())]
   let id = match fake.val {
     Some(f) => {
       f.image_loads.push((src, max_px))
-      let (w, h) = f.image_sizes.get(src).unwrap_or((0, 0))
-      let id = fake_image(f, w, h, max_px)
+      // as the host decoded it, when kept with the text; else as the test made it up (Tester::new's images)
+      let id = match (f.image_sizes.get(src), text_table.val) {
+        (None, Some(_)) =>
+          match kept_sizes(kept_answer("is", head)) {
+            Some((w, h, ow, oh)) => fake_image_sized(f, w, h, ow, oh)
+            None => fake_image(f, 0, 0, max_px)
+          }
+        (sized, _) => {
+          let (w, h) = sized.unwrap_or((0, 0))
+          fake_image(f, w, h, max_px)
+        }
+      }
       // one it does not know failed at once: nothing of it is left to wait for
-      if w <= 0 {
-        return id
+      match f.images.get(id) {
+        Some(im) if im.state < 0 => return id
+        _ => ()
       }
       id
     }
-    None => @host.image_load(src, max_px)
+    None => {
+      let id = @host.image_load(src, max_px)
+      rec_image_asked(id, { "is": head })
+      id
+    }
   }
   outside_start(1, id, "image \{id} \{src}")
   id
@@ -442,12 +468,25 @@ fn h_image_load(src : String, max_px : Int) -> Int {
 
 ///|
 fn h_image_load_bytes(data : Bytes, max_px : Int) -> Int {
+  let head : Json = [
+    Json::string(bytes_name(data)),
+    Json::number(data.length().to_double()),
+    Json::number(max_px.to_double()),
+  ]
   let id = match fake.val {
     Some(f) => {
       f.image_loads.push(("bytes:\{data.length()}", max_px))
-      fake_image(f, 400, 300, max_px)
+      // as the host decoded these bytes, when kept with the text; else a made-up 400 × 300
+      match (text_table.val, kept_sizes(kept_answer("ib", head))) {
+        (Some(_), Some((w, h, ow, oh))) => fake_image_sized(f, w, h, ow, oh)
+        _ => fake_image(f, 400, 300, max_px)
+      }
     }
-    None => @host.image_load_bytes(data, max_px)
+    None => {
+      let id = @host.image_load_bytes(data, max_px)
+      rec_image_asked(id, { "ib": head })
+      id
+    }
   }
   outside_start(1, id, "image \{id} (\{data.length()} bytes)")
   id
@@ -469,7 +508,13 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
         }
         None => -1
       }
-    None => @host.image_info(id, out)
+    None => {
+      let st = @host.image_info(id, out)
+      if st == 1 {
+        rec_image_ready(id, out)
+      }
+      st
+    }
   }
 }
 
@@ -671,44 +716,118 @@ fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit
 
 ///|
 fn h_pdf_open(data : Bytes) -> Int {
+  let named = (bytes_name(data), data.length())
   match fake.val {
     Some(f) => {
       f.views.push("pdf \{data.length()}")
-      7
+      let doc = 7 + f.pdfs.length()
+      f.pdfs[doc] = named
+      doc
     }
-    None => @host.pdf_open(data)
+    None => {
+      let doc = @host.pdf_open(data)
+      if text_recording() {
+        g().host_rec.pdfs[doc] = named
+      }
+      doc
+    }
   }
+}
+
+///|
+/// A PDF's answers' head: its bytes' name and length, and `more`.
+fn pdf_head(named : (String, Int), more : Array[Int]) -> Json {
+  let a : Array[Json] = [Json::string(named.0), Json::number(named.1.to_double())]
+  for m in more {
+    a.push(Json::number(m.to_double()))
+  }
+  Json::array(a)
 }
 
 ///|
 fn h_pdf_pages(doc : Int) -> Int {
   match fake.val {
-    Some(_) => if doc == 7 { 3 } else { -1 }
-    None => @host.pdf_pages(doc)
+    Some(f) =>
+      match f.pdfs.get(doc) {
+        // as the host counted them, when kept with the text; else the fake's 3
+        Some(named) if text_table.val is Some(_) =>
+          match kept_answer("pn", pdf_head(named, [])) {
+            Some(Number(n, ..)) => n.to_int()
+            _ => 3
+          }
+        Some(_) => 3
+        None => -1
+      }
+    None => {
+      let n = @host.pdf_pages(doc)
+      match g().host_rec.pdfs.get(doc) {
+        Some(named) if text_recording() => {
+          let line : Json = { "pn": pdf_head(named, []), "r": Json::number(n.to_double()) }
+          text_say(line.stringify(), line)
+        }
+        _ => ()
+      }
+      n
+    }
   }
 }
 
 ///|
 fn h_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
   match fake.val {
-    Some(_) => {
-      ignore(doc)
-      ignore(page)
+    Some(f) => {
       out[0] = 612.0
       out[1] = 792.0
+      match f.pdfs.get(doc) {
+        Some(named) if text_table.val is Some(_) =>
+          match kept_answer("ps", pdf_head(named, [page])) {
+            Some(Array([Number(w, ..), Number(h, ..), ..])) => {
+              out[0] = w
+              out[1] = h
+            }
+            _ => ()
+          }
+        _ => ()
+      }
     }
-    None => @host.pdf_page_size(doc, page, out)
+    None => {
+      @host.pdf_page_size(doc, page, out)
+      match g().host_rec.pdfs.get(doc) {
+        Some(named) if text_recording() => {
+          let line : Json = { "ps": pdf_head(named, [page]), "r": nums(out, 2) }
+          text_say(line.stringify(), line)
+        }
+        _ => ()
+      }
+    }
   }
 }
 
 ///|
 fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
   let id = match fake.val {
-    Some(f) => {
-      f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
-      fake_image(f, 1224, 1584, max_px)
+    Some(f) =>
+      match f.pdfs.get(doc) {
+        Some(named) if text_table.val is Some(_) => {
+          f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
+          match kept_sizes(kept_answer("pi", pdf_head(named, [page, max_px]))) {
+            Some((w, h, ow, oh)) => fake_image_sized(f, w, h, ow, oh)
+            None => fake_image(f, 1224, 1584, max_px)
+          }
+        }
+        _ => {
+          f.image_loads.push(("pdf:\{doc}/\{page}", max_px))
+          fake_image(f, 1224, 1584, max_px)
+        }
+      }
+    None => {
+      let id = @host.pdf_page_load(doc, page, max_px)
+      match g().host_rec.pdfs.get(doc) {
+        Some(named) if text_recording() => rec_image_asked(id, { "pi": pdf_head(named, [page, max_px]) })
+        _ => ()
+      }
+      id
     }
-    None => @host.pdf_page_load(doc, page, max_px)
   }
   outside_start(1, id, "image \{id} (PDF \{doc}, page \{page})")
   id

@@ -176,6 +176,8 @@ pub struct Ctx {
   mut nav_rest : Double
   /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
   clear : (Double, Double, Double)
+  /// what of the host's answers is being recorded (hostrec.mbt)
+  host_rec : HostRec
   /// covers by their ids, and those asked for this frame (cover.mbt)
   covers : Map[Int, CoverState]
   cover_asks : Array[CoverAsk]
@@ -296,6 +298,7 @@ fn Ctx::new() -> Ctx {
     read_back_moved: false,
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
+    host_rec: HostRec::new(),
     covers: Map::new(),
     cover_asks: [],
     owner: 0,
