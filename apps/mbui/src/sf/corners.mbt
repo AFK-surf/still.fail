@@ -12,3 +12,11 @@ pub fn concentric(outer : Double, inset : Double) -> Double {
     0.0
   }
 }
+
+///|
+/// The corner of a container whose corner holds a whole circle (or a capsule) of `inner` radius `inset` in from both
+/// edges: round with it, the container's corner its inset plus its radius (a circle is not cut to the container: the
+/// container is drawn round it).
+pub fn around(inset : Double, inner : Double) -> Double {
+  inset + inner
+}

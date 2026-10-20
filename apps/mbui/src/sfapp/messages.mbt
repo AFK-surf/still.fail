@@ -1108,15 +1108,19 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
 }
 
 ///|
-/// The card of options' corner, how far in its rows stand, how far a row's number stands in it: the number's disc is
-/// in the card's corner, concentric with it (docs/ui-panels.md).
-let options_card_radius : Double = 24.4
-
-///|
+/// How far in the card of options' rows stand, how far a row's number stands in it, its disc's size: the first disc is
+/// in the card's corner, and the card's corner is drawn round it (docs/ui-panels.md: a whole circle stays round, the
+/// container follows it).
 let options_card_pad : Double = 8.0
 
 ///|
 let options_row_pad : Double = 7.0
+
+///|
+let option_disc : Double = 22.0
+
+///|
+let options_card_radius : Double = @sf.around(options_card_pad + options_row_pad, option_disc / 2.0)
 
 ///|
 /// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger 8 in
@@ -1169,9 +1173,9 @@ fn decision_options(
           id~,
           fn() {
             c.box(
-              w=Px(22.0),
-              h=Px(22.0),
-              radius=@sf.concentric(options_card_radius, options_card_pad + options_row_pad),
+              w=Px(option_disc),
+              h=Px(option_disc),
+              radius=option_disc / 2.0,
               bg=if o.recommended { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
               align=ACenter,
               justify=JCenter,
