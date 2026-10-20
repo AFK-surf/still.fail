@@ -368,6 +368,37 @@ test "sheet: closed by the view, it sinks away and is gone" {
 }
 
 ///|
+/// A moment into a sheet's way to another height (its spring's first stretch).
+let growing_ms : Double = 50.0
+
+///|
+test "sheet: closed while still on its way to a new height, it sinks away from where it is and is gone" {
+  let open = Ref(true)
+  let tall = Ref(300.0)
+  let shown = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let r = sheet(c, "s", open.val, h=tall.val, fn() { button(c, "OK") |> ignore })
+    shown.val = r.shown
+    if r.open != open.val {
+      open.val = r.open
+    }
+  })
+  to_rest(t, "s")
+  // what it holds grew (a fitted sheet measured): on its way up to 600
+  tall.val = 600.0
+  t.draw()
+  t.run_for(growing_ms)
+  let (_, _, _, h) = t.get(@ui.Dialog).rect
+  assert_true(h > 300.0 && h < 600.0, msg="\{h}")
+  open.val = false
+  t.draw()
+  t.run_for(sheet_rest("s") - t.time())
+  assert_false(shown.val)
+  assert_true(t.query(@ui.Dialog) is None)
+  t.assert_idle()
+}
+
+///|
 test "toasts: the room beside one takes no press (what is under it does)" {
   let taps = Ref(0)
   let t = @ui.Tester::new(fn(c) {

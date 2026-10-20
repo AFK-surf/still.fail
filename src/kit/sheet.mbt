@@ -181,10 +181,13 @@ pub fn sheet(
     }
     _ => ()
   }
-  // closed: it sinks away
+  // closed: it sinks away from the height it has, which stays (one still on its way to another height, told as it
+  // was opened or while open, stops there: else it would sink to where it was and the rest of it stay up)
   if !now && s.was_open {
     s.held = -1.0
-    s.below.go_at(c, s.h.value_at(c))
+    let at = s.h.value_at(c)
+    s.h.put(at)
+    s.below.go_at(c, at)
     s.fade.animate(0.0, scrim_fade())
   }
   // (the springs and the fade say themselves that they move, as they set out: Ctx::moving)
@@ -221,6 +224,7 @@ pub fn sheet(
   if now && o.dismissed is Some(_) {
     now = false
     s.held = -1.0
+    s.h.put(hx)
     s.below.go_at(c, hx)
     s.fade.animate(0.0, scrim_fade())
   }
