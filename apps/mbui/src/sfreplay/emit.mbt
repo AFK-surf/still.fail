@@ -103,3 +103,21 @@ fn page_name(page : @sfapp.Page) -> String {
     _ => abort("flow: no MBUI_OPEN_PAGE for this page")
   }
 }
+
+///|
+/// The calls the core answered in the step just taken, a scripted run's `answered NAME` each (drive.mbt: the step
+/// after waits for that answer and the frame drawn after it), once each in order.
+fn emit_answered(names : Array[String]) -> Unit {
+  match script.val {
+    Some(_) => {
+      let seen : Array[String] = []
+      for n in names {
+        if !seen.contains(n) {
+          seen.push(n)
+          emit("answered " + n)
+        }
+      }
+    }
+    None => ()
+  }
+}
