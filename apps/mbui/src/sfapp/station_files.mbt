@@ -480,7 +480,8 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
     return
   }
   let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pl=2.0, pr=2.0, pt=2.0, gap=11.0, align=AEnd, clip=true, fn() {
+  // (as the files' row: as far from the capsule's left edge as from its top)
+  c.box(dir=Row, w=Fill(1.0), pl=composer_files_in - composer_inset, pr=2.0, pt=files_row_top, gap=11.0, align=AEnd, clip=true, fn() {
     for r in refs {
       let remove = c.id("composer/unref/" + r.station + "|" + r.path)
       let card = c.id("composer/ref/" + r.station + "|" + r.path)
@@ -515,13 +516,16 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
           None => tr("common.uploading")
         }
       }
+      // its remove button over its corner, as a picture's in the composer
+      with_remove(c, remove, fn() {
       c.box(
         dir=Row,
         w=Px(236.0),
+        min_h=picture_tile,
         padx=10.0,
         pady=8.0,
         gap=10.0,
-        radius=16.0,
+        radius=files_corner(),
         border=if named { 1.0 } else { 0.0 },
         border_color=@sf.alpha(t.p.text, 0.22),
         bg=if named { 0L } else { ink().neutral },
@@ -539,10 +543,10 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
             |> ignore
           })
           |> ignore
-          card_close(c, remove)
         },
       )
       |> ignore
+      })
     }
   })
   |> ignore

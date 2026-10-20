@@ -33,6 +33,27 @@ let composer_corner : Double = 26.0
 let composer_inset : Double = 8.0
 
 ///|
+/// What waits to go with the message, in the capsule's top left corner: a picture's tile (its remove button reaching
+/// `picture_remove_out` beyond its top right corner), each file's card as tall and as round. The row stands as far
+/// from the capsule's left edge as from its top (composer_files_in), so their corner is concentric with the capsule's.
+let picture_tile : Double = 56.0
+
+///|
+let picture_remove_out : Double = 5.0
+
+///|
+let files_row_top : Double = 2.0
+
+///|
+let composer_files_in : Double = composer_inset + files_row_top + picture_remove_out
+
+///|
+/// The corner of what waits in the files' row (a picture's tile, a file's card).
+fn files_corner() -> Double {
+  @sf.concentric(composer_corner, composer_files_in)
+}
+
+///|
 /// Where ＋'s ink starts in its 36 button (the 18 icon centred, its line from 4.5 of 24 less half its 1.75 stroke):
 /// the opened field's words start there.
 let plus_ink : Double = 9.0 + 18.0 * ((4.5 - 1.75 / 2.0) / 24.0)
@@ -1308,8 +1329,17 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
   }
   ref_cards(c, d.key)
   if d.files.length() > 0 {
-    // as far from the capsule's edge as from its top (ComposerFilesIn 10), past its own room
-    c.box(dir=Row, w=Fill(1.0), pl=2.0, pr=2.0, pt=2.0, gap=11.0, align=AEnd, clip=true, fn() {
+    // as far from the capsule's left edge as from its top (composer_files_in), past its own room
+    c.box(
+      dir=Row,
+      w=Fill(1.0),
+      pl=composer_files_in - composer_inset,
+      pr=2.0,
+      pt=files_row_top,
+      gap=11.0,
+      align=AEnd,
+      clip=true,
+      fn() {
       for f in d.files {
         let remove = c.id("composer/remove/\{f.id}")
         if c.clicked(remove) {
@@ -1333,13 +1363,17 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
         if picture != "" || (kind_of(f.name) == "image" && f.pasted is None && f.done is Some(_)) {
           draft_picture(c, f, picture, remove)
         } else {
-          match f.pasted {
-            Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
-            None => file_tile(c, f, remove)
-          }
+          // (its remove button over its corner as a picture's: their tops in line)
+          with_remove(c, remove, fn() {
+            match f.pasted {
+              Some(words) => pasted_card(c, src, r, d, f, words, remove, locked)
+              None => file_tile(c, f, remove)
+            }
+          })
         }
       }
-    })
+      },
+    )
     |> ignore
   }
 }
@@ -1349,10 +1383,10 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
 /// remove button over its corner.
 fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Unit {
   let t = @sf.theme()
-  c.box(w=Px(61.0), h=Px(61.0), pt=5.0, pr=5.0, fn() {
-    c.box(w=Px(56.0), h=Px(56.0), radius=16.0, bg=t.p.chip, clip=true, fn() {
+  with_remove(c, remove, fn() {
+    c.box(w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), bg=t.p.chip, clip=true, fn() {
       if picture != "" {
-        c.image(picture, w=Px(56.0), h=Px(56.0), radius=16.0, fit=FitCover, bg=0L) |> ignore
+        c.image(picture, w=Px(picture_tile), h=Px(picture_tile), radius=files_corner(), fit=FitCover, bg=0L) |> ignore
       }
       if f.done is None {
         c.layer(fn() {
@@ -1376,6 +1410,16 @@ fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Un
       }
     })
     |> ignore
+  })
+}
+
+///|
+/// What waits to go with the message (a picture's tile, a file's card), its remove button over its top right corner,
+/// reaching `picture_remove_out` beyond it (Composer.kt: a picture's; a file's card the same here, so both read alike).
+fn with_remove(c : @ui.Ctx, remove : Int, body : () -> Unit) -> Unit {
+  let t = @sf.theme()
+  c.box(pt=picture_remove_out, pr=picture_remove_out, fn() {
+    body()
     c.layer(align=AEnd, fn() {
       c.box(w=Px(20.0), h=Px(20.0), radius=10.0, bg=t.p.text, align=ACenter, justify=JCenter, id=remove, fn() {
         @sf.icon(c, "close", size=12.0, color=t.p.raised) |> ignore
@@ -1383,16 +1427,6 @@ fn draft_picture(c : @ui.Ctx, f : Pending, picture : String, remove : Int) -> Un
       |> ignore
     })
     |> ignore
-  })
-  |> ignore
-}
-
-///|
-/// The round × of a card in the composer.
-fn card_close(c : @ui.Ctx, remove : Int) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Px(22.0), h=Px(22.0), radius=11.0, bg=@sf.alpha(t.p.text, 0.06), align=ACenter, justify=JCenter, id=remove, fn() {
-    @sf.icon(c, "close", size=12.0, color=t.p.muted) |> ignore
   })
   |> ignore
 }
@@ -1432,12 +1466,13 @@ fn pasted_card(
   c.box(
     dir=Row,
     w=Px(260.0),
+    min_h=picture_tile,
     pl=10.0,
     pr=8.0,
     pt=8.0,
     pb=8.0,
     gap=10.0,
-    radius=16.0,
+    radius=files_corner(),
     bg=k.neutral,
     align=ACenter,
     fn() {
@@ -1487,7 +1522,7 @@ fn pasted_card(
         }
       })
       |> ignore
-      card_close(c, remove)
+      ignore(remove)
     },
   )
   |> ignore
@@ -1502,7 +1537,17 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
   let busy = f.done is None && f.error is None
   // a link shared in (share-in.ts): its title and its site, drawn as a file is
   let link = field(f.done, "link")
-  c.box(dir=Row, w=Px(236.0), padx=10.0, pady=8.0, gap=10.0, radius=16.0, bg=k.neutral, align=ACenter, fn() {
+  c.box(
+    dir=Row,
+    w=Px(236.0),
+    min_h=picture_tile,
+    padx=10.0,
+    pady=8.0,
+    gap=10.0,
+    radius=files_corner(),
+    bg=k.neutral,
+    align=ACenter,
+    fn() {
     if busy {
       @sf.spinner(c) |> ignore
     } else if link is Some(_) {
@@ -1530,8 +1575,9 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Unit {
       |> ignore
     })
     |> ignore
-    card_close(c, remove)
-  })
+    ignore(remove)
+    },
+  )
   |> ignore
 }
 
