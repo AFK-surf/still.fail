@@ -2133,12 +2133,18 @@ test("an_existing_update_is_not_started_twice_by_a_batch", async () => {
 test("a_batch_waits_for_a_runtime_to_finish_before_starting_station", async () => {
   const items = [{ id: "station", installed: true, updatable: true, newer: true }, { id: "claude", installed: true, updatable: true, newer: true }];
   const answers: J = { ...base(), "GET /overview": { ...overview, updates: items }, "POST /updates": [{ id: "claude", state: "updating" }] };
-  const { host, core } = await started(answers);
+  const { host, core, push } = await started(answers);
   const done = Effect.runPromise(Effect.result(core.inner.stations.perform(op("software.updateAll", {}), null)));
   await host.time.pass(3_000, 100);
   assert.equal(posted(host, "/admin/api/updates").length, 1, "station cannot restart during a runtime update");
-  answers["GET /overview"] = { ...overview, updates: [{ id: "claude", state: "idle" }] };
-  await host.time.pass(2_000, 100);
+  // Its progress is the station's to tell (its overview event, as the pages see it), not asked again each second.
+  const asked = () => host.requests.filter((r) => r.method === "GET" && r.url.endsWith("/admin/api/overview")).length;
+  const before = asked();
+  await host.time.pass(10_000, 100);
+  assert.equal(asked(), before);
+  assert.equal(posted(host, "/admin/api/updates").length, 1);
+  push("overview", { ...overview, updates: [{ id: "claude", state: "idle" }] });
+  await host.time.pass(500, 100);
   assert.equal(((await done) as J)._tag, "Success");
   assert.equal(posted(host, "/admin/api/updates").length, 2);
   core.close();
