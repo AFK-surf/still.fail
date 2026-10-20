@@ -3,7 +3,7 @@
 ///|
 test "the foundation page under a Tester over mini1_foundation's kept text draws, frame for frame, what it drew" {
   reset()
-  let t = @ui.Tester::new(fn(c) { gallery(c, "foundation") }, w=960.0, h=720.0, text=run_mini1_foundation, scale=1.0, time=7950001026.96871 - 16.0, stable=true)
+  let t = @ui.Tester::new(fn(c) { gallery(c, "foundation") }, w=960.0, h=720.0, text=run_mini1_foundation, run=run_mini1_foundation, scale=1.0, time=7950001026.96871 - 16.0, stable=true)
   let frames = t.replay_frames(run_mini1_foundation)
   let apart = frames.filter(fn(f) { f.1 != f.2 })
   println("frames \{frames.length()}, apart \{apart.length()}, text missing \{t.text_missing()}")

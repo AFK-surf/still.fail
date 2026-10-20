@@ -267,3 +267,37 @@ test "what comes again every so often while shown (a run's time each second) is 
   assert_true(t.periodic()[0].has_prefix("every 1000 ms by "))
   t.assert_idle()
 }
+
+///|
+test "the system's say on notifications is the test's: refused, the app's ask answered no; never answered, nothing" {
+  let asked = Ref(false)
+  let answers : Array[Bool] = []
+  let t = @ui.Tester::new(fn(c) {
+    if asked.val && @ui.notice_permission() == "ask" {
+      asked.val = false
+      ignore(@ui.notice_ask())
+    }
+    match @ui.notice_answer() {
+      Some(a) => answers.push(a)
+      None => ()
+    }
+    c.text(@ui.notice_permission(), wrap=false) |> ignore
+  })
+  t.draw()
+  assert_true(t.find("granted") is Some(_))
+  t.set_notice_permission("ask")
+  t.set_notice_reply(Some(false))
+  asked.val = true
+  t.draw()
+  assert_eq(t.notice_asks(), 1)
+  assert_eq(answers, [false])
+  assert_true(t.find("denied") is Some(_))
+  // asked again, left unanswered: no answer comes
+  t.set_notice_permission("ask")
+  t.set_notice_reply(None)
+  asked.val = true
+  t.draw()
+  assert_eq(t.notice_asks(), 2)
+  assert_eq(answers, [false])
+  t.assert_idle()
+}

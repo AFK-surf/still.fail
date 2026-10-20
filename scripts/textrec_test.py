@@ -12,7 +12,6 @@ W H "-": the window's size at the run's first frame (its DRAWHASH line).
 PLATFORM is the host's as @host.platform has it (0 macOS, 1 iOS, 2 Android, 3 Windows, 4 the web; 0 by default).
 """
 import glob
-import json
 import re
 import os
 import sys
@@ -68,27 +67,11 @@ def main():
             "// made by scripts/textrec_test.py: not edited by hand.", "", "///|", f"let run_{name} : String ="]
     data += ["  #|" + l for l in keep]
     plat = f", platform={platform}" if platform != "0" else ""
-    # the system's settings before the first frame (its ENV line): Tester::new draws that frame itself, before
-    # replay_frames reaches the line, so they are given to it here (later ENV lines replay_frames sets at their place)
-    first_env = {}
-    for l in keep:
-        if l.startswith("DRAWHASH "):
-            break
-        if l.startswith("ENV "):
-            first_env = json.loads(l[4:])
-    if first_env.get("motion"):
-        plat += ', env=[("MBUI_REDUCE_MOTION", "1")]'
-    if first_env.get("dark"):
-        plat += ", dark=true"
-    if first_env.get("inset"):
-        plat += ", window_inset=true"
-    if first_env.get("glass"):
-        sys.exit("textrec_test.py: the run's first frame has transparency reduced, which Tester::new cannot be given")
     test = [f"// A Tester over {name}'s kept text and frames (textrec_{name}.mbt), made by scripts/textrec_test.py.", "",
             "///|",
             f'test "the {page} page under a Tester over {name}\'s kept text draws, frame for frame, what it drew" {{',
             "  reset()",
-            f'  let t = @ui.Tester::new(fn(c) {{ gallery(c, "{page}") }}, w={w}, h={h}, text=run_{name}, scale={scale}, time={t0} - 16.0, stable={stable}{plat})',
+            f'  let t = @ui.Tester::new(fn(c) {{ gallery(c, "{page}") }}, w={w}, h={h}, text=run_{name}, run=run_{name}, scale={scale}, time={t0} - 16.0, stable={stable}{plat})',
             f"  let frames = t.replay_frames(run_{name})",
             "  let apart = frames.filter(fn(f) { f.1 != f.2 })",
             '  println("frames \\{frames.length()}, apart \\{apart.length()}, text missing \\{t.text_missing()}")',

@@ -58,6 +58,12 @@ struct FakeHost {
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
   notices : Array[Notice]
   mut notice_opened : String
+  /// what the system lets the app show ("granted", "denied", "ask", "unknown": Tester::set_notice_permission), what
+  /// the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after it
+  mut notice_perm : String
+  mut notice_reply : Bool?
+  mut notice_asks : Int
+  mut notice_due : (Bool, Int)?
   /// the PDFs opened, by their ids: their bytes' name and length (what their kept answers are by)
   pdfs : Map[Int, (String, Int)]
   /// what the system's pickers give (Tester::picks), what was asked of them (files.mbt), the files kept on the device

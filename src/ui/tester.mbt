@@ -105,6 +105,8 @@ fn leaked_state() -> Array[String] {
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
 /// in place of the fake host's. `scale`: device pixels a point. `time`: the clock before the first frame (drawn 16 ms
 /// later). `stable`: output the same on every run, as a host asked by MBUI_BENCH=-1 makes it (Ctx::stable).
+/// `run`: a real host's run this Tester replays (Tester::replay_frames): the system's settings it began with (its ENV
+/// lines before its first frame) are set before the first frame is drawn, so that frame is the run's first.
 /// `finish`: what the host does for the app (an image decoding, a native view
 /// loading) is done by itself at the next frame, in the order asked; false: it
 /// stays undone until the test says (Tester::finish, finish_all), so the test
@@ -125,6 +127,7 @@ pub fn Tester::new(
   time? : Double = 1000.0,
   stable? : Bool = false,
   finish? : Bool = true,
+  run? : String,
 ) -> Tester {
   let f = {
     time,
@@ -161,6 +164,10 @@ pub fn Tester::new(
     app_version,
     notices: [],
     notice_opened: "",
+    notice_perm: "granted",
+    notice_reply: Some(true),
+    notice_asks: 0,
+    notice_due: None,
     pdfs: {},
     picks: [],
     pick_asks: [],
@@ -168,6 +175,9 @@ pub fn Tester::new(
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
+  }
+  if run is Some(r) {
+    env_before_frames(f, r)
   }
   fake.val = Some(f)
   reset_globals()

@@ -53,10 +53,70 @@ pub fn notice_opened() -> String {
 }
 
 ///|
-/// What the system lets the app show (@host.notice_permission): a test's host lets it.
+/// What the system lets the app show (@host.notice_permission): "granted", "denied", "ask", "unknown". A Tester's
+/// host lets it unless the test says otherwise (Tester::set_notice_permission).
 pub fn notice_permission() -> String {
   match fake.val {
-    Some(_) => "granted"
+    Some(f) => f.notice_perm
     None => @host.notice_permission()
   }
+}
+
+///|
+/// Asks the system to let the app show notifications (@host.notice_ask): false when nothing was asked (allowed
+/// already). Under a Tester the person answers as the test said (Tester::set_notice_reply), from the next frame.
+pub fn notice_ask() -> Bool {
+  match fake.val {
+    Some(f) => {
+      if f.notice_perm == "granted" {
+        return false
+      }
+      f.notice_asks += 1
+      f.notice_due = match f.notice_reply {
+        Some(yes) => Some((yes, g().frame_no))
+        None => None
+      }
+      f.wants = true
+      true
+    }
+    None => @host.notice_ask()
+  }
+}
+
+///|
+/// The system's answer to the last `notice_ask`, once (@host.notice_answer): Some(true) allowed, Some(false) refused,
+/// None not yet.
+pub fn notice_answer() -> Bool? {
+  match fake.val {
+    Some(f) =>
+      match f.notice_due {
+        Some((yes, asked)) if g().frame_no > asked => {
+          f.notice_due = None
+          f.notice_perm = if yes { "granted" } else { "denied" }
+          Some(yes)
+        }
+        _ => None
+      }
+    None => @host.notice_answer()
+  }
+}
+
+///|
+/// What the system lets the app show from the next frame on: "granted", "denied", "ask" (not asked yet), "unknown".
+pub fn Tester::set_notice_permission(self : Tester, state : String) -> Unit {
+  self.fake.notice_perm = state
+  self.fake.wants = true
+}
+
+///|
+/// What the person answers when the app asks to show notifications: Some(true) allows, Some(false) refuses, None never
+/// answers (the dialog left open).
+pub fn Tester::set_notice_reply(self : Tester, reply : Bool?) -> Unit {
+  self.fake.notice_reply = reply
+}
+
+///|
+/// How often the app asked to show notifications (notice_ask).
+pub fn Tester::notice_asks(self : Tester) -> Int {
+  self.fake.notice_asks
 }
