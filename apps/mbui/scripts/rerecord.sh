@@ -71,10 +71,15 @@ bash scripts/e2e-local.sh up > "$TMP/up.log" 2>&1 || { tail -30 "$TMP/up.log"; d
 bash e2e/run.sh mac 2>&1 | tee "$TMP/run.log" | grep -a '^PASS\|^FAIL\|flows passed\|DRIVE FAIL'
 rc=${PIPESTATUS[0]}
 [ -n "${E2E_KEEP:-}" ] || bash scripts/e2e-local.sh down > /dev/null 2>&1
-[ $rc = 0 ] || die "the run failed: the traces are left as they were ($TMP/run.log, out/e2e/mac/)"
-code=0
+# (a flow its run failed keeps its old trace; the others are recorded again)
+[ $rc = 0 ] || echo "rerecord: not all of the run passed: those that failed keep their traces ($TMP/run.log, out/e2e/mac/)"
+code=$rc
 for x in $tests; do
   name=${x%%:*}; rest=${x#*:}; trace=${rest%%:*}; test=${rest#*:}
+  if ! grep -aq '^DRIVE PASS' "out/e2e/mac/$name.log" 2>/dev/null; then
+    echo "  $test: its run failed, its trace kept as it was:"; grep -a 'DRIVE FAIL' "out/e2e/mac/$name.log" 2>/dev/null | head -2 | cut -c1-300
+    continue
+  fi
   cp "$trace" "$TMP/$(basename "$trace").old"
   python3 scripts/trace.py "out/e2e/mac/$name.log" "$(basename "$trace" .trace)"
   python3 scripts/tracediff.py "$TMP/$(basename "$trace").old" "$trace" | sed "s|^|  $(basename "$trace" .trace): |"
