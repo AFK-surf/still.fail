@@ -52,7 +52,7 @@ test "a shared link in a draft: a card with its site, sent as words after what i
     loaded: true,
     kept: "",
     changed_at: 0.0,
-    warmed: 0.0,
+    warm_n: 1,
     focus: 0,
     id: "",
   }

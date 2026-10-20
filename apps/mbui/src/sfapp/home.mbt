@@ -488,9 +488,9 @@ fn moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit 
 }
 
 ///|
-/// The marks each chat has had and since when (ListMotion.kt MarksSeen), from the whole list: a mark that came while
-/// the list shows pops in as its row is drawn (within 300 ms of coming), one there from the first does not.
-let marks_seen : Map[String, (String, Double)] = {}
+/// The mark each chat has had (ListMotion.kt MarksSeen), from the whole list: a mark that came while the list shows
+/// pops in, its pop set out as it comes (mark_pop_of); one there from the first does not.
+let marks_seen : Map[String, String] = {}
 
 ///|
 fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
@@ -499,8 +499,13 @@ fn note_marks(c : @ui.Ctx, v : ChatsView) -> Unit {
       let k = item.station + "/" + item.id
       let tone = row_tone(item)
       match marks_seen.get(k) {
-        None => marks_seen[k] = (tone, -1.0e9)
-        Some((was, _)) if was != tone => marks_seen[k] = (tone, c.now())
+        None => marks_seen[k] = tone
+        Some(was) if was != tone => {
+          marks_seen[k] = tone
+          let p = mark_pop_of(c, k, tone)
+          p.snap(0.0)
+          p.animate(1.0, @motion.tween(mark_pop_ms, ease=CssOut))
+        }
         _ => ()
       }
     }
@@ -743,16 +748,7 @@ fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   })
   // one that came while the list shows pops in (Home.kt ChatMark: 320 ms, CSS's ease-out, 0 → 1.3 at 60% → 1)
   if pop != "" {
-    let k = "mark-pop/" + pop + "/" + tone
-    let fresh = match marks_seen.get(pop) {
-      Some((was, at)) => was == tone && c.now() - at <= mark_pop_window_ms
-      None => false
-    }
-    let p = @motion.anim(c, k, if fresh { 0.0 } else { 1.0 }, global=true)
-    if fresh && !p.moving() && p.get() == 0.0 {
-      p.animate(1.0, @motion.tween(mark_pop_ms, ease=CssOut))
-    }
-    let v = p.get()
+    let v = mark_pop_of(c, pop, tone).get()
     if v < 1.0 {
       let s = if v < 0.6 { 1.3 * v / 0.6 } else { 1.3 - 0.3 * (v - 0.6) / 0.4 }
       c.look(mark, @ui.look(scale=s))
@@ -761,11 +757,14 @@ fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
 }
 
 ///|
-/// A mark that came this recently pops in as its row is drawn; the pop's length.
-let mark_pop_window_ms : Double = 300.0
+/// The pop's length.
+let mark_pop_ms : Double = 320.0
 
 ///|
-let mark_pop_ms : Double = 320.0
+/// A chat's pop of its mark `tone` (whole, 1, unless one set out as the mark came: note_marks).
+fn mark_pop_of(c : @ui.Ctx, chat : String, tone : String) -> @motion.Anim {
+  @motion.anim(c, "mark-pop/" + chat + "/" + tone, 1.0, global=true)
+}
 
 ///|
 /// How long a row is held before its time shows (a long press).
