@@ -1,6 +1,8 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import { pillInner, surfaceCorner } from "@stillfail/ui/styles/align.ts";
 import { mButton } from "./parts.css.ts";
+import { mField } from "./styles/lists.css.ts";
 
 export const mMono = style({
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: vars.textUi, overflow: "hidden",
@@ -49,5 +51,16 @@ export const mStepN = style({
 export const mStepBody = style({ paddingLeft: "30px" });
 /** The code's field and what sends it, on one line. */
 export const mCodeRow = style({ display: "flex", alignItems: "center", gap: "8px" });
+/** A sign-in card with its buttons at its foot (or the code's field and what sends it): they sit in its bottom corners,
+ *  as far from its foot as from its sides, and its corner is taken from them (docs/ui-panels.md, align.ts pillInner);
+ *  the field beside a button is as high and rounded as it is. */
+const SIGN_IN_PAD = 16;
+const SIGN_IN_PILL = 38;
+globalStyle(`${mSignIn}:has(> ${mButton}:last-child), ${mSignIn}:has(> ${mSignInActions}:last-child), ${mSignIn}:has(> ${mCodeRow}:last-child)`, {
+  paddingBottom: `${SIGN_IN_PAD}px`, borderRadius: surfaceCorner(SIGN_IN_PAD, pillInner(SIGN_IN_PAD, SIGN_IN_PILL, vars.cornerScale)),
+});
+globalStyle(`${mSignIn} > ${mCodeRow}:last-child > ${mField}`, {
+  height: `${SIGN_IN_PILL}px`, paddingBlock: "0", borderRadius: pillInner(SIGN_IN_PAD, SIGN_IN_PILL, vars.cornerScale),
+});
 /** A key's profile: where it stands, atop its key's rows on one card. */
 export const mHeadRow = style({ padding: "14px 16px" });
