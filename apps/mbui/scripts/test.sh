@@ -23,7 +23,7 @@ for t in ${TARGETS:-js}; do
   mode=
   if [ $t = native ] && [ "$(uname)" = Darwin ]; then
     mode=--release
-    export MBC_REAL_CC="$MBUI_DIR/scripts/cc_apple.sh" MBC_LTO=${MBC_LTO:-0}
+    export MBC_REAL_CC="$A/mbui/scripts/cc_apple.sh" MBC_LTO=${MBC_LTO:-0}
     PATH="$(python3 "$MBUI_DIR/scripts/mbc.py" shim "$A/_build/mbc-bin"):$PATH"
   fi
   # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
