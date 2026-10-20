@@ -476,8 +476,7 @@ test "a message held: its words quoted into the draft, with a line for a comment
 test "the fixture's station: sending, then the message, then an answer; a failure, then 重试" {
   reset()
   let clock : Ref[Double] = { val: 0.0 }
-  fix_clock.val = fn() { clock.val }
-  fix_wake.val = fn(_) {  }
+  fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
@@ -510,8 +509,7 @@ test "the fixture's station: sending, then the message, then an answer; a failur
   t.draw()
   assert_true(t.find("未发送") is None)
   assert_true(t.find("这条会失败") is Some(_))
-  fix_clock.val = fix_frame_clock
-  fix_wake.val = fix_frame_wake
+  fix_clock.val = None
 }
 
 ///|

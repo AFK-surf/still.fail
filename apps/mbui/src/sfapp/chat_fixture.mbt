@@ -472,38 +472,27 @@ fn fix_chat(session : String) -> FixChat {
 }
 
 ///|
-/// What happens later (the station's answers), at a time of day in ms.
+/// What the fixture's station does later (its answers): `ms` after it is said, on the window's runtime's clock
+/// (Runtime::after: the station is outside the view, timed as a host's answer is), or on a test's own clock
+/// (fix_clock). Due, it is done as the fixture is next read (fix_tick): what is shown reads it then.
+let fix_due : Array[() -> Unit] = []
+
+///|
+/// What was said later before the window's first frame (as the fixture is made): handed to its runtime as the
+/// fixture is first read, `ms` from then.
+let fix_unsaid : Array[(Double, () -> Unit)] = []
+
+///|
+/// What is said later on a test's own clock (fix_clock), at a time on it.
 let fix_timers : Array[(Double, () -> Unit)] = []
 
 ///|
-/// The window's context of the frame being built (`view` sets it): the fixture's clock is its frames' clock, the
-/// same one under a Tester and in a settled scripted run, never the wall's.
+/// The window's context of the frame being built (`view` sets it): none yet, the fixture is being made.
 let fix_ctx : Ref[@ui.Ctx?] = { val: None }
 
 ///|
-/// The frames' clock (what the fixture's times are on, unless a test sets its own).
-fn fix_frame_clock() -> Double {
-  match fix_ctx.val {
-    Some(c) => c.now()
-    None => 0.0
-  }
-}
-
-///|
-/// A frame again `ms` from now on the frames' clock.
-fn fix_frame_wake(ms : Double) -> Unit {
-  match fix_ctx.val {
-    Some(c) => c.wake_in(ms)
-    None => ()
-  }
-}
-
-///|
-/// The fixture's clock and how it asks for a frame later (a test sets its own).
-let fix_clock : Ref[() -> Double] = { val: fix_frame_clock }
-
-///|
-let fix_wake : Ref[(Double) -> Unit] = { val: fix_frame_wake }
+/// A test's own clock for the fixture's station, moved on by the test (none: the window's runtime times it).
+let fix_clock : Ref[(() -> Double)?] = { val: None }
 
 ///|
 let fix_drafts : Map[String, Json] = {}
@@ -512,28 +501,33 @@ let fix_drafts : Map[String, Json] = {}
 let fix_serial : Ref[Int] = { val: 0 }
 
 ///|
-/// The timers due, run (each a change: the views read again); a frame asked for the next.
+/// What is due, done (each a change: the views read again); what was said before the first frame, handed to the
+/// runtime.
 fn fix_tick(f : Fixture) -> Unit {
-  if fix_timers.length() == 0 {
-    return
+  if fix_ctx.val is Some(_) && fix_unsaid.length() > 0 {
+    let unsaid = fix_unsaid.copy()
+    fix_unsaid.clear()
+    for u in unsaid {
+      fix_later(u.0, u.1)
+    }
   }
-  let now = (fix_clock.val)()
-  let due = fix_timers.filter(fn(t) { t.0 <= now })
-  if due.length() > 0 {
-    fix_timers.retain(fn(t) { t.0 > now })
-    for t in due {
-      (t.1)()
+  match fix_clock.val {
+    Some(clock) => {
+      let now = clock()
+      for t in fix_timers.filter(fn(t) { t.0 <= now }) {
+        fix_due.push(t.1)
+      }
+      fix_timers.retain(fn(t) { t.0 > now })
+    }
+    None => ()
+  }
+  if fix_due.length() > 0 {
+    let due = fix_due.copy()
+    fix_due.clear()
+    for d in due {
+      d()
     }
     f.version += 1
-  }
-  let mut next = -1.0
-  for t in fix_timers {
-    if next < 0.0 || t.0 < next {
-      next = t.0
-    }
-  }
-  if next >= 0.0 {
-    (fix_wake.val)(dmax(next - now, 1.0))
   }
 }
 
@@ -550,8 +544,11 @@ let fix_turn_end_ms : Double = 700.0
 
 ///|
 fn fix_later(ms : Double, f : () -> Unit) -> Unit {
-  fix_timers.push(((fix_clock.val)() + ms, f))
-  (fix_wake.val)(ms)
+  match (fix_clock.val, fix_ctx.val) {
+    (Some(clock), _) => fix_timers.push((clock() + ms, f))
+    (None, Some(_)) => @ui.runtime().after(ms.ceil().to_int(), fn() { fix_due.push(f) })
+    (None, None) => fix_unsaid.push((ms, f))
+  }
 }
 
 ///|
@@ -644,7 +641,8 @@ fn fix_deliver(session : String, id : String) -> Unit {
   )
   // its agent sets to work at once (its activity comes in), answers a moment later (its answer said while the chat
   // shows: out of the activity's avatar), and its turn ends a moment after that
-  fc.working = (fix_clock.val)()
+  // (at work from its source's now: the fixture's is 0, fixture.mbt)
+  fc.working = 0.0
   fix_later(fix_answer_ms, fn() {
     fix_serial.val += 1
     fix_later(fix_turn_end_ms, fn() { fix_chat(session).working = -1.0 })

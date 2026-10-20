@@ -220,6 +220,8 @@ fn reset() -> Unit {
   pick_reset()
   fix_chats.clear()
   fix_timers.clear()
+  fix_due.clear()
+  fix_unsaid.clear()
   fix_drafts.clear()
   fix_decided.clear()
   emits.clear()
@@ -238,8 +240,7 @@ fn reset() -> Unit {
   fixture_pictures.clear()
   fix_threads.clear()
   fix_ctx.val = None
-  fix_clock.val = fix_frame_clock
-  fix_wake.val = fix_frame_wake
+  fix_clock.val = None
   fix_serial.val = 0
   fix_stream_ids.val = 0
   // Home (home.mbt), the host told (above), a chat's page and what is in it

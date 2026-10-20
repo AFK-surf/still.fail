@@ -5,8 +5,7 @@
 /// The fixture's chat open, its clock the test's; words sent and taken by the station (its agent then at work).
 fn emit_core(clock : Ref[Double]) -> @ui.Tester {
   reset()
-  fix_clock.val = fn() { clock.val }
-  fix_wake.val = fn(_) {  }
+  fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
@@ -29,8 +28,7 @@ fn emit_all_ms() -> Double {
 
 ///|
 fn emit_restore() -> Unit {
-  fix_clock.val = fix_frame_clock
-  fix_wake.val = fix_frame_wake
+  fix_clock.val = None
 }
 
 ///|
