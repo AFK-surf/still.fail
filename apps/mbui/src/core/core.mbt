@@ -54,7 +54,7 @@ pub let client : Client = Client::new(
     (transport.val)(s, None)
   },
   send_bytes=fn(s, b) {
-    trace_out(s, ffi_wall_ms())
+    trace_out(s, ffi_wall_ms(), bytes=b)
     (transport.val)(s, Some(b))
   },
 )

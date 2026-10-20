@@ -57,7 +57,13 @@ pub fn Replay::parse(log : String) -> Replay {
     }
     guard j is Object(m) else { continue }
     match (m.get("out"), m.get("in")) {
-      (Some(o), _) => evs.push({ out: true, msg: o, bytes: None, wall: 0.0, done: false })
+      (Some(o), _) => {
+        let bytes = match m.get("b") {
+          Some(String(h)) => Some(unhex(h))
+          _ => None
+        }
+        evs.push({ out: true, msg: o, bytes, wall: 0.0, done: false })
+      }
       (_, Some(i)) => {
         let wall = match m.get("w") {
           Some(Number(d, ..)) => d
@@ -217,6 +223,22 @@ pub fn Replay::deliver(
     self.advance()
   }
   n
+}
+
+///|
+/// The bytes the run sent beside its first call `name` whose params' `key` is `value` (a part of a file going up:
+/// `station.upload.part`, `name`, `e2e-photo.jpg`), as the trace keeps them: what a test hands the app again (shared
+/// in, a picture marked) for it to send the same. None where the trace has none (over trace.py's MAX_BYTES).
+pub fn Replay::sent_bytes(self : Replay, name : String, key : String, value : String) -> Bytes? {
+  for e in self.evs {
+    if e.out && e.msg is Object(m) && name_of(m) == name {
+      match m.get("params") {
+        Some(Object(p)) if p.get(key) == Some(Json::string(value)) => return e.bytes
+        _ => ()
+      }
+    }
+  }
+  None
 }
 
 ///|

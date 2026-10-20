@@ -4,8 +4,9 @@
 // its log); a Tester gives it again (replay.mbt), so what the run saw is shown frame by frame, with no backend and no
 // wall clock.
 //
-//   {"out":MSG,"w":WALL}              what the app sent, the wall clock as it went (a message in is due its time after
-//                                     the last thing before it, in or out: replay.mbt)
+//   {"out":MSG,"w":WALL,"b":"HEX"}    what the app sent, the wall clock as it went (a message in is due its time after
+//                                     the last thing before it, in or out: replay.mbt), the bytes beside it if any (a
+//                                     part going up: a test gives the same again, Replay::sent_bytes)
 //   {"in":MSG,"w":WALL,"b":"HEX"}     what came, the wall clock (wall_ms) as it came, the bytes beside it if any
 
 ///|
@@ -24,11 +25,16 @@ pub fn trace_stop() -> Unit {
 }
 
 ///|
-fn trace_out(text : String, wall : Double) -> Unit {
+fn trace_out(text : String, wall : Double, bytes? : Bytes) -> Unit {
   match tracer.val {
     Some(f) => {
       let msg = @json.parse(text) catch { _ => Json::string(text) }
-      f(Json::object({ "out": msg, "w": Json::number(wall) }).stringify())
+      let m : Map[String, Json] = { "out": msg, "w": Json::number(wall) }
+      match bytes {
+        Some(b) => m["b"] = Json::string(hex(b))
+        None => ()
+      }
+      f(Json::object(m).stringify())
     }
     None => ()
   }
