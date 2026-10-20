@@ -191,7 +191,7 @@ let table_rows : Int = 2000
 
 ///|
 /// The bars fade after this long left alone; after a tap that brought them back, a while longer.
-let rest_ms : Double = 2000.0
+pub let rest_ms : Double = 2000.0
 
 ///|
 let tap_rest_ms : Double = 4000.0
@@ -606,6 +606,27 @@ let viewer : Ref[Viewer?] = { val: None }
 /// The viewer closed and still drawn going (its fade or its flight back), no longer the one open: closing takes it
 /// out of `viewer` at once, and what is under it is the page's again.
 let pv_leaving : Ref[Viewer?] = { val: None }
+
+///|
+/// When the preview's way in or out is over (the frames' clock): the latest end told its fade and its flight, the one
+/// open's or the one leaving's; -1 when neither moves. What a test runs to after it opens or closes one.
+pub fn preview_rest() -> Double {
+  let mut at = -1.0
+  for v in [viewer.val, pv_leaving.val] {
+    match v {
+      Some(v) => {
+        if v.fade.ends_at() > at {
+          at = v.fade.ends_at()
+        }
+        if v.fly.ends_at() > at {
+          at = v.fly.ends_at()
+        }
+      }
+      None => ()
+    }
+  }
+  at
+}
 
 ///|
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps

@@ -639,7 +639,7 @@ fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Uni
     fn(err) {
       match err {
         None =>
-          if !@host.share("", e.name, e.mime, all.to_bytes()) {
+          if !@ui.share("", e.name, e.mime, all.to_bytes()) {
             app.toast = sh("android-misc.drive.noApp")
             app.toast_at = -1.0
           }
