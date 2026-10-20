@@ -21,8 +21,9 @@ let nav_back_box : @ui.Style = @ui.style(
 )
 
 ///|
+/// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
 // kept across runs: a value (no field of it changes)
-let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=Accent, wrap=false)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=AccentText, wrap=false)
 
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
@@ -59,7 +60,7 @@ let nav_ends : @ui.Style = @ui.style(row=true, w=Full, h=S8, align=ACenter)
 let nav_trailing : @ui.Style = @ui.style(row=true, h=S8, align=ACenter)
 
 ///|
-/// Back, in the accent: a chevron and where to (Parts.kt NavBack); its word no wider than `max_w` when it is said.
+/// Back: a chevron in the accent and where to in a link's ink (Parts.kt NavBack); its word no wider than `max_w` when it is said.
 /// True on the frame after it was tapped.
 pub fn nav_back(c : @ui.Ctx, key : String, label : String, max_w? : Double = 0.0) -> Bool {
   let t = theme()
