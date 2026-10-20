@@ -982,3 +982,15 @@ pub fn Replay::host_given(self : Replay) -> (Double, Double)? {
   }
   last
 }
+
+///|
+/// The run's first event that says its moment and has happened again here: when here (this clock) and when in the
+/// run (its clock), for a test's time of day to be the run's from then on (Tester::set_wall). None while none has.
+pub fn Replay::first_happened(self : Replay) -> (Double, Double)? {
+  for e in self.evs {
+    if e.has_wall && e.done && e.at >= 0.0 {
+      return Some((e.at, e.wall))
+    }
+  }
+  None
+}

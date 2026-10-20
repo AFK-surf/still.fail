@@ -71,7 +71,7 @@ pub fn source() -> @sfapp.Source {
       }
       image("station.file", Json::object(params), "file " + station + "\u{1}" + key + "\u{1}" + name)
     },
-    now: fn() { @core.wall_ms() },
+    now: fn() { @ui.wall_ms() },
     leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
     read_only: false,
   }

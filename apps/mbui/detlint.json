@@ -80,9 +80,7 @@
     "stable-mode": {},
     "retired-api": {},
     "app-clock": {},
-    "wall-clock": {
-      "src/sfreplay/source.mbt": 1
-    },
+    "wall-clock": {},
     "poll": {},
     "host-read": {},
     "builtin-hash": {},
