@@ -2,12 +2,12 @@
 // cloud.json's `joined` as the state frames say it; each workspace's members admitted with their own revocations; the
 // station's own settings and the workspaces it joins left to its home workspace's owners and admins.
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { Effect, Fiber, Stream, SubscriptionRef } from "effect";
-import { enroll, joinWorkspace } from "../src/cli.ts";
+import { enroll, joinWorkspace, staysIn } from "../src/cli.ts";
 import { loadKey } from "../src/cloud/key.ts";
 import { makeControlPlane } from "../src/cloud/plane.ts";
 import { Cloud } from "../src/cloud/state.ts";
@@ -73,6 +73,15 @@ test("joining one more workspace keeps the home one, and the state frames say bo
   await until(() => state.memberships().length === 1);
   assert.equal(JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8")).joined, undefined);
   assert.equal(state.removed(), false);
+});
+
+test("the installers' enroll (--stay) joins on a station in a workspace, and enrolls one in none or removed from its own", async (t) => {
+  const { data } = await enrolled(t, true);
+  assert.equal(staysIn(data), true);
+  assert.equal(staysIn(mkdtempSync(join(tmpdir(), "multi-"))), false);
+  const file = join(data, "mesh", "cloud.json");
+  writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), removed_at: 1_790_000_000 }));
+  assert.equal(staysIn(data), false);
 });
 
 test("a control plane from before several workspaces is not asked to move the station", async (t) => {

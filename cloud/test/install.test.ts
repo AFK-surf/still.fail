@@ -243,7 +243,7 @@ test("with both places there the new one is used and the old one left; a fresh m
     assert.equal(done.status, 0, done.out);
     assert.ok(existsSync(join(fresh.home, ".stillfail", "app", "VERSION")));
     assert.ok(!existsSync(join(fresh.home, ".ember")));
-    assert.match(done.said, /stillfail station enroll https:\/\/app\.still\.fail tok/);
+    assert.match(done.said, /stillfail station enroll https:\/\/app\.still\.fail tok --stay/);
   } finally {
     fresh.done();
   }

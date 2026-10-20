@@ -3,7 +3,7 @@
 // interrupting it: every part's scope closes, and with it what it opened. Commands as the Rust station takes them:
 //
 //   run --app DIR [--port N] [--data DIR] [--with-parent] [--launcher-fds a,b,c]
-//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] [--data DIR]   status [--data DIR]   id [--data DIR]
+//   enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] [--data DIR]   status [--data DIR]   id [--data DIR]
 //   channel [stable|beta] [--app DIR] [--data DIR]   update [--beta|--stable] --app DIR [--data DIR]
 //   lock status|reset [--data DIR]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { Effect, Fiber, Layer, SubscriptionRef } from "effect";
-import { enroll, id, joinWorkspace, lockCommand, status } from "./cli.ts";
+import { enroll, id, joinWorkspace, lockCommand, staysIn, status } from "./cli.ts";
 import { readState } from "./cloud/state.ts";
 import { loadKey } from "./cloud/key.ts";
 import { shortCode } from "./cloud/lock.ts";
@@ -68,7 +68,7 @@ try {
 } catch {}
 
 function usage(): never {
-  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
+  console.error("usage: stillfail-station run --app DIR [--port N] [--data DIR] | enroll <cloud> <token> [--provider stillfail|comma] [--lock HASH] [--join | --stay] | status | id | channel [stable|beta] | update [--beta|--stable] --app DIR | lock status|reset | heap");
   process.exit(2);
 }
 
@@ -218,13 +218,20 @@ switch (command) {
     const lock = flag(args, "--lock");
     if (!origin || !token || !PROVIDERS.includes(provider) || (lock !== undefined && !/^[0-9a-f]{64}$/.test(lock))) usage();
     // One more workspace, staying in those it is in (docs/multi-workspace.md): at the control plane it is enrolled with.
-    if (args.includes("--join")) {
-      const at = readState(data)?.origin;
-      if (at !== undefined && at !== origin.replace(/\/+$/, "")) {
-        console.error(`this station is enrolled at ${at}; it joins workspaces there only`);
+    // --stay (the installers'): joins when the station is in a workspace already, else enrolls; at the control plane it
+    // is enrolled with whatever host the command names (the test channel's app.youdid.wtf is still.fail's API too), a
+    // token that plane does not know refused there.
+    const stay = !args.includes("--join") && args.includes("--stay") && staysIn(data);
+    if (args.includes("--join") || stay) {
+      const now = readState(data);
+      if (!stay && now !== null && now.origin !== origin.replace(/\/+$/, "")) {
+        console.error(`this station is enrolled at ${now.origin}; it joins workspaces there only`);
         process.exit(1);
       }
-      const joined = await joinWorkspace(data, token, lock);
+      const joined = await joinWorkspace(data, token, lock).catch((error) => {
+        if (stay) console.error(`this station is in workspace ${now?.workspace_name || now?.workspace} (${now?.origin}): it was to join this one beside it, which did not go through. To move it here instead, remove it from that workspace first.`);
+        throw error;
+      });
       console.log(tr(stationLang(), "station.cli.joined", { workspace: joined.workspace_name, name: joined.name, id: loadKey(data).id.slice(0, 12) }));
       // A locked workspace: its owner confirms this station by its code, as one enrolled with `--lock`.
       if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(loadKey(data).id) }));

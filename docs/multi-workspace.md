@@ -69,6 +69,8 @@
 
 在机器上跑 `stillfail station enroll <origin> <token> --join` 效果一样。
 
+「添加 station」给的安装命令（install.sh、install.ps1）登记时带 `--stay`：这台机器已经在某个 workspace 里（没被移除），就走 join，加入新的、留在原来的；不在任何 workspace 里或已被移除才走 enroll。以前它直接 enroll，把已在别的 workspace 的机器悄悄搬走（2026-10-20 用户反馈：电脑 B 已在账号 2 的 workspace，跑了 A 的安装命令后从账号 2 那边消失）。真要搬家，先在原 workspace 里移除这台 station。
+
 ## station
 
 ### cloud.json
