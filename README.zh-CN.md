@@ -52,7 +52,7 @@ flowchart LR
   cloud[("still.fail cloud<br/>账号 · workspace · 中继")]
   chat -->|机器人| a
   apps <-->|"iroh 点对点"| a
-  a <-->|"任务 · 共享 Profile 和 skill"| b
+  a <-->|"任务、Profile、skill"| b
   apps -.->|登录| cloud
   a -.->|成员关系| cloud
 ```
