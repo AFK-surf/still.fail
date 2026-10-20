@@ -213,13 +213,41 @@ let core_source : @sfapp.Source = {
 }
 
 ///|
+/// Whether `url` is a cloud on this machine: its host, as written, 127.0.0.1 or localhost (not one that only begins so:
+/// localhost.example.com, 127.0.0.1.nip.io, a user's part before an @).
+fn local_cloud(url : String) -> Bool {
+  let rest = if url.has_prefix("http://") {
+    url.view(start_offset=7).to_owned()
+  } else if url.has_prefix("https://") {
+    url.view(start_offset=8).to_owned()
+  } else {
+    return false
+  }
+  let mut end = rest.length()
+  for ch in ['/', '?', '#'] {
+    match rest.find(ch.to_string()) {
+      Some(i) if i < end => end = i
+      _ => ()
+    }
+  }
+  let authority = rest.view(end_offset=end).to_owned()
+  if authority.contains("@") {
+    return false
+  }
+  let host = match authority.rev_find(":") {
+    Some(i) => authority.view(end_offset=i).to_owned()
+    None => authority
+  }
+  host == "127.0.0.1" || host == "localhost"
+}
+
+///|
 fn main {
   // MBUI_CORE_TRACE=1: the app's conversation with its core kept on the log (CORETRACE …), for a Tester to give
   // again (src/core/replay.mbt). Only on a local cloud (MBUI_CLOUD on this machine: its made-up account): what a real
   // account's core says (its tokens, a vault's values) is never put on a log.
   let cloud = @ui.env("MBUI_CLOUD")
-  if @ui.env("MBUI_CORE_TRACE") == "1" &&
-    (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
+  if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
     // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace.py's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) }, bytes_max~)
