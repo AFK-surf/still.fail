@@ -62,7 +62,7 @@ def body_kept(b):
         j = None
     if isinstance(j, dict):
         k = json_kept(j)
-        return b if k == j else json.dumps(k, separators=(",", ":")).encode("latin-1")
+        return b if k == j else json.dumps(k, ensure_ascii=False, separators=(",", ":")).encode("latin-1")
     if "=" in s and " " not in s and "\n" not in s:
         k = query_kept("?" + s)[1:]
         return b if k == s else k.encode("latin-1")

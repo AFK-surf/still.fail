@@ -583,7 +583,7 @@ test "the list keeps clear the room the composer takes in the very frame it grow
 }
 
 ///|
-test "at its end, rows that come (the message sent, the agent's answer) leave the core told the end is seen" {
+test "at its end, rows that come: the core told the end is not in view while the list glides to them, then that it is" {
   reset()
   let clock : Ref[Double] = { val: 0.0 }
   fix_clock.val = Some(fn() { clock.val })
@@ -625,7 +625,15 @@ test "at its end, rows that come (the message sent, the agent's answer) leave th
   if rest > t.time() && rest < @double.infinity {
     t.run_for(rest - t.time())
   }
-  // never told it left the end: the list going to its end on its own is at its end, as a reader sees it
-  assert_true(!ends.contains(false))
+  // (Android's Chat.kt: rows that came are not read before they are in view) told end:false as they come and the list
+  // glides to them, end:true once it is there; at its end as it rests
+  assert_true(ends.contains(false))
+  assert_eq(ends[ends.length() - 1], true)
+  let mut k = 1
+  while k < ends.length() {
+    // (each said as it changes)
+    assert_true(ends[k] != ends[k - 1])
+    k += 1
+  }
   fix_clock.val = None
 }
