@@ -235,7 +235,7 @@ fn fill_chip(c : @ui.Ctx, fill : Int, level : String, mark : String, words : Str
     if fill > 0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(fill.to_double()), h=Fill(1.0), radius=@sf.concentric(fill_chip_radius, 0.0), bg=ground, fn() {  }) |> ignore
+          c.box(w=Fill(fill.to_double()), h=Fill(1.0), radius=@ui.concentric(fill_chip_radius, 0.0), bg=ground, fn() {  }) |> ignore
           if fill < 100 {
             c.box(w=Fill((100 - fill).to_double()), h=Fill(1.0), fn() {  }) |> ignore
           }

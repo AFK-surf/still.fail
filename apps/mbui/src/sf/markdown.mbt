@@ -740,7 +740,7 @@ pub fn code_block(c : @ui.Ctx, code : String, lang : String) -> Unit {
           padx=7.0,
           gap=4.0,
           align=ACenter,
-          radius=concentric(block_radius, key_inset),
+          radius=@ui.concentric(block_radius, key_inset),
           bg=alpha(t.p.canvas, if c.pressed(id) { 1.0 } else { 0.8 }),
           id~,
           fn() {
@@ -891,13 +891,13 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
       clip=true,
       fn() {
         // the head's tint behind the rows, not scrolled with them: in the frame's top corners as the web's
-        // overflow-hidden card cuts it (docs/ui-panels.md: concentric, 20 less the 1 it sits in, 19; square under it).
+        // overflow-hidden card cuts it (docs/ui-panels.md: concentric with the 20 it sits 1 in; square under it).
         // A clip is a rectangle, so the tint is a round box taller than the head, cut at the head's foot.
         match @motion.measured(c, key + "/head") {
           Some(hh) if hh > 0.0 =>
             c.layer(pad=1.0, fn() {
               c.box(w=Fill(1.0), h=Px(hh), clip=true, fn() {
-                c.box(w=Fill(1.0), h=Px(hh + 19.0), radius=19.0, bg=theme().p.code_ground, fn() {  })
+                c.box(w=Fill(1.0), h=Px(hh + 40.0), radius=table_head_radius, bg=theme().p.code_ground, fn() {  })
                 |> ignore
               })
               |> ignore
@@ -939,3 +939,7 @@ fn Md::table(self : Md, t : @md.TableBlock) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// The table head's tint's corner: concentric with the table's frame (20), 1 in from its edge.
+let table_head_radius : Double = @ui.concentric(20.0, 1.0)

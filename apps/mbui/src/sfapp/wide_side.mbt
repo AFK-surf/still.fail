@@ -64,7 +64,7 @@ fn nav_row(
     pady~,
     gap=8.0,
     align~,
-    radius=corner(12.0),
+    radius=12.0,
     bg=if on {
       t.p.selected
     } else if c.hovered(id) || c.pressed(id) {
@@ -230,7 +230,7 @@ fn filter_button(c : @ui.Ctx, filter : String) -> Unit {
   c.box(
     w=Px(32.0),
     h=Px(32.0),
-    radius=corner(12.0),
+    radius=12.0,
     align=ACenter,
     justify=JCenter,
     bg=if narrowed {
@@ -310,7 +310,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
       pady=7.0,
       gap=8.0,
       align=AStart,
-      radius=corner(12.0),
+      radius=12.0,
       bg=if on {
         t.p.selected
       } else if hover || c.pressed(id) {
@@ -398,7 +398,7 @@ fn side_chat_row(c : @ui.Ctx, src : Source, item : ChatItem, lead : String, on :
           c.box(
             w=Px(24.0),
             h=Px(24.0),
-            radius=corner(8.0),
+            radius=8.0,
             align=ACenter,
             justify=JCenter,
             bg=if c.hovered(aid) { t.p.hover } else { 0L },
