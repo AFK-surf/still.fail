@@ -12,7 +12,14 @@
 /// the test fails, saying whose.
 pub fn Tester::draw(self : Tester) -> Unit {
   self.frame(ms=0.0)
-  let mut n = 1
+  self.draw_owed(1)
+}
+
+///|
+/// The frames owed at this moment drawn (Tester::draw's, after `n` drawn at it already): what a frame left owed is
+/// drawn where the Tester stands, at its making (Tester::new) and a run's end (run_for), not left to the next input.
+fn Tester::draw_owed(self : Tester, n : Int) -> Unit {
+  let mut n = n
   while self.owed_now() {
     if n == draw_frames_most {
       let c = g()
@@ -83,6 +90,8 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
   if end > self.fake.time {
     self.frame(ms=end - self.fake.time)
   }
+  // (what its last frame said starts there: drawn at that moment, as an input's frames are)
+  self.draw_owed(1)
 }
 
 ///|

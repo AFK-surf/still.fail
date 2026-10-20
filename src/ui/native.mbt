@@ -486,6 +486,16 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
 }
 
 ///|
+/// Before the view is built: how each open view stands (view_info), so what the frame shows of it is as it stands now.
+fn views_frame_start() -> Unit {
+  for v in open_views {
+    if !v.closed && v.id != 0 {
+      v.state = h_view_info(v.id, v.info)
+    }
+  }
+}
+
+///|
 /// After a frame is painted: each open view placed where it was painted (hidden where it was not), told how it
 /// stands, and the reads its player waits on handed to its `read`.
 fn Ctx::sync_views(self : Ctx) -> Unit {

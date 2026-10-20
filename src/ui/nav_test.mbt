@@ -65,12 +65,10 @@ test "back pops; the page under keeps where its list was scrolled" {
   t.wheel(100.0, 400.0, 600.0)
   t.back()
   assert_eq(nav.depth(), 1)
-  // (on_leave is told the frame after the page has slid off: logic on a motion's end, to be told at once instead,
-  // the page sliding off then drawn from what it was)
+  // on_leave told in the frame its slide ends: nothing more drawn for it
   t.run_for(@ui.nav_push_ms)
-  t.frame()
-  assert_eq(t.visible(), before)
   assert_eq(left, [1])
+  assert_eq(t.visible(), before)
   assert_false(t.takes_back())
   // page 1 again is a new page: its list at the top, not where it was left
   t.tap_text("open 1")

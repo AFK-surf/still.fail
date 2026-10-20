@@ -351,6 +351,12 @@ pub fn[P] Ctx::nav(
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()
+      // the page that slid away forgotten in the frame its slide ends (`on_leave` told), not the next
+      for e in nav.gone {
+        self.forget(e.serial)
+        (nav.on_leave)(e.page)
+      }
+      nav.gone.clear()
     }
     let r = nav.rest_at(self.now, self.frame_no)
     if r > self.nav_rest {

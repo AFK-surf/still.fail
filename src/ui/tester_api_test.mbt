@@ -348,3 +348,24 @@ test "how a node is drawn over its layout: its scale and opacity, with what hold
   assert_eq(t.look_of("card"), Some((1.0, 0.85, 0.5)))
   assert_eq(t.look_of("nothing of that name"), None)
 }
+
+///|
+test "a motion going on owes no frame at a moment: draw draws one, run_for draws it on as its time goes" {
+  let go = Ref::new(false)
+  let t = @ui.Tester::new(fn(c) {
+    let x = c.spring("knob-x", if go.val { 100.0 } else { 0.0 })
+    c.box(w=Px(10.0), h=Px(10.0), tx=x, fn() {  }) |> ignore
+  })
+  go.val = true
+  t.draw()
+  let rest = t.rest_of("\"knob-x\"")
+  assert_true(rest > t.time() && rest < @double.infinity)
+  // half way: one frame at a moment, though it moves
+  t.run_for(((rest - t.time()) / 2.0).floor())
+  let before = t.frames
+  t.draw()
+  assert_eq(t.frames - before, 1)
+  t.run_for(rest - t.time())
+  t.assert_idle()
+}
+

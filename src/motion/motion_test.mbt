@@ -693,3 +693,27 @@ test "layout_rest: a list's row gone, when its copy has left; its copy said to m
   assert_eq(@motion.layout_rest("row/b"), -1.0)
   assert_true(t.instances() < leaving, msg="\{t.instances()} \{leaving}")
 }
+
+///|
+test "run_for: what its last frame says starts there is drawn at that moment, its end known as run_for returns" {
+  let shown = 300.0
+  let fade : Ref[@motion.Anim?] = Ref::new(None)
+  let begun = Ref::new(-1.0)
+  let t = @ui.Tester::new(fn(c) {
+    let a = @motion.anim(c, "toast-fade", 1.0)
+    fade.val = Some(a)
+    if begun.val < 0.0 {
+      begun.val = c.now()
+    }
+    // (a toast's deadline: it goes once shown that long, from the first frame)
+    if c.now() >= begun.val + shown && a.target() != 0.0 {
+      a.animate(0.0, @motion.tween(200.0))
+    }
+    c.box(w=Px(10.0), h=Px(10.0), fn() {  }) |> ignore
+  })
+  t.run_for(begun.val + shown - t.time())
+  let end = fade.val.unwrap().ends_at()
+  assert_true(end > t.time() && end < @double.infinity, msg="\{end} at \{t.time()}")
+  t.run_for(end - t.time())
+  t.assert_idle()
+}

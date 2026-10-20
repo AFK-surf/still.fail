@@ -86,11 +86,16 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
   c.motion_left = c.motion_owed()
   // (a layout read back that moved: what was placed from it, placed again)
-  if c.motion_left || c.cycling || c.read_back_moved {
+  if c.read_back_moved {
     c.wants_frame = true
   }
   if c.wants_frame || bench.mode > 0 {
     h_request_frame()
+  } else if c.motion_left || c.cycling {
+    // what moves on is drawn as the clock goes, on the host's next frame: no frame is owed at this moment (a
+    // Tester's draw draws none for it; its run_for does, as its time goes)
+    c.wants_frame = true
+    h_request_frame_on()
   } else if c.wake_at > 0.0 {
     h_wake_after(dmax(c.wake_at - t, 1.0))
   }
@@ -175,6 +180,8 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   // the keys and presses since the last frame that move the focus, press what has it, dismiss a layer (focus.mbt,
   // overlay.mbt), before the view builds
   c.focus_frame_start()
+  // how each native view stands, read before the view builds what it shows of it (a player's time, its first frame)
+  views_frame_start()
   c.sems.clear()
   c.sem_hide = 0
   c.sem_hidden.clear()

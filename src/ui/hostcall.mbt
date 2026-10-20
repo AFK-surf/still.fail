@@ -177,6 +177,16 @@ fn h_request_frame() -> Unit {
 }
 
 ///|
+/// The host's next frame asked for what moves on by the clock (a motion going on, a cycle shown): a Tester's host owes
+/// no frame at this moment for it (its time goes by run_for).
+fn h_request_frame_on() -> Unit {
+  match fake.val {
+    Some(_) => ()
+    None => @host.request_frame()
+  }
+}
+
+///|
 fn h_wake_after(ms : Double) -> Unit {
   match fake.val {
     Some(f) =>

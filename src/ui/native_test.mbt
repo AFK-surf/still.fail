@@ -237,3 +237,19 @@ test "marks drawn onto an image give the PNG the test says, the next one a clear
   assert_eq(made[0].length(), 10957)
   assert_true(made[1].length() < 100)
 }
+
+///|
+test "a player's state is read before the frame is built: set, one frame shows it" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let t = @ui.Tester::new(fn(c) {
+    let v = once(cell, fn() { @ui.NativeView::video("video/mp4", fn(_o, _l, answer) { answer(b"", -1.0) }) })
+    c.native(v, h=Px(220.0)) |> ignore
+    c.text("at \{(v.position() / 1000.0).to_int()} s", wrap=false) |> ignore
+  })
+  let v = cell.val.unwrap()
+  t.set_player(v.id(), position=2000.0)
+  let before = t.frames
+  t.draw()
+  assert_eq(t.frames - before, 1)
+  assert_true(t.find("at 2 s") is Some(_))
+}
