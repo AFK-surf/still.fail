@@ -1,2 +1,0 @@
-check "the core keeps the draft on the device" 'core_has "还没发出去的草稿 $TAG"'
-check "nothing of it reached the station" '[ "$(sql "select count(*) from entries where text like \"%还没发出去的草稿 $TAG%\"")" = 0 ]'

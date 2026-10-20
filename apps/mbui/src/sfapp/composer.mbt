@@ -319,7 +319,7 @@ let warm_every_ms : Double = 60000.0
 
 ///|
 /// How long after a change to the draft it is kept.
-let draft_keep_ms : Double = 400.0
+pub let draft_keep_ms : Double = 400.0
 
 ///|
 /// A change kept a moment after it is made (the core writes it down then too), and at once as the chat is left.

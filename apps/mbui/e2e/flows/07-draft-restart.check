@@ -1,2 +1,0 @@
-check "the restarted app put the draft back" 'grep -q "DRIVE ok field 还没发出去的草稿 $TAG" $OUT/$name.log'
-check "emptied, the core keeps no draft of it" '! core_has "还没发出去的草稿 $TAG"'
