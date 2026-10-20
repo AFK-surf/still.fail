@@ -1,11 +1,20 @@
-// mbui-render's few needs from the system: a file read whole (as UTF-16 text, or as bytes), a line on stderr, and the
-// main run loop turned for a while (an image's decode is told there). The drawing is src/host/apple_render.m's
-// offscreen path (mb_render_init_offscreen, mb_render_draw_timed, mb_render_snapshot).
+// mbui-render's few needs from the system: a file read whole (as UTF-16 text, or as bytes), a line said, and a while
+// for an image's decode to be told. The drawing is the host's offscreen path (mb_render_init_offscreen,
+// mb_render_draw_timed, mb_render_snapshot): src/host/apple_render.m on macOS, win_render.cpp on Windows (built by
+// scripts/win.sh), android_host.c on Android (scripts/android.sh, this file one of its extra C files:
+// scripts/render_android.sh).
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__ANDROID__)
+#include <android/log.h>
+#endif
 #include "moonbit.h"
 
 static char *utf8(moonbit_string_t s) {
@@ -108,10 +117,16 @@ moonbit_string_t mbr_arg(moonbit_string_t name) {
 
 void mbr_say(moonbit_string_t s) {
   char *u = utf8(s);
+#if defined(__ANDROID__)
+  // (logcat: where scripts/render_android.sh reads that the picture is written)
+  __android_log_print(ANDROID_LOG_INFO, "mbui", "%s", u);
+#else
   fprintf(stderr, "%s\n", u);
+#endif
   free(u);
 }
 
+#if defined(__APPLE__)
 // the main run loop turned for `ms` (what is told on the main queue, an image decoded, is handled)
 void mbr_spin(double ms) { CFRunLoopRunInMode(kCFRunLoopDefaultMode, ms / 1000.0, false); }
 
@@ -124,3 +139,37 @@ int32_t mbr_snapshot(moonbit_string_t path) {
   free(p);
   return ok;
 }
+#elif defined(_WIN32)
+// the thread's messages handled for `ms` (WIC's decodes are told to the image table directly: win_image.cpp)
+void mbr_spin(double ms) {
+  MSG m;
+  while (PeekMessageW(&m, NULL, 0, 0, PM_REMOVE)) DispatchMessageW(&m);
+  Sleep((DWORD)ms);
+}
+
+// the last frame drawn, as a PNG (win_render.cpp), at a path in UTF-16
+int mb_render_snapshot(const wchar_t *path);
+
+int32_t mbr_snapshot(moonbit_string_t path) {
+  int32_t n = Moonbit_array_length(path);
+  wchar_t *w = malloc(((size_t)n + 1) * sizeof(wchar_t));
+  memcpy(w, path, (size_t)n * 2);
+  w[n] = 0;
+  int ok = mb_render_snapshot(w);
+  free(w);
+  return ok;
+}
+#else
+// Android (android_host.c): the image uploads that came meanwhile done on this thread, the GL one
+void mb_render_spin(double ms);
+void mbr_spin(double ms) { mb_render_spin(ms); }
+
+int mb_render_snapshot(const char *path);
+
+int32_t mbr_snapshot(moonbit_string_t path) {
+  char *p = utf8(path);
+  int ok = mb_render_snapshot(p);
+  free(p);
+  return ok;
+}
+#endif

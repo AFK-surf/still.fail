@@ -19,6 +19,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -62,6 +63,24 @@ final class Images {
         pool.execute(() -> decode(id, r));
     }
 
+    // mbui-render (android_host.c mb_render_init_offscreen): its main holds the GL thread while it waits for its
+    // images, so their uploads are kept here and done when it asks (pump), on that thread
+    static volatile boolean held;
+    static final ConcurrentLinkedQueue<Runnable> heldUploads = new ConcurrentLinkedQueue<>();
+
+    static void hold() {
+        held = true;
+    }
+
+    static void pump() {
+        for (Runnable r; (r = heldUploads.poll()) != null; ) r.run();
+    }
+
+    static void toGL(Runnable r) {
+        if (held) heldUploads.add(r);
+        else Host.view.toGL(r);
+    }
+
     static void free(int id) {
         live.remove(id);
     }
@@ -90,7 +109,7 @@ final class Images {
                 b = t.getConfig() == Bitmap.Config.ARGB_8888 ? t : t.copy(Bitmap.Config.ARGB_8888, false);
                 if (b != t) t.recycle();
                 Bitmap bmp = b;
-                Host.view.toGL(() -> upload(id, bmp, orig[0], orig[1]));
+                toGL(() -> upload(id, bmp, orig[0], orig[1]));
                 return;
             }
             if (data == null && (r.src.startsWith("http://") || r.src.startsWith("https://"))) {
@@ -133,7 +152,7 @@ final class Images {
                     + " in " + (System.nanoTime() - t0) / 1000000 + " ms: " + r.src);
         }
         Bitmap bmp = b;
-        Host.view.toGL(() -> upload(id, bmp, orig[0], orig[1]));
+        toGL(() -> upload(id, bmp, orig[0], orig[1]));
     }
 
     /** Older decoders: a power-of-two subsample, then scaled and turned. */

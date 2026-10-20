@@ -328,6 +328,8 @@ static int make_composed(IDXGIDevice1 *xdev, IDXGIFactory2 *factory, HWND hwnd) 
   return 0;
 }
 
+static void make_pipeline(void);
+
 int mb_render_init(void *hwnd) {
   if (FAILED(make_device(D3D_DRIVER_TYPE_HARDWARE)) && FAILED(make_device(D3D_DRIVER_TYPE_WARP))) {
     fprintf(stderr, "no Direct3D 11 device\n");
@@ -361,7 +363,12 @@ int mb_render_init(void *hwnd) {
   factory->Release();
   adapter->Release();
   xdev->Release();
+  make_pipeline();
+  return chain != NULL;
+}
 
+// The shaders, buffers, atlas and states every target is drawn with (the window's, the offscreen one).
+static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
@@ -415,7 +422,6 @@ int mb_render_init(void *hwnd) {
   rd.CullMode = D3D11_CULL_NONE;
   rd.DepthClipEnable = TRUE;
   dev->CreateRasterizerState(&rd, &raster);
-  return chain != NULL;
 }
 
 void *mb_render_device(void) { return dev; }
@@ -649,8 +655,9 @@ static void encode(ID3D11RenderTargetView *target, int pw, int ph, int32_t count
   }
 }
 
-void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
-  if (!rtv) return;
+// The frame's instances into the vertex buffer and kept (a snapshot draws them again), then drawn into the target.
+static int submit(const double *inst, int32_t count, double r, double g, double b) {
+  if (!rtv) return 0;
   size_t need = (size_t)(count > 0 ? count : 1) * 24 * sizeof(float);
   if (vbuf_cap < need) {
     if (vbuf) vbuf->Release();
@@ -660,7 +667,7 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
     dev->CreateBuffer(&bd, NULL, &vbuf);
   }
   D3D11_MAPPED_SUBRESOURCE m;
-  if (FAILED(ctx->Map(vbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return;
+  if (FAILED(ctx->Map(vbuf, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) return 0;
   float *f = (float *)m.pData;
   int32_t n = count * 24;
   if (last_cap < need) {
@@ -675,8 +682,56 @@ void mb_render_present(const double *inst, int32_t count, double r, double g, do
   last_bg[1] = (float)g;
   last_bg[2] = (float)b;
   encode(rtv, fb_w, fb_h, count, last_bg, last_inst);
+  return 1;
+}
+
+void mb_render_present(const double *inst, int32_t count, double r, double g, double b) {
+  if (!submit(inst, count, r, g, b) || !chain) return;
   // a hidden or minimized window does not wait for vsync; pace it as if it did
   if (chain->Present(1, 0) == DXGI_STATUS_OCCLUDED) Sleep(16);
+}
+
+// Without a window (mbui-render, src/render): WARP's device whatever the machine has (the same rasterizer on every
+// Windows: what the references are of, docs/determinism.md), a texture the size a window's swap chain would be as
+// the target, the text at the list's scale. A frame drawn there is drawn as a window's is, and its snapshot is of it.
+static ID3D11Texture2D *off_target;
+
+extern "C" void mb_render_init_offscreen(double w, double h, double scale) {
+  CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+  if (FAILED(make_device(D3D_DRIVER_TYPE_WARP))) {
+    fprintf(stderr, "no Direct3D 11 WARP device\n");
+    return;
+  }
+  make_pipeline();
+  vw = w;
+  vh = h;
+  vscale = scale;
+  fb_w = (int)floor(w * scale + 0.5);
+  fb_h = (int)floor(h * scale + 0.5);
+  D3D11_TEXTURE2D_DESC td = {};
+  td.Width = (UINT)fb_w;
+  td.Height = (UINT)fb_h;
+  td.MipLevels = td.ArraySize = 1;
+  td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  td.SampleDesc.Count = 1;
+  td.Usage = D3D11_USAGE_DEFAULT;
+  td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+  dev->CreateTexture2D(&td, NULL, &off_target);
+  dev->CreateRenderTargetView(off_target, NULL, &rtv);
+  mb_text_set_scale(scale);
+}
+
+// A frame drawn into the offscreen target and finished: out[0] the CPU's time of it, out[1] the GPU's (not measured
+// here: -1), in ms.
+extern "C" void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  LARGE_INTEGER f, t0, t1;
+  QueryPerformanceFrequency(&f);
+  QueryPerformanceCounter(&t0);
+  submit(inst, count, r, g, b);
+  ctx->Flush();
+  QueryPerformanceCounter(&t1);
+  out[0] = (double)(t1.QuadPart - t0.QuadPart) * 1000.0 / (double)f.QuadPart;
+  out[1] = -1;
 }
 
 static int write_png(const wchar_t *path, const uint8_t *bgra, int w, int h, int stride) {

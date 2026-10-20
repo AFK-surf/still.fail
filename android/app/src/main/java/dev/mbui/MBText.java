@@ -79,7 +79,15 @@ final class MBText {
 
     /** Pixels a point: text is measured at the size it is drawn in on the screen. */
     static float density() {
-        return Host.view != null ? Host.view.density : 1;
+        return scale > 0 ? scale : Host.view != null ? Host.view.density : 1;
+    }
+
+    /** mbui-render's: the text at a draw list's scale, not the screen's (android_host.c mb_render_init_offscreen). */
+    static float scale;
+
+    static void setScale(float s) {
+        scale = s;
+        reset();
     }
 
     static void fontMetrics(double size, int weight, int style, double[] out) {
@@ -201,7 +209,7 @@ final class MBText {
     static void rasterize(Entry e) {
         e.done = true;
         e.w = 0;
-        float sc = Host.view.density;
+        float sc = density();
         Paint p = paint(e.size * sc, e.weight, e.style);
         Rect b = new Rect();
         p.getTextBounds(e.text, 0, e.text.length(), b);

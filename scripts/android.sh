@@ -33,7 +33,14 @@ SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 NDK=${ANDROID_NDK_HOME:-${ANDROID_NDK_LATEST_HOME:-$SDK/ndk/28.2.13676358}}
 HOST_TAG=$([ "$(uname)" = Darwin ] && echo darwin-x86_64 || echo linux-x86_64)
 TC=$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin
-CC="$TC/aarch64-linux-android29-clang"
+# ABI: the libraries' (default arm64-v8a, a phone's; x86_64 for an x86 machine's emulator: CI's, scripts/render_android.sh)
+ABI=${ABI:-arm64-v8a}
+case $ABI in
+  arm64-v8a) CC="$TC/aarch64-linux-android29-clang" ;;
+  x86_64) CC="$TC/x86_64-linux-android29-clang" ;;
+  *) echo "android.sh: ABI $ABI: arm64-v8a or x86_64"; exit 1 ;;
+esac
+export MBUI_ABI=$ABI
 ADB=$SDK/platform-tools/adb
 AVD=${AVD:-mbui-avd}
 PORT=${EMU_PORT:-5580}
@@ -83,7 +90,7 @@ photos() {
 # Gradle packs (its project's sourceSets): .so files in apk/jniLibs/arm64-v8a ($jni), assets in apk/assets.
 APP_EXTRA= APP_LINK= APP_KIND=plain
 apk=$OUT/apk
-jni=$OUT/apk/jniLibs/arm64-v8a
+jni=$OUT/apk/jniLibs/$ABI
 [ -z "${MBUI_ANDROID_HOOK:-}" ] || . "$MBUI_ANDROID_HOOK"
 
 now() { python3 -c 'import time;print(time.time())'; }
@@ -116,7 +123,7 @@ case "${1:-build}" in
       || { python3 "$D/errs.py" < $OUT/moon.log; grep '^mbc:' $OUT/moon.log; exit 1; }
     python3 "$D/errs.py" < $OUT/moon.log | grep -v '^errors: 0' || true
     T1=$(now)
-    SO=$PROJ/app/src/main/jniLibs/arm64-v8a/libmbui.so
+    SO=$PROJ/app/src/main/jniLibs/$ABI/libmbui.so
     mkdir -p $OUT/obj $(dirname $SO)
     R=$MOON_HOME/lib/runtime
     EXTRA="--extra=$ROOT/src/host/android_host.c $APP_EXTRA"
@@ -130,7 +137,7 @@ case "${1:-build}" in
     # (ThinLTO's backends run here: scripts/mbc.py's link flags), unless the same command made libmbui.so of the same
     # objects and the core's .so files already (scripts/mbc.py link: by content)
     python3 "$D/mbc.py" link --out=$SO --dep=$jni -- $CC -shared -o $SO $(cat $OUT/objs.txt) $(cat $OUT/link-flags.txt) \
-      $APP_LINK -lGLESv3 -llog -lm -Wl,--no-undefined
+      $APP_LINK -lGLESv3 -llog -lz -lm -Wl,--no-undefined
     T4=$(now)
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi

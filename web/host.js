@@ -1096,5 +1096,31 @@
     H.requestFrame();
   };
 
+  // ---- mbui-render (src/render, scripts/render_web.mjs): no frames, no input ----
+  // The canvas the size a window's would be, its text at the list's scale; a frame is drawn into it as any
+  // (H.present) and read back at once (the drawing buffer is not kept past the task), top row first.
+  H.renderInit = (w, h, scale) => {
+    canvas = document.getElementById('c');
+    cssW = w;
+    cssH = h;
+    dpr = scale;
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    setupGL();
+  };
+  H.renderPixels = () => {
+    const w = canvas.width, h = canvas.height, row = w * 4;
+    const px = new Uint8Array(row * h), out = new Uint8Array(row * h);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    for (let y = 0; y < h; y++) out.set(px.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    return { w, h, px: out };
+  };
+  H.renderInfo = () => {
+    const x = gl.getExtension('WEBGL_debug_renderer_info');
+    return x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  };
+
   globalThis.__mbhost = H;
 })();

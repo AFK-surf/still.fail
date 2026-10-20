@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <zlib.h>
 #include "moonbit.h"
 #include "post.h"
 
@@ -40,7 +41,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
-    m_open_url;
+    m_open_url, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls;
 static jclass gallery_cls, marks_cls;
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
@@ -106,6 +107,9 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_img_load = (*env)->GetStaticMethodID(env, images_cls, "load", "(ILjava/lang/String;[BI)V");
   m_img_free = (*env)->GetStaticMethodID(env, images_cls, "free", "(I)V");
   m_img_reload = (*env)->GetStaticMethodID(env, images_cls, "reload", "()V");
+  m_img_hold = (*env)->GetStaticMethodID(env, images_cls, "hold", "()V");
+  m_img_pump = (*env)->GetStaticMethodID(env, images_cls, "pump", "()V");
+  m_text_scale = (*env)->GetStaticMethodID(env, text_cls, "setScale", "(F)V");
   login_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/BrowserLogin"));
   m_bl_start = (*env)->GetStaticMethodID(env, login_cls, "start", "(Ljava/lang/String;)I");
   m_bl_port = (*env)->GetStaticMethodID(env, login_cls, "port", "(I)I");
@@ -456,6 +460,8 @@ static float *fbuf;
 static size_t fcap;
 static int fb_w, fb_h;
 static double cur_w, cur_h, cur_scale;
+// what is drawn into: the surface (0), or mbui-render's offscreen framebuffer (mb_render_init_offscreen)
+static GLuint target_fb;
 
 static void glass_lost(void);
 
@@ -636,7 +642,7 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
   int w = px1 - px0, h = pb1 - pb0;
   ensure_levels(fb_w, fb_h);
   glDisable(GL_BLEND);
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, target_fb);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, lv[0].fb);
   glBlitFramebuffer(px0, pb0, px1, pb1, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
   glUseProgram(post);
@@ -668,7 +674,7 @@ static int capture(const float *f, int32_t start, int32_t end, int32_t count) {
 
 // the main program's state (after the passes)
 static void main_state(void) {
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, vy0, fb_w, vhp);
   glEnable(GL_BLEND);
   glUseProgram(prog);
@@ -692,6 +698,7 @@ static void main_state(void) {
 }
 
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
+  glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
   glClearColor((float)r, (float)g, (float)b, 1);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -758,6 +765,95 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     }
     start = end;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Without the surface (mbui-render, src/render: started as an app, on the GL thread with the surface's context
+// current): a framebuffer of its own the size the surface would be, the text at the list's scale (MBText.setScale,
+// not the screen's density), the images' uploads done when it asks (Images.hold, mb_render_spin). A frame is drawn
+// there as on the surface, and read back from it as a PNG.
+
+static GLuint off_tex;
+double mb_host_now(void);
+
+void mb_render_init_offscreen(double w, double h, double scale) {
+  JNIEnv *env = env_();
+  cur_w = w;
+  cur_h = h;
+  cur_scale = scale;
+  fb_w = (int)floor(w * scale + 0.5);
+  fb_h = (int)floor(h * scale + 0.5);
+  glGenTextures(1, &off_tex);
+  glBindTexture(GL_TEXTURE_2D, off_tex);
+  glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, fb_w, fb_h);
+  glGenFramebuffers(1, &target_fb);
+  glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, off_tex, 0);
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG("mbui-render: no framebuffer");
+  (*env)->CallStaticVoidMethod(env, text_cls, m_text_scale, (jfloat)scale);
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_hold);
+}
+
+void mb_render_draw_timed(const double *inst, int32_t count, double r, double g, double b, double *out) {
+  double t0 = mb_host_now();
+  mb_host_present((double *)inst, count, r, g, b);
+  glFinish();
+  out[0] = mb_host_now() - t0;
+  out[1] = -1;
+}
+
+// the images decoded meanwhile uploaded here (Images.pump), then a while for more
+void mb_render_spin(double ms) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, images_cls, m_img_pump);
+  struct timespec t = {(time_t)(ms / 1000), (long)(fmod(ms, 1000) * 1e6)};
+  nanosleep(&t, NULL);
+}
+
+static void png_chunk(FILE *f, const char *type, const unsigned char *data, uint32_t n) {
+  unsigned char be[4] = {n >> 24, n >> 16, n >> 8, n};
+  fwrite(be, 1, 4, f);
+  fwrite(type, 1, 4, f);
+  if (n) fwrite(data, 1, n, f);
+  uLong c = crc32(0, (const Bytef *)type, 4);
+  if (n) c = crc32(c, data, n);
+  unsigned char cb[4] = {c >> 24, c >> 16, c >> 8, c};
+  fwrite(cb, 1, 4, f);
+}
+
+// The offscreen frame as a PNG (8-bit RGBA, top row first, zlib's level 6): 1 when written.
+int mb_render_snapshot(const char *path) {
+  if (!target_fb || fb_w <= 0 || fb_h <= 0) return 0;
+  size_t row = (size_t)fb_w * 4;
+  unsigned char *px = malloc(row * fb_h), *raw = malloc((row + 1) * fb_h);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, target_fb);
+  glPixelStorei(GL_PACK_ALIGNMENT, 1);
+  glReadPixels(0, 0, fb_w, fb_h, GL_RGBA, GL_UNSIGNED_BYTE, px);
+  // GL's rows are from the foot up
+  for (int y = 0; y < fb_h; y++) {
+    raw[(row + 1) * y] = 0;
+    memcpy(raw + (row + 1) * y + 1, px + row * (fb_h - 1 - y), row);
+  }
+  uLongf zn = compressBound((uLong)((row + 1) * fb_h));
+  unsigned char *z = malloc(zn);
+  int ok = compress2(z, &zn, raw, (uLong)((row + 1) * fb_h), 6) == Z_OK;
+  FILE *f = ok ? fopen(path, "wb") : NULL;
+  if (f) {
+    static const unsigned char sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    unsigned char ihdr[13] = {fb_w >> 24, fb_w >> 16, fb_w >> 8, fb_w, fb_h >> 24, fb_h >> 16, fb_h >> 8, fb_h,
+                              8, 6, 0, 0, 0};
+    fwrite(sig, 1, 8, f);
+    png_chunk(f, "IHDR", ihdr, 13);
+    png_chunk(f, "IDAT", z, (uint32_t)zn);
+    png_chunk(f, "IEND", NULL, 0);
+    ok = fclose(f) == 0;
+  } else {
+    ok = 0;
+  }
+  free(z);
+  free(raw);
+  free(px);
+  return ok;
 }
 
 // ---------------------------------------------------------------------------

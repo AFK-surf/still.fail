@@ -1,0 +1,67 @@
+# The renderer's pixels on Windows (docs/determinism.md, "Pixel references belong to one kind of machine"): a Tester's
+# draw list drawn offscreen by the Direct3D 11 renderer on WARP on GitHub's windows-2025 runner, twice in each of two
+# jobs at once, against its reference (goldens/render/windows-controls.png) to the byte, on the runner image the
+# reference was made on (goldens/render/windows.txt). The picture drawn is the artifact: what a PR that changes it
+# commits, saying why.
+name: render-windows
+on:
+  pull_request:
+    paths: &paths
+      - "src/host/win_render.cpp"
+      - "src/host/win_text.cpp"
+      - "src/host/win_image.cpp"
+      - "scripts/win.sh"
+      - "src/render/**"
+      - "src/ui/drawlist.mbt"
+      - "src/ui/scene.mbt"
+      - "goldens/render/windows*"
+      - "scripts/render_dl.sh"
+      - "scripts/render_windows.sh"
+      - ".github/workflows/render-windows.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+jobs:
+  offscreen:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [a, b]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install MoonBit
+        shell: pwsh
+        run: |
+          irm https://cli.moonbitlang.com/install/powershell.ps1 | iex
+          "$env:USERPROFILE\.moon\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Drawn offscreen, twice (scripts/render_windows.sh)
+        run: scripts/render_windows.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-windows-${{ matrix.run }}
+          path: out/render/
+      - name: Against the reference, on the machine it was made on
+        run: scripts/render_windows.sh against
+
+  # the two jobs' pictures (two machines of the kind, at once): the same to the byte
+  same:
+    needs: offscreen
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: render-windows-*, path: runs }
+      - run: |
+          md5sum runs/*/controls.png
+          grep -h '^cpu ' runs/*/machine.txt
+          cmp runs/render-windows-a/controls.png runs/render-windows-b/controls.png && echo "the two jobs' pictures: the same to the byte"

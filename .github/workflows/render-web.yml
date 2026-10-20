@@ -1,0 +1,63 @@
+# The renderer's pixels in the browser (docs/determinism.md, "Pixel references belong to one kind of machine"): a
+# Tester's draw list drawn by web/host.js's WebGL2 renderer in headless Chromium on SwiftShader (Playwright pinned,
+# scripts/render_web.sh) on GitHub's ubuntu-24.04 runner, twice in each of two jobs at once, against its reference
+# (goldens/render/web-controls.png) to the byte, on the runner image and browser the reference was made on
+# (goldens/render/web.txt). The picture drawn is the artifact: what a PR that changes it commits, saying why.
+name: render-web
+on:
+  pull_request:
+    paths: &paths
+      - "web/host.js"
+      - "web/render.html"
+      - "src/render/**"
+      - "src/ui/drawlist.mbt"
+      - "src/ui/scene.mbt"
+      - "goldens/render/web*"
+      - "scripts/render_dl.sh"
+      - "scripts/render_web.sh"
+      - "scripts/render_web.mjs"
+      - ".github/workflows/render-web.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+env:
+  MOON_HOME: ${{ github.workspace }}/../.moon
+
+jobs:
+  offscreen:
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [a, b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
+          echo "$MOON_HOME/bin" >> $GITHUB_PATH
+      - name: Drawn offscreen, twice (scripts/render_web.sh)
+        run: scripts/render_web.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-web-${{ matrix.run }}
+          path: out/render/
+      - name: Against the reference, on the machine it was made on
+        run: scripts/render_web.sh against
+
+  # the two jobs' pictures (two machines of the kind, at once): the same to the byte
+  same:
+    needs: offscreen
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: render-web-*, path: runs }
+      - run: |
+          md5sum runs/*/controls.png
+          grep -h '^cpu ' runs/*/machine.txt
+          cmp runs/render-web-a/controls.png runs/render-web-b/controls.png && echo "the two jobs' pictures: the same to the byte"

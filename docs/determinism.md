@@ -96,6 +96,28 @@ Only for these, which the framework knows by itself:
   (Virtual)); the render workflow fails when the image is another, and then every reference is made again in one PR
   from its artifact, saying so. Other machines check draw lists only. A PR that changes references commits the
   workflow's artifact and lists each changed picture and why.
+- **The other hosts' references belong to a GitHub runner of theirs, offscreen, each the same way:** made and checked
+  there only, by a workflow of their own that runs when that host's drawing changes. Each run draws the list twice,
+  in each of two jobs at once; all the pictures are the same to the byte, on whatever CPU the jobs land (AMD EPYC
+  7763, 9V45, 9V74, Intel Xeon 8573C seen), and across GitHub's weekly runner image (ubuntu24 20261012 and 20261018:
+  the same bytes). So what is checked beside the picture is what draws it, not the runner's image (written down,
+  not checked: a new image every week would only make the same references again): goldens/render/`<host>`.txt's
+  checked lines; one of them another: every reference of that host made again in one PR from its workflow's
+  artifact. On every one of them the text is the host's own (the list's glyphs shaped again there, at their own
+  sizes), so the pictures are of that host and nothing else.
+  - **Android** (render-android.yml, scripts/render_android.sh, goldens/render/android-*.png): the app's GL renderer
+    (android_host.c: a framebuffer of its own, the text at the list's scale) in an x86_64 emulator on SwiftShader, on
+    `ubuntu-24.04`. Checked: the emulator (its build pinned in the workflow) and the system image
+    (`android-34/default/x86_64`, its revision and build): all of the drawing, text and GL, is inside them.
+  - **Windows** (render-windows.yml, scripts/render_windows.sh, goldens/render/windows-*.png): Direct3D 11 on WARP
+    (always WARP offscreen, whatever the machine has), DirectWrite's text, on `windows-2025`. Checked: the system,
+    WARP's and DirectWrite's versions and the fonts' bytes.
+  - **Web** (render-web.yml, scripts/render_web.sh, goldens/render/web-*.png): web/host.js's WebGL2 renderer in
+    headless Chromium on SwiftShader (Playwright pinned, and with it the browser), on `ubuntu-24.04`. Checked: the
+    browser and the system's fonts' bytes.
+  - An image a list names is decoded by the host while the renderer waits (Android: its uploads done on the GL
+    thread as it asks; Windows: WIC's pool); in the browser nothing is told while the page's one thread draws, so a
+    list with images is drawn without them there (the fixed list has none).
 - **On screen = offscreen** is checked on Mini1 (scripts/render_check.sh; GitHub's runner cannot open a window that
   large), by still.fail's mbui CI on its own runner, when mbui is bumped there and the bump changes the macOS drawing
   (src/host/apple_render.m, apple_text.m): rarely.
