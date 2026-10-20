@@ -32,6 +32,8 @@ pub struct Replay {
   priv fuzzy : Array[String]
   /// the wall clock as the last message given came
   priv mut wall : Double
+  /// the wall clock of each message handed to the app's queue (`deliver`'s `to`) and not received yet, oldest first
+  priv walls : Array[Double]
   /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
   priv mut seed : UInt
 }
@@ -77,6 +79,7 @@ pub fn Replay::parse(log : String) -> Replay {
     diverged: [],
     fuzzy: [],
     wall: 0.0,
+    walls: [],
     seed: 0,
   }
   r.advance()
@@ -119,6 +122,12 @@ pub fn Replay::attach(self : Replay) -> Unit {
   client.reset()
   transport.val = fn(s, _) { self.out(s) }
   wall_override.val = Some(fn() { self.wall })
+  // what `deliver` handed to the app's queue is received at a frame's start (`receive`): the wall clock is its own then
+  receive_hook.val = Some(fn() {
+    if self.walls.length() > 0 {
+      self.wall = self.walls.remove(0)
+    }
+  })
   self.client = Some(client)
 }
 
@@ -127,13 +136,19 @@ pub fn Replay::attach(self : Replay) -> Unit {
 pub fn Replay::detach() -> Unit {
   transport.val = engine_send
   wall_override.val = None
+  receive_hook.val = None
 }
 
 ///|
 /// What came in, handed on in its order, as long as what it came after has been sent again: at most `at_most` of
 /// them (all that may, by default). How many were. With a seed (`shuffle`), what may come at once comes in an order
-/// drawn from it, each ask's own messages still in theirs.
-pub fn Replay::deliver(self : Replay, at_most? : Int = -1) -> Int {
+/// drawn from it, each ask's own messages still in theirs. `to`: each handed there (its JSON, its bytes) instead of to
+/// the client at once: an app's, the app's queue (a Tester's `post` on "core"), whose next frame gives it to `receive`.
+pub fn Replay::deliver(
+  self : Replay,
+  at_most? : Int = -1,
+  to? : (String, Bytes?) -> Unit,
+) -> Int {
   let mut n = 0
   while at_most < 0 || n < at_most {
     let i = self.pick()
@@ -142,12 +157,20 @@ pub fn Replay::deliver(self : Replay, at_most? : Int = -1) -> Int {
     }
     let e = self.evs[i]
     e.done = true
-    self.wall = e.wall
     match self.live(e.msg) {
       Some(msg) => {
-        match self.client {
-          Some(c) => c.receive_json(msg, bytes=e.bytes)
-          None => ()
+        match to {
+          Some(post) => {
+            self.walls.push(e.wall)
+            post(msg.stringify(), e.bytes)
+          }
+          None => {
+            self.wall = e.wall
+            match self.client {
+              Some(c) => c.receive_json(msg, bytes=e.bytes)
+              None => ()
+            }
+          }
         }
         n += 1
       }

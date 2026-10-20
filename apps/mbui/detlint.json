@@ -53,8 +53,7 @@
       "src/sfapp/share.mbt": 4,
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/station_files.mbt": 4,
-      "src/sfapp/updates.mbt": 1,
-      "src/sfcore/signin.mbt": 1
+      "src/sfapp/updates.mbt": 1
     },
     "settle": {
       "src/sfapp/drive_wbtest.mbt": 20,

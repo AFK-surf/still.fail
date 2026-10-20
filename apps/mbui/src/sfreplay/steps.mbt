@@ -1,7 +1,9 @@
 // A flow of e2e/flows seen again in a Tester, its steps written as a test's (docs/stillfail-port.md, "Seen again"):
 // the app (source.mbt) over a run's conversation with its core (e2e/traces), every input given by the test. An input
-// draws only the frames it causes (Tester::draw); what the core said comes as the run had it, at a frame's start, each
-// message once what it came after has been asked again (Replay::deliver); a step that looks (see, gone) looks then,
+// draws only the frames it causes (Tester::draw); what the core said comes as the run had it, posted to mbui's queue
+// (Tester::post on "core") as a frame ends once what it came after has been asked again (Replay::deliver,
+// Tester::between_frames), taken as the next frame begins and handed to @core.receive, as a real core's is; a step
+// that looks (see, gone) looks then,
 // waiting for nothing; time goes on only by `run_for` a declared length. At its end nothing is left to come, the app
 // asked all the run asked and is idle (Flow::end).
 //
@@ -33,25 +35,22 @@ pub fn Flow::start(
   }
   r.shuffle(seed)
   r.attach()
-  let t = @ui.Tester::new(
-    fn(c) {
-      r.deliver() |> ignore
-      app(c)
-    },
-    w~,
-    h~,
-    env~,
-  )
+  // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
+  @ui.on_message("core", @core.receive)
+  let t = @ui.Tester::new(app, w~, h~, env~)
+  // the run's core answering as soon as asked: what may come is posted as each frame ends, taken by the next
+  t.between_frames(fn() { r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore })
   let f = { r, t }
   f.core()
   f
 }
 
 ///|
-/// What the core has for the app now, given, a frame drawn for each lot: until nothing more may come (the next
-/// message waits for an ask the app has not made again). Each turn gives at least one: it ends with the trace.
+/// What the core has for the app now, posted, the frame that takes it drawn for each lot: until nothing more may come
+/// (the next message waits for an ask the app has not made again). Each turn gives at least one: it ends with the trace.
 pub fn Flow::core(self : Flow) -> Unit {
-  while self.r.due() {
+  while self.r.due() || self.t.posted() > 0 {
+    self.r.deliver(to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
     self.t.draw()
   }
 }

@@ -264,8 +264,7 @@ fn main {
   }
   @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) {
-    // what the core said since the last frame, all of it, before the frame reads anything
-    @core.pump()
+    // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
     @sfcore.frame(@core.subscribe("accounts"))
     @sfapp.view(c, core_source)
   })

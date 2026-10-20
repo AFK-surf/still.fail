@@ -1,22 +1,10 @@
-// mbui/core's native side: the engine's messages, which come on the core's own thread, copied into a queue that the
-// UI thread drains (core.mbt `pump`). On Apple's systems the main queue is woken to drain it, once per run of messages
-// (`scheduled`); elsewhere the engine asks the host for a frame and the host calls mbc_frame as each begins (Android's
-// GL thread: android_host.c; Windows' message loop: win_app.c), which drains it when something came. The engine itself is
-// the app's (core_client.h, mbc_use).
+// mbui/core's native side: the engine's messages, which come on the core's own thread, posted to mbui's queue
+// (mb_post, mbui's src/host/post.h) on the channel "core": the window's next frame takes them as it begins and hands them
+// to the app's handler (@ui.on_message("core", @core.receive)); the first since a frame took the last wakes the host.
+// The engine itself is the app's (core_client.h, mbc_use).
 #ifdef _WIN32
-// (MSVC's C has neither pthreads nor, by default, C11's atomics: a slim lock and an interlocked flag instead)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-typedef SRWLOCK pthread_mutex_t;
-#define PTHREAD_MUTEX_INITIALIZER SRWLOCK_INIT
-#define pthread_mutex_lock(m) AcquireSRWLockExclusive(m)
-#define pthread_mutex_unlock(m) ReleaseSRWLockExclusive(m)
-typedef volatile LONG atomic_int;
-#define atomic_store(p, v) InterlockedExchange((p), (v))
-#define atomic_exchange(p, v) InterlockedExchange((p), (v))
-#else
-#include <pthread.h>
-#include <stdatomic.h>
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -25,84 +13,27 @@ typedef volatile LONG atomic_int;
 #include <time.h>
 #include "moonbit.h"
 #include "core_client.h"
-#ifdef __APPLE__
-#include <dispatch/dispatch.h>
-#endif
 
-typedef struct msg {
-  struct msg *next;
-  size_t len;
-  size_t blen; // the bytes beside it, after the JSON
-  char json[];
-} msg;
+// mbui's (src/host/post_api.h): a message for the next frame, from any thread; what is posted and not handed on, gone
+void mb_post(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
+void mb_post_drop(const char *channel);
 
-// The bytes beside the message mbc_next took last, for mbc_next_bytes.
-static msg *taken;
-
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static msg *head, *tail;
-static atomic_int scheduled;
-static void (*wake)(void);
 static const mbc_engine *engine;
 
 void mbc_use(const mbc_engine *e) { engine = e; }
 
-void mbc_set_wake(void (*f)(void)) { wake = f; }
-
-#ifdef __APPLE__
-static void on_main(void *ctx) {
-  // Cleared first: a message queued while the UI drains wakes it again.
-  atomic_store(&scheduled, 0);
-  if (wake) wake();
-}
-#endif
-
 static void push_with(const char *json, size_t len, const uint8_t *bytes, size_t blen) {
-  msg *m = malloc(sizeof(msg) + len + blen);
-  m->next = NULL;
-  m->len = len;
-  m->blen = bytes ? blen : 0;
-  memcpy(m->json, json, len);
-  if (m->blen) memcpy(m->json + len, bytes, blen);
-  pthread_mutex_lock(&lock);
-  if (tail) tail->next = m;
-  else head = m;
-  tail = m;
-  pthread_mutex_unlock(&lock);
-#ifdef __APPLE__
-  if (!atomic_exchange(&scheduled, 1)) dispatch_async_f(dispatch_get_main_queue(), NULL, on_main);
-#else
-  atomic_store(&scheduled, 1);
-#endif
+  mb_post("core", json, len, bytes, blen);
 }
-
-#ifndef __APPLE__
-// As a frame begins, on the UI thread: what the core said since the last one (core.mbt `pump`, through `wake`).
-void mbc_frame(void) {
-  if (wake && atomic_exchange(&scheduled, 0)) wake();
-}
-#endif
 
 static void push(const char *json, size_t len) { push_with(json, len, NULL, 0); }
 
-// With the bytes beside a message (a picture, a file read), which the UI takes after its JSON (mbc_next_bytes).
+// With the bytes beside a message (a picture, a file read), which the UI takes with its JSON.
 static void on_message(const char *json, size_t len, const uint8_t *bytes, size_t blen, void *ctx) {
   push_with(json, len, bytes, blen);
 }
 
-static void drop_all(void) {
-  pthread_mutex_lock(&lock);
-  msg *m = head;
-  head = tail = NULL;
-  pthread_mutex_unlock(&lock);
-  while (m) {
-    msg *next = m->next;
-    free(m);
-    m = next;
-  }
-}
-
-// ── strings: MoonBit's are UTF-16, the core's UTF-8 ──
+// ── strings: MoonBit's are UTF-16, the core's UTF-8 (what comes back is mbui's to make: post.h) ──
 
 static char *utf8_of(moonbit_string_t s, size_t *out_len) {
   int32_t n = Moonbit_array_length(s);
@@ -122,37 +53,6 @@ static char *utf8_of(moonbit_string_t s, size_t *out_len) {
   }
   out[o] = 0;
   if (out_len) *out_len = o;
-  return out;
-}
-
-static moonbit_string_t string_of(const char *p, size_t len) {
-  const uint8_t *b = (const uint8_t *)p;
-  uint16_t *tmp = malloc((len ? len : 1) * sizeof(uint16_t));
-  size_t n = 0;
-  for (size_t i = 0; i < len;) {
-    uint32_t c = b[i], cp = 0xfffd;
-    size_t k = 1;
-    if (c < 0x80) cp = c;
-    else if (c >= 0xc2 && c < 0xe0 && i + 1 < len && (b[i + 1] & 0xc0) == 0x80) cp = ((c & 31) << 6) | (b[i + 1] & 63), k = 2;
-    else if (c >= 0xe0 && c < 0xf0 && i + 2 < len && (b[i + 1] & 0xc0) == 0x80 && (b[i + 2] & 0xc0) == 0x80) {
-      cp = ((c & 15) << 12) | ((b[i + 1] & 63) << 6) | (b[i + 2] & 63), k = 3;
-      if (cp < 0x800 || (cp >= 0xd800 && cp < 0xe000)) cp = 0xfffd;
-    } else if (c >= 0xf0 && c < 0xf5 && i + 3 < len && (b[i + 1] & 0xc0) == 0x80 && (b[i + 2] & 0xc0) == 0x80 && (b[i + 3] & 0xc0) == 0x80) {
-      cp = ((c & 7) << 18) | ((b[i + 1] & 63) << 12) | ((b[i + 2] & 63) << 6) | (b[i + 3] & 63), k = 4;
-      if (cp < 0x10000 || cp > 0x10ffff) cp = 0xfffd;
-    }
-    if (cp >= 0x10000) {
-      cp -= 0x10000;
-      tmp[n++] = (uint16_t)(0xd800 + (cp >> 10));
-      tmp[n++] = (uint16_t)(0xdc00 + (cp & 0x3ff));
-    } else {
-      tmp[n++] = (uint16_t)cp;
-    }
-    i += k;
-  }
-  moonbit_string_t out = moonbit_make_string_raw((int32_t)n);
-  memcpy(out, tmp, n * sizeof(uint16_t));
-  free(tmp);
   return out;
 }
 
@@ -197,28 +97,7 @@ void mbc_stop(void) {
   if (!engine) return;
   engine->stop();
   // What the stopped core said and the UI has not taken is its last words: the next core's ids are the same.
-  drop_all();
-}
-
-moonbit_string_t mbc_next(void) {
-  pthread_mutex_lock(&lock);
-  msg *m = head;
-  if (m) {
-    head = m->next;
-    if (!head) tail = NULL;
-  }
-  pthread_mutex_unlock(&lock);
-  free(taken);
-  taken = m;
-  if (!m) return moonbit_make_string_raw(0);
-  return string_of(m->json, m->len);
-}
-
-moonbit_bytes_t mbc_next_bytes(void) {
-  size_t n = taken ? taken->blen : 0;
-  moonbit_bytes_t b = moonbit_make_bytes((int32_t)n, 0);
-  if (n) memcpy(b, taken->json + taken->len, n);
-  return b;
+  mb_post_drop("core");
 }
 
 // A browser session's end, queued as a message of ours: {"mbui_auth": token, "url"|"error": "..."}.

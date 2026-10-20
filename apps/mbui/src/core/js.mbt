@@ -21,16 +21,6 @@ fn ffi_stop() -> Unit {
 }
 
 ///|
-fn ffi_next() -> String {
-  ""
-}
-
-///|
-fn ffi_set_wake(_f : FuncRef[() -> Unit]) -> Unit {
-
-}
-
-///|
 fn ffi_has_web_auth() -> Int {
   0
 }
@@ -43,11 +33,6 @@ fn ffi_web_auth(_token : Int, _url : String, _scheme : String) -> Int {
 ///|
 fn ffi_now() -> Double {
   0.0
-}
-
-///|
-fn ffi_next_bytes() -> Bytes {
-  b""
 }
 
 ///|
