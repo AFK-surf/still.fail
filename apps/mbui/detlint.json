@@ -48,11 +48,9 @@
       "src/sfapp/chat.mbt": 1,
       "src/sfapp/composer.mbt": 2,
       "src/sfapp/drive_reader.mbt": 2,
-      "src/sfapp/pick.mbt": 2,
+      "src/sfapp/pick.mbt": 1,
       "src/sfapp/recent.mbt": 1,
       "src/sfapp/service.mbt": 1,
-      "src/sfapp/share.mbt": 1,
-      "src/sfapp/sheet.mbt": 1,
       "src/sfapp/updates.mbt": 1
     },
     "settle": {},

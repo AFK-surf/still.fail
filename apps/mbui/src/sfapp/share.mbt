@@ -139,7 +139,6 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
         c.blur()
         raise_sheet(ShareSheet)
         share_in.raised = true
-        c.request_frame()
       }
       _ => ()
     }
