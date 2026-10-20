@@ -71,7 +71,13 @@ pub fn Flow::start(
   emit_start(seed, w, h, env)
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
-  // (the app started with what the run's was: its trace's env, then what the test says of its own)
+  // (the app started with what the run's was: its trace's env, then what the test says of its own; a trace that does
+  // not say it is one recorded before it was kept, to record again: never run as if started with nothing)
+  if r.env().is_empty() && emit_path() == "" {
+    abort(
+      "flow: this test's trace has no {\"env\":…} head, what its run's app was started with (src/stillfail: CORETRACE env): record it again (scripts/rerecord.sh)",
+    )
+  }
   let t = @ui.Tester::new(app, w~, h~, env=r.env() + env)
   // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
   // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
