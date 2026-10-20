@@ -149,7 +149,8 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   MBUI_READONLY=1 (Source.read_only): runs on a real account change nothing.
   MBUI_OPEN_CHAT (words of a title, or `#n` the n-th row),
   MBUI_OPEN_SESSION and MBUI_CHAT_AT_END open a chat for scripted runs;
-  MBUI_CHAT_BENCH=1 scrolls it up 600 frames and says the frames' times.
+  MBUI_CHAT_BENCH=1 with MBUI_BENCH=3 (mbui's bench_app: every frame drawn while it asks)
+  scrolls it up 600 frames and says the frames' times.
 - Scrolling (MBUI_CHAT_BENCH, Studio, 390×844, 600 frames at 40 a frame,
   build + layout + paint): the made-up chat of 3000 messages 0.34–0.57 ms a
   frame on average (p99 0.8–2.5 ms, none over 8 ms); the long real chat

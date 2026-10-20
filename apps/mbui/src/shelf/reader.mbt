@@ -182,7 +182,7 @@ fn reader(c : @ui.Ctx, src : Source, r : Reading) -> Unit {
           if shown != r.page && r.pages is Some(_) {
             r.page = shown
             r.offset = pages.pages[shown].start
-            (src.save_place)(r.book.id, r.chapter, r.offset)
+            (src.save_place)(r.book.id, r.chapter, r.offset, (src.now)())
           }
         }
         Some(Err(why)) => note(c, "这一章读不到：" + why, pp, error=true)

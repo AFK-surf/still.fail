@@ -207,16 +207,9 @@ let core_source : @sfapp.Source = {
   picture,
   fatal: fn() { @core.fatal() },
   file: chat_file,
-  now: wall,
+  now: fn() { @ui.wall_ms() },
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,
-}
-
-///|
-/// The machine's clock, the one place the app reads it: the app's time (Source.now), and what a run's trace keeps
-/// stamped with it.
-fn wall() -> Double {
-  @core.wall_ms()
 }
 
 ///|
@@ -229,10 +222,7 @@ fn main {
     (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
-    @ui.trace_views(fn(m) {
-      m["w"] = Json::number(wall())
-      @host.log("CORETRACE " + Json::object(m).stringify())
-    })
+    @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
     // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
     // to take it when the run did (src/core/replay.mbt: Replay::step_at)
@@ -241,8 +231,7 @@ fn main {
       if moment == @ui.Acted {
         m["acted"] = Json::boolean(true)
       }
-      m["w"] = Json::number(wall())
-      @host.log("CORETRACE " + Json::object(m).stringify())
+      @core.trace_note(m)
     })
   }
   if core_linked() == 0 || !@sfcore.start() {
