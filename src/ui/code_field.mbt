@@ -75,7 +75,7 @@ pub fn Ctx::code_field(
   if cleared {
     st.value = ""
     st.handed = None
-    self.set_editor_text(key, "")
+    self.put_editor_text(key, "")
   }
   // what was typed, as the field holds it now: digits only, `length` at most (what else came is taken out of the
   // field); while it may not change, the field put back as it was
@@ -86,7 +86,7 @@ pub fn Ctx::code_field(
   let mut out : String? = None
   if !enabled {
     if typed != st.value {
-      self.set_editor_text(key, st.value)
+      self.put_editor_text(key, st.value)
     }
   } else {
     let b = StringBuilder()
@@ -99,7 +99,7 @@ pub fn Ctx::code_field(
     }
     let d = b.to_string()
     if d != typed {
-      self.set_editor_text(key, d)
+      self.put_editor_text(key, d)
     }
     st.value = d
     if n < length {

@@ -319,6 +319,7 @@ fn Ctx::emit_text(
   color : Int64,
   alpha : Double,
   center_in? : Double = -1.0,
+  spans? : Array[(Int, Int, Int64)] = [],
 ) -> Unit {
   let s = tl.shaped
   let n = s.starts.length()
@@ -358,7 +359,13 @@ fn Ctx::emit_text(
       if g.color { 3.0 } else if adaptive { 7.0 } else { 1.0 },
       0.0,
       0.0,
-      if g.color { 0xFFFFFFFFL } else { color },
+      if g.color {
+        0xFFFFFFFFL
+      } else if spans.is_empty() {
+        color
+      } else {
+        span_color(spans, s.starts[c], color)
+      },
       alpha,
       g.u,
       g.v,
@@ -372,6 +379,18 @@ fn Ctx::emit_text(
       self.inst[b + 23] = glass_paint.ink_r
     }
   }
+}
+
+///|
+/// The colour of the words at `off`: the last of `spans` (from, to, colour) over it, else `color`.
+fn span_color(spans : Array[(Int, Int, Int64)], off : Int, color : Int64) -> Int64 {
+  let mut out = color
+  for sp in spans {
+    if sp.0 <= off && off < sp.1 {
+      out = sp.2
+    }
+  }
+  out
 }
 
 ///|

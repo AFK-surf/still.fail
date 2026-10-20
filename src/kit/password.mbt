@@ -13,7 +13,8 @@ pub(all) struct Password {
 
 ///|
 /// A password field (see the file's head), its editor `key`'s, showing its words if `visible`; `placeholder` while
-/// empty; the button named `show_label` or `hide_label` for the semantics tree.
+/// empty; the button named `show_label` or `hide_label` for the semantics tree; `field`: its words, the view's own
+/// (mbui's Field), else the editor's.
 pub fn password_field(
   c : @ui.Ctx,
   key : String,
@@ -23,6 +24,7 @@ pub fn password_field(
   show_label? : String = "显示",
   hide_label? : String = "隐藏",
   disabled? : Bool = false,
+  field? : @ui.Field,
 ) -> Password {
   let t = c.theme()
   let bid = c.id(key + "/toggle")
@@ -39,6 +41,6 @@ pub fn password_field(
       focus_ring(c, r.focus_shown, r.rect, 12.0)
     })
     c.semantics(i, Button, id=bid, label~, pressed=shows, disabled~, actions=pick(disabled, [], [Activate]))
-  })
+  }, field?)
   { text: words, visible: shows, toggle: r.changed_to(shows != visible) }
 }

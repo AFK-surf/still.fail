@@ -66,6 +66,8 @@ priv struct FormState {
   mut tried : Bool
   touched : Map[String, Bool]
   focused : Map[String, Bool]
+  /// each field's words, by its name (its editor shows them)
+  fields : Map[String, @ui.Field]
 }
 
 ///|
@@ -109,7 +111,7 @@ pub fn form(
   let st = match kit.val.forms.get(id) {
     Some(s) => s
     None => {
-      let s = { tried: false, touched: {}, focused: {} }
+      let s = { tried: false, touched: {}, focused: {}, fields: {} }
       kit.val.forms[id] = s
       s
     }
@@ -121,9 +123,17 @@ pub fn form(
   let fi = c.box(w~, gap=16.0, fn() {
     for f in fields {
       let ek = key + "/" + f.name
+      let field = match st.fields.get(f.name) {
+        Some(x) => x
+        None => {
+          let x = @ui.Field::new()
+          st.fields[f.name] = x
+          x
+        }
+      }
       // known from last frame: what is wrong decides the field's edge as it is built
       let shown_error = (st.tried || st.touched.contains(f.name)) &&
-        field_error(f, c.editor_text(ek), words~) != ""
+        field_error(f, field.text(), words~) != ""
       c.box(gap=6.0, fn() {
         label(c, f.label, for_id=c.id(ek), field=true, size=t.font, weight=500) |> ignore
         let mut got = ""
@@ -142,6 +152,7 @@ pub fn form(
           },
           fn() {  },
           invalid=shown_error,
+          field~,
         )
         values[f.name] = got
         let wrong = field_error(f, got, words~)

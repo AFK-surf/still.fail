@@ -88,8 +88,8 @@ The gallery's page for each is `MBUI_SCREEN=<page>`.
 | ToggleGroup | `@kit.toggle_group(c, key, items, value, multiple?) -> Changed[Array[String]]`, a roving group | controls |
 | RadioGroup | `@kit.radio_group(c, key, items, value) -> Changed[String]`: the arrows check what they reach | controls |
 | Slider | `@kit.slider(c, key, value, min?, max?, step?) -> Changed[Double]` | controls |
-| (a one-line field) | `@kit.text_field(c, key, placeholder?) -> Field`: still.fail's pill field | |
-| Password Toggle Field | `@kit.password_field(c, key, visible) -> Password`: the words, whether they show | controls |
+| (a one-line field) | `@kit.text_field(c, key, placeholder?, field?) -> Field`: still.fail's pill field; `field` (`@ui.Field`) the words the view keeps, reads and writes | |
+| Password Toggle Field | `@kit.password_field(c, key, visible, field?) -> Password`: the words, whether they show | controls |
 | One-Time Password Field | `Ctx::code_field` (src/ui): a code complete is handed on once | |
 | Dialog | `@kit.dialog(c, key, open, title, description?, modal?) -> Changed[Bool]`: in the window's middle; Escape, the back, a press outside, its close button close it | overlays |
 | AlertDialog | `@kit.alert_dialog(c, key, open, title, action, cancel?, danger?) -> Alert`: opens on cancel; a press outside leaves it | overlays |

@@ -252,6 +252,7 @@ test "one-line text too wide for its box ends in an ellipsis" {
 ///|
 test "a composer's field: Enter a new line, a long paste handed over, its words kept in view as they grow" {
   let pasted : Array[String] = []
+  let field = @ui.Field::new()
   let t = @ui.Tester::new(fn(c) {
     c.column(w=Fill(1.0), h=Fill(1.0), fn() {
       c.spacer()
@@ -263,6 +264,7 @@ test "a composer's field: Enter a new line, a long paste handed over, its words 
         max_lines=3,
         enter_sends=false,
         paste_limit=50,
+        field~,
       )
       match r.pasted {
         Some(s) => pasted.push(s)
@@ -293,7 +295,7 @@ test "a composer's field: Enter a new line, a long paste handed over, its words 
   let (_, cy, _, _) = t.ime_rect()
   assert_true(cy >= y && cy < y + h)
   // words put in by the app
-  t.ctx().set_editor_text("composer", "kept")
+  field.set("kept")
   t.frame()
   let (_, kept, a, _) = t.ime()
   assert_eq(kept, "kept")

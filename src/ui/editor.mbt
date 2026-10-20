@@ -33,12 +33,31 @@ fn EditorState::display(self : EditorState) -> String {
 }
 
 ///|
+/// What its look makes of words `d` (`d` itself, no colours, with none): what shows (`d` where it would not keep
+/// their length) and the colours of its ranges; worked out once a build, kept for the same words.
+fn EditorState::look_of(self : EditorState, d : String) -> (String, Array[(Int, Int, Int64)]) {
+  match self.look {
+    None => (d, [])
+    Some(f) =>
+      match self.looked {
+        Some((w, o, spans)) if w == d => (o, spans)
+        _ => {
+          let (o, spans) = f(d)
+          let shown = if o.length() == d.length() { o } else { d }
+          self.looked = Some((d, shown, spans))
+          (shown, spans)
+        }
+      }
+  }
+}
+
+///|
 /// What it shows: its words (with what is being composed), each a dot where they are a secret (as many UTF-16 units,
 /// so the caret's and the selection's places are the same).
 fn EditorState::shown(self : EditorState) -> String {
   let d = self.display()
   if !self.secret {
-    return d
+    return self.look_of(d).0
   }
   let b = StringBuilder()
   for _ in 0..<d.length() {
@@ -283,35 +302,23 @@ pub fn Ctx::editor(
   enter_sends? : Bool = true,
   paste_limit? : Int = 0,
   secret? : Bool = false,
+  look? : (String) -> (String, Array[(Int, Int, Int64)]),
+  field? : Field,
 ) -> EditorResult {
   let id = self.id(key)
-  let st = match self.editors.get(id) {
-    Some(s) => s
-    None => {
-      let s = {
-        text: "",
-        caret: 0,
-        anchor: 0,
-        marked: "",
-        msel_a: 0,
-        msel_b: 0,
-        blink0: self.now,
-        tl: None,
-        ox: 0.0,
-        oy: 0.0,
-        submitted: None,
-        pref_x: -1.0,
-        scroll: 0.0,
-        pasted: None,
-        limit: 0,
-        enter_sends: true,
-        line: 0.0,
-        color: 0L,
-        ph_color: 0L,
-        caret_color: 0L,
-        sel_color: 0L,
-        secret: false,
+  let st = match (self.editors.get(id), field) {
+    // what the app keeps (Field): this editor shows it from now on
+    (Some(s), Some(f)) if physical_equal(s, f.st) => s
+    (had, Some(f)) => {
+      self.editors[id] = f.st
+      if had is None {
+        self.own(id)
       }
+      f.st
+    }
+    (Some(s), None) => s
+    (None, None) => {
+      let s = EditorState::fresh("", self.now)
       self.editors[id] = s
       self.own(id)
       s
@@ -320,6 +327,23 @@ pub fn Ctx::editor(
   st.limit = paste_limit
   st.enter_sends = enter_sends
   st.secret = secret
+  st.look = look
+  // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
+  st.looked = None
+  // one Field, one editor: two editors over one Field would lay each other's lines and scroll over each other
+  // (by id: the same key in two scopes, a list's rows, is two editors)
+  if field is Some(_) && st.built_frame == self.frame_no && st.built_id != id {
+    abort(
+      "Ctx::editor: one Field given to two editors in one frame (\{st.built_key} id \{st.built_id} and \{key} id \{id}): a Field is one editor's",
+    )
+  }
+  st.built_frame = self.frame_no
+  st.built_key = key
+  st.built_id = id
+  if st.blink_again {
+    st.blink_again = false
+    st.blink0 = self.now
+  }
   st.line = line
   st.color = color
   st.ph_color = placeholder_color
@@ -405,7 +429,8 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     let ph = layout_text(n.text, n.font_size, 400, 1.0e9, false, line=st.line)
     self.emit_text(ph, st.ox, st.oy, st.ph_color, alpha)
   } else {
-    self.emit_text(tl, st.ox, st.oy, st.color, alpha)
+    let spans = if st.secret { [] } else { st.look_of(st.display()).1 }
+    self.emit_text(tl, st.ox, st.oy, st.color, alpha, spans~)
   }
   // composition underline
   if ml > 0 {
@@ -481,28 +506,115 @@ fn Ctx::sync_ime(self : Ctx) -> Unit {
 }
 
 ///|
-/// Takes the text out of an editor (a send button does this).
-pub fn Ctx::take_editor_text(self : Ctx, key : String) -> String {
-  match self.editors.get(self.id(key)) {
-    Some(st) => {
-      if st.marked.length() > 0 {
-        st.text_input(2, "", 0, 0, self.now)
-      }
-      let t = st.text
-      st.text = ""
-      st.caret = 0
-      st.anchor = 0
-      st.scroll = 0.0
-      t
-    }
-    None => ""
+/// An editor's state as it starts: `text` in it, the caret at its end.
+fn EditorState::fresh(text : String, now : Double) -> EditorState {
+  {
+    text,
+    caret: text.length(),
+    anchor: text.length(),
+    marked: "",
+    msel_a: 0,
+    msel_b: 0,
+    blink0: now,
+    tl: None,
+    ox: 0.0,
+    oy: 0.0,
+    submitted: None,
+    pref_x: -1.0,
+    scroll: 0.0,
+    pasted: None,
+    limit: 0,
+    enter_sends: true,
+    line: 0.0,
+    color: 0L,
+    ph_color: 0L,
+    caret_color: 0L,
+    sel_color: 0L,
+    secret: false,
+    look: None,
+    looked: None,
+    blink_again: false,
+    built_frame: -1,
+    built_key: "",
+    built_id: 0,
   }
 }
 
 ///|
-/// Puts `text` in an editor in place of what it has, the caret at its end (a draft kept, words put back). An editor
-/// not drawn yet takes it when it is.
-pub fn Ctx::set_editor_text(self : Ctx, key : String, text : String) -> Unit {
+/// What an editor holds (its words, its selection), the app's own (Compose's TextFieldState): kept where the app keeps
+/// what it is about (a draft), given to the editor that shows it (Ctx::editor's `field`), read and written by the app
+/// from anywhere (a core's answer between frames included), the editor drawing what it holds when it is next built.
+/// Typing changes it as it changes the editor: they are one. A Field is one editor's: given to two in one frame, the
+/// app is stopped there (both named); it may move from one editor to another between frames.
+struct Field {
+  st : EditorState
+}
+
+///|
+/// A field holding `text`, the caret at its end.
+pub fn Field::new(text? : String = "") -> Field {
+  let st = EditorState::fresh(text, 0.0)
+  // (its caret blinks from when its editor is first built, not from the app's start)
+  st.blink_again = true
+  { st, }
+}
+
+///|
+/// Its words as written (what the input method composes not counted).
+pub fn Field::text(self : Field) -> String {
+  self.st.text
+}
+
+///|
+/// Its selection: its anchor and its caret (UTF-16, in its words; the same when nothing is selected).
+pub fn Field::selection(self : Field) -> (Int, Int) {
+  (self.st.anchor, self.st.caret)
+}
+
+///|
+/// `text` in place of what it holds, the caret at `caret` (its end when not said), nothing selected: an app's own edit
+/// (words kept put back, a mark put in, a word taken out whole). What the input method was composing is let go.
+pub fn Field::set(self : Field, text : String, caret? : Int) -> Unit {
+  let st = self.st
+  let at = match caret {
+    Some(k) => imin(imax(k, 0), text.length())
+    None => text.length()
+  }
+  if st.text == text && st.marked == "" && st.caret == at && st.anchor == at {
+    return
+  }
+  st.marked = ""
+  st.text = text
+  st.caret = at
+  st.anchor = at
+  st.pref_x = -1.0
+  if text == "" {
+    st.scroll = 0.0
+  }
+  // the caret shown at once where it is put; and a frame to draw it, written from wherever it was (an answer between
+  // frames, a fiber, a timer), as the input's own changes have
+  st.blink_again = true
+  field_written()
+}
+
+///|
+/// Its words given up (sent): what the input method was composing put in first, then none left in it.
+pub fn Field::take(self : Field) -> String {
+  let st = self.st
+  if st.marked.length() > 0 {
+    // (when: its blinking starts again as it is next built)
+    st.text_input(2, "", 0, 0, 0.0)
+    st.blink_again = true
+  }
+  let t = st.text
+  self.set("")
+  t
+}
+
+///|
+/// The framework's own fields (Ctx::code_field): `text` in its editor `key` in place of what it has, the caret at its
+/// end. An app writes a field it keeps (Field::set), never an editor by its key.
+fn Ctx::put_editor_text(self : Ctx, key : String, text : String) -> Unit {
   let id = self.id(key)
   match self.editors.get(id) {
     Some(st) => {
@@ -513,49 +625,11 @@ pub fn Ctx::set_editor_text(self : Ctx, key : String, text : String) -> Unit {
       st.blink0 = self.now
     }
     None => {
-      let st = {
-        text,
-        caret: text.length(),
-        anchor: text.length(),
-        marked: "",
-        msel_a: 0,
-        msel_b: 0,
-        blink0: self.now,
-        tl: None,
-        ox: 0.0,
-        oy: 0.0,
-        submitted: None,
-        pref_x: -1.0,
-        scroll: 0.0,
-        pasted: None,
-        limit: 0,
-        enter_sends: true,
-        line: 0.0,
-        color: 0L,
-        ph_color: 0L,
-        caret_color: 0L,
-        sel_color: 0L,
-        secret: false,
-      }
+      let st = EditorState::fresh(text, self.now)
       self.editors[id] = st
       self.own(id)
     }
   }
-}
-
-///|
-/// The words in editor `key` now ("" none such): what a view checks before the editor is built this frame.
-pub fn Ctx::editor_text(self : Ctx, key : String) -> String {
-  match self.editors.get(self.id(key)) {
-    Some(st) => st.text
-    None => ""
-  }
-}
-
-///|
-/// Whether the editor `key` is kept on this page (drawn before, and its page not left since).
-pub fn Ctx::has_editor(self : Ctx, key : String) -> Bool {
-  self.editors.contains(self.id(key))
 }
 
 ///|

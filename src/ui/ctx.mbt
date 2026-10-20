@@ -113,6 +113,19 @@ struct EditorState {
   mut sel_color : Int64
   /// what it holds is a secret (a key, a token, a password): drawn as dots, never copied or cut out of it
   mut secret : Bool
+  /// how its words are drawn, as the app says (Ctx::editor's `look`): the same number of letters in the same places,
+  /// and ranges of them in colours of their own
+  mut look : ((String) -> (String, Array[(Int, Int, Int64)]))?
+  /// what `look` made of the words it was last given, worked out once a build (the words, what shows, the colours)
+  mut looked : (String, String, Array[(Int, Int, Int64)])?
+  /// the caret's blinking starts again (shown at once) the next time the editor is built: the app wrote what it holds
+  /// (Field::new, set, take)
+  mut blink_again : Bool
+  /// the frame it was last built in and the editor's key and id then: a Field given to a second editor (another id) in
+  /// one frame is told
+  mut built_frame : Int
+  mut built_key : String
+  mut built_id : Int
 }
 
 ///|

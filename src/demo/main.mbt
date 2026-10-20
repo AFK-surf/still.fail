@@ -59,10 +59,12 @@ struct App {
   initial : Int
   mut tab : Int
   mut sent : Int
+  /// what is being written (the composer's field shows it; sending takes it)
+  draft : @ui.Field
 }
 
 ///|
-let app : App = { msgs: make_messages(10000), initial: 10000, tab: 0, sent: 0 }
+let app : App = { msgs: make_messages(10000), initial: 10000, tab: 0, sent: 0, draft: @ui.Field::new() }
 
 ///|
 fn message_row(c : @ui.Ctx, i : Int) -> Unit {
@@ -195,13 +197,13 @@ fn view(c : @ui.Ctx) -> Unit {
       align=AEnd,
       bg=0xFFFFFFFFL,
       fn() {
-        let r = c.editor("composer", placeholder="输入消息，回车发送")
+        let r = c.editor("composer", placeholder="输入消息，回车发送", field=app.draft)
         match r.submitted {
           Some(t) => send(t)
           None => ()
         }
         if c.button("发送") {
-          let st = c.take_editor_text("composer")
+          let st = app.draft.take()
           if st.length() > 0 {
             send(st)
           }

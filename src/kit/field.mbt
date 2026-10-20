@@ -10,16 +10,28 @@ pub(all) struct Field {
 }
 
 ///|
-/// A one-line field (see the file's head), its editor `key`'s, `placeholder` while empty, `w` wide.
+/// A one-line field (see the file's head), its editor `key`'s, `placeholder` while empty, `w` wide; `field`: what it
+/// holds, the view's own to read and write (mbui's Field), else the editor's.
 pub fn text_field(
   c : @ui.Ctx,
   key : String,
   placeholder? : String = "",
   w? : @ui.Size = Fill(1.0),
   disabled? : Bool = false,
+  field? : @ui.Field,
 ) -> Field {
   let mut out = { text: "", submitted: false }
-  pill_field(c, key, w, disabled, false, placeholder, fn(e) { out = { text: e.text, submitted: e.submitted is Some(_) } }, fn() {  })
+  pill_field(
+    c,
+    key,
+    w,
+    disabled,
+    false,
+    placeholder,
+    fn(e) { out = { text: e.text, submitted: e.submitted is Some(_) } },
+    fn() {  },
+    field?,
+  )
   out
 }
 
@@ -36,6 +48,7 @@ fn pill_field(
   got : (@ui.EditorResult) -> Unit,
   after : () -> Unit,
   invalid? : Bool = false,
+  field? : @ui.Field,
 ) -> Unit {
   let t = c.theme()
   let fid = c.id(key + "/field")
@@ -75,6 +88,7 @@ fn pill_field(
           color=t.fg,
           placeholder_color=t.subtle,
           caret_color=t.accent,
+          field?,
         ),
       )
       after()

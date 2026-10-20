@@ -459,6 +459,13 @@ let track_x : Tracker = Tracker::new()
 let track_y : Tracker = Tracker::new()
 
 ///|
+/// What an editor holds was written by the app (Field::set, take): an event, as an input is, wherever it came from
+/// (an answer between frames, a fiber, a timer); the frame that draws it the framework's to draw.
+fn field_written() -> Unit {
+  h_request_frame()
+}
+
+///|
 /// An input came between two frames (the host's, a test's, an action asked by the accessibility): the next frame and
 /// the one after it are the framework's to draw (inputrec.mbt `inputs_since`).
 fn input_came() -> Unit {
