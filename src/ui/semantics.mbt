@@ -176,9 +176,10 @@ pub fn Ctx::visually_hidden(self : Ctx, label : String, role? : Role = Text) -> 
 ///|
 /// `action` asked of the widget `id` (by a test, by the host's accessibility): its widget sees it the next frame.
 pub fn Ctx::ask_action(self : Ctx, id : Int, action : Action) -> Unit {
+  ignore(self)
   self.asked_actions.push((id, action))
-  self.request_frame()
-  h_request_frame()
+  // an input, as a tap is: its frame and the one after
+  input_came()
 }
 
 ///|

@@ -356,7 +356,6 @@ fn Ctx::secondary_press(self : Ctx, x : Double, y : Double) -> Unit {
   self.press_down = Some((x, y))
   self.px = x
   self.py = y
-  h_request_frame()
 }
 
 ///|
@@ -369,7 +368,6 @@ fn Ctx::pointer_left(self : Ctx) -> Unit {
   self.py = -1.0
   self.hover = 0
   self.show_cursor()
-  h_request_frame()
 }
 
 ///|
@@ -508,7 +506,6 @@ fn select_move(x : Double, y : Double) -> Bool {
   match picked.target {
     Some(t) => {
       picked.b = t.lay.offset_at(x - t.ox, y - t.oy)
-      h_request_frame()
       picked.a != picked.b
     }
     None => false

@@ -357,6 +357,14 @@ let track_x : Tracker = Tracker::new()
 let track_y : Tracker = Tracker::new()
 
 ///|
+/// An input came between two frames (the host's, a test's, an action asked by the accessibility): the next frame and
+/// the one after it are the framework's to draw (inputrec.mbt `inputs_since`).
+fn input_came() -> Unit {
+  inputs_since.val = true
+  h_request_frame()
+}
+
+///|
 fn on_pointer(kind : Int, x : Double, y : Double, button : Int) -> Unit {
   took_input("pointer", h_event_time(), [kind.to_double(), x, y, button.to_double()])
   let c = g()

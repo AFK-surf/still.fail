@@ -47,19 +47,15 @@
     "frame-request": {
       "src/textdiff/main.mbt": 1,
       "src/ui/code_field.mbt": 1,
-      "src/ui/desktop.mbt": 3,
       "src/ui/drive.mbt": 1,
       "src/ui/focus.mbt": 2,
       "src/ui/fx.mbt": 2,
-      "src/ui/image.mbt": 1,
-      "src/ui/inputrec.mbt": 1,
       "src/ui/list.mbt": 4,
       "src/ui/native.mbt": 3,
       "src/ui/nav.mbt": 4,
-      "src/ui/overlay.mbt": 5,
+      "src/ui/overlay.mbt": 4,
       "src/ui/reader.mbt": 1,
-      "src/ui/scroll.mbt": 6,
-      "src/ui/semantics.mbt": 2
+      "src/ui/scroll.mbt": 6
     },
     "settle": {
       "src/effecttest/outside_test.mbt": 10,

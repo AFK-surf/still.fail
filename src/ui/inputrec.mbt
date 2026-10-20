@@ -23,8 +23,7 @@ let inputs_since : Ref[Bool] = Ref::new(false)
 
 ///|
 fn took_input(kind : String, t : Double, args : Array[Double], text? : String) -> Unit {
-  inputs_since.val = true
-  h_request_frame()
+  input_came()
   if taping() {
     let m : Map[String, Json] = {
       "k": Json::string(kind),

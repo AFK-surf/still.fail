@@ -112,10 +112,8 @@ pub fn Ctx::overlay(
   })
   // the back to it, unless a layer built in it (over it) takes it after
   if escape && !inert {
-    self.take_back(fn() {
-      self.dismissals[id] = Back
-      self.request_frame()
-    })
+    // (the system's back is an input: its frames are the framework's)
+    self.take_back(fn() { self.dismissals[id] = Back })
   }
   self.with_parent(i, fn() {
     if modal && !inert {

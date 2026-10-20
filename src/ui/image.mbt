@@ -23,6 +23,17 @@ priv struct ImageEntry {
   mut oh : Double
   mut used : Int // the frame it was last drawn
   mut ready_at : Double
+  // its fade in (image_fade_ms from ready_at), told once as it is first drawn fading (Ctx::moving)
+  mover : Mover
+  mut fade_told : Bool
+}
+
+///|
+/// An image fading in is at rest image_fade_ms after it was ready.
+impl Moving for ImageEntry with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  self.ready_at + image_fade_ms
 }
 
 ///|
@@ -140,6 +151,8 @@ fn Ctx::image_for(self : Ctx, src : String, px : Double) -> ImageEntry? {
       oh: 0.0,
       used: self.frame_no,
       ready_at: 0.0,
+      mover: Mover::new(),
+      fade_told: false,
     }
     e.poll(self.now)
     // smallest first
@@ -349,8 +362,9 @@ fn Ctx::draw_image(
   } else {
     1.0
   }
-  if fade < 1.0 {
-    self.request_frame()
+  if fade < 1.0 && !e.fade_told {
+    e.fade_told = true
+    self.moving(e.mover, e, what="image \"\{src}\" fading in")
   }
   let (x, y, w, h, u0, v0, du, dv) = match fit {
     FitFill => (bx, by, bw, bh, 0.0, 0.0, 1.0, 1.0)
