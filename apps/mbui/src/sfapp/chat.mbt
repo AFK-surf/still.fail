@@ -111,6 +111,8 @@ priv struct Reading {
   /// a message gone to (a notification's, "" none: ChatMotion.kt flashed) and how lit it is (flash_of)
   mut flash : String
   flash_lit : @motion.Anim
+  /// flashes started (each one's own hold, with motion reduced)
+  mut flash_n : Int
 }
 
 ///|
@@ -148,6 +150,7 @@ fn reading_of(key : String) -> Reading {
         running: {},
         flash: "",
         flash_lit: @motion.Anim::new(0.0),
+        flash_n: 0,
       }
       readings[key] = r
       r
@@ -799,6 +802,7 @@ let flash_ms : Double = 1700.0
 ///|
 /// The flash of the message gone to, all of its way said as it starts.
 fn flash_start(rd : Reading) -> Unit {
+  rd.flash_n += 1
   rd.flash_lit.snap(0.0)
   rd.flash_lit.animate(
     0.0,
@@ -816,15 +820,17 @@ fn flash_start(rd : Reading) -> Unit {
 }
 
 ///|
-/// How much a message gone to is lit now (flash_start); 0 for any other message. With motion reduced (or in a
-/// screenshot) it is not lit at all.
+/// How much a message gone to is lit now (flash_start); 0 for any other message. With motion reduced it is lit whole
+/// for `flash_ms`, then not: less motion, not less said (which message it went to).
 fn flash_of(c : @ui.Ctx, rd : Reading, ts : String) -> Double {
-  ignore(c)
   if rd.flash == "" || rd.flash != ts {
     return 0.0
   }
   if flash_held.val {
     return 1.0
+  }
+  if @ui.reduced_motion() {
+    return if @kit.after(c, "chat-flash/\{rd.flash_n}", true, flash_ms) { 0.0 } else { 1.0 }
   }
   rd.flash_lit.get()
 }

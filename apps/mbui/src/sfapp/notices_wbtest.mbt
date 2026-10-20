@@ -75,6 +75,7 @@ fn notify_core(
   sys : FakeSystem,
   notify? : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] }),
   show? : Array[Json] = [],
+  env? : Array[(String, String)] = [],
 ) -> @ui.Tester {
   reset()
   use_system(sys)
@@ -104,7 +105,7 @@ fn notify_core(
       }
     },
   }
-  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0, env~)
   t.draw()
   t
 }
@@ -185,6 +186,19 @@ test "a message gone to flashes, in and out as the Android app's, nothing of it 
   t.frame()
   assert_eq(flashing.val.1, 0.0)
   t.assert_idle()
+}
+
+///|
+test "with motion reduced, a message gone to is lit whole for its flash's time, then not: no fade" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let t = notify_core(calls, sys, env=[("MBUI_REDUCE_MOTION", "1")])
+  sys.opened = "/o/ws1/st1/s-c2?message=2\n2"
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(flashing.val, ("ts2", 1.0))
+  t.run_for(flash_ms)
+  assert_eq(flashing.val.1, 0.0)
 }
 
 ///|
