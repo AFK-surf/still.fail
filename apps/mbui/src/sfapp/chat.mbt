@@ -603,9 +603,11 @@ fn messages(
       }
       _ => ()
     }
-    // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run
+    // the core told the chat shows, and whether its end does (what is read follows): not on a read-only run. A list
+    // at its end that glides after rows come (glide_on_growth) is still following its end: not told it left it and
+    // came back for each lot of rows; one gliding from elsewhere (the way to the newest) has its end once it is there
     let seen = match info {
-      Some(i) => !v.newer && i.at_end
+      Some(i) => !v.newer && (i.at_end || (i.gliding && rd.at_end))
       None => false
     }
     rd.at_end = seen

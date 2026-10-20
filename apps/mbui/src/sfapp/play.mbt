@@ -15,12 +15,19 @@ priv struct Playing {
   mut asked_at : Double
   mut subtitle_asked : Bool
   mut kept_at : Double
+  /// the place last told to the core (its time and length, ms; -1: none yet): told again only once it moved
+  mut kept_pos : Double
+  mut kept_dur : Double
   /// a read logged, the first times
   mut reads : Int
 }
 
 ///|
 let playing : Map[String, Playing] = Map([])
+
+///|
+/// How often where it is goes to the core while it is open (Player.kt: every 20 ticks of 250 ms), when it moved.
+let play_keep_ms : Double = 5000.0
 
 ///|
 let play_srcs : Map[String, Source] = Map([])
@@ -40,6 +47,8 @@ fn playing_for(key : String) -> Playing {
         asked_at: -1.0,
         subtitle_asked: false,
         kept_at: 0.0,
+        kept_pos: -1.0,
+        kept_dur: -1.0,
         reads: 0,
       }
       playing[key] = p
@@ -155,12 +164,12 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     if pl.kept_at <= 0.0 {
       pl.kept_at = now
     }
-    if now - pl.kept_at >= 5000.0 {
+    if now - pl.kept_at >= play_keep_ms {
       play_keep(src, at, pl)
       pl.kept_at = now
     }
     // (the place kept now and then: nothing shown waits for it)
-    c.wake_in(5000.0 - (now - pl.kept_at), later=true)
+    c.wake_in(play_keep_ms - (now - pl.kept_at), later=true)
   }
   let list = @player.playlist_of(
     entries
@@ -181,6 +190,12 @@ fn play_keep(src : Source, at : DriveAt, pl : Playing) -> Unit {
   if dur <= 0.0 {
     return
   }
+  // (paused, or played back to where it was told: the same place is not told again)
+  if pos.round() == pl.kept_pos && dur.round() == pl.kept_dur {
+    return
+  }
+  pl.kept_pos = pos.round()
+  pl.kept_dur = dur.round()
   let p = play_params(at, at.path)
   p["at"] = Json::number(pos.round())
   p["of"] = Json::number(dur.round())
