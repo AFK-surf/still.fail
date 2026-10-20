@@ -2,7 +2,9 @@
 # This module's tests against mbui's fake host (no window): still.fail's design system, its pages (over the fixtures),
 # the media screens' parts and the core client's, then the flows seen again over their runs' cores
 # (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run on (js by default; CI's
-# check-mbui: js; check-mbui-native on Mini1: native). mbui's own: its scripts/test.sh.
+# check-mbui: js; check-mbui-native: native). PARTS: which of the two (app: the design system, the pages, gallery and
+# player; replay: the core and the flows seen again), both by default; check-mbui-native runs each on a runner of its
+# own. mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
@@ -13,9 +15,13 @@ for t in ${TARGETS:-js}; do
   # (native on macOS: the hosts' Objective-C linked in by mbui's own wrapper, as a test's binary is given no
   # cc-link-flags: mbui's scripts/cc_apple.sh)
   if [ $t = native ] && [ "$(uname)" = Darwin ]; then export MOON_CC="$MBUI_DIR/scripts/cc_apple.sh"; else unset MOON_CC; fi
+  if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
   moon test --target $t -p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p stillfail/player ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
+  fi
+  if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
   moon test --target $t -p stillfail/core -p stillfail/sfreplay -p stillfail/sfreplay/flows 2>&1 | grep -v "$F" | tail -${LINES_OUT:-8}
   [ ${PIPESTATUS[0]} = 0 ] || code=1
+  fi
 done
 exit $code
