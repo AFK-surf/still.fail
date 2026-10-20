@@ -195,6 +195,33 @@ fn Ctx::rest_why(self : Ctx) -> String {
 }
 
 ///|
+/// Whether the app is at its rest after the last frame (Ctx::at_rest, as that frame ended), with no frame asked for
+/// between frames and no message posted that no frame took: what a step that runs the frames on until the app has
+/// nothing that ends left to come goes on to (a frame grabbed and kept, then said: a frame each). A host's picture at
+/// its rest is taken at the same.
+pub fn Tester::at_rest(self : Tester) -> Bool {
+  g().frame_rest && !self.fake.wants && posted_left() == ""
+}
+
+///|
+/// What keeps the app from its rest after the last frame, in words (Tester::at_rest): "" when nothing does.
+pub fn Tester::rest_why(self : Tester) -> String {
+  let why = []
+  let c = g()
+  if !c.frame_rest {
+    why.push(c.rest_why())
+  }
+  if self.fake.wants {
+    why.push("a frame asked for between frames")
+  }
+  let posted = posted_left()
+  if posted != "" {
+    why.push(posted)
+  }
+  why.filter(fn(w) { w != "" }).join("; ")
+}
+
+///|
 /// What comes again every so often while shown in the last frame (Ctx::every): its period and who reads it, a line each.
 pub fn Tester::periodic(self : Tester) -> Array[String] {
   ignore(self)

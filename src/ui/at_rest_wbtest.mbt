@@ -110,3 +110,28 @@ test "a runtime's timer said once is a wake a run's end sees, with who said it; 
   assert_true(g().frame_rest, msg=g().rest_why())
   assert_true(own_clock())
 }
+
+///|
+test "a Tester asked whether the app is at rest: frames on until it is, each a frame of what it does after another" {
+  // (a frame grabbed, then kept, then said: each step in the frame after the last, as still.fail's "save this frame")
+  let step = Ref(0)
+  let t = Tester::new(fn(c) {
+    if step.val > 0 && step.val < 3 {
+      step.val += 1
+      c.request_frame()
+    }
+    c.text(if step.val >= 3 { "saved" } else { "x" }, wrap=false) |> ignore
+  })
+  assert_true(t.at_rest(), msg=t.rest_why())
+  step.val = 1
+  t.frame()
+  assert_false(t.at_rest())
+  assert_true(t.rest_why().contains("a frame asked for"), msg=t.rest_why())
+  let mut frames = 0
+  while !t.at_rest() && frames < 10 {
+    t.frame()
+    frames += 1
+  }
+  assert_true(t.at_rest(), msg=t.rest_why())
+  assert_true(t.find("saved") is Some(_))
+}
