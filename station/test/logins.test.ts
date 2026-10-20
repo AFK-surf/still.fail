@@ -15,7 +15,7 @@ import type { Callback } from "../src/logins/relay.ts";
 import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, storesSecret, urlsIn } from "../src/logins/parse.ts";
 import { QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
-import { endedNotice, loginTools, screenFor } from "../src/tools/login.ts";
+import { act, endedNotice, loginTools, promptNotice, screenFor } from "../src/tools/login.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 import { approval, script, temp, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -229,6 +229,47 @@ read ok < '${approved.path}'
     await m.until(id, (l) => l.state === "done", "done");
     assert.match(await tool!.run("ember:c-1", { id }), /It finished/);
     await assert.rejects(tool!.run("ember:c-1", { id, key: "f13" }), /key: one of/);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("a login another station's agent started (its tool's station): told where it runs and the card's station, its own logins only, told as it ends", { skip: skipped }, async () => {
+  const m = machine();
+  const approved = approval(m.home);
+  script(join(m.bin, "fakegh"), `#!/bin/sh
+echo "! First copy your one-time code: 1A2B-C3D4"
+"$BROWSER" https://github.com/login/device
+echo "Waiting for the browser"
+read ok < '${approved.path}'
+`);
+  const here = { station: "b".repeat(64), name: "Mini1" };
+  const peer = (station: string) => ({ starter: () => ({ ...m.by, chat: null, chatTitle: "部署", peer: { station, session: "ember:c-a" } }), link: (id: string) => `https://still.fail/w/w1/s/${here.station}/login/${id}`, where: here, mine: (id: string) => m.logins.starterOf(id)?.peer?.station === station });
+  // The agent's tool hands a call naming a station to the station transport (logins/module.ts), as it was given.
+  const asked: unknown[] = [];
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: () => null, remote: async (station, session, args) => (asked.push({ station, session, args }), "told there") });
+  try {
+    assert.equal(await tool!.run("ember:c-1", { station: "Mini1", command: "gh auth login" }), "told there");
+    assert.deepEqual(asked, [{ station: "Mini1", session: "ember:c-1", args: { station: "Mini1", command: "gh auth login" } }]);
+    // On the station it runs on: started for the other station's agent, its chat none here.
+    const starting = act(m.logins, { command: "fakegh auth login" }, peer("a".repeat(64)));
+    const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
+    await upon((w) => m.logins.follow(id, w), () => m.screen(id).includes("Waiting for the browser"), "opened");
+    await settle(5);
+    await m.time.adjust(QUIET_MS);
+    const ready = await starting;
+    assert.ok(ready.includes(`card {"type": "login", "login": "${id}", "station": "${here.station}"}`), ready);
+    assert.match(ready, /who should log in to what on Mini1 and why/);
+    assert.match(ready, /"stationName": "Mini1"/);
+    assert.equal(m.logins.get(id)!.chat, undefined, "no chat of this station's");
+    assert.deepEqual(m.logins.starterOf(id)!.peer, { station: "a".repeat(64), session: "ember:c-a" });
+    // Another station acts only on the logins it started.
+    await assert.rejects(act(m.logins, { id }, peer("c".repeat(64))), /no login/);
+    assert.match(await act(m.logins, { id }, peer("a".repeat(64))), /The person's browser step is ready/);
+    assert.match(promptNotice(m.logins, m.logins.get(id)!, null, here), /^The login on Mini1 you started/);
+    await approved.approve();
+    const done = await m.until(id, (l) => l.state === "done", "done");
+    assert.match(endedNotice(done, null, here), /^The login on Mini1 you started or posted a card for, fakegh auth login/);
   } finally {
     await m.logins.close();
   }
