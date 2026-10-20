@@ -6,6 +6,7 @@
                                          built whole and split: the same output, the same global symbols
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -135,6 +136,138 @@ class Split(unittest.TestCase):
         self.assertIn('void moonbit_init();', files['decls.h'])
         self.assertNotIn('_M0G1 = {', files['decls.h'] + files['externs.h'])
 
+    def test_stable(self):
+        """group 'stable': moonc's made-up numbers (locals, labels, anonymous functions, string literals) another
+        build numbers otherwise give the same units; a package's functions in its unit, with only what they use."""
+        def prog(n, extra=''):
+            return PRELUDE + '\n' + textwrap.dedent(f'''\
+                struct _M0TP11a1T;
+
+                struct _M0TP11a1T {{
+                  int32_t x;
+                }};
+
+                struct _M0TP11b1U {{
+                  int32_t y;
+                }};
+
+                static struct {{ int32_t rc; uint16_t const data[2]; }} const moonbit_string_literal_{n} =
+                  {{ 1, {{104, 0}} }};
+
+                int32_t _M0FP11a3add(int32_t, int32_t);
+
+                static int32_t _M0FP11a4callC{n}l9(int32_t);
+
+                static int32_t _M0FP11b4only(int32_t);
+
+                #define _M0FP11b3ffi b_real
+
+                int32_t b_real(int32_t);
+
+                {extra}
+                static int32_t _M0FP11a4callC{n}l9(int32_t _M0L1xS{n}) {{
+                  int32_t _M0L6_2atmpS{n + 1} = _M0L1xS{n} + (int32_t)moonbit_string_literal_{n}.data[0];
+                  goto joinlet_{n};
+                  joinlet_{n}:
+                  return _M0L6_2atmpS{n + 1};
+                }}
+
+                int32_t _M0FP11a3add(int32_t a, int32_t b) {{
+                  struct _M0TP11a1T t = {{ .x = a }};
+                  return t.x + b + _M0FP11a4callC{n}l9(0);
+                }}
+
+                static int32_t _M0FP11b4only(int32_t _M0L1yS{n + 7}) {{
+                  struct _M0TP11b1U u = {{ _M0L1yS{n + 7} }};
+                  return u.y + _M0FP11b3ffi(0);
+                }}
+
+                void moonbit_init() {{
+                }}
+
+                int main(int argc, char** argv) {{
+                  moonbit_init();
+                  printf("%d\\n", _M0FP11a3add(1, 2) + _M0FP11b4only(3));
+                  return 0;
+                }}
+                ''')
+        one, m = csplit.split(prog(12), 2, 'stable')
+        two, _ = csplit.split(prog(345, 'int32_t _M0FP11c5otherC9l9(int32_t);\n'), 2, 'stable')
+        units = sorted(n for n in one if n not in ('decls.h', 'externs.h', 'data.c', 'init.c'))
+        self.assertEqual(units, ['s0.c'])  # (two small packages: together)
+        for n in units:
+            self.assertEqual(one[n], two[n], n)
+        u = one['s0.c']
+        self.assertNotIn('S12', u)
+        self.assertNotIn('joinlet_12', u)
+        self.assertNotIn('moonbit_string_literal_12', u)
+        self.assertIn('t.x', u)  # a member stays
+        self.assertIn('int32_t _M0FP11a3add(int32_t a', u)  # not static: its name kept
+        self.assertGreater(m['stats']['renamed'], 0)
+        # a unit has what it uses only: package b's alone does not declare a's type
+        # (a's functions over half a unit: a unit of its own; b's under: with the other small ones)
+        apart, _ = csplit.split(prog(12), 2, 'stable', unit_bytes=600)
+        self.assertEqual(sorted(n for n in apart if n.endswith('.c') and n not in ('data.c', 'init.c')), ['a.c', 's0.c'])
+        # (the types renamed too: by their members)
+        self.assertIn('int32_t y;', apart['s0.c'])
+        self.assertNotIn('int32_t x;', apart['s0.c'])
+        self.assertIn('int32_t x;', apart['a.c'])
+        self.assertNotIn('int32_t y;', apart['a.c'])
+        self.assertIn('int32_t b_real(int32_t);', apart['s0.c'])  # what an FFI name stands for
+
+    def test_by_content_apart(self):
+        """String literals and layouts named by their content: two contents whose hashes are the same named apart,
+        the same each time; two layouts the same, one name (and the first's offset)."""
+        src = PRELUDE + '\n' + textwrap.dedent('''\
+            struct _M0TP11a1T;
+
+            static struct { int32_t rc; uint16_t const data[2]; } const moonbit_string_literal_3 = { 1, {104, 0} };
+
+            static struct { int32_t rc; uint16_t const data[2]; } const moonbit_string_literal_9 = { 1, {105, 0} };
+
+            static uint32_t const moonbit_layout_table_data[7] = { 1, 0, 2, 1, 2, 1, 0 };
+
+            int32_t _M0FP11a3add(int32_t, int32_t);
+
+            int32_t _M0FP11a3add(int32_t a, int32_t b) {
+              uint32_t x = Moonbit_make_regular_object_header(MOONBIT_REGULAR_LAYOUT_CLASS_INDEXED, 0, 0);
+              uint32_t y = Moonbit_make_regular_object_header(MOONBIT_REGULAR_LAYOUT_CLASS_INDEXED, 2, 0);
+              uint32_t z = Moonbit_make_regular_object_header(MOONBIT_REGULAR_LAYOUT_CLASS_INDEXED, 5, 0);
+              return (int32_t)(x + y + z) + moonbit_string_literal_3.data[0] + moonbit_string_literal_9.data[0];
+            }
+
+            void moonbit_init() {
+            }
+
+            int main(int argc, char** argv) {
+              moonbit_init();
+              return _M0FP11a3add(1, 2);
+            }
+            ''')
+
+        def names(files):
+            u = ''.join(t for n, t in files.items() if n.endswith('.c') and n not in ('data.c', 'init.c'))
+            lay = re.findall(r'INDEXED, (csplit_layout_\w+), 0', u)
+            lit = sorted(set(re.findall(r'\b(_Ms\w+)\.data', u)))
+            return lay, lit, files['data.c']
+        lay, lit, data = names(csplit.split(src, 2, 'stable')[0])
+        self.assertEqual(lay[0], lay[2])  # offsets 0 and 5: the same words
+        self.assertNotEqual(lay[0], lay[1])
+        self.assertEqual(len(lit), 2)
+        self.assertIn(f'const uint32_t {lay[0]} = 0;', data)  # (the first of the two)
+        real = csplit.content_hash
+        csplit.content_hash = lambda text: '0'  # every content the same hash
+        try:
+            for _ in range(2):
+                lay2, lit2, data2 = names(csplit.split(src, 2, 'stable')[0])
+                self.assertEqual(lay2[0], lay2[2])
+                self.assertNotEqual(lay2[0], lay2[1])
+                self.assertEqual(sorted(lay2[:2]), ['csplit_layout_0', 'csplit_layout_0_1'])
+                self.assertEqual(lit2, ['_Ms0', '_Ms0_1'])
+                self.assertIn(f'const uint32_t {lay2[1]} = 2;', data2)
+        finally:
+            csplit.content_hash = real
+
     def refuse(self, src, words):
         with self.assertRaises(csplit.SplitError) as e:
             csplit.split(src, 2)
@@ -182,6 +315,47 @@ class Build(unittest.TestCase):
             self.assertIn('linked split', said(['-lm']))  # another command: linked again
             self.assertEqual(run([os.path.join(t, 'whole')]), run([os.path.join(t, 'split')]))
             self.assertEqual(run([os.path.join(t, 'split')]).strip(), '121')  # 3 + 3 + 104 + 2 + 0 + 1 + 2 + 6
+
+
+@unittest.skipUnless(CC, 'no C compiler')
+class Kept(unittest.TestCase):
+    def test_what_an_object_is_made_of(self):
+        """An object is kept only when its command, its compiler and every header it includes are as they were: a
+        header changed, the flags changed or the compiler changed, it is compiled again."""
+        with tempfile.TemporaryDirectory() as t:
+            src = os.path.join(t, 'p.c')
+            with open(src, 'w') as f:
+                f.write(SRC)
+            with open(os.path.join(t, 'h.h'), 'w') as f:
+                f.write('#define H 1\n')
+            extra = os.path.join(t, 'x.c')
+            with open(extra, 'w') as f:
+                f.write('#include "h.h"\nint x_value(void) { return H; }\n')
+            cc = os.path.join(t, 'cc.sh')
+
+            def wrapper(note):
+                with open(cc, 'w') as f:
+                    f.write(f'#!/bin/sh\n# {note}\nexec {CC} "$@"\n')
+                os.chmod(cc, 0o755)
+            wrapper('one')
+
+            def compiled(flags='-O1'):
+                p = subprocess.run([sys.executable, os.path.join(HERE, 'mbc.py'), 'compile', '--cc', cc,
+                                    '--cflags=' + flags + ' -I' + t, '--extra', extra, '--obj', os.path.join(t, 'o'),
+                                    src], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                self.assertEqual(p.returncode, 0, p.stderr.decode())
+                m = re.search(r'(\d+) of (\d+) compiled', p.stderr.decode())
+                return int(m.group(1)), int(m.group(2))
+            n, total = compiled()
+            self.assertEqual(n, total)
+            self.assertEqual(compiled(), (0, total))  # nothing changed: all kept
+            with open(os.path.join(t, 'h.h'), 'w') as f:
+                f.write('#define H 2\n')
+            self.assertEqual(compiled(), (1, total))  # the header x.c includes: x.c alone
+            self.assertEqual(compiled('-O2'), (total, total))  # the flags
+            self.assertEqual(compiled('-O2'), (0, total))
+            wrapper('two')
+            self.assertEqual(compiled('-O2'), (total, total))  # the compiler (its wrapper here)
 
 
 @unittest.skipUnless(CC and shutil.which('moon'), 'no moon or C compiler')

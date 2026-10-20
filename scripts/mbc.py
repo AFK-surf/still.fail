@@ -109,8 +109,14 @@ def lto_for(cc, j):
         return ['/link', '/LTCG', f'/CGTHREADS:{min(8, j)}']
     if kind != 'clang':
         return None
-    # ld64 runs ThinLTO's backends on every core by itself; lld takes the count
-    return ['-flto=thin'] if apple else ['-flto=thin', f'-Wl,--thinlto-jobs={j}']
+    # ld64 runs ThinLTO's backends on every core by itself; lld takes the count. MBC_LTO_CACHE: the linker's ThinLTO
+    # cache (a module whose inputs, the summaries it imports from included, are the same is not generated again)
+    cache = os.environ.get('MBC_LTO_CACHE')
+    if cache:
+        os.makedirs(cache, exist_ok=True)
+    if apple:
+        return ['-flto=thin'] + ([f'-Wl,-cache_path_lto,{os.path.abspath(cache)}'] if cache else [])
+    return ['-flto=thin', f'-Wl,--thinlto-jobs={j}'] + ([f'-Wl,--thinlto-cache-dir={os.path.abspath(cache)}'] if cache else [])
 
 
 def lto_compile(msvc):
@@ -248,9 +254,36 @@ def depfile_paths(dep):
     return paths
 
 
+_tools = {}
+
+
+def tool_identity(tool):
+    """What a compiler or linker is, beyond its command line: its own --version and the file it runs (a wrapper such
+    as scripts/cc_apple.sh by its content too); MSVC's cl and link by their files. A new Xcode, a new MSVC or a
+    wrapper changed: its objects and links are not taken for the ones it makes."""
+    k = tuple(tool)
+    if k not in _tools:
+        exe = tool[0] if os.path.isfile(tool[0]) else shutil.which(tool[0]) or tool[0]
+        parts = []
+        try:
+            parts.append(file_hash(exe))
+        except OSError:
+            parts.append('no file ' + exe)
+        if not is_msvc(tool) and os.path.basename(exe).lower() not in ('link', 'link.exe', 'lib', 'lib.exe'):
+            try:
+                p = subprocess.run(list(tool) + ['--version'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                parts.append(p.stdout.decode('utf-8', 'replace'))
+            except OSError:
+                pass
+        _tools[k] = hashlib.sha1('\0'.join(parts).encode('utf-8', 'surrogateescape')).hexdigest()
+    return _tools[k]
+
+
 class Job:
-    def __init__(self, src, obj, argv, optional=False, depfile=None, weight=0):
+    def __init__(self, src, obj, argv, optional=False, depfile=None, weight=0, cc=None):
         self.src, self.obj, self.argv, self.optional, self.depfile, self.weight = src, obj, argv, optional, depfile, weight
+        # (an object is kept when its command, its compiler and every file its depfile names, by content, are the same)
+        self.cc = list(cc) if cc else argv[:1]
         self.secs = 0.0
         self.cached = False
         self.ok = True
@@ -265,7 +298,7 @@ class Job:
                 st = json.load(f)
         except (OSError, ValueError):
             return False
-        if st.get('argv') != self.argv or not os.path.exists(self.obj):
+        if st.get('argv') != self.argv or st.get('cc') != tool_identity(self.cc) or not os.path.exists(self.obj):
             return False
         try:
             return all(file_hash(p) == h for p, h in st['deps'].items())
@@ -291,7 +324,7 @@ class Job:
                 deps = depfile_paths(self.depfile)
             try:
                 with open(self.stamp(), 'w', encoding='utf-8') as f:
-                    json.dump({'argv': self.argv, 'deps': {d: file_hash(d) for d in deps}}, f)
+                    json.dump({'argv': self.argv, 'cc': tool_identity(self.cc), 'deps': {d: file_hash(d) for d in deps}}, f)
             except OSError:
                 pass
         return self
@@ -302,7 +335,7 @@ def compile_args(cc, flags, src, obj, msvc):
     if msvc:
         return cc + flags + ['/nologo', '/c', src, '/Fo' + obj], None
     dep = obj + '.d'
-    return cc + flags + ['-MMD', '-MF', dep, '-c', src, '-o', obj], dep
+    return cc + flags + ['-MD', '-MF', dep, '-c', src, '-o', obj], dep
 
 
 def run_jobs(jobs, j, label):
@@ -335,9 +368,12 @@ def split_jobs(c_file, objdir, cc, flags, gen_flags, init_flags, units, msvc, lt
         raw = f.read()
     t0 = time.time()
     # the same C split the same way as last time: the units are there already
-    # a package's functions together (MBC_GROUP=package, the default; size: each function by itself): with ThinLTO
-    # the frames of scripts/bench.sh are within 1% of the whole file's (size: 2%; without LTO 12% and 17% slower)
-    group = os.environ.get('MBC_GROUP', 'package')
+    # a package's functions together (MBC_GROUP=package; size: each function by itself): with ThinLTO the frames of
+    # scripts/bench.sh are within 1% of the whole file's (size: 2%; without LTO 12% and 17% slower). stable, the
+    # default: packages too (a big one by source file), moonc's made-up names made stable and each unit with only the
+    # declarations it uses, so that a change compiles the units whose functions changed, not all of them
+    # (csplit.split_stable; scripts/bench.sh's frames within 1% of package's, 2026-10-20)
+    group = os.environ.get('MBC_GROUP', 'stable')
     key = hashlib.sha1(raw + f'\0{units}\0{group}\0{file_hash(os.path.abspath(csplit.__file__))}'.encode()).hexdigest()
     saved = os.path.join(srcdir, 'manifest.json')
     manifest = None
@@ -384,7 +420,7 @@ def split_jobs(c_file, objdir, cc, flags, gen_flags, init_flags, units, msvc, lt
         argv, dep = compile_args(cc, f, src, obj, msvc)
         # moonbit_init first: the slowest to compile at any level
         weight = size * (4 if name == 'init.c' else 1)
-        jobs.append(Job(src, obj, argv, depfile=dep, weight=weight))
+        jobs.append(Job(src, obj, argv, depfile=dep, weight=weight, cc=cc))
     return jobs, manifest
 
 
@@ -403,7 +439,7 @@ def cmd_compile(a):
         # the C whole, one unit (as before the split; for comparisons)
         obj = os.path.join(objdir, 'whole' + ext)
         argv, dep = compile_args(cc, flags + gen_flags, os.path.abspath(a.src), obj, msvc)
-        jobs = [Job(a.src, obj, argv, depfile=dep, weight=1 << 40)]
+        jobs = [Job(a.src, obj, argv, depfile=dep, weight=1 << 40, cc=cc)]
     else:
         lto = lto_for(cc, j)
         jobs, _ = split_jobs(a.src, objdir, cc, flags, gen_flags, init_flags, a.n or j, msvc, lto is not None)
@@ -424,7 +460,7 @@ def cmd_compile(a):
         f = flags + (split_words(a.objc_flags) if path.endswith('.m') else [])
         obj = os.path.join(objdir, 'x_' + name + ext)
         argv, dep = compile_args(cc, f, path, obj, msvc)
-        jobs.append(Job(path, obj, argv, optional=optional, depfile=dep, weight=os.path.getsize(path)))
+        jobs.append(Job(path, obj, argv, optional=optional, depfile=dep, weight=os.path.getsize(path), cc=cc))
     for o in run_jobs(jobs, j, os.path.basename(a.src)):
         print(o)
     if a.link_flags:
@@ -453,8 +489,8 @@ def link_stamp(out, stamp=None):
 
 
 def link_key(argv, deps, out):
-    return json.dumps({'argv': argv, 'inputs': {p: file_hash(p) for p in link_inputs(argv, deps, out)}},
-                      sort_keys=True)
+    return json.dumps({'argv': argv, 'tool': tool_identity(argv[:1]),
+                       'inputs': {p: file_hash(p) for p in link_inputs(argv, deps, out)}}, sort_keys=True)
 
 
 def linked_already(argv, out, deps=(), stamp=None):
@@ -650,7 +686,7 @@ def cmd_check(a):
     whole = os.path.join(objdir, 'whole.o')
     argv, dep = compile_args(cc, flags, os.path.abspath(a.src), whole, False)
     jobs, manifest = split_jobs(a.src, os.path.join(objdir, 'split'), cc, flags, [], split_words(a.init_flags), j, False)
-    objs = run_jobs(jobs + [Job(a.src, whole, argv, depfile=dep, weight=1 << 40)], j, 'check')
+    objs = run_jobs(jobs + [Job(a.src, whole, argv, depfile=dep, weight=1 << 40, cc=cc)], j, 'check')
     one, one_needs = symbols(nm, whole)
     one = set(one)
     many, needs = [], set()

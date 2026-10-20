@@ -90,6 +90,11 @@ for macOS left out) and compile it with their own compiler (`mbc.py compile`);
 the macOS and Windows builds give moon a `cc`/`cl.exe` of ours that passes every
 command through but that one (`mbc.py shim`/`wrap`). `moonbit_init` (every
 global's initial value, run once) is a unit of its own at `-O0` (`/Od`).
+The split is stable (`MBC_GROUP=stable`): moonc's made-up names (locals,
+anonymous functions, layouts' offsets) are named by what they are, a package's
+functions are a unit (a big package's in pieces by source file), and each unit
+has only the declarations it uses, so an object made of the same text is kept
+and a change compiles only the units whose functions it changed.
 `MBC_SPLIT=0` compiles the file whole; `mbc.py check` compares the global
 symbols of the whole and the split build, `scripts/mbc_test.py` tests both.
 
