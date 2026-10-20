@@ -15,6 +15,7 @@ import { t } from "./i18n.ts";
 import { SseParser } from "./station/sse.ts";
 import { CLOUD, cloudWhat, type Status } from "./status.ts";
 import { isObject, parseJson, toJsonBytes } from "./util.ts";
+import { laterSleep } from "./runtime.ts";
 
 /// Requests to Comma that the app sends with its session (it adds the credential); plain promises, so an app that
 /// bundles its own Effect can give them. A stream's `next` resolves null once it ended; `close` lets it go.
@@ -296,7 +297,7 @@ export const commaAccountProvider =
             // Nothing to follow: alive all the same, and opened anew now and then.
             const idle = Effect.gen(function* () {
               for (let waited = 0; waited < IDLE_REOPEN_MS; waited += HEARTBEAT_MS) {
-                yield* Effect.sleep(HEARTBEAT_MS);
+                yield* laterSleep(HEARTBEAT_MS);
                 yield* put({ frame: "pong" });
               }
               yield* put({ end: true });

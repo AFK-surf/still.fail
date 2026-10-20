@@ -5,6 +5,7 @@ import { Effect, Fiber } from "effect";
 import type { Inner } from "../core.ts";
 import type { Owner } from "../core/routing.ts";
 import { topicKey, type Topic } from "../protocol.ts";
+import { laterSleep } from "../runtime.ts";
 
 /** How often it is read while shown: as often as the relays' counters are sampled. */
 export const RELAYS_EVERY_MS = 60_000;
@@ -25,7 +26,7 @@ export class AdminRelays implements Owner {
     const key = topicKey(topic);
     if (this.#live.has(key)) return;
     const read = this.#core.cloudSync.adminList(topic.account as string, "relays");
-    this.#live.set(key, this.#core.runner.fork(Effect.forever(Effect.andThen(read, Effect.sleep(RELAYS_EVERY_MS)))) as Fiber.Fiber<unknown, unknown>);
+    this.#live.set(key, this.#core.runner.fork(Effect.forever(Effect.andThen(read, laterSleep(RELAYS_EVERY_MS)))) as Fiber.Fiber<unknown, unknown>);
   }
 
   stop(topic: Topic): void {

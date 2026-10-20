@@ -21,6 +21,7 @@ import type { LinkNet } from "./wire.ts";
 import { screenCard, screensChanged, screensView } from "../screens.ts";
 import type { Link } from "./link.ts";
 import * as logins from "./machine-logins.ts";
+import { laterSleep } from "../runtime.ts";
 
 /// A chat shows a window of its thread's entries: at most this many.
 export const WINDOW = 3 * PAGE;
@@ -671,7 +672,7 @@ export class StationTopics implements Owner {
     // A measurement shown on screen: sampled while it is shown, never kept. Not while the app is out of view: a phone
     // in a pocket samples nothing (it was most of what the core did there, 2026-10-19).
     const inView = Effect.suspend(() => core.attention?.attend.untilShown() ?? Effect.void);
-    const fiber = core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, Effect.sleep(NET_EVERY_MS)))));
+    const fiber = core.runner.fork(Effect.forever(Effect.andThen(inView, Effect.andThen(sample, laterSleep(NET_EVERY_MS)))));
     this.#sampling.set(station, { fiber, by: new Set([by]) });
   }
 

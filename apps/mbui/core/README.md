@@ -77,6 +77,16 @@ stops the core and prints timings and the process's memory footprint.
   (microtask queue, block scoping, Intl).
 - Timers run on `CLOCK_MONOTONIC`, which on Apple's systems goes on while the machine sleeps (as Android's
   CLOCK_BOOTTIME): a 10 s wait begun before a sleep is over after it.
+- In a run on a clock of its own (`@ui.own_clock()`: a settled screenshot run, Android's shot_at, the web's) the core's
+  timers are on the app's clock instead (`core/clock.ts`, the entries' first import, the same on every engine): the
+  app's `{"clock": ms}` runs what is due by then and is answered `{"clocked": ms, "next": due, "later": due}`, said
+  again whenever either changes. `next` is what what is shown waits for (a retry, a request's time running out),
+  `later` what it does not (setInterval's, core-ts's `laterSleep`: a keepalive, a shown clock's next second).
+  The app tells it its clock before anything it sends too (what that sets off is timed from then). `src/core/
+  clock.mbt` makes each a wait of the runtime's (`src/sfcore/clock.mbt` gives it the runtime: a fiber's sleep), so
+  `at_rest` and `next_wake` see them, and awaits the core while it runs what is due; the core's `monotonic` and `now`
+  are the app's clock then too. On a device none of
+  this: the engine's timers, real time.
 - `__native` is ember's `HermesNative` (hosts/hermes-globals.ts) as it is, plus `os`; the engine starts the core with
   `__stillfail.start(cloudOrigin, beta, os)` (`macos`, `ios`; hosts/engine.ts takes the third over hermes-start.ts's
   `android`). Bytes are ArrayBuffers both ways: `call(id, op, json, ArrayBuffer?)`, `emitBytes(client, json,

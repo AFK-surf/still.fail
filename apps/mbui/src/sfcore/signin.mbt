@@ -63,6 +63,8 @@ pub fn start() -> Bool {
     @core.start()
   }
   if started {
+    // (a run on a clock of its own: the core's timers on it too; not a replay's, which has no engine)
+    own_core_clock()
     begin()
   }
   started
