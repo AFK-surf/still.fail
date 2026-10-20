@@ -67,24 +67,23 @@ test("a relay sampled long ago has no rate now", () => {
   assert.equal(relayLoadView("https://r.example", [], now).at, null);
 });
 
-test("relays send their load with their token; the console shows each relay's", async () => {
-  const h = await harness();
+test("relays send their load from their own address; the console shows each relay's", async () => {
+  const relay = "https://203.0.113.7";
+  const h = await harness({ relayUrls: relay, relayNames: { [relay]: "北京" } });
   try {
-    const push = (token: string, relay: string, body = METRICS) => h.fetch("/v1/relays/load", { method: "POST", headers: { authorization: `Bearer ${token}`, "x-stillfail-relay": relay }, body });
-    assert.equal((await push("wrong".repeat(10), h.origin)).status, 401);
-    assert.equal((await push(h.adminToken, h.origin)).status, 401);
-    assert.equal((await push(h.relayLoadToken, "https://elsewhere.example")).status, 400);
-    assert.equal((await push(h.relayLoadToken, h.origin, "x".repeat(300 * 1024))).status, 413);
-    assert.equal((await push(h.relayLoadToken, `${h.origin}/`)).status, 200);
+    const push = (from: string | null, named: string, body = METRICS) => h.fetch("/v1/relays/load", { method: "POST", headers: { "x-stillfail-relay": named, ...(from ? { "cf-connecting-ip": from } : {}) }, body });
+    assert.equal((await push(null, relay)).status, 403);
+    assert.equal((await push("198.51.100.1", relay)).status, 403);
+    assert.equal((await push("203.0.113.7", "https://elsewhere.example")).status, 400);
+    assert.equal((await push("203.0.113.7", relay, "x".repeat(300 * 1024))).status, 413);
+    assert.equal((await push("203.0.113.7", `${relay}/`)).status, 200);
     const admin = h.as(await h.login("alice"), "admin");
-    const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { url: string; name: string; at: number; open: number; limits?: unknown }[] };
-    assert.equal(answer.relays.length, 1);
-    const [relay] = answer.relays;
-    assert.equal(relay!.url, h.origin);
-    assert.equal(relay!.name, new URL(h.origin).host);
-    assert.equal(relay!.at, h.now());
-    assert.equal(relay!.open, 5);
-    assert.deepEqual(relay!.limits, { bytes: LIMITS.bytesPerDay, frames: LIMITS.framesPerDay });
+    const answer = await (await admin("GET", "/v1/admin/relays")).json() as { relays: { url: string; name: string; at: number | null; open: number | null; limits?: unknown }[] };
+    assert.deepEqual(answer.relays.map((r) => r.url), [h.origin, relay]);
+    const [own, beijing] = answer.relays;
+    // still.fail's own, held to its budget, not sampled (no cron ran).
+    assert.deepEqual([own!.name, own!.at, own!.limits], [new URL(h.origin).host, null, { bytes: LIMITS.bytesPerDay, frames: LIMITS.framesPerDay }]);
+    assert.deepEqual([beijing!.name, beijing!.at, beijing!.open, beijing!.limits], ["北京", h.now(), 5, undefined]);
     assert.equal((await h.as(await h.login("bob"), "admin")("GET", "/v1/admin/relays")).status, 404);
   } finally {
     await h.close();
