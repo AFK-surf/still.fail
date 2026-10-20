@@ -42,10 +42,10 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 13303:cd3af78d
-    #|waiting wide 13570:ff17694c
-    #|waiting-dark narrow 13493:daa5b238
-    #|waiting-dark wide 13703:9507ad4a
+    #|waiting narrow 13308:6a93e54b
+    #|waiting wide 13575:3f30ba22
+    #|waiting-dark narrow 13498:26e58e40
+    #|waiting-dark wide 13708:99adfd78
     #|finding narrow 9181:f6695278
     #|finding wide 9559:b93a9091
     #|finding-dark narrow 9242:79990343
@@ -62,23 +62,24 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     #|checking wide 11582:2aa46407
     #|checking-dark narrow 11344:73ce27f4
     #|checking-dark wide 11449:44843109
-    #|none narrow 12825:339cd555
-    #|none wide 13083:624a7054
-    #|none-dark narrow 13007:7a6b9f36
-    #|none-dark wide 13228:66411f42
-    #|failed narrow 8985:f2550dfa
-    #|failed wide 9075:ed814e5e
-    #|failed-dark narrow 9103:34343d4f
-    #|failed-dark wide 9324:74b2dd20
-    #|refused narrow 11125:da8df9bf
-    #|refused wide 11289:1d82ebd5
-    #|refused-dark narrow 11279:39f3d4a2
-    #|refused-dark wide 11520:4d83fe75
-    #|nocode narrow 12059:82a19513
-    #|nocode wide 12329:185d3c95
-    #|nocode-dark narrow 12279:9d0b0124
-    #|nocode-dark wide 12472:9c75e855
+    #|none narrow 12830:a3cb7083
+    #|none wide 13088:c7f46bde
+    #|none-dark narrow 13012:243ed582
+    #|none-dark wide 13233:7f79a1c0
+    #|failed narrow 8990:953a8fe
+    #|failed wide 9080:4788d09c
+    #|failed-dark narrow 9108:d954663d
+    #|failed-dark wide 9329:19e29a0a
+    #|refused narrow 11130:4596ca69
+    #|refused wide 11294:566e2339
+    #|refused-dark narrow 11284:482addf2
+    #|refused-dark wide 11525:76585d19
+    #|nocode narrow 12064:af3239b1
+    #|nocode wide 12334:698694b
+    #|nocode-dark narrow 12284:799fd0c
+    #|nocode-dark wide 12477:c212f28f
     #|
+
 
   ))
 }
@@ -99,19 +100,20 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
     }
   }
   inspect(out.to_string(), content=(
-    #|settings narrow 17260:4646cb7b
+    #|settings narrow 17739:cc455d62
     #|station narrow 31504:219d717f
-    #|me-reading narrow 9873:82e96fc0
+    #|me-reading narrow 10497:90f037c5
     #|settings wide 35318:a381ea59
     #|station wide 38432:1371a32a
-    #|me-reading wide 20365:7930275e
-    #|settings-dark narrow 17246:9104c939
+    #|me-reading wide 20370:96e49b7a
+    #|settings-dark narrow 17725:d55d8ff6
     #|station-dark narrow 31190:f7bceccc
-    #|me-reading-dark narrow 9865:e7138d48
+    #|me-reading-dark narrow 10489:4fc23737
     #|settings-dark wide 35296:ce5431c1
     #|station-dark wide 38353:a123ae9a
-    #|me-reading-dark wide 20249:7f6d45c8
+    #|me-reading-dark wide 20254:64bbde42
     #|
+
 
 
   ))

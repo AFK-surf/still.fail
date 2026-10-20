@@ -419,6 +419,31 @@ pub let row_caption_size : @ui.TextSize = Exact(12.0, 16.0)
 pub let code_size : @ui.TextSize = Exact(13.0, 0.0)
 
 ///|
+/// Back in a bar, the word for where it goes (17/23.8: 17sp with no line, Parts.kt:491 NavBack).
+pub let back_size : @ui.TextSize = Exact(17.0, 23.8)
+
+///|
+/// A compact bar's title (16/22.4: 16sp with no line, Parts.kt:527 NavBar).
+pub let bar_title_size : @ui.TextSize = Exact(16.0, 22.4)
+
+///|
+/// A page's large title, its big word (32/44.8: 32sp with no line, Parts.kt:559, 562 LargeTitle).
+pub let large_title_size : @ui.TextSize = Exact(32.0, 44.8)
+
+///|
+/// A settings page's card's corner, and the shapes of cards to come (20, r_card).
+pub let card_radius : @ui.Radius = Exact(20.0)
+
+///|
+/// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
+pub let dot_size : @ui.Len = Fixed(7.0)
+
+///|
+/// An option of a segmented choice in the wide frame, at its narrowest (the web's 105, controls.css.ts seg, less the
+/// track's inset on both sides).
+pub let seg_pill_min : @ui.Len = Fixed(101.0)
+
+///|
 /// A code's box's edge: the words' colour at 18%.
 pub let code_edge : @ui.Color = A(Fg, Exact(0.18))
 
