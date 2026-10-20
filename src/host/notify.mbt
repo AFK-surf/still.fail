@@ -1,7 +1,8 @@
 // The system's notifications, as still.fail's Android app shows them (ember apps/android app/Notices.kt, Push.kt;
 // docs/notifications.md → Clients): one channel, one notification per tag (a newer one with the same tag replaces the
 // older), tapped it brings the app to the front with what it was shown with (`opens`); whether the system lets the
-// app show them, asking it to; and a push service's token and what it delivered.
+// app show them, asking it to; and a push service's token and what it delivered. (A link the system opens the app with
+// comes on the system's channel: system.mbt.)
 //
 // Android: NotificationManager (dev.mbui.Notices: the channel made as a notification is shown, POST_NOTIFICATIONS
 // asked for from the activity, a tap a PendingIntent back to MainActivity). No push service is linked yet (Firebase

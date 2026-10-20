@@ -17,6 +17,8 @@ struct FakeHost {
   mut ime_sel : (Int, Int)
   mut ime_rect : (Double, Double, Double, Double)
   mut clipboard : String
+  /// the last words put there were a secret: taken off this long after (Ctx::copy_secret); -1 not a secret
+  mut clipboard_secret : Double
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
   // the system it plays (as @host.platform: 0 macOS, 1 iOS, 2 Android)
@@ -60,6 +62,12 @@ struct FakeHost {
   /// the system's notifications the app shows, oldest first (notify.mbt), and the one tapped, not yet taken
   notices : Array[Notice]
   mut notice_opened : String
+  /// the packages handed to the system's installer (@ui.install_package), oldest first: their names
+  installs : Array[String]
+  /// what the notice holding the app up says (@ui.hold_words): its channel, title and line
+  mut hold_words : (String, String, String)?
+  /// how the app over another app was ended (@ui.over_done), each time: whether on into the app
+  overs_done : Array[Bool]
   /// what the system lets the app show ("granted", "denied", "ask", "unknown": Tester::set_notice_permission), what
   /// the person answers when asked (None: never), how often the app asked, and the answer due: from the frame after it
   mut notice_perm : String
@@ -391,8 +399,24 @@ fn h_set_ime(
 ///|
 fn h_clipboard_set(s : String) -> Unit {
   match fake.val {
-    Some(f) => f.clipboard = s
+    Some(f) => {
+      f.clipboard = s
+      f.clipboard_secret = -1.0
+    }
     None => @host.clipboard_set(s)
+  }
+}
+
+///|
+/// A secret on the clipboard (@host.clipboard_set_secret); the fake host keeps it as any words (Tester::clipboard)
+/// and says it was a secret (Tester::clipboard_secret).
+fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
+  match fake.val {
+    Some(f) => {
+      f.clipboard = s
+      f.clipboard_secret = clear_ms
+    }
+    None => @host.clipboard_set_secret(s, clear_ms~)
   }
 }
 
@@ -433,6 +457,19 @@ fn h_open_url(url : String) -> Bool {
       true
     }
     None => @host.open_url(url)
+  }
+}
+
+///|
+/// A page in a browser's tab over the app (@host.open_tab); the fake host keeps it as one handed to the system
+/// (Tester::opened).
+fn h_open_tab(url : String) -> Bool {
+  match fake.val {
+    Some(f) => {
+      f.opened.push(url)
+      true
+    }
+    None => @host.open_tab(url)
   }
 }
 

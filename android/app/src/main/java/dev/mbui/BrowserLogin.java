@@ -90,6 +90,31 @@ final class BrowserLogin {
         return 1;
     }
 
+    /**
+     * A page in a Custom Tab over the app (@host.open_tab: a login's page, as still.fail's LoginCards.kt openLoginPage),
+     * or in the system's browser where none takes a tab; false when nothing takes it at all.
+     */
+    static boolean openTab(String url) {
+        Activity a = Host.activity;
+        if (a == null || url == null || url.isEmpty()) return false;
+        Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        view.addCategory(Intent.CATEGORY_BROWSABLE);
+        if (a.getPackageManager().queryIntentActivities(view, 0).isEmpty()) return Host.openUrl(url);
+        Bundle session = new Bundle();
+        session.putBinder("android.support.customtabs.extra.SESSION", null);
+        view.putExtras(session);
+        view.putExtra("android.support.customtabs.extra.TITLE_VISIBILITY", 1);
+        Host.main.post(() -> {
+            try {
+                a.startActivity(view);
+                Host.log("open-tab: " + url);
+            } catch (ActivityNotFoundException e) {
+                Host.openUrl(url);
+            }
+        });
+        return true;
+    }
+
     static String back(int bid) {
         Login l = logins.get(bid);
         String b = l != null ? l.back : null;

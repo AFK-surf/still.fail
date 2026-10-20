@@ -51,6 +51,9 @@ final class Host {
         return systemDark;
     }
 
+    /** What shows under the system bars (the app's view is inside them), light and dark: MainActivity's dev.mbui.ground. */
+    static int groundLight = android.graphics.Color.rgb(245, 245, 247), groundDark = 0xFF1B1C1F;
+
     /** The app drawn dark or light (@host.set_dark): the system bars' icons light over it or dark, as the Android app's. */
     static void setDark(boolean dark) {
         main.post(() -> {
@@ -60,10 +63,11 @@ final class Host {
             int light = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
                     | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
             c.setSystemBarsAppearance(dark ? 0 : light, light);
-            // what shows under the bars (the app's view is inside them): the dark page's ground, else as it was
+            // what shows under the bars (the app's view is inside them): the dark page's ground, else as it was; none
+            // over another app
             android.view.ViewGroup content = activity.findViewById(android.R.id.content);
-            if (content != null && content.getChildCount() > 0) {
-                content.getChildAt(0).setBackgroundColor(dark ? 0xFF1B1C1F : android.graphics.Color.rgb(245, 245, 247));
+            if (content != null && content.getChildCount() > 0 && !activity.over()) {
+                content.getChildAt(0).setBackgroundColor(dark ? groundDark : groundLight);
             }
         });
     }
@@ -148,6 +152,41 @@ final class Host {
     }
 
     /**
+     * A secret on the clipboard (@host.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
+     * system's preview of it masked, Android 13 on: ClipDescription.EXTRA_IS_SENSITIVE, by its value, which older
+     * systems pass over), and cleared `clearMs` later unless something else was copied meanwhile (when the clipboard
+     * cannot be read then, the app not in front, it is cleared all the same: a secret left there is worse).
+     */
+    static void clipboardSecret(String s, double clearMs) {
+        main.post(() -> {
+            if (activity == null) return;
+            ClipboardManager cm = (ClipboardManager) activity.getApplicationContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            ClipData clip = ClipData.newPlainText("text", s);
+            android.os.PersistableBundle extras = new android.os.PersistableBundle();
+            extras.putBoolean("android.content.extra.IS_SENSITIVE", true);
+            clip.getDescription().setExtras(extras);
+            cm.setPrimaryClip(clip);
+            if (clearMs <= 0) return;
+            main.postDelayed(() -> {
+                String now = null;
+                try {
+                    ClipData c = cm.getPrimaryClip();
+                    if (c != null && c.getItemCount() > 0 && c.getItemAt(0).getText() != null) now = c.getItemAt(0).getText().toString();
+                } catch (RuntimeException e) {
+                    // not readable now (the app not in front)
+                }
+                if (now == null || now.equals(s)) {
+                    try {
+                        cm.clearPrimaryClip();
+                    } catch (RuntimeException e) {
+                        log("clipboard: not cleared: " + e);
+                    }
+                }
+            }, (long) clearMs);
+        });
+    }
+
+    /**
      * The word of `text` around `off` as the system finds words (ICU's BreakIterator, as Compose's text and the
      * still.fail app's Pick.kt: a dictionary's words in Chinese and Japanese): start × 2³² + end, or -1 when `off` is in
      * no word (a space, a mark).
@@ -182,6 +221,22 @@ final class Host {
             }
         });
         return true;
+    }
+
+    /**
+     * The app over another app done (@host.over_done, OverActivity): it ends, back to the app it was over; `openApp`, on
+     * into the app's own activity (its task brought to the front) as it ends.
+     */
+    static void overDone(boolean openApp) {
+        main.post(() -> {
+            MainActivity a = activity;
+            if (!(a instanceof OverActivity)) return;
+            if (openApp) {
+                a.startActivity(new android.content.Intent(a, MainActivity.class)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+            }
+            a.finish();
+        });
     }
 
     /** Whether the app takes back (a page to go back to); MainActivity's callback follows it. */

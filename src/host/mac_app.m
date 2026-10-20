@@ -921,10 +921,24 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   [pb setString:mb_ns_from_string(s) forType:NSPasteboardTypeString];
 }
 
+// A secret on the clipboard (@host.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
+void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
+
+
 void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", mb_ns_from_string(s).UTF8String);
   fflush(stdout);
 }
+
+// The app over another app done (@host.over_done): it never is here.
+void mb_host_over_done(int32_t open_app) {}
+
+// A page in a browser's tab over the app (@host.open_tab): macOS has none of its own, so the browser, as open_url.
+int32_t mb_host_open_url(moonbit_string_t s);
+int32_t mb_host_open_tab(moonbit_string_t s) { return mb_host_open_url(s); }
+
+// What holds the app up while it listens for a browser (@host.hold_words): nothing to say here, the app runs on.
+void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {}
 
 // A URL handed to the system (@host.open_url): NSWorkspace, the browser or the app that takes it. A scripted run
 // (MBUI_SCRIPT, MBUI_DRIVE) only says it on the log (open-url: …), opening nothing on the machine it runs on.
@@ -1059,6 +1073,13 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
 
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
+// A package for the system's installer (@host.install_package): none here, said on the system channel (system.mbt).
+void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
+  NSDictionary *said = @{@"install" : @{@"name" : mb_ns_from_string(name), @"error" : @"unsupported"}};
+  NSData *json = [NSJSONSerialization dataWithJSONObject:said options:0 error:NULL];
+  if (json) mb_post("system", (const char *)json.bytes, json.length, NULL, 0);
+}
+
 void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
   (void)url; (void)sha256; (void)size; (void)name;
 }

@@ -15,6 +15,15 @@ final class Native {
     static native void text(int kind, String s, int a, int b);
     static native void back(int kind, float x, float progress, int edge);
     static native void appState(int state);
+    /** Over another app (OverActivity) or not: what the app does not paint is left clear (android_host.c present). */
+    static native void overOther(boolean on);
+    /** A message for the app's next frame on `channel` (post.h's mb_post: any thread): its JSON's UTF-8. */
+    static native void postBytes(String channel, byte[] json);
+
+    /** `json` posted as UTF-8 (Java's own encoding of a String into JNI is modified UTF-8, which an emoji is not). */
+    static void post(String channel, String json) {
+        postBytes(channel, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
     static native int atlasTexture();
     static native boolean snapshot(String path);
     static native void imageDone(int id, int tex, int w, int h, int ow, int oh);

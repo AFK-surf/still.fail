@@ -75,6 +75,10 @@ extern "C" fn ffi_set_ime(
 #borrow(s)
 extern "C" fn ffi_clipboard_set(s : String) -> Unit = "mb_host_clipboard_set"
 
+///|
+#borrow(s)
+extern "C" fn ffi_clipboard_secret(s : String, clear_ms : Double) -> Unit = "mb_host_clipboard_secret"
+
 #borrow(s)
 extern "C" fn ffi_log(s : String) -> Unit = "mb_host_log"
 
@@ -143,6 +147,17 @@ extern "C" fn ffi_word_at(text : String, off : Int) -> Double = "mb_host_word_at
 extern "C" fn ffi_open_url(url : String) -> Int = "mb_host_open_url"
 
 ///|
+#borrow(url)
+extern "C" fn ffi_open_tab(url : String) -> Int = "mb_host_open_tab"
+
+///|
+extern "C" fn ffi_over_done(open_app : Int) -> Unit = "mb_host_over_done"
+
+///|
+#borrow(channel, title, body)
+extern "C" fn ffi_hold_words(channel : String, title : String, body : String) -> Unit = "mb_host_hold_words"
+
+///|
 extern "C" fn ffi_app_version() -> Int = "mb_host_app_version"
 
 ///|
@@ -151,6 +166,10 @@ extern "C" fn ffi_update_install(url : String, sha256 : String, size : Double, n
 
 ///|
 extern "C" fn ffi_update_state() -> String = "mb_host_update_state"
+
+///|
+#borrow(name, data)
+extern "C" fn ffi_install_package(name : String, data : Bytes) -> Unit = "mb_host_install_package"
 
 ///|
 extern "C" fn ffi_window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset : Int) -> Unit = "mb_host_window_setup"
@@ -316,6 +335,13 @@ pub fn set_ime(
 ///|
 pub fn clipboard_set(s : String) -> Unit {
   ffi_clipboard_set(s)
+}
+
+///|
+/// A secret put on the system's clipboard: marked sensitive where the system masks such (Android 13 on), and taken
+/// off `clear_ms` later unless something else was copied meanwhile (0: kept). Elsewhere as clipboard_set.
+pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
+  ffi_clipboard_secret(s, clear_ms)
 }
 
 ///|
@@ -494,6 +520,15 @@ pub fn update_install(url : String, sha256 : String, size : Double, name : Strin
 /// apps asked for, downloading, retrying, installing, handed, failed); "" where there is none.
 pub fn update_state() -> String {
   ffi_update_state()
+}
+
+///|
+/// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm (Android:
+/// still.fail's Install.kt installApk). What comes of it, when it is not installed, comes on @host.system_channel
+/// (system.mbt `install`: the leave to install apps asked for, or why it failed: "unsupported" where there is no
+/// installer).
+pub fn install_package(name : String, data : Bytes) -> Unit {
+  ffi_install_package(name, data)
 }
 
 ///|
@@ -974,6 +1009,28 @@ fn word_pair(v : Double) -> (Int, Int) {
 /// iOS's UIApplication, Windows' ShellExecute). False when nothing took it.
 pub fn open_url(url : String) -> Bool {
   ffi_open_url(url) != 0
+}
+
+///|
+/// The app over another app (system.mbt `over`: Android's OverActivity, a share sheet over the app it came from) done:
+/// it goes, back to the app it was over; `open_app`, on into the app's own window. Nothing where it never is over one.
+pub fn over_done(open_app~ : Bool) -> Unit {
+  ffi_over_done(if open_app { 1 } else { 0 })
+}
+
+///|
+/// A page shown in a browser's tab over the app, the app under it (Android's Custom Tab, the system's browser where
+/// none takes one); elsewhere as open_url. False when nothing took it.
+pub fn open_tab(url : String) -> Bool {
+  ffi_open_tab(url) != 0
+}
+
+///|
+/// What the notice says that holds the app up while it listens for a browser coming back (@host.browser_login, the
+/// core's loopback listeners: Android's foreground service, in `channel`, named as the system's settings list it);
+/// said before the browser opens, kept for the next. Other hosts keep no notice.
+pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
+  ffi_hold_words(channel, title, body)
 }
 
 ///|

@@ -27,6 +27,13 @@ import javax.microedition.khronos.opengles.GL10;
  */
 public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     private static boolean started;  // MoonBit's main runs once per process
+    /**
+     * Whose GL context the host's drawing (its programs, textures, atlas: android_host.c) was last set up in: a count,
+     * each view's own set when it set it up. Two views (MainActivity's and an OverActivity's) each have a context of
+     * their own; one drawn after the other set it up in its own sets it up again in its own first.
+     */
+    private static int setUp;
+    private int mine;
     final float density;
 
     public MBView(Context c) {
@@ -51,6 +58,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         Native.surfaceCreated();
         MBText.reset();
+        mine = ++setUp;
         if (!started) {
             started = true;
             // (a run to a declared moment: the app's clock is its frames' from the start, shotFrame below)
@@ -128,6 +136,14 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
+        // another view set the drawing up in its own context since this one did (an OverActivity came and went): set
+        // up again here, at this view's size
+        if (mine != setUp) {
+            Native.surfaceCreated();
+            MBText.reset();
+            Native.resize(getWidth(), getHeight());
+            mine = ++setUp;
+        }
         // the soft keyboard's height off the bottom (Host.imeBottom, as it moves): the app lays out above it, the
         // surface keeps its size (resizing it with each step of the keyboard's motion would be far too slow)
         float w = getWidth() / density, h = Math.max(1, getHeight() - Host.imeBottom) / density;

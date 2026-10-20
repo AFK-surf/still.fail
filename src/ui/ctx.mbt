@@ -1180,10 +1180,59 @@ pub fn open_url(url : String) -> Bool {
 }
 
 ///|
+/// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm
+/// (@host.install_package); what comes of it when it is not installed comes on @host.system_channel. Under a Tester:
+/// kept (Tester::installs); the test posts what the system says (Tester::post).
+pub fn install_package(name : String, data : Bytes) -> Unit {
+  match fake.val {
+    Some(f) => {
+      ignore(data)
+      f.installs.push(name)
+    }
+    None => @host.install_package(name, data)
+  }
+}
+
+///|
+/// The app over another app (@host.system_channel `over`) done (@host.over_done): back to the app it was over, or on
+/// into the app's own window (`open_app`). Under a Tester: kept (Tester::overs_done).
+pub fn over_done(open_app~ : Bool) -> Unit {
+  match fake.val {
+    Some(f) => f.overs_done.push(open_app)
+    None => @host.over_done(open_app~)
+  }
+}
+
+///|
+/// What the notice says that holds the app up while it listens for a browser coming back (@host.hold_words), said
+/// before the browser opens. Under a Tester: kept (Tester::hold_words).
+pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
+  match fake.val {
+    Some(f) => f.hold_words = Some((channel, title, body))
+    None => @host.hold_words(channel~, title~, body~)
+  }
+}
+
+///|
+/// A page shown in a browser's tab over the app (Android's Custom Tab: a login's page), outside a frame too; elsewhere
+/// as open_url. False when nothing took it.
+pub fn open_tab(url : String) -> Bool {
+  h_open_tab(url)
+}
+
+///|
 /// Puts `s` on the system's clipboard.
 pub fn Ctx::copy_text(self : Ctx, s : String) -> Unit {
   ignore(self)
   h_clipboard_set(s)
+}
+
+///|
+/// Puts a secret on the system's clipboard: marked sensitive (Android masks its preview), taken off `clear_ms` later
+/// unless something else was copied meanwhile (the host's own timer: nothing the app waits on).
+pub fn Ctx::copy_secret(self : Ctx, s : String, clear_ms~ : Double) -> Unit {
+  ignore(self)
+  h_clipboard_secret(s, clear_ms)
 }
 
 ///|

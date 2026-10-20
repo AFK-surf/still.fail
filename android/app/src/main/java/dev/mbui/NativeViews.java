@@ -89,6 +89,8 @@ final class NativeViews {
 
     static class NView {
         final int id, kind;
+        /** What it is made in: the activity whose layer it is in, switched as it moves to another's (moveTo). */
+        android.content.MutableContextWrapper context;
         FrameLayout clip;
         View content;
         volatile boolean closed;
@@ -176,11 +178,12 @@ final class NativeViews {
                 v.tell(-1);
                 return;
             }
-            v.clip = new FrameLayout(layer.getContext());
+            v.context = new android.content.MutableContextWrapper(layer.getContext());
+            v.clip = new FrameLayout(v.context);
             v.clip.setClipChildren(true);
             v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
             v.clip.setVisibility(View.GONE);
-            v.make(layer.getContext());
+            v.make(v.context);
             layer.addView(v.clip, new FrameLayout.LayoutParams(0, 0));
         });
         return id;
@@ -219,6 +222,23 @@ final class NativeViews {
         });
     }
 
+    /**
+     * The layer of the activity resumed (MainActivity's, OverActivity's: each has its own), the views still open moved
+     * into it from the other's, where they were placed; laid out in it as they were, and made in it from then on (a
+     * WebView's dialogs and pickers in an activity that lives, not in the one finished). On the main thread.
+     */
+    static void moveTo(FrameLayout to) {
+        layer = to;
+        for (NView v : views.values()) {
+            if (v.closed || v.clip == null || v.clip.getParent() == to) continue;
+            android.view.ViewGroup from = (android.view.ViewGroup) v.clip.getParent();
+            FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) v.clip.getLayoutParams();
+            if (from != null) from.removeView(v.clip);
+            v.context.setBaseContext(to.getContext());
+            to.addView(v.clip, p);
+        }
+    }
+
     static void close(int id) {
         NView v = views.remove(id);
         if (v == null) return;
@@ -226,7 +246,8 @@ final class NativeViews {
         Host.log("view " + id + ": closed (" + (long) v.bytes + " bytes given)");
         Host.main.post(() -> {
             v.destroy();
-            if (v.clip != null && layer != null) layer.removeView(v.clip);
+            // out of whichever layer it is in (an activity's other than the one resumed now, not yet moved)
+            if (v.clip != null && v.clip.getParent() != null) ((android.view.ViewGroup) v.clip.getParent()).removeView(v.clip);
         });
     }
 

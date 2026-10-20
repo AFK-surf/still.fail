@@ -34,7 +34,20 @@ public class MainActivity extends Activity {
         String defaults = null;
         try {
             Bundle meta = getPackageManager().getApplicationInfo(getPackageName(), android.content.pm.PackageManager.GET_META_DATA).metaData;
-            if (meta != null) defaults = meta.getString("dev.mbui.env");
+            if (meta != null) {
+                defaults = meta.getString("dev.mbui.env");
+                // what shows under the system bars, light and dark (<meta-data android:name="dev.mbui.ground"
+                // android:value="#F5F3EF,#1B1C1F">: the app's page ground), else mbui's own
+                String ground = meta.getString("dev.mbui.ground");
+                if (ground != null && ground.indexOf(',') > 0) {
+                    try {
+                        Host.groundLight = Color.parseColor(ground.substring(0, ground.indexOf(',')).trim());
+                        Host.groundDark = Color.parseColor(ground.substring(ground.indexOf(',') + 1).trim());
+                    } catch (IllegalArgumentException e) {
+                        Host.log("dev.mbui.ground " + ground + ": " + e);
+                    }
+                }
+            }
         } catch (android.content.pm.PackageManager.NameNotFoundException e) {}
         String given = hooks ? getIntent().getStringExtra("env") : null;
         String env = defaults == null ? given : given == null ? defaults : defaults + ";" + given;
@@ -70,30 +83,39 @@ public class MainActivity extends Activity {
         // what another app shared into this one (ACTION_SEND or SEND_MULTIPLE: text, files), for the app to take
         Shares.take(getIntent());
         FrameLayout root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(245, 245, 247));
+        // over another app (OverActivity): nothing of the app's own ground, the app draws what is over it alone
+        root.setBackgroundColor(over() ? Color.TRANSPARENT : night(getResources().getConfiguration()) ? Host.groundDark : Host.groundLight);
         MBView view = new MBView(this);
+        mbView = view;
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
         root.addView(view, lp);
         // native views (NativeViews): over the MBView in the tree, so a page there takes its touches, under its
         // surface on the screen; laid out as the MBView is
         NativeViews.layer = new FrameLayout(this);
+        layer = NativeViews.layer;
         root.addView(NativeViews.layer, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         // The view inside the system bars; the soft keyboard over its foot is told to it as it moves (Host.imeBottom:
         // the app lays out above it, its composer riding on the keyboard as Compose's imePadding does), the surface
-        // itself not resized.
+        // itself not resized. Over another app (OverActivity) the view takes the whole window, under the bars too (as
+        // still.fail's ShareActivity is edge to edge: its scrim from the screen's top, its sheet down to its foot), and
+        // the bars are said to the app instead (src/host/system.mbt `bars`).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars()
                     | WindowInsets.Type.displayCutout());
+            if (over()) {
+                sayBars(bars);
+                bars = Insets.NONE;
+            }
             FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) view.getLayoutParams();
             if (p.leftMargin != bars.left || p.topMargin != bars.top
                     || p.rightMargin != bars.right || p.bottomMargin != bars.bottom) {
                 p.setMargins(bars.left, bars.top, bars.right, bars.bottom);
                 view.setLayoutParams(p);
-                FrameLayout.LayoutParams q = (FrameLayout.LayoutParams) NativeViews.layer.getLayoutParams();
+                FrameLayout.LayoutParams q = (FrameLayout.LayoutParams) layer.getLayoutParams();
                 q.setMargins(bars.left, bars.top, bars.right, bars.bottom);
-                NativeViews.layer.setLayoutParams(q);
+                layer.setLayoutParams(q);
             }
             if (!imeMoving) keyboardAt(insets);
             return WindowInsets.CONSUMED;
@@ -138,9 +160,79 @@ public class MainActivity extends Activity {
         if (Host.script != null) Script.start(view);
         // started by a notification's tap (Notices): what it opens, for the app
         Notices.from(getIntent());
+        // the default network as it changes, told to the app (src/host/system.mbt), while an activity of the app lives
+        NetworkWatch.hold(this);
+    }
+
+    /**
+     * Since when the app has been off screen (elapsedRealtime: deep sleep counted); 0 while on it. The process's, not
+     * an activity's: one closed with back and made again later is the same app coming back (as still.fail's
+     * MainActivity's `hidden`).
+     */
+    private static long hiddenAt;
+
+    /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/host/system.mbt). */
+    private android.net.wifi.WifiManager.MulticastLock multicast;
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        if (multicast == null && checkSelfPermission(android.Manifest.permission.CHANGE_WIFI_MULTICAST_STATE)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            if (wifi != null) {
+                multicast = wifi.createMulticastLock("mbui-mdns");
+                multicast.setReferenceCounted(false);
+            }
+        }
+        if (multicast != null) multicast.acquire();
+        // back on screen after a while off it: said to the app (src/host/system.mbt)
+        if (hiddenAt != 0) {
+            long away = Math.max(0, android.os.SystemClock.elapsedRealtime() - hiddenAt);
+            hiddenAt = 0;
+            Native.post("system", "{\"shown\":{\"away\":" + away + "}}");
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (multicast != null) multicast.release();
+        if (hiddenAt == 0) hiddenAt = android.os.SystemClock.elapsedRealtime();
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        NetworkWatch.release();
+        super.onDestroy();
     }
 
     private boolean imeMoving;
+
+    /** This activity's own view and native views' layer: the host's (Host.view, NativeViews.layer) while it is resumed. */
+    private MBView mbView;
+    private FrameLayout layer;
+
+    /** Whether this is the app over another app (OverActivity, a subclass: a share sheet over the app it came from). */
+    boolean over() {
+        return false;
+    }
+
+    /** What was last said of being over another app (src/host/system.mbt `over`): null nothing yet. */
+    private static Boolean saidOver;
+
+    /** The bars last said to the app (over another app: sayBars), in pixels; null none yet. */
+    private static Insets saidBars;
+
+    /** The system bars over the view, said to the app as they change (src/host/system.mbt `bars`): in points. */
+    private void sayBars(Insets bars) {
+        if (bars.equals(saidBars)) return;
+        saidBars = bars;
+        float d = mbView.density;
+        Native.post("system", String.format(java.util.Locale.ROOT,
+                "{\"bars\":{\"top\":%.2f,\"bottom\":%.2f,\"left\":%.2f,\"right\":%.2f}}",
+                bars.top / d, bars.bottom / d, bars.left / d, bars.right / d));
+    }
 
     /** How far the keyboard reaches over the view's foot (past the navigation bar it covers), told to the view. */
     private void keyboardAt(WindowInsets insets) {
@@ -255,15 +347,25 @@ public class MainActivity extends Activity {
         // told before the GL thread pauses (its queued events run first): the core hears the app left the front
         Host.resumed = false;
         Host.tellAppState();
-        Host.view.onPause();
+        mbView.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        Host.view.onResume();
+        // the host's this activity's again (the app over another app, OverActivity, came and went meanwhile)
+        Host.activity = this;
+        Host.view = mbView;
+        NativeViews.moveTo(layer);
+        Native.overOther(over());
+        mbView.onResume();
         Host.resumed = true;
         Host.tellAppState();
+        // whether it is over another app, said to the app as it changes (src/host/system.mbt `over`)
+        if (saidOver == null || saidOver != over()) {
+            saidOver = over();
+            Native.post("system", "{\"over\":" + over() + "}");
+        }
     }
 
     @Override

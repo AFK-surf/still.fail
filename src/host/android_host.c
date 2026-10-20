@@ -43,15 +43,15 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
     m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
-    m_open_url, m_text_scale, m_img_hold, m_img_pump;
-static jclass updates_cls, shares_cls, keeps_cls;
+    m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
+static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
 static jmethodID m_kp_begin, m_kp_append, m_kp_finish, m_kp_state, m_kp_where, m_kp_end;
-static jmethodID m_up_version, m_up_install, m_up_state, m_sh_share, m_sh_in, m_sh_file;
+static jmethodID m_up_version, m_up_install, m_up_state, m_up_package, m_sh_share, m_sh_in, m_sh_file;
 static mb_back_fn back_cb;
 static jdoubleArray shape_buf, small_buf;
 static int want_frame;
@@ -82,6 +82,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_wake_after = (*env)->GetStaticMethodID(env, host_cls, "wakeAfter", "(D)V");
   m_set_ime = (*env)->GetStaticMethodID(env, host_cls, "setIme", "(ZDDDDLjava/lang/String;II)V");
   m_clipboard = (*env)->GetStaticMethodID(env, host_cls, "clipboardSet", "(Ljava/lang/String;)V");
+  m_clipboard_secret = (*env)->GetStaticMethodID(env, host_cls, "clipboardSecret", "(Ljava/lang/String;D)V");
   m_log = (*env)->GetStaticMethodID(env, host_cls, "log", "(Ljava/lang/String;)V");
   m_bench = (*env)->GetStaticMethodID(env, host_cls, "benchMode", "()I");
   m_reduce_motion = (*env)->GetStaticMethodID(env, host_cls, "reduceMotion", "()I");
@@ -93,9 +94,11 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_set_sideways = (*env)->GetStaticMethodID(env, host_cls, "setSideways", "(Z)V");
   m_word_at = (*env)->GetStaticMethodID(env, host_cls, "wordAt", "(Ljava/lang/String;I)D");
   m_open_url = (*env)->GetStaticMethodID(env, host_cls, "openUrl", "(Ljava/lang/String;)Z");
+  m_over_done = (*env)->GetStaticMethodID(env, host_cls, "overDone", "(Z)V");
   updates_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Updates"));
   m_up_version = (*env)->GetStaticMethodID(env, updates_cls, "versionCode", "()I");
   m_up_install = (*env)->GetStaticMethodID(env, updates_cls, "install", "(Ljava/lang/String;Ljava/lang/String;DLjava/lang/String;)V");
+  m_up_package = (*env)->GetStaticMethodID(env, updates_cls, "installPackage", "(Ljava/lang/String;[B)V");
   m_up_state = (*env)->GetStaticMethodID(env, updates_cls, "state", "()Ljava/lang/String;");
   shares_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Shares"));
   m_sh_share = (*env)->GetStaticMethodID(env, shares_cls, "share", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[B)Z");
@@ -122,6 +125,10 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_bl_open = (*env)->GetStaticMethodID(env, login_cls, "open", "(ILjava/lang/String;)I");
   m_bl_back = (*env)->GetStaticMethodID(env, login_cls, "back", "(I)Ljava/lang/String;");
   m_bl_end = (*env)->GetStaticMethodID(env, login_cls, "end", "(I)V");
+  m_open_tab = (*env)->GetStaticMethodID(env, login_cls, "openTab", "(Ljava/lang/String;)Z");
+  holds_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/LoginService"));
+  m_hold_words = (*env)->GetStaticMethodID(env, holds_cls, "words",
+                                          "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V");
   picks_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Picks"));
   m_pk_start = (*env)->GetStaticMethodID(env, picks_cls, "start", "(I)I");
   m_pk_state = (*env)->GetStaticMethodID(env, picks_cls, "state", "(I)I");
@@ -737,10 +744,16 @@ static void main_state(void) {
   glUniform1i(u_n, gn);
 }
 
+// Over another app (OverActivity: Native.overOther): what the app does not paint stays clear, the app under it shows.
+static volatile int over_other;
+
+JNIEXPORT void JNICALL Java_dev_mbui_Native_overOther(JNIEnv *env, jclass c, jboolean on) { over_other = on ? 1 : 0; }
+
 void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
   glBindFramebuffer(GL_FRAMEBUFFER, target_fb);
   glViewport(0, 0, fb_w, fb_h);
-  glClearColor((float)r, (float)g, (float)b, 1);
+  if (over_other) glClearColor(0, 0, 0, 0);
+  else glClearColor((float)r, (float)g, (float)b, 1);
   glClear(GL_COLOR_BUFFER_BIT);
   // the app drawn in the surface's top part, as tall as it was told (the soft keyboard over the rest: MBView)
   int vh = (int)(cur_h * cur_scale + 0.5);
@@ -948,6 +961,18 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_appState(JNIEnv *env, jclass c, jint
   if (state_cb) state_cb(state);
 }
 
+// What the system says between frames (MainActivity: the app back on screen after a while, the device's network
+// changed, a link it was opened with), posted on its channel for the app's handler (src/host/system.mbt): the JSON's
+// UTF-8 as Java made it (Native.post), the channel's name ASCII.
+JNIEXPORT void JNICALL Java_dev_mbui_Native_postBytes(JNIEnv *env, jclass c, jstring channel, jbyteArray json) {
+  const char *ch = (*env)->GetStringUTFChars(env, channel, NULL);
+  jsize n = (*env)->GetArrayLength(env, json);
+  jbyte *j = (*env)->GetByteArrayElements(env, json, NULL);
+  mb_post(ch, (const char *)j, (size_t)n, NULL, 0);
+  (*env)->ReleaseByteArrayElements(env, json, j, JNI_ABORT);
+  (*env)->ReleaseStringUTFChars(env, channel, ch);
+}
+
 JNIEXPORT void JNICALL Java_dev_mbui_Native_back(JNIEnv *env, jclass c, jint kind, jfloat x, jfloat progress,
                                                 jint edge) {
   if (back_cb) back_cb(kind, x, progress, edge);
@@ -1041,6 +1066,32 @@ int32_t mb_host_open_url(moonbit_string_t url) {
   return ok ? 1 : 0;
 }
 
+// The app over another app done (Host.overDone, @host.over_done): back to it, or on into the app's own activity.
+void mb_host_over_done(int32_t open_app) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, host_cls, m_over_done, open_app ? JNI_TRUE : JNI_FALSE);
+}
+
+// A page in a browser's tab over the app (BrowserLogin.openTab, @host.open_tab): a Custom Tab, ACTION_VIEW where no
+// browser takes one.
+int32_t mb_host_open_tab(moonbit_string_t url) {
+  JNIEnv *env = env_();
+  jstring u = jstr(env, url);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, login_cls, m_open_tab, u);
+  (*env)->DeleteLocalRef(env, u);
+  return ok ? 1 : 0;
+}
+
+// What the notice that holds the app up while it listens for a browser says (LoginService.words, @host.hold_words).
+void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {
+  JNIEnv *env = env_();
+  jstring c = jstr(env, channel), t = jstr(env, title), b = jstr(env, body);
+  (*env)->CallStaticVoidMethod(env, holds_cls, m_hold_words, c, t, b);
+  (*env)->DeleteLocalRef(env, c);
+  (*env)->DeleteLocalRef(env, t);
+  (*env)->DeleteLocalRef(env, b);
+}
+
 // Sharing (Shares.java): words or a file to the system's share sheet; what another app shared in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
   JNIEnv *env = env_();
@@ -1085,6 +1136,17 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
   (*env)->DeleteLocalRef(env, u);
   (*env)->DeleteLocalRef(env, h);
   (*env)->DeleteLocalRef(env, n);
+}
+
+// A package handed to the system's installer (Updates.installPackage, @host.install_package); what comes of it is
+// posted on the system channel (system.mbt `install`).
+void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
+  JNIEnv *env = env_();
+  jstring n = jstr(env, name);
+  jbyteArray b = jbytes(env, data);
+  (*env)->CallStaticVoidMethod(env, updates_cls, m_up_package, n, b);
+  (*env)->DeleteLocalRef(env, n);
+  (*env)->DeleteLocalRef(env, b);
 }
 
 moonbit_string_t mb_host_update_state(void) {
@@ -1181,6 +1243,14 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   JNIEnv *env = env_();
   jstring j = jstr(env, s);
   (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard, j);
+  (*env)->DeleteLocalRef(env, j);
+}
+
+// A secret on the clipboard (Host.clipboardSecret): marked sensitive, cleared `clear_ms` later if still there.
+void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
+  JNIEnv *env = env_();
+  jstring j = jstr(env, s);
+  (*env)->CallStaticVoidMethod(env, host_cls, m_clipboard_secret, j, clear_ms);
   (*env)->DeleteLocalRef(env, j);
 }
 

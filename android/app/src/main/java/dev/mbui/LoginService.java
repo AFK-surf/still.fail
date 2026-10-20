@@ -26,6 +26,18 @@ public final class LoginService extends Service {
     private static final String CHANNEL = "login";
     private static final int ID = 9;
     private static final long MOST_MS = 16 * 60_000L;
+    /**
+     * What its notice says (@host.hold_words, the app's words: still.fail's LoginRelay.kt notification): its channel's
+     * name, its title (在 Studio 上登录 gcloud), its line.
+     */
+    private static volatile String channelName = "Login", title = "Login", body = "";
+
+    static void words(String channel, String t, String b) {
+        if (!channel.isEmpty()) channelName = channel;
+        if (!t.isEmpty()) title = t;
+        body = b;
+    }
+
     /** A listener is open (the service asked for or running); its instance once started. */
     private static boolean running;
     private static LoginService started;
@@ -65,13 +77,14 @@ public final class LoginService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         NotificationManager nm = getSystemService(NotificationManager.class);
-        nm.createNotificationChannel(new NotificationChannel(CHANNEL, "登录", NotificationManager.IMPORTANCE_LOW));
+        nm.createNotificationChannel(new NotificationChannel(CHANNEL, channelName, NotificationManager.IMPORTANCE_LOW));
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
                 PendingIntent.FLAG_IMMUTABLE);
         Notification shown = new Notification.Builder(this, CHANNEL)
-                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                .setContentTitle("正在登录")
-                .setContentText("等浏览器回来 · Waiting for the browser")
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(0xFFE5704A)
+                .setContentTitle(title)
+                .setContentText(body)
                 .setContentIntent(open)
                 .setOngoing(true)
                 .setCategory(Notification.CATEGORY_SERVICE)

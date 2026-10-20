@@ -637,6 +637,13 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   CloseClipboard();
 }
 
+// A secret on the clipboard (@host.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
+void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
+  (void)clear_ms;
+  mb_host_clipboard_set(s);
+}
+
+
 void mb_host_log(moonbit_string_t s) {
   int n = Moonbit_array_length(s);
   int bytes = WideCharToMultiByte(CP_UTF8, 0, (const WCHAR *)s, n, NULL, 0, NULL, NULL);
@@ -646,6 +653,20 @@ void mb_host_log(moonbit_string_t s) {
   fprintf(stdout, "%s\n", u);
   fflush(stdout);
   free(u);
+}
+
+// The app over another app done (@host.over_done): it never is here.
+void mb_host_over_done(int32_t open_app) { (void)open_app; }
+
+// A page in a browser's tab over the app (@host.open_tab): the default browser, as open_url.
+int32_t mb_host_open_url(moonbit_string_t s);
+int32_t mb_host_open_tab(moonbit_string_t s) { return mb_host_open_url(s); }
+
+// What holds the app up while it listens for a browser (@host.hold_words): nothing here, the app runs on.
+void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {
+  (void)channel;
+  (void)title;
+  (void)body;
 }
 
 // A URL handed to the system (@host.open_url): ShellExecute, the default browser or the app that takes it; only
@@ -721,6 +742,28 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make
 
 // Updates (@host.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
+// A package for the system's installer (@host.install_package): none here, said on the system channel (system.mbt):
+// its name as UTF-8, escaped for JSON.
+void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
+  (void)data;
+  int n = Moonbit_array_length(name);
+  int u = WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)name, n, NULL, 0, NULL, NULL);
+  char *utf8 = (char *)malloc((size_t)u + 1);
+  WideCharToMultiByte(CP_UTF8, 0, (LPCWCH)name, n, utf8, u, NULL, NULL);
+  char *out = (char *)malloc((size_t)u * 6 + 64);
+  size_t o = (size_t)sprintf(out, "{\"install\":{\"name\":\"");
+  for (int i = 0; i < u; i++) {
+    unsigned char ch = (unsigned char)utf8[i];
+    if (ch == '"' || ch == '\\') out[o++] = '\\', out[o++] = (char)ch;
+    else if (ch < 0x20) o += (size_t)sprintf(out + o, "\\u%04x", ch);
+    else out[o++] = (char)ch;
+  }
+  o += (size_t)sprintf(out + o, "\",\"error\":\"unsupported\"}}");
+  mb_post("system", out, o, NULL, 0);
+  free(out);
+  free(utf8);
+}
+
 void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, double size, moonbit_string_t name) {
   (void)url; (void)sha256; (void)size; (void)name;
 }

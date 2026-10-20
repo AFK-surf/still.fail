@@ -51,6 +51,36 @@ test "a test sees the notifications the app shows, and taps one: what it opens i
 }
 
 ///|
+test "what the system says between frames comes on its channel, once, kept on the tape; a page in a tab, a secret copied, a package handed over and the hold notice's words are kept" {
+  let said : Array[String] = []
+  @ui.on_message(@host.system_channel, fn(json, _) { said.push(json) })
+  let t = @ui.Tester::new(fn(c) { c.text("app", wrap=false) |> ignore })
+  t.start_tape()
+  t.draw()
+  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/o/w/s/k\"}")
+  t.frame()
+  assert_eq(said, ["{\"link\":\"https://app.still.fail/o/w/s/k\"}"])
+  t.frame()
+  assert_eq(said.length(), 1)
+  assert_true(t.tape().contains("MSG {\"c\":\"system\""))
+  assert_true(@ui.open_tab("https://example.com/login"))
+  assert_eq(t.opened(), ["https://example.com/login"])
+  // (a secret's time on the clipboard, as an app names it)
+  let secret_ms = 30000.0
+  t.ctx().copy_secret("s3cret", clear_ms=secret_ms)
+  assert_eq(t.clipboard(), "s3cret")
+  assert_eq(t.clipboard_secret(), Some(secret_ms))
+  t.ctx().copy_text("words")
+  assert_eq(t.clipboard_secret(), None)
+  @ui.install_package("app.apk", b"PK")
+  assert_eq(t.installs(), ["app.apk"])
+  @ui.hold_words(channel="Login", title="Login to Studio", body="Waiting for the browser")
+  assert_eq(t.hold_words(), Some(("Login", "Login to Studio", "Waiting for the browser")))
+  @ui.over_done(open_app=true)
+  assert_eq(t.overs_done(), [true])
+}
+
+///|
 test "idle but for what never ends while shown: a cycle read is said, not a failure; a field cleared" {
   let spin = Ref(true)
   let t = @ui.Tester::new(fn(c) {

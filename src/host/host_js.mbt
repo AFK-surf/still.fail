@@ -230,6 +230,13 @@ pub fn clipboard_set(s : String) -> Unit {
 }
 
 ///|
+/// A secret on the clipboard (see host_native.mbt): a page's as any words.
+pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
+  ignore(clear_ms)
+  js_clipboard_set(s)
+}
+
+///|
 pub fn log(s : String) -> Unit {
   js_log(s)
 }
@@ -379,6 +386,19 @@ pub fn update_install(url : String, sha256 : String, size : Double, name : Strin
 pub fn update_state() -> String {
   ""
 }
+
+///|
+/// A package for the system's installer (see host_native.mbt): a page has none, said on the system channel as the
+/// other hosts say it (the page's post queue: web/host.js H.post).
+pub fn install_package(name : String, data : Bytes) -> Unit {
+  ignore(data)
+  let said : Json = { "install": { "name": Json::string(name), "error": "unsupported" } }
+  js_post(system_channel, said.stringify())
+}
+
+///|
+extern "js" fn js_post(channel : String, json : String) -> Unit =
+  #|(c, j) => { const H = globalThis.__mbhost; if (H && H.post) H.post(c, j) }
 
 ///|
 /// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
@@ -875,6 +895,26 @@ pub fn word_at(text : String, off : Int) -> (Int, Int) {
 /// `url` handed to the browser (see host_native.mbt): window.open, in a tab of its own.
 pub fn open_url(url : String) -> Bool {
   js_open_url(url)
+}
+
+///|
+/// The app over another app done (see host_native.mbt): a page never is.
+pub fn over_done(open_app~ : Bool) -> Unit {
+  ignore(open_app)
+}
+
+///|
+/// A page in a browser's tab (see host_native.mbt): a tab of its own, as open_url.
+pub fn open_tab(url : String) -> Bool {
+  js_open_url(url)
+}
+
+///|
+/// What holds the app up while it listens for a browser (see host_native.mbt): a page keeps no notice.
+pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
+  ignore(channel)
+  ignore(title)
+  ignore(body)
 }
 
 ///|

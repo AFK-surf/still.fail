@@ -113,8 +113,24 @@ final class Notices {
         return o;
     }
 
-    /** The activity started or brought back by a notification's tap: what it opens, kept for the app. */
+    /**
+     * The activity started or brought back by a notification's tap: what it opens, kept for the app; or by a link (an
+     * http(s) ACTION_VIEW the manifest takes: one of the app's links tapped in another app), posted to the app on its
+     * system channel ({"link": url}: src/host/system.mbt), so a run's tape has it. Each is taken off the intent once
+     * told (as still.fail's MainActivity.handle sets an empty one).
+     */
     static void from(Intent intent) {
+        if (intent != null && Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null
+                && ("https".equals(intent.getData().getScheme()) || "http".equals(intent.getData().getScheme()))) {
+            String link = intent.getData().toString();
+            intent.setData(null);
+            Host.log("LINK OPENED " + link);
+            try {
+                Native.post("system", new org.json.JSONObject().put("link", link).toString());
+            } catch (org.json.JSONException ignored) {
+            }
+            return;
+        }
         String o = intent != null ? intent.getStringExtra(OPENS) : null;
         if (o == null) return;
         intent.removeExtra(OPENS);

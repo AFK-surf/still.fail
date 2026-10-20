@@ -173,6 +173,7 @@ pub fn Tester::new(
     ime_sel: (0, 0),
     ime_rect: (0.0, 0.0, 0.0, 0.0),
     clipboard: "",
+    clipboard_secret: -1.0,
     back_on: false,
     platform,
     reduce_transparency: false,
@@ -197,6 +198,9 @@ pub fn Tester::new(
     app_version,
     notices: [],
     notice_opened: "",
+    installs: [],
+    hold_words: None,
+    overs_done: [],
     notice_perm: "granted",
     notice_reply: Some(true),
     notice_asks: 0,
@@ -583,6 +587,35 @@ pub fn Tester::ime_rect(self : Tester) -> (Double, Double, Double, Double) {
 ///|
 pub fn Tester::clipboard(self : Tester) -> String {
   self.fake.clipboard
+}
+
+///|
+/// How the app over another app was ended (@ui.over_done), oldest first: whether on into the app.
+pub fn Tester::overs_done(self : Tester) -> Array[Bool] {
+  self.fake.overs_done.copy()
+}
+
+///|
+/// What the app last said the notice holding it up says (@ui.hold_words): its channel, title and line.
+pub fn Tester::hold_words(self : Tester) -> (String, String, String)? {
+  self.fake.hold_words
+}
+
+///|
+/// The packages the app handed to the system's installer (@ui.install_package), oldest first.
+pub fn Tester::installs(self : Tester) -> Array[String] {
+  self.fake.installs.copy()
+}
+
+///|
+/// Whether the clipboard's words were put there as a secret (Ctx::copy_secret): how long after they are taken off,
+/// None when they were not.
+pub fn Tester::clipboard_secret(self : Tester) -> Double? {
+  if self.fake.clipboard_secret < 0.0 {
+    None
+  } else {
+    Some(self.fake.clipboard_secret)
+  }
 }
 
 ///|
