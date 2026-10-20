@@ -45,6 +45,11 @@ pub(all) struct Core {
   version_words : () -> (String, Bool)
   /// the version row tapped: a newer build installed, or still.fail cloud asked now
   version_tap : () -> Unit
+  /// whether usage statistics and error reports go out from this device (Crashes.reporting); None where nothing is
+  /// sent anyway (no host takes them, a build without PostHog's key): no row then
+  reporting : () -> Bool?
+  /// them turned on or off on this device (Crashes.setReporting)
+  set_reporting : (Bool) -> Unit
 }
 
 ///|

@@ -9,9 +9,11 @@
 // files, the words after what is written) and opens the chat there (or a new chat on that station), where it is added
 // to and sent. Files (which the Android app does not take in) head the sheet as the composer shows them (pictures as
 // tiles, a file's mark, name and size; n 个文件) and go into the chat's composer as attachments, up to the station at once
-// as ＋'s files do (composer.mbt add_file); words shared with them go in through `shareIn.open` as before. The Android
-// app shows the sheet over the app it came from (an activity of its own); here the app comes to the front and shows it
-// over itself.
+// as ＋'s files do (composer.mbt add_file); words shared with them go in through `shareIn.open` as before. The sheet
+// shows over the app it came from (Android's OverActivity, as the Android app's ShareActivity: the host says so,
+// @host.system_channel `over`), on the page's paper: nothing of the app's own under it. Closed, the app goes and the
+// person is back where they were; gone into a chat, the app opens at it (@ui.over_done). Signed out, it says to sign in
+// in the app first, with 打开 still.fail.
 //
 // Out: a file of a drive handed to another app (DriveScreen.kt openElsewhere with share): read whole through the core
 // (`drive.read`), then the system's share sheet (@host.share: Android's chooser, a file of the app's own provider;
@@ -32,6 +34,8 @@ let share_zh : Map[String, String] = {
   "common.cancel": "取消",
   "android-settings.files.count": "{n} 个文件",
   "common.reading": "正在读取",
+  "android-misc.shareIn.signIn": "先在 still.fail 里登录，再来分享",
+  "android-misc.shareIn.openApp": "打开 still.fail",
 }
 
 ///|
@@ -85,6 +89,99 @@ let share_in : ShareIn = {
   query: "",
   find: @ui.Field::new(),
 }
+
+///|
+/// Shown over another app (the host's say, @host.system_channel `over`): only the share sheet is drawn.
+let share_over : Ref[Bool] = Ref(false)
+
+///|
+/// Over another app, how far the navigation bar reaches in over the app's foot (@host.system_channel `bars`: the view
+/// under the bars there, as ShareActivity is edge to edge): the sheet's content and the toasts kept above it.
+let share_foot : Ref[Double] = Ref(0.0)
+
+///|
+/// Over another app, its sheet closed by hand: the app goes once it has sunk away (ShareScreen: onClose after its spring).
+let share_closing : Ref[Bool] = Ref(false)
+
+///|
+/// 打开 still.fail, as a link's words (ShareSheet.kt SignInFirst: 15, semibold, the link's ink).
+// kept across runs: a value (no field of it changes)
+let open_app_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold, color=Link)
+
+///|
+// kept across runs: a value (no field of it changes)
+let open_app_box : @ui.Style = @ui.style(px=S5, py=S2, pb=S6)
+
+///|
+/// Over another app (ShareActivity): what is shared taken, its sheet over that app and nothing else; the toasts.
+fn over_view(c : @ui.Ctx, src : Source) -> Unit {
+  share_in_frame(c)
+  sheet_layer(c, fn(kind) { if kind == ShareSheet { share_over_sheet(c, src) } })
+  toast(c)
+}
+
+///|
+/// The sheet over another app (ShareSheet.kt ShareSheetContent): the chats once the core says them, the workspace the
+/// app was last in (else the first); reading meanwhile; signed out, to sign in first (SignInFirst).
+fn share_over_sheet(c : @ui.Ctx, src : Source) -> Unit {
+  let accounts = (src.topic)("accounts", {})
+  let (source, title) = match share_in.shared {
+    Some(s) => s
+    None => return
+  }
+  let head = fn() {
+    sheet_grab(c)
+    if share_in.files.length() > 0 {
+      shared_files_head(c, share_in.files, source, title)
+    } else {
+      shared_head(c, source, title)
+    }
+  }
+  match accounts.value {
+    Some(Array(list)) if list.length() == 0 => {
+      head()
+      share_note(c, sh("android-misc.shareIn.signIn"))
+      let id = c.id("share-in/open-app")
+      if c.clicked(id) {
+        @ui.over_done(open_app=true)
+      }
+      c.box(style=open_app_box, id~, fn() {
+        // (in still.fail's own theme: its size and the link's ink as Android's C.link, not mbui's own blue)
+        c.with_theme(@sf.ui_theme(), fn() {
+          c.text(sh("android-misc.shareIn.openApp"), style=open_app_words) |> ignore
+        })
+      })
+      |> ignore
+    }
+    Some(Array(_)) => {
+      let ws = (src.topic)("workspaces", {})
+      let prefs = (src.topic)("prefs", {})
+      let (all, answered, _) = workspaces_of(ws.value)
+      let kept = text(prefs.value, "workspace")
+      match all.iter().find_first(fn(w) { w.id == kept }) {
+        Some(w) => share_in_sheet(c, src, w)
+        None if all.length() > 0 && (kept == "" || answered) => share_in_sheet(c, src, all[0])
+        _ => {
+          head()
+          share_reading(c)
+        }
+      }
+    }
+    _ => {
+      head()
+      share_reading(c)
+    }
+  }
+}
+
+///|
+fn share_reading(c : @ui.Ctx) -> Unit {
+  c.box(style=share_reading_box, fn() { @sf.wait_line(c, sh("common.reading"), key="share-in") }) |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let share_reading_box : @ui.Style = @ui.style(w=Full, px=S5, pt=S2)
 
 ///|
 /// From six chats the list can be searched.
@@ -147,10 +244,17 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       _ => ()
     }
   } else if share_in.raised && sheet_host.kind != ShareSheet {
-    // closed (the scrim, back, dragged down): let go
+    // closed (the scrim, back, dragged down): let go; over another app, the app goes once the sheet has sunk away
     share_in.shared = None
     share_in.files = []
     share_in.raised = false
+    if share_over.val {
+      share_closing.val = true
+    }
+  }
+  if share_closing.val && share_over.val && sheet_host.shown == NoSheet {
+    share_closing.val = false
+    @ui.over_done(open_app=false)
   }
 }
 
@@ -205,7 +309,8 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
   |> ignore
   if share_in.searching {
     c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=4.0, fn() {
-      c.box(w=Fill(1.0), h=Px(40.0), radius=12.0, bg=t.p.chip, padx=12.0, justify=JCenter, fn() {
+      // (Controls.kt Field: the surface, a line round it, as the invitation's field)
+      c.box(style=invite_field, h=Px(40.0), justify=JCenter, fn() {
         let r = c.editor(
           "share-in/find",
           placeholder=sh("android-misc.shareIn.find"),
@@ -543,6 +648,11 @@ fn share_opened(
   share_in.raised = false
   lower_sheet()
   @host.log("share in: into \{key}, \{files.length()} files")
+  // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
+  if share_over.val {
+    home()
+    @ui.over_done(open_app=true)
+  }
   if session == "" {
     pick()
     while app.nav.depth() > 1 {

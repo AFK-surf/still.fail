@@ -28,8 +28,9 @@ pub(all) enum Page {
   PreviewFile(String, String, String, String)
   /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
-  /// an agent's execution history (history.mbt): its chat, its session
-  History(ChatRef, String)
+  /// an agent's execution history (history.mbt): its chat, its session, the transcript entry it opens at (a link's
+  /// `entry`; None: its newest)
+  History(ChatRef, String, Int?)
   /// an entry of a history opened in full: the line it was under, its words
   Words(String, String)
   /// a new chat (newchat.mbt), rising from the bottom; it becomes the chat it makes, in place
@@ -174,6 +175,9 @@ fn reset() -> Unit {
   new_fix.d_profile = ""
   new_fix.made = 0
   app.switch_way = 0
+  bar_timing.val = None
+  reporting_host.val = None
+  bar_timed.val = None
   app.menu = false
   app.held = 0
   app.held_long = false
@@ -204,6 +208,9 @@ fn reset() -> Unit {
   share_in.error = ""
   share_in.query = ""
   share_in.find.set("")
+  share_over.val = false
+  share_foot.val = 0.0
+  share_closing.val = false
   update.available = None
   update.asked = false
   update.checking = false
@@ -255,6 +262,7 @@ fn reset() -> Unit {
   ask_turns.clear()
   flash_held.val = false
   notices_reset()
+  links_reset()
   wide_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
   kept_chats.clear()
@@ -351,7 +359,7 @@ fn pages_left(src : Source) -> Unit {
       DrivePlay(at) => play_left(at)
       Service(station, job) => service_left(src, station, job)
       PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
-      History(r, key) => history_left(src, r, key)
+      History(r, key, _) => history_left(src, r, key)
       _ => ()
     }
   }
@@ -380,11 +388,21 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
 
 ///|
 fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
+  // over another app (a share sheet over the app it came from: share.mbt share_over): nothing but the sheet
+  if share_over.val {
+    over_view(c, src)
+    return
+  }
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
       (_, Some(why)) => splash(c, Some(why), true)
-      (Some(Array(list)), _) if list.length() == 0 => sign_in_page(c, src)
+      (Some(Array(list)), _) if list.length() == 0 => {
+        sign_in_page(c, src)
+        // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
+        c.after_build("links", fn() { signed_out_links(src) })
+        sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
+      }
       (Some(Array(_)), _) => signed_in(c, src)
       (_, _) =>
         splash(
@@ -430,6 +448,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
       // frame's builds are over: a build let go of follows no workspace)
       c.after_build("notices", fn() { notices_frame(src, w) })
+      // a link the system opened the app with (links.mbt)
+      c.after_build("links", fn() { links_frame(src, w) })
       // a newer build of the app asked for once (updates.mbt)
       // (asked once, with the app's version: nothing a build changes)
       update_first(src)
@@ -480,6 +500,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
           LoadOf(station, port) => load_sheet(c, src, station, port)
           PageSizes(key) => page_sizes_sheet(c, key)
           ShareSheet => share_in_sheet(c, src, w)
+          InviteLink => invite_sheet(c, src)
           NoSheet => ()
         }
       })
@@ -527,6 +548,9 @@ fn page_view(
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
   let root = app.nav.depth() == 1
   let e = if root { place_switch(c).get() } else { 1.0 }
+  if root {
+    bar_built(c, page)
+  }
   c.box(
     w=Fill(1.0),
     h=Fill(1.0),
@@ -558,7 +582,7 @@ fn page_view(
         Setting(r) => setting_page(c, src, w, r)
         // 奏: a place of the bar at the stack's root, else a page pushed
         Decisions => decisions_page(c, src, w)
-        History(r, key) => history_page(c, src, r, key)
+        History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
       }
     },
@@ -586,6 +610,8 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
     Some(p) => p
     None => ""
   }
+  // (timed from here: BarTiming)
+  bar_placed(from, place)
   let bar_now = if cur >= 0 && cur < sets.length() { sets[cur] } else { [] }
   let a = bar_now.search(from).unwrap_or(-1)
   let b = bar_now.search(place).unwrap_or(-1)
@@ -684,8 +710,27 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
     },
     version_words: fn() { update_row_words() },
     version_tap: fn() { update_row_tapped(src) },
+    reporting: fn() { reporting_host.val.map(fn(h) { (h.get)() }) },
+    set_reporting: fn(on) {
+      match reporting_host.val {
+        Some(h) => (h.set)(on)
+        None => ()
+      }
+    },
   }
 }
+
+///|
+/// Whether usage statistics and error reports go out from this device, as the host keeps it (src/stillfail
+/// reports.mbt: Android's Crashes.reporting, the app's prefs); None where nothing is sent anyway: no settings row then.
+pub(all) struct ReportingHost {
+  get : () -> Bool
+  set : (Bool) -> Unit
+}
+
+///|
+/// The host's, set once as the app starts (src/stillfail main); None under a Tester (reset), unless its test sets one.
+pub let reporting_host : Ref[ReportingHost?] = Ref(None)
 
 ///|
 /// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
@@ -742,7 +787,9 @@ let told_dark : Ref[Bool?] = Ref(None)
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
-  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0, look=fn(c, s, _action, _close) {
+  // (over another app, above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
+  let foot = if share_over.val { share_foot.val } else { 0.0 }
+  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0 + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
       c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
@@ -1046,4 +1093,70 @@ fn attend(src : Source, workspace : String) -> Unit {
     "workspace": Json::string(workspace),
   }
   (src.call)("client.focus", Json::object(params), fn(_) {  })
+}
+
+///|
+/// What the system said between frames (@host.system_channel; its handler set as the package starts, before the first
+/// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
+/// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
+/// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
+/// network changed, every link it had is taken for dead (NetworkWatch: `client.wake {away: 0, network: true}`).
+fn system_said(json : String) -> Unit {
+  let v = @json.parse(json) catch { _ => return }
+  // a link the system opened the app with (links.mbt): opened once the app can (signed in, its workspace known)
+  match field(Some(v), "link") {
+    Some(String(url)) => link_later.push(url)
+    _ => ()
+  }
+  // shown over another app, or in its own window again (share.mbt)
+  match field(Some(v), "over") {
+    Some(True) => share_over.val = true
+    Some(False) => share_over.val = false
+    _ => ()
+  }
+  // over another app, how far the bars reach in over the view (share.mbt share_foot)
+  let bars = field(Some(v), "bars")
+  if bars is Some(Object(_)) {
+    share_foot.val = number(bars, "bottom")
+  }
+  let src = match attention.src {
+    Some(s) => s
+    None => return
+  }
+  if src.read_only {
+    return
+  }
+  match field(Some(v), "shown") {
+    Some(Object(_) as s) => {
+      let away = match field(Some(s), "away") {
+        Some(Number(n, ..)) => n
+        _ => 0.0
+      }
+      (src.call)("client.wake", { "away": Json::number(away) }, fn(_) {  })
+      update_check(src, false)
+    }
+    _ => ()
+  }
+  // a package handed to the system's installer could not be installed (FilePreview.kt install's toast)
+  match field(Some(v), "install") {
+    Some(Object(_) as i) if flag(Some(i), "allow") =>
+      toast_later(pv_fill("android-chat.file.allowInstall", [("app", "still.fail")]))
+    Some(Object(_) as i) =>
+      toast_later(pv_fill("android-chat.file.installFailed", [("error", text(Some(i), "error"))]))
+    _ => ()
+  }
+  if flag(Some(v), "network") {
+    (src.call)(
+      "client.wake",
+      { "away": Json::number(0.0), "network": Json::boolean(true) },
+      fn(_) {  },
+    )
+  }
+}
+
+///|
+/// The system's say has its handler before the first frame (what is posted as the app starts, a link it was opened
+/// with, would be left with none).
+fn init {
+  @ui.on_message(@host.system_channel, fn(json, _) { system_said(json) })
 }

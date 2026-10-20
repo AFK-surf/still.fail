@@ -3,7 +3,8 @@
 // (one quoting, two sent close together), a person's with a picture, an agent's long Markdown (headings, lists,
 // a task list, a quote, code, links, a reference to another chat), its files placed in its words and below them, a
 // message it sent to Slack, an options card, a login card, its last post offering to archive the chat. An older
-// page comes in when the reader nears the top (`chat.older`). Every other row's chat is two lines. "chat-long" is a
+// page comes in when the reader nears the top (`chat.older`); "chat-login" its login card for one who may finish it,
+// its page to open in the browser. Every other row's chat is two lines. "chat-long" is a
 // chat of thousands of messages, for timing the list. Every word here is made up.
 
 ///|
@@ -476,6 +477,20 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
       }
       Some({ "items": Json::array(out) })
     }
+    // chat-login: the login's page to open in the browser, for one who may (its pill opens it in a tab over the app;
+    // what apps/android's MbuiCompareTest pictures beside it)
+    "machineLogins" if f.mode == "chat-login" => Some({ "canLogin": true, "canRelay": true })
+    "machineLogin" if f.mode == "chat-login" =>
+      Some({
+        "id": "login-1",
+        "title": "在 Studio 上登录 gh",
+        "state": "browser",
+        "step": "open",
+        "url": "https://github.com/login",
+        "domain": "github.com",
+        "active": true,
+        "statusText": "在浏览器里完成登录",
+      })
     "machineLogin" =>
       Some({
         "id": "login-1",

@@ -437,6 +437,8 @@ pub fn fixture(mode : String) -> Source {
                 None =>
               match fixture_chat_call(f, name, params) {
                 Some(r) => done(r)
+                None if name == "link.parse" =>
+                  done(Ok(fixture_link_parse(text(Some(params), "url"))))
                 None =>
                   match decide_fixture_call(name) {
                     Some(r) => done(r)

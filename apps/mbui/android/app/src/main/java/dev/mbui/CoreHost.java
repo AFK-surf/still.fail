@@ -105,6 +105,8 @@ final class CoreHost {
                 body = a.bytes;
             } catch (Unsupported e) {
                 error = "unsupported";
+            } catch (SecureException | android.security.keystore.KeyPermanentlyInvalidatedException e) {
+                error = errorText(e);
             } catch (Throwable e) {
                 error = op + ": " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             }
@@ -134,9 +136,25 @@ final class CoreHost {
         return "1".equals(Os.getenv("MB_CORE_TRACE"));
     }
 
-    /** An error as ember's app says it (SecureStore.errorText): the exception's class and its message. */
+    /**
+     * An error as ember's app says it (SecureStore.errorText): a secure call's code (user_cancelled, no_device_lock…),
+     * key_invalidated when the screen lock was taken off (what was sealed for the person cannot open), else the
+     * exception's class and its message.
+     */
     private static String errorText(Throwable e) {
+        if (e instanceof SecureException s) return s.code;
+        if (e instanceof android.security.keystore.KeyPermanentlyInvalidatedException) return "key_invalidated";
         return e.getClass().getSimpleName() + ": " + (e.getMessage() != null ? e.getMessage() : "");
+    }
+
+    /** A `secure.*` call that failed, `code` its whole message (client/core-ts host.ts `secureGet`). */
+    private static final class SecureException extends Exception {
+        final String code;
+
+        SecureException(String code) {
+            super(code);
+            this.code = code;
+        }
     }
 
     // ── listen.* (ember client/core-ts hosts/bridge.ts; ember's Loopback.kt, as apple_core.mm answers them) ──
@@ -256,19 +274,36 @@ final class CoreHost {
 
     private static final class Unsupported extends Exception {}
 
-    // ── secure.* (ember client/core-ts hosts/bridge.ts) ──
+    // ── secure.* (ember client/core-ts hosts/bridge.ts; ember apps/android core SecureStore.kt) ──
     //   secure.get {key, user, reason} → {} + the bytes, or {none: true}; secure.set {key, user} + the bytes → {};
-    //   secure.delete {key} → {}; secure.ask, and `user` (asking the person: biometrics), not yet.
-    // Each value a file of <data>/secure (the key's UTF-8 in hex), sealed with AES-GCM under one key of the Android
-    // Keystore, which never leaves it; the value's name is the cipher's associated data, so one file can't stand in
-    // for another.
+    //   secure.delete {key} → {}; secure.ask {reason} → {} once the person said yes.
+    // `user: false`: each value a file of <data>/secure (the key's UTF-8 in hex), sealed with AES-GCM under one key of
+    // the Android Keystore (StrongBox where the phone has one), which never leaves it; the value's name is the cipher's
+    // associated data, so one file can't stand in for another.
+    // `user: true` (SecureStore.kt's): an RSA-2048 pair whose private half takes the person each time (biometrics or
+    // the screen lock, BiometricPrompt over the activity, the core's `reason` in it); a value is sealed with a fresh
+    // AES key wrapped to the public half, so keeping one asks nobody and only reading it does. It needs a screen lock,
+    // and is gone for good once the screen lock is taken off (key_invalidated). Its files are <data>/secure-user, as
+    // SecureStore.kt's: a version byte (1), 1, the wrapped key's length (2, big-endian), the wrapped key (RSA-OAEP,
+    // SHA-256), the IV (12) and AES-GCM's output, its associated data naming the key and `user`.
 
     private static final String ALIAS = "dev.mbui.core.secure";
+    private static final String PERSON = "dev.mbui.core.person";
+    private static final byte VERSION = 1;
+    private static final javax.crypto.spec.OAEPParameterSpec OAEP = new javax.crypto.spec.OAEPParameterSpec(
+            "SHA-256", "MGF1", java.security.spec.MGF1ParameterSpec.SHA1, javax.crypto.spec.PSource.PSpecified.DEFAULT);
 
     private Answer secure(String op, JSONObject a, byte[] bytes) throws Exception {
-        if (op.equals("secure.ask") || a.optBoolean("user")) throw new Unsupported();
+        String reason = a.optString("reason", "");
+        // asked by itself, before what the person should mean (turning the workspace lock off): no value, no key
+        if (op.equals("secure.ask")) {
+            if (!locked()) throw new SecureException("no_device_lock");
+            ask(reason, null);
+            return new Answer("{}", null);
+        }
         String key = a.optString("key", "");
         if (key.isEmpty()) throw new IllegalArgumentException("no key");
+        if (a.optBoolean("user")) return secureUser(op, key, reason, bytes);
         File file = new File(new File(dataDir, "secure"), hex(key.getBytes(StandardCharsets.UTF_8)));
         switch (op) {
             case "secure.get": {
@@ -285,15 +320,99 @@ final class CoreHost {
                 c.updateAAD(key.getBytes(StandardCharsets.UTF_8));
                 byte[] iv = c.getIV();
                 byte[] out = c.doFinal(bytes != null ? bytes : new byte[0]);
-                File dir = file.getParentFile();
-                if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("no directory for it");
-                File tmp = new File(dir, file.getName() + ".tmp");
-                try (FileOutputStream f = new FileOutputStream(tmp)) {
-                    f.write(iv);
-                    f.write(out);
-                    f.getFD().sync();
+                ByteArrayOutputStream all = new ByteArrayOutputStream();
+                all.write(iv);
+                all.write(out);
+                keep(file, all.toByteArray());
+                return new Answer("{}", null);
+            }
+            case "secure.delete":
+                file.delete();
+                new File(new File(dataDir, "secure-user"), hex(key.getBytes(StandardCharsets.UTF_8))).delete();
+                return new Answer("{}", null);
+            default:
+                throw new Unsupported();
+        }
+    }
+
+    /** Written aside and renamed over: a crash leaves the old value or the new one, never half. */
+    private static void keep(File file, byte[] content) throws Exception {
+        File dir = file.getParentFile();
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new IllegalStateException("no directory for it");
+        File tmp = new File(dir, file.getName() + ".tmp");
+        try (FileOutputStream f = new FileOutputStream(tmp)) {
+            f.write(content);
+            f.getFD().sync();
+        }
+        if (!tmp.renameTo(file)) throw new IllegalStateException("not written");
+    }
+
+    private static byte[] aad(String key) {
+        return ("stillfail-sealed/1\u0000" + key + "\u00001").getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** A value for the person (`user: true`): kept asking nobody, read once they say yes (SecureStore.kt get, set). */
+    private Answer secureUser(String op, String key, String reason, byte[] bytes) throws Exception {
+        File file = new File(new File(dataDir, "secure-user"), hex(key.getBytes(StandardCharsets.UTF_8)));
+        switch (op) {
+            case "secure.get": {
+                if (!file.exists()) return new Answer("{\"none\":true}", null);
+                byte[] blob = Files.readAllBytes(file.toPath());
+                if (blob.length <= 2 || blob[0] != VERSION || blob[1] != 1) throw new IllegalArgumentException(key + ": not a sealed value");
+                if (!locked()) throw new SecureException("no_device_lock");
+                java.nio.ByteBuffer rest = java.nio.ByteBuffer.wrap(blob, 2, blob.length - 2);
+                byte[] wrapped = new byte[rest.getShort() & 0xffff];
+                rest.get(wrapped);
+                byte[] iv = new byte[12];
+                rest.get(iv);
+                KeyStore ks = keystore();
+                if (!(ks.getKey(PERSON, null) instanceof java.security.PrivateKey secret))
+                    throw new android.security.keystore.KeyPermanentlyInvalidatedException("no key for what was sealed");
+                Cipher unwrap = Cipher.getInstance("RSA/ECB/OAEPPadding");
+                byte[] opened;
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    // the key takes the person for this one use: the prompt unlocks this cipher
+                    unwrap.init(Cipher.DECRYPT_MODE, secret, OAEP);
+                    android.hardware.biometrics.BiometricPrompt.CryptoObject crypto =
+                            ask(reason, new android.hardware.biometrics.BiometricPrompt.CryptoObject(unwrap));
+                    if (crypto == null) throw new SecureException("user_cancelled");
+                    opened = (crypto.getCipher() != null ? crypto.getCipher() : unwrap).doFinal(wrapped);
+                } else {
+                    // Android 10: a key that takes the screen lock cannot be unlocked per use, only for a while after
+                    // it was given (10 s): the person is asked first, then the key is used
+                    ask(reason, null);
+                    unwrap.init(Cipher.DECRYPT_MODE, secret, OAEP);
+                    opened = unwrap.doFinal(wrapped);
                 }
-                if (!tmp.renameTo(file)) throw new IllegalStateException("not written");
+                Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+                c.init(Cipher.DECRYPT_MODE, new javax.crypto.spec.SecretKeySpec(opened, "AES"), new GCMParameterSpec(128, iv));
+                c.updateAAD(aad(key));
+                java.util.Arrays.fill(opened, (byte) 0);
+                return new Answer("{}", c.doFinal(blob, rest.position(), rest.remaining()));
+            }
+            case "secure.set": {
+                if (!locked()) throw new SecureException("no_device_lock");
+                byte[] fresh = new byte[32];
+                new java.security.SecureRandom().nextBytes(fresh);
+                // the public half as a key of the platform's own provider: the Keystore's takes no part in it
+                java.security.PublicKey half = java.security.KeyFactory.getInstance("RSA")
+                        .generatePublic(new java.security.spec.X509EncodedKeySpec(personKey().getEncoded()));
+                Cipher wrap = Cipher.getInstance("RSA/ECB/OAEPPadding");
+                wrap.init(Cipher.ENCRYPT_MODE, half, OAEP);
+                byte[] wrapped = wrap.doFinal(fresh);
+                byte[] iv = new byte[12];
+                new java.security.SecureRandom().nextBytes(iv);
+                Cipher c = Cipher.getInstance("AES/GCM/NoPadding");
+                c.init(Cipher.ENCRYPT_MODE, new javax.crypto.spec.SecretKeySpec(fresh, "AES"), new GCMParameterSpec(128, iv));
+                c.updateAAD(aad(key));
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                out.write(new byte[] {VERSION, 1});
+                out.write(java.nio.ByteBuffer.allocate(2).putShort((short) wrapped.length).array());
+                out.write(wrapped);
+                out.write(iv);
+                out.write(c.doFinal(bytes != null ? bytes : new byte[0]));
+                java.util.Arrays.fill(fresh, (byte) 0);
+                keep(file, out.toByteArray());
                 return new Answer("{}", null);
             }
             case "secure.delete":
@@ -302,6 +421,137 @@ final class CoreHost {
             default:
                 throw new Unsupported();
         }
+    }
+
+    private static boolean locked() {
+        android.app.KeyguardManager k = (android.app.KeyguardManager) context().getSystemService(android.content.Context.KEYGUARD_SERVICE);
+        return k != null && k.isDeviceSecure();
+    }
+
+    private static KeyStore keystore() throws Exception {
+        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+        ks.load(null);
+        return ks;
+    }
+
+    /** A key made in the Keystore, in StrongBox where the phone has one (SecureStore.kt inStrongBox). */
+    private interface Make<T> {
+        T make(boolean strong) throws Exception;
+    }
+
+    private static <T> T inStrongBox(Make<T> make) throws Exception {
+        if (context().getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_STRONGBOX_KEYSTORE)) {
+            try {
+                return make.make(true);
+            } catch (android.security.keystore.StrongBoxUnavailableException e) {
+                // it says it has one, but not for this key: the Keystore's TEE then
+            }
+        }
+        return make.make(false);
+    }
+
+    /** The person's key's public half: made the first time, and again when the one there can no longer be used. */
+    private static synchronized java.security.PublicKey personKey() throws Exception {
+        KeyStore ks = keystore();
+        java.security.cert.Certificate cert = ks.getCertificate(PERSON);
+        if (cert != null) {
+            // taking the private half for a use says whether it still can be (the screen lock taken off ends it); it
+            // does not ask the person yet
+            try {
+                Cipher.getInstance("RSA/ECB/OAEPPadding").init(Cipher.DECRYPT_MODE, (java.security.PrivateKey) ks.getKey(PERSON, null), OAEP);
+                return cert.getPublicKey();
+            } catch (android.security.keystore.KeyPermanentlyInvalidatedException e) {
+                ks.deleteEntry(PERSON);
+            } catch (android.security.keystore.UserNotAuthenticatedException e) {
+                // Android 10's key, not given for a while: it is still there
+                return cert.getPublicKey();
+            }
+        }
+        return inStrongBox(strong -> {
+            KeyGenParameterSpec.Builder spec = new KeyGenParameterSpec.Builder(PERSON, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setKeySize(2048)
+                    .setDigests(KeyProperties.DIGEST_SHA256)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
+                    .setUserAuthenticationRequired(true)
+                    // whoever can unlock the phone can add a fingerprint: a new one does not end the key
+                    .setInvalidatedByBiometricEnrollment(false)
+                    .setIsStrongBoxBacked(strong);
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                spec.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG | KeyProperties.AUTH_DEVICE_CREDENTIAL);
+            } else {
+                spec.setUserAuthenticationValidityDurationSeconds(10);
+            }
+            java.security.KeyPairGenerator g = java.security.KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore");
+            g.initialize(spec.build());
+            return g.generateKeyPair().getPublic();
+        });
+    }
+
+    /**
+     * Asks the person, over the activity in front (SecureStore.kt ask): biometrics or the screen lock, `reason` under
+     * the app's name; `crypto` (Android 11 on) what the yes unlocks. Waits for the answer on this call's thread (one
+     * secure call at a time, as SecureStore.kt's lock). Fails user_cancelled when they said no, no_device_lock when
+     * there is nothing to ask with, not_in_front when no screen of the app is.
+     */
+    private static android.hardware.biometrics.BiometricPrompt.CryptoObject ask(
+            String reason, android.hardware.biometrics.BiometricPrompt.CryptoObject crypto) throws Exception {
+        MainActivity activity = Host.activity;
+        if (activity == null || !Host.resumed) throw new SecureException("not_in_front");
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        Object[] got = new Object[1];
+        android.os.CancellationSignal cancel = new android.os.CancellationSignal();
+        Host.main.post(() -> {
+            android.hardware.biometrics.BiometricPrompt.Builder b = new android.hardware.biometrics.BiometricPrompt.Builder(activity)
+                    .setTitle(activity.getApplicationInfo().loadLabel(activity.getPackageManager()));
+            if (!reason.isEmpty()) b.setDescription(reason);
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                b.setAllowedAuthenticators(android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG
+                        | android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL);
+            } else {
+                b.setDeviceCredentialAllowed(true);
+            }
+            android.hardware.biometrics.BiometricPrompt.AuthenticationCallback callback = new android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                @Override
+                public void onAuthenticationSucceeded(android.hardware.biometrics.BiometricPrompt.AuthenticationResult result) {
+                    got[0] = result.getCryptoObject() != null ? result.getCryptoObject() : Boolean.TRUE;
+                    done.countDown();
+                }
+
+                @Override
+                public void onAuthenticationError(int code, CharSequence message) {
+                    String said;
+                    switch (code) {
+                        case android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_USER_CANCELED:
+                        case android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_CANCELED:
+                            said = "user_cancelled";
+                            break;
+                        case android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_NO_DEVICE_CREDENTIAL:
+                        case android.hardware.biometrics.BiometricPrompt.BIOMETRIC_ERROR_NO_BIOMETRICS:
+                            said = "no_device_lock";
+                            break;
+                        default:
+                            said = "biometric_error: " + message;
+                    }
+                    got[0] = new SecureException(said);
+                    done.countDown();
+                }
+            };
+            try {
+                if (crypto != null) b.build().authenticate(crypto, cancel, activity.getMainExecutor(), callback);
+                else b.build().authenticate(cancel, activity.getMainExecutor(), callback);
+            } catch (RuntimeException e) {
+                got[0] = new SecureException("biometric_error: " + e.getMessage());
+                done.countDown();
+            }
+        });
+        done.await();
+        if (got[0] instanceof SecureException e) throw e;
+        return got[0] instanceof android.hardware.biometrics.BiometricPrompt.CryptoObject c ? c : crypto;
+    }
+
+    /** The app's context, from the activity (the core runs only beside it). */
+    private static android.content.Context context() {
+        return Host.activity.getApplicationContext();
     }
 
     /**
@@ -345,16 +595,18 @@ final class CoreHost {
     }
 
     private static synchronized SecretKey sealingKey() throws Exception {
-        KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
-        ks.load(null);
+        KeyStore ks = keystore();
         if (ks.getKey(ALIAS, null) instanceof SecretKey k) return k;
-        KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        g.init(new KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setKeySize(256)
-                .build());
-        return g.generateKey();
+        return inStrongBox(strong -> {
+            KeyGenerator g = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+            g.init(new KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setKeySize(256)
+                    .setIsStrongBoxBacked(strong)
+                    .build());
+            return g.generateKey();
+        });
     }
 
     private static String hex(byte[] b) {

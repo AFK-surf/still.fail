@@ -26,7 +26,15 @@ android {
         ndk { abiFilters += "arm64-v8a" }
         manifestPlaceholders["appLabel"] = "still.fail mbui"
         manifestPlaceholders["mbuiEnv"] = ""
+        // PostHog's project (docs/telemetry.md → 安卓), where the app's crashes and bar timings go (Crashes.java,
+        // BarTiming.java): the file $STILLFAIL_POSTHOG names ({host, key}; CI writes it from POSTHOG_JSON: beta.sh
+        // build), as still.fail's Android app reads it. Without one, none are sent.
+        val posthog = providers.environmentVariable("STILLFAIL_POSTHOG").orNull?.let { file(it) }?.takeIf { it.exists() }
+            ?.let { groovy.json.JsonSlurper().parse(it) as? Map<*, *> }
+        buildConfigField("String", "POSTHOG_HOST", "\"${posthog?.get("host") as? String ?: ""}\"")
+        buildConfigField("String", "POSTHOG_KEY", "\"${posthog?.get("key") as? String ?: ""}\"")
     }
+    buildFeatures { buildConfig = true }
     // mbui's host (its Java and the resources it uses), and the core's parts scripts/android.sh puts in
     // out/android/apk (the engine's and the shell's .so files, the core's bytecode).
     sourceSets.getByName("main") {

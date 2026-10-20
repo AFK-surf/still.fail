@@ -2,6 +2,7 @@
 # (src/host/android_host.c, android_core.c) finds them, their methods and their fields by name over JNI, and their
 # native methods are bound by name (Java_dev_mbui_…).
 -keep class dev.mbui.** { *; }
-# Line numbers in a crash's stack, without the source files' names.
+# Crash reports (Crashes.java) carry the stack as it is: names, files and lines kept, so PostHog can group and show
+# them without a mapping file (as still.fail's Android app's proguard-rules.pro).
+-dontobfuscate
 -keepattributes SourceFile,LineNumberTable
--renamesourcefileattribute SourceFile

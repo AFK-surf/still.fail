@@ -108,6 +108,9 @@ fn decide_reset() -> Unit {
   dui.history_tab = 0
   dui.opened.clear()
   dui.history_asked = ""
+  history_placed.clear()
+  history_short.clear()
+  history_marked.val = ("", "")
   dui.detail_at.clear()
   dui.dgone.clear()
   dui.dlater.clear()
@@ -542,9 +545,10 @@ fn option_button(
 
 ///|
 /// A login under way, for one who may finish it (the station's `machineLogins` says `canLogin`): what to do now by its
-/// step, then the step's own pill (filled) and 取消 (LoginCards.kt ActiveCard). The pill opens the login's page in the
-/// system's browser (Ctx::open_url; LoginPages.open): a device code first copied (复制并打开), a loopback login's page
-/// once the core listens for its callback (`machineLogin.open`, the browser's answer coming back to this device).
+/// step, then the step's own pill (filled) and 取消 (LoginCards.kt ActiveCard). The pill opens the login's page in a
+/// browser's tab over the app (@ui.open_tab: a Custom Tab, LoginPages.open): a device code first copied (复制并打开), a
+/// loopback login's page once the core listens for its callback (`machineLogin.open`, the browser's answer coming back
+/// to this device), the app held up meanwhile by a notice saying which login it waits for (LoginRelay.kt: its title).
 fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : Bool) -> Unit {
   let t = @sf.theme()
   let id = text(l, "id")
@@ -624,7 +628,16 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
         }
         if page == "\u{1}relay" {
           // the core listens for the browser's callback first, then the page opens (LoginCards.kt relay); this
-          // device's port taken is said on the card (relayText), nothing opened
+          // device's port taken is said on the card (relayText), nothing opened. What the notice holding the app up
+          // says while the browser is out (LoginRelay.start(title)), said before the core listens, which starts it.
+          @ui.hold_words(
+            channel=tr("web-main.logins.title"),
+            title=match text(l, "title") {
+              "" => tr("web-main.logins.title")
+              s => s
+            },
+            body=tr("web-main.logins.waitingBrowser"),
+          )
           act(
             src,
             tr("web-main.logins.openWhat"),
@@ -633,12 +646,15 @@ fn login_active(c : @ui.Ctx, src : Source, station : String, l : Json?, relay : 
             { "station": Json::string(station), "id": Json::string(id), "here": Json::boolean(false) },
             ok=fn(v) {
               let u = text(Some(v), "url")
-              if u != "" && !@ui.open_url(u) {
+              if u == "" {
+                return
+              }
+              if !@ui.open_tab(u) {
                 toast_later(tr("android-misc.link.cantOpen"))
               }
             },
           )
-        } else if page != "" && !c.open_url(page) {
+        } else if page != "" && !@ui.open_tab(page) {
           say(c, tr("android-misc.link.cantOpen"))
         }
       }

@@ -5,9 +5,10 @@
 #                                        has a newer one: its ETag), mbui at mbui.rev (scripts/mbui.sh), the core's packages
 #   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=release): versionCode the build (git
 #                                        rev-list --count HEAD), signed with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail
-#                                        Android release's key), into $RELEASE_DIR as android/stillfail-mbui-<n>.apk
-#                                        and android/mbui/latest.json (still.fail's AppRelease, news: the commits since
-#                                        the build the feed names now, of what the app is built from)
+#                                        Android release's key; POSTHOG_JSON: the key its crash reports go with), into
+#                                        $RELEASE_DIR as android/stillfail-mbui-<n>.apk and android/mbui/latest.json
+#                                        (still.fail's AppRelease, news: the commits since the build the feed names now,
+#                                        of what the app is built from)
 #   apps/mbui/scripts/beta.sh mac        the macOS app (scripts/mac-app.sh: still.fail mbui.app, fail.still.mbui),
 #                                        signed with still.fail's identity (.github/mac_signing.py), zipped, into
 #                                        $RELEASE_DIR as mac/stillfail-mbui-<n>-arm64-mac.zip and mac/mbui/latest.json
@@ -161,6 +162,14 @@ build() {
     export ANDROID_USER_HOME=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-key.XXXXXX")
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"
   fi
+  # PostHog's key the app reports its crashes with (build.gradle.kts, Crashes.java), as still.fail's Android release
+  # has it (.github/release.sh): the file STILLFAIL_POSTHOG names, written from POSTHOG_JSON, removed after
+  local posthog=
+  if [ -n "${POSTHOG_JSON:-}" ]; then
+    posthog=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-posthog.XXXXXX")
+    (umask 077 && printf '%s' "$POSTHOG_JSON" > "$posthog/posthog.json")
+    export STILLFAIL_POSTHOG="$posthog/posthog.json"
+  fi
   local r=0
   # MBUI_KEEP_DAEMON=1 (main's beta): the run's process tracking off for Gradle's daemon, which lives on to the next
   # build for its idle timeout (~2 GB resident); a branch's build leaves it to the runner, which ends it with the job
@@ -169,6 +178,7 @@ build() {
   env $keep APP=stillfail VARIANT=release HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
+  [ -z "$posthog" ] || rm -rf "$posthog"
   [ $r = 0 ] || exit $r
   apk=$WORK/android/app/build/outputs/apk/release/app-release.apk
   badging=$("$BT/aapt2" dump badging "$apk" | head -1)

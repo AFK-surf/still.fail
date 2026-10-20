@@ -836,7 +836,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
             fn() {  },
           ) {
           close_sheet(c)
-          app.nav.push(History(r, key))
+          app.nav.push(History(r, key, None))
         }
         if jobs.length() > 0 &&
           agent_row(

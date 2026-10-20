@@ -323,6 +323,21 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         }) {
           use_notify(core, !on)
         }
+        // usage statistics and error reports from this device (SettingsHome.kt Reporting): not where nothing is sent
+        match (core.reporting)() {
+          Some(on) =>
+            if list_row(c, key="reporting", fn() {
+                c.box(style=@sf.full_width, fn() {
+                  c.text(tr("android-settings.telemetry.title"), style=@sf.body) |> ignore
+                  c.text(fill("android-settings.telemetry.note", [("app", "still.fail")]), style=@sf.meta) |> ignore
+                })
+                |> ignore
+                switch(c, on)
+              }) {
+              (core.set_reporting)(!on)
+            }
+          None => ()
+        }
         // this build (Version): its name and version, and the way to a newer one (tapped: installed, or asked now)
         let (words, newer) = (core.version_words)()
         if list_row(c, key="version", fn() {

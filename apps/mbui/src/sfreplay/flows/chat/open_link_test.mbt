@@ -14,6 +14,8 @@ test "75-open-link" {
     f.gone("正在发送")
     f.see("example.com/e2e")
     f.tap("example.com/e2e")
+    // (what the link opens asked of the core first, as Android's AppState.openLink: not one of still.fail's, the system's)
+    f.answered("link.parse", 1)
     assert_true(f.t.opened().iter().any(fn(u) { u.has_prefix("https://example.com/e2e/") }))
     // the agent's turn over: the bar offering to archive the chat comes in, to the end it sets out
     f.see("归档此对话")

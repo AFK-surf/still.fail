@@ -63,6 +63,17 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 - 构建时由 `STILLFAIL_POSTHOG` 指向的文件给 key（`app/build.gradle.kts` → `BuildConfig.POSTHOG_KEY`）；CI 的安卓发布从 `POSTHOG_JSON` 写这个文件（`.github/release.sh`）。没有 key 的构建（本地、开发）什么都不发。
 - 设置 → 此设备里的「发送使用统计和错误报告」（默认开，只存在这台设备上，app prefs 的 `telemetry`；没有 key 的构建不显示）关掉后，以上都不发：都经 `Crashes.send` 发出，它先看这个开关；关着时的闪退也不留到以后再报。
 
+### still.fail mbui（`apps/mbui`）
+
+mbui 版安卓客户端照上面同样上报，代码是 `apps/mbui/android/app/src/main/java/dev/mbui/` 下的 `Crashes.java`、`Tombstone.java`、`MemoryWatch.java`、`BarTiming.java`、`CoreProfileReceiver.java`（Java 照 Kotlin 原版逐项抄），MoonBit 那边只告诉宿主它自己才知道的事（`src/stillfail/reports.mbt`：登录的账号、核心死掉重启、下方栏切换、页面新订阅的 topic），时间都由 Java 取。和原版的不同：
+
+- `app` 是 `android-mbui`，`$lib` 是 `stillfail-mbui-android`，`beta` 恒为 `false`，`in_app` 看 `dev.mbui.` 开头的类。
+- 没有 `DuplicateListKey`：mbui 的列表按下标建行，没有会因 key 重复而崩的 keyed 列表。
+- `bar_switch` 没有 `effect_ms`、`snap_ms`、`wait_ms`、`waited`、`timed_out`、`drawn_ms`（mbui 换页不等数据，也没有 Compose 的组合/绘制两步）；`composed_ms` 是第一次建出新页面的那一帧建完，`frame_ms` 是其后主线程的下一帧。topic 只有 `core_ms`（订阅到第一条消息在 UI 线程解完）、`tap_shown_ms`、`bytes`、`failed`，没有 `opening`、`held`、`decode_ms`、`shown_ms`。
+- key 由 `apps/mbui/android/app/build.gradle.kts` 读 `STILLFAIL_POSTHOG`；CI（`.github/workflows/mbui.yml` → `apps/mbui/scripts/beta.sh build`）从 `POSTHOG_JSON` 写这个文件。
+- 开关存在同一个地方（app prefs `stillfail` 的 `telemetry`，`Crashes.reporting`），设置 → 此设备里「发送使用统计和错误报告」那一行跟原版一样（没有 key 的构建不显示）；关掉以后 `Crashes.send` 什么都不发，崩溃、`bar_switch` 都走它。
+- 采样 core：`adb shell am broadcast -n fail.still.mbui/dev.mbui.CoreProfileReceiver --ei seconds 60`。
+
 ## key 从哪来
 
 项目 key 是 PostHog 的公开 key（`phc_…`），本来就会出现在网页里，但和别的部署输入一样不进仓库：放在部署目录（`STILLFAIL_DEPLOY_DIR`，默认 `~/stillfail-deploy`）的 `posthog.json`，内容 `{ "host": "https://us.i.posthog.com", "key": "phc_…" }`。

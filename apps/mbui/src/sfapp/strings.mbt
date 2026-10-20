@@ -175,7 +175,11 @@ pub fn tr(key : String) -> String {
         None =>
           match zh_decide.get(key) {
             Some(s) => s
-            None => zh_wide.get(key).unwrap_or(key)
+            None =>
+              match zh_wide.get(key) {
+                Some(s) => s
+                None => zh_links.get(key).unwrap_or(key)
+              }
           }
       }
   }

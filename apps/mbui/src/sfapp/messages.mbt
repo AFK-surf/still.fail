@@ -556,7 +556,7 @@ fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
     line=23.0,
     link_color=t.p.blue,
     pressed_bg=@sf.alpha(t.p.blue, 0.14),
-    on_link=fn(h) { open_link(c, h) },
+    on_link=fn(h) { open_link(h) },
     on_link_hold=Some(link_held),
   )
   |> ignore
@@ -585,7 +585,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       line=21.0,
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
-      on_link=fn(h) { open_link(c, h) },
+      on_link=fn(h) { open_link(h) },
       on_link_hold=Some(link_held),
     )
     |> ignore
@@ -597,33 +597,15 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
 }
 
 ///|
-/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one to another chat opens it here; any other
-/// is handed to the system (its browser, or the app that takes it: mbui's Ctx::open_url), said when nothing took it.
-fn open_link(c : @ui.Ctx, href : String) -> Unit {
-  match chat_of_link(href) {
-    Some(r) => app.nav.push(Chat(r))
-    None => if !c.open_url(href) { say(c, tr("android-misc.link.cantOpen")) }
+/// A link tapped in a message (App.kt's UriHandler, AppState.openLink): one of still.fail's opens here as the core
+/// says (links.mbt); any other is handed to the system (its browser, or the app that takes it: mbui's open_url), said
+/// when nothing took it.
+fn open_link(href : String) -> Unit {
+  let elsewhere = fn() { if !@ui.open_url(href) { toast_later(tr("android-misc.link.cantOpen")) } }
+  match link_src.val {
+    Some(src) => open_link_in(src, href, or_else=elsewhere)
+    None => elsewhere()
   }
-}
-
-///|
-/// The chat a link names: …/w/<workspace>/s/<station>/chats/<key>.
-fn chat_of_link(href : String) -> ChatRef? {
-  guard href.find("/w/") is Some(i) else { return None }
-  let parts = href.view(start_offset=i + 3).to_string().split("/").map(fn(v) { v.to_string() }).to_array()
-  if parts.length() >= 5 && parts[1] == "s" && parts[3] == "chats" {
-    let mut key = parts[4]
-    for cut in ["?", "#"] {
-      match key.find(cut) {
-        Some(j) => key = key.view(end_offset=j).to_string()
-        None => ()
-      }
-    }
-    if key != "" {
-      return Some({ station: parts[0] + "/" + parts[2], session: key, title: "", station_name: "" })
-    }
-  }
-  None
 }
 
 ///|
@@ -650,7 +632,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
           // a link within a sentence to a visualization it places: opened over the whole screen (Prose.kt OpenedFile)
           match placed.get(base_name(h)) {
             Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
-            _ => open_link(c, h)
+            _ => open_link(h)
           }
         },
         on_link_hold=Some(link_held),
@@ -1176,13 +1158,8 @@ fn decision_options(
   let mut picked : Choice? = None
   c.box(w=Fill(1.0), pt=6.0, fn() {
     c.box(w=Fill(1.0), radius=options_card_radius, bg=t.p.chip, pad=options_card_pad, fn() {
+      // (nothing drawn between two: SettingParts.kt DecisionOptions)
       for i, o in options {
-        if i > 0 {
-          c.box(w=Fill(1.0), pl=41.0, pr=12.0, fn() {
-            c.box(w=Fill(1.0), h=Px(1.0), bg=@sf.alpha(t.p.text, 0.07), fn() {  }) |> ignore
-          })
-          |> ignore
-        }
         let id = c.id(key + "/" + i.to_string())
         if c.clicked(id) && free {
           picked = Some(o)
@@ -1634,7 +1611,7 @@ fn activity(
   // tapped, its execution history (History.kt), its press drawn round it
   let id = c.id("activity/" + a.key)
   if c.clicked(id) {
-    app.nav.push(History(ref_of(here), a.key))
+    app.nav.push(History(ref_of(here), a.key, None))
   }
   c.box(
     dir=Row,

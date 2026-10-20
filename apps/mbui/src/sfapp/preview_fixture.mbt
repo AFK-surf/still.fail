@@ -27,6 +27,7 @@ fn preview_files() -> Array[(Attachment, () -> Bytes)] {
     (at("说明.md", 500.0, 0.0, 0.0), fn() { utf8_bytes(fixture_md) }),
     (at("数据.csv", 200.0, 0.0, 0.0), fn() { utf8_bytes(fixture_csv) }),
     (at("备份.bin", 4096.0, 0.0, 0.0), fn() { Bytes::makei(4096, fn(i) { (i % 7).to_byte() }) }),
+    (at("测试版.apk", 8192.0, 0.0, 0.0), fn() { Bytes::makei(8192, fn(i) { (i % 5).to_byte() }) }),
   ]
 }
 
@@ -43,6 +44,7 @@ fn fixture_preview(mode : String) -> Unit {
     "chat-preview-md" => "说明.md"
     "chat-preview-csv" => "数据.csv"
     "chat-preview-none" => "备份.bin"
+    "chat-preview-apk" => "测试版.apk"
     _ => return
   }
   for f in preview_files() {

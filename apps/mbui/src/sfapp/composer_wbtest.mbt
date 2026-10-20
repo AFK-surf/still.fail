@@ -46,6 +46,8 @@ fn fake_core(
           done(Ok({ "id": Json::string("draft-\{drafts_named.val}") }))
         }
         "session.warm" | "client.focus" | "chat.place" => done(Ok(Json::object({})))
+        // what still.fail's links open, as the core reads them (links_wbtest.mbt)
+        "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
         _ => ()
       }
     },

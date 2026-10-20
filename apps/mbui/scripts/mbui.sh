@@ -22,6 +22,8 @@ else
   dir=$CACHE/$rev
   if [ ! -f "$dir/moon.mod" ]; then
     mkdir -p "$CACHE"
+    # (from a git hook: GIT_DIR and the like name still.fail's repository, which the fetch below would write into)
+    unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR
     # one bare clone for every commit (only what a checkout needs comes over), each commit a plain copy
     [ -d "$CACHE/repo.git" ] || git clone -q --bare --filter=blob:none "$REPO" "$CACHE/repo.git"
     # (by its sha; GitHub answers a commit merged a moment ago "not our ref" for a while: then by the branches)

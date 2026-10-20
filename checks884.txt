@@ -1,0 +1,932 @@
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+check-mbui / js (replay)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+screens	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+cloud	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+check-mbui / js (replay)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+screens	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+cloud	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+screens	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+check-mbui / native	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+check-android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+windows	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+android	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+check-browser (stories 2/3)	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+Refreshing checks status every 30 seconds. Press Ctrl+C to quit.
+
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	pending	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+smoke	fail	10m33s	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+android	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111186	
+api	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280455	
+bundle	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111670	
+changelog	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325712	
+desktop	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112006	
+desktop-web	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112089	
+desktop-win	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110959	
+done	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325211	
+check-browser (stories 3/3)	pass	2m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109175	
+check-browser (stories 2/3)	pass	2m40s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109294	
+windows-smoke	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912112310	
+windows-natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111045	
+windows-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110877	
+station-update	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913325639	
+smoke	fail	10m33s	https://github.com/AFK-surf/still.fail/actions/runs/39505120811/job/118911999140	
+station	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111301	
+mac-build	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912111720	
+check-browser (stories 1/3)	pass	2m14s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109213	
+static	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913281199	
+put	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913324961	
+android	pass	2m59s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075615	
+check-browser (motion 2/2)	pass	2m4s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109187	
+natives-store	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913280771	
+check-browser (motion 1/2)	pass	1m38s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109409	
+check-android-lint	pass	1m35s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109274	
+natives	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110276	
+check-android	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109318	
+modules	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912110973	
+check	pass	31s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912108329	
+ios	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912078302	
+mac	skipping	0	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912077132	
+check-linux	pass	1m27s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109030	
+check-mbui / js (app)	pass	1m30s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109181	
+check-mbui / js (replay)	pass	1m2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109022	
+check-mbui / native	pass	2m47s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912109056	
+cloud	pass	53s	https://github.com/AFK-surf/still.fail/actions/runs/39505124587/job/118912012361	
+gate	pass	2s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913331963	
+on-screen	pass	18s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912012117	
+plan	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118912001162	
+screens	pass	1m20s	https://github.com/AFK-surf/still.fail/actions/runs/39505124618/job/118912011822	
+timing	pass	12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120932/job/118913323650	
+what	pass	7s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118911999109	
+windows	pass	3m12s	https://github.com/AFK-surf/still.fail/actions/runs/39505120769/job/118912075804	

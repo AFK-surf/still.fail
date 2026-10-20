@@ -84,7 +84,8 @@ fn link_menu_layer(c : @ui.Ctx) -> Unit {
         // as a tap on it: a chat's link opens it here, any other in the browser
         if item(tr("common.link.open"), "external", "open") {
           link_menu.open = false
-          open_link(c, link_menu.href)
+          let href = link_menu.href
+          c.after_build("link-menu-open", fn() { open_link(href) })
         }
         if item(tr("common.link.copy"), "copy", "copy") {
           link_menu.open = false
