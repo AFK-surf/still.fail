@@ -53,7 +53,6 @@ shell() {
   [ -n "$libs" ] && echo "$libs" > $OUT/shell-$target.libs
   mkdir -p $OUT/$target
   cp $CARGO_TARGET_DIR/$target/release/libstillfail_shell.a $OUT/$target/
-  strip -S -x -o $OUT/$target/libstillfail_shell.stripped.a $OUT/$target/libstillfail_shell.a 2>/dev/null || true
   echo "shell $target in $(since $t0) s: $(stat -f %z $OUT/$target/libstillfail_shell.a) bytes; links: $(libs $target)"
 }
 
@@ -310,7 +309,12 @@ vectors() {
   echo "vectors: $(grep -c '^test ' src/core/vectors_test.mbt) tests in src/core/vectors_test.mbt"
 }
 
+# (the shell's .a stripped only here, for its size: the apps link the unstripped one, and stripping 70 MB took a minute
+# and more on CI's macOS runner, beside a simulator booting)
 sizes() {
+  for a in $OUT/*/libstillfail_shell.a; do
+    [ -f "$a" ] && strip -S -x -o "${a%.a}.stripped.a" "$a" 2>/dev/null
+  done
   ls -la $OUT/core.hbc $OUT/*/libstillfail_shell*.a $OUT/*/libmbui_core.a $OUT/smoke $OUT/smoke.stripped 2>/dev/null
 }
 

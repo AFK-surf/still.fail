@@ -1,6 +1,7 @@
 #!/bin/bash
-# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply) on Mini1, as
-# .github/workflows/mbui-ios.yml runs them (by hand the same, from the checkout):
+# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), as
+# .github/workflows/mbui-ios.yml runs them on a GitHub macOS runner (take, boot, build, run, done), or by hand on Mini1
+# (gate, build, take, run, done):
 #   scripts/ios-smoke.sh gate   until Mini1 can take it: the load low enough (IOS_LOAD_MAX, the 5 minutes' average:
 #                               under 20, twice Mini1's 10 cores; the simulator's SimLaunchHost crashed above it on
 #                               2026-10-20, and Mini1 sits at 18 to 25 most of a working day, so 12 was never met in
@@ -13,6 +14,8 @@
 #                               mbui's host-ios contracts take it too), waiting while another run holds it (the job's
 #                               timeout the limit: take_lock). Without it mbui's contracts ran beside these flows,
 #                               put the app in the background and shut the simulator down under it (2026-10-20).
+#   scripts/ios-smoke.sh boot   the simulator made and booted in the background, while the app builds (a fresh
+#                               runner's first boot takes a minute or more); `run` waits for it
 #   scripts/ios-smoke.sh run    a local still.fail of its own (scripts/e2e-local.sh up: its directory kept, so its
 #                               packages stay installed), the flows, then that still.fail down
 #   scripts/ios-smoke.sh done   the simulator shut down when `take` found it so (another's booted one left as it was),
@@ -108,7 +111,9 @@ case "${1:-}" in
     wait_for "Mini1 busy" busy
     echo "ios-smoke: Mini1 can take it: load $(sysctl -n vm.loadavg | awk '{print $3}')" ;;
   build)
-    rustup target list --installed | grep -qx aarch64-apple-ios-sim || rustup target add aarch64-apple-ios-sim
+    # (its library there is enough: CI's cache puts it back without rustup's record of it)
+    [ -d "$(rustc --print sysroot)/lib/rustlib/aarch64-apple-ios-sim/lib" ] || rustup target list --installed | grep -qx aarch64-apple-ios-sim \
+      || rustup target add aarch64-apple-ios-sim
     CARGO_TARGET_DIR=$C/cargo-target-ios APP=stillfail bash "$D/ios.sh" build ;;
   take)
     rm -f "$STATE/booted-here"
@@ -121,7 +126,18 @@ case "${1:-}" in
     fi
     [ "$st" = Booted ] || touch "$STATE/booted-here"
     echo "ios-smoke: $MBUI_IOS_DEVICE is this run's ($ME): ${st:-to be made}" ;;
+  boot)
+    bash "$D/ios.sh" device > "$STATE/boot.log" 2>&1 &
+    echo $! > "$STATE/boot.pid"
+    echo "ios-smoke: $MBUI_IOS_DEVICE booting ($STATE/boot.log)" ;;
   run)
+    # (the boot `boot` started, ended first: e2e/run.sh would make a second simulator of that name beside one not
+    # made yet)
+    if [ -f "$STATE/boot.pid" ]; then
+      python3 "$A/mbui/scripts/logwait.py" --pid "$(cat "$STATE/boot.pid")" --deadline 600 >/dev/null || true
+      rm -f "$STATE/boot.pid"
+      cat "$STATE/boot.log"
+    fi
     export E2E_WORK=$C/e2e-ios E2E_STATION=/tmp/mbui-e2e-ios E2E_PORT=19500 E2E_RELAY=19040 E2E_NOBUILD=1 EMBER=$REPO
     bash "$D/e2e-local.sh" up || { tail -30 "$E2E_WORK/run/"*.log 2>/dev/null; bash "$D/e2e-local.sh" down; exit 1; }
     bash e2e/run.sh ios; r=$?
@@ -136,5 +152,5 @@ case "${1:-}" in
     rm -f "$STATE/booted-here"
     [ "$(head -1 "$LOCK/owner" 2>/dev/null)" = "$ME" ] && rm -rf "$LOCK" && echo "ios-smoke: the simulator's lock given back"
     true ;;
-  *) sed -n '2,19p' "$0"; exit 1 ;;
+  *) sed -n '2,22p' "$0"; exit 1 ;;
 esac
