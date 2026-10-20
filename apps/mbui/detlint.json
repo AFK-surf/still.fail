@@ -36,7 +36,8 @@
   "skip": [
     "scripts/detlint*.py",
     "mbui",
-    "out"
+    "out",
+    "src/sfapp/web_assets.mbt"
   ],
   "style": {
     "tokens": [
@@ -194,7 +195,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 12
+      "src/sf/tokens.mbt": 15
     },
     "build-effect": {},
     "unsettled-ok": {}

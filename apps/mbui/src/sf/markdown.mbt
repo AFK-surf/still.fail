@@ -42,6 +42,9 @@ priv struct Md {
   files : (String) -> (() -> Unit)?
   /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
   found : Array[String]
+  /// a fenced block drawn another way than as code, by its language and its code (Markdown.kt: a ```mermaid one as a
+  /// chart)
+  code : (String, String) -> (() -> Unit)?
 }
 
 ///|
@@ -256,6 +259,7 @@ pub fn markdown(
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   files? : (String) -> (() -> Unit)? = fn(_) { None },
   found? : Array[String] = [],
+  code? : (String, String) -> (() -> Unit)? = fn(_, _) { None },
 ) -> Int {
   let t = theme()
   let md = {
@@ -267,6 +271,7 @@ pub fn markdown(
     n: 0,
     files,
     found,
+    code,
   }
   let blocks = blocks_of(text)
   c.box(w=Fill(1.0), fn() {
@@ -364,9 +369,12 @@ fn Md::piece(self : Md, b : @md.Block, tight : Bool, task : Bool?) -> Array[Piec
         },
       ]
     }
-    CodeBlock(lang, code) => [
-      { top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang) } },
-    ]
+    CodeBlock(lang, code) =>
+      match (self.code)(lang, code) {
+        // (drawn another way: 4 under it, as Markdown.kt's chart)
+        Some(draw) => [{ top: 0.0, bottom: 4.0, draw }]
+        None => [{ top: 0.0, bottom: 8.0, draw: fn() { code_block(c, code, lang) } }]
+      }
     Table(t) => [{ top: 0.0, bottom: 8.0, draw: fn() { self.table(t) } }]
     Rule => [
       {

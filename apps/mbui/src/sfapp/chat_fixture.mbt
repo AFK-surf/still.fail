@@ -379,7 +379,13 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
         Some(kept_chat("long", fn() { long_chat(3000) }))
       } else if session == "s-c1" {
         let base = kept_chat("rich/\{f.older}/\{f.mode}", fn() {
-          let v = if f.mode == "chat-md" { with_md_message(rich_chat(f.older)) } else { rich_chat(f.older) }
+          let v = if f.mode == "chat-md" {
+            with_md_message(rich_chat(f.older))
+          } else if f.mode == "chat-viz" {
+            with_viz_message(rich_chat(f.older))
+          } else {
+            rich_chat(f.older)
+          }
           match (v, seeded_outbox(f.mode)) {
             (Object(m), out) if out.length() > 0 => {
               let o = m.copy()
@@ -1036,6 +1042,48 @@ let md_answer : String =
   #|```sh
   #|pnpm test --filter list -- --reporter dot
   #|```
+
+///|
+fn with_viz_message(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      let all = match m.get("messages") {
+        Some(Array(a)) => a.copy()
+        _ => []
+      }
+      all.push(
+        msg(12, "agent", by_agent("anthropic", "claude", "s-c1"), viz_answer, "1 分钟前", {
+          "attachments": [file("release.html", 0, 0, 1200)],
+          "placed": ["release.html"],
+          "ending": "all_done",
+        }),
+      )
+      o["messages"] = Json::array(all)
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The words of MBUI_FIXTURE=chat-viz's last message: a visualization placed, and a mermaid chart.
+let viz_answer : String =
+  #|这周的发布节奏：
+  #|
+  #|[发布节奏](release.html)
+  #|
+  #|流程是这样：
+  #|
+  #|```mermaid
+  #|graph LR; 构建-->签名-->发布
+  #|```
+
+///|
+/// MBUI_FIXTURE=chat-viz's visualization: a fragment, as the viz skill has agents write them.
+let fixture_viz_html : String =
+  #|<div class="viz-card" style="padding:16px"><b>本周发布</b><p>周一 2 个、周三 1 个、周五 3 个</p>
+  #|<button onclick="ember.setWidgetState({seen:true})">看过了</button></div>
 
 ///|
 fn with_md_message(v : Json) -> Json {

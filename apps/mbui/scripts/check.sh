@@ -5,6 +5,8 @@
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 python3 "$MBUI_DIR/scripts/detlint.py" "$A" || exit 1
+# the web's files the app carries, as they are now (scripts/webassets.py)
+python3 "$D/webassets.py" --check || exit 1
 cd "$A"
 for t in ${TARGETS:-js native}; do
   echo "=== $t"

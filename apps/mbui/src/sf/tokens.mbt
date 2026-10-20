@@ -533,3 +533,24 @@ pub let found_start : @ui.Space = Exact(22.0)
 ///|
 /// What takes the room left in a row or a column (Compose's `weight(1f)`).
 pub let grow : @ui.Len = Grow(1.0)
+
+///|
+/// A visualization in a message (Android ui/Viz.kt, chat/VizFiles.kt): its place while it comes (120 high), the ways
+/// under it (22 boxes); a whole page's corners (Smooth 20, the web's card) on its paper (#F6F2EA, dark #26272B); the
+/// full screen's name 18 in (Viz.kt VizFull).
+pub let viz_wait_h : @ui.Len = Fixed(120.0)
+
+///|
+pub let viz_way_side : @ui.Len = Fixed(22.0)
+
+///|
+pub let viz_card_radius : @ui.Radius = Exact(20.0)
+
+///|
+pub let viz_paper : @ui.Color = Exact(0xF6F2EAFFL)
+
+///|
+pub let viz_paper_dark : @ui.Color = Exact(0x26272BFFL)
+
+///|
+pub let viz_full_in : @ui.Space = S4_5

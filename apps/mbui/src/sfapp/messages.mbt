@@ -646,18 +646,39 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         key="md/" + m.ts,
         size=15.0,
         ink=ink().text,
-        on_link=fn(h) { open_link(c, h) },
+        on_link=fn(h) {
+          // a link within a sentence to a visualization it places: opened over the whole screen (Prose.kt OpenedFile)
+          match placed.get(base_name(h)) {
+            Some(a) if is_viz(a.name) => viz_open_full(a.name, here.station, owner_of(here, a), a.path, here, linked=true)
+            _ => open_link(c, h)
+          }
+        },
         on_link_hold=Some(link_held),
         found=found_words_of(m.ts),
         files=fn(name) {
           match placed.get(name) {
+            // an HTML one is a visualization, drawn there; failing, its card (Prose.kt PlacedFile)
+            Some(a) if is_viz(a.name) =>
+              Some(fn() { viz_file(c, src, here, m.ts, a, fn() { files(c, src, here, [a], false) }) })
             Some(a) => Some(fn() { files(c, src, here, [a], false) })
             None => None
+          }
+        },
+        code=fn(lang, code) {
+          let first = match lang.find(" ") {
+            Some(i) => lang.view(end_offset=i).to_owned()
+            None => lang
+          }
+          if first.to_lower() == "mermaid" && code.trim() != "" {
+            Some(fn() { viz_mermaid_block(c, "chat/" + here.station + ":" + here.session + "/" + m.ts, code) })
+          } else {
+            None
           }
         },
       )
       |> ignore
     }
+    viz_opening(c, src, here)
     if rest.length() > 0 {
       c.box(w=Fill(1.0), pt=4.0, fn() { files(c, src, here, rest, false) }) |> ignore
     }
