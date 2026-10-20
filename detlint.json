@@ -46,10 +46,8 @@
   "counts": {
     "frame-request": {
       "src/textdiff/main.mbt": 1,
-      "src/ui/code_field.mbt": 1,
       "src/ui/drive.mbt": 1,
       "src/ui/fx.mbt": 2,
-      "src/ui/list.mbt": 1,
       "src/ui/native.mbt": 3,
       "src/ui/nav.mbt": 4
     },

@@ -759,7 +759,7 @@ fn Ctx::step_glide(self : Ctx, st : ListState) -> Unit {
 /// Scrolls list `key` by `dy` (down when positive), as a wheel does.
 pub fn Ctx::list_scroll_by(self : Ctx, key : String, dy : Double) -> Unit {
   self.scroll_list(self.id(key), dy)
-  self.request_frame()
+  self.read_changed("list_scroll_by \"\{key}\"")
 }
 
 ///|

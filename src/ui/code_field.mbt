@@ -184,9 +184,8 @@ pub fn Ctx::code_field(
 /// Empties the code field `key` as it is next built, the code it handed forgotten (a code refused: typed again, it is
 /// handed again). From anywhere: an answer that comes between frames, a field not shown now.
 pub fn Ctx::clear_code_field(self : Ctx, key : String) -> Unit {
-  ignore(self)
   if !code_clears.contains(key) {
     code_clears.push(key)
   }
-  h_request_frame()
+  self.read_changed("clear_code_field \"\{key}\"")
 }
