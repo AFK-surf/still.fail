@@ -28,6 +28,8 @@ let engine : Engine = {
 ///|
 /// The engine's way in: a message, and the bytes beside it if any.
 fn engine_send(s : String, b : Bytes?) -> Unit {
+  // (on the app's own clock, the core told it first: what this sets off is timed from now)
+  clock_before_send()
   match b {
     Some(b) => ffi_send_bytes(s, b)
     None => ffi_send(s)
@@ -173,6 +175,7 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
   let msg = @json.parse(text) catch { _ => return }
   match msg {
     Object(m) if m.contains("mbui_auth") => web_auth_done(m)
+    Object(m) if m.contains("clocked") => clocked(m)
     _ => {
       match receive_hook.val {
         Some(f) => f()
@@ -210,6 +213,8 @@ fn restart() -> Unit {
   }) !=
     0
   client.restarted()
+  // (a core started anew runs on real time until told the app's clock again)
+  clock_again()
 }
 
 ///|

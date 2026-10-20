@@ -15,7 +15,7 @@ import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
 import * as present from "./present.ts";
 import { topicDebug, topicKey, type ClientId, type CoreMessage, type RequestId, type Topic } from "./protocol.ts";
-import type { Runner } from "./runtime.ts";
+import { laterSleep, type Runner } from "./runtime.ts";
 import { equal, sharedValue } from "./util.ts";
 import { holds } from "./data.ts";
 
@@ -182,7 +182,7 @@ export class Store {
     const now = this.host.nowMs();
     const next = (Math.floor(now / 60_000) + 1) * 60_000 + 1000;
     this.runner.fork(
-      Effect.sleep(Math.max(next - now, 0)).pipe(
+      laterSleep(Math.max(next - now, 0)).pipe(
         Effect.andThen(
           Effect.sync(() => {
             this.#clock = false;
@@ -239,7 +239,7 @@ export class Store {
     const entry = this.#topics.get(topicKey(topic));
     if (!entry || entry.subscribers.length > 0 || entry.watchers.length > 0) return;
     entry.idle = idle;
-    this.runner.fork(Effect.sleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
+    this.runner.fork(laterSleep(EVICT_AFTER_MS).pipe(Effect.andThen(Effect.sync(() => this.#evict(topic, idle)))));
   }
 
   /// A UI went away: drops all its subscriptions.
