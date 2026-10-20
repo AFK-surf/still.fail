@@ -49,3 +49,29 @@ test "a test sees the notifications the app shows, and taps one: what it opens i
   @ui.notice_cancel("c2")
   assert_eq(t.notices(), [])
 }
+
+///|
+test "idle but for what never ends while shown: a cycle read is said, not a failure; a field cleared" {
+  let spin = Ref(true)
+  let t = @ui.Tester::new(fn(c) {
+    if spin.val {
+      // (a declared period, a spinner's)
+      let turn_ms = 1000.0
+      ignore(c.cycle(turn_ms))
+    }
+    c.editor("field", placeholder="words") |> ignore
+  })
+  t.draw()
+  t.assert_idle()
+  assert_eq(t.cycles().length(), 1)
+  assert_true(t.cycles()[0].has_prefix("1000 ms by "))
+  spin.val = false
+  t.draw()
+  t.assert_idle()
+  assert_eq(t.cycles(), [])
+  t.tap_text("words")
+  t.type_text("some words")
+  assert_eq(t.field_words(), "some words")
+  t.clear()
+  assert_eq(t.field_words(), "")
+}

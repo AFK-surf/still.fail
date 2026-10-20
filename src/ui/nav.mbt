@@ -150,6 +150,14 @@ impl[P] Moving for Nav[P] with rest_at(self, now, frame) {
 }
 
 ///|
+/// When the stacks built in the last frame (Ctx::nav) are all at rest: the latest of their slides' ends (the frames'
+/// clock; -1: none slides; +inf: told to slide, not started yet). What a test runs to after a page pushed, popped or
+/// let go, when it holds no stack itself (an app's own).
+pub fn nav_rest() -> Double {
+  g().nav_rest
+}
+
+///|
 /// When this stack's slide is over (the frames' clock; +inf: told to go, not started yet; -1: it is not sliding): what
 /// a test runs to.
 pub fn[P] Nav::rest(self : Nav[P]) -> Double {
@@ -342,6 +350,10 @@ pub fn[P] Ctx::nav(
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()
+    }
+    let r = nav.rest_at(self.now, self.frame_no)
+    if r > self.nav_rest {
+      self.nav_rest = r
     }
   }
   let n = nav.pages.length()

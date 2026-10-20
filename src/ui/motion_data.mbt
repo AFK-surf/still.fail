@@ -30,9 +30,13 @@ pub fn Ctx::mover_id(self : Ctx) -> Int {
 
 ///|
 /// Where a cycle of `period` ms is now, from 0 to 1 (a spinner's turn, a breath): read by what shows it, a frame each
-/// frame while it is shown.
-pub fn Ctx::cycle(self : Ctx, period : Double) -> Double {
+/// frame while it is shown. A test's idle is not broken by it: it is said (Tester::cycles), as what never ends.
+#callsite(autofill(loc))
+pub fn Ctx::cycle(self : Ctx, period : Double, loc~ : SourceLoc) -> Double {
   self.cycling = true
+  if !self.cycles.iter().any(fn(c) { c.1.to_string() == loc.to_string() }) {
+    self.cycles.push((period, loc))
+  }
   if period <= 0.0 {
     0.0
   } else {

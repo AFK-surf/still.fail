@@ -30,15 +30,22 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
 }
 
 ///|
-/// Nothing asks for a frame now: no frame asked for, no wake owed, no fiber or ticket of the runtime running. Else the
-/// test fails, saying who.
+/// Nothing asks for a frame now: no frame asked for, no motion said that is not at rest, no wake owed, no fiber or
+/// ticket of the runtime running. Else the test fails, saying who. What never ends while shown (a cycle: a spinner, a
+/// breath) does not break it: it is said (Tester::cycles).
 pub fn Tester::assert_idle(self : Tester) -> Unit {
   // (the frame the last input or motion left owed is drawn first: idle is what comes after)
   self.draw()
   let c = g()
   let why = []
-  if c.wants_frame || self.fake.wants {
+  if c.frame_by is Some(_) {
     why.push("a frame asked for" + by_of(c.frame_by))
+  } else if c.motion_left {
+    why.push("a motion said is not at rest")
+  } else if c.wants_frame && !c.cycling {
+    why.push("a frame asked for")
+  } else if self.fake.wants && !c.wants_frame {
+    why.push("a frame asked for between frames")
   }
   if c.wake_waited >= 0.0 {
     why.push("a wake at \{c.wake_waited.to_int()} ms" + by_of(c.wake_by))
@@ -52,6 +59,25 @@ pub fn Tester::assert_idle(self : Tester) -> Unit {
     println(s)
     abort(s)
   }
+  let cycles = self.cycles()
+  if cycles.length() > 0 {
+    println("Tester::assert_idle: idle, but for what never ends while shown: " + cycles.join("; "))
+  }
+}
+
+///|
+/// What never ends while shown in the last frame (Ctx::cycle): its period and who reads it, a line each.
+pub fn Tester::cycles(self : Tester) -> Array[String] {
+  ignore(self)
+  g().cycles.map(fn(c) { "\{c.0.to_int()} ms by \{c.1}" })
+}
+
+///|
+/// The focused field emptied, as a scripted run's `clear` empties it: all of it picked, then taken out.
+pub fn Tester::clear(self : Tester) -> Unit {
+  on_key(key_select_all, 0)
+  on_key(key_backspace, 0)
+  self.draw()
 }
 
 ///|

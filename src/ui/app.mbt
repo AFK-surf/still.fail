@@ -91,7 +91,9 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     @host.frame_settled(settled, n, what)
   }
   // a motion said, not at its end; a cycle shown (motion_data.mbt)
-  if c.motion_owed() || c.cycling {
+  c.motion_left = c.motion_owed()
+  // (a layout read back that moved: what was placed from it, placed again)
+  if c.motion_left || c.cycling || c.read_back_moved {
     c.wants_frame = true
   }
   if c.wants_frame || bench.mode > 0 {
@@ -145,6 +147,9 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.frame_by = None
   c.wake_by = None
   c.cycling = false
+  c.cycles.clear()
+  c.nav_rest = -1.0
+  c.read_back_moved = false
   check_atlas()
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)

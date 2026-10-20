@@ -163,6 +163,13 @@ pub struct Ctx {
   movers : Map[Int, &Moving]
   mut mover_ids : Int
   mut cycling : Bool
+  /// the cycles read this frame (their periods, who reads them), whether a motion said was not at rest at its end, and
+  /// the latest rest of the stacks (Ctx::nav) built this frame: what a test asks (Tester::assert_idle, nav_rest)
+  cycles : Array[(Double, SourceLoc)]
+  mut motion_left : Bool
+  /// what the next build reads of this frame's layout moved (words_of): a frame more, for what is placed from it
+  mut read_back_moved : Bool
+  mut nav_rest : Double
   /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
   clear : (Double, Double, Double)
   /// covers by their ids, and those asked for this frame (cover.mbt)
@@ -280,6 +287,10 @@ fn Ctx::new() -> Ctx {
     movers: Map([]),
     mover_ids: 0,
     cycling: false,
+    cycles: [],
+    motion_left: false,
+    read_back_moved: false,
+    nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
     covers: Map::new(),
     cover_asks: [],

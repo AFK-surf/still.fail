@@ -359,3 +359,33 @@ test "toasts: the room beside one takes no press (what is under it does)" {
   t.tap(8.0, y + h / 2.0)
   assert_eq(taps.val, 1)
 }
+
+///|
+test "sheet_rest: a test runs to when a sheet is at rest, opened or closed, by the key it is built by" {
+  let open = Ref(false)
+  let shown = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    let r = sheet(c, "info", open.val, h=300.0, fn() { button(c, "OK") |> ignore })
+    shown.val = r.shown
+    if r.open != open.val {
+      open.val = r.open
+    }
+  })
+  t.draw()
+  assert_eq(sheet_rest("info"), -1.0)
+  open.val = true
+  t.draw()
+  let up = sheet_rest("info")
+  assert_true(up > t.time())
+  t.run_for(up - t.time())
+  t.assert_idle()
+  // there, its button where the sheet's top puts it
+  assert_true(t.get(@ui.Button, label="OK").rect.1 >= 844.0 - 300.0)
+  open.val = false
+  t.draw()
+  let down = sheet_rest("info")
+  t.run_for(down - t.time())
+  t.assert_idle()
+  assert_false(shown.val)
+  assert_eq(sheet_rest("nothing of that name"), -1.0)
+}

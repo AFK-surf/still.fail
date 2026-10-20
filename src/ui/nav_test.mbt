@@ -183,3 +183,16 @@ test "a stack's slide starts at its first frame, whoever asks its end before or 
   t.run_for(e - t.time())
   t.assert_idle()
 }
+
+///|
+test "nav_rest: a test runs to the end of the stacks' slides, holding none of them" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  t.draw()
+  assert_eq(@ui.nav_rest(), -1.0)
+  t.tap_text("open 1")
+  assert_eq(@ui.nav_rest(), t.time() + @ui.nav_push_ms)
+  t.run_for(@ui.nav_rest() - t.time())
+  t.assert_idle()
+  assert_eq(@ui.nav_rest(), -1.0)
+}

@@ -100,6 +100,34 @@ test "words: a box not built this frame is forgotten" {
 }
 
 ///|
+test "words: moved (a page sliding in to its place), a frame more: what was placed from them where they were placed again" {
+  let dx = Ref::new(0.0)
+  let placed = Ref::new(-1.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      match c.words_of("m") {
+        Some(w) => placed.val = w.pieces[0].x
+        None => ()
+      }
+      let b = c.box(tx=dx.val, fn() { c.rich([@ui.plain("abc")], size=10.0) |> ignore })
+      c.words(b, "m")
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  let x0 = t.ctx().words_of("m").unwrap().pieces[0].x
+  dx.val = 10.5
+  // one frame: built from where they were, laid out further on
+  t.frame(ms=0.0)
+  assert_eq(placed.val, x0)
+  // the frame more it asked for: placed again where they are
+  t.draw()
+  assert_eq(placed.val, x0 + 10.5)
+  t.assert_idle()
+}
+
+///|
 test "a press taken by the app is no tap of what it went down on, and scrolls nothing" {
   let taps = Ref::new(0)
   let take = Ref::new(false)

@@ -68,7 +68,10 @@ pub fn Ctx::words_of(self : Ctx, key : String) -> Words? {
 }
 
 ///|
-/// Once laid out: what each marked box holds, kept; the selections to draw.
+/// Once laid out: what each marked box holds, kept; the selections to draw. Words kept elsewhere than before (their
+/// box moved: a page sliding in, a list scrolled) are a layout read back that moved (Ctx::read_back_moved): what the
+/// app placed from them this frame (handles over a passage, words_of read while building) was placed where they were
+/// the frame before, and is placed again in a frame more.
 fn Ctx::words_after_layout(self : Ctx) -> Unit {
   words_sel.clear()
   if words_marks.is_empty() {
@@ -109,6 +112,10 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
         None => ()
       }
     }
+    match words_kept.get(m.key) {
+      Some(was) if !same_place(was.pieces, pieces) => self.read_back_moved = true
+      _ => ()
+    }
     words_kept[m.key] = { text: sb.to_string(), pieces }
     seen[m.key] = true
   }
@@ -118,6 +125,22 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
   for k in gone {
     words_kept.remove(k)
   }
+}
+
+///|
+/// Whether paragraphs kept twice lie in the same places, the same size.
+fn same_place(a : Array[WordsPiece], b : Array[WordsPiece]) -> Bool {
+  if a.length() != b.length() {
+    return false
+  }
+  for k in 0..<a.length() {
+    let p = a[k]
+    let q = b[k]
+    if p.x != q.x || p.y != q.y || p.w != q.w || p.h != q.h || p.start != q.start {
+      return false
+    }
+  }
+  true
 }
 
 ///|

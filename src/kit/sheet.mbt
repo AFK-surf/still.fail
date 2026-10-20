@@ -95,6 +95,7 @@ pub fn sheet(
   install()
   let th = c.theme()
   let id = c.id(key)
+  kit.val.sheet_keys[key] = id
   let (_, total) = c.window_size()
   let target = if h >= 0.0 { h } else { share * total }
   let s = match kit.val.sheets.get(id) {
@@ -223,6 +224,29 @@ pub fn sheet(
   s.was_open = now
   ignore(told(c, now != open))
   { open: now, shown: true, dragged }
+}
+
+///|
+/// When sheet `key` (the key it is built by, the last built by it) is at rest: its height's and its sinking's springs
+/// and its scrim's fade all there (the frames' clock; -1: it is not moving; +inf: told to move, not started yet).
+/// What a test runs to once it opened or closed one.
+pub fn sheet_rest(key : String) -> Double {
+  match kit.val.sheet_keys.get(key) {
+    Some(id) =>
+      match kit.val.sheets.get(id) {
+        Some(s) => {
+          let mut e = -1.0
+          for r in [s.h.end(), s.below.end(), s.fade.ends_at()] {
+            if r > e {
+              e = r
+            }
+          }
+          e
+        }
+        None => -1.0
+      }
+    None => -1.0
+  }
 }
 
 ///|
