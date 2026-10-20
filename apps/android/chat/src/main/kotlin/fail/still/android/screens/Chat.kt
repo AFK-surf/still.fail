@@ -378,17 +378,6 @@ class AgentAtWork(val key: String, val who: String, val runtime: String, val mak
 class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>, val orOwner: String? = null) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: ChatMessage) = m.mine
-    /** The post 归档这个 chat goes under: the agents' latest that ended all done, while the chat is offered to archive
-     *  (the core's `archiveOffered`: archivable, and the viewer's `archiveHint` offers it). */
-    val archiveUnder: Long? by lazy {
-        if (view.archiveOffered != true || view.archived == true || view.pending == true) null
-        else view.messages.lastOrNull { it.authorKind == "agent" && it.ending == "all_done" }?.seq
-    }
-    /** The post what the archive check made of the chat goes under: the agents' latest, when it ended all done. */
-    val checkUnder: Long? by lazy {
-        if (view.archiveCheck == null) null
-        else view.messages.lastOrNull { it.authorKind == "agent" && !it.system }?.takeIf { it.ending == "all_done" }?.seq
-    }
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
@@ -1062,7 +1051,7 @@ private fun AskDismiss(ctx: Here, m: ChatMessage, asking: Boolean) {
     val app = LocalApp.current
     var gone by remember(m.seq) { mutableStateOf(false) }
     val answered = m.decision?.resolved == true || m.decision?.dismissed == true
-    // Going as the archive buttons go (below), rather than vanishing; back at once if letting it go failed. Answered, it
+    // Going rather than vanishing; back at once if letting it go failed. Answered, it
     // goes with the options (`asking`), in their turn.
     AnimatedVisibility(
         visible = asking && inTurn((m.asked == true || answered) && !gone, 280), enter = EnterTransition.None,
@@ -1271,15 +1260,6 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (decide) DecisionUnder(ctx, m, asking)
             // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
             if (decide) AskDismiss(ctx, m, asking)
-            // What the archive check made of the chat (web Chat.tsx archiveCheck): a quiet line, red when it failed.
-            if (decide && ctx.checkUnder == m.seq) ctx.view.archiveCheck?.let { Text(it.text, fontSize = 12.sp, lineHeight = 18.sp, color = if (it.failed) C.red else C.muted, modifier = Modifier.padding(top = 6.dp)) }
-            // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
-            // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
-            if (decide) AnimatedVisibility(
-                visible = inTurn(ctx.archiveUnder == m.seq, 280),
-                enter = fadeIn(tween(280, easing = ArchiveEase)) + scaleIn(tween(280, easing = ArchiveEase), initialScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + expandVertically(tween(280, easing = ArchiveEase), expandFrom = Alignment.Top, clip = false),
-                exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
-            ) { ArchiveUnder(ctx, enabled = ctx.archiveUnder == m.seq) }
         }
     }
 }
@@ -1289,39 +1269,13 @@ private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>):
     (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
 
 /**
- * Archives the chat (its bar's 归档, and the one under its last 做完了): home at once, the chat gone from the list
+ * Archives the chat (its bar's 归档): home at once, the chat gone from the list
  * meanwhile (the core's), not waiting on the station; back in the list, and said, if it could not.
  */
 private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) {
     app.home()
     app.act(t("android-chat.archive.verb"), t("android-chat.archived")) {
         app.api(station).setArchived(view.thread?.id, session, true)
-    }
-}
-
-/**
- * 归档这个 chat, full width under the agent's latest post that ended its turn all done, while nothing is left in the
- * chat (the core's `archivable`): drawn as buttons (Decisions.kt OptionButton), this one in the accent, a spinner on it meanwhile.
- */
-@Composable
-private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
-    val app = LocalApp.current
-    val session = archiveSession(ctx.of, ctx.view, ctx.agents) ?: return
-    val label = t("android-chat.chat.archiveThis")
-    val busy = app.isDoing("chat.archive", "station" to ctx.station, "session" to session)
-    val thread = ctx.view.thread?.id ?: return
-    val keep = t("android-chat.chat.keep")
-    val keeping = app.isDoing("chat.keep", "station" to ctx.station, "thread" to thread)
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OptionButton(
-            keep, Modifier.weight(1f),
-            enabled = enabled && !ctx.view.offline && !busy, busy = keeping,
-            failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
-        ) { app.act(t("android-chat.chat.keep.verb")) { app.api(ctx.station).keepChat(thread); app.toast = t("android-chat.chat.kept") } }
-        OptionButton(
-            label, Modifier.weight(1f), strong = true,
-            enabled = enabled && !ctx.view.offline && !keeping, busy = busy,
-        ) { archiveChat(app, ctx.station, ctx.view, session) }
     }
 }
 

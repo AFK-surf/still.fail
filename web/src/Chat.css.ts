@@ -688,12 +688,6 @@ export const chatToAsk = style({
   },
 });
 
-/** What the archive check made of the chat, under its agent's all-done post: a quiet line; red when the check failed. */
-export const archiveCheck = style({
-  margin: "6px 0 0", fontSize: vars.textMeta, color: vars.muted, lineHeight: "18px",
-  selectors: { "&[data-failed]": { color: vars.red } },
-});
-
 /** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */
 export const composerAbove = style({ margin: "0 12px 6px" });
 /** The activity line and, for one of several agents, its own stop: shown on hover. */

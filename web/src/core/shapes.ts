@@ -213,14 +213,6 @@ export interface AppRelease {
 	news?: string[];
 }
 
-/** What the archive check made of a chat as it stands, under its agent's all-done post. */
-export interface ArchiveCheck {
-	/** The option the check picked and what came of it, or that it failed, in a line. */
-	text: string;
-	recommended: boolean;
-	failed: boolean;
-}
-
 /**
  * An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
  * archived (`at`, and `clock` 14:05) and how (`how`: 手动归档, 空闲后自动归档). `place`: its station's name, where there
@@ -1796,13 +1788,6 @@ export interface ChatMessage {
 	 */
 	asked?: boolean;
 	/**
-	 * In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
-	 * (`archiveOffered`): 归档 is offered under it. Absent otherwise.
-	 */
-	archive?: boolean;
-	/** Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`). */
-	archiveCheck?: ArchiveCheck;
-	/**
 	 * In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	 * when nothing.
 	 */
@@ -2123,10 +2108,6 @@ export interface ChatView {
 	 * (`chat.archive`). Absent otherwise.
 	 */
 	archivable?: boolean;
-	/** Archivable, and the viewer's `archiveHint` offers it: 归档 under its last all-done post. Absent otherwise. */
-	archiveOffered?: boolean;
-	/** What the archive check made of it as it stands (the option picked, or a failure). Absent when none did. */
-	archiveCheck?: ArchiveCheck;
 	/**
 	 * Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
 	 * the viewer is in no other workspace.
@@ -4107,7 +4088,7 @@ export interface PrefsView {
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**
-	 * When a done chat is offered to archive (drawn faded, 归档 under its last all-done post): `off`, never;
+	 * When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
 	 */

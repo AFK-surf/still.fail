@@ -161,7 +161,6 @@
   "web-main.chat.transcriptsCopied": "Copied the session file paths of {n} agents, one per line",
   "web-main.chat.transcriptNone": "No session file yet: the agent writes it once it starts working",
   "web-main.chat.archiveNamed": "Archive \"{title}\"",
-  "web-main.chat.archiveThis": "Archive this chat",
   "web-main.chat.archived": "Archived",
   "web-main.chat.archivedPlaceholder": "Restore to send",
   "web-main.chat.deleteFailed": "Couldn't delete: {error}",

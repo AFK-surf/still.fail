@@ -57,10 +57,6 @@ export const choiceLabel = style({
 export const choiceSpinner = style({ position: "absolute", right: `${CARD_PAD - LIST_PAD}px`, top: `${NUMBER_IN + 4}px` });
 export const choiceDetail = style({ gridColumn: "2", fontSize: vars.textMeta, lineHeight: "18px", color: vars.muted, overflowWrap: "anywhere" });
 
-// 留着 and 归档这个 chat under an agent's post that said it is all done (Chat.tsx ArchiveOption): two buttons side by
-// side, the second in the accent.
-export const archiveOptions = style({ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "6px", marginTop: "6px" });
-
 export const option = style({
   position: "relative", display: "grid", gap: "0", width: "100%", boxSizing: "border-box", padding: "9px 14px",
   border: "0", borderRadius: vars.rField, cornerShape: vars.cornerShape, background: chip, color: vars.text,

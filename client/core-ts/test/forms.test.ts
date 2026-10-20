@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
 import { DecisionForms, PolicyForms, ProfileFlows, Tokens } from "../src/forms.ts";
-import { archiveCheck } from "../src/present.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
@@ -104,14 +103,6 @@ test("the archive policy draft follows the station until edited, moves an option
   assert.equal(forms.value(form).dirty, false);
   forms.change(form, 1, "drop", {});
   assert.equal(forms.value(form), null);
-});
-
-test("the archive check under a done post says the option and what came of it", () => {
-  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: true }), { text: "已落地 · 推荐归档", recommended: true, failed: false });
-  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: false }), { text: "已落地 · 把握不足，不推荐归档", recommended: false, failed: false });
-  assert.deepEqual(archiveCheck({ option: "awaiting_review", name: "等人看结果", archive: false, recommended: false }), { text: "等人看结果 · 不推荐归档", recommended: false, failed: false });
-  assert.deepEqual(archiveCheck({ error: "timeout" }), { text: "归档检查失败", recommended: false, failed: true });
-  assert.equal(archiveCheck(undefined), null);
 });
 
 const tokensTopic = (station: string): Topic => ({ topic: "slackTokens", station, form: "form" });
