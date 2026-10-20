@@ -1922,7 +1922,7 @@ fn file_tile(c : @ui.Ctx, f : Pending, remove : Int) -> Int {
   let link = field(f.done, "link")
   let open = c.id("composer/link/\{f.id}")
   match link {
-    Some(l) if c.clicked(open) => open_link(c, text(Some(l), "url"))
+    Some(l) if c.clicked(open) => open_link(text(Some(l), "url"))
     _ => ()
   }
   c.box(

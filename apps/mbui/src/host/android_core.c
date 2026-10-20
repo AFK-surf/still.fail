@@ -36,6 +36,8 @@ JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_receiveBytes(JNIEnv *, 
 JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_complete(JNIEnv *, jobject, jlong handle, jlong id,
                                                                  jstring json, jstring error, jbyteArray bytes);
 JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_close(JNIEnv *, jobject, jlong handle);
+JNIEXPORT void JNICALL Java_fail_still_core_HermesNative_profile(JNIEnv *, jobject, jint seconds, jstring path);
+JNIEXPORT jstring JNICALL Java_fail_still_core_HermesNative_shellStats(JNIEnv *, jobject);
 
 JavaVM *mb_android_vm(void);  // android_host.c
 
@@ -122,6 +124,18 @@ static int core_init(JNIEnv *env) {
   };
   (*env)->RegisterNatives(env, A.core_host, natives, 3);
   if (cleared(env)) return 0;
+  // the core's JS sampled, and what the shell was asked (the engine's, as still.fail's CoreProfile.kt has them):
+  // dev.mbui.CoreProfile's, for CoreProfileReceiver and MemoryWatch (their `this` is the class, which neither reads)
+  jclass profile = (*env)->FindClass(env, "dev/mbui/CoreProfile");
+  if (!cleared(env) && profile) {
+    JNINativeMethod sampling[] = {
+        {"sample", "(ILjava/lang/String;)V", (void *)Java_fail_still_core_HermesNative_profile},
+        {"shellStats", "()Ljava/lang/String;", (void *)Java_fail_still_core_HermesNative_shellStats},
+    };
+    (*env)->RegisterNatives(env, profile, sampling, 2);
+    cleared(env);
+    (*env)->DeleteLocalRef(env, profile);
+  }
   A.ready = 1;
   return 1;
 }

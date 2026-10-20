@@ -244,7 +244,8 @@ let narrow_light : Palette = {
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0xE8E4DCFFL,
   card: 0xFFFFFFFFL,
-  chip: 0xEFECE6FFL,
+  // Android's C.chip (Theme.kt), what the app on a phone matches, not the narrow web's EFECE6
+  chip: 0xE8E4DCFFL,
   hover: 0x24272B0FL,
 }
 

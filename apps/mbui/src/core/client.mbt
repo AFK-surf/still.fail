@@ -40,6 +40,9 @@ pub struct Client {
   /// the tickets: by call id, by subscription id
   priv call_waits : Map[Int, Int]
   priv sub_waits : Map[Int, Int]
+  /// Told of each subscription made (its id, its topic's name, None) and of its first message (its value, or None
+  /// when it could not be read): Client::time_topics
+  priv mut timing : ((Int, String, Json?, Bool) -> Unit)?
 }
 
 ///|
@@ -64,7 +67,16 @@ pub fn Client::new(
     end_wait: fn(_) {  },
     call_waits: {},
     sub_waits: {},
+    timing: None,
   }
+}
+
+///|
+/// What the app times of its topics (still.fail's Android app's bar_switch, BarTiming.kt `topics`): `f(id, topic,
+/// None, false)` as a subscription is made and asked of the core, `f(id, topic, value, true)` as its first message is
+/// taken (its value; None: an error). Nothing here reads a clock: the times are the caller's.
+pub fn Client::time_topics(self : Client, f : ((Int, String, Json?, Bool) -> Unit)?) -> Unit {
+  self.timing = f
 }
 
 ///|
@@ -108,6 +120,19 @@ fn topic_json(topic : String, params : Map[String, Json]) -> Json {
 }
 
 ///|
+/// A topic's name (its `topic`), without its params.
+fn topic_name(t : Json) -> String {
+  match t {
+    Object(m) =>
+      match m.get("topic") {
+        Some(String(n)) => n
+        _ => ""
+      }
+    _ => ""
+  }
+}
+
+///|
 /// The subscription to `topic` with `params`: made (and asked of the core) the first time, the same one after that,
 /// so a view can call this every frame.
 pub fn Client::subscribe(
@@ -126,6 +151,10 @@ pub fn Client::subscribe(
       self.subs[id] = s
       self.by_key[key] = s
       self.ask(s)
+      match self.timing {
+        Some(f) => f(id, topic, None, false)
+        None => ()
+      }
       s
     }
   }
@@ -312,6 +341,10 @@ fn Client::take(self : Client, msg : Json) -> Unit {
             None => return
           }
         _ => return
+      }
+      match self.timing {
+        Some(f) if s.version == 0 => f(id, topic_name(s.topic), s.value, true)
+        _ => ()
       }
       s.version += 1
       self.version += 1

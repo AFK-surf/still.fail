@@ -203,6 +203,8 @@ let zh : Map[String, String] = {
   "android-settings.stations.rtt": "当前延迟 ",
   "android-settings.stations.silent": "此机器已长时间未连接 {app}",
   "android-settings.stations.total": "共 {total}",
+  "android-settings.telemetry.note": "帮助改进 {app}。不包含聊天内容。",
+  "android-settings.telemetry.title": "发送使用统计和错误报告",
   "android-settings.theme.dark": "深色",
   "android-settings.theme.light": "浅色",
   "android-settings.theme.system": "跟随系统",

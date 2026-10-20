@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- images from http(s) URLs -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- mbui's NetworkWatch: the default network as it changes, told to the core (client.wake {network}: src/sfapp/app.mbt) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- mbui's MainActivity holds a multicast lock while on screen: the core's mDNS hears a station on the LAN answer -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- LoginService: the app held up while a loopback listener waits for the browser (BrowserLogin, the core's listen.*) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
@@ -21,7 +25,9 @@
             <data android:scheme="https" />
         </intent>
     </queries>
-    <application android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:hasCode="true" android:enableOnBackInvokedCallback="true" android:usesCleartextTraffic="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <!-- Not backed up (as still.fail's app): the core's data and sealed files restored elsewhere would not match this
+         device's Keystore keys. Plain HTTP to a local still.fail alone (xml/local_network.xml). -->
+    <application android:name=".StillfailApp" android:label="${appLabel}" android:icon="@mipmap/ic_launcher" android:hasCode="true" android:enableOnBackInvokedCallback="true" android:allowBackup="false" android:networkSecurityConfig="@xml/local_network" android:theme="@style/Theme.StillFail">
         <!-- singleTask, as still.fail's: coming back (BrowserLogin, or the page's link) closes the Custom Tab above it -->
         <activity android:name=".MainActivity" android:exported="true"
             android:launchMode="singleTask"
@@ -31,6 +37,52 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${applicationId}" android:host="back" />
+            </intent-filter>
+            <!-- still.fail's links, as still.fail's Android app takes them (apps/android/app/src/main/AndroidManifest.xml):
+                 an item's link (a session's link in Slack), verified by still.fail cloud's assetlinks.json (served on both
+                 hosts: app.still.fail, and ember.3720.org from before the rename), which lists this app's package; mbui's
+                 Notices keeps the link for the app (@host.link_opened), which asks the core what it opens (src/sfapp/links.mbt). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPrefix="/o/" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPrefix="/o/" />
+            </intent-filter>
+            <!-- An invitation's link (/invite#<token>), a chat's link as chats refer to each other (/w/<ws>/s/<station>/chats/<key>),
+                 a station's 共享调试 an agent asks for (/w/<ws>/s/<station>/adb), one of its screens an agent asks a person to
+                 take over (/w/<ws>/s/<station>/screen/<id>), and a login an agent started there (/w/<ws>/s/<station>/login/<id>). -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.still.fail" android:path="/invite" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/screen/.*" />
+                <data android:scheme="https" android:host="app.still.fail" android:pathPattern="/w/.*/s/.*/login/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:path="/invite" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/chats/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/adb" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/screen/.*" />
+                <data android:scheme="https" android:host="ember.3720.org" android:pathPattern="/w/.*/s/.*/login/.*" />
+            </intent-filter>
+        </activity>
+        <!-- What another app shares (a link, some text, files: the system's share sheet), into a chat (mbui's Shares.java):
+             a sheet over that app (mbui's OverActivity, as still.fail's ShareActivity), in a task of its own and out of the
+             recent apps, so going back lands where the person was. -->
+        <activity android:name=".OverActivity" android:exported="true"
+            android:theme="@style/Theme.StillFail.Share"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustNothing"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|colorMode|touchscreen|mcc|mnc">
             <!-- What another app shares (a link, some text, files: the system's share sheet), into a chat (mbui's Shares.java) -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -42,13 +94,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <!-- A browser login's page, once the browser has come back, links here: <package>://back (the build's own package) -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${applicationId}" android:host="back" />
-            </intent-filter>
         </activity>
         <!-- mbui's Shares: a file handed to another app, read only (the cache's shared/) -->
         <provider android:name=".Shares$Files" android:authorities="${applicationId}.shared" android:exported="false" android:grantUriPermissions="true" />
@@ -56,6 +101,10 @@
         <receiver android:name=".Updates$InstallResult" android:exported="false" />
         <!-- the app's environment's defaults (mbui's MainActivity): the release's update feed (build.gradle.kts) -->
         <meta-data android:name="dev.mbui.env" android:value="${mbuiEnv}" />
+        <!-- what shows under the system bars, light and dark (mbui's MainActivity): the page's paper (src/sf tokens) -->
+        <meta-data android:name="dev.mbui.ground" android:value="#F5F3EF,#1B1C1F" />
+        <!-- The core's JS sampled for a while, asked from adb (CoreProfileReceiver.java): the shell holds DUMP, apps do not. -->
+        <receiver android:name=".CoreProfileReceiver" android:exported="true" android:permission="android.permission.DUMP" />
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Keeps a local loopback listener alive for a few minutes while the user signs in in their browser, so the browser's OAuth redirect to 127.0.0.1 reaches the app." />
         </service>

@@ -47,3 +47,307 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
   t.run_for(@motion.menu_spring.duration(1.0, 0.0, 0.0))
   assert_true(t.find("打开链接") is None)
 }
+
+// still.fail's own links (links.mbt): what the core says each opens (`link.parse`), opened as pages; from outside
+// (@host.system_channel `link`), an item's chat over its workspace's Home; an invitation's link, its sheet.
+
+///|
+/// The fixture's app in `mode`, its calls kept and answered (`link.parse` as the core would, `invitation.*` as
+/// `invitation` says), `history` its history view when given.
+fn links_core(
+  calls : Array[Made],
+  mode : String,
+  history? : Json? = None,
+  invitation? : Result[Json, Json] = Ok({ "workspace": "ws3", "name": "新的工作室", "role": "member", "inviter": "周" }),
+  accounts? : Json? = None,
+) -> @ui.Tester {
+  reset()
+  let base = fixture(mode)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      match (name, history, accounts) {
+        ("history", Some(h), _) => { value: Some(h), error: None, version: 1 }
+        ("accounts", _, Some(a)) => { value: Some(a), error: None, version: 1 }
+        _ => (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      match name {
+        "link.parse" => done(Ok(fixture_link_parse(text(Some(params), "url"))))
+        "invitation.preview" => done(invitation)
+        "invitation.accept" => done(Ok({ "id": "ws3" }))
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  if mode.has_prefix("chat") {
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  }
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+fn top_chat() -> ChatRef? {
+  match app.nav.top() {
+    Chat(r) => Some(r)
+    _ => None
+  }
+}
+
+///|
+test "a link to an item tapped in a chat: its chat over this one, its web service over that (AppState.open item)" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/o/ws1/st1/s-c2?service=j-web")
+  assert_eq(named(calls, "link.parse").length(), 1)
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 4)
+  assert_true(pages[2] == Chat(chat_ref("ws1/st1", "s-c2")))
+  assert_true(pages[3] == Service("ws1/st1", "j-web"))
+  assert_eq(t.opened().length(), 0)
+}
+
+///|
+test "a link to this chat's own item with ?service=: only its web service over this chat" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/o/ws1/st1/s-c1?service=j-web")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 3)
+  assert_true(pages[2] == Service("ws1/st1", "j-web"))
+}
+
+///|
+test "a chat's link of another workspace: that workspace in view, the chat over its Home (openItem)" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws2/s/st9/chats/s-x")
+  assert_eq(app.picked, "ws2")
+  let set = named(calls, "prefs.set")
+  assert_true(set.length() > 0 && text(Some(set[set.length() - 1].params), "workspace") == "ws2")
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 2)
+  assert_true(pages[0] == Home)
+  assert_true(top_chat() == Some(chat_ref("ws2/st9", "s-x")))
+}
+
+///|
+test "a link that is not still.fail's: handed to the system; none takes it: said so" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://example.com/a")
+  assert_eq(t.opened(), ["https://example.com/a"])
+  assert_eq(app.nav.depth(), 2)
+}
+
+///|
+test "an item's link from another app (an App Link): its chat alone over its workspace's Home" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  app.nav.push(Settings)
+  t.run_for(@ui.nav_push_ms)
+  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/o/ws1/st1/s-c2\"}")
+  t.frame()
+  let pages = app.nav.pages()
+  assert_eq(pages.length(), 2)
+  assert_true(pages[0] == Home)
+  assert_true(top_chat() == Some(chat_ref("ws1/st1", "s-c2")))
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("好的，我来处理。") is Some(_))
+  // taken once
+  t.frame()
+  assert_eq(named(calls, "link.parse").length(), 1)
+}
+
+///|
+test "a screen's link: its viewer not here yet, said so in place of it" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat")
+  open_link("https://app.still.fail/w/ws1/s/st1/screen/main")
+  t.frame()
+  assert_true(t.find("无法打开此链接") is Some(_))
+  assert_eq(t.opened().length(), 0)
+  assert_eq(app.nav.depth(), 2)
+}
+
+///|
+/// A history whose items span entries 1–2, 3–9, 10–12 …, its page before not loaded (`more`) when `more`.
+fn spread_history(more : Bool) -> Json {
+  let h = fix_history()
+  let its = items(Some(h), "items")
+  let spread : Array[Json] = []
+  let mut from = 1
+  for i in its {
+    match i {
+      Object(m) => {
+        let o = m.copy()
+        o["entries"] = [Json::number(from.to_double()), Json::number((from + 4).to_double())]
+        from += 5
+        spread.push(Json::object(o))
+      }
+      x => spread.push(x)
+    }
+  }
+  match h {
+    Object(m) => {
+      let o = m.copy()
+      o["items"] = Json::array(spread)
+      o["more"] = Json::boolean(more)
+      Json::object(o)
+    }
+    x => x
+  }
+}
+
+///|
+test "a history's link with an entry: its page over the chat, that entry's item near the top, marked, then not" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "chat", history=Some(spread_history(false)))
+  open_link("https://app.still.fail/o/ws1/st1/s-c1?history=s-c1&entry=12")
+  match app.nav.top() {
+    History(r, key, entry) => {
+      assert_eq(r.station, "ws1/st1")
+      assert_eq(key, "s-c1")
+      assert_eq(entry, Some(12))
+    }
+    _ => fail("not the history")
+  }
+  t.run_for(@ui.nav_push_ms)
+  // entries 11–15: the third item (h3), marked
+  assert_eq(history_marked.val.1, "h3")
+  assert_eq(history_placed.get("history/ws1/st1/s-c1"), Some(false))
+  t.run_for(history_shade_ms)
+  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() > 0.99)
+  t.run_for(history_mark_ms)
+  assert_true(history_mark(t.ctx(), "history/ws1/st1/s-c1").get() < 0.01)
+}
+
+///|
+test "an entry before what is loaded: the page before asked for first" {
+  let calls : Array[Made] = []
+  let h = spread_history(true)
+  let t = links_core(calls, "chat", history=Some(h))
+  // (its items start at entry 1: one before them)
+  app.nav.push(History(chat_ref("ws1/st1", "s-c1"), "s-c1", Some(0)))
+  t.run_for(@ui.nav_push_ms)
+  assert_eq(named(calls, "history.older").length(), 1)
+  assert_true(!history_placed.contains("history/ws1/st1/s-c1"))
+}
+
+///|
+test "an invitation's link: what it leads to, then joined as the account (InviteLinkSheet)" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "home")
+  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok1\"}")
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("加入「新的工作室」") is Some(_))
+  assert_true(t.find("周邀请你以成员身份加入。") is Some(_))
+  let read = named(calls, "invitation.preview")
+  assert_eq(read.length(), 1)
+  assert_eq(text(Some(read[0].params), "token"), "tok1")
+  assert_eq(text(Some(read[0].params), "account"), "u1")
+  t.tap_text("以 lin@example.com 加入")
+  assert_eq(named(calls, "invitation.accept").length(), 1)
+  assert_eq(app.picked, "ws3")
+  assert_true(t.find("已加入「新的工作室」") is Some(_))
+}
+
+///|
+test "an invitation that cannot be used: why, and only 关闭" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "home", invitation=Err({ "code": "gone", "message": "邀请已过期" }))
+  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok2\"}")
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("邀请无效") is Some(_))
+  assert_true(t.find("邀请已过期") is Some(_))
+  assert_true(t.find("使用其他链接") is None)
+  t.tap_text("关闭")
+  assert_true(!sheet_open())
+}
+
+///|
+test "an invitation's link opened signed out: sign in first" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "signin")
+  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok3\"}")
+  t.frame()
+  t.run_for(@ui.nav_push_ms)
+  assert_true(t.find("登录 still.fail") is Some(_))
+  assert_true(t.find("你收到了一个 still.fail workspace 的邀请。先登录，再决定是否加入。") is Some(_))
+  assert_eq(named(calls, "invitation.preview").length(), 0)
+}
+
+///|
+test "an invitation's token: from its link, or pasted alone" {
+  assert_eq(invitation_token("https://app.still.fail/invite#abc"), Some("abc"))
+  assert_eq(invitation_token("  abc \n"), Some("abc"))
+  assert_eq(invitation_token("https://app.still.fail/other"), None)
+  assert_eq(invitation_token("two words"), None)
+  assert_eq(invitation_token(""), None)
+}
+
+///|
+test "back on screen after a while, the core is told how long it was away; another network, that its links are dead" {
+  let calls : Array[Made] = []
+  let t = links_core(calls, "home")
+  t.post(@host.system_channel, "{\"shown\":{\"away\":42000}}")
+  t.frame()
+  let woke = named(calls, "client.wake")
+  assert_eq(woke.length(), 1)
+  assert_eq(number(Some(woke[0].params), "away"), 42000.0)
+  t.post(@host.system_channel, "{\"network\":true}")
+  t.frame()
+  let again = named(calls, "client.wake")
+  assert_eq(again.length(), 2)
+  assert_eq(number(Some(again[1].params), "away"), 0.0)
+  assert_true(flag(Some(again[1].params), "network"))
+}
+
+///|
+test "a login's page on this device: the notice that holds the app up says which login, then the page in a tab" {
+  let calls : Array[Made] = []
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      match name {
+        "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
+        "machineLogin" =>
+          {
+            value: Some({
+              "id": "login-1",
+              "title": "在 Studio 上登录 gcloud",
+              "state": "browser",
+              "step": "loopback",
+              "active": true,
+              "statusText": "等你在浏览器里登录",
+            }),
+            error: None,
+            version: 1,
+          }
+        _ => (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      match name {
+        "machineLogin.open" => done(Ok({ "url": "https://accounts.example.com/o/oauth2/auth?x=1" }))
+        _ => (base.call)(name, params, done)
+      }
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t.tap_text("在浏览器里登录")
+  assert_eq(named(calls, "machineLogin.open").length(), 1)
+  assert_eq(t.hold_words(), Some(("登录", "在 Studio 上登录 gcloud", "正在等待浏览器")))
+  assert_eq(t.opened(), ["https://accounts.example.com/o/oauth2/auth?x=1"])
+}

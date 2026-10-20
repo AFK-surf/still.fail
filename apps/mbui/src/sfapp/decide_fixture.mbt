@@ -2,14 +2,15 @@
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
 // with a sheet open over it: "chat-info", "chat-agent", "chat-jobs", "chat-job"; "home-jobs" (Home with the jobs left
-// up a long while at its top). Every word here is made up.
+// up a long while at its top); "history-link" (Home, the history there for a link to open at an entry: what apps/android's
+// MbuiCompareTest pictures beside it). Every word here is made up.
 
 ///|
 /// Whether `mode` is one of this slice's.
 fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
-    "chat-info", "chat-agent", "chat-jobs", "chat-job", "home-jobs",
+    "chat-info", "chat-agent", "chat-jobs", "chat-job", "home-jobs", "history-link",
   ].contains(mode)
 }
 
@@ -478,7 +479,7 @@ pub fn open_fixture(mode : String) -> Unit {
     "decisions" | "decisions-text" | "decisions-idle" => app.nav.push(Decisions)
     "history" | "history-details" => {
       app.nav.push(Chat(r))
-      app.nav.push(History(r, "s-c1"))
+      app.nav.push(History(r, "s-c1", None))
       if mode == "history-details" {
         dui.history_tab = 1
       } else {

@@ -104,7 +104,7 @@ test "styles: screens with kit's components (switches, a sheet), drawn as before
   }
   inspect(out.to_string(), content=(
     #|settings narrow 19076:9e2ea5af
-    #|station narrow 33291:564620f0
+    #|station narrow 33291:6813625b
     #|me-reading narrow 18506:a64e4fa0
     #|settings wide 37578:ec083139
     #|station wide 40654:8d5a4466

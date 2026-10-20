@@ -8,7 +8,8 @@
 //
 // Not here yet, against the Android app: code highlighting (code is the code face in the ink), a capped block's own
 // scroll (it is cut at its height), the run settings page (its row is shown), opening at an entry, a Slack user's
-// 这是我, a place's link.
+// 这是我, a place's link. Opened at an entry (a link's `?history=…&entry=…`), that entry's item comes near the top, for
+// a moment marked.
 
 ///|
 /// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
@@ -28,12 +29,15 @@ fn history_params(r : ChatRef, key : String) -> Map[String, Json] {
 /// The history's page left: what it followed let go.
 fn history_left(src : Source, r : ChatRef, key : String) -> Unit {
   (src.leave)("history", history_params(r, key))
+  history_placed.remove("history/" + r.station + "/" + key)
+  history_short.remove("history/" + r.station + "/" + key)
 }
 
 ///|
 /// The page (History.kt HistoryScreen): its bar (copying its link at its end), the agent at its head with what can be
-/// done to it and the tabs, then its steps or its details.
-fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
+/// done to it and the tabs, then its steps or its details; its steps opened at `entry` (a transcript entry), else at
+/// its newest.
+fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r))
   let title = text(chat.value, "title")
@@ -87,7 +91,7 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
     history_summary(c, a)
     c.box(w=Fill(1.0), h=Fill(1.0), fn() {
       if dui.history_tab == 0 {
-        history_steps(c, src, r, key)
+        history_steps(c, src, r, key, entry)
       } else {
         history_details(c, src, r, key, a)
       }
@@ -202,9 +206,43 @@ priv enum HLine {
 }
 
 ///|
+/// How a history's steps were put in place as it opened (History.kt Steps: `follow.placed`), by its list's key: at
+/// its newest, followed (true), or at an entry, not followed (false). Not there: not put in place yet.
+let history_placed : Map[String, Bool] = {}
+
+///|
+/// An item gone to (an entry's) is marked a moment (History.kt Steps: `marked` for 1.6 s, its shade, the accent at
+/// 10%, coming and going on a 900 ms tween, FastOutSlowIn): in, held, out.
+let history_mark_ms : Double = 1600.0
+
+///|
+let history_shade_ms : Double = 900.0
+
+///|
+/// The shade under an item gone to: the accent at 10%, its corners Smooth(8)'s.
+// kept across runs: a value (no field of it changes)
+let history_mark_ground : @ui.Style = @ui.style(w=Full, h=Full, radius=Lg, bg=A(Accent, O10))
+
+///|
+/// The item marked (its list's key, its item's key).
+let history_marked : Ref[(String, String)] = Ref(("", ""))
+
+///|
+/// The histories whose page before, asked for an entry before what was loaded, could not be had: put in place with
+/// what there is.
+let history_short : Map[String, Bool] = {}
+
+///|
+fn history_mark(c : @ui.Ctx, lkey : String) -> @motion.Anim {
+  @motion.anim(c, "history-mark/" + lkey, 0.0, global=true)
+}
+
+///|
 /// Its steps (History.kt Steps): its newest at the foot, followed while the reader stays there; the page before
-/// brought in near the top (`history.older`, once a page); in brief until it is read.
-fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
+/// brought in near the top (`history.older`, once a page); in brief until it is read. Opened at `entry`: the pages
+/// before brought in until it is loaded, then its item near the top (under 24 of room), marked a moment, and not
+/// followed; an entry not found opens at the newest.
+fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : Int?) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("history", history_params(r, key))
   let h = match topic.value {
@@ -242,6 +280,82 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
   // the list's first item moved down by what came in above it: what is in view stays put
   let more = flag(h, "more")
   let older = more && dui.history_asked == first && first != ""
+  // put in place once, as it opens: at the entry asked for (the pages before it brought in first), else the newest
+  if !history_placed.contains(lkey) {
+    match entry {
+      Some(e) => {
+        let start = match its.get(0) {
+          Some(i) => entry_range(Some(i)).map(fn(x) { x.0 }).unwrap_or(0)
+          None => 0
+        }
+        if more && e < start && !history_short.contains(lkey) {
+          // one before what is loaded: the page before first (once per page; failed, it opens where it can)
+          if dui.history_asked != first {
+            dui.history_asked = first
+            c.tell("history.older/" + lkey, fn() {
+              (src.call)(
+                "history.older",
+                { "station": Json::string(r.station), "key": Json::string(key) },
+                fn(res) { if res is Err(_) { history_short[lkey] = true } },
+              )
+            })
+          }
+        } else {
+          match its.search_by(fn(i) { entry_range(Some(i)).map(fn(x) { e >= x.0 && e <= x.1 }).unwrap_or(false) }) {
+            Some(at) => {
+              history_placed[lkey] = false
+              // (the edge's line before the items)
+              c.list_scroll_to(lkey, at + 1, offset=-24.0)
+              history_marked.val = (lkey, text(its.get(at), "key"))
+              let m = history_mark(c, lkey)
+              m.snap(0.0)
+              m.animate(
+                0.0,
+                @motion.keyframes_to(
+                  [1.0, 1.0, 0.0],
+                  duration=history_mark_ms + history_shade_ms,
+                  times=[
+                    0.0,
+                    history_shade_ms / (history_mark_ms + history_shade_ms),
+                    history_mark_ms / (history_mark_ms + history_shade_ms),
+                    1.0,
+                  ],
+                  eases=[
+                    fn(t) { @motion.Ease::Standard.at(t) },
+                    fn(t) { t },
+                    fn(t) { @motion.Ease::Standard.at(t) },
+                  ],
+                ),
+              )
+              @host.log("history: gone to entry \{e}")
+            }
+            // (not there: the newest, followed)
+            None => {
+              history_placed[lkey] = true
+              c.list_scroll_to(lkey, lines.length() - 1)
+            }
+          }
+        }
+      }
+      None => history_placed[lkey] = true
+    }
+  }
+  let marked = match history_marked.val {
+    (l, k) if l == lkey => k
+    _ => ""
+  }
+  // (with motion reduced, marked whole as long, then not: less motion, not less said)
+  let shade = if marked == "" {
+    0.0
+  } else if @ui.reduced_motion() {
+    if @kit.after(c, "history-marked/" + lkey, true, history_mark_ms) {
+      0.0
+    } else {
+      1.0
+    }
+  } else {
+    history_mark(c, lkey).get()
+  }
   match c.list_info(lkey) {
     Some(info) if more && info.first >= 0 && info.first <= 2 && dui.history_asked != first =>
       // (asked once the frame's builds are over, from where the last laid the list out)
@@ -274,7 +388,18 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
             } else {
               history_edge(c, text(h, "edge"))
             }
-          HItem(item) => history_item(c, src, r, key, Some(item))
+          HItem(item) =>
+            if marked != "" && text(Some(item), "key") == marked && shade > 0.0 {
+              c.box(style=@sf.full_width, fn() {
+                // its shade under it (Smooth(8), the accent at 10%), as much of it as is in now
+                let ground = c.layer(fn() { c.box(style=history_mark_ground, fn() {  }) |> ignore })
+                c.look(ground, @ui.look(alpha=shade))
+                history_item(c, src, r, key, Some(item))
+              })
+              |> ignore
+            } else {
+              history_item(c, src, r, key, Some(item))
+            }
           HLive(l) =>
             c.text(text(Some(l), "text"), size=13.0, color=t.p.muted, wrap=false) |> ignore
           HPhase(p) => phase_line(c, src, Some(p))
@@ -283,9 +408,19 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> Unit {
       })
       |> ignore
     },
-    stick_end=true,
+    // followed at its newest; not while opened at an entry
+    stick_end=history_placed.get(lkey).unwrap_or(entry is None),
   )
   |> ignore
+}
+
+///|
+/// The transcript entries an item spans (HistoryItem.entries: its first and last), if it says.
+fn entry_range(item : Json?) -> (Int, Int)? {
+  match field(item, "entries") {
+    Some(Array([Number(a, ..), Number(b, ..)])) => Some((a.to_int(), b.to_int()))
+    _ => None
+  }
 }
 
 ///|
@@ -382,11 +517,18 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
       let place = field(content, "place")
       history_message(c, ik, "send", fn() {
         let (b, a) = around("android-chat.history.sent.to")
-        let to = match place {
-          Some(Object(_)) => text(place, "name")
-          _ => "Slack"
+        history_label(c, [(b, false)])
+        match place {
+          Some(Object(_)) => history_place(c, r, ik, place)
+          // (no place: Slack's mark and its name, strong)
+          _ =>
+            c.box(style=history_slack_row, fn() {
+              @sf.slack_mark(c, 12.0) |> ignore
+              history_label(c, [(" Slack", true)])
+            })
+            |> ignore
         }
-        history_label(c, [(b, false), (to, true), (a, false)])
+        history_label(c, [(a, false)])
         if flag(content, "block") {
           pill(c, "Block", if t.dark { 0x81AEFAFFL } else { 0x1559C4FFL })
         }
@@ -396,7 +538,7 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
       }, text(content, "text"), true)
     }
     "mark" =>
-      c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+      c.box(style=mark_row, fn() {
         let wait = field(content, "wait")
         match wait {
           Some(Object(_)) => {
@@ -486,10 +628,69 @@ fn history_label(c : @ui.Ctx, parts : Array[(String, Bool)]) -> Unit {
 }
 
 ///|
+/// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Slack's for
+/// another) and its name, 13 semibold; a chat here is its agent's item, opened by its session (back to it when it is the
+/// chat under the history), in the accent's ink; a Slack thread opens by its link. (Feishu's mark is Slack's here: the
+/// app has no picture of Feishu's yet.)
+fn history_place(c : @ui.Ctx, r : ChatRef, ik : String, place : Json?) -> Unit {
+  let t = @sf.theme()
+  let surface = text(place, "surface")
+  let session = text(place, "session")
+  let url = text(place, "url")
+  let here = surface == "ember" || surface == "stillfail"
+  let slack = url != "" && (surface == "slack" || surface == "feishu" || surface.has_prefix("feishu:"))
+  let opens = session != "" || slack
+  let id = c.id("history-place/" + ik)
+  if opens && c.clicked(id) {
+    if session != "" {
+      if session == r.session {
+        app.nav.pop() |> ignore
+      } else {
+        app.nav.push(Chat({ station: r.station, session, title: text(place, "name"), station_name: r.station_name }))
+      }
+    } else if !@ui.open_url(url) {
+      toast_later(tr("android-chat.link.failed"))
+    }
+  }
+  c.box(dir=Row, gap=3.0, align=ACenter, radius=4.0, id=if opens { id } else { 0 }, fn() {
+    if here {
+      @sf.drawable(c, if t.dark { "stillfail_mark_dark" } else { "stillfail_mark" }, 12.0) |> ignore
+    } else {
+      @sf.slack_mark(c, 12.0) |> ignore
+    }
+    c.text(text(place, "name"), style=history_place_words, color=if opens { t.p.accent_text } else { t.p.text }) |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// A place's name (History.kt Place: 13, semibold, one line); with no place, Slack's mark and its name in a row.
+// kept across runs: a value (no field of it changes)
+let history_place_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, wrap=false)
+
+///|
+/// A mark's row: what it waits for, 6 apart.
+// kept across runs: a value (no field of it changes)
+let mark_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let history_slack_row : @ui.Style = @ui.style(row=true, align=ACenter)
+
+///|
+/// A pill's room after the label (6) and its tinted ground: 6 by 1 round its word, Smooth(6)'s corners.
+// kept across runs: a value (no field of it changes)
+let pill_after : @ui.Style = @ui.style(pl=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pill_ground : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md)
+
+///|
 /// A small tinted word after a label (History.kt Pill).
 fn pill(c : @ui.Ctx, words : String, color : Int64) -> Unit {
-  c.box(pl=6.0, fn() {
-    c.box(padx=6.0, pady=1.0, radius=6.0, bg=@sf.alpha(color, 0.12), fn() {
+  c.box(style=pill_after, fn() {
+    c.box(style=pill_ground, bg=@sf.alpha(color, 0.12), fn() {
       c.text(words, size=11.0, color~, wrap=false) |> ignore
     })
     |> ignore

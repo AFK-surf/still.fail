@@ -21,6 +21,8 @@ priv enum SheetKind {
   PageSizes(String)
   /// what another app shares in, to a chat (ShareSheet.kt): 72%, draggable
   ShareSheet
+  /// what an invitation's link leads to, before it is accepted (Workspaces.kt InviteLinkSheet): half the screen
+  InviteLink
 } derive(Eq)
 
 ///|
@@ -32,6 +34,7 @@ fn sheet_spec(kind : SheetKind) -> (Double, Bool) {
     RunPicker(_) => (0.66, false)
     LoadOf(_, _) | PageSizes(_) => (0.62, false)
     ShareSheet => (0.72, true)
+    InviteLink => (0.5, false)
     NoSheet => (0.5, false)
   }
 }
@@ -108,8 +111,16 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
     detents=if draggable { [0.55, 0.94] } else { [] },
     close_below=0.3,
     scrim=@sf.sheet_scrim,
-    look=@sf.sheet_look(),
-    fn() { content(kind) },
+    // over another app, on the page's paper, not frosted (Sheet.kt SheetSpec solid: there is nothing of the app's under it)
+    look=if share_over.val { @sf.sheet_look(ground=@sf.theme().p.bg) } else { @sf.sheet_look() },
+    fn() {
+      content(kind)
+      // over another app the view reaches under the navigation bar: what the sheet shows kept above it, the sheet's
+      // ground going on down to the screen's foot (Sheet.kt: windowInsetsPadding(navigationBars) inside the sheet)
+      if share_over.val && share_foot.val > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(share_foot.val)), fn() {  }) |> ignore
+      }
+    },
   )
   // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)
   match r.dragged {

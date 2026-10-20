@@ -108,6 +108,34 @@ test "a file of no kind it can show: told of, with the download" {
 }
 
 ///|
+test "an APK told of: 安装 first, handed to the system's installer once its bytes are here; 下载 beside it" {
+  let t = preview_tester("apk")
+  assert_true(t.find("安装") is Some(_))
+  assert_true(t.find("下载") is Some(_))
+  t.tap_text("安装")
+  // read through the core first (the fixture answers at once), then handed over
+  t.frame()
+  assert_eq(t.installs(), ["测试版.apk"])
+}
+
+///|
+test "an APK without the leave to install apps: the system's page, and said to tap again; a failure later said" {
+  let t = preview_tester("apk")
+  t.tap_text("安装")
+  t.frame()
+  assert_eq(t.installs(), ["测试版.apk"])
+  // the system's page for the leave opened in its place, said so (the host's system channel)
+  t.post(@host.system_channel, "{\"install\":{\"name\":\"测试版.apk\",\"allow\":true}}")
+  t.frame()
+  assert_true(t.find("允许 still.fail 安装应用后，再次点击安装") is Some(_))
+  t.run_for(toast_ms)
+  // what the installer says, later (the host's system channel)
+  t.post(@host.system_channel, "{\"install\":{\"name\":\"测试版.apk\",\"error\":\"签名不一致\"}}")
+  t.frame()
+  assert_true(t.find("无法安装：签名不一致") is Some(_))
+}
+
+///|
 test "Markdown rendered; code as it is; a table" {
   let t = preview_tester("md")
   assert_true(t.find("发布前要做的") is Some(_))

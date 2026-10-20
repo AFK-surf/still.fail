@@ -184,10 +184,26 @@ pub fn receive(text : String, bytes : Bytes?) -> Unit {
       trace_in(msg, bytes, ffi_wall_ms())
       client.receive_json(msg, bytes~)
       if client.fatal is Some(_) && engine.started {
+        // (told before it is started again: the reason is the only trace of the core's own failure)
+        match on_failed.val {
+          Some(f) => f(client.fatal.unwrap())
+          None => ()
+        }
         restart()
       }
     }
   }
+}
+
+///|
+/// Told as the core fails, with its reason, before it is started again (or stopped, a third time in a minute): still.fail's
+/// Android app reports it as CoreFailed (StillFailCore.onFailed, Crashes.kt), as src/stillfail's host does.
+pub let on_failed : Ref[((String) -> Unit)?] = { val: None }
+
+///|
+/// What the app times of its topics as they are subscribed and first read (Client::time_topics).
+pub fn time_topics(f : ((Int, String, Json?, Bool) -> Unit)?) -> Unit {
+  client.time_topics(f)
 }
 
 ///|

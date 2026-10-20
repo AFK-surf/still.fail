@@ -156,7 +156,7 @@ fn notices_frame(src : Source, w : Workspace) -> Unit {
   // a notification tapped
   match (h.opened)() {
     "" => ()
-    opens => open_notice(src, w, opens)
+    opens => open_notice(src, opens)
   }
   // a push delivered while the app runs
   match (h.pushed)() {
@@ -287,9 +287,9 @@ fn push_sync(src : Source, wanted : Bool?) -> Unit {
 }
 
 ///|
-/// A notification tapped (MainActivity.handle): its link read by the core (`link.parse`), an item's chat opened over
-/// its workspace's Home at the message it is about.
-fn open_notice(src : Source, w : Workspace, opens : String) -> Unit {
+/// A notification tapped (MainActivity.handle): its link opened as one from outside (links.mbt: the core's
+/// `link.parse`), an item's chat over its workspace's Home at the message it is about.
+fn open_notice(src : Source, opens : String) -> Unit {
   let (url, seq) = match opens.find("\n") {
     Some(i) => (opens.view(end_offset=i).to_owned(), opens.view(start_offset=i + 1).to_owned())
     None => (opens, "")
@@ -298,39 +298,10 @@ fn open_notice(src : Source, w : Workspace, opens : String) -> Unit {
     n if n > 0.0 => Some(n)
     _ => None
   }
-  (src.call)("link.parse", { "url": Json::string(trim_slash(cloud_origin()) + url) }, fn(r) {
-    match r {
-      Ok(t) if text(Some(t), "opens") == "item" && text(Some(t), "session") != "" => {
-        let ws = text(Some(t), "workspace")
-        let station = ws + "/" + text(Some(t), "station")
-        let session = text(Some(t), "session")
-        @host.log("notice opens \{station}|\{session} at \{seq}")
-        open_item(src, w, ws, station, session, at)
-      }
-      Ok(_) => @host.log("notice: the link opens nothing here: " + url)
-      Err(e) => @host.log("notice: link.parse failed: " + text(Some(e), "message"))
-    }
+  @host.log("notice tapped \{url} at \{seq}")
+  open_link_in(src, trim_slash(cloud_origin()) + url, outside=true, at~, or_else=fn() {
+    @host.log("notice: the link opens nothing here: " + url)
   })
-}
-
-///|
-/// An item's chat from outside (AppState.openItem): its workspace in view, nothing over Home but the chat, opened at
-/// `at` (the message a notification is about).
-fn open_item(src : Source, w : Workspace, ws : String, station : String, session : String, at : Double?) -> Unit {
-  if ws != "" && ws != w.id {
-    app.picked = ws
-    (src.call)("prefs.set", { "workspace": Json::string(ws) }, fn(_) {  })
-  }
-  home()
-  if app.nav.top() != Home {
-    app.nav.replace(Home)
-  }
-  let r : ChatRef = { station, session, title: "", station_name: "" }
-  match at {
-    Some(seq) => go_to(r, seq)
-    None => ()
-  }
-  app.nav.push(Chat(r))
 }
 
 ///|

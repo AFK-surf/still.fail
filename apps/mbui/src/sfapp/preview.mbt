@@ -10,7 +10,7 @@
 // Android app does when the thumbnail is not on the screen), stepping through the chat's images (`imageNear`),
 // pinching on iOS (no second finger told there yet), marking an image (ImageMarks.kt), a video's frame-exact steps (its frames' times
 // read by MediaExtractor: here steps of a guessed 60 fps), saving a frame and turning to landscape, code
-// highlighting, a code file's sideways scroll, installing an APK, the frosted glass (the bars are a solid tint: a
+// highlighting, a code file's sideways scroll, the frosted glass (the bars are a solid tint: a
 // native view under them cannot be blurred, and the canvas's blur is another slice's).
 
 ///|
@@ -21,6 +21,9 @@ let pv_zh : Map[String, String] = {
   "android-chat.file.cut": "文件较大，仅显示前 {size}，完整内容请下载",
   "android-chat.file.cut.rows": "仅显示前 {n} 行，完整内容请下载",
   "android-chat.file.download": "下载",
+  "android-chat.file.install": "安装",
+  "android-chat.file.installFailed": "无法安装：{error}",
+  "android-chat.file.allowInstall": "允许 {app} 安装应用后，再次点击安装",
   "android-chat.file.image.failed": "此图片无法在此显示",
   "android-chat.file.loadFailed": "无法读取：{error}",
   "android-chat.file.loading.size": "正在读取 {size}",
@@ -456,6 +459,8 @@ priv struct Viewer {
   /// a file told of (not shown): asked for (to save)
   mut asked : Bool
   mut save_after : Bool
+  /// …or to be installed (an APK)
+  mut install_after : Bool
   /// the bars shown, and how long they stay when left alone (-1: till a tap), counted anew each time they wake
   mut awake : Bool
   mut rest_len : Double
@@ -658,6 +663,7 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     error: None,
     asked: false,
     save_after: false,
+    install_after: false,
     awake: true,
     rest_len: -1.0,
     rest_n: 0,
@@ -1182,6 +1188,10 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     v.save_after = false
     v.ask_save(c)
   }
+  if v.install_after && v.bytes is Some(_) {
+    v.install_after = false
+    v.ask_install(c)
+  }
   // the bars fade when left alone (not while it comes, nor over a page whose taps are its own)
   if v.awake && v.rest_len > 0.0 && @kit.after(c, "pv-rest/\{v.rest_n}", true, v.rest_len) {
     v.awake = false
@@ -1513,30 +1523,85 @@ fn Viewer::facts(self : Viewer, c : @ui.Ctx) -> Unit {
         |> ignore
       None => ()
     }
-    let id = c.id("preview/note-download")
-    if c.clicked(id) {
+    // an APK: 安装 first, handed to the system's installer (FilePreview.kt: NoteButton install, strong)
+    let apk = lower(v.file.name).has_suffix(".apk")
+    if apk && note_button(c, "preview/note-install", "", pv("android-chat.file.install"), true) {
+      v.ask_install(c)
+    }
+    if note_button(c, "preview/note-download", "download", pv("android-chat.file.download"), !apk) {
       v.ask_save(c)
     }
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      padx=14.0,
-      pady=10.0,
-      gap=6.0,
-      align=ACenter,
-      justify=JCenter,
-      radius=12.0,
-      bg=if c.pressed(id) { @sf.mix(0xFFFFFFFFL, 0.15, t.p.accent) } else { t.p.accent },
-      id~,
-      fn() {
-        @sf.icon(c, "download", size=16.0, color=0xFFFFFFFFL) |> ignore
-        c.text(pv("android-chat.file.download"), size=15.0, weight=500, color=0xFFFFFFFFL, wrap=false)
-        |> ignore
-      },
-    )
-    |> ignore
   })
   |> ignore
+}
+
+///|
+/// A button of a file told of (FilePreview.kt NoteButton): its words (an icon before them), the accent's ground with
+/// white words when `strong`, the chip's with the ink's otherwise; 12 round, 14 and 10 in. True on the frame after it
+/// was tapped.
+fn note_button(c : @ui.Ctx, key : String, icon : String, label : String, strong : Bool) -> Bool {
+  let t = @sf.theme()
+  let id = c.id(key)
+  let ink = if strong { 0xFFFFFFFFL } else { t.p.text }
+  c.box(style=if strong { note_strong } else { note_plain }, id~, fn() {
+    if icon != "" {
+      @sf.icon(c, icon, size=16.0, color=ink) |> ignore
+    }
+    c.text(label, style=if strong { note_strong_words } else { note_plain_words }) |> ignore
+  })
+  |> ignore
+  c.clicked(id)
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_base : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S3_5,
+  py=S2_5,
+  gap=S1_5,
+  align=ACenter,
+  justify=JCenter,
+  radius=Xl,
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_strong : @ui.Style = note_base.then(
+  @ui.style(bg=Accent, pressed=@ui.patch(bg=Over(Accent, A(OnAccent, O15)))),
+)
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_plain : @ui.Style = note_base.then(@ui.style(bg=Faint, pressed=@ui.patch(bg=Over(Faint, A(Fg, O5)))))
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_strong_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=OnAccent, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let note_plain_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// 安装: an APK handed to the system's installer, which asks the person to confirm (FilePreview.kt install), once
+/// its bytes are here (fetched first when it was only told of). What the system says of it comes later (app.mbt
+/// system_said): the leave to install apps asked for (its page opened), 允许 still.fail 安装应用后，再次点击安装; a
+/// failure, 无法安装：….
+fn Viewer::ask_install(self : Viewer, c : @ui.Ctx) -> Unit {
+  match self.bytes {
+    Some(b) => {
+      let name = self.file.name
+      // (handed to the host once the frame's builds are over: its bytes, given once)
+      c.tell("install/" + name, fn() { @ui.install_package(name, b) })
+    }
+    None => {
+      self.error = None
+      self.asked = true
+      self.install_after = true
+    }
+  }
 }
 
 ///|

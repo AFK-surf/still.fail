@@ -314,10 +314,14 @@ fn main {
       @sfapp.set_update_source(Some(@sfapp.cloud_updates(core_source, feed, origin)))
     }
   }
+  // crash reports and the bar's timing, where the host has them (reports.mbt: Android)
+  reports_start()
   @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) {
     // (what the core said since the last frame is handed to @core.receive as the frame begins, before this: sfcore.start)
-    @sfcore.frame(@core.subscribe("accounts"))
+    let accounts = @core.subscribe("accounts")
+    @sfcore.frame(accounts)
+    report_signed_in(c, accounts)
     @sfapp.view(c, core_source)
   })
 }

@@ -295,3 +295,34 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   assert_true(told[told.length() - 1].params.stringify().contains("\"denied\""))
   // (not idle yet: the bottom bar is still on its spring (bar.mbt), till mbui#25 declares its end)
 }
+
+///|
+test "settings: usage statistics and error reports switched off on this device, on again; no row where none are sent" {
+  let calls : Array[Made] = []
+  let sys = fake_system()
+  let notify : Ref[Json] = Ref({ "on": true, "asked": true, "push": true, "show": [] })
+  let t = notify_core(calls, sys, notify~)
+  // (a host that sends none: a build without PostHog's key, macOS, the web)
+  open_setting("home")
+  t.draw()
+  t.run_for(@ui.nav_push_ms)
+  t.scroll_to_end()
+  t.draw()
+  assert_true(t.find("发送使用统计和错误报告") is None)
+  // Android's (Crashes.reporting, kept in the app's prefs): on until turned off
+  let on = Ref(true)
+  let told : Array[Bool] = []
+  reporting_host.val = Some({ get: fn() { on.val }, set: fn(v) { told.push(v); on.val = v } })
+  t.draw()
+  t.scroll_to_end()
+  t.draw()
+  assert_true(t.find("帮助改进 still.fail。不包含聊天内容。") is Some(_))
+  t.tap_text("发送使用统计和错误报告")
+  // off: what Crashes.send then sends is nothing (Crashes.java: !reporting, no batch goes)
+  assert_eq(told, [false])
+  assert_true(!on.val)
+  t.draw()
+  t.tap_text("发送使用统计和错误报告")
+  assert_eq(told, [false, true])
+  reporting_host.val = None
+}

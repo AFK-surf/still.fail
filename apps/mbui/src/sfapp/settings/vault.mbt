@@ -374,13 +374,8 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
   let disc = 22.0
   let card_radius = @sf.around(card_pad + row_pad, disc / 2.0)
   c.box(w=Fill(1.0), pad=card_pad, radius=card_radius, bg=t.p.chip, fn() {
+    // (nothing drawn between two: SettingParts.kt DecisionOptions)
     for i, o in options {
-      if i > 0 {
-        c.box(w=Fill(1.0), pl=7.0 + 22.0 + 12.0, pr=12.0, fn() {
-          c.box(w=Fill(1.0), h=Px(1.0), bg=@sf.alpha(t.p.text, 0.07), fn() {  }) |> ignore
-        })
-        |> ignore
-      }
       let id = c.id(key + "/" + i.to_string())
       if hit(c, id) && busy < 0 {
         picked = Some(i)

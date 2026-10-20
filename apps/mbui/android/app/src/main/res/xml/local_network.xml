@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain HTTP only to a still.fail on this device or the emulator's host (a local cloud: adb reverse, the e2e flows,
+     their release-build runs too: e2e/run.sh E2E_APK); anything else over HTTPS, as still.fail's release app (which
+     allows none). -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

@@ -94,7 +94,7 @@ test "the chat's own sheet: its agents, pinning it, and on to the agent's card a
   t.tap_text("8 轮 · 共干了 1 小时 12 分")
   t.run_for(@ui.nav_push_ms)
   match app.nav.top() {
-    History(r, key) => {
+    History(r, key, _) => {
       assert_eq(r.session, "s-c1")
       assert_eq(key, "s-c1")
     }
@@ -198,4 +198,49 @@ test "a fitted sheet is as tall as what it shows: under its last card its paddin
   let t = decide_core(calls, "chat-agent")
   let foot = fitted_foot(t, "服务在线：web · 在盯着：CI")
   assert_true((foot - agent_sheet_foot).abs() < 0.5, msg="under the agent's sheet: \{foot}")
+}
+
+///|
+test "an options card: nothing drawn between two options (SettingParts.kt DecisionOptions)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat")
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    if t.find("把首页和聊天页的截图都更新") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  let (_, above, _, above_h) = t.rect_of("这次只改列表，截图下次再说").unwrap()
+  let (_, below, _, _) = t.rect_of("一起换").unwrap()
+  // no hairline across the card between the first option's words and the second's
+  assert_true(
+    t
+    .drawn_rects()
+    .iter()
+    .all(fn(r) { !(r.3 <= 1.5 && r.2 > 100.0 && r.1 > above + above_h && r.1 < below) }),
+  )
+}
+
+///|
+test "the history's post: where it went with its platform's mark, in the accent's ink, a chat here back to it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "history-link")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  app.nav.push(Chat(r))
+  app.nav.push(History(r, "s-c1", None))
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.nav_push_ms)
+  let (x, y, _, h) = t.rect_of("整理发布清单").unwrap()
+  // still.fail's mark (12) just before the name, on its line
+  assert_true(
+    t
+    .drawn_images()
+    .iter()
+    .any(fn(i) { i[2] >= 11.0 && i[2] <= 13.0 && i[0] + i[2] <= x && i[0] + i[2] >= x - 6.0 && i[1] < y + h && i[1] + i[3] > y }),
+  )
+  // the chat it went to is the one under the history: back to it
+  t.tap_text("整理发布清单")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() is Chat(_))
 }

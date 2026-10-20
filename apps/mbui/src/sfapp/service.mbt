@@ -352,16 +352,14 @@ fn service_body(
         no_answer=svc("android-chat.web.timeout", args=[("s", (@ui.site_head_wait_ms / 1000.0).to_int().to_string())]),
         too_slow=svc("android-chat.web.slow"),
         leave=fn(url) {
-          // a link elsewhere: not followed in the page; one to a chat of still.fail's opened here, any other handed to
-          // the system (AppState.openLink), said when nothing took it (Preview.kt's leave)
-          match chat_of_link(url) {
-            Some(r) => app.nav.push(Chat(r))
-            None =>
-              if !@ui.open_url(url) {
-                app.toast = svc("android-chat.link.failed")
-                app.toast_n += 1
-              }
-          }
+          // a link elsewhere: not followed in the page; one of still.fail's opened here as the core says, any other
+          // handed to the system (AppState.openLink), said when nothing took it (Preview.kt's leave)
+          open_link_in(src, url, or_else=fn() {
+            if !@ui.open_url(url) {
+              app.toast = svc("android-chat.link.failed")
+              app.toast_n += 1
+            }
+          })
         },
       )
       @ui.log("service: \{name} on \{station} (port \{port}) opened in a site view")
