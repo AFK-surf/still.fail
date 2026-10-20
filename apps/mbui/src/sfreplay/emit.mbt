@@ -80,15 +80,20 @@ fn emit_end() -> Unit {
 pub fn Flow::peer(self : Flow, words : String) -> Unit {
   emit("log do: " + words)
   // (the station frozen or thawed: the run's runner does it beside the script, not waited for, e2e/run.sh starting it
-  // in the background, and a send right after it would go before it is done; the script gives it the time the flows'
-  // own scripts gave it, and so does the clock here, what the app does meanwhile (a draft kept) with it)
+  // in the background, and a send right after it would go before it is done: the script, and only the script, gives
+  // it the time the flows' own scripts gave it. Here the step after it is taken when the run took it: Flow::start)
   if words == "freeze" || words == "thaw" {
-    self.run_for(peer_ms.to_double())
+    match script.val {
+      // det-ok(flow-wait): 等 done（mbui#done）
+      Some(s) => s.push("wait \{peer_ms}")
+      None => ()
+    }
   }
 }
 
 ///|
 /// How long a scripted run gives its runner to freeze or thaw the station (Flow::peer) before its next step.
+// det-ok(flow-wait): 等 done（mbui#done）
 let peer_ms : Int = 2000
 
 ///|
