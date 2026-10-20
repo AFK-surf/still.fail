@@ -8,6 +8,8 @@
 test "91-drive-download-many" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_drive_download_many, seed~)
+    // (put in the lent folder before the app starts: a live run's step, the trace has what came of it)
+    f.before("drive-big 105609")
     f.open_page(@sfapp.Page::Files)
     f.tap("=e2e-105609")
     f.run_to(@ui.nav_rest())

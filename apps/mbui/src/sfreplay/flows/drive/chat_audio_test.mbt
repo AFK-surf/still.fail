@@ -29,6 +29,8 @@ test "46-chat-audio" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_chat_audio, seed~)
     f.see("端到端测试")
+    // (alice's other device sends the song: a live run's step beside the app)
+    f.peer("peer createfiles 一段录音 104339 post:收到录音 104339 -- e2e-tune.m4a")
     f.see("一段录音 104339")
     f.tap("一段录音 104339")
     f.run_to(@ui.nav_rest())

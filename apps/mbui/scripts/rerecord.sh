@@ -59,6 +59,22 @@ PY
   tests="$tests $idx-$n:$trace:$test"
 done
 [ -n "$tests" ] || die "no test among: $*"
+# bytes kept as the old traces kept them: their largest beside a message (a novel read whole was kept whole), unless
+# MAX_BYTES says otherwise
+if [ -z "${MAX_BYTES:-}" ]; then
+  MAX_BYTES=$(python3 - $(for x in $tests; do r=${x#*:}; echo "${r%%:*}"; done) <<'PY'
+import json, sys
+most = 16384
+for path in sys.argv[1:]:
+    for line in open(path, encoding="utf-8"):
+        line = line.strip()
+        if line:
+            most = max(most, len(json.loads(line).get("b", "")) // 2)
+print(most)
+PY
+)
+  export MAX_BYTES
+fi
 # (none of them with a mark of its own: a new one)
 [ -n "$tag" ] || tag=$(date +%H%M%S)
 echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'

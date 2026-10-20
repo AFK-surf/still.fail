@@ -40,7 +40,8 @@ pub struct Replay {
   priv walls : Array[Double]
   /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
   priv mut seed : UInt
-  /// the calls made again since the last take_asked that the run answered, by name, in the order made
+  /// the calls made since the last take_asked that the run answered (or that it did not make: a live backend answers
+  /// them), by name, in the order made
   priv asked : Array[String]
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
@@ -429,6 +430,10 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   }
   if found < 0 {
     self.diverged.push(text)
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
+    if kind == "call" {
+      self.asked.push(name_of(m))
+    }
     return
   }
   let e = self.evs[found]
