@@ -267,6 +267,9 @@ test "settings: notifications switched off, the core keeps it; on again, the sys
   t.draw()
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("任务完成、需要处理、出错或有新消息时通知你") is Some(_))
+  // the row below the fold on a 844 high screen since the cards keep Android's room (20 in): the page at its end
+  t.scroll_to_end()
+  t.draw()
   t.tap_text("通知")
   let set = named(calls, "notify.set")
   assert_eq(set.length(), 1)
