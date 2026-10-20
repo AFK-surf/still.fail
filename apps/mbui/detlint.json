@@ -50,9 +50,7 @@
       "src/sfapp/sheet.mbt": 1,
       "src/sfapp/updates.mbt": 1
     },
-    "settle": {
-      "src/sfapp/newchat_wbtest.mbt": 5
-    },
+    "settle": {},
     "flow-wait": {
       "e2e/flows/09-paste-long.drive": 1,
       "e2e/flows/15-drive-lend.drive": 1,
@@ -135,7 +133,6 @@
     "host-read": {},
     "globals": {},
     "unsettled-ok": {
-      "src/sfapp/newchat_wbtest.mbt": 5,
       "src/sfreplay/flows/offline_retry_test.mbt": 1,
       "src/sfreplay/steps.mbt": 1
     }

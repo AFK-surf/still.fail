@@ -64,20 +64,20 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   let t = tester("home")
   t.draw()
   t.tap_text("星火工作室")
-  t.settle(unsettled_ok=true) |> ignore
+  sheet_rested(t, "sheet")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y - 200.0)
-  t.settle(unsettled_ok=true) |> ignore
+  sheet_rested(t, "sheet")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.94).abs() < 1.0)
   // a tap on the grabber: half
   let (x, y) = t.find("切换 workspace").unwrap()
   t.tap(x, y - 30.0)
-  t.settle(unsettled_ok=true) |> ignore
+  sheet_rested(t, "sheet")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.55).abs() < 1.0)
   let (x, y) = t.find("切换 workspace").unwrap()
   t.drag(x, y, x, y + 300.0)
-  t.settle(unsettled_ok=true) |> ignore
+  sheet_rested(t, "sheet")
   assert_true(t.find("切换 workspace") is None)
   assert_true(!sheet_open())
 }
@@ -88,7 +88,7 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
   t.draw()
   let before = t.list_offset()
   t.tap_text("星火工作室")
-  t.settle(unsettled_ok=true) |> ignore
+  sheet_rested(t, "sheet")
   t.drag(195.0, 700.0, 195.0, 400.0)
   assert_eq(t.list_offset(), before)
   assert_true(sheet_open())
