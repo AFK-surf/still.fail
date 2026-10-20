@@ -1,5 +1,5 @@
 #!/bin/bash
-# Records a flow's trace again from its test (src/sfreplay/flows/NAME_test.mbt), one command, nothing kept by hand:
+# Records a flow's trace again from its test (src/sfreplay/flows/*/NAME_test.mbt), one command, nothing kept by hand:
 # the test's steps, as its first order takes them, written as a scripted run (src/sfreplay/emit.mbt: FLOW_EMIT), run
 # in the app against a local still.fail of its own (scripts/e2e-local.sh up, e2e/run.sh with MBUI_CORE_TRACE=1), its
 # conversation made the test's trace again (scripts/trace.py) and what changed of its asks said (scripts/tracediff.py),
@@ -30,8 +30,8 @@ for n in "$@"; do
     [ -f "e2e/flows/$n.check" ] && cp "e2e/flows/$n.check" "$TMP/$idx-$n.check"
     continue
   fi
-  test="src/sfreplay/flows/${n}_test.mbt"
-  [ -f "$test" ] || die "no test $test, nor flow e2e/flows/$n.drive"
+  test=$(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1)
+  [ -n "$test" ] || die "no test src/sfreplay/flows/*/${n}_test.mbt, nor flow e2e/flows/$n.drive"
   ident=$(grep -o '@sfreplay\.trace_[a-z0-9_]*' "$test" | head -1 | sed 's/.*trace_//')
   [ -n "$ident" ] || die "$test names no @sfreplay.trace_…"
   trace=""
