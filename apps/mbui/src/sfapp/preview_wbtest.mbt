@@ -5,7 +5,9 @@ fn preview_tester(what : String) -> @ui.Tester {
   let src = fixture("chat-preview-" + what)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  t.settle() |> ignore
+  t.draw()
+  // seen once it is in (grown from its thumbnail, or faded in)
+  t.run_for(fly_open_ms)
   t
 }
 
@@ -32,21 +34,23 @@ test "an image opens fitted, its bar over it; a double tap zooms in, another bac
   // 600 × 400 in 390 × 844 with 12 round it: (390 - 24) / 600
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
   t.tap(195.0, 422.0)
-  t.advance(100.0)
+  t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  t.settle() |> ignore
+  t.run_for(zoom_glide_ms)
   assert_true((v.zoom.scale - 1.525).abs() < 0.01)
-  t.advance(400.0)
+  // (the next two taps a double tap of their own)
+  t.run_for(double_tap_ms)
   t.tap(195.0, 422.0)
-  t.advance(100.0)
+  t.advance(double_tap_ms / 2.0)
   t.tap(195.0, 422.0)
-  t.settle() |> ignore
+  t.run_for(zoom_glide_ms)
   assert_true((v.zoom.scale - 366.0 / 600.0).abs() < 0.001)
-  // back closes it (fading out), the chat under it again
+  // back closes it at once (only drawn going, back into its thumbnail or fading out), the chat under it again
   t.back()
-  t.settle() |> ignore
   assert_true(viewer.val is None)
+  t.run_for(fly_close_ms)
   assert_true(t.find("界面草图.png") is None)
+  t.assert_idle()
 }
 
 ///|
@@ -65,7 +69,8 @@ test "a video plays in a native view, its bytes read through the core; its contr
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
   assert_true(t.find(" / 3 帧") is Some(_))
   t.back()
-  t.settle() |> ignore
+  assert_true(viewer.val is None)
+  t.run_for(pv_fade_ms)
   assert_true(t.views().contains("close 1"))
 }
 
@@ -85,7 +90,6 @@ test "HTML in a page of its own; its source in the code face" {
   let (_, y, _, _) = t.holes()[0]
   assert_eq(y, 60.0)
   t.tap_text("源码")
-  t.settle() |> ignore
   assert_true(t.views().contains("close 1"))
   assert_true(t.find("周报草稿") is Some(_))
 }
@@ -116,17 +120,17 @@ test "two fingers pinch an image round the point between them; no tap comes of i
   let fit = v.zoom.scale
   let awake = v.awake
   t.touch(0, 150.0, 422.0)
-  t.frame()
+  t.draw()
   t.touch(4, 240.0, 422.0)
-  t.frame()
+  t.draw()
   t.touch(5, 330.0, 422.0)
-  t.frame()
+  t.draw()
   // 90 apart, then 180: twice as big
   assert_true((v.zoom.scale - fit * 2.0).abs() < 0.001)
   t.touch(6, 330.0, 422.0)
-  t.frame()
+  t.draw()
   t.touch(2, 150.0, 422.0)
-  t.settle() |> ignore
+  t.draw()
   assert_eq(v.awake, awake)
 }
 
@@ -139,19 +143,16 @@ test "stepping through the chat's images: the way to the next (imageNear), a tap
   let (_, after) = v.near(fixture("chat-preview-step"))
   assert_true(after is Some(_))
   t.tap(390.0 - 8.0 - 18.0, 422.0)
-  t.settle() |> ignore
-  assert_true(t.find("第二版.png") is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "第二版.png")
+  assert_true(t.find("第二版.png") is Some(_))
 }
 
 ///|
 test "a swipe past a fifth of the stage goes to the next; a short one comes back" {
   let t = preview_tester("step")
   t.drag(300.0, 422.0, 260.0, 422.0)
-  t.settle() |> ignore
   assert_eq(viewer.val.unwrap().file.name, "界面草图.png")
   t.drag(300.0, 422.0, 100.0, 422.0)
-  t.settle() |> ignore
   assert_eq(viewer.val.unwrap().file.name, "第二版.png")
 }
 
@@ -159,13 +160,12 @@ test "a swipe past a fifth of the stage goes to the next; a short one comes back
 test "marking: a box drawn on the picture is numbered, its note kept, its quote says where it is" {
   let t = preview_tester("image")
   marks_start()
-  t.settle() |> ignore
+  t.draw()
   let v = viewer.val.unwrap()
   let (x, y, w, _) = v.zoom.rect().unwrap()
   let k = w / v.zoom.nw
   // from (100, 100) to (300, 200) in the picture's pixels
   t.drag(x + 100.0 * k, y + 100.0 * k, x + 300.0 * k, y + 200.0 * k)
-  t.settle() |> ignore
   assert_eq(marking.shapes.length(), 1)
   assert_eq(marking.shapes[0].kind, "box")
   assert_eq(mark_numbers(marking.shapes).get(marking.shapes[0].id), Some(1))

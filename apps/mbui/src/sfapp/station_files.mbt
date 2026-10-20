@@ -248,7 +248,12 @@ fn station_files_open(c : @ui.Ctx, key : String) -> Unit {
 }
 
 ///|
+/// The sheet (or a station file's card's) drawn closing this long after it was closed.
+let sfs_close_ms : Double = 300.0
+
+///|
 fn station_files_close(c : @ui.Ctx) -> Unit {
+
   sfs.open = false
   sfs.closed_at = c.now()
 }
@@ -258,7 +263,7 @@ fn station_files_close(c : @ui.Ctx) -> Unit {
 /// 取消 and 添加.
 fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> Unit {
   let closing = !sfs.open
-  if closing && (c.now() - sfs.closed_at >= 300.0 || sfs.draft != key) {
+  if closing && (c.now() - sfs.closed_at >= sfs_close_ms || c.stable() || sfs.draft != key) {
     return
   }
   if closing {
@@ -562,7 +567,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     return
   }
   let closing = sfs.ref_closed > sfs.ref_at
-  if closing && c.now() - sfs.ref_closed >= 300.0 {
+  if closing && c.now() - sfs.ref_closed >= sfs_close_ms {
     sfs.ref = None
     return
   }

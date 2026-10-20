@@ -406,7 +406,7 @@ fn Zoom::step(self : Zoom, now : Double) -> Bool {
   if self.g0 < 0.0 {
     return false
   }
-  let t = dmin(1.0, (now - self.g0) / 260.0)
+  let t = dmin(1.0, (now - self.g0) / zoom_glide_ms)
   let e = @ui.bezier(0.16, 1.0, 0.3, 1.0, t)
   self.scale = self.g_from[0] + (self.g_to[0] - self.g_from[0]) * e
   self.x = self.g_from[1] + (self.g_to[1] - self.g_from[1]) * e
@@ -555,6 +555,19 @@ let fly_open_ms : Double = 320.0
 let fly_close_ms : Double = 280.0
 
 ///|
+/// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
+let pv_fade_ms : Double = 140.0
+
+///|
+/// A zoom gliding to where it was told.
+let zoom_glide_ms : Double = 260.0
+
+///|
+/// Two taps within this long are a double tap.
+let double_tap_ms : Double = 300.0
+
+
+///|
 /// What an image opened in the viewer steps through (FilePreview.kt Gallery): the images of the chat it is opened from,
 /// of which the core tells those beside the one shown (`imageNear`: by the chat's thread, else its session), not the
 /// chat's every image; or a folder's of a drive.
@@ -566,6 +579,11 @@ priv enum Stepping {
 
 ///|
 let viewer : Ref[Viewer?] = { val: None }
+
+///|
+/// The viewer closed and still drawn going (its fade or its flight back), no longer the one open: closing takes it
+/// out of `viewer` at once, and what is under it is the page's again.
+let pv_leaving : Ref[Viewer?] = { val: None }
 
 ///|
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps
@@ -709,28 +727,44 @@ priv struct Strip {
 let pv_strip : Strip = { leaving: None, pinned: None, near: Map([]) }
 
 ///|
-/// The viewer gone at once, what it holds let go (its player stopped, its page and PDF closed).
+/// The viewer gone at once (the one open and the one going), what it holds let go (its player stopped, its page and
+/// PDF closed).
 fn close_now() -> Unit {
   marks_leave()
   match viewer.val {
-    Some(v) => {
-      if v.turned {
-        @host.set_sideways(false)
-      }
-      match v.video {
-        Some(n) => n.close()
-        None => ()
-      }
-      match v.page {
-        Some(n) => n.close()
-        None => ()
-      }
-      match v.pdf {
-        Some(p) => p.close()
-        None => ()
-      }
-      viewer.val = None
-    }
+    Some(v) => v.let_go()
+    None => ()
+  }
+  viewer.val = None
+  leaving_done()
+}
+
+///|
+/// The viewer that was going, gone.
+fn leaving_done() -> Unit {
+  match pv_leaving.val {
+    Some(v) => v.let_go()
+    None => ()
+  }
+  pv_leaving.val = None
+}
+
+///|
+/// What a viewer holds of the host's, let go.
+fn Viewer::let_go(self : Viewer) -> Unit {
+  if self.turned {
+    @host.set_sideways(false)
+  }
+  match self.video {
+    Some(n) => n.close()
+    None => ()
+  }
+  match self.page {
+    Some(n) => n.close()
+    None => ()
+  }
+  match self.pdf {
+    Some(p) => p.close()
     None => ()
   }
 }
@@ -1038,7 +1072,11 @@ fn upper(s : String) -> String {
 fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let v = match viewer.val {
     Some(v) => v
-    None => return
+    None =>
+      match pv_leaving.val {
+        Some(v) => v
+        None => return
+      }
   }
   let now = c.now()
   if v.opened < 0.0 {
@@ -1066,7 +1104,7 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let p = v.flying(now)
   if v.fly_at >= 0.0 && v.fly_back && p <= 0.0 {
     // landed in its thumbnail
-    close_now()
+    leaving_done()
     pv_hidden.val = ""
     c.request_frame()
     return
@@ -1079,12 +1117,12 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let faded = if v.fly_at >= 0.0 {
     1.0
   } else if v.closing >= 0.0 {
-    1.0 - dmin(1.0, (now - v.closing) / 140.0)
+    1.0 - dmin(1.0, (now - v.closing) / pv_fade_ms)
   } else {
-    dmin(1.0, (now - v.opened) / 140.0)
+    dmin(1.0, (now - v.opened) / pv_fade_ms)
   }
   if v.closing >= 0.0 && v.fly_at < 0.0 && faded <= 0.0 {
-    close_now()
+    leaving_done()
     c.request_frame()
     return
   }
@@ -1146,13 +1184,22 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     }
   })
   |> ignore
-  c.take_back(fn() { if marking.on { marks_back(c) } else { v.close(c) } })
+  // (one going takes back no more: it is the page's)
+  if v.closing < 0.0 {
+    c.take_back(fn() { if marking.on { marks_back(c) } else { v.close(c) } })
+  }
 }
 
 ///|
 fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
   if self.closing < 0.0 {
     self.closing = c.now()
+    // closed at once: the one going is only drawn (what was going before it, gone)
+    marks_leave()
+    leaving_done()
+    viewer.val = None
+    pv_leaving.val = Some(self)
+
     // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to)
     match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
       (Some(t), Some(KImage), Some(_)) => {
@@ -1970,7 +2017,7 @@ fn Viewer::gestures(
     v.pinched = false
   }
   if c.clicked(stage) && v.moved <= 8.0 && !pinched {
-    if now - v.tap_at < 300.0 && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
+    if now - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
       v.toggle(now)
@@ -2249,25 +2296,26 @@ fn frame_at(starts : Array[Double], ms : Double) -> Int {
 fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Double) -> Unit {
   let id = c.id("preview/timeline")
   let part = if dur > 0.0 { dmax(0.0, dmin(1.0, pos / dur)) } else { 0.0 }
-  match c.rect_of(id) {
+  let held = match c.rect_of(id) {
     Some((x, _, w, _)) if c.pressed(id) && dur > 0.0 => {
       let (px, _, _) = c.pointer()
       n.seek(dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur)
-      // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
-      v.awake = true
-      v.rest_at = -1.0
-      v.scrubbing = true
+      true
     }
-    _ =>
-      if v.scrubbing {
-        // let go: the bars rest from now
-        v.scrubbing = false
-        v.wake(c.now(), tap_rest_ms)
-        if v.rest_at > 0.0 {
-          c.wake_in(tap_rest_ms)
-        }
-
-      }
+    _ => false
+  }
+  if held {
+    // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
+    v.awake = true
+    v.rest_at = -1.0
+    v.scrubbing = true
+  } else if v.scrubbing {
+    // let go: the bars rest from now
+    v.scrubbing = false
+    v.wake(c.now(), tap_rest_ms)
+    if v.rest_at > 0.0 {
+      c.wake_in(tap_rest_ms)
+    }
   }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)

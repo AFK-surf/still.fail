@@ -539,7 +539,12 @@ fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
 }
 
 ///|
+/// A sheet of the drive's (or a reader's panel) drawn closing this long after it was closed.
+let dv_sheet_close_ms : Double = 300.0
+
+///|
 /// How long a row is held before the hold acts (the system's long press).
+
 let dv_hold_ms : Double = 400.0
 
 ///|

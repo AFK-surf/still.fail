@@ -1072,7 +1072,7 @@ fn reader_panels(
 ) -> Unit {
   let (panel, closing) = match r.panel {
     NoPanel =>
-      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 {
+      if r.closing != NoPanel && c.now() - r.closed_at < dv_sheet_close_ms && !c.stable() {
         c.request_frame()
         (r.closing, true)
       } else {
@@ -1385,6 +1385,10 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
   // (the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
   // has drawn its bars; a click handled asks for that frame)
 }
+
+///|
+/// The reader's bars coming or going.
+let reader_bars_ms : Double = 180.0
 
 ///|
 /// The search goes this long after the last thing typed.
