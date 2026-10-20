@@ -1,0 +1,45 @@
+# The core's contract (apps/mbui/e2e/contract.sh, mbui's docs/determinism.md "What is compared, and where"): the tapes
+# still.fail mbui's Tester flows are given again (apps/mbui/e2e/traces/*.trace) put to this checkout's TS core in Node,
+# against a local still.fail started in the job (the dev cloud, a relay, a test station with ember's fake claude), and
+# its answers compared with the tapes'. A tape the core no longer answers fails here, saying how to record it again:
+# else the Tester's flows would pass on what the core once said. Daily, on main when the core or a tape changes, and on
+# demand; blocking nothing.
+name: core-contract
+on:
+  schedule:
+    - cron: "41 3 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "client/core-ts/**"
+      - "apps/mbui/e2e/traces/**"
+      - "apps/mbui/e2e/contract.*"
+      - ".github/workflows/core-contract.yml"
+  pull_request:
+    paths:
+      - "apps/mbui/e2e/contract.*"
+      - ".github/workflows/core-contract.yml"
+  workflow_dispatch:
+concurrency:
+  group: core-contract-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/natives
+      - name: The tapes put to the core (apps/mbui/e2e/contract.sh)
+        run: bash apps/mbui/e2e/contract.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: core-contract-${{ github.sha }}
+          path: |
+            apps/mbui/out/contract/result.txt
+            apps/mbui/out/contract-local/run/*.log
+          if-no-files-found: ignore
