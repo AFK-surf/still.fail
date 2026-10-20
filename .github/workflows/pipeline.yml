@@ -324,7 +324,25 @@ jobs:
       # (native too once its tests link: a test's binary is not given the Apple frameworks mbui's host needs, as only
       # an app's main package is; on GitHub's macOS they fail to link)
       - name: The mbui app's tests and the flows seen again (js)
-        run: LINES_OUT=40 bash apps/mbui/scripts/test.sh
+        run: |
+          set -o pipefail
+          LINES_OUT=40 bash apps/mbui/scripts/test.sh 2>&1 | tee "$RUNNER_TEMP/mbui-test.log"
+      # What failed, and in which commit, where everyone sees it (main is pushed to directly too: red, said whose)
+      - name: What failed
+        if: failure()
+        run: |
+          failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-test.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
+          why=$(grep -a '^flow: \|assert_idle: not' "$RUNNER_TEMP/mbui-test.log" | grep -v 'not checked idle' | sort -u | head -10)
+          subject=$(git log -1 --format='%h %an: %s' "$GITHUB_SHA")
+          echo "::error title=check-mbui failed at ${GITHUB_SHA:0:9}::$(printf '%s' "$failed" | tr '\n' ';')"
+          {
+            echo "### check-mbui failed at $subject"
+            echo
+            echo '```'
+            printf '%s\n' "${failed:-(no test named: the check or the build failed, see the log)}"
+            echo '```'
+            [ -z "$why" ] || { echo '```'; printf '%s\n' "$why" | cut -c1-300; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
