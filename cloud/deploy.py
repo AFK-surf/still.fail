@@ -42,6 +42,9 @@ like, nothing else changes):
 Cloudflare: an interactive `wrangler login` (or CLOUDFLARE_API_TOKEN). Docker (OrbStack) builds the relay image.
 """
 import argparse
+import base64
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -139,19 +142,21 @@ def grant_jwk() -> dict:
     return json.loads(out)
 
 
+def relay_load_token(admin_token: str) -> str:
+    """What the relays on machines of their own send their counters with (relay-load.sh): made from ADMIN_TOKEN, so a
+    keys.json from before it (CI's DEPLOY_KEYS_JSON among them) gives the same one every deploy."""
+    digest = hmac.new(admin_token.encode(), b"stillfail relay load", hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
 def keys() -> dict:
     if KEYS.exists():
         value = json.loads(KEYS.read_text())
-        # What the relays on machines of their own send their counters with (relay-load.sh), made once when missing.
-        if "RELAY_LOAD_TOKEN" not in value:
-            value["RELAY_LOAD_TOKEN"] = secrets.token_urlsafe(32)
-            write_private(KEYS, value)
-            print(f"added RELAY_LOAD_TOKEN to {KEYS}")
-        return value
-    value = {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32), "RELAY_LOAD_TOKEN": secrets.token_urlsafe(32), "GRANT_SIGNING_JWK": json.dumps(grant_jwk())}
-    write_private(KEYS, value)
-    print(f"created {KEYS}")
-    return value
+    else:
+        value = {"AUTH_SIGNING_KEY": secrets.token_urlsafe(32), "ADMIN_TOKEN": secrets.token_urlsafe(32), "GRANT_SIGNING_JWK": json.dumps(grant_jwk())}
+        write_private(KEYS, value)
+        print(f"created {KEYS}")
+    return {"RELAY_LOAD_TOKEN": relay_load_token(value["ADMIN_TOKEN"]), **value}
 
 
 def axiom() -> dict:
