@@ -580,18 +580,27 @@ async function download(part: string, target: Target, k: string): Promise<string
   // a prebuilt one's store, then the release CI publishes to
   const started = Date.now();
   let url = "";
-  let response: Response | null = null;
+  let bytes: Buffer | null = null;
+  // (each place in turn: one that answers and then breaks off is said so, and the next one asked: a body cut short
+  // failed the whole job with only the socket's error, 39431384793)
   for (const at of [`${STORE}/${name}`, `https://github.com/${REPO}/releases/download/${RELEASE}/${name}`]) {
+    let answered = false;
     try {
       const r = await fetch(at, { redirect: "follow", signal: AbortSignal.timeout(300_000) });
-      if (r.ok) { url = at; response = r; break; }
-      if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
+      if (!r.ok) {
+        if (r.status !== 404) log(`${part} ${target}: ${at} answered ${r.status}`);
+        continue;
+      }
+      answered = true;
+      bytes = Buffer.from(await r.arrayBuffer());
+      url = at;
+      break;
     } catch (e) {
-      log(`${part} ${target}: could not reach ${new URL(at).host} (${(e as Error).message})`);
+      const cause = (e as Error & { cause?: Error }).cause?.message;
+      log(`${part} ${target}: ${answered ? `${at} broke off while sending it` : `could not reach ${new URL(at).host}`} (${(e as Error).message}${cause ? `: ${cause}` : ""})`);
     }
   }
-  if (!response) return null;
-  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes) return null;
   const tgz = join(tmpdir(), `${name}.${process.pid}`);
   writeFileSync(tgz, bytes);
   try {
