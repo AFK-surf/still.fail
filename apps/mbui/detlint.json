@@ -46,12 +46,10 @@
   "counts": {
     "frame-request": {
       "src/sfapp/chat.mbt": 1,
-      "src/sfapp/composer.mbt": 2,
+      "src/sfapp/composer.mbt": 1,
       "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/pick.mbt": 1,
-      "src/sfapp/recent.mbt": 1,
-      "src/sfapp/service.mbt": 1,
-      "src/sfapp/updates.mbt": 1
+      "src/sfapp/service.mbt": 1
     },
     "settle": {},
     "flow-wait": {
@@ -105,10 +103,7 @@
       "src/stillfail/main.mbt": 1
     },
     "poll": {
-      "src/sfapp/composer.mbt": 1,
       "src/sfapp/drive_reader.mbt": 1,
-      "src/sfapp/preview.mbt": 2,
-      "src/sfapp/recent.mbt": 2,
       "src/sfapp/service.mbt": 1
     },
     "host-read": {},
