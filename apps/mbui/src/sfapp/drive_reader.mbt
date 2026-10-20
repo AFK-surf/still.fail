@@ -122,7 +122,8 @@ priv struct TextReading {
   mut within : Double
   mut chrome : Bool
   mut panel : ReaderPanel
-  mut panel_at : Double
+  /// the contents just opened: put at the chapter read (once, as it is first laid out)
+  mut contents_put : Bool
   mut closing : ReaderPanel
   mut query : String
   mut searched : String
@@ -163,7 +164,7 @@ fn reading_for(key : String) -> TextReading {
         within: 0.0,
         chrome: false,
         panel: NoPanel,
-        panel_at: 0.0,
+        contents_put: false,
         closing: NoPanel,
         query: "",
         searched: "",
@@ -1038,7 +1039,7 @@ fn reader_tool(c : @ui.Ctx, key : String, icon : String, label : String, p : Pap
 ///|
 fn reader_open_panel(c : @ui.Ctx, r : TextReading, panel : ReaderPanel) -> Unit {
   r.panel = panel
-  r.panel_at = c.now()
+  r.contents_put = panel == Contents
   if panel == Find {
     c.focus_editor("reader-search")
   }
@@ -1095,7 +1096,8 @@ fn reader_panels(
             |> ignore
           } else {
             let key = "contents/" + r.key
-            if !closing && c.now() - r.panel_at < 20.0 {
+            if !closing && r.contents_put {
+              r.contents_put = false
               c.list_scroll_to(key, if chapter > 3 { chapter - 3 } else { 0 })
             }
             c.list(key, novel.chapters.length(), 45.0, fn(i) {
