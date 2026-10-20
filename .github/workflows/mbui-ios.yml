@@ -3,8 +3,8 @@
 # scripts, the core's Apple engine, the smoke flows and their runner, the pinned mbui (its iOS host). What else the
 # app does is the same MoonBit as on the other hosts, checked by check-mbui's Tester replays (pipeline.yml).
 # On mini1-6 (label mbui), after the job before it there; once there, it waits for Mini1 to be able to take it (the
-# simulator not running another's app, the load under 12) and fails saying so after 20 minutes, rather than run
-# over another or on a machine loaded past where the simulator crashed (2026-10-20).
+# simulator not running another's app, the load under 20: twice its 10 cores) and fails saying so after 30 minutes,
+# rather than run over another or on a machine loaded past where the simulator crashed (2026-10-20).
 name: mbui-ios
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
   smoke:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: mbui
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
