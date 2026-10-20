@@ -501,13 +501,6 @@ fn seg(
   }
   let inset = 2.0
   let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
-  // each option's place in the track, as laid out last frame: the thumb slides to the one chosen (placed the first
-  // time, as Seg's first placement jumps)
-  let (x, w) = match (c.rect_of(base + picked + 1), c.rect_of(base)) {
-    (Some(r), Some(tr)) =>
-      (c.spring(key + "/x", r.0 - tr.0 - inset), c.spring(key + "/w", r.2))
-    _ => (0.0, 0.0)
-  }
   let track = fn() {
     c.box(
       dir=Row,
@@ -518,25 +511,13 @@ fn seg(
       bg=@sf.alpha(t.p.text, 0.06),
       id=base,
       fn() {
-        if w > 0.0 {
-          c.layer(pad=inset, fn() {
-            c.box(
-              w=Px(w),
-              h=Fill(1.0),
-              tx=x,
-              radius=dmax(radius - inset, 0.0),
-              bg=thumb,
-              border=0.5,
-              border_color=t.p.line,
-              fn() {  },
-            )
-            |> ignore
-          })
-          |> ignore
-        }
+        // the thumb behind the options, laid out over the one chosen in the frame they are (Ctx::cover): to another
+        // on its spring, placed at once the first time (as Seg's first placement jumps)
+        let holder = c.layer(fn() {  })
+        let items : Array[Int] = []
         for i, label in options {
           let id = base + i + 1
-          c.box(
+          let item = c.box(
             w=if fill { Fill(1.0) } else { Auto },
             h=Fill(1.0),
             min_w=if pill { 101.0 } else { 0.0 },
@@ -554,8 +535,20 @@ fn seg(
               |> ignore
             },
           )
-          |> ignore
+          items.push(item)
         }
+        c.cover(key + "/thumb", holder, items, picked, fn(c, w, h) {
+          c.box(
+            w=Px(w),
+            h=Px(h),
+            radius=dmax(radius - inset, 0.0),
+            bg=thumb,
+            border=0.5,
+            border_color=t.p.line,
+            fn() {  },
+          )
+          |> ignore
+        })
       },
     )
     |> ignore

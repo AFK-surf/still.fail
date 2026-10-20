@@ -15,6 +15,8 @@ test "13-delete-failed" {
     f.see("未发送")
     f.tap("=删除")
     f.gone("这条没发出去就删掉 082947")
-    f.end(unsettled_ok="a motion said is not at rest：删掉未发送消息后列表收拢的动画（约 200 ms），没有可 run_to 的 rest（等 app 迁移）")
+    // its row fades out where it was (out_leave_ms)
+    f.run_for(@sfapp.out_leave_ms)
+    f.end()
   })
 }

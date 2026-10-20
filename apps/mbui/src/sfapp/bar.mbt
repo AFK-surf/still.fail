@@ -190,6 +190,8 @@ pub let icon_swap_ms : Double = 300.0
 /// (@ui.SpringPath): `x`, `v` and `to` where it is, how fast it goes and where to, as of this frame (sample).
 priv struct Spr {
   mut path : @ui.SpringPath?
+  /// riding something that moves itself (the ball on a bar chosen coming down: Ride), its way worked out as it set out
+  mut ride : Ride?
   mut x : Double
   mut v : Double
   mut to : Double
@@ -201,7 +203,7 @@ priv struct Spr {
 
 ///|
 fn spr(start : Double, tension : Double, friction : Double, rest? : Double = 0.001) -> Spr {
-  { path: None, x: start, v: 0.0, to: start, tension, friction, rest }
+  { path: None, ride: None, x: start, v: 0.0, to: start, tension, friction, rest }
 }
 
 ///|
@@ -212,6 +214,20 @@ fn Spr::moving(self : Spr) -> Bool {
 ///|
 /// Where it is at `now` (once a frame).
 fn Spr::sample(self : Spr, now : Double) -> Unit {
+  match self.ride {
+    Some(r) => {
+      let (x, v) = r.at(now)
+      self.x = x
+      self.v = v
+      if now >= r.end {
+        // there: at rest where it rode to
+        self.ride = None
+        self.put(r.to)
+      }
+      return
+    }
+    None => ()
+  }
   match self.path {
     Some(p) => {
       let (x, v) = p.at(now)
@@ -227,17 +243,30 @@ fn Spr::sample(self : Spr, now : Double) -> Unit {
 /// so already.
 fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit {
   let same = tension == self.tension && friction == self.friction
+  let now = bar_now()
+  // riding: where it rides to by the ride's spring is nothing new; anything else sets out from where the ride has it
+  let rode = match self.ride {
+    Some(r) => {
+      if same && r.to == to {
+        return
+      }
+      self.ride = None
+      r.stop()
+      Some(r.at(now))
+    }
+    None => None
+  }
   match self.path {
-    Some(p) if same && p.target() == to => return
+    Some(p) if rode is None && same && p.target() == to => return
     _ => ()
   }
-  let now = bar_now()
-  let (x, v) = match self.path {
-    Some(p) => p.at(now)
-    None => (self.x, self.v)
+  let (x, v) = match (rode, self.path) {
+    (Some(xv), _) => xv
+    (None, Some(p)) => p.at(now)
+    (None, None) => (self.x, self.v)
   }
   let p = match self.path {
-    Some(p) if same => p
+    Some(p) if same && rode is None => p
     old => {
       // (a spring of another stiffness from here: the old one's way is over)
       match old {
@@ -260,15 +289,30 @@ fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit
 ///|
 /// When it is at rest (the frames' clock, ms; before now, or -1: it is).
 fn Spr::end(self : Spr) -> Double {
+  match (self.ride, self.path) {
+    (Some(r), _) => r.end
+    (None, Some(p)) => p.end()
+    (None, None) => -1.0
+  }
+}
+
+///|
+/// Where it is at `t` (ms, the frames' clock), by what it was told so far: for what rides on it (Ride).
+fn Spr::value_at(self : Spr, t : Double) -> Double {
   match self.path {
-    Some(p) => p.end()
-    None => -1.0
+    Some(p) => p.value(t)
+    None => self.x
   }
 }
 
 ///|
 /// There at once, at rest.
 fn Spr::put(self : Spr, x : Double) -> Unit {
+  match self.ride {
+    Some(r) => r.stop()
+    None => ()
+  }
+  self.ride = None
   match self.path {
     Some(p) => p.put(x)
     None => ()
@@ -282,11 +326,164 @@ fn Spr::put(self : Spr, x : Double) -> Unit {
 /// As at the start.
 fn Spr::back(self : Spr, x : Double, tension : Double, friction : Double) -> Unit {
   self.path = None
+  self.ride = None
   self.x = x
   self.v = 0.0
   self.to = x
   self.tension = tension
   self.friction = friction
+}
+
+///|
+/// A spring riding something that moves by itself (Bar.kt ride: the ball on a bar chosen as it comes down, sent each
+/// frame to where its place is then), its way worked out once as it sets out, from the ways of what it rides on (the
+/// panel's and the notch's springs, known to their end): sent at each step of `ride_step_ms` to where that is then, at
+/// rest at `to` from `end` on. So it is the same however often frames come, and its end is said as it sets out
+/// (Ctx::moving), not anew each frame.
+priv struct Ride {
+  /// each leg: when it starts, from where and how fast, and towards what
+  legs : Array[(Double, Double, Double, Double)]
+  /// the spring: stiffness, damping ratio
+  k : Double
+  ratio : Double
+  to : Double
+  end : Double
+  /// what it was worked out from (RideFrom::same)
+  from : RideFrom
+  mut stopped : Bool
+}
+
+///|
+/// What a ride rides on, as it set out: the bar chosen and its place, the window, and the ways of the springs it rides
+/// on (where they go, when they are at rest).
+priv struct RideFrom {
+  swap : Swap
+  j : Int
+  w : Double
+  row_top : Double
+  o_to : Double
+  o_end : Double
+  k_to : Double
+  k_end : Double
+}
+
+///|
+/// The step a ride is sent at (a frame's, at 60 a second: as the ball was sent each frame).
+let ride_step_ms : Double = 16.0
+
+///|
+/// A ride from `x` (at `v` a second) at `t0`, by stiffness `k` and damping `c`, after `anchor` (where it is sent at a
+/// time) until `still` (when what it rides on is at rest; after it, where it is sent stays), at rest within `rest`.
+fn Ride::new(
+  x : Double,
+  v : Double,
+  t0 : Double,
+  k : Double,
+  c : Double,
+  rest : Double,
+  anchor : (Double) -> Double,
+  still : Double,
+  from : RideFrom,
+) -> Ride {
+  let ratio = c / (2.0 * k.sqrt())
+  let legs = []
+  let mut t = t0
+  let mut x = x
+  let mut v = v
+  let mut to = anchor(t0)
+  legs.push((t, x, v, to))
+  while t < still {
+    let next = t + ride_step_ms
+    let (d, vel) = @motion.spring_at(ratio, k, x - to, v, (next - t) / 1000.0)
+    x = to + d
+    v = vel
+    t = next
+    to = anchor(dmin(t, still))
+    legs.push((t, x, v, to))
+  }
+  let end = t + @motion.spring_duration(ratio, k, x - to, v, rest)
+  { legs, k, ratio, to, end, from, stopped: false }
+}
+
+///|
+/// Where it is at `t`, and how fast it goes (a second).
+fn Ride::at(self : Ride, t : Double) -> (Double, Double) {
+  if t >= self.end {
+    return (self.to, 0.0)
+  }
+  // the leg it is on: the last one started by `t`
+  let mut i = self.legs.length() - 1
+  while i > 0 && self.legs[i].0 > t {
+    i = i - 1
+  }
+  let (t0, x0, v0, to) = self.legs[i]
+  let (d, v) = @motion.spring_at(self.ratio, self.k, x0 - to, v0, dmax(0.0, t - t0) / 1000.0)
+  (to + d, v)
+}
+
+///|
+/// Ended before its end (sent elsewhere, put): it no longer moves.
+fn Ride::stop(self : Ride) -> Unit {
+  self.stopped = true
+}
+
+///|
+impl @ui.Moving for Ride with rest_at(self, now, frame) {
+  ignore(now)
+  ignore(frame)
+  if self.stopped {
+    -1.0
+  } else {
+    self.end
+  }
+}
+
+///|
+/// Whether a ride worked out from `a` rides on what `b` says now.
+fn RideFrom::same(a : RideFrom, b : RideFrom) -> Bool {
+  physical_equal(a.swap, b.swap) &&
+  a.j == b.j &&
+  a.w == b.w &&
+  a.row_top == b.row_top &&
+  a.o_to == b.o_to &&
+  a.o_end == b.o_end &&
+  a.k_to == b.k_to &&
+  a.k_end == b.k_end
+}
+
+///|
+/// `self` set riding by `anchor` until `still` (Ride::new), from where it is now, unless it rides so already; said once
+/// as it sets out (Ctx::moving).
+fn Spr::ride_on(self : Spr, tension : Double, anchor : (Double) -> Double, still : Double, from : RideFrom) -> Unit {
+  match self.ride {
+    Some(r) if r.from.same(from) && r.k == tension => return
+    _ => ()
+  }
+  let now = bar_now()
+  let (x, v) = match (self.ride, self.path) {
+    (Some(r), _) => r.at(now)
+    (None, Some(p)) => p.at(now)
+    (None, None) => (self.x, self.v)
+  }
+  match self.ride {
+    Some(r) => r.stop()
+    None => ()
+  }
+  // (its own spring's way is over: it rides from here)
+  match self.path {
+    Some(p) => p.put(x)
+    None => ()
+  }
+  let friction = ball_damping(tension)
+  let r = Ride::new(x, v, now, tension, friction, self.rest, anchor, dmax(now, still), from)
+  self.ride = Some(r)
+  self.x = x
+  self.v = v
+  self.to = r.to
+  self.tension = tension
+  self.friction = friction
+  let c = @ui.current()
+  c.moving(c.mover_id(), r as &@ui.Moving)
 }
 
 ///|
@@ -948,30 +1145,51 @@ fn bottom_bar(c : @ui.Ctx, src : Source, ws : Workspace, active : String?, shown
     m.active_was = active_key
     m.trip = dmax(8.0, (goal_x - m.ball_x.x).abs())
   }
-  let mut gx = goal_x
-  let mut gy = goal_y
-  let mut tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip, 90.0, 700.0) }
+  let tension = if sliding { 300.0 } else { dclamp(300.0 * slot_px / m.trip, 90.0, 700.0) }
   // riding a bar chosen: after the place tapped in it as it comes down (Bar.kt ride)
-  match m.swap {
+  let ride = match m.swap {
     Some({ key: Some(key), .. } as s) =>
       match s.sets[s.i].search(key) {
-        Some(j) => {
-          let (xs, y) = swap_at(s, m.o.x, w, m.k_now(), row_top)
-          gx = xs[j]
-          gy = y + s.drop * (1.0 - s.t(m.o.x))
-          tension = 300.0
-        }
-        None => ()
+        Some(j) => Some((s, j))
+        None => None
       }
-    _ => ()
+    _ => None
   }
   if m.width != w {
     // a new width (turned): there at once
     m.width = w
     m.ball_x.put(goal_x)
   }
-  m.ball_x.go(gx, tension, ball_damping(tension))
-  m.ball_y.go(gy, ball_down, ball_damping(ball_down))
+  match ride {
+    Some((s, j)) => {
+      // where its place is at a time, by the panel's and the notch's ways (as swap_at has it each frame): ridden
+      // after on the ball's springs, worked out once as it sets out (Ride), again only when those ways change
+      let from = {
+        swap: s,
+        j,
+        w,
+        row_top,
+        o_to: m.o.to,
+        o_end: m.o.end(),
+        k_to: m.k.to,
+        k_end: m.k.end(),
+      }
+      let still = dmax(m.o.end(), m.k.end())
+      let o = m.o
+      let k = m.k
+      let place_at = fn(t : Double) {
+        let ot = o.value_at(t)
+        let (xs, y) = swap_at(s, ot, w, k.value_at(t) * (1.0 - dclamp(2.0 * ot, 0.0, 1.0)), row_top)
+        (xs[j], y + s.drop * (1.0 - s.t(ot)))
+      }
+      m.ball_x.ride_on(300.0, fn(t) { place_at(t).0 }, still, from)
+      m.ball_y.ride_on(ball_down, fn(t) { place_at(t).1 }, still, from)
+    }
+    None => {
+      m.ball_x.go(goal_x, tension, ball_damping(tension))
+      m.ball_y.go(goal_y, ball_down, ball_damping(ball_down))
+    }
+  }
   m.held.go(if sliding { 1.0 } else { 0.0 }, 420.0, 16.0)
   let ball_shown = ai >= 0 ||
     sliding ||

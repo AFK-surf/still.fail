@@ -362,14 +362,28 @@ fn draft_quote(d : Draft, author : String, words : String, ts : String, role : S
 // ── files ──────────────────────────────────────────────────────────────
 
 ///|
-/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes): from the source's time
-/// of day and a count, so a fixture or a test (whose time stands) gets the same ids each run.
+/// An upload's id: 32 hex digits, new each time (the Android app's UUID without its dashes): from a seed this run of
+/// the app takes once (the source's time of day as its first upload is made) and a count, so the same uploads made
+/// over the same source get the same ids, whenever each is made and whatever came between (a fixture's or a replay's
+/// time), and another run of the app other ids.
 let upload_serial : Ref[Int] = { val: 0 }
+
+///|
+/// The seed upload ids are made from (upload_id), once taken.
+let upload_seed : Ref[Double?] = { val: None }
 
 ///|
 fn upload_id(src : Source) -> String {
   upload_serial.val += 1
-  let seed = "\{(src.now)()}/\{upload_serial.val}"
+  let run = match upload_seed.val {
+    Some(s) => s
+    None => {
+      let s = (src.now)()
+      upload_seed.val = Some(s)
+      s
+    }
+  }
+  let seed = "\{run}/\{upload_serial.val}"
   let hex = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]

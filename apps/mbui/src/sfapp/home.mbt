@@ -449,6 +449,13 @@ fn item_key(it : Item) -> String {
 }
 
 ///|
+/// How long a row new to Home takes to grow in, and how long after it came it starts.
+pub let row_in_ms : Double = 240.0
+
+///|
+pub let row_in_after_ms : Double = 100.0
+
+///|
 /// How a row or day's heading moves as the list changes (Home.kt Moving, Leaving): from where it was to where it is
 /// on the MOVE spring (a little late while closing over one gone), growing in when new (240 ms after 100, Ease.Out,
 /// from 90% and nothing), and one gone drawn where it was as it shrinks to 90% and fades (200 ms, CSS's ease-out);
@@ -459,7 +466,7 @@ fn moving(c : @ui.Ctx, lid : Int, list : String, key : String, i : Int) -> Unit 
     i,
     list + "\u{1}" + key,
     spec=@motion.row_spring,
-    enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(240.0, ease=Out, delay=100.0)),
+    enter=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(row_in_ms, ease=Out, delay=row_in_after_ms)),
     exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(200.0, ease=CssOut)),
   )
   if @motion.lifted(c, lid, list + "\u{1}" + key) >= 0.0 {
