@@ -19,6 +19,7 @@ fn fake_core(
   read_only? : Bool = false,
   now? : Double = 0.0,
   over? : (String, Topic) -> Topic = fn(_, t) { t },
+  made? : Ref[Source?] = Ref(None),
 ) -> @ui.Tester {
   reset()
   let base = fixture("chat")
@@ -37,6 +38,7 @@ fn fake_core(
     now: fn() { now },
     read_only,
   }
+  made.val = Some(src)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   // the chat pushed in over Home
@@ -225,6 +227,53 @@ test "the same paste in the next message is another upload: the chat moved on by
   let second = up()
   assert_true(first.0 != second.0)
   assert_true(first.1 != second.1)
+}
+
+///|
+test "a file going up keeps the id it was given as it went in, whatever comes to the chat meanwhile" {
+  let calls : Array[Made] = []
+  // a message comes to the chat between the file's two parts
+  let came = Ref(false)
+  let made : Ref[Source?] = Ref(None)
+  let t = fake_core(calls, made~, over=fn(name, tp) {
+    if name != "chat" || !came.val {
+      return tp
+    }
+    match tp.value {
+      Some(Object(o)) =>
+        match o.get("messages") {
+          Some(Array(ms)) if ms.length() > 0 =>
+            match ms[ms.length() - 1] {
+              Object(m) => {
+                let next = m.copy()
+                next["seq"] = Json::number(9999.0)
+                let o2 = o.copy()
+                o2["messages"] = Json::array(ms + [Json::object(next)])
+                { ..tp, value: Some(Json::object(o2)), version: tp.version + 1 }
+              }
+              _ => tp
+            }
+          _ => tp
+        }
+      _ => tp
+    }
+  })
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  let before = d.after
+  // two parts' worth
+  let bytes = Bytes::make(part_size + 10, b'x')
+  add_file(made.val.unwrap(), d, r.station, "big.bin", bytes, None)
+  let first = named(calls, "station.upload.part")
+  assert_eq(first.length(), 1)
+  came.val = true
+  t.draw()
+  assert_true(d.after != before)
+  (first[0].done)(Ok({ "have": Json::number(part_size.to_double()) }))
+  let parts = named(calls, "station.upload.part")
+  assert_eq(parts.length(), 2)
+  assert_eq(text(Some(parts[1].params), "id"), text(Some(parts[0].params), "id"))
+  assert_eq(text(Some(parts[1].params), "name"), text(Some(parts[0].params), "name"))
 }
 
 ///|
