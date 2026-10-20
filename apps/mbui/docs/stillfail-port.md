@@ -966,7 +966,7 @@ while the card moved the list):
 | 04 chinese-enter | Chinese composed and committed through the input method, Enter a new line, sent | one entry of both lines; none of the first line alone · Tester 重放（src/sfreplay/flows/chinese_enter_test.mbt） |
 | 05 agent-reply | a question; the fake agent's answer comes while the chat shows, the list following its end | the agent's entry; the answer shown in the window |
 | 06 draft | words left in the field, the chat left and opened again: they are back | the draft in the core's store on the device, nothing of it at the station · Tester 重放（src/sfreplay/flows/draft_test.mbt） |
-| 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more |
+| 07 draft-restart | the app started again: the draft is back; emptied | the core keeps no draft of it any more · Tester 重放（src/sfreplay/flows/draft_restart_test.mbt） |
 | 08 paste-short | a short paste (Cmd+V, KEYCODE_PASTE) goes into the field, sent | the entry's words are the pasted ones |
 | 09 paste-long | 6000 characters pasted become a text file's card (6000 字符), put up at once, sent with words | the entry's attachment, a .txt; the station keeps it whole (18000 bytes) |
 | 10 attachments | ＋ → 文件: a photo and a 9 MB file, each put up at once in 4 MB parts (three for the file), sent | the entry's two attachments; both files at the station, byte for byte |
