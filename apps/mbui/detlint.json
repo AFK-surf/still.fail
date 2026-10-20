@@ -100,7 +100,7 @@
     "retired-api": {},
     "app-clock": {
       "src/sfapp/bar.mbt": 1,
-      "src/sfapp/chat.mbt": 4,
+      "src/sfapp/chat.mbt": 2,
       "src/sfapp/chat_fixture.mbt": 1,
       "src/sfapp/decisions.mbt": 3,
       "src/sfapp/drive_reader.mbt": 2,
