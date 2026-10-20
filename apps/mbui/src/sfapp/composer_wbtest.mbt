@@ -187,6 +187,17 @@ test "a long paste goes up by the same id and name whatever the clocks say: from
 }
 
 ///|
+test "an upload's id is the same in every run and on js and native: written out, not compared within one run" {
+  // MoonBit's own hash() is seeded anew in each process and differs between js and native, so two ids made in one
+  // run agreed while a recording and its replay did not (93, 96, 18): these are FNV-1a's (@ui.stable_hash), fixed
+  assert_eq(upload_id("", 0), "a092d94b70696d701bdbc07e71af9cee")
+  assert_eq(upload_id("drive\u{1}/\u{1}a.txt", 12345), "bc9e091661ed62a8e324d39c70a25f05")
+  let seed = file_seed("ws/st", "照片.png", b"abc")
+  assert_eq(seed, "ws/st\u{1}照片.png\u{1}3\u{1}-1792535898324117685")
+  assert_eq(upload_id("new:ws/st\u{1}draft-0123456789abcdef01\u{1}" + seed, 0), "d0a7b4599668b44a462604fa8617fc77")
+}
+
+///|
 test "the same paste in the next message is another upload: the core names the next draft anew" {
   let long = "第一行要点\n" + String::make(6000, 'x')
   let calls : Array[Made] = []

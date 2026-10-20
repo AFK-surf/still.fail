@@ -23,7 +23,7 @@ fn image(call : String, params : Json, key : String) -> String {
       @core.call_bytes(call, params~, on_done=fn(r) {
         match r {
           Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let k = "mem:replay/\{key.hash()}/\{key.length()}"
+            let k = "mem:replay/\{@ui.stable_hash(key)}/\{key.length()}"
             @ui.add_image(k, bytes)
             images[key] = k
           }
