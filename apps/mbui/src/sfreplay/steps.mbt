@@ -72,7 +72,14 @@ pub fn Flow::start(
   }
   let f = { r, t, one_by_one }
   // each step the test says lets what came after it in the run come (Replay::step_taken)
-  step_hook.val = Some(fn(line) { ignore(r.step_taken(line)) })
+  // (and one after a step the run's runner took beside its script, a station frozen, as long after it as in the run)
+  step_hook.val = Some(fn(line) {
+    match r.after_runner(line) {
+      Some(gap) if gap > 0.0 => t.run_for(gap)
+      _ => ()
+    }
+    ignore(r.step_taken(line))
+  })
   f.core()
   f
 }

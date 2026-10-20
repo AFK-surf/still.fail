@@ -307,6 +307,32 @@ fn is_step(m : Json) -> Bool {
 }
 
 ///|
+/// How long after a step its runner took beside the script (`log do: freeze`) the run took its next one, `line`, by
+/// the run's clock (its trace's `w`): what a step after the runner's waits here (Flow::start), the app's own doings
+/// meanwhile (a draft kept) with it. None after any other step, or for a line that is not the run's next.
+pub fn Replay::after_runner(self : Replay, line : String) -> Double? {
+  guard step_of(line) is Some(l) else { return None }
+  let mut prev : Ev? = None
+  for i in 0..<self.evs.length() {
+    let e = self.evs[i]
+    if !(e.out && is_step(e.msg)) {
+      continue
+    }
+    if !e.done {
+      guard e.msg is Object(m) && m.get("step") == Some(Json::string(l)) else { return None }
+      return match prev {
+        Some(p) if p.msg is Object(pm) &&
+          pm.get("step") is Some(String(ps)) &&
+          ps.has_prefix("log ") => Some(e.wall - p.wall)
+        _ => None
+      }
+    }
+    prev = Some(e)
+  }
+  None
+}
+
+///|
 /// The run's next step not taken again, when it is `line` (step_of: as the test says it), taken: what came after it
 /// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it waiting, said by
 /// `waiting`.
