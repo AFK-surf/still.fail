@@ -113,7 +113,10 @@ fn Ctx::words_after_layout(self : Ctx) -> Unit {
       }
     }
     match words_kept.get(m.key) {
-      Some(was) if !same_place(was.pieces, pieces) => self.read_back_moved = true
+      Some(was) if !same_place(was.pieces, pieces) => {
+        self.read_back_moved = true
+        self.read_back_key = m.key
+      }
       _ => ()
     }
     words_kept[m.key] = { text: sb.to_string(), pieces }

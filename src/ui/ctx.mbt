@@ -171,8 +171,14 @@ pub struct Ctx {
   /// the latest rest of the stacks (Ctx::nav) built this frame: what a test asks (Tester::assert_idle, nav_rest)
   cycles : Array[(Double, SourceLoc)]
   mut motion_left : Bool
-  /// what the next build reads of this frame's layout moved (words_of): a frame more, for what is placed from it
+  /// a motion said that has not started yet (its rest +inf: it starts at its first step, a frame to come)
+  mut motion_unstarted : Bool
+  /// inputs came before this frame (a frame more, for what they changed late in it)
+  mut took_input : Bool
+  /// what the next build reads of this frame's layout moved (words_of): a frame more, for what is placed from it; the
+  /// last that moved (its words' key)
   mut read_back_moved : Bool
+  mut read_back_key : String
   mut nav_rest : Double
   /// what is under everything the frame draws (0-1: what the host clears to as it presents it)
   clear : (Double, Double, Double)
@@ -295,7 +301,10 @@ fn Ctx::new() -> Ctx {
     cycling: false,
     cycles: [],
     motion_left: false,
+    motion_unstarted: false,
+    took_input: false,
     read_back_moved: false,
+    read_back_key: "",
     nav_rest: -1.0,
     clear: (0.961, 0.961, 0.969),
     host_rec: HostRec::new(),

@@ -7,14 +7,37 @@
 ///|
 /// The frames owed now, drawn at this moment (no time goes by): after an input, the frame that takes it, the one after
 /// (what read it late: a list's rows), a layout read back once more; after a change the test made (a value it set),
-/// the frame that shows it. Three at most.
+/// the frame that shows it; a motion said, the frame it starts at. Not a motion going on: at this moment it is where
+/// it is (time goes on by run_for). Three at most: a layout read back still moving after them never converges, and
+/// the test fails, saying whose.
 pub fn Tester::draw(self : Tester) -> Unit {
   self.frame(ms=0.0)
   let mut n = 1
-  while n < 3 && (g().wants_frame || self.fake.wants) {
+  while self.owed_now() {
+    if n == draw_frames_most {
+      let c = g()
+      if c.read_back_moved {
+        let s = "Tester::draw: a layout read back (words_of \"\{c.read_back_key}\") still moves after \{n} frames: it does not converge"
+        println(s)
+        abort(s)
+      }
+      return
+    }
     self.frame(ms=0.0)
     n = n + 1
   }
+}
+
+///|
+/// The most frames drawn at one moment (Tester::draw).
+let draw_frames_most = 3
+
+///|
+/// Whether a frame is owed at this moment (Tester::draw): an input's frame after, a layout read back that moved, a
+/// motion said that starts at the next frame, the host's events, a frame asked for. A motion going on is not.
+fn Tester::owed_now(self : Tester) -> Bool {
+  let c = g()
+  c.took_input || c.read_back_moved || c.motion_unstarted || self.fake.wants || c.frame_by is Some(_)
 }
 
 ///|

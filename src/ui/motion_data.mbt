@@ -51,7 +51,18 @@ pub fn Ctx::cycle(self : Ctx, period : Double, loc~ : SourceLoc) -> Double {
 fn Ctx::motion_owed(self : Ctx) -> Bool {
   let done = []
   let mut owed = false
-  self.movers.each(fn(id, m) { if m.rest_at(self.now, self.frame_no) > self.now { owed = true } else { done.push(id) } })
+  self.motion_unstarted = false
+  self.movers.each(fn(id, m) {
+    let r = m.rest_at(self.now, self.frame_no)
+    if r > self.now {
+      owed = true
+      if r == @double.infinity {
+        self.motion_unstarted = true
+      }
+    } else {
+      done.push(id)
+    }
+  })
   for id in done {
     self.movers.remove(id)
   }

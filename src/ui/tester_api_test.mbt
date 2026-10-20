@@ -75,3 +75,40 @@ test "idle but for what never ends while shown: a cycle read is said, not a fail
   t.clear()
   assert_eq(t.field_words(), "")
 }
+
+///|
+/// A box whose words are placed by where they were last laid out: `step` px further in each frame (`step` 0: placed
+/// once by them, then where they are).
+fn reading_back(step : Double) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      let x = match c.words_of("w") {
+        Some(w) if w.pieces.length() > 0 => if step > 0.0 { w.pieces[0].x + step } else { 20.0 }
+        _ => 0.0
+      }
+      c.box(padx=x, fn() {
+        let b = c.column(w=Px(100.0), fn() { c.rich([@ui.plain("hello")], size=10.0) |> ignore })
+        c.words(b, "w")
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+}
+
+///|
+test "draw: a layout read back that moves once is placed again at the same moment, and then is still" {
+  let t = reading_back(0.0)
+  let at = t.time()
+  t.draw()
+  assert_eq(t.time(), at)
+  assert_eq(t.ctx().words_of("w").unwrap().pieces[0].x, 20.0)
+  t.assert_idle()
+}
+
+///|
+test "panic draw: a layout read back that moves at every frame does not converge, and says whose" {
+  let t = reading_back(1.0)
+  t.draw()
+}

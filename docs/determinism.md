@@ -52,7 +52,8 @@ A test says its time; nothing else moves it.
 
 - An input (`tap`, `key`, `wheel`, `back`, `paste`, `key_named`, a notification tapped…) is handed over at the
   test's present moment, and the frames it causes are drawn at that moment (`Tester::draw`: one at least, the few a
-  layout read back asks for). It takes no time. A gesture over time is time said: a drag's moves come
+  layout read back asks for, three at most; a layout read back still moving after them never converges, and the test
+  fails saying whose; a motion going on is not drawn again at the same moment). It takes no time. A gesture over time is time said: a drag's moves come
   `drag_step_ms` apart.
 - Time goes by only by `run_for(ms)`, `ms` a declared length: an animation's (`nav_push_ms`, `sheet_scrim_ms`,
   `cover_slide_ms`), a timer's, or the moment a test looks at. A test runs to the end of the motion it cares about by
@@ -100,3 +101,16 @@ Only for these, which the framework knows by itself:
 - **Image decoding** is checked apart: each host's decoded pixels of a fixed set of images, to the byte.
 - **The system's own views** (a web page, a video) are outside mbui's drawing: only where and how large they are
   placed is checked (a Tester's `views`).
+
+## What is left, in order
+
+The migration ends when each of detlint's rules is at 0 (docs/detlint.md). What stays of it, in the order it goes:
+
+1. The tests' `settle` (mbui's, still.fail's): each to `draw`, `run_for(<a declared time>)`, `finish(<a ticket>)`,
+   and `assert_idle` at its end.
+2. still.fail's `c.stable()`: gone with `Ctx::stable` (mbui #36); the app draws in a screenshot's run as in any.
+3. still.fail's screens: compared as draw lists (`.dl`, every PR) and drawn offscreen against the GitHub `macos-15`
+   references; then its Mac real-window screenshots and the end-to-end drive's waits for settled are deleted.
+4. Last: `Tester::settle`, `Tester::settled`, `Ctx::settled`, `Runtime::settle` / `settled` deleted, and with them
+   the tests of those (effecttest's `outside_test.mbt`, `scheduler_test.mbt`: they live and die with the API). The
+   `settle` rule is then at 0.

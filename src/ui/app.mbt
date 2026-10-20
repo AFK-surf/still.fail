@@ -67,6 +67,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   let t0 = frame_body(c, w, h, scale, t)
   in_frame.val = false
   // inputs came before this frame: one more, for what they changed late in it (inputrec.mbt `took_input`)
+  c.took_input = fed
   if fed {
     c.wants_frame = true
   }
