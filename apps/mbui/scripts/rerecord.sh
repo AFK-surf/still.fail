@@ -50,15 +50,17 @@ print(c.most_common(1)[0][0] if c else "")
 PY
 )
   s=$(grep -o '/tmp/mb[A-Za-z0-9-]*' "$trace" | sort | uniq -c | sort -rn | awk 'NR==1 {print $2}')
-  [ -n "$t" ] || die "$n: no mark of its run found in $test and $trace"
-  [ -z "$tag" ] || [ "$tag" = "$t" ] || die "$n was recorded with the mark $t, the others before it $tag: rerecord them apart"
-  tag=$t; [ -n "$s" ] && station=$s
-  echo "rerecord: $n ← $test (trace $trace, mark $t${s:+, station $s})"
+  # (a test whose words hold no mark of its run looks for none: it goes with the others' mark)
+  [ -z "$t" ] || [ -z "$tag" ] || [ "$tag" = "$t" ] || die "$n was recorded with the mark $t, the others before it $tag: rerecord them apart"
+  [ -n "$t" ] && tag=$t; [ -n "$s" ] && station=$s
+  echo "rerecord: $n ← $test (trace $trace, mark ${t:-none of its own}${s:+, station $s})"
   FLOW_EMIT="$TMP/$idx-$n.drive" moon test --target js "$test" > "$TMP/$idx-$n.test.log" 2>&1
   [ -s "$TMP/$idx-$n.drive" ] || { grep -a 'Error\]\|error:\|failed\|^flow:' "$TMP/$idx-$n.test.log" | head -20 | cut -c1-300; die "$test wrote no script"; }
   tests="$tests $idx-$n:$trace:$test"
 done
-[ -n "$tag" ] || die "no test among: $*"
+[ -n "$tests" ] || die "no test among: $*"
+# (none of them with a mark of its own: a new one)
+[ -n "$tag" ] || tag=$(date +%H%M%S)
 echo "rerecord: the scripts written ($TMP)"; ls "$TMP"/*.drive | sed 's/^/  /'
 # (each step once the app is settled, as the Tester's steps are taken: what came of the last one in, its page loaded;
 # until drive's named events take its place)
