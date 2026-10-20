@@ -10,7 +10,8 @@
       "src/effect"
     ],
     "clock_sources": [
-      "src/host"
+      "src/host",
+      "src/ui/hostcall.mbt"
     ],
     "frame_core": [
       "src/ui/app.mbt",

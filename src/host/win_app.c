@@ -558,6 +558,16 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 
 double mb_host_now(void) { return mb_now_ms(); }
 
+// The time of day (host_native.mbt's wall_ms): FILETIME's 100 ns since 1601, from 1970 in ms.
+double mb_host_wall_ms(void) {
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  ULARGE_INTEGER u;
+  u.LowPart = ft.dwLowDateTime;
+  u.HighPart = ft.dwHighDateTime;
+  return (double)(u.QuadPart - 116444736000000000ULL) / 10000.0;
+}
+
 double mb_host_event_time(void) { return -1; }
 
 int32_t mb_host_platform(void) { return 3; }

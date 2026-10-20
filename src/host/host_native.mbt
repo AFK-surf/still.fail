@@ -208,6 +208,16 @@ pub fn now() -> Double {
 }
 
 ///|
+extern "C" fn ffi_wall_ms() -> Double = "mb_host_wall_ms"
+
+///|
+/// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
+/// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
+pub fn wall_ms() -> Double {
+  ffi_wall_ms()
+}
+
+///|
 /// When the input event being delivered happened, on now()'s clock (ms):
 /// a touch's own time, which comes before it is handled (a frame's touches
 /// are handled together); negative when the host doesn't say.

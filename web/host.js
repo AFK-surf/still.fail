@@ -57,6 +57,9 @@
   // (a run to a declared moment draws every frame to it: its timers are on its clock, due at the frame they fall in)
   H.wakeAfter = (ms) => { if (shotAt < 0) setTimeout(H.requestFrame, ms); };
   H.now = () => (shotAt >= 0 ? clock : performance.now());
+  // the time of day (@host.wall_ms): a run to a declared moment's from a fixed day (@ui.tester_wall's), on with its
+  // clock, so what it shows of it is the same each run
+  H.wallMs = () => (shotAt >= 0 ? 1790000000000 + clock : Date.now());
 
   // ---- messages from outside the frames (src/ui/messages.mbt; mbui's mb_post on the native hosts) ----
   // H.post(channel, json, bytes?): kept for the next frame, which takes all that came and hands them on in their

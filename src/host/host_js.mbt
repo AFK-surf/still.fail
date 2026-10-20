@@ -130,6 +130,17 @@ pub fn now() -> Double {
 }
 
 ///|
+extern "js" fn js_wall_ms() -> Double =
+  #|() => (globalThis.__mbhost && globalThis.__mbhost.wallMs) ? globalThis.__mbhost.wallMs() : Date.now()
+
+///|
+/// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
+/// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
+pub fn wall_ms() -> Double {
+  js_wall_ms()
+}
+
+///|
 /// When the input event being delivered happened, on now()'s clock (ms);
 /// negative when the host doesn't say.
 pub fn event_time() -> Double {

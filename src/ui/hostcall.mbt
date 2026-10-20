@@ -5,6 +5,8 @@
 ///|
 struct FakeHost {
   mut time : Double
+  /// the time of day (ms since 1970) at its clock's 0: what @ui.wall_ms says is it plus the clock (Tester::set_wall)
+  mut wall : Double
   /// device pixels a point, as a host's window has them (2: a Retina screen; a recording host's, Tester::new(scale=))
   mut scale : Double
   mut wants : Bool
@@ -137,6 +139,14 @@ fn h_now() -> Double {
   match fake.val {
     Some(f) => f.time
     None => @host.now()
+  }
+}
+
+///|
+fn h_wall_ms() -> Double {
+  match fake.val {
+    Some(f) => f.wall + f.time
+    None => @host.wall_ms()
   }
 }
 

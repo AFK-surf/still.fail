@@ -162,6 +162,7 @@ pub fn Tester::new(
 ) -> Tester {
   let f = {
     time,
+    wall: tester_wall - time,
     scale,
     wants: false,
     wake: -1.0,

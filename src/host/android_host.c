@@ -966,6 +966,15 @@ double mb_host_now(void) {
   return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 
+// The time of day (host_native.mbt's wall_ms): a run to a declared moment's (own_clock) from a fixed day
+// (@ui.tester_wall's), on with its frames' clock.
+double mb_host_wall_ms(void) {
+  if (own_clock) return 1790000000000.0 + frame_now;
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
+}
+
 void mb_host_request_frame(void) {
   want_frame = 1;
   JNIEnv *env = env_();

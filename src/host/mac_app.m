@@ -811,6 +811,12 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 
 double mb_host_now(void) { return settle ? settle_clock : mb_now_ms(); }
 
+// The time of day (host_native.mbt's wall_ms): a settled run's from a fixed day (@ui.tester_wall's), on with its
+// clock, so what it shows of it is the same each run.
+double mb_host_wall_ms(void) {
+  return settle ? 1790000000000.0 + settle_clock : [[NSDate date] timeIntervalSince1970] * 1000.0;
+}
+
 int32_t mb_host_set_outside(mb_outside_fn f) {
   outside_cb = f;
   return 1;

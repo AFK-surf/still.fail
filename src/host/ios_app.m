@@ -480,6 +480,9 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
 
 double mb_host_now(void) { return mb_now_ms(); }
 
+// The time of day (host_native.mbt's wall_ms).
+double mb_host_wall_ms(void) { return [[NSDate date] timeIntervalSince1970] * 1000.0; }
+
 double mb_host_event_time(void) { return event_time; }
 
 int32_t mb_host_platform(void) { return 1; }

@@ -32,7 +32,8 @@ The rules (see RULES below for each one's words):
                    whether a time has passed: motion / wake_at do that from what they declared
     wall-clock     the machine's own clock or randomness (Date.now, performance.now, Math.random, an unseeded
                    @random, a random id: uuid() / random_id() called with nothing, the system's uuid or random
-                   bytes) outside the host that provides them
+                   bytes) outside the host that provides them; the time of day through @ui.wall_ms, for what is
+                   shown of it, only as a source's `now` (now: fn() { @ui.wall_ms() })
     poll           a frame or a wake asked for under a condition that reads the host or the layout (a frame each
                    until it says yes): the host's answer, or the layout, is an event
     builtin-hash   a value made from MoonBit's own hash (x.hash(), Hash::hash, an `impl Hash` of one's own): it is seeded
@@ -579,6 +580,8 @@ WALL_WORDS = re.compile(r"\b(Date\.now|performance\.now|Math\.random|crypto\.get
                         r"crypto\.randomUUID|randomUUID|NSUUID|uuid_generate|SecRandomCopyBytes|getrandom|"
                         r"BCryptGenRandom|SecureRandom|rand|srand|random)\b(?=\s*\()|"
                         r"\b(Date\.now|performance\.now|Math\.random|NSUUID|SecureRandom|randomUUID)\b|/dev/u?random")
+# the time of day read as a source's `now`, the one place it may be (@ui.wall_ms)
+WALL_AS_NOW = re.compile(r"\bnow\s*:\s*fn\s*\(\s*\)\s*\{\s*@ui\.wall_ms\(\s*\)\s*\}")
 # a function that makes a random id when called with nothing (a uuid, a random id); given something, it only shapes
 # what it is given (`uuid(hash)`: the same each run)
 RANDOM_IDS = {"uuid", "uuid4", "uuid_v4", "new_uuid", "random_uuid", "random_id", "rand_id", "random_hex",
@@ -702,8 +705,10 @@ def lint_mbt(f, cfg, out, returns, readers):
         # 5. the app reads the clock
         if c.name in CLOCK_READ and app and not test and c.kind in ("method", "pkg") and not c.args:
             add("app-clock", c.at, line_text)
-        # wall clock through a provider's function outside it
-        if c.name in ("wall_ms", "ffi_wall_ms") and not under(f.rel, cfg.clock_sources) and not test:
+        # wall clock through a provider's function outside it; @ui.wall_ms, the time of day for what is shown of it,
+        # only as a source's `now` (now: fn() { @ui.wall_ms() }): never what a wait or a motion is timed by
+        if c.name in ("wall_ms", "ffi_wall_ms") and not under(f.rel, cfg.clock_sources) and not test and \
+                not (c.qual == "@ui" and WALL_AS_NOW.search(line_text)):
             add("wall-clock", c.at, line_text)
         # a random id made new each run (uuid(), random_id()): an id the app needs is drawn from what the run gives
         # it (a seed, a counter, the frames' clock), so the same run makes the same one
