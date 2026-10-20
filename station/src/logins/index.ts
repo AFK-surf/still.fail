@@ -15,7 +15,7 @@ import { Fibers } from "../ops/fibers.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { platform } from "../platform/index.ts";
-import { commandWords, domainOf } from "./parse.ts";
+import { commandWords, domainOf, programOf } from "./parse.ts";
 import { type Answered, type Callback, Refused, relay } from "./relay.ts";
 import { type Key, KEYS, LoginRun, type Screen } from "./run.ts";
 
@@ -36,7 +36,7 @@ export type Starter = { by: Person; workspace: string | null; chat?: string | nu
 
 export type Login = {
   id: string;
-  /// What it is shown by: its command's program (gh, gcloud).
+  /// What it is shown by: its command's program (gh, gcloud; devin for `env HOME=… /x/bin/devin auth login`).
   name: string;
   command: string[];
   state: string;
@@ -48,7 +48,8 @@ export type Login = {
   code?: string;
   codeUrl?: string;
   waiting: boolean;
-  /// It waits for what its page gives (a code to paste back): entered by the person from their card (`answer`).
+  /// It waits for what its page gives (a code to paste back), as its agent says (`paste`): entered by the person from
+  /// their card (`answer`).
   paste?: boolean;
   by: Person;
   workspace?: string;
@@ -85,6 +86,8 @@ export class Logins {
   readonly #ended = new Set<(login: Login, starter: Starter) => void>();
   /// The logins whose end was told (once each).
   readonly #endedOnce = new Set<string>();
+  /// The logins their agent's call waits on now (how many calls), told what they ask by that call's answer.
+  readonly #heard = new Map<string, number>();
   #next = 0;
 
   constructor(o: LoginsOptions) {
@@ -275,15 +278,43 @@ export class Logins {
     if (text.length > 10_000 || /[\r\n]/.test(text.trim())) throw new Refused(400, "one line of text");
     e.run.input({ text: text.trim() });
     e.run.input({ key: "Enter" });
+    e.run.askPaste(false);
     if (by) e.doneBy = by;
+    return this.#shown(e);
+  }
+
+  /// Its agent says it waits for what its page gives (a code to paste back), entered by the person on their card; or
+  /// that it no longer does. Only once it has given a page to open, and never at a prompt that reads a secret.
+  paste(id: string, on: boolean): Login {
+    const e = this.#entry(id);
+    if (!e.run.active) throw new Refused(409, tr(this.#lang(), "station.machineLogin.ended"));
+    if (!e.run.askPaste(on)) {
+      throw new Refused(409, e.run.secret
+        ? "it waits on a prompt read without echo (a password or token): nobody enters a secret here"
+        : "paste: only once it has given a page to open, with no device code or loopback (step open): the person opens it and enters what it gives");
+    }
     return this.#shown(e);
   }
 
   /// Waits until the command has gone quiet (what it waits on is known), it ended, or `ms` passed.
   async settle(id: string, ms: number): Promise<Login | null> {
     const e = this.#entries.get(id);
-    if (e) await Promise.race([e.run.nextQuiet(), this.#fibers.sleep(ms)]);
+    if (e) {
+      this.#heard.set(id, (this.#heard.get(id) ?? 0) + 1);
+      try {
+        await Promise.race([e.run.nextQuiet(), this.#fibers.sleep(ms)]);
+      } finally {
+        const n = (this.#heard.get(id) ?? 1) - 1;
+        if (n > 0) this.#heard.set(id, n);
+        else this.#heard.delete(id);
+      }
+    }
     return this.get(id);
+  }
+
+  /// Whether its agent's call waits on it now (settle): what it asks is told in that call's answer, not a notice.
+  heard(id: string): boolean {
+    return this.#heard.has(id);
   }
 
   /// Its screen as its agent reads it.
@@ -318,7 +349,7 @@ export class Logins {
     const r = e.run;
     const login: Login = {
       id: r.id,
-      name: r.command[0]?.split(/[\\/]/).at(-1) ?? "",
+      name: programOf(r.command),
       command: r.command,
       state: r.state,
       ...(r.step ? { step: r.step } : {}),

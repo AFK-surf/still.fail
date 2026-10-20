@@ -44,7 +44,7 @@ agent 在 station 上跑 `gh`、`gcloud`、`npm publish`、`docker push` 时常�
 | 回环回调 | 网址里的 `redirect_uri`（或同类参数）是 `http://localhost:<端口>`、`http://127.0.0.1:<端口>`、`http://[::1]:<端口>` | 本机临时监听同一个端口，用默认浏览器打开网址，回调经 mesh 转给 station 上的命令 |
 | 设备码 | 输出里有验证网址和一串码（`ABCD-1234` 之类，见「网址和端口的解析」） | 卡片上显示网址和码：复制码、打开网址 |
 | 只要打开网址 | 有网址，但没有回环回调，也没有码（如 `npm login` 的网页登录：命令自己去轮询 npm） | 用默认浏览器打开网址，等命令自己结束 |
-| 贴回网页给的码 | 给了要打开的网址（没有回环、没有设备码），接着 PTY 停在回显的提示上（gcloud `--no-launch-browser` 的「enter the verification code」） | 卡片上「在浏览器里登录」，下面一个输入框：人把网页给的码贴进来，客户端交给 station（`POST /machine-logins/<id>/answer`），station 打进命令再按回车。agent 不答这个提示 |
+| 贴回网页给的码 | station 不自己判断（用户定：不应该自动判断，agent 自己发）：给了要打开的网址（没有回环、没有设备码）之后，agent 从屏幕上看出它要的是网页给的码（gcloud `--no-launch-browser` 的「enter the verification code」、Devin 的「copy the code and paste it below」），调 `login {id, paste: true}` | 卡片上「在浏览器里登录」，下面一个输入框：人把网页给的码贴进来，客户端交给 station（`POST /machine-logins/<id>/answer`），station 打进命令再按回车，输入框随之收起。agent 不答这个提示。原来按「给了网址、接着停在回显的提示上」自动认，Devin 的输入框（`❭` 开头、不以冒号结尾）认不出来，卡片就没有输入框 |
 | 要输入 | PTY 停在提示上（Y/n、选项、主机、用户名） | 由 agent 通过 `login` 工具答；卡片只说「等 agent 回答命令的问题」。不回显的提示（密码）谁也不写，agent 换浏览器或设备码方式 |
 
 浏览器那一步做完以后，命令自己写凭据、自己退出。退出码 0 就算完成（不再跑状态命令、不读账号）。
@@ -182,6 +182,8 @@ station: 命令轮询到结果，写凭据，退出 0 → done
 - 网址先看 `BROWSER`/替身拿到的，再看输出里的 `https://…`；两样都有时以打开的为准（Claude Code 打印的网址回调到它自己的 https 贴码页，打开的才是回环）。
 - 回环：取网址查询参数里的 `redirect_uri`（也看 `redirect_url`、`redirect`、`callback`，以及这些参数里再套一层的网址），host 是 `localhost`、`127.0.0.1`、`[::1]` 的，取端口和路径；再看 `state`、`response_mode=form_post`。端口为 0 或没写的不算回环。
 - 设备码：通用规则，不按工具：网址里的 `user_code=`（RFC 8628 的 verification_uri_complete，Vercel 这样给）；`ABCD-1234` 这类（四位大写字母数字、横线、四到六位：gh、Docker、AWS、Cloudflare）；「code」字样同一行里紧跟在 code 后面、或带数字的 6–10 位大写字母数字（az）。验证网址取路径里有 device、activate、verify 的那个。
+- 程序自己按终端宽度（200 列）折行时，比 200 列还长的网址会断成两行（Devin 的登录网址约 230 字符，丢了后半截，网页给的码换不了 token）：一行几乎占满整行宽、以网址结尾时，下一行开头那个词接回去再认。
+- 设备码只在网址以外的文字里找（`user_code=` 除外）：网址里的 PKCE challenge、state 是随机串，偶尔会像一个码。
 - 认不出来的网址也照样给客户端「打开」，由人判断。
 
 ### 不按工具的知识
@@ -238,6 +240,7 @@ agent 要在另一台 station 上登录（它在 A 上，命令要在 B 上跑�
 login {command, station?}           // 跑工具自己的登录命令（station：在另一台上）；等它停下，回状态、屏幕（网址和码遮掉）、它在等什么
 login {id}                          // 现在怎样了，同上
 login {id, input?, key?}            // 答它的提示：文字和/或一个键（enter、up、down、tab、ctrl-c…），等它再停下
+login {id, paste: true|false}       // 它在等网页给的码：卡片上出输入框，由人贴（只在给了要打开的网址之后；不回显的提示不行）
 login {id, cancel: true}            // 结束它
 ```
 
@@ -245,7 +248,7 @@ login {id, cancel: true}            // 结束它
 - 用法（写进 instructions 和工具说明）：命令失败、输出说没登录（not logged in、401、token 过期），或者人在 chat 里要登录时，用工具自己的登录命令调 `login`（有浏览器或设备码选项的带上）。命令问问题就自己答（工具的默认，或任务需要的），实在定不了在 chat 里问人。从不叫人去跑命令。
 - 卡片只在有浏览器那一步（设备码或要打开的网页）之后发：`chat_post` 带 `card: {"type": "login", "login": "<id>"}`，正文一句话说要谁在哪台登录什么、为什么，加登录链接，`kind: "need_human"` 结束这一轮。工具回的话会说「人那一步好了，现在发卡片」。
 - 密码：不问、不输；不回显的提示 station 拒绝输入，工具回的话会说换浏览器或设备码方式，或者告诉人不能这样登录。
-- 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知，卡片自动算答了（从奏里撤掉）。人那一步之后命令又问问题（az 选订阅这类）时，也给发起它的会话一条通知，agent 接着答。
+- 登录结束（完成、失败、超时、取消）时，station 给发起它和发过它卡片的会话各一条通知，卡片自动算答了（从奏里撤掉）。人那一步之后命令又问问题（az 选订阅这类）时，也给发起它的会话一条通知，agent 接着答；agent 正在用 `login` 等它停下时不发，那次调用的回答里已经有了。
 - 同一条命令已有进行中的登录，回那一个，不起第二个。
 - 改了工具和规则，按惯例在 `station/src/agents/migrations.ts` 的 `NOTES` 末尾加一条（38）。
 
@@ -268,7 +271,7 @@ login {id, cancel: true}            // 结束它
 ### 登录卡片（用户定：卡片就是全部界面，点开不再有弹窗）
 
 chat 里 agent 的消息下面、奏里、station 页「登录」区里进行中的，都是同一张卡片；点卡片本身什么也不打开，没有卡片、没有底部弹层。卡片里依次是：
-- 标题「在 studio 上登录 gh」（命令的程序名）。
+- 标题「在 studio 上登录 gh」（命令的程序名：跳过 `env` 和它的选项、`VAR=value`，以及 sudo、npx、uvx、`pnpm dlx` 这类只是用来跑它的命令，取文件名、去掉包的版本；`env HOME=… /x/bin/devin auth login` 是 devin）。
 - 现在要人做的：
   - 设备码：「打开 github.com，输入」+ 大字的码，一个按钮 [复制并打开]（用户定：不要两个按钮）：先把码写进剪贴板，再打开验证网址（网址里已经带码的就用那个）；剪贴板写不进去照样打开，码一直显示在卡片上。码本身也能点（用户后来加的）：点了只复制、不打开什么，底部 toast「验证码已复制」（复制不了就说为什么）；它是个按钮（键盘 Enter/空格也行，读屏念「复制验证码 <码>」），手指形光标，没有底色，悬停也没有。
   - 回环（桌面 app）：「登录页在 accounts.google.com」+ [在浏览器里登录]；点了以后「等浏览器回来…」。网页版说一句「这一步要在桌面 app 里完成」，也写出域名。

@@ -21,7 +21,7 @@ const KEYS: Record<string, "Enter" | "Backspace" | "Up" | "Down" | "Left" | "Rig
 export const LOGIN = {
   name: "login",
   description:
-    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one (skill stillfail-login says which, for common CLIs). You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"} (with \"station\": the key the answer gives, for another station's), a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
+    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one (skill stillfail-login says which, for common CLIs). You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Where its screen says the page gives a code to paste back here and it waits for it (copy the code and paste it below, enter the verification code), you never type it: login {id, paste: true} gives the card a field where the person enters it. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"} (with \"station\": the key the answer gives, for another station's), a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -46,9 +46,13 @@ export const LOGIN = {
         "type": "boolean",
         "description": "With id: end that login."
       },
+      "paste": {
+        "type": "boolean",
+        "description": "With id: true when its screen says the page it gave hands out a code to paste back here (copy the code and paste it below, enter the verification code): the login card gets a field for the person to enter it, typed at its prompt with Enter. false takes the field away. Only after a page to open (step open); never for a password or token."
+      },
       "station": {
         "type": "string",
-        "description": "Another station of the workspace to log in, by its name or id (station_list lists them): the command runs there, and id, input, key and cancel act on that station's login (give station with them too). Left out: this station."
+        "description": "Another station of the workspace to log in, by its name or id (station_list lists them): the command runs there, and id, input, key, paste and cancel act on that station's login (give station with them too). Left out: this station."
       }
     },
     "additionalProperties": false
@@ -108,11 +112,11 @@ export function told(logins: Logins, login: Login, link: string | null, where: W
     : logins.screen(login.id)?.echo === false && login.waiting
       ? "It asks for a secret (read without echo): do not type it, nothing is sent to such a prompt. Cancel it, and use the tool's browser or device-code login, or tell the person it cannot be logged in this way."
       : login.paste
-        ? `The person's browser step is ready: they open the page and enter what it gives (a code) in the login card, which types it here; do not answer this prompt yourself. chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone and have the person send the code in the thread, then type it with login {id${where ? ", station" : ""}, input, key: "enter"}. You get a station notice when it ends.`
+        ? `The person's browser step is ready: they open the page and enter what it gives (a code) in the login card's field, which types it here; do not answer its prompt yourself. chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone and have the person send the code in the thread, then type it with login {id${where ? ", station" : ""}, input, key: "enter"}. You get a station notice when it ends.`
       : login.waiting
-        ? `It waits on the prompt above: answer it with login {id${where ? ", station" : ""}, input and/or key} (the tool's default, usually key enter, or what the task needs). If you truly cannot decide, ask the person in the chat.`
+        ? `It waits on the prompt above: answer it with login {id${where ? ", station" : ""}, input and/or key} (the tool's default, usually key enter, or what the task needs)${login.step === "open" ? `, unless it asks for what the page it gave hands out (a code to paste back): then do not answer it; login {id${where ? ", station" : ""}, paste: true} gives the login card a field for the person, and post the card as below` : ""}. If you truly cannot decide, ask the person in the chat.`
         : login.step === "device" || login.step === "loopback" || login.step === "open"
-          ? `The person's browser step is ready: chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone. You get a station notice when it ends.`
+          ? `The person's browser step is ready${login.step === "open" ? ` (if the screen says the page gives a code to paste back here, first login {id${where ? ", station" : ""}, paste: true}: the card gets a field for it; never type it yourself)` : ""}: chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone. You get a station notice when it ends.`
           : `It is still working: look again with login {id${where ? ", station" : ""}}.`;
   const shown = where ? { ...state, station: where.station, stationName: where.name } : state;
   return `${JSON.stringify(shown, null, 2)}\n\nScreen:\n${screen === "" ? "(nothing yet)" : screen}\n\n${next}`;
@@ -128,6 +132,7 @@ export async function act(logins: Logins, args: Record<string, unknown>, o: { st
     const id = args.id;
     if (logins.get(id) === null || (o.mine && !o.mine(id))) throw new Error(`no login ${id}`);
     if (args.cancel === true) logins.cancel(id);
+    else if (typeof args.paste === "boolean") logins.paste(id, args.paste);
     else if (typeof args.input === "string" || typeof args.key === "string") {
       const key = typeof args.key === "string" ? KEYS[args.key.toLowerCase()] : undefined;
       if (typeof args.key === "string" && key === undefined) throw new Error(`key: one of ${Object.keys(KEYS).join(", ")}`);
