@@ -406,11 +406,11 @@ pub fn open_drive_fixture(mode : String) -> Unit {
       }
       if mode == "reader-contents" {
         r.panel = Contents
-        r.panel_at = -1.0e9
+        r.contents_put = false
       }
       if mode == "reader-layout" {
         r.panel = Layout
-        r.panel_at = -1.0e9
+        r.contents_put = false
       }
     }
     // the first row's chat (opened by sffix for chat… modes): ＋'s Station 文件 in 文档, a file ticked; a station's file
