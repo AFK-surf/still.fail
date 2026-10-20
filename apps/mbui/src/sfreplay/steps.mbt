@@ -243,3 +243,25 @@ pub fn orders(flow : (UInt) -> String raise) -> Unit raise {
     }
   }
 }
+
+///|
+/// The focused field emptied (all of it chosen, then deleted), as a flow's `clear`.
+pub fn Flow::clear(self : Flow) -> Unit {
+  self.t.clear()
+  self.core()
+}
+
+///|
+/// On the frames' clock to `end`, a motion's own end as it says it (`@kit.sheet_rest(key)`, `@ui.nav_rest()`): the
+/// test fails if it has not started yet (+inf: draw first) or does not move (-1).
+pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
+  if end < 0.0 || end > 1.0e300 {
+    self.fail("no motion to run to (its end: \{end})")
+    return
+  }
+  let now = self.t.time()
+  if end > now {
+    self.t.run_for(end - now)
+  }
+  self.core()
+}
