@@ -172,7 +172,7 @@
       "src/sfapp/settings/connects.mbt": 33,
       "src/sfapp/settings/home.mbt": 50,
       "src/sfapp/settings/memory.mbt": 56,
-      "src/sfapp/settings/parts.mbt": 238,
+      "src/sfapp/settings/parts.mbt": 26,
       "src/sfapp/settings/profiles.mbt": 143,
       "src/sfapp/settings/security.mbt": 80,
       "src/sfapp/settings/sheet.mbt": 63,
@@ -233,7 +233,7 @@
       "src/sfapp/settings/connects.mbt": 17,
       "src/sfapp/settings/home.mbt": 22,
       "src/sfapp/settings/memory.mbt": 24,
-      "src/sfapp/settings/parts.mbt": 87,
+      "src/sfapp/settings/parts.mbt": 29,
       "src/sfapp/settings/profiles.mbt": 61,
       "src/sfapp/settings/security.mbt": 39,
       "src/sfapp/settings/sheet.mbt": 18,
@@ -257,7 +257,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 16
+      "src/sf/tokens.mbt": 20
     },
     "unsettled-ok": {
       "src/sfreplay/flows/chat/offline_retry_test.mbt": 1,

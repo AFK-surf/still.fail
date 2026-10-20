@@ -32,7 +32,7 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
       if i == blocks.length() {
         gap(c, 80.0)
       } else {
-        c.box(w=Fill(1.0), pl=side, pr=side, fn() { (blocks[i])() }) |> ignore
+        c.box(style=@sf.full_width, pl=side, pr=side, fn() { (blocks[i])() }) |> ignore
       }
     })
     |> ignore
@@ -55,11 +55,11 @@ fn wide_head(
   let t = @sf.theme()
   // (inside a block of the page, which stands in already)
   let side = if inside { 16.0 } else { wide_side(c) + 16.0 }
-  c.box(w=Fill(1.0), pl=side, pr=side, pt=if wide_deep.val { 20.0 } else { 40.0 }, pb=12.0, bg=t.p.bg, fn() {
+  c.box(style=if wide_deep.val { wide_head_deep } else { wide_head_top }, pl=side, pr=side, fn() {
     if wide_deep.val {
       let id = c.id("settings-back")
       c.cursor(id, Hand)
-      c.box(dir=Row, pb=8.0, gap=4.0, align=ACenter, id~, fn() {
+      c.box(style=wide_back, id~, fn() {
         @sf.icon(c, "chevron-left", size=14.0, color=t.p.muted) |> ignore
         c.text(back, size=13.0, color=if c.hovered(id) { t.p.text } else { t.p.muted }, wrap=false) |> ignore
       })
@@ -68,8 +68,8 @@ fn wide_head(
         (core.pop)()
       }
     }
-    c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-      c.box(w=Fill(1.0), fn() {
+    c.box(style=title_line, fn() {
+      c.box(style=@sf.full_width, fn() {
         c.text(title, size=22.0, weight=600, color=t.p.text, wrap=false, line=34.0) |> ignore
       })
       |> ignore
@@ -84,9 +84,28 @@ fn wide_head(
 }
 
 ///|
+/// The wide frame's head: on a page under another (back over its title) 20 down, else 40; 12 under it.
+// kept across runs: a value (no field of it changes)
+let wide_head_top : @ui.Style = @ui.style(w=Full, pt=S10, pb=S3, bg=Bg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wide_head_deep : @ui.Style = wide_head_top.then(@ui.style(pt=S5))
+
+///|
+/// The wide frame's back, over the head's title.
+// kept across runs: a value (no field of it changes)
+let wide_back : @ui.Style = @ui.style(row=true, pb=S2, gap=S1, align=ACenter)
+
+///|
+/// A title and what is at its end, in a line (LargeTitle's lead and big word too).
+// kept across runs: a value (no field of it changes)
+let title_line : @ui.Style = @ui.style(row=true, w=Full, gap=S2_5, align=ACenter)
+
+///|
 /// A gap of `h` (Spacer).
 fn gap(c : @ui.Ctx, h : Double) -> Unit {
-  c.box(w=Fill(1.0), h=Px(h), fn() {  }) |> ignore
+  c.box(style=@sf.full_width, h=Px(h), fn() {  }) |> ignore
 }
 
 ///|
@@ -104,7 +123,7 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
     top_label.val = label
     return
   }
-  c.box(dir=Row, w=Fill(1.0), pl=10.0, pr=10.0, pt=6.0, pb=4.0, align=ACenter, justify=JBetween, fn() {
+  c.box(style=top_back_line, fn() {
     if nav_back(c, label) {
       (core.pop)()
     }
@@ -115,6 +134,19 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
   })
   |> ignore
 }
+
+///|
+/// Back's line at the top of a large-title page (Stations.kt TopBack): 10 in, 6 over, 4 under.
+// kept across runs: a value (no field of it changes)
+let top_back_line : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S2_5,
+  pt=S1_5,
+  pb=S1,
+  align=ACenter,
+  justify=JBetween,
+)
 
 ///|
 /// What a large-title page's top had (top_back), for its head in the wide frame (large_title).
@@ -137,7 +169,6 @@ fn nav_bar(
   sub? : () -> Unit,
   trailing? : () -> Unit,
 ) -> Unit {
-  let t = @sf.theme()
   if wide.val {
     ignore(sub)
     match trailing {
@@ -146,7 +177,7 @@ fn nav_bar(
     }
     return
   }
-  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=t.p.bg) {
+  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg) {
     (core.pop)()
   }
 }
@@ -177,28 +208,44 @@ fn place_page(
   back? : String = tr("android-settings.title"),
   actions? : () -> Unit,
 ) -> Unit {
-  c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+  c.box(style=page_fill, fn() {
     match actions {
       // (at the root its actions at the end of a row of their own, over what it shows)
-      Some(a) if at_root.val =>
-        c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, gap=10.0, align=ACenter, justify=JEnd, fn() { a() })
-        |> ignore
+      Some(a) if at_root.val => c.box(style=root_actions, fn() { a() }) |> ignore
       None if at_root.val => ()
       Some(a) =>
         nav_bar(c, core, under_label(core, back), title, trailing=fn() {
-          c.box(dir=Row, gap=10.0, align=ACenter, fn() { a() }) |> ignore
+          c.box(style=bar_actions, fn() { a() }) |> ignore
         })
       None => nav_bar(c, core, under_label(core, back), title)
     }
-    c.box(w=Fill(1.0), h=Fill(1.0), pt=4.0, fn() { body() }) |> ignore
+    c.box(style=place_body, fn() { body() }) |> ignore
   })
   |> ignore
 }
 
 ///|
+/// All of where it is.
+// kept across runs: a value (no field of it changes)
+let page_fill : @ui.Style = @ui.style(w=Full, h=Full)
+
+///|
+/// A place's page's actions, 10 apart: in the bar, or at the root at the end of a line of their own, 16 in, 8 down.
+// kept across runs: a value (no field of it changes)
+let bar_actions : @ui.Style = @ui.style(row=true, gap=S2_5, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let root_actions : @ui.Style = bar_actions.then(@ui.style(w=Full, px=S4, pt=S2, justify=JEnd))
+
+///|
+/// What a place's page shows, 4 under its bar.
+// kept across runs: a value (no field of it changes)
+let place_body : @ui.Style = page_fill.then(@ui.style(pt=S1))
+
+///|
 /// A page's large title (Parts.kt LargeTitle): the big word, after `lead` when there is one (a workspace's mark).
 fn large_title(c : @ui.Ctx, big : String, lead? : () -> Unit) -> Unit {
-  let t = @sf.theme()
   if wide.val {
     ignore(lead)
     match frame_core.val {
@@ -212,43 +259,62 @@ fn large_title(c : @ui.Ctx, big : String, lead? : () -> Unit) -> Unit {
     top_trailing.val = None
     return
   }
-  c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pb=6.0, gap=10.0, align=ACenter, fn() {
+  c.box(style=large_title_line, fn() {
     match lead {
       Some(f) => f()
       None => ()
     }
-    c.text(big, size=32.0, weight=700, color=t.p.text, wrap=false, line=44.0) |> ignore
+    // Parts.kt:559 (32sp)
+    c.text(big, style=@sf.large_title) |> ignore
   })
   |> ignore
 }
 
 ///|
+/// LargeTitle's line: 16 in, 6 under it.
+// kept across runs: a value (no field of it changes)
+let large_title_line : @ui.Style = title_line.then(@ui.style(px=S4, pb=S1_5))
+
+///|
 /// A section's heading (Parts.kt SectionHeader): its title, what it holds at its end.
 fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? : Double = 24.0) -> Unit {
-  let t = @sf.theme()
-  c.box(dir=Row, w=Fill(1.0), pl=start, pr=20.0, pt=14.0, pb=6.0, align=AEnd, gap=8.0, fn() {
-    c.text(title, size=15.0, weight=600, color=t.p.text, wrap=false, line=21.0) |> ignore
+  c.box(style=section_line, pl=start, fn() {
+    // Parts.kt:585 (15sp)
+    c.text(title, style=@sf.body.then(@sf.strong).then(@sf.one_line)) |> ignore
     c.spacer()
     if trailing != "" {
-      c.text(trailing, size=13.0, color=t.p.muted, wrap=false, line=18.0) |> ignore
+      // Parts.kt:591 (13sp)
+      c.text(trailing, style=@sf.secondary.then(@sf.one_line)) |> ignore
     }
   })
   |> ignore
 }
 
 ///|
+/// SectionHeader's line (its start said where it is used): 20 in at its end, 14 over, 6 under, its words on the
+/// line's foot.
+// kept across runs: a value (no field of it changes)
+let section_line : @ui.Style = @ui.style(row=true, w=Full, pr=S5, pt=S3_5, pb=S1_5, align=AEnd, gap=S2)
+
+///|
 /// A page's note under its title, in a line or two (SettingParts.kt PageNote).
 fn page_note(c : @ui.Ctx, words : String) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=24.0, pr=24.0, pb=10.0, fn() {
-    c.text(words, size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
+  c.box(style=page_note_box, fn() {
+    // SettingParts.kt:266 (13sp)
+    c.text(words, style=@sf.secondary.then(@sf.full_words)) |> ignore
   })
   |> ignore
 }
 
 ///|
+/// PageNote's room: 24 in, 10 under it.
+// kept across runs: a value (no field of it changes)
+let page_note_box : @ui.Style = @ui.style(w=Full, px=S6, pb=S2_5)
+
+///|
 /// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
-/// edges: docs/ui-panels.md); what has a ground of its own there takes @sf.concentric(card_radius, card_pad).
+/// edges: docs/ui-panels.md); what has a ground of its own there takes @sf.concentric(card_radius, card_pad). The
+/// card's style says them as tokens (@sf.card_radius, S4).
 let card_radius : Double = 20.0
 
 ///|
@@ -258,68 +324,76 @@ let card_pad : Double = 16.0
 /// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words card_pad in; tapped when `key`
 /// is given. True on the frame after a tap.
 fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
-  let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    c.box(
-      w=Fill(1.0),
-      pad=card_pad,
-      radius=card_radius,
-      bg=if id != 0 && c.pressed(id) {
-        @sf.over(t.p.card, @sf.alpha(t.p.text, 0.05))
-      } else {
-        t.p.card
-      },
-      clip=true,
-      id~,
-      body,
-    )
-    |> ignore
-  })
-  |> ignore
+  c.box(style=card_room, fn() { c.box(style=card_ground, id~, body) |> ignore }) |> ignore
   id != 0 && hit(c, id)
 }
 
 ///|
+/// A card's room on the page: 12 from its sides, 10 under it.
+// kept across runs: a value (no field of it changes)
+let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
+
+///|
+/// A card: card_pad in, card_radius round, the ink at 5% over it while pressed (tapped: an id).
+// kept across runs: a value (no field of it changes)
+let card_ground : @ui.Style = @ui.style(
+  w=Full,
+  p=S4,
+  radius=@sf.card_radius,
+  bg=Card,
+  clip=true,
+  pressed=@ui.patch(bg=Over(Card, A(Fg, O5))),
+)
+
+///|
 /// Rows on one rounded card, no lines between them (Parts.kt ListCard).
 fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
-    c.box(w=Fill(1.0), radius=16.0, bg=t.p.card, clip=true, body) |> ignore
-  })
-  |> ignore
+  c.box(style=card_room, fn() { c.box(style=list_ground, body) |> ignore }) |> ignore
 }
+
+///|
+/// A list card: 16 round, its rows to its edges.
+// kept across runs: a value (no field of it changes)
+let list_ground : @ui.Style = @ui.style(w=Full, radius=Xl2, bg=Card, clip=true)
 
 ///|
 /// A row of a list card (Parts.kt ListRow): 16 and 12 in, what it holds 12 apart; tapped when `key` is given. True on
 /// the frame after a tap.
 fn list_row(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
-  let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
-  c.box(
-    dir=Row,
-    w=Fill(1.0),
-    padx=16.0,
-    pady=12.0,
-    gap=12.0,
-    align=ACenter,
-    bg=if id != 0 && c.pressed(id) { @sf.alpha(t.p.text, 0.05) } else { 0L },
-    id~,
-    body,
-  )
-  |> ignore
+  c.box(style=list_line, id~, body) |> ignore
   id != 0 && hit(c, id)
 }
 
 ///|
+/// ListRow's line: 16 and 12 in, 12 apart, the ink at 5% under it while pressed.
+// kept across runs: a value (no field of it changes)
+let list_line : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S4,
+  py=S3,
+  gap=S3,
+  align=ACenter,
+  pressed=@ui.patch(bg=A(Fg, O5)),
+)
+
+///|
 /// A row's main words, as wide as the row lets them, cut to one line.
-fn row_title(c : @ui.Ctx, words : String, color? : Int64, size? : Double = 15.0) -> Unit {
-  let t = @sf.theme()
-  c.text(words, size~, color=color.unwrap_or(t.p.text), wrap=false, w=Fill(1.0), line=21.0) |> ignore
+fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
+  // SettingParts.kt:255 (15sp)
+  c.text(words, style=row_title_words, color?) |> ignore
 }
 
 ///|
-/// A row's title with a line under it, as wide as the row lets them.
+/// A row's title: the body's words on one line, as wide as the row lets them.
+// kept across runs: a value (no field of it changes)
+let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_words)
+
+///|
+/// A row's title with a line under it, as wide as the row lets them. `title_color`, `sub_color`: in place of the
+/// roles' (a warning's, worked out where it is called).
 fn row_lines(
   c : @ui.Ctx,
   title : String,
@@ -328,17 +402,25 @@ fn row_lines(
   title_color? : Int64,
   wrap_sub? : Bool = false,
 ) -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), fn() {
-    c.text(title, size=15.0, color=title_color.unwrap_or(t.p.text), wrap=false, w=Fill(1.0), line=21.0)
-    |> ignore
+  c.box(style=@sf.full_width, fn() {
+    // Connects.kt:231, Security.kt:191 (15sp)
+    c.text(title, style=row_title_words, color?=title_color) |> ignore
     if sub != "" {
-      c.text(sub, size=13.0, color=sub_color.unwrap_or(t.p.muted), wrap=wrap_sub, w=Fill(1.0), line=18.0)
-      |> ignore
+      // Connects.kt:232, Security.kt:192 (13sp)
+      c.text(sub, style=if wrap_sub { row_sub_lines } else { row_sub_line }, color?=sub_color) |> ignore
     }
   })
   |> ignore
 }
+
+///|
+/// The line under a row's title: one, or in lines.
+// kept across runs: a value (no field of it changes)
+let row_sub_lines : @ui.TextStyle = @sf.secondary.then(@sf.full_words)
+
+///|
+// kept across runs: a value (no field of it changes)
+let row_sub_line : @ui.TextStyle = row_sub_lines.then(@sf.one_line)
 
 ///|
 /// The chevron at a row's end.
@@ -359,7 +441,6 @@ fn go_row(
   dot? : Bool = false,
   lead? : () -> Unit,
 ) -> Bool {
-  let t = @sf.theme()
   list_row(c, key~, fn() {
     match lead {
       Some(f) => f()
@@ -367,18 +448,23 @@ fn go_row(
     }
     row_title(c, title)
     if value != "" {
-      c.box(dir=Row, max_w=220.0, gap=6.0, align=ACenter, fn() {
+      c.box(style=near_beside, max_w=220.0, fn() {
         if dot {
           presence_dot(c, "error")
         }
-        c.text(value, size=14.0, color=if bad { t.p.red } else { t.p.muted }, wrap=false, line=20.0)
-        |> ignore
+        // SettingParts.kt:258 (14sp)
+        c.text(value, style=if bad { @sf.value.then(@sf.bad) } else { @sf.value }) |> ignore
       })
       |> ignore
     }
     chevron(c)
   })
 }
+
+///|
+/// Things in a line, centred across it, 6 apart (a dot and its words, a mark and a word).
+// kept across runs: a value (no field of it changes)
+let near_beside : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 
 ///|
 /// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
@@ -403,16 +489,35 @@ fn switch(c : @ui.Ctx, on : Bool) -> Unit {
 /// A connect's presence, a station's state (PageParts.kt PresenceDot): online green, at work the accent, failing red,
 /// else a hollow ring.
 fn presence_dot(c : @ui.Ctx, state : String) -> Unit {
-  let t = @sf.theme()
   match state {
-    "online" => c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.green, fn() {  }) |> ignore
-    "busy" => c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  }) |> ignore
-    "error" => c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.red, fn() {  }) |> ignore
-    _ =>
-      c.box(w=Px(7.0), h=Px(7.0), radius=3.5, border=1.5, border_color=t.p.subtle, fn() {  })
-      |> ignore
+    "online" => c.box(style=dot_online, fn() {  }) |> ignore
+    "busy" => c.box(style=dot_busy, fn() {  }) |> ignore
+    "error" => c.box(style=dot_error, fn() {  }) |> ignore
+    // (its edge 1.5, off the scale of edges)
+    _ => c.box(style=dot_ring, border=1.5, fn() {  }) |> ignore
   }
 }
+
+///|
+/// A small dot (PresenceDot, Dot): 7 round.
+// kept across runs: a value (no field of it changes)
+let dot_shape : @ui.Style = @ui.style(w=@sf.dot_size, h=@sf.dot_size, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let dot_online : @ui.Style = dot_shape.then(@ui.style(bg=Positive))
+
+///|
+// kept across runs: a value (no field of it changes)
+let dot_busy : @ui.Style = dot_shape.then(@ui.style(bg=Accent))
+
+///|
+// kept across runs: a value (no field of it changes)
+let dot_error : @ui.Style = dot_shape.then(@ui.style(bg=Danger))
+
+///|
+// kept across runs: a value (no field of it changes)
+let dot_ring : @ui.Style = dot_shape.then(@ui.style(border_color=Subtle))
 
 ///|
 /// A check's tone as a presence dot (Stations.kt toneDot).
@@ -467,10 +572,8 @@ fn seg(
   let thumb = if t.dark { 0x3A3B40FFL } else { 0xFFFFFFFFL }
   let track = fn() {
     c.box(
-      dir=Row,
-      w=if fill { Fill(1.0) } else { Auto },
+      style=if fill { seg_track_full } else { seg_track },
       h=Px(height),
-      pad=inset,
       radius~,
       bg=@sf.alpha(t.p.text, 0.06),
       id=base,
@@ -482,19 +585,23 @@ fn seg(
         for i, label in options {
           let id = base + i + 1
           let item = c.box(
-            w=if fill { Fill(1.0) } else { Auto },
-            h=Fill(1.0),
-            min_w=if pill { 101.0 } else { 0.0 },
-            padx=if fill { 12.0 } else { 10.0 },
-            align=ACenter,
-            justify=JCenter,
+            style=if pill {
+              seg_pill_option
+            } else if fill {
+              seg_full_option
+            } else {
+              seg_option
+            },
             id~,
             fn() {
+              // Parts.kt:424 (14sp filling, else 13sp)
               c.text(
                 label,
-                size=if fill { 14.0 } else { 13.0 },
-                color=if i == picked { t.p.text } else { t.p.muted },
-                wrap=false,
+                style=@ui.text_style(
+                  size=if fill { @sf.value_size } else { @sf.secondary_size },
+                  color=if i == picked { Fg } else { Muted },
+                  wrap=false,
+                ),
               )
               |> ignore
             },
@@ -519,7 +626,7 @@ fn seg(
   }
   // (in a row, as wide as its options: not stretched to its parent's width)
   if pill {
-    c.box(dir=Row, w=Fill(1.0), fn() { track() }) |> ignore
+    c.box(style=seg_pill_line, fn() { track() }) |> ignore
   } else {
     track()
   }
@@ -527,17 +634,43 @@ fn seg(
 }
 
 ///|
+/// Seg's track (its height and corner said where it is used): its options in a line, 2 in; as wide as where it is
+/// (`fill`) or as they are.
+// kept across runs: a value (no field of it changes)
+let seg_track : @ui.Style = @ui.style(row=true, p=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let seg_track_full : @ui.Style = seg_track.then(@ui.style(w=Full))
+
+///|
+/// An option: its words in its middle, 10 in; 12 in and an equal share where the track fills; the wide frame's pill,
+/// 101 at least.
+// kept across runs: a value (no field of it changes)
+let seg_option : @ui.Style = @ui.style(h=Full, px=S2_5, align=ACenter, justify=JCenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let seg_full_option : @ui.Style = seg_option.then(@ui.style(w=Full, px=S3))
+
+///|
+// kept across runs: a value (no field of it changes)
+let seg_pill_option : @ui.Style = seg_option.then(@ui.style(min_w=@sf.seg_pill_min))
+
+///|
+/// The wide frame's pill in a line of its own, not stretched to its width.
+// kept across runs: a value (no field of it changes)
+let seg_pill_line : @ui.Style = @ui.style(row=true, w=Full)
+
+///|
 /// A person's picture (Parts.kt Avatar): theirs once it is here, else their initial on their colour.
 fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, picture? : String = "") -> Unit {
   let key = if picture == "" { "" } else { (core.picture)(picture) }
   c.box(
+    style=avatar_disc,
     w=Px(size),
     h=Px(size),
-    radius=size / 2.0,
     bg=avatar_color(id),
-    align=ACenter,
-    justify=JCenter,
-    clip=true,
     fn() {
       if key != "" {
         c.image(key, w=Px(size), h=Px(size), radius=size / 2.0, bg=0L) |> ignore
@@ -549,6 +682,11 @@ fn avatar(c : @ui.Ctx, core : Core, id : String, name : String, size : Double, p
   )
   |> ignore
 }
+
+///|
+/// A person's disc (its side and colour said where it is used): round, what it holds in its middle.
+// kept across runs: a value (no field of it changes)
+let avatar_disc : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter, clip=true)
 
 ///|
 /// The people's colours (Parts.kt AVATAR).
@@ -590,12 +728,22 @@ fn initial(name : String) -> String {
 ///|
 /// A word in the accent's wash (Settings.kt You: 你, 本机).
 fn you(c : @ui.Ctx, words : String) -> Unit {
-  let t = @sf.theme()
-  c.box(padx=6.0, radius=6.0, bg=t.p.accent_bg, fn() {
-    c.text(words, size=12.0, color=t.p.accent_text, wrap=false, line=17.0) |> ignore
+  c.box(style=you_ground, fn() {
+    // Settings.kt:294 (12sp)
+    c.text(words, style=you_words) |> ignore
   })
   |> ignore
 }
+
+///|
+/// You's wash: 6 in at its sides, 6 round.
+// kept across runs: a value (no field of it changes)
+let you_ground : @ui.Style = @ui.style(px=S1_5, radius=Md, bg=AccentBg)
+
+///|
+/// Small words in the accent's ink, on one line.
+// kept across runs: a value (no field of it changes)
+let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText, wrap=false))
 
 ///|
 /// The turning ring (Waiting.kt Spinner): 14, or 12 in a line of small text.
@@ -636,32 +784,60 @@ let wait_line_padded : @ui.Style = @sf.beside.then(@ui.style(px=S5, py=S2))
 /// The shapes of a settings page's cards to come (Waiting.kt Waiting, WaitShape.Cards), breathing; what could not be
 /// read over them in red (the shapes then still).
 fn waiting_cards(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  let t = @sf.theme()
   let pills = if error != "" { [error] } else { [] }
   pills.append(failing)
-  c.box(w=Fill(1.0), fn() {
+  c.box(style=@sf.full_width, fn() {
     if pills.length() > 0 {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        for f in pills {
-          c.box(padx=12.0, pady=6.0, radius=15.0, bg=t.p.chip, fn() {
-            c.text(f, size=13.0, color=t.p.red, line=18.0, center=true) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+      wait_pills(c, pills)
     }
     let breath = if pills.length() == 0 { @sf.breath(c) } else { 0.6 }
-    c.box(w=Fill(1.0), padx=12.0, gap=16.0, opacity=breath, fn() {
+    c.box(style=wait_card_list, opacity=breath, fn() {
       for i in 0..<count {
-        c.box(w=Fill(1.0), h=Px(wait_cards[i % wait_cards.length()]), radius=20.0, bg=t.p.neutral_bg, fn() {  })
-        |> ignore
+        c.box(style=wait_card, h=Px(wait_cards[i % wait_cards.length()]), fn() {  }) |> ignore
       }
     })
     |> ignore
   })
   |> ignore
 }
+
+///|
+/// What could not be read, each in a pill of the chip's grey (Waiting.kt WaitPill), over the shapes: 20 in, 14 down.
+fn wait_pills(c : @ui.Ctx, pills : Array[String]) -> Unit {
+  let t = @sf.theme()
+  c.box(style=wait_pill_list, fn() {
+    for f in pills {
+      // (the chip's grey: the wide frame's light one is not mbui's Faint)
+      c.box(style=wait_pill, bg=t.p.chip, fn() {
+        // Waiting.kt:119 (13sp, line 18)
+        c.text(f, style=wait_pill_words) |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_pill_list : @ui.Style = @ui.style(w=Full, px=S5, pt=S3_5, pb=S1, gap=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_pill : @ui.Style = @ui.style(px=S3, py=S1_5, radius=Full)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_pill_words : @ui.TextStyle = @sf.meta.then(@sf.bad).then(@ui.text_style(center=true))
+
+///|
+/// The cards to come: 12 from the page's sides, 16 apart, each a card's corner on the placeholders' grey.
+// kept across runs: a value (no field of it changes)
+let wait_card_list : @ui.Style = @ui.style(w=Full, px=S3, gap=S4)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_card : @ui.Style = @ui.style(w=Full, radius=@sf.card_radius, bg=Neutral)
 
 ///|
 // kept across runs: a table, never written
@@ -678,26 +854,18 @@ let wait_lines : Array[Double] = [230.0, 190.0, 250.0, 170.0, 210.0, 200.0, 180.
 ///|
 /// A list's rows to come (Waiting.kt WaitShape.Rows): a title and a line, a picture at the end, 66 high.
 fn waiting_rows(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : Array[String] = []) -> Unit {
-  let t = @sf.theme()
   let pills = if error != "" { [error] } else { [] }
   pills.append(failing)
-  c.box(w=Fill(1.0), fn() {
+  c.box(style=@sf.full_width, fn() {
     if pills.length() > 0 {
-      c.box(w=Fill(1.0), pl=20.0, pr=20.0, pt=14.0, pb=4.0, gap=8.0, align=ACenter, fn() {
-        for f in pills {
-          c.box(padx=12.0, pady=6.0, radius=15.0, bg=t.p.chip, fn() {
-            c.text(f, size=13.0, color=t.p.red, line=18.0, center=true) |> ignore
-          })
-          |> ignore
-        }
-      })
-      |> ignore
+      wait_pills(c, pills)
     }
     let breath = if pills.length() == 0 { @sf.breath(c) } else { 0.6 }
-    c.box(w=Fill(1.0), opacity=breath, fn() {
+    c.box(style=@sf.full_width, opacity=breath, fn() {
       for i in 0..<count {
-        c.box(dir=Row, w=Fill(1.0), h=Px(66.0), pl=22.0, pr=16.0, gap=12.0, align=ACenter, fn() {
-          c.box(w=Fill(1.0), gap=10.0, fn() {
+        // (66 high, 22 in at its start: off the scale)
+        c.box(style=wait_row, h=Px(66.0), pl=22.0, fn() {
+          c.box(style=wait_row_lines, fn() {
             @sf.bar(c, Px(wait_titles[i % 7]), 13.0)
             @sf.bar(c, Px(wait_lines[i % 7]), 10.0)
           })
@@ -711,6 +879,15 @@ fn waiting_rows(c : @ui.Ctx, count? : Int = 3, error? : String = "", failing? : 
   })
   |> ignore
 }
+
+///|
+/// A row to come: 16 in at its end, its lines and its picture 12 apart; its lines 10 apart.
+// kept across runs: a value (no field of it changes)
+let wait_row : @ui.Style = @ui.style(row=true, w=Full, pr=S4, gap=S3, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let wait_row_lines : @ui.Style = @ui.style(w=Full, gap=S2_5)
 
 ///|
 /// What could not be read of a list, by the stations that failed (a ListNote's `failing`).
@@ -727,15 +904,21 @@ fn note_waits(note : Json?) -> Bool {
 ///|
 /// What the page is for, said where its list is empty (PlaceRows.kt PlaceEmpty).
 fn place_empty(c : @ui.Ctx, words : String, note? : String = "") -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), padx=32.0, pady=40.0, gap=8.0, align=ACenter, fn() {
-    c.text(words, size=14.0, color=t.p.muted, center=true, w=Fill(1.0), line=20.0) |> ignore
+  c.box(style=place_empty_box, fn() {
+    // PlaceRows.kt:55 (14sp)
+    c.text(words, style=@sf.value.then(@sf.in_lines).then(@sf.centered)) |> ignore
     if note != "" {
-      c.text(note, size=13.0, color=t.p.subtle, center=true, w=Fill(1.0), line=18.0) |> ignore
+      // PlaceRows.kt:56 (13sp)
+      c.text(note, style=@sf.secondary.then(@sf.quieter).then(@sf.centered)) |> ignore
     }
   })
   |> ignore
 }
+
+///|
+/// PlaceEmpty's room: 32 in, 40 over and under, its lines 8 apart in its middle.
+// kept across runs: a value (no field of it changes)
+let place_empty_box : @ui.Style = @ui.style(w=Full, px=S8, py=S10, gap=S2, align=ACenter)
 
 ///|
 /// A button (Controls.kt Button): 38 high, round; primary in ink (red when `danger`), else the chip's grey; a spinner
@@ -769,25 +952,32 @@ fn button(
   } else {
     t.p.chip
   }
+  // (38 high, off the scale; its ground and ink from what it is)
   c.box(
-    dir=Row,
+    style=button_box,
     h=Px(38.0),
-    padx=16.0,
-    gap=8.0,
-    radius=19.0,
-    align=ACenter,
     bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
     id~,
     fn() {
       if busy {
         @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
       }
-      c.text(label, size=14.0, weight=600, color=ink, wrap=false) |> ignore
+      // Controls.kt:126 (14sp)
+      c.text(label, style=button_words, color=ink) |> ignore
     },
   )
   |> ignore
   enabled && !busy && hit(c, id)
 }
+
+///|
+/// A button: a capsule, 16 in, a spinner 8 before its words.
+// kept across runs: a value (no field of it changes)
+let button_box : @ui.Style = @ui.style(row=true, px=S4, gap=S2, radius=Full, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let button_words : @ui.TextStyle = @sf.value.then(@sf.strong)
 
 ///|
 /// A main action as wide as where it is (Security.kt WideButton): 46 high; primary in ink (red when `danger`), the
@@ -823,26 +1013,28 @@ fn wide_button(
   } else {
     t.p.text
   }
+  // (46 high, off the scale; its ground and ink from what it is)
   c.box(
-    dir=Row,
-    w=Fill(1.0),
+    style=wide_button_box,
     h=Px(46.0),
-    radius=23.0,
-    gap=8.0,
-    align=ACenter,
-    justify=JCenter,
     bg=if c.pressed(id) && enabled && !busy { @sf.over(ground, @sf.alpha(ink, 0.12)) } else { ground },
     id~,
     fn() {
       if busy {
         @sf.spinner(c, size=14.0, ring=@sf.alpha(ink, 0.3), arc=ink) |> ignore
       }
-      c.text(label, size=15.0, weight=600, color=ink, wrap=false) |> ignore
+      // Security.kt:127 (15sp)
+      c.text(label, style=@sf.body.then(@sf.strong).then(@sf.one_line), color=ink) |> ignore
     },
   )
   |> ignore
   enabled && !busy && hit(c, id)
 }
+
+///|
+/// WideButton: a capsule as wide as where it is, its words in its middle.
+// kept across runs: a value (no field of it changes)
+let wide_button_box : @ui.Style = @ui.style(row=true, w=Full, radius=Full, gap=S2, align=ACenter, justify=JCenter)
 
 ///|
 /// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the one chosen; `mark` before
@@ -860,46 +1052,31 @@ fn pick_row(
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
-  c.box(w=Fill(1.0), padx=12.0, fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      padx=8.0,
-      pady=12.0,
-      gap=12.0,
-      align=ACenter,
-      bg=if c.pressed(id) && enabled { @sf.alpha(t.p.text, 0.05) } else { 0L },
-      id~,
-      fn() {
-        c.box(w=Fill(1.0), fn() {
-          c.box(dir=Row, w=Fill(1.0), gap=6.0, align=ACenter, fn() {
-            match mark {
-              Some(f) => f()
-              None => ()
-            }
-            c.text(
-              label,
-              size=15.0,
-              color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle },
-              wrap=false,
-              w=Fill(1.0),
-              line=21.0,
-            )
-            |> ignore
-          })
-          |> ignore
-          if sub != "" {
-            c.text(sub, size=12.0, color=t.p.muted, w=Fill(1.0), line=17.0) |> ignore
+  c.box(style=pick_room, fn() {
+    c.box(style=if enabled { pick_line } else { pick_line_off }, id~, fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=pick_label_line, fn() {
+          match mark {
+            Some(f) => f()
+            None => ()
           }
+          // Controls.kt:69, 72 (15sp)
+          c.text(label, style=row_title_words, color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle })
+          |> ignore
         })
         |> ignore
-        if busy {
-          spinner(c)
-        } else if checked {
-          @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+        if sub != "" {
+          // Controls.kt:74 (12sp)
+          c.text(sub, style=@sf.caption.then(@sf.full_words)) |> ignore
         }
-      },
-    )
+      })
+      |> ignore
+      if busy {
+        spinner(c)
+      } else if checked {
+        @sf.icon(c, "check", size=14.0, color=t.p.accent) |> ignore
+      }
+    })
     |> ignore
   })
   |> ignore
@@ -907,19 +1084,37 @@ fn pick_row(
 }
 
 ///|
+/// PickRow: 12 from the sheet's sides; its line 8 and 12 in, 12 apart, the ink at 5% under it while pressed (not
+/// when off); its label after its mark, 6 apart.
+// kept across runs: a value (no field of it changes)
+let pick_room : @ui.Style = @ui.style(w=Full, px=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_line_off : @ui.Style = @ui.style(row=true, w=Full, px=S2, py=S3, gap=S3, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_line : @ui.Style = pick_line_off.then(@ui.style(pressed=@ui.patch(bg=A(Fg, O5))))
+
+///|
+// kept across runs: a value (no field of it changes)
+let pick_label_line : @ui.Style = near_beside.then(@sf.full_width)
+
+///|
 /// A word at a row's end that does something (Settings.kt RowAction: 移除, 撤回): a spinner in its place while it is
 /// under way, a red mark before it a moment after it failed. True on the frame after a tap.
 fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : String?) -> Bool {
-  let t = @sf.theme()
   if busy {
     spinner(c)
     return false
   }
   let id = c.id(key)
-  c.box(dir=Row, gap=6.0, align=ACenter, fn() {
+  c.box(style=near_beside, fn() {
     doing_mark(c, false, failed)
-    c.box(id~, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, fn() {
-      c.text(label, size=14.0, color=t.p.accent, wrap=false) |> ignore
+    c.box(style=press_fade, id~, fn() {
+      // Settings.kt:288 (14sp)
+      c.text(label, style=@sf.value.then(@sf.accent)) |> ignore
     })
     |> ignore
   })
@@ -928,12 +1123,18 @@ fn row_action(c : @ui.Ctx, key : String, label : String, busy : Bool, failed : S
 }
 
 ///|
+/// Words to tap, faded while pressed.
+// kept across runs: a value (no field of it changes)
+let press_fade : @ui.Style = @ui.style(pressed=@ui.patch(opacity=O60))
+
+///|
 /// Words that do something when tapped (a link's look). True on the frame after a tap.
 fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : Double = 15.0) -> Bool {
-  let t = @sf.theme()
   let id = c.id(key)
-  c.box(id~, opacity=if c.pressed(id) { 0.6 } else { 1.0 }, fn() {
-    c.text(label, size~, color=color.unwrap_or(t.p.accent), wrap=false) |> ignore
+  c.box(style=press_fade, id~, fn() {
+    // Settings.kt:447 (15sp), Profiles.kt:794, Vault.kt:365 (14sp): the theme's line, 1.4 its size (its size the
+    // caller's)
+    c.text(label, style=@sf.accent.then(@sf.one_line), size~, line=size * 1.4, color?) |> ignore
   })
   |> ignore
   hit(c, id)
@@ -944,12 +1145,11 @@ fn tap_text(c : @ui.Ctx, key : String, label : String, color? : Int64, size? : D
 fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
+  // (34 round, off the scale; the ink at 8% while pressed, off the scale of opacities)
   c.box(
+    style=round_button,
     w=Px(34.0),
     h=Px(34.0),
-    radius=17.0,
-    align=ACenter,
-    justify=JCenter,
     bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
     id~,
     fn() { @sf.icon(c, icon, size~, color=t.p.text) |> ignore },
@@ -959,19 +1159,29 @@ fn nav_button(c : @ui.Ctx, key : String, icon : String, size? : Double = 18.0) -
 }
 
 ///|
+/// NavButton: round, its icon in its middle.
+// kept across runs: a value (no field of it changes)
+let round_button : @ui.Style = @ui.style(radius=Full, align=ACenter, justify=JCenter)
+
+///|
 /// A body of words in a list card (PageParts.kt Body): 16 and 14 in, 12 apart.
 fn body(c : @ui.Ctx, f : () -> Unit) -> Unit {
-  c.box(w=Fill(1.0), padx=16.0, pady=14.0, gap=12.0, f) |> ignore
+  c.box(style=body_box, f) |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let body_box : @ui.Style = @ui.style(w=Full, px=S4, py=S3_5, gap=S3)
 
 ///|
 /// A paragraph and a quieter one under it (Security.kt Para).
 fn para(c : @ui.Ctx, main : String, sub? : String = "") -> Unit {
-  let t = @sf.theme()
-  c.box(w=Fill(1.0), fn() {
-    c.text(main, size=15.0, color=t.p.text, w=Fill(1.0), line=22.0) |> ignore
+  c.box(style=@sf.full_width, fn() {
+    // Security.kt:105 (15sp, line 22)
+    c.text(main, style=@sf.paragraph.then(@sf.full_words)) |> ignore
     if sub != "" {
-      c.text(sub, size=15.0, color=t.p.subtle, w=Fill(1.0), line=22.0) |> ignore
+      // Security.kt:106 (15sp, line 22)
+      c.text(sub, style=@sf.lead.then(@sf.full_words)) |> ignore
     }
   })
   |> ignore
@@ -980,8 +1190,8 @@ fn para(c : @ui.Ctx, main : String, sub? : String = "") -> Unit {
 ///|
 /// A quiet note (Security.kt Note).
 fn note(c : @ui.Ctx, words : String) -> Unit {
-  let t = @sf.theme()
-  c.text(words, size=12.0, color=t.p.subtle, w=Fill(1.0), line=18.0) |> ignore
+  // Security.kt:110 (12sp, line 18)
+  c.text(words, style=@sf.note.then(@sf.full_words)) |> ignore
 }
 
 ///|
@@ -989,9 +1199,7 @@ fn note(c : @ui.Ctx, words : String) -> Unit {
 fn dot(c : @ui.Ctx, on : Bool, warned? : Bool = false) -> Unit {
   let t = @sf.theme()
   c.box(
-    w=Px(7.0),
-    h=Px(7.0),
-    radius=3.5,
+    style=dot_shape,
     bg=if on {
       t.p.green
     } else if warned {
@@ -1008,11 +1216,21 @@ fn dot(c : @ui.Ctx, on : Bool, warned? : Bool = false) -> Unit {
 /// A tone's words in a pill of its colour (Profiles.kt TonePill).
 fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
   let ink = tone_color(tone)
-  c.box(padx=8.0, pady=2.0, radius=9.0, bg=@sf.alpha(ink, 0.12), fn() {
-    c.text(words, size=12.0, weight=500, color=ink, wrap=false, line=16.0) |> ignore
+  // (9 round, off the scale; its ground its tone's at 12%)
+  c.box(style=tone_pill_box, radius=9.0, bg=@sf.alpha(ink, 0.12), fn() {
+    // Profiles.kt:760 (12sp)
+    c.text(words, style=tone_pill_words, color=ink) |> ignore
   })
   |> ignore
 }
+
+///|
+// kept across runs: a value (no field of it changes)
+let tone_pill_box : @ui.Style = @ui.style(px=S2, py=S0_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let tone_pill_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(weight=Medium, wrap=false))
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
@@ -1040,7 +1258,7 @@ fn mono(
       )
   }
   if center {
-    c.box(w=Fill(1.0), align=ACenter, fn() {
+    c.box(style=centre_column, fn() {
       c.rich([@ui.span(words, mono=true)], style?, size?, weight?, color?, line?, wrap~) |> ignore
     })
     |> ignore
@@ -1058,3 +1276,8 @@ fn mono(
     |> ignore
   }
 }
+
+///|
+/// What it holds in the middle of where it is, across.
+// kept across runs: a value (no field of it changes)
+let centre_column : @ui.Style = @ui.style(w=Full, align=ACenter)

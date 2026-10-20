@@ -55,6 +55,22 @@ pub let meta : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted)
 pub let code : @ui.TextStyle = @ui.text_style(size=code_size, color=Fg)
 
 ///|
+/// A paragraph of the body's words, in lines a little apart (15/22: Security.kt:105 Para).
+pub let paragraph : @ui.TextStyle = @ui.text_style(size=lead_size, color=Fg)
+
+///|
+/// Back in a bar: where it goes back to, in the accent (17/23.8: Parts.kt:491 NavBack).
+pub let back : @ui.TextStyle = @ui.text_style(size=back_size, color=Accent, wrap=false)
+
+///|
+/// A compact bar's title, on one line (16/22.4, semibold: Parts.kt:527 NavBar).
+pub let bar_title : @ui.TextStyle = @ui.text_style(size=bar_title_size, weight=Semibold, color=Fg, wrap=false)
+
+///|
+/// A page's large title, on one line (32/44.8, bold: Parts.kt:559 LargeTitle).
+pub let large_title : @ui.TextStyle = @ui.text_style(size=large_title_size, weight=Bold, color=Fg, wrap=false)
+
+///|
 /// Modifiers laid over a role (`@sf.meta.then(@sf.bad)`): what went wrong, quieter, heavier, on one line, centred
 /// across where it is.
 pub let bad : @ui.TextStyle = @ui.text_style(color=Danger)
@@ -70,6 +86,14 @@ pub let one_line : @ui.TextStyle = @ui.text_style(wrap=false)
 
 ///|
 pub let accent : @ui.TextStyle = @ui.text_style(color=Accent)
+
+///|
+/// Quieter still than `quiet` (the subtle grey).
+pub let quieter : @ui.TextStyle = @ui.text_style(color=Subtle)
+
+///|
+/// In lines, over a role on one line.
+pub let in_lines : @ui.TextStyle = @ui.text_style(wrap=true)
 
 ///|
 /// A page's words in from its sides as a card's (20), a little under them.
