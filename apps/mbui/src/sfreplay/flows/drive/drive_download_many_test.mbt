@@ -32,6 +32,9 @@ test "91-drive-download-many" {
     assert_eq(f.t.kept().filter(fn(k) { k.0 == "附件.txt" })[0].2.length(), 40)
     // its toast, up since the download began (the sheet still going down), its time shown and gone
     f.run_for(@sfapp.toast_ms)
+    // (its time counted from the frame after it showed, @kit.toaster's `after(later=true)`: out a frame on, then gone)
+    f.run_for(@sfreplay.frame_ms)
+    f.run_to_rest("toast")
     f.end()
   })
 }

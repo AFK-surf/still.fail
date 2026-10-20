@@ -14,8 +14,9 @@ test "15-drive-lend" {
     f.tap("e2e-082940")
     f.see("子文件夹")
     f.tap("=选择此文件夹")
-    f.run_to(@kit.sheet_rest("dv-sheet"))
+    // lent, said at once, the sheet still going down (its toast's time its own: looked at as it shows)
     f.see("已开放「e2e-082940」")
+    f.run_to(@kit.sheet_rest("dv-sheet"))
     f.see("=e2e-082940")
     // the toast gone by itself
     f.run_for(@sfapp.toast_ms)

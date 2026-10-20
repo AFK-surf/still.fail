@@ -231,3 +231,195 @@ test "the bytes the run sent beside a call are the test's to give again" {
   assert_eq(r.sent_bytes("station.upload.part", "name", "b.pdf"), None)
   assert_eq(r.sent_bytes("chat.send", "name", "a.jpg"), None)
 }
+
+///|
+/// The same run with its asks' wall clock: the message sent 2 s after the value came (the person thinking), answered
+/// 50 ms after it went.
+let paced : String =
+  #|{"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|{"in":{"id":7,"value":[]},"w":1000}
+  #|{"out":{"id":9,"call":"chat.send","params":{"text":"hi"}},"w":3000}
+  #|{"in":{"id":9,"ok":{"sent":true}},"w":3050}
+  #|{"in":{"id":7,"value":[{"sub":"u1"}]},"w":3250}
+
+///|
+test "at the run's pace: a call's answer measured from its ask made again, the next from the answer" {
+  let r = @core.Replay::parse(paced)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  let s = c.subscribe("accounts")
+  // the value: 100 ms after the subscription was made again
+  assert_eq(r.next_due(), Some(100.0))
+  assert_eq(r.deliver(now=99.0), 0)
+  assert_eq(r.deliver(now=100.0), 1)
+  assert_eq(s.value.unwrap().stringify(), "[]")
+  // the answer waits for the message: whenever it is sent, nothing is due before
+  assert_eq(r.next_due(), None)
+  now.val = 500.0
+  c.call("chat.send", params={ "text": "hi" }, on_done=fn(_) {  }) |> ignore
+  // 50 ms after it was sent again, not 2 s after the value
+  assert_eq(r.next_due(), Some(550.0))
+  assert_eq(r.deliver(now=549.0), 0)
+  assert_eq(r.deliver(now=550.0), 1)
+  // the change: 200 ms after the answer was given
+  assert_eq(r.next_due(), Some(750.0))
+  assert_eq(r.deliver(now=750.0), 1)
+  assert_eq(r.left(), 0)
+}
+
+///|
+test "at the run's pace, an older trace (no wall clock on its asks): each message from the one before it" {
+  let r = @core.Replay::parse(run)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  c.subscribe("accounts") |> ignore
+  // the first: at once
+  assert_eq(r.deliver(now=0.0), 1)
+  now.val = 40.0
+  c.call("chat.send", params={ "text": "hi" }, on_done=fn(_) {  }) |> ignore
+  // the answer: 200 ms after the value was given (the run's gap between them)
+  assert_eq(r.next_due(), Some(200.0))
+  assert_eq(r.deliver(now=200.0), 1)
+  assert_eq(r.next_due(), Some(300.0))
+}
+
+///|
+test "twice as slow, at once: the gaps scaled, or none" {
+  let slow = @core.Replay::parse(paced)
+  slow.clock(fn() { 0.0 })
+  slow.pace(@core.AsRun(2.0))
+  slow.client().subscribe("accounts") |> ignore
+  assert_eq(slow.next_due(), Some(200.0))
+  let fast = @core.Replay::parse(paced)
+  fast.pace(@core.AtOnce)
+  fast.client().subscribe("accounts") |> ignore
+  assert_eq(fast.deliver(now=0.0), 1)
+}
+
+///|
+/// A scripted run's steps on its trace (trace_steps): it typed 400 ms after the value came, then tapped send 600 ms
+/// later (an upload going up meanwhile), the answer 50 ms after the send.
+let stepped : String =
+  #|CORETRACE {"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|CORETRACE {"in":{"id":7,"value":[]},"w":1000}
+  #|CORETRACE {"step":"until 发消息","w":1100}
+  #|CORETRACE {"step":"type 你好","w":1400}
+  #|CORETRACE {"step":"now tap icon:arrow-up","w":2000}
+  #|CORETRACE {"out":{"id":9,"call":"chat.send","params":{"text":"你好"}},"w":2010}
+  #|CORETRACE {"in":{"id":9,"ok":{"sent":true}},"w":2060}
+
+///|
+test "at the run's pace, its steps taken when it took them: each from the event before it taken again" {
+  let r = @core.Replay::parse(stepped)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  let c = r.client()
+  ignore(c.subscribe("accounts"))
+  now.val = 100.0
+  assert_eq(r.deliver(now=100.0), 1)
+  // the waiting step 100 ms after the value; a step out of turn is none of the run's yet
+  assert_eq(r.step_at("type 你好"), None)
+  assert_eq(r.step_at("until 发消息"), Some(200.0))
+  now.val = 200.0
+  assert_true(r.step_taken("until 发消息"))
+  // the typing 300 ms after it
+  assert_eq(r.step_at("type 你好"), Some(500.0))
+  now.val = 500.0
+  assert_true(r.step_taken("type 你好"))
+  // the tap 600 ms after the typing, whatever `now` the script put before it
+  assert_eq(r.step_at("tap icon:arrow-up"), Some(1100.0))
+  now.val = 1100.0
+  assert_true(r.step_taken("tap icon:arrow-up"))
+  now.val = 1110.0
+  c.call("chat.send", params={ "text": "你好" }, on_done=fn(_) {  }) |> ignore
+  assert_eq(r.next_due(), Some(1160.0))
+  assert_eq(r.deliver(now=1160.0), 1)
+  assert_eq(r.left(), 0)
+  assert_eq(r.unmade().length(), 0)
+  // at once: whenever the test takes it
+  let q = @core.Replay::parse(stepped)
+  q.pace(@core.AtOnce)
+  assert_eq(q.step_at("until 发消息"), Some(-@double.infinity))
+}
+
+///|
+test "step_of: the line as the drive took it" {
+  assert_eq(step_of("now noticed 出错 · "), Some("noticed 出错 ·"))
+  assert_eq(step_of("tap =保存"), Some("tap 保存"))
+  assert_eq(step_of("wait 1500"), None)
+}
+
+///|
+/// What came in a run, its gaps under a frame's.
+let close_in : String =
+  #|{"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|{"in":{"id":7,"value":[]},"w":1000}
+  #|{"in":{"id":7,"value":[{"sub":"u1"}]},"w":1001}
+  #|{"in":{"id":7,"value":[{"sub":"u2"}]},"w":1017}
+  #|{"in":{"id":7,"value":[{"sub":"u3"}]},"w":1018}
+  #|{"in":{"id":7,"value":[{"sub":"u4"}]},"w":1034}
+
+///|
+test "at the run's pace, given a frame at a time: each due by the run's gaps, not from the frame it was given in" {
+  let r = @core.Replay::parse(close_in)
+  r.clock(fn() { 0.0 })
+  r.pace(@core.AsRun(1.0))
+  r.client().subscribe("accounts") |> ignore
+  // frames at 0, 16, 32…: the value at 100, then two a frame, as they came
+  assert_eq(r.deliver(now=96.0), 0)
+  assert_eq(r.deliver(now=112.0), 2)
+  assert_eq(r.deliver(now=128.0), 2)
+  assert_eq(r.deliver(now=144.0), 1)
+  assert_eq(r.left(), 0)
+}
+
+///|
+/// A step that acts said twice by the run: as its line began, and as its input went to the host three frames on (a
+/// message come meanwhile).
+let acted : String =
+  #|CORETRACE {"out":{"id":7,"subscribe":{"topic":"accounts"},"keyed":true},"w":900}
+  #|CORETRACE {"in":{"id":7,"value":[]},"w":1000}
+  #|CORETRACE {"step":"back","w":1100}
+  #|CORETRACE {"in":{"id":7,"value":[{"sub":"u1"}]},"w":1120}
+  #|CORETRACE {"step":"back","acted":true,"w":1148}
+  #|CORETRACE {"in":{"id":7,"value":[{"sub":"u2"}]},"w":1200}
+
+///|
+test "at the run's pace, a step that acts taken when its input went, what came before that before it" {
+  let r = @core.Replay::parse(acted)
+  let now : Ref[Double] = { val: 0.0 }
+  r.clock(fn() { now.val })
+  r.pace(@core.AsRun(1.0))
+  ignore(r.client().subscribe("accounts"))
+  assert_eq(r.deliver(now=100.0), 1)
+  // the message come as the line began is not held for the step: 120 ms after the value
+  assert_eq(r.deliver(now=220.0), 1)
+  // the step when its input went: 28 ms after that message, not when its line began
+  assert_eq(r.step_at("back"), Some(248.0))
+  now.val = 248.0
+  assert_true(r.step_taken("back"))
+  assert_eq(r.next_due(), Some(300.0))
+  assert_eq(r.deliver(now=300.0), 1)
+  assert_eq(r.left(), 0)
+}
+
+///|
+test "frame_period: the run's frames as its host's lines space them, two lines a frame" {
+  let r = @core.Replay::parse(
+    #|{"info":{"view":1,"at":[0]},"w":1000.0}
+    #|{"info":{"view":1,"at":[0]},"w":1000.3}
+    #|{"info":{"view":1,"at":[16]},"w":1016.5}
+    #|{"info":{"view":1,"at":[16]},"w":1016.8}
+    #|{"info":{"view":1,"at":[33]},"w":1033.25}
+    #|{"info":{"view":1,"at":[900]},"w":1900.0}
+    ,
+  )
+  // (the pause before the last left out)
+  assert_eq(r.frame_period(), Some(16.625))
+  assert_eq(@core.Replay::parse(paced).frame_period(), None)
+}

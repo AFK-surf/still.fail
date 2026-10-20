@@ -894,6 +894,15 @@ let flash_held_ms : Double = 900.0
 let flash_ms : Double = 1700.0
 
 ///|
+/// When the flash of the messages gone to (in every chat read) is over (the frames' clock; -1: none flashes): a test
+/// runs to it after opening a chat at a message (a notification tapped, a decision's post).
+pub fn flash_rest() -> Double {
+  let mut end = -1.0
+  readings.each(fn(_, rd) { if rd.flash_lit.ends_at() > end { end = rd.flash_lit.ends_at() } })
+  end
+}
+
+///|
 /// The flash of the message gone to, all of its way said as it starts.
 fn flash_start(rd : Reading) -> Unit {
   rd.flash_n += 1

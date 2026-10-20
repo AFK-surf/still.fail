@@ -96,6 +96,8 @@ let dui : Decide = {
 ///|
 /// As at the start (tests).
 fn decide_reset() -> Unit {
+  under_ends.clear()
+  deck_anims.clear()
   dui.doing.clear()
   dui.gone.clear()
   dui.failed.clear()
@@ -235,9 +237,36 @@ fn seq_key(station : String, thread : Double, seq : Double) -> String {
 let close_gap : @motion.Spec = @motion.spring(stiffness=350.0, threshold=0.002, delay=100.0)
 
 ///|
-/// The archive buttons' curve and time (Chat.kt ArchiveEase, 280 ms): a quick start, a soft landing.
+/// How long the archive buttons take to come and go (Chat.kt ArchiveEase's 280 ms), 忽略 too.
+pub let archive_ms : Double = 280.0
+
+///|
+/// ArchiveEase (Chat.kt): a quick start, a soft landing.
 // kept across runs: a curve, never written
-let archive_tween : @motion.Spec = @motion.tween(280.0, ease=Soft)
+pub let archive_ease : @motion.Ease = Soft
+
+///|
+/// How small the archive buttons (and 忽略) are as they have come or gone: 85%.
+pub let archive_scale : Double = 0.85
+
+///|
+/// The archive buttons' curve and time (Chat.kt ArchiveEase, `archive_ms`): a quick start, a soft landing.
+// kept across runs: a curve, never written
+let archive_tween : @motion.Spec = @motion.tween(archive_ms, ease=archive_ease)
+
+///|
+/// The rooms under the posts as their motions were asked (under_post, by its key), kept to say when they are at rest.
+let under_ends : Map[String, @motion.Anim] = {}
+
+///|
+/// When what comes and goes under the posts (options, how a card went, 忽略, the archive buttons) is at rest, their
+/// rooms opening or closing on their springs and tweens (the frames' clock; -1: none moves; +inf: told to go, not
+/// started yet): a test runs to it.
+pub fn under_rest() -> Double {
+  let mut end = -1.0
+  under_ends.each(fn(_, a) { if a.ends_at() > end { end = a.ends_at() } })
+  end
+}
 
 ///|
 /// What `body` builds under a post, shown or not as `shown` says (Compose's AnimatedVisibility with expandVertically /
@@ -268,6 +297,7 @@ fn under_post(
     }
   }
   h.follow(to, if shown { open } else { close })
+  under_ends[key] = h
   let share = h.get()
   let look = match look {
     Some(l) => l
@@ -349,7 +379,7 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     c,
     "dismiss/" + k,
     shown,
-    exit=@motion.trans(fade=0.0, scale=0.85, ox=0.0, oy=0.0, spec=archive_tween),
+    exit=@motion.trans(fade=0.0, scale=archive_scale, ox=0.0, oy=0.0, spec=archive_tween),
     fn() {
       c.box(pt=6.0, fn() {
         c.box(id=if shown { id } else { 0 }, fn() {
@@ -397,7 +427,7 @@ fn archive_under_post(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Un
   }
   let under = archive_under(here.view) == Some(m.seq)
   let shown = under && here.view.thread is Some(_)
-  let enter = @motion.trans(fade=0.0, scale=0.85, ox=0.5, oy=0.0, spec=archive_tween)
+  let enter = @motion.trans(fade=0.0, scale=archive_scale, ox=0.5, oy=0.0, spec=archive_tween)
   under_post(c, "archive/" + here.station + "/" + m.ts, shown, enter~, exit=enter, fn() {
     archive_buttons(c, src, here, shown)
   })

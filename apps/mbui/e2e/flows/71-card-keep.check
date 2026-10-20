@@ -1,6 +1,0 @@
-S71=$(grep '^CALL chat.keep' $OUT/$name.log | tail -1 | sed 's/.*"thread":\([0-9]*\).*/\1/')
-check "the app asked to keep that chat's thread" '[ -n "$S71" ]'
-check "the station keeps it for alice (kept_chats)" '[ "$(sql "select count(*) from kept_chats where viewer = \"alice@example.test\" and thread = $S71")" = 1 ]'
-check "it is that chat (its first words)" '[ "$(sql "select count(*) from entries where thread = $S71 and text like \"保留用的对话 $TAG%\"")" -ge 1 ]'
-check "the buttons went as the Android app's (the motion log: ArchiveEase, to 85% about their top's middle)" 'grep "MOTION .* under/archive/" $OUT/$name.log | grep -q "scale=0.8[5-9]"'
-check "the bar's 归档 went with them" 'grep -q "MOTION .* bar-archive/" $OUT/$name.log'

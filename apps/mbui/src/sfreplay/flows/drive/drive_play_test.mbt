@@ -11,10 +11,10 @@
 fn player_reads(f : @sfreplay.Flow, v : Int, size : Int) -> Unit raise {
   let head = f.t.view_reads(v, 0.0, 2)
   f.t.draw()
-  f.core()
+  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == head }) })
   let all = f.t.view_reads(v, 0.0, size)
   f.t.draw()
-  f.core()
+  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == all }) })
   let answers = f.t.view_answers(v)
   assert_true(answers.contains((head, 2, size.to_double())))
   assert_true(answers.contains((all, size, size.to_double())))

@@ -36,7 +36,7 @@ fn emit_start(seed : UInt, w : Double, h : Double, env : Array[(String, String)]
 }
 
 ///|
-/// What the flow does as each step is said (its replay told it: Replay::step_taken).
+/// What the flow does as each step is said (Flow::take_step: taken when the run took it, Replay::step_taken).
 // kept across runs: Flow::start sets it for each flow
 let step_hook : Ref[((String) -> Unit)?] = Ref::new(None)
 
@@ -97,6 +97,15 @@ pub fn Flow::peer(self : Flow, words : String) -> Unit {
 }
 
 ///|
+/// A live run's step beside the app that goes on while the script does (`peer lock-await 60`: the other device waiting
+/// for this one to ask it): `log do:` and no waiting for its word, as what it does needs the app's next steps (the tap
+/// that asks); what came of it is the trace's, here as anywhere.
+pub fn Flow::peer_aside(self : Flow, words : String) -> Unit {
+  ignore(self)
+  emit("log do: " + words)
+}
+
+///|
 /// What a live run does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, a chat made elsewhere):
 /// nothing here.
 pub fn Flow::before(self : Flow, words : String) -> Unit {
@@ -129,7 +138,7 @@ fn page_name(page : @sfapp.Page) -> String {
 
 ///|
 /// The calls the step just taken made of the core (that the run answered), a scripted run's `answered NAME` each, in
-/// order: one line a call (drive.mbt, mbui#98: each line waits for an answer of its own, two reads of a file two).
+/// order: one line a call (drive.mbt, mbui#98: each line waits for an answer of its own, a file read twice two).
 fn emit_answered(names : Array[String]) -> Unit {
   match script.val {
     Some(_) =>

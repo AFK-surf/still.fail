@@ -29,12 +29,6 @@ fn options_gone_ms() -> Double {
 }
 
 ///|
-/// Under a post, what comes or goes by the archive's curve (忽略, 保留 and 归档).
-fn archive_ms() -> Double {
-  archive_tween.duration(1.0, 0.0, 0.0)
-}
-
-///|
 /// `words` tapped where it is, as two inputs (the press, the lift), each drawn.
 fn tap_now(t : @ui.Tester, words : String) -> Unit {
   let (x, y) = t.find(words).unwrap()
@@ -103,11 +97,11 @@ test "忽略: it and the ask go at once (decision.dismiss), drawn going, then go
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
   // going: drawn, not tapped
-  t.run_for(archive_ms() / 4.0)
+  t.run_for(archive_ms / 4.0)
   assert_true(t.find("忽略") is Some(_))
   tap_now(t, "忽略")
   assert_eq(named(calls, "decision.dismiss").length(), 1)
-  t.run_for(archive_ms())
+  t.run_for(archive_ms)
   assert_true(t.find("忽略") is None)
   // the ask's room closed after it
   t.run_for(options_gone_ms())
@@ -121,7 +115,7 @@ test "保留 kept: the buttons under the post go and the bar's 归档 with them"
   scroll_to_words(t, "保留")
   t.tap_text("保留")
   assert_eq(named(calls, "chat.keep").length(), 1)
-  t.run_for(archive_ms())
+  t.run_for(archive_ms)
   assert_true(t.find("归档此对话") is None)
   t.assert_idle()
 }

@@ -233,11 +233,14 @@ priv struct Spr {
   mut friction : Double
   /// at rest within it
   rest : Double
+  /// what it is, as Tester::moving says it (`bar/o`: the panel, `bar/k`: the notch, `bar/held`: the ball held, the
+  /// ball's `bar/ball-x`, `bar/ball-y`), beside the bar's glides (`bar/vis`)
+  what : String
 }
 
 ///|
-fn spr(start : Double, tension : Double, friction : Double, rest? : Double = 0.001) -> Spr {
-  { path: None, ride: None, x: start, v: 0.0, to: start, tension, friction, rest }
+fn spr(start : Double, tension : Double, friction : Double, what : String, rest? : Double = 0.001) -> Spr {
+  { path: None, ride: None, x: start, v: 0.0, to: start, tension, friction, rest, what }
 }
 
 ///|
@@ -312,7 +315,7 @@ fn Spr::go(self : Spr, to : Double, tension : Double, friction : Double) -> Unit
       p
     }
   }
-  p.go(now, to, v~)
+  p.go(now, to, v~, what=self.what)
   self.x = x
   self.v = v
   self.to = to
@@ -678,15 +681,15 @@ let ball_rest_within : Double = 0.01
 ///|
 let bar : BarModel = {
   mode: false,
-  o: spr(0.0, 260.0, 17.0),
-  k: spr(1.0, 300.0, 30.0),
-  held: spr(0.0, 420.0, 16.0),
+  o: spr(0.0, 260.0, 17.0, "bar/o"),
+  k: spr(1.0, 300.0, 30.0, "bar/k"),
+  held: spr(0.0, 420.0, 16.0, "bar/held"),
   vis: glide("vis", 0.0),
   ball_alpha: glide("ball-alpha", 1.0),
   ball_scale: glide("ball-scale", 1.0),
   tints: {},
-  ball_x: spr(0.0, 300.0, ball_damping(300.0), rest=ball_rest_within),
-  ball_y: spr(0.0, ball_down, ball_damping(ball_down), rest=ball_rest_within),
+  ball_x: spr(0.0, 300.0, ball_damping(300.0), "bar/ball-x", rest=ball_rest_within),
+  ball_y: spr(0.0, ball_down, ball_damping(ball_down), "bar/ball-y", rest=ball_rest_within),
   trip: slot_px,
   active_was: "",
   drag: -1.0,

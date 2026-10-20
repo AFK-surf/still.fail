@@ -26,6 +26,11 @@ fn Pose::ms(self : Pose) -> Double {
 }
 
 ///|
+/// What is left of a message's coming out once it shows in the list (it comes out as the avatar lands: Spit), to the
+/// avatar home again (Return): its activity stays till then (ChatMotion.keeps), its turn's linger counted after.
+pub let emit_out_ms : Double = Spit.ms() + Return.ms()
+
+///|
 /// The same agent's next message, waiting as one comes out: the avatar drops on to it, no hop (how long).
 let emit_drop_ms : Double = 280.0
 
