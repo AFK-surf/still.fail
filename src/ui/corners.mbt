@@ -250,7 +250,8 @@ fn Ctx::corners_after_layout(self : Ctx) -> Unit {
       ("right", a.x + a.fw - (n.x + n.fw)),
       ("bottom", a.y + a.fh - (n.y + n.fh)),
     ]
-    let near = sides.filter(fn(s) { s.1 < ra })
+    // (an edge it reaches past is no edge of its: it is cut there, as corner_faults leaves out a corner it overhangs)
+    let near = sides.filter(fn(s) { s.1 >= -inner_even && s.1 < ra })
     if near.is_empty() {
       self.inner_faults.push(
         "\{self.named(i)}: radius=Inner, near none of the edges of \{self.named(p)} (corner \{ra})",

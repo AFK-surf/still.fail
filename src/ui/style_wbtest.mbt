@@ -408,3 +408,25 @@ test "style: a list's rows are built in the direction where the list was" {
   t.draw()
   assert_true(rtl.val)
 }
+
+///|
+test "style: radius=Inner leaves out an edge it reaches past (cut there, in a row too narrow for it)" {
+  let t = Tester::new(fn(c) {
+    c.box(pad=20.0, align=AStart, fn() {
+      c.box(w=Px(200.0), radius=24.0, bg=0xEEEEEEFFL, pad=8.0, fn() {
+        c.box(dir=Row, w=Fill(1.0), gap=8.0, clip=true, fn() {
+          for _ in 0..<2 {
+            c.box(style=style(w=Fixed(120.0), h=S10, radius=Inner, bg=Faint), fn() {  }) |> ignore
+          }
+        })
+        |> ignore
+      })
+      |> ignore
+    })
+    |> ignore
+  })
+  t.draw()
+  let c = g()
+  assert_eq(c.nodes[c.count - 1].radius, 16.0)
+  assert_eq(t.corner_faults(), [])
+}
