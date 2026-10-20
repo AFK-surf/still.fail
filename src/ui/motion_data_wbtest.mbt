@@ -59,3 +59,59 @@ test "a spring sent on the frame's own clock: go_at and value_at are go and valu
   assert_eq(seen.val, q.value(t.time()))
   assert_eq(p.end(), q.end())
 }
+
+///|
+test "every from when its count started: the next period's frame where the count changes, not the clock's own seconds" {
+  let second = 1000.0
+  let begin : Ref[Double] = Ref(-1.0)
+  let started : Ref[Double] = Ref(-1.0)
+  let shown : Ref[Int] = Ref(-1)
+  let t = Tester::new(fn(c) {
+    if begin.val < 0.0 {
+      begin.val = c.now()
+    }
+    // a run that starts 600 ms after the first frame, counting its seconds from then
+    if started.val < 0.0 && c.now() >= begin.val + 600.0 {
+      started.val = c.now()
+    }
+    if started.val >= 0.0 {
+      shown.val = c.every(second, from=started.val)
+      c.text("\{shown.val} s", wrap=false) |> ignore
+    }
+  })
+  t.draw()
+  t.run_for(begin.val + 600.0 - t.time())
+  let s0 = begin.val + 600.0
+  assert_eq(started.val, s0)
+  assert_eq(shown.val, 0)
+  // its frame is asked for at 1600 ms after, then 2600: where what it shows changes
+  assert_eq(g().wake_at, s0 + 1000.0)
+  // a millisecond short of its first second, then that second
+  let short = second - 1.0
+  t.run_for(short)
+  assert_eq(shown.val, 0)
+  t.run_for(second - short)
+  assert_eq(shown.val, 1)
+  assert_eq(g().wake_at, s0 + 2000.0)
+  t.run_for(second)
+  assert_eq(shown.val, 2)
+  assert_eq(g().wake_at, s0 + 3000.0)
+  t.assert_idle()
+}
+
+///|
+test "every by how far a count kept on another clock is: its frame where that count's next period starts" {
+  let second = 1000.0
+  let shown : Ref[Int] = Ref(-1)
+  // a run that had gone 4300 ms when the test began (its own clock: the station's), counted on as the frames go
+  let t = Tester::new(fn(c) {
+    shown.val = c.every(second, elapsed=4300.0 + c.now())
+    c.text("\{shown.val} s", wrap=false) |> ignore
+  })
+  t.draw()
+  let t0 = t.time()
+  assert_eq(shown.val, ((4300.0 + t0) / second).floor().to_int())
+  // its next second where the run's is, not the frames' clock's own
+  assert_eq(g().wake_at, t0 + 1000.0 - (4300.0 + t0 - 1000.0 * ((4300.0 + t0) / 1000.0).floor()))
+  t.assert_idle()
+}

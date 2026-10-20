@@ -73,20 +73,38 @@ fn Ctx::moving_now(self : Ctx) -> Array[String] {
 }
 
 ///|
-/// How many whole periods of `period` ms the frames' clock has passed: what changes every so often while shown (a
-/// run's time said each second, a clock's minute), and a frame at the next period's start, none between. A test's idle
-/// is not broken by it: it is said (Tester::periodic), as what comes again for as long as it is shown.
+/// How many whole periods of `period` ms the frames' clock has passed since `from` (0 by default): what changes every
+/// so often while shown (a run's time said each second, counted from when it started; a clock's minute), and a frame
+/// at the next period's start, none between, so what shows the count changes as it does (a run started at 600 ms says
+/// its next second at 1600, not at 2000). Before `from`, none (0), the frame at `from` the next. A count kept on
+/// another clock (a run's time since the station said it started, the time of day) says how far it is now instead
+/// (`elapsed`, ms): its next period's frame is as far from now as that count is from its next. A test's idle is not
+/// broken by it: it is said (Tester::periodic), as what comes again for as long as it is shown.
 #callsite(autofill(loc))
-pub fn Ctx::every(self : Ctx, period : Double, loc~ : SourceLoc) -> Int {
+pub fn Ctx::every(
+  self : Ctx,
+  period : Double,
+  from? : Double = 0.0,
+  elapsed? : Double,
+  loc~ : SourceLoc,
+) -> Int {
   if period <= 0.0 {
     return 0
   }
   if !self.periodic.iter().any(fn(p) { p.1.to_string() == loc.to_string() }) {
     self.periodic.push((period, loc))
   }
-  let n = (self.now / period).floor()
+  let gone = match elapsed {
+    Some(e) => e
+    None => self.now - from
+  }
+  if gone < 0.0 {
+    self.wake_at_time(self.now - gone, later=true)
+    return 0
+  }
+  let n = (gone / period).floor()
   // the next period's start: a wake the test's idle does not wait for (it comes for as long as it is shown)
-  self.wake_at_time((n + 1.0) * period, later=true)
+  self.wake_at_time(self.now + (n + 1.0) * period - gone, later=true)
   n.to_int()
 }
 
