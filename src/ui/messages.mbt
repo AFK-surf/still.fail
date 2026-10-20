@@ -44,12 +44,17 @@ let tape : Ref[Array[String]?] = Ref::new(None)
 let between_frames : Ref[(() -> Unit)?] = Ref::new(None)
 
 ///|
+/// When that outside has its next to say (Tester::between_frames' `due`): +inf, nothing it knows of.
+let outside_due : Ref[(() -> Double)?] = Ref::new(None)
+
+///|
 fn messages_reset() -> Unit {
   fake_posted.clear()
   post_wakes.val = 0
   messages_handed.val = 0
   tape.val = None
   between_frames.val = None
+  outside_due.val = None
 }
 
 ///|
@@ -185,10 +190,13 @@ pub fn Tester::post(self : Tester, channel : String, json : String, bytes? : Byt
 ///|
 /// What stands for the outside in this test (a kept conversation with a core given again: an app's replay): `f` is
 /// told as each frame ends, and posts what has come by then (`post`), as a real core's answers come between two
-/// frames; the next frame takes them. It asks for no frame itself: a post asks for the one that takes it.
-pub fn Tester::between_frames(self : Tester, f : () -> Unit) -> Unit {
+/// frames; the next frame takes them. It asks for no frame itself: a post asks for the one that takes it. `due`: when
+/// it has its next to say (a kept message's moment; +inf: nothing it knows of), a moment run_for draws a frame at, as
+/// a host's message that comes then: what comes at a time comes at it, however the clock was run on.
+pub fn Tester::between_frames(self : Tester, f : () -> Unit, due? : () -> Double) -> Unit {
   ignore(self)
   between_frames.val = Some(f)
+  outside_due.val = due
 }
 
 ///|

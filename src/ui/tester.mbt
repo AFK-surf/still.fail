@@ -442,6 +442,17 @@ pub fn Tester::next_frame_time(self : Tester) -> Double {
 }
 
 ///|
+/// When what is posted now is taken: the frame drawn for it, at this moment (Tester::draw, run_for: what comes at a
+/// time is drawn at it); a host's run's frames (set_frame_times, set_frame_period): its next.
+pub fn Tester::taken_at(self : Tester) -> Double {
+  if self.host_frames {
+    self.tick_after(self.fake.time)
+  } else {
+    self.fake.time
+  }
+}
+
+///|
 /// The display's first frame at or after `t` on the clock: where a test sees what is so at `t` (a deadline, a motion's
 /// end), as a host shows it.
 pub fn Tester::display_frame(self : Tester, t : Double) -> Double {

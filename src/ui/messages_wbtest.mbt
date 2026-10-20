@@ -172,3 +172,29 @@ test "the outside a test stands for posts after a frame what came by then: the n
   assert_eq(t.posted(), 0)
   t.assert_idle()
 }
+
+///|
+test "what the outside says comes at its moment, however the clock is run on: a frame drawn then, taken at it" {
+  let got : Array[(String, Double)] = []
+  let t = Tester::new(fn(c) { c.text(got.map(fn(g) { g.0 }).join(",")) |> ignore }, w=100.0, h=100.0)
+  on_message("test.a", fn(j, _) { got.push((j, g().now)) })
+  // a kept conversation's message due 437 ms on (off the display's frames)
+  let at = t.time() + 437.0
+  let due = Ref::new(at)
+  t.between_frames(
+    fn() {
+      if t.time() >= due.val {
+        t.post("test.a", "late")
+        due.val = @double.infinity
+      }
+    },
+    due=fn() { due.val },
+  )
+  assert_eq(t.taken_at(), t.time())
+  // run on in one go past it: the frame at its moment posts it, the one that takes it is drawn there too
+  let past_it = 1000.0
+  t.run_for(past_it)
+  assert_eq(got, [("late", at)])
+  assert_true(t.find("late") is Some(_))
+  t.assert_idle()
+}

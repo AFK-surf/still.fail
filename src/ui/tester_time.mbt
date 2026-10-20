@@ -94,8 +94,8 @@ pub fn rest_of(name : String) -> Double {
 }
 
 ///|
-/// `ms` on the frames' clock, straight to it: a frame at each moment the view asked to be woken at, and the last at
-/// `ms` itself, what is so at `ms` drawn there; with frames between (MBUI_TEST_FPS: a run at a frame rate, which comes
+/// `ms` on the frames' clock, straight to it: a frame at each moment something is due (a wake the view asked for, the
+/// end of what is said to move), and the last at `ms` itself, what is so at `ms` drawn there; with frames between (MBUI_TEST_FPS: a run at a frame rate, which comes
 /// out the same) a frame at each of the display's frames too. None after it: what that frame leaves owed (an input's
 /// frame after, a host's event) is drawn by what the test does next.
 pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
@@ -109,15 +109,20 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
     return
   }
   while self.fake.time < end - 1.0e-9 {
-    // the next of: what is due (a wake the view asked for), the end, and with frames between (MBUI_TEST_FPS) the
-    // display's next frame; each drawn at its own moment: what happens at a time happens at it, at any frame rate or
-    // none, and the last frame is the end's
+    // the next of: what is due (a wake the view asked for, a motion's end), the end, and with frames between
+    // (MBUI_TEST_FPS) the display's next frame; each drawn at its own moment: what happens at a time happens at it,
+    // at any frame rate or none, and the last frame is the end's
     let mut next = if self.between { dmin(self.tick_after(self.fake.time), end) } else { end }
     let due = self.on_grid(self.next_due())
     if due > self.fake.time + 1.0e-9 && due < next {
       next = due
     }
     self.frame_at(next)
+    // what that frame left owed (a host's answer posted, an input's frame after, a layout read back) drawn at its
+    // moment, as Tester::draw draws it: what it sets off goes on from there, not from the next due moment
+    if next < end - 1.0e-9 {
+      self.draw_owed(1)
+    }
   }
 }
 
@@ -136,11 +141,30 @@ fn Tester::on_grid(self : Tester, t : Double) -> Double {
 }
 
 ///|
-/// The earliest moment after now that the view asked to be woken at (Ctx::wake_in, wake_at): +inf when none. What
-/// moves needs no frame of its own: where it is is a function of the time.
+/// The earliest moment after now that something is due at: a wake the view asked for (Ctx::wake_in, wake_at), or the
+/// declared end of what is said to move (its rest: an event at its moment, as a host's frames show it, where what
+/// waits for it goes on); +inf when none. Where what moves is meanwhile needs no frame: it is a function of the time.
 fn Tester::next_due(self : Tester) -> Double {
   let c = g()
-  if c.wake_at > self.fake.time { c.wake_at } else { @double.infinity }
+  let now = self.fake.time
+  let mut due = if c.wake_at > now { c.wake_at } else { @double.infinity }
+  for e in c.movers {
+    let r = e.m.rest_at(c.now, c.frame_no)
+    if r > now && r < due {
+      due = r
+    }
+  }
+  // (and what the outside the test stands for says next: a kept message, at its moment)
+  match outside_due.val {
+    Some(f) => {
+      let r = f()
+      if r > now && r < due {
+        due = r
+      }
+    }
+    None => ()
+  }
+  due
 }
 
 ///|
