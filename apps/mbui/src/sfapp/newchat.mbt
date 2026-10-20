@@ -562,8 +562,7 @@ fn send_first(
   let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
   let taken_text = d.text
   let taken_files = d.files.copy()
-  c.take_editor_text(field_key) |> ignore
-  d.text = ""
+  ref_field_put(d, "")
   d.files.clear()
   d.quotes.clear()
   d.comments.clear()

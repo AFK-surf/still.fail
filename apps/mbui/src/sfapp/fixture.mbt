@@ -310,6 +310,7 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
     "chats" => fixture_chats(f, params)
+    "search" => fixture_search(params)
     "workspaceMarks" =>
       Some({
         "workspaces": {
@@ -458,7 +459,17 @@ pub fn fixture(mode : String) -> Source {
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
       }
     },
-    stream: fn(name, params, _bytes, on_value, done) { fixture_stream(name, params, on_value, done) },
+    stream: fn(name, params, _bytes, on_value, done) {
+      // a file's part going up (composer.mbt upload_part): as the station takes it, all of it at once
+      if name == "station.upload.part" {
+        match fixture_chat_call(f, name, params) {
+          Some(r) => done(r)
+          None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))
+        }
+        return 0
+      }
+      fixture_stream(name, params, on_value, done)
+    },
     cancel: fn(_) {  },
     call_bytes: fn(name, params, _bytes, done) {
       match fixture_chat_call(f, name, params) {
@@ -505,6 +516,8 @@ pub fn open_fixture_mode(mode : String) -> Unit {
   if mode.has_prefix("settings") {
     open_setting(@settings.fixture_page(mode))
   }
+  // the search open over Home, words typed (search_fixture.mbt)
+  open_search_mode(mode)
   // a device not yet confirmed in the workspace's safe mode: lock-waiting, lock-finding, lock-code, lock-wrong (its
   // waiting page in the chats' place), lock-security (its security page)
   if mode == "lock-security" {

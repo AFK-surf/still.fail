@@ -149,6 +149,7 @@ fn home_page(
   invited : Bool,
 ) -> Unit {
   ignore(all)
+  search_start(c)
   let filter = filter_of(src, w.id)
   let (view, error) = chats_of(src, w.id, filter)
   match view {
@@ -208,8 +209,10 @@ fn home_page(
   let row_keys = moved.map(fn(k) { key + "\u{1}" + k })
   home_rows.val = row_keys
   let lid = @motion.list_keys(c, key, row_keys, liftable=fn(k) { !k.contains("\u{1}h/") })
+  // under the search (search.mbt): the list up 56 and away, the bar faded (Home.kt `away`)
+  let away = search_away(c)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
-    c.list(key, list.length(), 66.0, fn(i) {
+    let li = c.list(key, list.length(), 66.0, fn(i) {
       match list[i] {
         Top => c.box(h=Px(bar_h + 8.0), fn() {  }) |> ignore
         Search => search_field(c)
@@ -227,11 +230,24 @@ fn home_page(
         Foot => c.box(h=Px(bar_room), fn() {  }) |> ignore
       }
     })
-    |> ignore
-    c.layer(fn() {
+    // the list's first time with its rows: at its first row, the search above it out of view, there once scrolled to
+    // (Home.kt top: as the list first read, which the search comes in over)
+    if !home_placed.contains(key) {
+      home_placed[key] = true
+      if list.search_by(fn(it) { it is Search }) is Some(at) {
+        c.list_scroll_to(key, at + 1, offset=-(bar_h + 8.0))
+      }
+    }
+    if away > 0.0 {
+      c.look(li, { ..@ui.still_look, alpha: 1.0 - away, dy: -search_list_rise * away })
+    }
+    let bar = c.layer(fn() {
       top_bar(c, src, w, view, filter, invited)
     })
-    |> ignore
+    if away > 0.0 {
+      c.look(bar, { ..@ui.still_look, alpha: 1.0 - away })
+    }
+    search_page(c, src, w)
   })
   |> ignore
 }
@@ -325,36 +341,6 @@ fn nav_button(
   )
   |> ignore
   c.clicked(id)
-}
-
-///|
-/// The search at the list's top (Search.kt SearchField): a quiet field. (The search itself is a later slice's.)
-fn search_field(c : @ui.Ctx) -> Unit {
-  let t = @sf.theme()
-  c.box(pl=16.0, pr=16.0, pb=6.0, fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      h=Px(38.0),
-      radius=19.0,
-      bg=@sf.alpha(t.p.text, 0.06),
-      padx=12.0,
-      gap=8.0,
-      align=ACenter,
-      fn() {
-        @sf.icon(c, "search", size=17.0, color=t.p.muted) |> ignore
-        c.text(
-          tr("android-chat.search.field"),
-          size=15.0,
-          color=t.p.muted,
-          wrap=false,
-        )
-        |> ignore
-      },
-    )
-    |> ignore
-  })
-  |> ignore
 }
 
 ///|
@@ -779,10 +765,12 @@ fn chat_row(
   item : ChatItem,
   lead : String,
   lifted? : Double = -1.0,
+  found? : Bool = false,
 ) -> Int {
   let t = @sf.theme()
   let id = c.id("row/" + item.station + "/" + item.id)
-  let pressed = c.pressed(id)
+  // a chat the search found (Search.kt: ChatRowBody alone, a tap its chat): not held, archived nor swiped
+  let pressed = c.pressed(id) && !found
   if pressed && app.held != id {
     app.held = id
     app.held_long = false
@@ -812,7 +800,7 @@ fn chat_row(
     app.held = 0
   }
   let dim = if item.offline is Some(_) { 0.45 } else { 1.0 }
-  let archivable = item.archivable && item.offline is None && !item.pending
+  let archivable = item.archivable && item.offline is None && !item.pending && !found
   let busy = row_busy(item)
   let failed = row_failed(c, item)
   let row = fn(tx : Double) -> Int {

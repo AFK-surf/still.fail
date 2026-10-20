@@ -8,6 +8,8 @@ priv struct Made {
   params : Json
   bytes : Bytes?
   done : (Result[Json, Json]) -> Unit
+  /// a streamed call's: what it hears before its answer (a part going up: how much of it has gone)
+  heard : ((Json, Bytes?) -> Unit)?
 }
 
 ///|
@@ -28,7 +30,7 @@ fn fake_core(
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done })
+      calls.push({ name, params, bytes: None, done, heard: None })
       match name {
         "draft.get" => done(Ok(kept))
         // the core's name for the draft (DraftView.id): another once it is put back empty
@@ -47,7 +49,14 @@ fn fake_core(
         _ => ()
       }
     },
-    call_bytes: fn(name, params, bytes, done) { calls.push({ name, params, bytes: Some(bytes), done }) },
+    call_bytes: fn(name, params, bytes, done) { calls.push({ name, params, bytes: Some(bytes), done, heard: None }) },
+    stream: fn(name, params, bytes, on_value, done) {
+      if name != "station.upload.part" {
+        return (base.stream)(name, params, bytes, on_value, done)
+      }
+      calls.push({ name, params, bytes, done, heard: Some(on_value) })
+      0
+    },
     topic: fn(name, params) { over(name, (base.topic)(name, params)) },
     now: fn() { now },
     read_only,

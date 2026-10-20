@@ -1,0 +1,3 @@
+# The Mac the screens' text is kept from (scripts/screens.sh rerecord): its system and fonts, checked.
+system 27.0.1 26A434
+fonts 0f1922d512eaa67519604dc36e8a486e

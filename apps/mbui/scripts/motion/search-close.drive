@@ -1,0 +1,12 @@
+# The search over Home opened and closed, nothing typed (the Android app's SearchMotionTest: search-open, then
+# search-close): the list pulled down to its field, the field tapped (up to the top as 取消 comes in), a pause, then
+# 取消 (the field back into the list).
+timeout 20000
+until 整理发布清单
+wait 600
+drag 195 300 0 300 300
+wait 900
+tap 搜索全部内容
+wait 1000
+tap 取消
+wait 1000

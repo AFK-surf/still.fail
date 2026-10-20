@@ -194,6 +194,7 @@ fn reset() -> Unit {
   share_in.opening = None
   share_in.error = ""
   share_in.query = ""
+  share_in.find.set("")
   update.available = None
   update.asked = false
   update.checking = false
@@ -215,6 +216,9 @@ fn reset() -> Unit {
   cui.down_frame = 0
   cui.moved = false
   cui.outside = false
+  cui.long = false
+  cui.restore_error.clear()
+  sharing.val = None
   cui.room_for = ("", None)
   cui.cap_id = 0
   cui.content_id = 0
@@ -225,6 +229,7 @@ fn reset() -> Unit {
   fix_due.clear()
   fix_unsaid.clear()
   fix_drafts.clear()
+  fix_xshared.clear()
   fix_decided.clear()
   emits.clear()
   fix_kept.val = false
@@ -233,6 +238,11 @@ fn reset() -> Unit {
   close_now()
   @settings.reset()
   go_tos.clear()
+  ref_fields.clear()
+  decision_fields.clear()
+  go_to_words.clear()
+  found_marking.val = ("", [], 0.0)
+  search_reset()
   ask_turns.clear()
   flash_held.val = false
   notices_reset()
@@ -265,7 +275,9 @@ fn reset() -> Unit {
   svc_hold.val = -1.0
   // the composer: its ids counted from the start, what waits for it
   next_pending.val = 1
-  quote_seeded.clear()
+  quote_fields.clear()
+  rename_field.set("")
+  rename_given.val = ""
   marked_into.clear()
   shared_into.clear()
   share_files_made.val = 0
@@ -279,8 +291,8 @@ fn reset() -> Unit {
   marking.next_id = 1
   marking.to_draft = false
   marking.job_name = ""
-  marking.write_text = ""
-  marking.note_text = ""
+  marking.write_field.set("")
+  marking.note_field.set("")
   pv_thumbs.clear()
   pv_hidden.val = ""
   pv_read.clear()
@@ -296,7 +308,9 @@ fn reset() -> Unit {
   // the wide frame's keys (wide_keys.mbt)
   focus_composer.val = false
   switcher_query.val = ""
+  switcher_field.set("")
   rename_for.val = ""
+  side_rename_field.set("")
   rename_seen.val = false
   reset_by_hand.val = true
 }
@@ -346,6 +360,13 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   if left_pages.length() > 0 {
     c.after_build("pages-left", fn() { pages_left(src) })
   }
+  // everything in still.fail's theme, as this frame's palette has it (light or dark, a phone's or a desktop's): the
+  // styles' roles (@sf styles.mbt, the pages' own) its ink, its sizes, its corners; the one place it is put
+  c.with_theme(@sf.ui_theme(), fn() { view_in(c, src, t) })
+}
+
+///|
+fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
@@ -422,7 +443,13 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
         // the bottom bar: on a place's top page with nothing over it
-        bottom_bar(c, src, w, place_of(root), app.nav.depth() == 1 && place_of(root) is Some(_))
+        bottom_bar(
+          c,
+          src,
+          w,
+          place_of(root),
+          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away(),
+        )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
         filter_menu(c, src, w)

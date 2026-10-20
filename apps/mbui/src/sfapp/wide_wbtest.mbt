@@ -8,7 +8,7 @@ fn wide_tester(calls : Array[Made], mode? : String = "home", w? : Double = 1280.
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done })
+      calls.push({ name, params, bytes: None, done, heard: None })
       (base.call)(name, params, done)
     },
   }

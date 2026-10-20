@@ -40,6 +40,8 @@ priv struct Md {
   mut n : Int
   /// a placed file's drawing, by the file's name
   files : (String) -> (() -> Unit)?
+  /// a search's words, bold wherever they are in it (TextMark.kt markWeight)
+  found : Array[String]
 }
 
 ///|
@@ -253,6 +255,7 @@ pub fn markdown(
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
   files? : (String) -> (() -> Unit)? = fn(_) { None },
+  found? : Array[String] = [],
 ) -> Int {
   let t = theme()
   let md = {
@@ -263,6 +266,7 @@ pub fn markdown(
     on_link_hold,
     n: 0,
     files,
+    found,
   }
   let blocks = blocks_of(text)
   c.box(w=Fill(1.0), fn() {
@@ -601,7 +605,7 @@ fn Md::words(
   runs_of(xs, runs, weight >= 600, false, false, "", p.accent)
   self.n = self.n + 1
   c.rich(
-    runs,
+    found_weight(runs, self.found),
     key="sf-md/p\{self.n}",
     size~,
     weight=if weight > 0 { weight } else { 400 },

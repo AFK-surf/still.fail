@@ -10,7 +10,7 @@ fn cards_core(calls : Array[Made], mode? : String = "chat") -> @ui.Tester {
   let src : Source = {
     ..base,
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done })
+      calls.push({ name, params, bytes: None, done, heard: None })
       (base.call)(name, params, done)
     },
   }

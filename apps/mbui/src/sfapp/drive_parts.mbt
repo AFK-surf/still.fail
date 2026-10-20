@@ -83,6 +83,9 @@ priv struct DriveUi {
   /// the folder picker's last ask (`picker_serial`) on its way, not answered yet: what is shown is coming, not asked
   /// again
   mut picker_asking : Bool
+  /// the Ask sheet's words and the folder picker's filter (their fields show them)
+  ask_field : @ui.Field
+  picker_filter : @ui.Field
 }
 
 ///|
@@ -109,6 +112,8 @@ let dv : DriveUi = {
   picker_denied: false,
   picker_serial: 0,
   picker_asking: false,
+  ask_field: @ui.Field::new(),
+  picker_filter: @ui.Field::new(),
 }
 
 ///|
@@ -130,6 +135,8 @@ fn dv_reset() -> Unit {
   dv.picking = None
   dv.picking_for = { station: "", root: None, path: "" }
   dv.asked = ""
+  dv.ask_field.set("")
+  dv.picker_filter.set("")
   dv.picker_at = None
   dv.picker = None
   dv.picker_error = ""
@@ -322,7 +329,7 @@ fn dv_pick_row(
 
 ///|
 /// A line to type in, on a soft frame (Controls.kt Field): 12 corners, the card's ground, a line round it.
-fn dv_field(c : @ui.Ctx, key : String, placeholder : String) -> String {
+fn dv_field(c : @ui.Ctx, key : String, placeholder : String, field : @ui.Field) -> String {
   let t = @sf.theme()
   let mut words = ""
   c.box(
@@ -344,6 +351,7 @@ fn dv_field(c : @ui.Ctx, key : String, placeholder : String) -> String {
         color=t.p.text,
         placeholder_color=t.p.subtle,
         caret_color=t.p.accent,
+        field~,
       )
       words = res.text
     },

@@ -205,11 +205,12 @@ fn said(
             } else {
               // coming in with the words, when they fly here from the composer
               match flying.val {
-                Some(f) => {
+                // (files sent alone: the row comes in where it is, its time with it)
+                Some(f) if f.text != "" => {
                   let at = c.box(fn() { message_time(c, m.ts, m.time) })
                   c.look(at, @ui.look(alpha=flight_settled(flight_p(c, f))))
                 }
-                None => message_time(c, m.ts, m.time)
+                _ => message_time(c, m.ts, m.time)
               }
             }
         }
@@ -548,7 +549,7 @@ fn bare_links(s : String, out : Array[@ui.Run]) -> Unit {
 fn person_words(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let t = @sf.theme()
   c.rich(
-    ref_runs(words),
+    @sf.found_weight(ref_runs(words), found_words_of(ts)),
     key="words/" + ts,
     size=15.0,
     color=ink().text,
@@ -577,7 +578,7 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
   let neutral = if lit > 0.0 { @sf.mix(flash_ground(), lit, k.neutral) } else { k.neutral }
   let b = c.box(max_w=c.width - 36.0, padx=14.0, pady=8.0, radius=18.0, bg=@sf.alpha(neutral, ground), fn() {
     c.rich(
-      ref_runs(words),
+      @sf.found_weight(ref_runs(words), found_words_of(ts)),
       key="bubble/" + ts,
       size=16.0,
       color=k.text,
@@ -647,6 +648,7 @@ fn agent_words(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
         ink=ink().text,
         on_link=fn(h) { open_link(c, h) },
         on_link_hold=Some(link_held),
+        found=found_words_of(m.ts),
         files=fn(name) {
           match placed.get(name) {
             Some(a) => Some(fn() { files(c, src, here, [a], false) })
@@ -838,7 +840,12 @@ fn files(
     for r in rows {
       c.box(dir=Row, gap=6.0, align=AStart, fn() {
         for i in r {
-          file_item(c, src, here, list[i], widths[i])
+          // (each in a box of its own: where a file sent from the composer flies to, flight.mbt)
+          let item = c.box(fn() { file_item(c, src, here, list[i], widths[i]) })
+          match flying.val {
+            Some(f) => flight_landing(c, f, item, list[i].path)
+            None => ()
+          }
         }
       })
       |> ignore

@@ -78,10 +78,10 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         let asked = title + "\u{1}" + value
         if dv.asked != asked {
           dv.asked = asked
-          c.set_editor_text(key, value)
+          dv.ask_field.set(value)
         }
         c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
-          let words = dv_field(c, key, placeholder)
+          let words = dv_field(c, key, placeholder, dv.ask_field)
           let line = words.trim(chars=" \t\n").to_owned()
           c.box(dir=Row, w=Fill(1.0), pt=6.0, pb=24.0, gap=8.0, justify=JEnd, fn() {
             if dv_button(c, "ask/cancel", tr("common.cancel"), primary=false) {
@@ -482,7 +482,7 @@ fn dv_open_picker(c : @ui.Ctx, station : String, lent : Array[String]) -> Unit {
   // (an ask of an earlier opening still on its way is let go: its answer is not this one's)
   dv.picker_serial += 1
   dv.picker_asking = false
-  c.set_editor_text("dv-picker-filter", "")
+  dv.picker_filter.set("")
   dv_open(c, Picker(station, lent))
 }
 
@@ -498,7 +498,7 @@ fn dv_picker_go(c : @ui.Ctx, src : Source, station : String, path : String?) -> 
   dv.picker_serial += 1
   dv.picker_asking = true
   let serial = dv.picker_serial
-  c.set_editor_text("dv-picker-filter", "")
+  dv.picker_filter.set("")
   let params : Map[String, Json] = { "station": Json::string(station) }
   match path {
     Some(p) => params["path"] = Json::string(p)
@@ -608,12 +608,13 @@ fn picker_sheet(c : @ui.Ctx, src : Source, station : String, lent : Array[String
             color=t.p.text,
             placeholder_color=t.p.muted,
             caret_color=t.p.accent,
+            field=dv.picker_filter,
           )
           wanted = res.text.trim(chars=" ").to_owned()
         })
         |> ignore
         if wanted != "" && dv_row_key(c, "pick-filter-clear", "close") {
-          c.set_editor_text("dv-picker-filter", "")
+          dv.picker_filter.set("")
         }
       })
       |> ignore

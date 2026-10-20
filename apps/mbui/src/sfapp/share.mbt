@@ -68,6 +68,8 @@ priv struct ShareIn {
   mut error : String
   /// what is typed to find a chat (its field's words, last frame)
   mut query : String
+  /// the words searched for (its field shows them)
+  find : @ui.Field
 }
 
 ///|
@@ -81,6 +83,7 @@ let share_in : ShareIn = {
   opening: None,
   error: "",
   query: "",
+  find: @ui.Field::new(),
 }
 
 ///|
@@ -184,7 +187,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         share_in.searching = !share_in.searching
         if !share_in.searching {
           share_in.query = ""
-          c.set_editor_text("share-in/find", "")
+          share_in.find.set("")
         }
       }
       c.box(pt=14.0, pb=4.0, id~, fn() {
@@ -212,6 +215,7 @@ fn share_in_sheet(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
           color=t.p.text,
           placeholder_color=t.p.muted,
           caret_color=t.p.accent,
+          field=share_in.find,
         )
         share_in.query = r.text
       })

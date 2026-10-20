@@ -44,6 +44,7 @@ test "a shared link in a draft: a card with its site, sent as words after what i
     key: "ws1/st1:s-c4",
     text: "",
     put_text: None,
+    field: @ui.Field::new(),
     quotes: [],
     comments: {},
     files: [],

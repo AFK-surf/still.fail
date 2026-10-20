@@ -94,7 +94,7 @@ fn notify_core(
       }
     },
     call: fn(name, params, done) {
-      calls.push({ name, params, bytes: None, done })
+      calls.push({ name, params, bytes: None, done, heard: None })
       match name {
         "notice.claim" => done(Ok({ "show": true }))
         "link.parse" => done(Ok({ "opens": "item", "workspace": "ws1", "station": "st1", "session": "s-c2" }))

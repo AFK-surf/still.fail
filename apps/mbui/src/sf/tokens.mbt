@@ -384,10 +384,12 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 ///|
 /// still.fail's sizes of words on mbui's scale (Tailwind's names, still.fail's values), the eight the Android app
 /// has, each with the line it has where a `Text` there says no `lineHeight` (ui/Theme.kt WebType: 1.4em, the web
-/// phone's root.css.ts): Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
+/// phone's root.css.ts), and mbui's two under Xs (Xs3 10, Xs2 11) on the same rule: Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
 /// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
 /// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
 pub let text_scale : @ui.TextScale = {
+  xs3: (10.0, 14.0),
+  xs2: (11.0, 15.4),
   xs: (12.0, 16.8),
   sm: (13.0, 18.2),
   base: (14.0, 19.6),
@@ -493,4 +495,41 @@ pub let files_row_end : @ui.Space = Exact(7.0)
 pub let nav_title_clear : @ui.Space = Exact(84.0)
 
 ///|
-pub let nav_sub_gap : @ui.Space = Exact(5.0)
+pub let nav_sub_gap : @ui.Space = space_5
+
+///|
+/// 5, off the scale's 4 and 6: the gap in the line under a bar's title (nav_sub_gap), a row's room above and under in
+/// a sheet of chats (Composer.kt askToShare: padding(vertical = 5)).
+pub let space_5 : @ui.Space = Exact(5.0)
+
+///|
+/// A tag's widest (PageParts.kt StationTag: widthIn(max = 104)).
+pub let tag_max : @ui.Len = Fixed(104.0)
+
+///|
+/// A chat in the `@` menu at its lowest (Composer.kt ChatRefMenu: heightIn(min = 44)).
+pub let ref_row_min_h : @ui.Len = Fixed(44.0)
+
+///|
+/// The search (Search.kt): its field 38 high (FIELD) on the ink at 6%; a row found 66 high (HitRow, ItemRow; 50 an item
+/// with no line of words), its first line 22; what a row found says starts 22 in.
+pub let search_field_h : @ui.Len = Fixed(38.0)
+
+///|
+pub let search_ground : @ui.Color = A(Fg, Exact(0.06))
+
+///|
+pub let found_row_h : @ui.Len = Fixed(66.0)
+
+///|
+pub let found_row_short_h : @ui.Len = Fixed(50.0)
+
+///|
+pub let found_line_h : @ui.Len = Fixed(22.0)
+
+///|
+pub let found_start : @ui.Space = Exact(22.0)
+
+///|
+/// What takes the room left in a row or a column (Compose's `weight(1f)`).
+pub let grow : @ui.Len = Grow(1.0)
