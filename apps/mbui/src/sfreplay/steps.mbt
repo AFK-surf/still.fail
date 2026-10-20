@@ -18,11 +18,13 @@ pub struct Flow {
 ///|
 /// The app over `trace` in a w × h window (a phone's by default; the wide flows' 1280 × 800), what may come at once
 /// in the order drawn from `seed` (0: as it came). `skip`: the run's calls a Tester does not make (the engine's start
-/// told the core what the device is: sfcore.start).
+/// told the core what the device is: sfcore.start). `drop`: asks of the run's its timing made, by words in them
+/// (Replay::drop), each with what came for it.
 pub fn Flow::start(
   trace : String,
   seed? : UInt = 0,
   skip? : Array[String] = ["client.device"],
+  drop? : Array[String] = [],
   w? : Double = 390.0,
   h? : Double = 844.0,
   env? : Array[(String, String)] = [],
@@ -30,6 +32,12 @@ pub fn Flow::start(
   let r = @core.Replay::parse(trace)
   for call in skip {
     r.skip(call)
+  }
+  // (asks the run's timing made, with what came for them: each test says which and why)
+  for text in drop {
+    if r.drop(text) == 0 {
+      abort("flow: nothing in the run holds " + text + " to drop")
+    }
   }
   r.shuffle(seed)
   r.attach()
