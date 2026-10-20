@@ -544,7 +544,7 @@ class ScreenViewerTest {
 
     @Test fun overStates() {
         val v = Viewer()
-        // Ended by the station: the frame put away, 返回 and 重新打开.
+        // Ended by the station: the frame put away, 重新打开 (the way out the bar's ×).
         v.open()
         v.state("live")
         v.config()
@@ -589,8 +589,9 @@ class ScreenViewerTest {
         v.shot("screen-failed")
         rule.onNodeWithText("station 不在线").assertIsDisplayed()
 
-        // 返回 leaves.
-        rule.onNodeWithText("返回").performTouchInput { click() }
+        // Nothing but the bar's × to leave by; it leaves.
+        assertEquals(0, rule.onAllNodesWithTextCount("返回"))
+        rule.onNodeWithContentDescription("关闭").performTouchInput { click() }
         v.h.settle()
         assertTrue(v.exited)
     }
