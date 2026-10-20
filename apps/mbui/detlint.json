@@ -98,9 +98,7 @@
     "literal-time": {},
     "stable-mode": {},
     "retired-api": {},
-    "app-clock": {
-      "src/sfapp/chat_fixture.mbt": 1
-    },
+    "app-clock": {},
     "wall-clock": {
       "src/coredemo/shelf.mbt": 1,
       "src/sfreplay/source.mbt": 1,

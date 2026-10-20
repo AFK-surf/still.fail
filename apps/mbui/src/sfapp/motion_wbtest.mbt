@@ -6,8 +6,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   // (the clock set after reset, which puts the fixture's own back)
   reset()
   let clock = Ref::new(0.0)
-  fix_clock.val = fn() { clock.val }
-  fix_wake.val = fn(_) {  }
+  fix_clock.val = Some(fn() { clock.val })
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
@@ -32,8 +31,7 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   assert_true((y2 - y_top).abs() < 0.5)
   let (_, f2) = t.drawn_of("整理发布清单").unwrap()
   assert_true((f2 - y_top - 66.0).abs() < 0.5)
-  fix_clock.val = fix_frame_clock
-  fix_wake.val = fix_frame_wake
+  fix_clock.val = None
 }
 
 ///|
@@ -41,8 +39,7 @@ test "words sent fly from the field into their bubble" {
   // the fixture's own station takes what is sent: the outbox at once, the message after
   reset()
   let clock = Ref::new(0.0)
-  fix_clock.val = fn() { clock.val }
-  fix_wake.val = fn(_) {  }
+  fix_clock.val = Some(fn() { clock.val })
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
@@ -77,8 +74,7 @@ test "words sent fly from the field into their bubble" {
     }
   }
   assert_true(moved && landed, msg="\{moved} \{landed}")
-  fix_clock.val = fix_frame_clock
-  fix_wake.val = fix_frame_wake
+  fix_clock.val = None
 }
 
 ///|
