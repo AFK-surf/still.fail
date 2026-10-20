@@ -4,7 +4,7 @@
 # emulator of our own (AVD mbui-avd, port 5580). APP=demo|textdiff picks the app (still.fail's apps: its
 # apps/mbui/scripts/android.sh, these scripts on its module);
 # ENV="K=V;K2=V2" gives `run` the app's environment variables (MainActivity sets them before the app starts).
-#   scripts/android.sh build | emu | run [script] | shown | shot NAME | record NAME SECONDS [drive] | log | stop | delete
+#   scripts/android.sh build | emu | run [script] | shown | uid | shot NAME | record NAME SECONDS [drive] | log | stop | delete
 # moon.pkg cannot choose files per OS, so the build runs on a copy of the
 # module in out/android/mod, where an app's src/photos/pictures/android.mbt takes pictures_native.mbt's place.
 #
@@ -193,7 +193,7 @@ case "${1:-build}" in
     # the flings are Script.java's (--es script fling): swipes at set speeds, as the system delivers a finger's
     ENV="MBUI_SCROLL_LOG=1${ENV:+;$ENV}" "$0" run fling
     # the script's own named end (Script.java), or the app's crash, as logcat has it (cleared above: this run's)
-    $ADB -s $SERIAL logcat -v brief -m 1 -e "script fling: done|FATAL EXCEPTION|Fatal signal" >/dev/null
+    $ADB -s $SERIAL logcat -v brief -m 1 --uid=$("$0" uid) -e "script fling: done|FATAL EXCEPTION|Fatal signal" >/dev/null
     $ADB -s $SERIAL shell pkill -INT screenrecord || true
     wait $REC || true
     $ADB -s $SERIAL pull /sdcard/fling.mp4 $F/fling.mp4 >/dev/null
@@ -244,6 +244,11 @@ case "${1:-build}" in
     echo "android.sh: $APP_ID's window not the one shown ($SERIAL)" >&2
     echo "$w" | grep -iE "focus|splash|starting" | head -20 >&2
     exit 1
+    ;;
+  uid)
+    # The app's uid (installed): what `logcat --uid` keeps to, so another app's crash on the emulator (its FATAL
+    # EXCEPTION, its Fatal signal) is not taken for this one's.
+    $ADB -s $SERIAL shell pm list packages -U $APP_ID | tr -d '\r' | sed -n "s/^package:$APP_ID uid:\([0-9]*\).*/\1/p"
     ;;
   shot)
     mkdir -p $OUT/shots

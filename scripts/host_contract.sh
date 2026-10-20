@@ -135,8 +135,9 @@ run() {
       $ADB logcat -c
       EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="$(echo "$1" | tr ' ' ';');MBUI_LOG_FILE=run.log" \
         bash scripts/android.sh run
-      # the app's own named end (or its crash) as logcat has it; its whole log is the file it wrote (Host.log)
-      $ADB logcat -v brief -m 1 -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      # the app's own named end (or its crash, its own: not another app's on the emulator) as logcat has it; its whole
+      # log is the file it wrote (Host.log)
+      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -405,7 +406,7 @@ open(sys.argv[2],'wb').write(base64.b64decode(''.join(parts)))
           $ADB logcat -c
           EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 SHOT_AT=$m ENV="MBUI_SCREEN=$REST_PAGE" bash scripts/android.sh run
           # (said once it is on the screen: MBView's shotFrame)
-          $ADB logcat -v raw -m 1 -e "SHOT [0-9]+ [0-9]|SHOT FAIL|FATAL EXCEPTION|Fatal signal" | tr -d '\r' > $O/rest-$m.log
+          $ADB logcat -v raw -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "SHOT [0-9]+ [0-9]|SHOT FAIL|FATAL EXCEPTION|Fatal signal" | tr -d '\r' > $O/rest-$m.log
           # (and the app's window the one shown, the system's splash gone: android.sh shown)
           grep -aq "^SHOT [0-9]" $O/rest-$m.log && EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown \
             && $ADB exec-out screencap -p > $O/rest-$m.png ;;
