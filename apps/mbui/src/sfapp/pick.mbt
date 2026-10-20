@@ -27,8 +27,6 @@ priv struct Pick {
   mut grab_y : Double
   /// the press that picked it (its lifting is not a tap that lets go)
   mut picked_frame : Int
-  /// frames its words were not laid out
-  mut missing : Int
 }
 
 ///|
@@ -46,7 +44,6 @@ let pk : Pick = {
   grab_x: 0.0,
   grab_y: 0.0,
   picked_frame: -1,
-  missing: 0,
 }
 
 ///|
@@ -56,7 +53,6 @@ fn pick_clear() -> Unit {
   pk.key = ""
   pk.widening = false
   pk.handle = 0
-  pk.missing = 0
 }
 
 ///|
@@ -193,18 +189,12 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
     return
   }
   let words = match c.words_of(pk.key) {
-    Some(w) => {
-      pk.missing = 0
-      w
-    }
-    // scrolled far off, gone: what was picked in it goes too (not before it was first laid out)
+    Some(w) => w
+    // not laid out in this build: once the frame's builds are over (read back as it is laid out, words.mbt), still
+    // none: scrolled far off, gone, and what was picked in it goes too
     None => {
-      pk.missing += 1
-      if pk.missing > 2 {
-        pick_clear()
-      } else {
-        c.request_frame()
-      }
+      let key = pk.key
+      c.after_build("pick-gone", fn() { if c.words_of(key) is None && pk.key == key { pick_clear() } })
       return
     }
   }

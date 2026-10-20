@@ -376,7 +376,7 @@ fn messages(
         }
         match e {
           Top => c.box(h=Px(chat_bar_h + 14.0), fn() {  }) |> ignore
-          Foot => c.box(h=Px(composer_room_of(c) + 10.0), fn() {  }) |> ignore
+          Foot => c.box(h=Px(composer_room_for(c, draft_key(r), Some(v)) + 10.0), fn() {  }) |> ignore
           Working(a) => {
             // coming in, its room opens (220 ms, Ease.Out) as it fades in and grows from its avatar; its turn over,
             // it stays a moment and fades (Chat.kt Activity)
@@ -1061,7 +1061,7 @@ fn jump_to_latest(
   c.layer(align=AEnd, fn() {
     c.spacer()
     // (in the wide frame right over the send button, the composer's column in the pane's middle: Chat.css.ts)
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_of(c) + 2.0, fn() {
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_for(c, draft_key(r), Some(v)) + 2.0, fn() {
       let pill = c.box(
         dir=Row,
         h=Px(36.0),
@@ -1165,7 +1165,7 @@ fn jump_to_ask(
   }
   c.layer(align=AEnd, fn() {
     c.spacer()
-    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_of(c) + 2.0 + lift, fn() {
+    c.box(pr=if wide_on.val { (c.width - dmin(c.width - 24.0, column_w + 44.0)) / 2.0 + 6.0 } else { 18.0 }, pb=composer_room_for(c, draft_key(r), Some(v)) + 2.0 + lift, fn() {
       let bell = c.box(
         w=Px(36.0),
         h=Px(36.0),

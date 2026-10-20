@@ -215,7 +215,9 @@ fn reset() -> Unit {
   cui.down_frame = 0
   cui.moved = false
   cui.outside = false
-  cui.room = 0.0
+  cui.room_for = ("", None)
+  cui.cap_id = 0
+  cui.content_id = 0
   cui.doing.clear()
   pick_reset()
   fix_chats.clear()

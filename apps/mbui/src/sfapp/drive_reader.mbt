@@ -478,36 +478,40 @@ fn reader_book(
     // (once the frame's builds are over, where the last put it)
     c.after_build("reader-keep", fn() { reader_keep(src, at, r, novel, false) })
   }
-  // a jump: its block at the top, then slid to the offset in it once it is laid out
-  if r.jump_step == 1 {
-    // (only once the list is there, laid out in a frame before this one: built further down this frame the first
-    // time, before which a scroll to it is lost, and the second step would wait for its block for ever)
-    if c.list_place(list_key) is Some(_) {
-      let (k, _, _) = r.jump
-      c.list_scroll_to(list_key, k + 1)
-      r.chunk = k
-      r.within = 0.0
-      r.jump_step = 2
-    }
-    c.request_frame()
-  } else if r.jump_step == 2 {
+  // a jump (r.jump: to block k, `off` into it, `lead` a little below the top), held until it is there: each build
+  // scrolls to where it is by what is laid out now (the block's row at the top; once its height is laid out, the
+  // offset in it), the same scroll again as often as it is asked; there once the frame's last build scrolled with the
+  // block's height known (after the builds, so a build read back again does not take a step of it)
+  if r.jump_step != 0 && c.list_place(list_key) is Some(_) {
     let (k, off, lead) = r.jump
-    match c.list_row_height(list_key, k + 1) {
+    let y = match c.list_row_height(list_key, k + 1) {
       Some(h) if h > 0.0 => {
-        r.jump_step = 0
         let len = novel.chunks[k].length()
         if off > 0 && len > 0 {
           let shown = reader_drawn_offset(novel, k, off, prefs.indent, p)
-          let y = h * shown.to_double() / dmax(1.0, reader_drawn_len(novel, k, prefs.indent, p).to_double()) -
-            (if lead { 120.0 } else { 0.0 })
-          if y > 0.0 {
-            c.list_scroll_to(list_key, k + 1, offset=y)
-          }
+          Some(
+            h * shown.to_double() / dmax(1.0, reader_drawn_len(novel, k, prefs.indent, p).to_double()) -
+            (if lead { 120.0 } else { 0.0 }),
+          )
+        } else {
+          Some(0.0)
         }
+      }
+      // (its height not laid out yet: read back once it is)
+      _ => None
+    }
+    match y {
+      Some(y) if y > 0.0 => c.list_scroll_to(list_key, k + 1, offset=y)
+      _ => c.list_scroll_to(list_key, k + 1)
+    }
+    c.after_build("reader-jump", fn() {
+      if y is Some(_) && r.jump_step != 0 {
+        r.jump_step = 0
+        r.chunk = k
+        r.within = 0.0
         r.moves = r.moves + 1
       }
-      _ => c.request_frame()
-    }
+    })
   }
   // the search, as it is typed (a quarter of a second after)
   if r.query != r.searched {
