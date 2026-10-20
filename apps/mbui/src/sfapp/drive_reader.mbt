@@ -881,12 +881,12 @@ fn reader_bottom_bar(
   c.box(w=Fill(1.0), padx=8.0, pady=8.0, opacity=shown, fn() {
     c.box(
       w=Fill(1.0),
-      pl=14.0,
-      pr=14.0,
-      pt=10.0,
+      pl=reader_bar_inset,
+      pr=reader_bar_inset,
+      pt=reader_bar_inset,
       pb=6.0,
       gap=6.0,
-      radius=20.0,
+      radius=reader_bar_radius,
       bg=paper_glass(p),
       shadow=2.0,
       shadow_color=0x0000004DL,
@@ -990,13 +990,21 @@ fn reader_hairline(
 }
 
 ///|
+/// The reader's bottom bar: its corner, and how far in what it holds stands from its sides and its top.
+let reader_bar_radius : Double = 20.0
+
+///|
+let reader_bar_inset : Double = 10.0
+
+///|
 /// A small key on the bar (上一章, 下一章): faded and inert when there is nowhere to go.
 fn reader_text_key(c : @ui.Ctx, key : String, label : String, p : PaperInk, on : Bool) -> Bool {
   let id = c.id(key)
   c.box(
     padx=12.0,
     pady=6.0,
-    radius=10.0,
+    // (上一章 and 下一章 stand in the bar's top corners: as far from both edges, concentric with it)
+    radius=@sf.concentric(reader_bar_radius, reader_bar_inset),
     bg=@sf.alpha(p.ink, if on && c.pressed(id) { 0.12 } else if on { 0.07 } else { 0.04 }),
     id=if on { id } else { 0 },
     fn() {

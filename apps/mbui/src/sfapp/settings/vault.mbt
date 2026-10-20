@@ -367,7 +367,11 @@ fn request_card(c : @ui.Ctx, core : Core, ws : String, v : Json?, r : Json) -> U
 fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, Bool)], busy : Int) -> Int? {
   let t = @sf.theme()
   let mut picked : Int? = None
-  c.box(w=Fill(1.0), pad=8.0, radius=18.0 + 8.0 / 1.25, bg=t.p.chip, fn() {
+  // (the number's disc in the card's corner: concentric with it, docs/ui-panels.md)
+  let card_pad = 8.0
+  let row_pad = 7.0
+  let card_radius = 18.0 + card_pad / 1.25
+  c.box(w=Fill(1.0), pad=card_pad, radius=card_radius, bg=t.p.chip, fn() {
     for i, o in options {
       if i > 0 {
         c.box(w=Fill(1.0), pl=7.0 + 22.0 + 12.0, pr=12.0, fn() {
@@ -382,10 +386,10 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
       c.box(
         dir=Row,
         w=Fill(1.0),
-        pl=7.0,
+        pl=row_pad,
         pr=12.0,
-        pt=7.0,
-        pb=7.0,
+        pt=row_pad,
+        pb=row_pad,
         gap=12.0,
         radius=18.0,
         bg=if c.pressed(id) { @sf.alpha(t.p.text, 0.08) } else { 0L },
@@ -394,7 +398,7 @@ fn decision_options(c : @ui.Ctx, key : String, options : Array[(String, String, 
           c.box(
             w=Px(22.0),
             h=Px(22.0),
-            radius=11.0,
+            radius=@sf.concentric(card_radius, card_pad + row_pad),
             bg=if o.2 { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
             align=ACenter,
             justify=JCenter,

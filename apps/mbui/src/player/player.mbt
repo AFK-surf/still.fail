@@ -675,7 +675,7 @@ fn Player::controls(
     Some((x, y, w, h)) if down && px >= x && px < x + w && py >= y && py < y + h => p.wake()
     _ => ()
   }
-  c.box(w=Fill(1.0), max_w=720.0, radius=20.0, bg=glass, pl=6.0, pr=6.0, pt=8.0, pb=4.0, id~, fn() {
+  c.box(w=Fill(1.0), max_w=720.0, radius=bar_radius, bg=glass, pl=bar_side, pr=bar_side, pt=8.0, pb=bar_foot, id~, fn() {
     let at = if p.scrub >= 0.0 { p.scrub } else { s.position }
     c.box(pl=10.0, fn() {
       c.rich(
@@ -737,19 +737,24 @@ fn Player::controls(
         }
         p.wake()
       }
-      c.box(
-        h=Px(30.0),
-        min_w=44.0,
-        radius=10.0,
-        padx=8.0,
-        bg=if p.speed != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
-        align=ACenter,
-        justify=JCenter,
-        id=if on { sid } else { 0 },
-        fn() {
-          c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
-        },
-      )
+      // in the bar's bottom right corner (the audio's): as far from its right edge as from its foot, concentric with it
+      let speed_inset = bar_foot + (key_size - speed_h) / 2.0
+      c.box(pr=speed_inset - bar_side, fn() {
+        c.box(
+          h=Px(speed_h),
+          min_w=44.0,
+          radius=@sf.concentric(bar_radius, speed_inset),
+          padx=8.0,
+          bg=if p.speed != 1.0 { 0xFFFFFF24L } else { 0xFFFFFF0FL },
+          align=ACenter,
+          justify=JCenter,
+          id=if on { sid } else { 0 },
+          fn() {
+            c.text(speed_label(p.speed), size=12.0, weight=600, color=ink, wrap=false) |> ignore
+          },
+        )
+        |> ignore
+      })
       |> ignore
       if p.subtitle &&
         key_button(c, p.key + "/captions", "captions", on, lit=p.subs_on) {
@@ -861,15 +866,31 @@ fn share_bar(c : @ui.Ctx, part : Double, h : Double, color : Int64) -> Unit {
 }
 
 ///|
+/// The controls' bar: its corner, its sides' and its foot's room; a key's size, the speed's height.
+let bar_radius : Double = 20.0
+
+///|
+let bar_side : Double = 6.0
+
+///|
+let bar_foot : Double = 4.0
+
+///|
+let key_size : Double = 40.0
+
+///|
+let speed_h : Double = 30.0
+
+///|
 /// A round key on the controls (Player.kt Key): 40, a 20 icon; `lit`, a soft light behind it while what it turns on is
 /// on. True on the frame it was tapped; `on` false, it takes no tap (what is under it does).
 fn key_button(c : @ui.Ctx, key : String, icon : String, on : Bool, lit? : Bool = false) -> Bool {
   let id = c.id(key)
   let pressing = if on { @motion.pressing(c, id) } else { 0.0 }
   c.box(
-    w=Px(40.0),
-    h=Px(40.0),
-    radius=20.0,
+    w=Px(key_size),
+    h=Px(key_size),
+    radius=key_size / 2.0,
     align=ACenter,
     justify=JCenter,
     bg=if lit {

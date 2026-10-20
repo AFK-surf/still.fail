@@ -198,6 +198,11 @@ fn download_drive_zip(c : @ui.Ctx, src : Source, station : String, root : String
 
 
 ///|
+/// The corner of a chip whose ground fills from the left (how far a download or a use has come): its fill, flush with
+/// the chip's edges, is concentric with it (the chip's clip does not round what is in it until mbui#42).
+let fill_chip_radius : Double = 6.0
+
+///|
 /// How far a file of the drive has come while it is fetched (Parts.kt DownloadChip, FillChip's `progress`): the
 /// allowance's rounded box, its ground filled in the accent from the left as it comes (moving smoothly to each new
 /// share over 500 ms), n% on it.
@@ -212,11 +217,11 @@ fn download_chip(c : @ui.Ctx, key : String, percent : Int) -> Unit {
   }
   // (at its first share at once, as animateFloatAsState starts)
   let drawn = @motion.animate(c, "fetch/" + key, p.to_double(), spec=@motion.tween(500.0))
-  c.box(h=Px(20.0), radius=6.0, bg=t.p.chip, clip=true, justify=JCenter, fn() {
+  c.box(h=Px(20.0), radius=fill_chip_radius, bg=t.p.chip, clip=true, justify=JCenter, fn() {
     if drawn > 0.0 {
       c.layer(fn() {
         c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), fn() {
-          c.box(w=Fill(drawn), h=Fill(1.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
+          c.box(w=Fill(drawn), h=Fill(1.0), radius=@sf.concentric(fill_chip_radius, 0.0), bg=@sf.alpha(t.p.accent, 0.2), fn() {  }) |> ignore
           if drawn < 100.0 {
             c.box(w=Fill(100.0 - drawn), h=Fill(1.0), fn() {  }) |> ignore
           }

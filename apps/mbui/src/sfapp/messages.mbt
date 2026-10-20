@@ -1108,6 +1108,17 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
 }
 
 ///|
+/// The card of options' corner, how far in its rows stand, how far a row's number stands in it: the number's disc is
+/// in the card's corner, concentric with it (docs/ui-panels.md).
+let options_card_radius : Double = 24.4
+
+///|
+let options_card_pad : Double = 8.0
+
+///|
+let options_row_pad : Double = 7.0
+
+///|
 /// A card of options (SettingParts.kt DecisionOptions): each a row to be pressed (its ground under the finger 8 in
 /// from the card's edge, rounded 18), its number in a disc (the one recommended in the accent), its label and what it
 /// leads to; hairlines between them; half there when not `enabled`, a spinner on the one being answered (`busy`, none
@@ -1124,7 +1135,7 @@ fn decision_options(
   let free = enabled && busy is None
   let mut picked : Choice? = None
   c.box(w=Fill(1.0), pt=6.0, fn() {
-    c.box(w=Fill(1.0), radius=24.4, bg=t.p.chip, pad=8.0, fn() {
+    c.box(w=Fill(1.0), radius=options_card_radius, bg=t.p.chip, pad=options_card_pad, fn() {
       for i, o in options {
         if i > 0 {
           c.box(w=Fill(1.0), pl=41.0, pr=12.0, fn() {
@@ -1139,10 +1150,10 @@ fn decision_options(
         c.box(
           dir=Row,
           w=Fill(1.0),
-          pl=7.0,
+          pl=options_row_pad,
           pr=12.0,
-          pt=7.0,
-          pb=7.0,
+          pt=options_row_pad,
+          pb=options_row_pad,
           gap=12.0,
           align=AStart,
           radius=18.0,
@@ -1160,7 +1171,7 @@ fn decision_options(
             c.box(
               w=Px(22.0),
               h=Px(22.0),
-              radius=11.0,
+              radius=@sf.concentric(options_card_radius, options_card_pad + options_row_pad),
               bg=if o.recommended { t.p.accent } else { @sf.alpha(t.p.text, 0.09) },
               align=ACenter,
               justify=JCenter,

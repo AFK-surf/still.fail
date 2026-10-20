@@ -290,17 +290,24 @@ fn page_note(c : @ui.Ctx, words : String) -> Unit {
 }
 
 ///|
-/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words 16 and 14 in; tapped when `key` is
-/// given. True on the frame after a tap.
+/// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
+/// edges: docs/ui-panels.md); what has a ground of its own there takes @sf.concentric(card_radius, card_pad).
+let card_radius : Double = 20.0
+
+///|
+let card_pad : Double = 16.0
+
+///|
+/// A card on the page (Parts.kt Card): 12 in from the sides, 10 under it, its words card_pad in; tapped when `key`
+/// is given. True on the frame after a tap.
 fn card(c : @ui.Ctx, body : () -> Unit, key? : String = "") -> Bool {
   let t = @sf.theme()
   let id = if key == "" { 0 } else { c.id(key) }
   c.box(w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, fn() {
     c.box(
       w=Fill(1.0),
-      padx=16.0,
-      pady=14.0,
-      radius=20.0,
+      pad=card_pad,
+      radius=card_radius,
       bg=if id != 0 && c.pressed(id) {
         @sf.over(t.p.card, @sf.alpha(t.p.text, 0.05))
       } else {
@@ -541,7 +548,7 @@ fn seg(
           c.box(
             w=Px(w),
             h=Px(h),
-            radius=dmax(radius - inset, 0.0),
+            radius=@sf.concentric(radius, inset),
             bg=thumb,
             border=0.5,
             border_color=t.p.line,

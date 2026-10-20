@@ -153,9 +153,9 @@ fn quota_chips(c : @ui.Ctx, quota : Json?, small? : Bool = false) -> Unit {
       }
       let ground = if low { @sf.alpha(tone, 0.2) } else { @sf.alpha(t.p.muted, 0.22) }
       let fs = if small { 10.0 } else { 11.0 }
-      c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=6.0, bg=t.p.chip, clip=true, fn() {
+      c.box(h=Px(if small { 16.0 } else { 20.0 }), radius=fill_chip_radius, bg=t.p.chip, clip=true, fn() {
         c.layer(fn() {
-          c.box(w=Fill(left / 100.0), h=Fill(1.0), bg=ground, fn() {  }) |> ignore
+          c.box(w=Fill(left / 100.0), h=Fill(1.0), radius=@sf.concentric(fill_chip_radius, 0.0), bg=ground, fn() {  }) |> ignore
         })
         |> ignore
         c.box(

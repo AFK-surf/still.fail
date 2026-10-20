@@ -518,10 +518,9 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
       c.box(
         dir=Row,
         w=Px(236.0),
-        padx=10.0,
-        pady=8.0,
+        pad=file_card_pad,
         gap=10.0,
-        radius=16.0,
+        radius=file_card_radius,
         border=if named { 1.0 } else { 0.0 },
         border_color=@sf.alpha(t.p.text, 0.22),
         bg=if named { 0L } else { ink().neutral },
