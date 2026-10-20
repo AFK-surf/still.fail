@@ -20,9 +20,6 @@ test "12-offline-retry" {
     f.tap("=重试")
     f.gone("未发送")
     f.gone("正在发送")
-    // the agent's activity row opening as its turn runs on: to its end, as it set out (its clock comes again each
-    // second for as long as it shows: Ctx::every, not waited for)
-    f.run_to(f.t.rest_of("open/"))
     f.end()
   })
 }

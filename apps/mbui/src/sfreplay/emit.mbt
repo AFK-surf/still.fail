@@ -78,9 +78,18 @@ fn emit_end() -> Unit {
 /// the station frozen…): said on the script's log there (`log do: WORDS`), nothing here, where the trace has what came
 /// of it.
 pub fn Flow::peer(self : Flow, words : String) -> Unit {
-  ignore(self)
   emit("log do: " + words)
+  // (the station frozen or thawed: the run's runner does it beside the script, not waited for, e2e/run.sh starting it
+  // in the background, and a send right after it would go before it is done; the script gives it the time the flows'
+  // own scripts gave it, and so does the clock here, what the app does meanwhile (a draft kept) with it)
+  if words == "freeze" || words == "thaw" {
+    self.run_for(peer_ms.to_double())
+  }
 }
+
+///|
+/// How long a scripted run gives its runner to freeze or thaw the station (Flow::peer) before its next step.
+let peer_ms : Int = 2000
 
 ///|
 /// What a live run does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, a chat made elsewhere):
