@@ -665,7 +665,8 @@ let linger_fade_ms : Double = 600.0
 let linger_out_ms : Double = 220.0
 
 ///|
-let linger_ms : Double = linger_fade_ms + linger_out_ms
+/// An activity's whole stay once its agent's turn ended: there, then faded.
+pub let linger_ms : Double = linger_fade_ms + linger_out_ms
 
 ///|
 /// The list with the activities of agents whose turn just ended, kept a moment (Chat.kt: 600 ms, then fading 220).

@@ -90,6 +90,24 @@ pub fn Replay::parse(log : String) -> Replay {
             _ => 0.0
           }
           evs.push({ out: false, msg: j, bytes: None, wall, done: false, host: true })
+        } else {
+          match (m.get("step"), m.get("w")) {
+            // (a step's line with the run's clock: mbui's trace_steps; a live run's own, #before's, have none)
+            (Some(String(line)), Some(Number(wall, ..))) =>
+              match step_of(line) {
+                Some(step) =>
+                  evs.push({
+                    out: true,
+                    msg: Json::object({ "step": Json::string(step) }),
+                    bytes: None,
+                    wall,
+                    done: false,
+                    host: false,
+                  })
+                None => ()
+              }
+            _ => ()
+          }
         }
     }
   }
@@ -140,7 +158,7 @@ pub fn Replay::skip(self : Replay, call : String) -> Unit {
 pub fn Replay::drop(self : Replay, text : String) -> Int {
   let gone : Array[Int] = []
   for e in self.evs {
-    if e.out && !e.done && e.msg.stringify().contains(text) {
+    if e.out && !e.done && !is_step(e.msg) && e.msg.stringify().contains(text) {
       e.done = true
       match e.msg {
         Object(m) =>
@@ -253,6 +271,58 @@ pub fn Replay::deliver(
 /// asked again (a Tester's `view_said`).
 pub fn Replay::host(self : Replay, said : (String) -> Unit) -> Unit {
   self.host_said = Some(said)
+}
+
+///|
+/// A scripted run's step as its trace keeps it (`{"step":LINE,"w":…}`: mbui's trace_steps, the line as its script had
+/// it), as a test says it (Flow's emitted line), `now ` aside; None for what a test says only as it writes a script
+/// (`answered`, `wait`) or never (`timeout`, a `shot`, a comment). What came after a step in the run waits for the
+/// test to have said it (Replay::step_taken): a player's state its host told once the run was past `until 0:02 /` is
+/// not given before.
+pub fn step_of(line : String) -> String? {
+  let l = if line.has_prefix("now ") { line.view(start_offset=4).to_owned() } else { line }
+  let verb = match l.find(" ") {
+    Some(k) => l.view(end_offset=k).to_owned()
+    None => l
+  }
+  if said_steps.contains(verb) {
+    Some(l)
+  } else {
+    None
+  }
+}
+
+///|
+/// The steps a test says as a scripted run's (src/sfreplay/emit.mbt).
+let said_steps : Array[String] = [
+  "tap", "tap1", "tapxy", "hold", "type", "clear", "key", "enter", "back", "drag", "dragon", "hover", "mark", "notice",
+  "paste", "resize", "rightclick", "wheel", "log", "until", "untiln", "gone", "noticed", "nonotice", "field", "empty",
+]
+
+///|
+/// Whether `m` (of the run's) is a step of its script, not an ask (step_of).
+fn is_step(m : Json) -> Bool {
+  m is Object(o) && o.contains("step")
+}
+
+///|
+/// The run's next step not taken again, when it is `line` (step_of: as the test says it), taken: what came after it
+/// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it waiting, said by
+/// `waiting`.
+pub fn Replay::step_taken(self : Replay, line : String) -> Bool {
+  guard step_of(line) is Some(l) else { return false }
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done && is_step(e.msg) {
+      if e.msg is Object(m) && m.get("step") == Some(Json::string(l)) {
+        e.done = true
+        self.advance()
+        return true
+      }
+      return false
+    }
+  }
+  false
 }
 
 ///|

@@ -41,8 +41,7 @@ test "46-chat-audio" {
     assert_true(v > 0)
     // the system's player asks for the song's head, then all of it
     player_reads(f, v, 177424)
-    // ready, playing, 2 s in
-    f.t.set_player(v, duration=4000.0, position=2000.0, playing=true)
+    // ready and playing as the Mac's player said (the trace's info lines, Replay::host), 2 s in
     f.t.draw()
     f.see("0:02 /")
     // left alone, its bars fade
