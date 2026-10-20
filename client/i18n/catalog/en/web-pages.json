@@ -1550,6 +1550,7 @@
   "web-pages.stations.permissions.missing": "Not allowed",
   "web-pages.stations.permissions.openScreen": "Open screen",
   "web-pages.stations.permissions.waiting": "Waiting",
+  "web-pages.stations.permissions.askingThisMac": "The permission window is open on this Mac; click Allow",
   "web-pages.drive.untitledFolder": "untitled folder",
   "web-pages.drive.moveWhat": "move",
   "web-pages.drive.uploadWhat": "upload",

@@ -2,7 +2,9 @@
 // "Grants") on its page: a row each with what it is for and whether it is given; one not given asked for from here
 // (`permissions.request`), which puts the helper's window up on that Mac. Where the Mac's screen can be seen and driven
 // the next step is that screen, opened at once, for the person to click in the window from wherever they are; else the
-// row says to click Allow on that Mac, and turns as they do. A station that says none (not a Mac, or older) shows nothing.
+// row says to click Allow on that Mac, and turns as they do; on the Mac the app runs on (its own station) the window is
+// on this screen, so the row says to click Allow here and no screen is opened. A station that says none (not a Mac, or
+// older) shows nothing.
 import type { ComponentType } from "react";
 import type { StationGrant, StationPermissions } from "./core/shapes.ts";
 import { useCall } from "./core/react.ts";
@@ -11,6 +13,7 @@ import { useAct } from "@stillfail/ui/toast.tsx";
 import { Cursor, Devices, Disk, Download, FileText, Folder, Monitor, Server, type IconProps } from "@stillfail/ui/icons.tsx";
 import { Button, Section } from "./ui.tsx";
 import { useGo } from "./go.ts";
+import { useThisMachineAddress } from "./thisMachine.ts";
 import { t } from "./i18n.ts";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./StationPermissions.css.ts";
@@ -45,8 +48,17 @@ export function useGrantRequest(station: string, open: (link: string) => void) {
   );
 }
 
+/** The grants as shown on the Mac `station` is on (the desktop app's own station): its screen is this one, so there is
+ *  none to open, and a window up is clicked here. Elsewhere as the core says them. */
+function useShownHere(station: string, p: StationPermissions): StationPermissions {
+  if (useThisMachineAddress() !== station) return p;
+  const { screen: _, ...rest } = p;
+  return { ...rest, grants: p.grants.map((g) => (g.asking ? { ...g, line: t("web-pages.stations.permissions.askingThisMac") } : g)) };
+}
+
 /** The station page's section (cloud/StationPage.tsx). */
-export function PermissionsSection({ station, permissions: p }: { station: string; permissions: StationPermissions }) {
+export function PermissionsSection({ station, permissions }: { station: string; permissions: StationPermissions }) {
+  const p = useShownHere(station, permissions);
   const go = useGo();
   const request = useGrantRequest(station, (link) => go(link));
   return (

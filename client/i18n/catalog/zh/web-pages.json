@@ -1475,6 +1475,7 @@
   "web-pages.stations.permissions.missing": "未允许",
   "web-pages.stations.permissions.openScreen": "打开屏幕",
   "web-pages.stations.permissions.waiting": "等待允许",
+  "web-pages.stations.permissions.askingThisMac": "授权窗口已在本机打开，请点击「允许」",
   "web-pages.drive.untitledFolder": "未命名文件夹",
   "web-pages.drive.moveWhat": "移动",
   "web-pages.drive.uploadWhat": "上传",
