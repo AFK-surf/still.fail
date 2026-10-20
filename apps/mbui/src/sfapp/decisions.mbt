@@ -293,17 +293,50 @@ let card_back_ms : Double = 250.0
 let card_arrive_ms : Double = 260.0
 
 ///|
+/// The deck's motions, each from 0 to 1 on its curve: the one that went flying off (across or up), the front one
+/// going back where it rests, the front one coming in (1: there).
+fn card_out(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "deck/out", 1.0, global=true)
+}
+
+///|
+fn card_back(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "deck/back", 1.0, global=true)
+}
+
+///|
+fn card_arrive(c : @ui.Ctx) -> @motion.Anim {
+  @motion.anim(c, "deck/arrive", 1.0, global=true)
+}
+
+///|
+/// `a` from 0 to 1 by `ms` on cubic-bezier(x1, y1, x2, y2), from now (said once: the framework draws it to its end).
+fn card_go(a : @motion.Anim, ms : Double, x1 : Double, y1 : Double, x2 : Double, y2 : Double) -> Unit {
+  a.snap(0.0)
+  a.animate(1.0, @motion.tween(ms, ease=Bezier(x1, y1, x2, y2)))
+}
+
+///|
+/// The front one comes in.
+fn card_comes(c : @ui.Ctx) -> Unit {
+  card_go(card_arrive(c), card_arrive_ms, 0.2, 0.7, 0.2, 1.0)
+}
+
+///|
 /// The front decision `item` goes (`dir` its side, 2 up after answering): `after` (what it goes to) done at once, the
 /// deck without it from now on; it is only drawn flying off, as the next comes in (the only one, set aside: it again).
 fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit {
   dui.out = Some(item)
   dui.out_dir = dir
-  let now = c.now()
-  dui.out_at = now
   dui.out_from = dui.drag
+  if dir == 2 {
+    card_go(card_out(c), card_up_ms, 0.55, 0.0, 0.85, 0.35)
+  } else {
+    card_go(card_out(c), card_off_ms, 0.2, 0.0, 0.0, 1.0)
+  }
   dui.drag = 0.0
   dui.going = 0
-  dui.arrive_at = now
+  card_comes(c)
   after()
 }
 
@@ -316,9 +349,9 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   let key = decision_key(item)
   let n = shown.length()
   if dui.front != key {
-    // a new one in front: it comes in (unless it is the first the page shows)
-    if dui.front != "" {
-      dui.arrive_at = c.now()
+    // a new one in front: it comes in (unless it is the first the page shows, or it came in as the one before went)
+    if dui.front != "" && dui.out is None {
+      card_comes(c)
     }
     dui.front = key
     dui.drag = 0.0
@@ -434,8 +467,8 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
       } else {
         // back where it rests
         dui.going = 3
-        dui.going_at = c.now()
         dui.going_from = at
+        card_go(card_back(c), card_back_ms, 0.2, 0.0, 0.0, 1.0)
       }
     }
   }
@@ -445,25 +478,15 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   }
   // let go short: back where it rests
   if dui.going == 3 {
-    // (only after a finger: never in a screenshot)
-    let p = dmin((c.now() - dui.going_at) / card_back_ms, 1.0)
-    dui.drag = dui.going_from * (1.0 - @ui.bezier(0.2, 0.0, 0.0, 1.0, p))
-    if p < 1.0 {
-      c.request_frame()
+    let back = card_back(c)
+    if back.moving() {
+      dui.drag = dui.going_from * (1.0 - back.get())
     } else {
       dui.going = 0
       dui.drag = 0.0
     }
   }
-  let arrive = if dui.arrive_at < 0.0 || c.stable() {
-    1.0
-  } else {
-    let p = dmin((c.now() - dui.arrive_at) / card_arrive_ms, 1.0)
-    if p < 1.0 {
-      c.request_frame()
-    }
-    @ui.bezier(0.2, 0.7, 0.2, 1.0, p)
-  }
+  let arrive = card_arrive(c).get()
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), clip=true, id=frame, fn() {
       // under it, what letting it go that way does: left 待定 (at the right edge it uncovers), right 不再提醒
@@ -534,20 +557,19 @@ fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit 
     None => return
   }
   let t = @sf.theme()
-  let up = dui.out_dir == 2
-  let ms = if up { card_up_ms } else { card_off_ms }
-  let p = if c.stable() { 1.0 } else { dmin((c.now() - dui.out_at) / ms, 1.0) }
-  if p >= 1.0 {
+  let a = card_out(c)
+  if !a.moving() {
     dui.out = None
     return
   }
-  c.request_frame()
-  let (x, y, fade) = if up {
-    let lift = height * @ui.bezier(0.55, 0.0, 0.85, 0.35, p)
+  // (its curve's: card_go's, as it set out)
+  let p = a.get()
+  let (x, y, fade) = if dui.out_dir == 2 {
+    let lift = height * p
     (dui.out_from, -lift, 1.0 - dmin(lift / height / 0.4, 1.0) * 0.6)
   } else {
     let to = dui.out_dir.to_double() * width * 1.25
-    (dui.out_from + (to - dui.out_from) * @ui.bezier(0.2, 0.0, 0.0, 1.0, p), 0.0, 1.0)
+    (dui.out_from + (to - dui.out_from) * p, 0.0, 1.0)
   }
   c.layer(fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), tx=x, ty=y, opacity=fade, bg=t.p.bg, fn() {

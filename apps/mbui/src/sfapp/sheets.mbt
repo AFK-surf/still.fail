@@ -1009,13 +1009,15 @@ fn job_tint(tone : String) -> Int64? {
 }
 
 ///|
+/// How long a restarting service's dot takes to breathe out and in.
+let job_breath_ms : Double = 1400.0
+
+///|
 /// A job's status (JobDot): a small dot (a restarting service's breathes).
 fn job_dot(c : @ui.Ctx, tone : String) -> Unit {
   let t = @sf.theme()
-  let breath = if tone == "restart" && !c.stable() {
-    c.request_frame()
-    let k = c.now() / 1400.0
-    let f = k - k.floor()
+  let breath = if tone == "restart" {
+    let f = c.cycle(job_breath_ms)
     let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
     1.0 - 0.65 * p
   } else {
