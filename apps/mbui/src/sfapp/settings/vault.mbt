@@ -151,6 +151,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
             tr(if plain { "web-pages.vault.lib.plain" } else { "web-pages.vault.lib.sealed" }),
             tr(if plain { "web-pages.vault.lib.plainWhy" } else { "web-pages.vault.lib.sealedWhy" }),
             title_color=if plain { warn } else { t.p.text },
+            wrap_title=false,
           )
           if plain {
             c.text(tr("web-pages.vault.lib.turnOn"), size=15.0, color=t.p.accent, wrap=false) |> ignore
@@ -177,7 +178,7 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
                   provider_mark(c, text(p, "runtime"), text(field(p, "access"), "kind"), 18.0, text(p, "providerMark"))
                 })
                 |> ignore
-                row_lines(c, text(p, "name"), join(["Profile", text(ev, "where")], " · "))
+                row_lines(c, text(p, "name"), join(["Profile", text(ev, "where")], " · "), wrap_title=false)
                 chevron(c)
               }) {
               (core.push)(Profile(text(ev, "station"), text(p, "id")))

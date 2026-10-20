@@ -288,8 +288,8 @@ let large_title_box : @ui.Style = @ui.style(w=Full, px=S4, pb=S1_5)
 /// (20; the settings pages' say 24, S6, as their SectionHeaders do).
 fn section_header(c : @ui.Ctx, title : String, trailing? : String = "", start? : @ui.Space = S5) -> Unit {
   c.box(style=section_line.then(@ui.style(pl=start)), fn() {
-    // Parts.kt:585 (15sp)
-    c.text(title, style=@sf.body.then(@sf.strong).then(@sf.one_line)) |> ignore
+    // Parts.kt:585 (15sp; in lines where it is long)
+    c.text(title, style=@sf.body.then(@sf.strong)) |> ignore
     c.spacer()
     if trailing != "" {
       // Parts.kt:591 (13sp)
@@ -419,19 +419,26 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_words)
 
 ///|
-/// A row's title with a line under it, as wide as the row lets them. `title_color`, `sub_color`: in place of the
-/// roles' (a warning's, worked out where it is called).
+/// A row's title in lines where it is long.
+// kept across runs: a value (no field of it changes)
+let row_title_lines : @ui.TextStyle = @sf.body.then(@sf.full_words)
+
+///|
+/// A row's title with a line under it, as wide as the row lets them; the title in lines where it is long, or cut to
+/// one (`wrap_title` false: where Android says maxLines = 1). `title_color`, `sub_color`: in place of the roles' (a
+/// warning's, worked out where it is called).
 fn row_lines(
   c : @ui.Ctx,
   title : String,
   sub : String,
   sub_color? : Int64,
   title_color? : Int64,
+  wrap_title? : Bool = true,
   wrap_sub? : Bool = false,
 ) -> Unit {
   c.box(style=@sf.full_width, fn() {
     // Connects.kt:231, Security.kt:191 (15sp)
-    c.text(title, style=row_title_words, color?=title_color) |> ignore
+    c.text(title, style=if wrap_title { row_title_lines } else { row_title_words }, color?=title_color) |> ignore
     if sub != "" {
       // Connects.kt:232, Security.kt:192 (13sp)
       c.text(sub, style=if wrap_sub { row_sub_lines } else { row_sub_line }, color?=sub_color) |> ignore
@@ -755,9 +762,9 @@ fn you(c : @ui.Ctx, words : String) -> Unit {
 let you_ground : @ui.Style = @ui.style(px=S1_5, radius=Md, bg=AccentBg)
 
 ///|
-/// Small words in the accent's ink, on one line.
+/// Small words in the accent's ink (in lines where there is no room: Settings.kt:294 has no maxLines).
 // kept across runs: a value (no field of it changes)
-let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText, wrap=false))
+let you_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(color=AccentText))
 
 ///|
 /// The turning ring (Waiting.kt Spinner): 14, or 12 in a line of small text.
@@ -1084,8 +1091,8 @@ fn pick_row(
             Some(f) => f()
             None => ()
           }
-          // Controls.kt:69, 72 (15sp)
-          c.text(label, style=row_title_words, color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle })
+          // Controls.kt:69, 72 (15sp, in lines where it is long)
+          c.text(label, style=row_title_lines, color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle })
           |> ignore
         })
         |> ignore
