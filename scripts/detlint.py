@@ -525,7 +525,7 @@ RULES = {
     "stable-mode": "the app draws otherwise when it is screenshotted (Ctx::stable): the picture is taken at a time "
                    "its animations declare, of the app as it runs",
     "retired-api": "an interface given up (an animation is data, declared once with its start and end): "
-                   "frames_until, animating, animating_until, run_animations",
+                   "frames_until, animating, animating_until, run_animations; motion_end run to, or read by the app",
     "app-clock": "the app reads the clock to work out an animation or a time passed: motion / wake_at do it from what "
                  "they declared",
     "wall-clock": "the machine's own clock or randomness, outside the host that provides them",
@@ -536,6 +536,8 @@ RULES = {
 
 FRAME_ASK = {"request_frame", "wake_in", "wake_after", "wake_at", "wake_at_time", "frames_until"}
 RETIRED = {"frames_until", "animating", "animating_until", "run_animations"}
+# kept inside the framework, given up for tests and apps: run_for(motion_end() - time()) is run_animations again
+RETIRED_OUTSIDE = {"motion_end"}
 SETTLE = {"settle", "settled"}
 SETTLE_TYPES = {"Tester", "Ctx", "Runtime"}
 SETTLE_DEFS = {"settle", "settled", "unsettled", "stable", "assert_idle"}
@@ -595,6 +597,13 @@ def lint_mbt(f, cfg, out, returns, readers):
         # the interfaces given up: neither defined nor called, anywhere
         if c.name in RETIRED and (c.is_def or c.kind in ("method", "pkg", "bare", "type")):
             add("retired-api", c.at, f.lines[toks[c.at].line - 1].strip())
+        # the same, as the framework keeps it for itself: not called by the app, nor run to by a test (its own
+        # tests may read it)
+        if c.name in RETIRED_OUTSIDE and not c.is_def and app and not f.in_test(c.at):
+            add("retired-api", c.at, f.lines[toks[c.at].line - 1].strip())
+        if c.name in TIME_FNS or c.name == "frame":
+            if any(toks[i].kind == "ident" and toks[i].text in RETIRED_OUTSIDE for _, a in c.args for i in a):
+                add("retired-api", c.at, f.lines[toks[c.at].line - 1].strip())
         if c.is_def:
             continue
         test = f.in_test(c.at)

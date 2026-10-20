@@ -140,7 +140,11 @@
     "stable-mode": {
       "src/demo/main.mbt": 1
     },
-    "retired-api": {},
+    "retired-api": {
+      "src/kit/controls_test.mbt": 1,
+      "src/ui/motion_data_wbtest.mbt": 1,
+      "src/ui/reader_test.mbt": 1
+    },
     "app-clock": {
       "src/effectdemo/demo.mbt": 1,
       "src/kit/menu.mbt": 2,

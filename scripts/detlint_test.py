@@ -377,6 +377,13 @@ class Retired(unittest.TestCase):
                "src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  c.animating_until(at + d)\n"
                                    "  if c.animating() { () }\n  @ui.run_animations(c)\n}\n"}
         found(self, bad, "retired-api", 4)
+        # motion_end: the framework's own, not a test's nor the app's
+        found(self, {"src/app/view_test.mbt": "test \"x\" {\n  t.run_for(t.motion_end() - t.time())\n}\n",
+                     "src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  let e = c.motion_end()\n}\n"},
+              "retired-api", 2)
+        found(self, {"src/ui/motion.mbt": "pub fn Ctx::motion_end(self : Ctx) -> Double {\n  self.ends.max()\n}\n",
+                     "src/ui/motion_test.mbt": "test \"its end\" {\n  assert_eq(t.motion_end(), 180.0)\n}\n"},
+              "retired-api", 0)
         good = {"src/app/view.mbt": "fn v(c : @ui.Ctx) -> Unit {\n  let animating = true\n"
                                     "  c.text(\"frames_until\")\n}\n"}
         found(self, good, "retired-api", 0)
