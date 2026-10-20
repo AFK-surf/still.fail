@@ -12,7 +12,8 @@ priv struct Playing {
   player : @player.Player
   mut opened : Bool
   mut subtitle_asked : Bool
-  mut kept_at : Double
+  /// the places kept (each next one play_keep_ms after it)
+  mut keeps : Int
   /// a read logged, the first times
   mut reads : Int
 }
@@ -36,7 +37,7 @@ fn playing_for(key : String) -> Playing {
         player: @player.Player::new(key="drive-play"),
         opened: false,
         subtitle_asked: false,
-        kept_at: 0.0,
+        keeps: 0,
         reads: 0,
       }
       playing[key] = p
@@ -69,7 +70,6 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   let key = reader_key(at)
   play_srcs[key] = src
   let pl = playing_for(key)
-  let now = c.now()
   let dir = dv_parent(at.path)
   let name = dv_name(at.path)
   let folder = (src.topic)("drive", play_params(at, dir)).value
@@ -155,15 +155,13 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
   // where it is, kept every 5 s while it is open
   if pl.player.started() && pl.player.duration() > 0.0 {
     // every 5 s from when it started (Player.kt: every 20 ticks of 250 ms)
-    if pl.kept_at <= 0.0 {
-      pl.kept_at = now
-    }
-    if now - pl.kept_at >= play_keep_ms {
+    // (the place kept now and then: nothing shown waits for it; the next wait starts in the frame this one ends)
+    let kept = fn() { @kit.after(c, "play-keep/" + key + "/\{pl.keeps}", true, play_keep_ms, later=true) }
+    if kept() {
       play_keep(src, at, pl)
-      pl.kept_at = now
+      pl.keeps = pl.keeps + 1
+      kept() |> ignore
     }
-    // (the place kept now and then: nothing shown waits for it)
-    c.wake_in(play_keep_ms - (now - pl.kept_at), later=true)
 
   }
   let list = @player.playlist_of(

@@ -51,7 +51,6 @@ priv struct DvUpload {
 /// The drive's state while the app runs.
 priv struct DriveUi {
   mut sheet : DvSheet
-  mut sheet_at : Double
   /// the sheet closing, what it showed kept until it is down
   mut closing : DvSheet
   /// what is chosen in a folder (by its page's key), by name
@@ -89,7 +88,6 @@ priv struct DriveUi {
 ///|
 let dv : DriveUi = {
   sheet: NoSheet,
-  sheet_at: 0.0,
   closing: NoSheet,
   chosen: {},
   uploads: [],
@@ -117,7 +115,6 @@ let dv : DriveUi = {
 /// As at the start (tests).
 fn dv_reset() -> Unit {
   dv.sheet = NoSheet
-  dv.sheet_at = 0.0
   dv.closing = NoSheet
   dv.chosen.clear()
   dv.uploads.clear()
@@ -158,7 +155,6 @@ fn dv_reset() -> Unit {
 fn dv_open(c : @ui.Ctx, s : DvSheet) -> Unit {
   c.blur()
   dv.sheet = s
-  dv.sheet_at = c.now()
 }
 
 ///|

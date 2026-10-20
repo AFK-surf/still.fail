@@ -5,18 +5,18 @@
 
 ///|
 /// The link whose menu is open: where it leads, the line held (x, y, w, h in the window), where the finger went down;
-/// the press it opened on (cui.down_at), so the same press picks no words.
+/// the press it opened on (cui.down_frame), so the same press picks no words.
 priv struct LinkMenu {
   mut href : String
   mut x : Double
   mut top : Double
   mut bottom : Double
   mut open : Bool
-  mut at : Double
+  mut at : Int
 }
 
 ///|
-let link_menu : LinkMenu = { href: "", x: 0.0, top: 0.0, bottom: 0.0, open: false, at: -1.0 }
+let link_menu : LinkMenu = { href: "", x: 0.0, top: 0.0, bottom: 0.0, open: false, at: -1 }
 
 ///|
 /// What a message's words give their rich text for a link held: its menu opened there.
@@ -26,7 +26,7 @@ fn link_held(href : String, line : (Double, Double, Double, Double)) -> Unit {
   link_menu.top = line.1
   link_menu.bottom = line.1 + line.3
   link_menu.open = true
-  link_menu.at = cui.down_at
+  link_menu.at = cui.down_frame
 }
 
 ///|

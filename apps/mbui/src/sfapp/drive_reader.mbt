@@ -133,8 +133,9 @@ priv struct TextReading {
   mut jump : (Int, Int, Bool)
   mut jump_step : Int
   mut kept : Int
-  mut kept_at : Double
-  mut moved_at : Double
+  /// the moves of the place (each a wait of its own till it is kept), the move last kept
+  mut moves : Int
+  mut kept_moves : Int
   mut draft : Double
 }
 
@@ -170,8 +171,8 @@ fn reading_for(key : String) -> TextReading {
         jump: (0, 0, false),
         jump_step: 0,
         kept: -1,
-        kept_at: 0.0,
-        moved_at: 0.0,
+        moves: 0,
+        kept_moves: 0,
         draft: -1.0,
       }
       reader_ui[key] = r
@@ -365,7 +366,7 @@ fn reader_left(at : DriveAt) -> Unit {
   match (reader_ui.get(key), dv_reads.get(key)) {
     (Some(r), Some((src, _))) => {
       match r.novel {
-        Some(novel) => reader_keep(src, at, r, novel, true, 0.0)
+        Some(novel) => reader_keep(src, at, r, novel, true)
         None => ()
       }
       reader_ui.remove(key)
@@ -377,13 +378,13 @@ fn reader_left(at : DriveAt) -> Unit {
 
 ///|
 /// Where it was left, told to the core (`drive.place`: the offset of the text, of its length).
-fn reader_keep(src : Source, at : DriveAt, r : TextReading, novel : Novel, force : Bool, now : Double) -> Unit {
+fn reader_keep(src : Source, at : DriveAt, r : TextReading, novel : Novel, force : Bool) -> Unit {
   let off = novel.offset_of(r.chunk, r.within)
   if !force && off == r.kept {
     return
   }
   r.kept = off
-  r.kept_at = now
+  r.kept_moves = r.moves
   (src.call)(
     "drive.place",
     Json::object({
@@ -460,24 +461,22 @@ fn reader_book(
         if first - 1 != r.chunk || (within - r.within).abs() > 0.002 {
           r.chunk = first - 1
           r.within = within
-          r.moved_at = c.now()
+          r.moves = r.moves + 1
         }
       }
       Some((0, _, _)) =>
         if r.chunk != 0 || r.within != 0.0 {
           r.chunk = 0
           r.within = 0.0
-          r.moved_at = c.now()
+          r.moves = r.moves + 1
         }
       _ => ()
     }
   }
   // kept as the reader stops (not on every pixel)
-  if r.moved_at > r.kept_at && c.now() - r.moved_at >= reader_still_ms {
-    reader_keep(src, at, r, novel, false, c.now())
-  } else if r.moved_at > r.kept_at {
-    // (nothing shown waits for it)
-    c.wake_in(reader_still_ms - (c.now() - r.moved_at), later=true)
+  // (each move a wait of its own; nothing shown waits for it)
+  if @kit.after(c, "reader-keep/" + r.key + "/\{r.moves}", r.moves > r.kept_moves, reader_still_ms, later=true) {
+    reader_keep(src, at, r, novel, false)
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
@@ -505,7 +504,7 @@ fn reader_book(
             c.list_scroll_to(list_key, k + 1, offset=y)
           }
         }
-        r.moved_at = c.now()
+        r.moves = r.moves + 1
       }
       _ => c.request_frame()
     }

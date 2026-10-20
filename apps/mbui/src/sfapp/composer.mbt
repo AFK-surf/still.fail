@@ -652,21 +652,20 @@ fn paste_preview(words : String) -> String {
 // ── the composer's state on the page ──────────────────────────────────────
 
 ///|
-/// What the page keeps of its composer: ＋'s sheet (open, since when), the system's picker under way, a finger down
+/// What the page keeps of its composer: ＋'s sheet (open), the system's picker under way, a finger down
 /// outside the composer (it lets go of the keyboard once lifted or moved: ui/Keyboard.kt letsGoOfKeyboard).
 priv struct ComposerUi {
   mut attach : Bool
-  mut attach_at : Double
   mut picking : @ui.Pick?
   mut picking_for : String
-  /// the finger: down last frame, down first this frame, lifted this frame, where and when it went down, moved past
-  /// the slop since (track_press)
+  /// the finger: down last frame, down first this frame, lifted this frame, where it went down and the frame it did (the
+  /// press's name: what it opened is not opened again by it), moved past the slop since (track_press)
   mut was_down : Bool
   mut press_new : Bool
   mut released : Bool
   mut down_x : Double
   mut down_y : Double
-  mut down_at : Double
+  mut down_frame : Int
   mut moved : Bool
   mut outside : Bool
   /// the composer's height with its margins, as last drawn (ids are the page's: the list's rows ask this)
@@ -678,7 +677,6 @@ priv struct ComposerUi {
 ///|
 let cui : ComposerUi = {
   attach: false,
-  attach_at: 0.0,
   picking: None,
   picking_for: "",
   was_down: false,
@@ -686,7 +684,7 @@ let cui : ComposerUi = {
   released: false,
   down_x: 0.0,
   down_y: 0.0,
-  down_at: 0.0,
+  down_frame: 0,
   moved: false,
   outside: false,
   room: 0.0,
@@ -1067,7 +1065,6 @@ fn composer_bar(
   let send = c.id("composer/send")
   if c.clicked(plus) && !locked && (v is Some(_) || fresh is Some(_)) {
     cui.attach = true
-    cui.attach_at = c.now()
     c.blur()
   }
   let do_send = fn() {
@@ -1756,7 +1753,7 @@ fn track_press(c : @ui.Ctx) -> Unit {
   if cui.press_new {
     cui.down_x = px
     cui.down_y = py
-    cui.down_at = c.now()
+    cui.down_frame = c.frame_number()
     cui.moved = false
   }
   if down && ((px - cui.down_x).abs() > 8.0 || (py - cui.down_y).abs() > 8.0) {

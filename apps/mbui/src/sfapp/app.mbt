@@ -45,14 +45,13 @@ priv struct App {
   mut picked : String
   /// the list's filter chosen here, by workspace, before the prefs say it
   filters : Map[String, String]
-  /// the filter's menu, and when it was opened
+  /// the filter's menu open
   mut menu : Bool
-  mut menu_at : Double
   /// a place switched to on the bar: from which side (1 from the right, -1 the left, 0 from no side)
   mut switch_way : Int
-  /// a row held: its id, since when (the time shows while it is)
+  /// a row held: its id, and whether it has been held long (its time on @kit.after)
   mut held : Int
-  mut held_at : Double
+  mut held_long : Bool
   /// what was said last of a write (a toast), and when
   mut toast : String
   mut toast_at : Double
@@ -64,10 +63,9 @@ let app : App = {
   picked: "",
   filters: {},
   menu: false,
-  menu_at: 0.0,
   switch_way: 0,
   held: 0,
-  held_at: 0.0,
+  held_long: false,
   toast: "",
   toast_at: 0.0,
 }
@@ -173,9 +171,8 @@ fn reset() -> Unit {
   new_fix.made = 0
   app.switch_way = 0
   app.menu = false
-  app.menu_at = 0.0
   app.held = 0
-  app.held_at = 0.0
+  app.held_long = false
   reset_row_menu()
   app.toast = ""
   app.toast_at = 0.0
@@ -208,7 +205,6 @@ fn reset() -> Unit {
   splash_first.val = -1.0
   drafts.clear()
   cui.attach = false
-  cui.attach_at = 0.0
   cui.picking = None
   cui.picking_for = ""
   cui.was_down = false
@@ -216,7 +212,7 @@ fn reset() -> Unit {
   cui.released = false
   cui.down_x = 0.0
   cui.down_y = 0.0
-  cui.down_at = 0.0
+  cui.down_frame = 0
   cui.moved = false
   cui.outside = false
   cui.room = 0.0

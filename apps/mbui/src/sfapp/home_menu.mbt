@@ -7,25 +7,25 @@
 
 ///|
 /// The row whose menu is open: what it shows, where the finger held it across, the row's top and height (in the
-/// window); the press it opened on (cui.down_at), so the same press opens it once.
+/// window); the press it opened on (cui.down_frame), so the same press opens it once.
 priv struct RowMenu {
   mut item : ChatItem?
   mut x : Double
   mut top : Double
   mut h : Double
   mut open : Bool
-  mut at : Double
+  mut at : Int
 }
 
 ///|
-let row_menu_at : RowMenu = { item: None, x: 0.0, top: 0.0, h: 66.0, open: false, at: -1.0 }
+let row_menu_at : RowMenu = { item: None, x: 0.0, top: 0.0, h: 66.0, open: false, at: -1 }
 
 ///|
 /// Back to no menu (as each Tester starts: app.mbt reset).
 fn reset_row_menu() -> Unit {
   row_menu_at.item = None
   row_menu_at.open = false
-  row_menu_at.at = -1.0
+  row_menu_at.at = -1
 }
 
 ///|
@@ -56,7 +56,7 @@ fn row_has_menu(item : ChatItem) -> Bool {
 ///|
 /// Held long (the row's `held` from this press on): its menu opens, once a press.
 fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
-  if row_menu_at.at == cui.down_at || !row_has_menu(item) {
+  if row_menu_at.at == cui.down_frame || !row_has_menu(item) {
     return
   }
   let (top, h) = match c.rect_of(id) {
@@ -68,7 +68,7 @@ fn row_held(c : @ui.Ctx, id : Int, item : ChatItem) -> Unit {
   row_menu_at.top = top
   row_menu_at.h = h
   row_menu_at.open = true
-  row_menu_at.at = cui.down_at
+  row_menu_at.at = cui.down_frame
 }
 
 ///|

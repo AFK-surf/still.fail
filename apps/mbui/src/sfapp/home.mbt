@@ -290,7 +290,6 @@ fn top_bar(
               color=if filter != "all" { t.p.accent } else { t.p.text },
             ) {
             app.menu = true
-            app.menu_at = c.now()
           }
         _ => ()
       }
@@ -784,23 +783,20 @@ fn chat_row(
   let t = @sf.theme()
   let id = c.id("row/" + item.station + "/" + item.id)
   let pressed = c.pressed(id)
-  if pressed {
-    if app.held != id {
-      app.held = id
-      app.held_at = c.now()
-    }
+  if pressed && app.held != id {
+    app.held = id
+    app.held_long = false
   }
-  let held = pressed && app.held == id && c.now() - app.held_at >= hold_ms
+  // held hold_ms (a frame asked for when it will have been)
+  let held = @kit.after(c, "row-hold/" + item.station + "/" + item.id, pressed && app.held == id, hold_ms)
   if held {
+    app.held_long = true
     // held long: what can be done to the chat (home_menu.mbt)
     row_held(c, id, item)
   }
-  if pressed && !held {
-    c.wake_in(hold_ms - (c.now() - app.held_at))
-  }
   if c.clicked(id) {
     // a long press is not a tap
-    let long = app.held == id && c.now() - app.held_at >= hold_ms
+    let long = app.held == id && app.held_long
     app.held = 0
     if !long {
       app.nav.push(

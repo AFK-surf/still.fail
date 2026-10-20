@@ -361,7 +361,6 @@ pub fn open_drive_fixture(mode : String) -> Unit {
           dv_entry(fix_entry("长篇小说.txt", false, novel_text().length() * 3, "14:05")),
           fix_folder(fix_docs, "").map(fn(e) { text(Some(e), "name") }),
         )
-        dv.sheet_at = -1.0e9
       }
       if mode == "drive-upload" {
         let up = fn(name : String, size : Int, sent : Int, state : String, error : String) {
