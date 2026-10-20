@@ -19,7 +19,7 @@ cd "$A"
 die() { echo "rerecord: $*" >&2; exit 1; }
 [ $# -gt 0 ] || die "which tests? (scripts/rerecord.sh drive_list …)"
 command -v moon > /dev/null || die "no moon on PATH (MoonBit: MBUI_TOOLS, or its bin on PATH)"
-TMP=$(mktemp -d "$A/out/rerecord.XXXXXX")
+mkdir -p "$A/out" && TMP=$(mktemp -d "$A/out/rerecord.XXXXXX") || exit 1
 tag=""; station=""; tests=""; i=0
 # a run's first flow is given the account by its environment (its trace has `migrate`): sign-in first, kept apart
 if [ -f e2e/flows/01-signin.drive ]; then cp e2e/flows/01-signin.drive "$TMP/00-01-signin.drive"; fi
