@@ -211,6 +211,15 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
+      # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
+      # to break off, 39431384793)
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
       - name: The Windows engine and shell, prebuilt; the shell's tests
         run: |
           node scripts/native.ts fetch engine win32-x64
