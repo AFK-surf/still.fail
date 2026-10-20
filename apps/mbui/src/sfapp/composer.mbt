@@ -902,7 +902,8 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     d.focus = 0
   }
   // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark: taken
-  // in before the capsule is laid out, so this frame draws them
+  // in before the capsule is laid out, so this frame draws them (taken once from where they wait: the pictures as they
+  // were marked, whichever build takes them)
   match marked_into.get(d.key) {
     Some(list) => {
       marked_into.remove(d.key)
@@ -919,6 +920,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     None => ()
   }
   // files another app shared into this chat (share.mbt), up as ＋'s are
+  // (taken once from where they wait: the files as they were shared, whichever build takes them)
   match shared_into.get(d.key) {
     Some(list) => {
       shared_into.remove(d.key)
@@ -1059,36 +1061,6 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     if x.mode == "file" && x.up is None {
       ref_send_up(c, src, d, r.station, x)
     }
-  }
-  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark
-  // (taken once from where they wait: the pictures as they were marked, whichever build takes them)
-  match marked_into.get(d.key) {
-    Some(list) => {
-      marked_into.remove(d.key)
-      for x in list {
-        add_file(src, d, r.station, x.0, x.1, None)
-        for q in x.2 {
-          let id = next_pending.val
-          next_pending.val += 1
-          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
-          d.comments[id] = q.2
-        }
-      }
-      c.request_frame()
-    }
-    None => ()
-  }
-  // files another app shared into this chat (share.mbt), up as ＋'s are
-  // (taken once from where they wait: the files as they were shared, whichever build takes them)
-  match shared_into.get(d.key) {
-    Some(list) => {
-      shared_into.remove(d.key)
-      for f in list {
-        add_file(src, d, r.station, f.name, f.bytes, None)
-      }
-      c.request_frame()
-    }
-    None => ()
   }
   // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
   // @kit.sheet); drawn until it has gone

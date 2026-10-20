@@ -1,11 +1,11 @@
 mbui-dl 4
 window 390 844 1
 clear 0.961 0.961 0.969
-glyph 0 16 600 0 0 "新对话"
-glyph 1 16 600 0 1 "新对话"
-glyph 2 16 600 0 2 "新对话"
-glyph 3 17 400 0 0 "取消"
-glyph 4 17 400 0 1 "取消"
+glyph 0 17 400 0 0 "取消"
+glyph 1 17 400 0 1 "取消"
+glyph 2 16 600 0 0 "新对话"
+glyph 3 16 600 0 1 "新对话"
+glyph 4 16 600 0 2 "新对话"
 glyph 5 22 700 0 0 "想让 agent 做什么？"
 glyph 6 22 700 0 1 "想让 agent 做什么？"
 glyph 7 22 700 0 3 "想让 agent 做什么？"
