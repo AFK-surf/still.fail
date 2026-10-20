@@ -1,7 +1,7 @@
-// The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell on macOS, iOS and Android) linked into
-// the app, its messages queued by core_native.c and drained here on the UI thread. On Apple's systems the queue wakes
-// the main thread itself; a host without a main queue (Android's GL thread) calls `pump` each frame. On the web there
-// is no engine yet (js.mbt): `start` says so.
+// The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell, on macOS, iOS, Android and Windows)
+// linked into the app, its messages posted by core_native.c to mbui's queue on the channel "core" (mb_post, any thread), which hands each to `receive`
+// on the UI thread as the next frame begins (the app's `@ui.on_message("core", @core.receive)`). On the web there is no
+// engine yet (js.mbt): `start` says so.
 
 ///|
 priv struct Engine {
@@ -10,7 +10,6 @@ priv struct Engine {
   mut cloud : String
   mut beta : Bool
   restarts : Array[Double]
-  mut on_change : () -> Unit
   auths : Map[Int, (Result[String, String]) -> Unit]
   mut next_auth : Int
 }
@@ -22,7 +21,6 @@ let engine : Engine = {
   cloud: "",
   beta: false,
   restarts: [],
-  on_change: fn() {  },
   auths: {},
   next_auth: 1,
 }
@@ -39,6 +37,10 @@ fn engine_send(s : String, b : Bytes?) -> Unit {
 ///|
 /// Where the app's messages go: the engine, or a kept conversation given again (replay.mbt).
 let transport : Ref[(String, Bytes?) -> Unit] = { val: engine_send }
+
+///|
+/// Told as each message is received, before it is (a kept conversation given again: its wall clock then, replay.mbt).
+let receive_hook : Ref[(() -> Unit)?] = { val: None }
 
 ///|
 /// The wall clock a kept conversation had (replay.mbt), in place of this machine's.
@@ -59,8 +61,8 @@ pub let client : Client = Client::new(
 
 ///|
 /// Starts the core: its files in `data_dir` (empty: the platform's place for the app's data, or $MBUI_CORE_DATA),
-/// still.fail cloud at `cloud`. Messages are taken as a frame begins (`pump`); `on_change` is told when one is
-/// queued (it asks for that frame). False when this build has no engine linked in.
+/// still.fail cloud at `cloud`. What it says is taken as a frame begins (mbui's queue, the app's handler for "core":
+/// `receive`). False when this build has no engine linked in.
 pub fn start(
   data_dir? : String = "",
   cloud? : String = "https://app.still.fail",
@@ -72,8 +74,6 @@ pub fn start(
   engine.data_dir = data_dir
   engine.cloud = cloud
   engine.beta = beta
-  // what the core says is taken as a frame begins (`pump`, the app's frame), never between two: wakes ask for a frame
-  ffi_set_wake(fn() { (engine.on_change)() })
   engine.started = ffi_start(data_dir, cloud, if beta { 1 } else { 0 }) != 0
   engine.started
 }
@@ -92,12 +92,6 @@ pub fn stop() -> Unit {
 /// runtime's `outside_start` and `outside_end`, so its screens are settled only once what they asked of the core is in.
 pub fn track(start : (String) -> Int, end : (Int) -> Unit) -> Unit {
   client.track(start, end)
-}
-
-///|
-/// What to do when something changed: request a frame (the redraw hook; `@host.request_frame` in an mbui app).
-pub fn on_change(f : () -> Unit) -> Unit {
-  engine.on_change = f
 }
 
 ///|
@@ -170,31 +164,27 @@ pub fn fatal() -> String? {
 }
 
 ///|
-/// Takes what the core said since last time, in its order. The app
-/// calls it as each frame begins, before it reads anything (src/stillfail): what came is seen whole at a frame's
-/// boundary, never part-way through one or between two, so how much of it a frame sees depends on frames, not on when
-/// the core's thread happened to answer (the queue's wake only asks for a frame).
-pub fn pump() -> Unit {
-  while true {
-    let text = ffi_next()
-    if text.length() == 0 {
-      break
-    }
-    let msg = @json.parse(text) catch { _ => continue }
-    match msg {
-      Object(m) if m.contains("mbui_auth") => web_auth_done(m)
-      _ => {
-        let b = ffi_next_bytes()
-        let bytes = if b.length() > 0 { Some(b) } else { None }
-        trace_in(msg, bytes, ffi_wall_ms())
-        client.receive_json(msg, bytes~)
-        if client.fatal is Some(_) {
-          restart()
-        }
+/// What the core said, one message (its JSON, the bytes beside it): the app's handler for mbui's channel "core"
+/// (`@ui.on_message("core", @core.receive)`), which mbui calls as a frame begins with everything posted since the last,
+/// in the order it came; so what came is seen whole at a frame's boundary, never part-way through one, and how much a
+/// frame sees depends on frames, not on when the core's thread answered. A kept conversation given again (replay.mbt)
+/// comes this way too.
+pub fn receive(text : String, bytes : Bytes?) -> Unit {
+  let msg = @json.parse(text) catch { _ => return }
+  match msg {
+    Object(m) if m.contains("mbui_auth") => web_auth_done(m)
+    _ => {
+      match receive_hook.val {
+        Some(f) => f()
+        None => ()
+      }
+      trace_in(msg, bytes, ffi_wall_ms())
+      client.receive_json(msg, bytes~)
+      if client.fatal is Some(_) && engine.started {
+        restart()
       }
     }
   }
-  // (no frame asked for after: what came is read by the frame this runs in, the one the queue's wake asked for)
 }
 
 ///|

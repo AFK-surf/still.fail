@@ -6,8 +6,8 @@
 //
 // The engine's JNI entry points (fail.still.core.HermesNative's) are called here as the C functions they are: none of
 // them looks at its `this`. What it calls back goes to a dev.mbui.CoreHost (android/): what the core says (onBytes,
-// onFrame) comes straight back here, into core_native.c's queue, and a frame is asked for, in which the host drains it
-// (mbc_frame, android_host.c); the calls only the app does (`secure.*`: the Android Keystore; `listen.*`: a loopback
+// onFrame) comes straight back here, through core_native.c into mbui's queue (mb_post), which asks for the frame that
+// takes it; the calls only the app does (`secure.*`: the Android Keystore; `listen.*`: a loopback
 // listener, dev.mbui.Loopback) CoreHost answers on threads of its own through the engine's `complete`.
 //
 // MB_CORE_TRACE=1 in the app's environment says what the core says (its first 400 bytes) and the app's calls in the
@@ -42,7 +42,7 @@ JavaVM *mb_android_vm(void);  // android_host.c
 static struct {
   int ready;
   jclass host, core_host, string;
-  jmethodID request_frame, data_dir, asset, init, started, closing, string_init, secure_test;
+  jmethodID data_dir, asset, init, started, closing, string_init, secure_test;
   jstring utf8_name;
   jobject listener;  // this core's CoreHost
   jlong handle, client;
@@ -73,11 +73,6 @@ static jstring jstring_utf8(JNIEnv *env, const char *p, size_t n) {
   return s;
 }
 
-static void ask_frame(JNIEnv *env) {
-  (*env)->CallStaticVoidMethod(env, A.host, A.request_frame);
-  cleared(env);
-}
-
 // ── what the engine calls back, on the core's thread (CoreHost's natives) ──
 
 static int tracing(void) {
@@ -91,7 +86,6 @@ static void JNICALL on_bytes(JNIEnv *env, jobject self, jbyteArray json) {
   if (tracing()) CORE_LOG("core says %.*s%s", n < 400 ? (int)n : 400, (const char *)p, n > 400 ? "…" : "");
   if (A.on_message) A.on_message((const char *)p, (size_t)n, NULL, 0, A.ctx);
   (*env)->ReleaseByteArrayElements(env, json, p, JNI_ABORT);
-  ask_frame(env);
 }
 
 static void JNICALL on_frame(JNIEnv *env, jobject self, jbyteArray json, jbyteArray bytes) {
@@ -102,7 +96,6 @@ static void JNICALL on_frame(JNIEnv *env, jobject self, jbyteArray json, jbyteAr
   if (A.on_message) A.on_message((const char *)p, (size_t)n, b ? (const uint8_t *)b : &none, (size_t)bn, A.ctx);
   if (b) (*env)->ReleaseByteArrayElements(env, bytes, b, JNI_ABORT);
   (*env)->ReleaseByteArrayElements(env, json, p, JNI_ABORT);
-  ask_frame(env);
 }
 
 // The classes and methods, once, from the UI's thread (a thread of the app's, whose class loader finds dev.mbui.*).
@@ -116,7 +109,6 @@ static int core_init(JNIEnv *env) {
   A.string = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "java/lang/String"));
   A.string_init = (*env)->GetMethodID(env, A.string, "<init>", "([BLjava/lang/String;)V");
   A.utf8_name = (*env)->NewGlobalRef(env, (*env)->NewStringUTF(env, "UTF-8"));
-  A.request_frame = (*env)->GetStaticMethodID(env, A.host, "requestFrame", "()V");
   A.data_dir = (*env)->GetStaticMethodID(env, A.core_host, "dataDir", "()Ljava/lang/String;");
   A.asset = (*env)->GetStaticMethodID(env, A.core_host, "asset", "(Ljava/lang/String;)[B");
   A.init = (*env)->GetMethodID(env, A.core_host, "<init>", "(Ljava/lang/String;)V");

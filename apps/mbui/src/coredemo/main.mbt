@@ -127,8 +127,6 @@ fn dump(accounts : @core.Sub) -> Unit {
 
 ///|
 fn view(c : @ui.Ctx) -> Unit {
-  // what the core said since the last frame, before the frame reads anything (core.mbt `pump`)
-  @core.pump()
   if app.shelf {
     @shelf.view(c, core_source)
     return

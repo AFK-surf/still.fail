@@ -118,9 +118,11 @@ into the smoke test it adds about 15 MB stripped.
 
 The MoonBit side, independent of `mbui/ui`:
 
-- `core_native.c`: `on_message` (core thread) copies each message into a queue and wakes the main queue once per run
-  of them (`dispatch_async_f`); there `@core.pump` drains it into the client and calls the app's `on_change` hook once.
-  A host without a main queue (Android's GL thread) calls `@core.pump()` each frame. The engine is handed over by the
+- `core_native.c`: `on_message` (core thread) posts each message to mbui's queue on the channel `core` (`mb_post`,
+  mbui's src/host/post.h), whose first post since a frame took the last asks the host for a frame; as that frame
+  begins mbui takes all that came and hands each, in order, to the app's handler (`@ui.on_message("core",
+  @core.receive)`, given by `@sfcore.start`), and keeps it on the run's tape (MBUI_DRAW_LOG=1: `MSG` lines, given
+  again by `Tester::replay_frames`). A Tester posts the core's answers itself (`Tester::post`). The engine is handed over by the
   app that links it (`core_client.h`: `mbc_use`, from a constructor), so `mbui/core` builds and tests without it.
 - `client.mbt`: subscriptions by topic and params (the same `Sub` each time, so a view can ask every frame), each with
   its current value, error and a `version` bumped per message; calls with an `on_done`; `{fatal}` fails the calls in
@@ -131,7 +133,7 @@ The MoonBit side, independent of `mbui/ui`:
 - `sign_in(on_done)`: `auth.begin`, the browser session (apple_auth.m), `auth.complete {query}`.
 
 ```moonbit
-@core.on_change(fn() { @host.request_frame() })   // the redraw hook
+@ui.on_message("core", @core.receive)             // what the core says, handed on as each frame begins
 @core.start() |> ignore                            // data: $MBUI_CORE_DATA, else Application Support/<bundle id|mbui>/core
 fn view(c : @ui.Ctx) {
   let accounts = @core.subscribe("accounts")       // .value : Json?, .error : Json?, .version : Int
@@ -171,8 +173,8 @@ it, not in one of ours.
 - **Host** (`src/host/android_core.c`, included by `src/coredemo/android_engine.c`): calls the engine's
   `Java_fail_still_core_HermesNative_*` entry points as C functions (none looks at its `this`), with a
   `dev.mbui.CoreHost` (android/) as the listener the engine calls back on its thread: `onBytes`/`onFrame` (a message,
-  or one with bytes) go straight into core_native.c's queue and ask for a frame; android_host.c drains the queue as
-  each frame begins (`mbc_frame`). Timers are the engine's (CLOCK_BOOTTIME).
+  or one with bytes) go straight through core_native.c into mbui's queue (`mb_post`), which asks for the frame that
+  takes them. Timers are the engine's (CLOCK_BOOTTIME).
 - **`secure.*`**: CoreHost seals each value with AES-GCM under one Android Keystore key (alias
   `dev.mbui.core.secure`), a file per value in `<files>/core/secure`, the value's name as associated data.
   `secure.ask` and `user: true` (biometrics) answer `"unsupported"`. `MBUI_SECURE_TEST=1` makes coredemo round-trip
@@ -216,7 +218,7 @@ memory).
 - **Script**: `scripts/core.sh hermes` with the engine's own hermesc (`hermesc.exe` in the engine part).
 - **Host** (`src/host/win_core.c`, included by `src/sfcore/win_engine.c`, which mbui's win.sh puts in place of the
   app's Apple stub): `mb_core_start` hands the engine the bytecode, the data directory and the host's calls; what the
-  core says goes into core_native.c's queue and asks for a frame, which win_app.c drains as it begins (`mbc_frame`).
+  core says goes through core_native.c into mbui's queue (`mb_post`), which asks for the frame that takes it.
 - **`secure.*`**: sealed with DPAPI for the Windows user (CryptProtectData, never a prompt), a file per value in
   `<data>\secure`. `secure.ask` and `user: true` (Windows Hello) answer `"unsupported"`. `MBUI_SECURE_TEST=1` round-trips
   it once as the core starts (`SECURE_TEST …` on stderr).

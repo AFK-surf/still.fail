@@ -122,6 +122,17 @@ test "a new chat: 令 raises it; the first message makes the chat and the page b
 }
 
 ///|
+/// On the frames' clock to where the sheet rests, as it says (@kit.sheet_rest: its springs and its scrim's fade):
+/// risen from below, a row is tapped where it is.
+fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
+  let end = @kit.sheet_rest("sheet")
+  if end < 0.0 || end > 1.0e300 {
+    fail("the sheet does not move (its rest: \{end})")
+  }
+  t.run_for(end - t.time())
+}
+
+///|
 test "a new chat: its station picked in the sheet, its model in the run picker" {
   let t = tester("newchat")
   open_mode("newchat")
@@ -131,6 +142,7 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   let (_, cy) = t.find("Opus 5.5 · high").unwrap()
   t.tap(50.0, cy)
   assert_true(t.find("选择运行的 station") is Some(_))
+  run_to_sheet_rest(t)
   let (mx, my) = t.find_last("MBA").unwrap()
   t.tap(mx, my)
   assert_true(!sheet_open())
@@ -138,6 +150,7 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
   assert_true(t.find("它会在 MBA 上") is Some(_))
   t.tap_text("Opus 5.5 · high")
   assert_true(t.find("思考深度") is Some(_))
+  run_to_sheet_rest(t)
   let (gx, gy) = t.find_last("GPT-6").unwrap()
   t.tap(gx, gy)
   assert_true(t.find("确定") is Some(_))

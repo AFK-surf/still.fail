@@ -7,8 +7,11 @@ test "signed out, as a run's core said: the sign-in page" {
     #|{"in":{"id":1,"value":[]},"w":1000}
   ))
   r.attach()
+  @ui.on_message("core", @core.receive)
   let t = @ui.Tester::new(app)
-  assert_eq(r.deliver(), 1)
+  // posted to mbui's queue, taken by the next frame as it begins
+  assert_eq(r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }), 1)
+  assert_true(t.find("登录") is None)
   t.draw()
   assert_true(t.find("登录") is Some(_))
   t.assert_idle()
