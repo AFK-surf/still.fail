@@ -157,6 +157,10 @@ fn run_first_frame(run : String) -> Double? {
 pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String, String)] {
   let out = []
   let mut framed = false
+  // the scripts the run sent its pages (VIEWSCRIPT), and how many of this one's are compared with them: one that is
+  // not the run's parts there, as a frame whose hash is not
+  let scripts : Array[String] = []
+  let sent_before = self.fake.scripts_sent.length()
   let num = fn(s : String) -> Double? {
     match (try Some(@json.parse(s)) catch { _ => None }) {
       Some(Number(d, ..)) => Some(d)
@@ -173,6 +177,13 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
     if line.find("INPUT ") is Some(_) {
       replay_input(self.fake, line)
       continue
+    }
+    match line.find("VIEWSCRIPT ") {
+      Some(i) => {
+        scripts.push(line.view(start_offset=i + 11).to_owned())
+        continue
+      }
+      None => ()
     }
     // what the host said of its views, said again at its place (hostcall.mbt: view_say); before its first frame, said
     // already (Tester::new's `run`)
@@ -210,6 +221,16 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       self.frame_at(t)
     }
     out.push((n.to_int(), parts[5], drawn_hash().to_string()))
+    // the scripts sent by now: the run's and this one's, the same in the same order
+    let ours = self.fake.scripts_sent
+    let k = ours.length() - sent_before
+    if k != scripts.length() || (0).until(k).iter().any(fn(j) { ours[sent_before + j] != scripts[j] }) {
+      out.push((
+        n.to_int(),
+        "VIEWSCRIPT " + scripts.join(", "),
+        "VIEWSCRIPT " + ours[sent_before:].iter().collect().join(", "),
+      ))
+    }
   }
   out
 }

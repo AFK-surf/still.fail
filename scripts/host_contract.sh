@@ -18,6 +18,9 @@
 #   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
 #        src/kitdemo/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
 #        to (VIEWTOLD), on whole device pixels, or it fails
+#   scripts/host_contract.sh HOST site          a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK,
+#        src/kitdemo/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
+#        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
 #   scripts/host_contract.sh HOST rest          (android, mac) kitdemo's foundation page pictured at its rest (a run
 #        on its own clock: Android's shot_at=rest, mac's MBUI_SHOT_MS=rest; @ui's Ctx::at_rest) and at a declared
 #        moment (1000 ms on that clock): both taken ("SHOT n t"), both of the page, and the same to the byte in the
@@ -137,7 +140,7 @@ run() {
         bash scripts/android.sh run
       # the app's own named end (or its crash, its own: not another app's on the emulator) as logcat has it; its whole
       # log is the file it wrote (Host.log)
-      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) -e "DRIVE (PASS|END|FAIL)|TEXTCHECK done|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
       $ADB exec-out run-as dev.mbui.demo cat files/run.log > "$2" ;;
     ios)
       # (the app's stderr is its log, line by line: scripts/ios.sh run, which leaves the app running)
@@ -147,7 +150,7 @@ run() {
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
       # own, @host.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
-      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done" --pid $pid \
+      "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       "$PY" scripts/logwait.py --pid $pid ;;
   esac
@@ -342,6 +345,40 @@ if bad:
     sys.exit(1)
 print(f"views contract ({sys.argv[2]}): {len(told)} native view put where it was told, on whole device pixels: " +
       " ".join(f"{x:g}" for x in next(iter(at.values()))))
+PYEOF
+    ;;
+  site)
+    # a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK, src/kitdemo/sitecheck.mbt), each step
+    # begun by what the page said before it: a script and its answer, the cookies (where the host keeps them), an event
+    # stream's events as they are sent (the next sent once the page has the first), what the page shows grabbed, a
+    # page of HTML the same; the run ends itself (SITECHECK done)
+    run "MBUI_SITECHECK=1" $O/site.log || true
+    grep -aq "SITECHECK done" $O/site.log || { echo "site contract ($H): the run did not end its check"; grep -a "SITECHECK\|view " $O/site.log | tail -20; exit 1; }
+    "$PY" - "$O/site.log" "$H" <<'PYEOF'
+import re, sys
+steps = [l.split("SITECHECK ", 1)[1].strip() for l in open(sys.argv[1], encoding="utf-8", errors="replace") if "SITECHECK " in l]
+h = sys.argv[2]
+bad = []
+if "no site view here" in steps:
+    # (the browser has no site view: its page alone is checked, by the same steps)
+    need = ["page page-hello", "page page-pong two", "done"]
+else:
+    need = ["said hello", "said pong one", "said event 1", "said event 2", "page page-hello", "page page-pong two", "done"]
+    if "cookies kept" in steps:
+        # (a run's sites begin with no cookies, whatever the last run left)
+        need += ["said start cookie none", "said cookie k=v", "said fetched cookie-sent"]
+    elif not any(s.startswith("said fetched ") for s in steps):
+        bad.append("the page's own request was not answered")
+    grabs = [s for s in steps if s.startswith("grab ")]
+    if not grabs or int(grabs[0].split()[1]) <= 0:
+        bad.append("the page was not grabbed: " + (grabs[0] if grabs else "no grab"))
+for n in need:
+    if n not in steps:
+        bad.append("missing: " + n)
+if bad:
+    print(f"site contract ({h}): " + "; ".join(bad) + " (steps: " + " | ".join(steps) + ")")
+    sys.exit(1)
+print(f"site contract ({h}): " + " | ".join(steps))
 PYEOF
     ;;
   marks)

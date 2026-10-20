@@ -3,6 +3,7 @@ import {
   "mbui/ui",
   "mbui/kit",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }
 
 options(

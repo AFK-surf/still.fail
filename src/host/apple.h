@@ -78,6 +78,9 @@ id mb_views_root(CGRect frame);
 // whether the pointer at (x, y) (the app's points) goes to a web view under
 // the canvas (the canvas's view lets it through)
 int mb_views_pass_through(double x, double y);
+// who takes a finger (or the wheel) at (x, y) over a page under the canvas: "all", "through", "pinch" or "vertical"
+// (ui's NativeView::touch), its slop in points; NULL where there is no page
+const char *mb_views_touch_at(double x, double y, double *slop);
 // how many views are open; their current content drawn into ctx (a bitmap of
 // the canvas's size in pixels, scale pixels per point), for snapshots
 int mb_views_count(void);

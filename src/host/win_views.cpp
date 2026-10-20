@@ -189,6 +189,14 @@ struct View {
   int snap_w = 0, snap_h = 0;
   bool snapping = false;
   HCURSOR cursor = NULL;
+  // a page's and a site's: the scripts the app sent (view_tell 1), waiting for the page there (loaded, or said
+  // something since it started); who takes the mouse on it (view_tell 2); a page grabbed (PNG; still_state 1 grabbing,
+  // 2 here, -1 failed)
+  std::vector<std::wstring> scripts;
+  bool there = false;
+  std::string touch = "all";
+  std::vector<uint8_t> still;
+  int still_state = 0;
 };
 
 static HWND hwnd_main;
@@ -198,6 +206,7 @@ static ComPtr<ICoreWebView2Environment> env;
 static int env_state;  // 0 not asked, 1 being made, 2 here, -1 failed
 static int runtime;    // 0 not looked for, 1 installed, -1 not
 static std::deque<std::pair<int, int>> told;  // (id, state) for the app (mb_views_tell)
+static std::deque<std::pair<int, int>> grabs;  // (id, state) of pages grabbed, for the app (mb_views_tell)
 static int captured;   // the view a button went down on, until it is up
 static int hovered;    // the view the pointer was last in
 
@@ -419,6 +428,13 @@ static void finish(View *v, Req *q, const std::wstring &error) {
 
 // ---- making it ----
 
+// What waits for the page runs, once it is there.
+static void run_scripts(View *v) {
+  if (!v->there || !v->web || v->closed) return;
+  for (auto &js : v->scripts) v->web->ExecuteScript(js.c_str(), NULL);
+  v->scripts.clear();
+}
+
 static void on_nav_start(View *v, ICoreWebView2NavigationStartingEventArgs *a) {
   LPWSTR uri = NULL;
   a->get_Uri(&uri);
@@ -443,7 +459,10 @@ static void on_nav_start(View *v, ICoreWebView2NavigationStartingEventArgs *a) {
     if (!ok) vlog("view %d: navigation to %s cancelled", v->vid, utf8(u.c_str()).c_str());
   }
   if (!ok) a->put_Cancel(TRUE);
-  else v->loading = true;
+  else {
+    v->loading = true;
+    v->there = false;
+  }
   mb_host_request_frame();
 }
 
@@ -460,6 +479,8 @@ static void on_nav_done(View *v, ICoreWebView2NavigationCompletedEventArgs *a) {
   mb_host_request_frame();
   if (v->closed) return;
   if (ok || code > 0) {
+    v->there = true;
+    run_scripts(v);
     if (v->kind == 3) {
       refresh_snap(v);
       tell(v, 1);
@@ -504,10 +525,31 @@ static void made(View *v, ICoreWebView2CompositionController *cc) {
     s->put_IsStatusBarEnabled(FALSE);
     s->put_IsZoomControlEnabled(FALSE);
     s->put_AreHostObjectsAllowed(FALSE);
-    s->put_IsWebMessageEnabled(FALSE);
+    // the page's way to the app (mbuiHost.post), its own messages, nothing else of the app's
+    s->put_IsWebMessageEnabled(TRUE);
   }
   int vid = v->vid;
   EventRegistrationToken tok;
+  v->web->AddScriptToExecuteOnDocumentCreated(
+      L"window.mbuiHost={post:function(t){window.chrome.webview.postMessage(String(t))}};", NULL);
+  v->web->add_WebMessageReceived(
+      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+          [vid](ICoreWebView2 *, ICoreWebView2WebMessageReceivedEventArgs *a) -> HRESULT {
+            View *v = find(vid);
+            LPWSTR text = NULL;
+            if (v && !v->closed && SUCCEEDED(a->TryGetWebMessageAsString(&text)) && text) {
+              std::wstring e = L"{\"said\":";
+              jstr(e, text);
+              e += L'}';
+              v->said.push_back(e);
+              v->there = true;
+              run_scripts(v);
+              mb_host_request_frame();
+            }
+            CoTaskMemFree(text);
+            return S_OK;
+          }).Get(),
+      &tok);
   std::wstring filter = std::wstring(v->kind == 3 ? kSite : kPage) + L"/*";
   v->web->AddWebResourceRequestedFilter(filter.c_str(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL);
   v->web->add_WebResourceRequested(
@@ -726,8 +768,45 @@ extern "C" void mb_host_view_close(int32_t vid) {
   delete v;
 }
 
+// What its page shows now, as a PNG (CapturePreview): `still` once it is here, told as a grab.
+static void grab_page(View *v) {
+  v->still_state = 1;
+  v->still.clear();
+  int vid = v->vid;
+  ComPtr<IStream> st;
+  if (!v->web || FAILED(CreateStreamOnHGlobal(NULL, TRUE, &st))) {
+    v->still_state = -1;
+    grabs.push_back({vid, -1});
+    mb_host_request_frame();
+    return;
+  }
+  v->web->CapturePreview(COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG, st.Get(),
+                         Callback<ICoreWebView2CapturePreviewCompletedHandler>([vid, st](HRESULT hr) -> HRESULT {
+                           View *v = find(vid);
+                           if (!v) return S_OK;
+                           STATSTG info = {};
+                           if (SUCCEEDED(hr) && SUCCEEDED(st->Stat(&info, STATFLAG_NONAME)) && info.cbSize.QuadPart > 0) {
+                             v->still.resize((size_t)info.cbSize.QuadPart);
+                             LARGE_INTEGER zero = {};
+                             st->Seek(zero, STREAM_SEEK_SET, NULL);
+                             ULONG got = 0;
+                             st->Read(v->still.data(), (ULONG)v->still.size(), &got);
+                             v->still.resize(got);
+                           }
+                           v->still_state = v->still.empty() ? -1 : 2;
+                           vlog("view %d: page %s", vid, v->still_state == 2 ? "grabbed" : "not grabbed");
+                           grabs.push_back({vid, v->still_state == 2 ? 1 : -1});
+                           mb_host_request_frame();
+                           return S_OK;
+                         }).Get());
+}
+
 extern "C" void mb_host_view_control(int32_t vid, int32_t op, double value) {
   View *v = find(vid);
+  if (v && op == 21) {
+    grab_page(v);
+    return;
+  }
   if (!v || v->kind != 3) return;
   if (op == 8) {
     // laid out at its rect over the scale, drawn at the scale
@@ -761,18 +840,46 @@ extern "C" int32_t mb_host_view_read_next(int32_t vid, double *out) { (void)vid;
 extern "C" void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, double total) {
   (void)vid; (void)req; (void)data; (void)total;
 }
+// a page's grab: how it stands (what 2), the PNG
 extern "C" moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
-  (void)vid; (void)what;
-  return moonbit_make_string_raw(0);
+  View *v = find(vid);
+  if (!v || what != 2) return moonbit_make_string_raw(0);
+  return mstr(std::to_wstring(v->still_state));
 }
-extern "C" int32_t mb_host_view_text_known(int32_t vid, int32_t what) { (void)vid; (void)what; return 0; }
-extern "C" moonbit_bytes_t mb_host_view_still(int32_t vid) { (void)vid; return moonbit_make_bytes(0, 0); }
+extern "C" int32_t mb_host_view_text_known(int32_t vid, int32_t what) { return find(vid) && what == 2 ? 1 : 0; }
+extern "C" moonbit_bytes_t mb_host_view_still(int32_t vid) {
+  View *v = find(vid);
+  size_t n = v ? v->still.size() : 0;
+  moonbit_bytes_t out = moonbit_make_bytes((int32_t)n, 0);
+  if (n) memcpy(out, v->still.data(), n);
+  if (v) {
+    v->still.clear();
+    if (v->still_state == 2) v->still_state = 0;
+  }
+  return out;
+}
+
+// What the app tells a view beyond its controls (host_native.mbt view_tell): a script for its page, who takes the
+// mouse on it ("through": the canvas, "vertical": the canvas its wheel's upright scroll), a site's settings (WebView2
+// waits on a request's deferral as long as the app takes: no head wait here).
+extern "C" void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
+  View *v = find(vid);
+  if (!v || v->kind < 2) return;
+  std::wstring t = wstr(text);
+  if (what == 1) {
+    v->scripts.push_back(t);
+    run_scripts(v);
+  } else if (what == 2) {
+    std::string m = utf8(t.c_str());
+    v->touch = m.substr(0, m.find(' '));
+  }
+}
 
 // ---- a site's API ----
 
 extern "C" moonbit_string_t mb_host_view_site_next(int32_t vid) {
   View *v = find(vid);
-  if (!v || v->kind != 3 || v->said.empty()) return moonbit_make_string_raw(0);
+  if (!v || v->kind < 2 || v->said.empty()) return moonbit_make_string_raw(0);
   std::wstring e = v->said.front();
   v->said.pop_front();
   return mstr(e);
@@ -879,7 +986,7 @@ extern "C" int mb_views_count(void) { return (int)views.size(); }
 static View *view_at(double x, double y) {
   for (auto it = views.rbegin(); it != views.rend(); ++it) {
     View *v = it->second;
-    if (!v->shown || !v->placed || !v->comp) continue;
+    if (!v->shown || !v->placed || !v->comp || v->touch == "through") continue;
     double x0 = fmax(v->cx0, v->x), y0 = fmax(v->cy0, v->y);
     double x1 = fmin(v->cx1, v->x + v->w), y1 = fmin(v->cy1, v->y + v->h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
@@ -925,6 +1032,8 @@ extern "C" int mb_views_input(unsigned msg, uintptr_t wp, intptr_t lp) {
     hovered = 0;
   }
   if (!v || !v->comp) return 0;
+  // the wheel's upright scroll over a page that gives it to the canvas (a page in a list of messages)
+  if (msg == WM_MOUSEWHEEL && v->touch == "vertical") return 0;
   hovered = v->vid;
   UINT32 data = 0;
   if (msg == WM_MOUSEWHEEL || msg == WM_MOUSEHWHEEL) data = (UINT32)(int32_t)GET_WHEEL_DELTA_WPARAM(wp);
@@ -966,6 +1075,11 @@ extern "C" void mb_views_tell(mb_outside_fn f) {
     std::pair<int, int> t = told.front();
     told.pop_front();
     if (f) f(MB_OUTSIDE_VIEW, t.first, t.second);
+  }
+  while (!grabs.empty()) {
+    std::pair<int, int> t = grabs.front();
+    grabs.pop_front();
+    if (f) f(MB_OUTSIDE_GRAB, t.first, t.second);
   }
 }
 

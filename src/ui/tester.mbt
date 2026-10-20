@@ -224,6 +224,18 @@ pub fn Tester::new(
     view_infos: {},
     site_states: {},
     site_bodies: {},
+    site_of: {},
+    view_kinds: {},
+    view_at: {},
+    view_touch: {},
+    touch_view: 0,
+    touch_down: (0.0, 0.0),
+    touch_at: (0.0, 0.0),
+    touch_sideways: false,
+    scripts_waiting: {},
+    scripts_run: {},
+    page_there: {},
+    scripts_sent: [],
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -461,8 +473,8 @@ pub fn Tester::resize(self : Tester, w : Double, h : Double) -> Unit {
 
 ///|
 pub fn Tester::tap(self : Tester, x : Double, y : Double) -> Unit {
-  on_pointer(0, x, y, 0)
-  on_pointer(2, x, y, 0)
+  finger(0, x, y)
+  finger(2, x, y)
   self.draw()
 }
 
@@ -477,17 +489,17 @@ pub fn Tester::drag(
   y1 : Double,
   steps? : Int = 10,
 ) -> Unit {
-  on_pointer(0, x0, y0, 0)
+  finger(0, x0, y0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
     // (a finger's moves come a display's frame apart: the drag takes steps × drag_step_ms)
     // (each move in the display's next frame, as a finger's come)
     let at = self.tick_after(self.fake.time)
     self.fake.time = at
-    on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
+    finger(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
     self.frame_at(at)
   }
-  on_pointer(2, x1, y1, 0)
+  finger(2, x1, y1)
   self.draw()
 }
 
@@ -498,7 +510,7 @@ pub let drag_step_ms : Double = 16.0
 
 ///|
 pub fn Tester::wheel(self : Tester, x : Double, y : Double, dy : Double) -> Unit {
-  on_wheel(x, y, 0.0, dy, 0)
+  finger_wheel(x, y, 0.0, dy, 0)
   self.draw()
 }
 
@@ -786,7 +798,7 @@ pub fn Tester::lines_of(self : Tester, s : String) -> Array[String] {
 ///|
 /// The pointer moved to (x, y), no button down.
 pub fn Tester::move(self : Tester, x : Double, y : Double) -> Unit {
-  on_pointer(1, x, y, 0)
+  finger(1, x, y)
   self.draw()
 }
 
@@ -952,7 +964,7 @@ pub fn Tester::back_gesture(
 /// frames, at the times a host gives them.
 pub fn Tester::touch(self : Tester, kind : Int, x : Double, y : Double) -> Unit {
   ignore(self)
-  on_pointer(kind, x, y, 0)
+  finger(kind, x, y)
 }
 
 ///|
@@ -1012,13 +1024,13 @@ pub fn Tester::hold_drag(
   y1 : Double,
   steps? : Int = 10,
 ) -> Unit {
-  on_pointer(0, x0, y0, 0)
+  finger(0, x0, y0)
   for i in 1..=steps {
     let t = i.to_double() / steps.to_double()
     // (each move in the display's next frame, as a finger's come)
     let at = self.tick_after(self.fake.time)
     self.fake.time = at
-    on_pointer(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, 0)
+    finger(1, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
     self.frame_at(at)
   }
 }
@@ -1026,14 +1038,14 @@ pub fn Tester::hold_drag(
 ///|
 /// The finger let go at (x, y).
 pub fn Tester::release(self : Tester, x : Double, y : Double) -> Unit {
-  on_pointer(2, x, y, 0)
+  finger(2, x, y)
   self.draw()
 }
 
 ///|
 /// The finger down at (x, y), held (a frame drawn so).
 pub fn Tester::press_at(self : Tester, x : Double, y : Double) -> Unit {
-  on_pointer(0, x, y, 0)
+  finger(0, x, y)
   self.draw()
 }
 
@@ -1318,8 +1330,8 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
 ///|
 /// A tap and the one frame after it, nothing settled (what moves after it is the test's to step).
 pub fn Tester::tap_once(self : Tester, x : Double, y : Double) -> Unit {
-  on_pointer(0, x, y, 0)
-  on_pointer(2, x, y, 0)
+  finger(0, x, y)
+  finger(2, x, y)
   self.draw()
 }
 
@@ -1342,7 +1354,7 @@ pub fn Tester::leave(self : Tester) -> Unit {
 /// A wheel at (x, y) as the host sends it: `phase` 0 a trackpad's (or a host that does not say), 4 a mouse wheel's
 /// notch (eased in over the next frames). One frame drawn, not settled.
 pub fn Tester::wheel_phase(self : Tester, x : Double, y : Double, dy : Double, phase : Int) -> Unit {
-  on_wheel(x, y, 0.0, dy, phase)
+  finger_wheel(x, y, 0.0, dy, phase)
   self.draw()
 }
 

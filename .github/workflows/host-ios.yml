@@ -104,6 +104,9 @@ jobs:
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh ios views
+      - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh ios site
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/ios.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh ios marks

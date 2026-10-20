@@ -67,6 +67,9 @@ jobs:
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: success() || failure()
         run: scripts/host_contract.sh windows views
+      - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
+        if: success() || failure()
+        run: scripts/host_contract.sh windows site
       - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
         if: success() || failure()
         run: scripts/host_contract.sh windows runner

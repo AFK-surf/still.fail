@@ -736,12 +736,25 @@ pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Un
 }
 
 ///|
-/// A site's waiting requests (see host_native.mbt): the browser opens no site (a page cannot answer another's
-/// requests without a service worker of its own), so none.
+/// What a view has to say (see host_native.mbt): the browser opens no site (a page cannot answer another's requests
+/// without a service worker of its own), so only what a page's frame posts its host (`{"said":…}`).
 pub fn view_site_next(id : Int) -> String {
-  ignore(id)
-  ""
+  js_view_site_next(id)
 }
+
+///|
+extern "js" fn js_view_site_next(id : Int) -> String =
+  #|(i) => { const H = globalThis.__mbhost; return (H && H.viewSiteNext ? H.viewSiteNext(i) : '') || '' }
+
+///|
+/// What the app tells a view beyond its controls (see host_native.mbt).
+pub fn view_tell(id : Int, what : Int, text : String) -> Unit {
+  js_view_tell(id, what, text)
+}
+
+///|
+extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
+  #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
 pub fn view_site_body(id : Int, req : Int) -> Bytes {

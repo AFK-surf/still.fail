@@ -324,14 +324,11 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
   match j {
     Object(m) if m.get("site") is Some(Object(v)) =>
       match (num(v, "view"), v.get("event")) {
-        (Some(_), Some(e)) => {
-          f.site.push(
-            match e {
-              String(s) => s
-              _ => e.stringify()
-            },
-          )
-          f.wants = true
+        (Some(id), Some(e)) => {
+          fake_site_push(f, id, match e {
+            String(s) => s
+            _ => e.stringify()
+          })
           true
         }
         _ => false
@@ -350,6 +347,11 @@ fn fake_view_said(f : FakeHost, line : String) -> Bool {
           f.site_states[id] = match st {
             String(s) => s
             _ => st.stringify()
+          }
+          // (a page that starts loading is not there for scripts until it is: loaded, or said something)
+          match st {
+            Object(o) if o.get("loading") is Some(True) => f.page_there[id] = false
+            _ => ()
           }
           f.wants = true
           true

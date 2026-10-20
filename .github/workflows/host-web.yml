@@ -46,6 +46,9 @@ jobs:
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: success() || failure()
         run: scripts/host_contract.sh web views
+      - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
+        if: success() || failure()
+        run: scripts/host_contract.sh web site
       - uses: actions/upload-artifact@v4
         if: always()
         with:

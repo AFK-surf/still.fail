@@ -75,6 +75,8 @@ public class MainActivity extends Activity {
                     .setPrimaryClip(android.content.ClipData.newPlainText("mbui", b.toString()));
         }
         Host.script = hooks ? getIntent().getStringExtra("script") : null;
+        // a run (scripted, driven, taped: the test hooks' intent) begins with no cookies in its sites
+        if (Host.script != null || given != null) NativeViews.clearCookies();
         Host.bench = hooks ? getIntent().getIntExtra("bench", 0) : 0;
         // (shot_at MS, or "rest": the first frame at rest)
         Object shotArg = hooks && getIntent().getExtras() != null ? getIntent().getExtras().get("shot_at") : null;

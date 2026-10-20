@@ -196,7 +196,17 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, MBSiteReq *> *reqs;
 @property(nonatomic) int32_t nextReq;
 @property(nonatomic) double scale;
+// a page's and a site's: the scripts the app sent (view_tell 1), waiting for the page there (loaded, or said something
+// since it started); who takes a finger on it (view_tell 2: "all", "through", "pinch", "vertical") and the slop; how
+// long a site's request waits for its head before the app is told (view_tell 3)
+@property(nonatomic, strong) NSMutableArray<NSString *> *scripts;
+@property(nonatomic) BOOL there;
+@property(nonatomic, copy) NSString *touchMode;
+@property(nonatomic) double slop;
+@property(nonatomic) double headWaitMs;
 - (void)say:(NSDictionary *)event;
+- (void)runScripts;
+- (void)grabPage;
 - (void)advance:(MBLoad *)l;
 - (void)drop:(MBLoad *)l;
 - (void)end:(MBLoad *)l error:(BOOL)err;
@@ -595,7 +605,59 @@ static void fill_info(AVAssetResourceLoadingRequest *req, NSString *uti, long lo
   mb_host_request_frame();
 }
 
+// A new document: scripts wait for it.
+- (void)webView:(WKWebView *)wv didCommitNavigation:(WKNavigation *)n {
+  self.there = NO;
+}
+
+- (void)runScripts {
+  if (!self.there || !self.web || self.closed) return;
+  for (NSString *js in self.scripts) [self.web evaluateJavaScript:js completionHandler:nil];
+  [self.scripts removeAllObjects];
+}
+
+// What its page shows now, at its view's size in device pixels, as a PNG (`still`), told as a grab is.
+- (void)grabPage {
+  self.stillState = 1;
+  self.still = nil;
+  if (!self.web || self.w <= 0 || self.h <= 0) {
+    self.stillState = -1;
+    mb_host_outside(MB_OUTSIDE_GRAB, self.vid, -1);
+    return;
+  }
+  __weak MBNative *me = self;
+  [self.web takeSnapshotWithConfiguration:nil
+                        completionHandler:^(PImage *img, NSError *e) {
+                          MBNative *v = me;
+                          if (!v) return;
+#if TARGET_OS_OSX
+                          CGImageRef cg = [img CGImageForProposedRect:NULL context:nil hints:nil];
+#else
+                          CGImageRef cg = img.CGImage;
+#endif
+                          NSMutableData *png = [NSMutableData new];
+                          CGImageDestinationRef d =
+                              cg ? CGImageDestinationCreateWithData((__bridge CFMutableDataRef)png, CFSTR("public.png"), 1, NULL) : NULL;
+                          if (d) {
+                            CGImageDestinationAddImage(d, cg, NULL);
+                            if (!CGImageDestinationFinalize(d)) png = nil;
+                            CFRelease(d);
+                          }
+                          if (d && png.length) {
+                            v.still = png;
+                            v.stillState = 2;
+                            vlog(@"view %d: page grabbed (%lu bytes)", v.vid, (unsigned long)png.length);
+                          } else {
+                            v.stillState = -1;
+                            vlog(@"view %d: page not grabbed: %@", v.vid, e.localizedDescription);
+                          }
+                          mb_host_outside(MB_OUTSIDE_GRAB, v.vid, v.stillState == 2 ? 1 : -1);
+                        }];
+}
+
 - (void)webView:(WKWebView *)wv didFinishNavigation:(WKNavigation *)n {
+  self.there = YES;
+  [self runScripts];
   if (self.kind == 3) {
     [self refreshSnap];
     mb_host_request_frame();
@@ -729,9 +791,44 @@ static MBNative *open_video(int32_t vid, NSString *mime) {
   return v;
 }
 
+// What a page's scripts say to the app (`mbuiHost.post(text)`, in the page and its frames): said as `{"said":…}`,
+// and the page there for the scripts that wait. (A handler the controller keeps, the view by a weak reference.)
+@interface MBPageSays : NSObject <WKScriptMessageHandler>
+@property(nonatomic, weak) MBNative *view;
+@end
+@implementation MBPageSays
+- (void)userContentController:(WKUserContentController *)uc didReceiveScriptMessage:(WKScriptMessage *)m {
+  MBNative *v = self.view;
+  if (!v || v.closed || ![m.body isKindOfClass:NSString.class]) return;
+  [v say:@{@"said" : m.body}];
+  v.there = YES;
+  [v runScripts];
+}
+@end
+
+// The page's way to the app, first in every frame of it.
+static NSString *const kHostScript =
+    @"window.mbuiHost={post:function(t){window.webkit.messageHandlers.mbui.postMessage(String(t))}};";
+
+// A page's configuration, its scripts able to speak to the app.
+static WKWebViewConfiguration *page_config(MBNative *v) {
+  WKWebViewConfiguration *c = [WKWebViewConfiguration new];
+  MBPageSays *h = [MBPageSays new];
+  h.view = v;
+  [c.userContentController addScriptMessageHandler:h name:@"mbui"];
+  [c.userContentController addUserScript:[[WKUserScript alloc] initWithSource:kHostScript
+                                                                injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                             forMainFrameOnly:NO]];
+  v.scripts = [NSMutableArray new];
+  v.said = [NSMutableArray new];
+  v.touchMode = @"all";
+  v.headWaitMs = 60000;
+  return c;
+}
+
 static MBNative *open_web(int32_t vid, NSString *html) {
   MBNative *v = [MBNative new];
-  WKWebViewConfiguration *c = [WKWebViewConfiguration new];
+  WKWebViewConfiguration *c = page_config(v);
   c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
   c.defaultWebpagePreferences.allowsContentJavaScript = YES;
 #if TARGET_OS_IOS
@@ -798,6 +895,14 @@ static MBNative *open_web(int32_t vid, NSString *html) {
   [v say:@{@"req" : @(q.rid), @"method" : r.HTTPMethod ?: @"GET", @"path" : path, @"headers" : hs, @"page" : @(page)}];
   // the site waits on the app's answer now (apple.h's mb_host_outside, 0)
   mb_host_outside(MB_OUTSIDE_VIEW, v.vid, 0);
+  // no head after headWaitMs: the app told (it answers it), the request still waiting
+  __weak MBNative *wv2 = v;
+  __weak MBSiteReq *wq = q;
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(v.headWaitMs * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+    MBNative *vv = wv2;
+    MBSiteReq *qq = wq;
+    if (vv && qq && !vv.closed && !qq.headed && !qq.gone && vv.reqs[@(qq.rid)] == qq) [vv say:@{@"late" : @(qq.rid)}];
+  });
 }
 
 - (void)webView:(WKWebView *)wv stopURLSchemeTask:(id<WKURLSchemeTask>)task {
@@ -814,12 +919,11 @@ static MBNative *open_web(int32_t vid, NSString *html) {
 
 static MBNative *open_site(int32_t vid, NSString *start) {
   MBNative *v = [MBNative new];
-  v.said = [NSMutableArray new];
+  WKWebViewConfiguration *c = page_config(v);
   v.reqs = [NSMutableDictionary new];
   v.scale = 1;
   v.handler = [MBSiteHandler new];
   v.handler.view = v;
-  WKWebViewConfiguration *c = [WKWebViewConfiguration new];
   c.websiteDataStore = [WKWebsiteDataStore nonPersistentDataStore];
   c.defaultWebpagePreferences.allowsContentJavaScript = YES;
   [c setURLSchemeHandler:v.handler forURLScheme:kSiteScheme];
@@ -920,6 +1024,10 @@ void mb_host_view_close(int32_t vid) {
 
 void mb_host_view_control(int32_t vid, int32_t op, double value) {
   MBNative *v = views[@(vid)];
+  if (v && v.kind >= 2 && op == 21) {
+    [v grabPage];
+    return;
+  }
   if (v && v.kind == 3) {
     switch (op) {
       case 5: if (v.web.canGoBack) [v.web goBack]; break;
@@ -972,12 +1080,14 @@ void mb_host_view_control(int32_t vid, int32_t op, double value) {
 // A video's frames' times and a frame grabbed (native.mbt `frames`, `grabbed`).
 moonbit_string_t mb_host_view_text(int32_t vid, int32_t what) {
   MBNative *v = views[@(vid)];
+  if (v && v.kind >= 2 && what == 2) return mb_string_from_ns([NSString stringWithFormat:@"%d", v.stillState]);
   if (!v || v.kind != 1) return moonbit_make_string_raw(0);
   return mb_string_from_ns(what == 1 ? (v.frames ?: @"") : [NSString stringWithFormat:@"%d", v.stillState]);
 }
 
 int32_t mb_host_view_text_known(int32_t vid, int32_t what) {
   MBNative *v = views[@(vid)];
+  if (v && v.kind >= 2 && what == 2) return 1;
   if (!v || v.kind != 1) return 0;
   return what == 1 ? (v.frames != nil) : 1;
 }
@@ -1056,7 +1166,7 @@ void mb_host_view_read_answer(int32_t vid, int32_t req, moonbit_bytes_t data, do
 
 moonbit_string_t mb_host_view_site_next(int32_t vid) {
   MBNative *v = views[@(vid)];
-  if (!v || v.kind != 3 || v.said.count == 0) return mb_string_from_ns(@"");
+  if (!v || v.kind < 2 || v.said.count == 0) return mb_string_from_ns(@"");
   NSString *e = v.said.firstObject;
   [v.said removeObjectAtIndex:0];
   return mb_string_from_ns(e);
@@ -1150,9 +1260,51 @@ void mb_host_view_site_load(int32_t vid, moonbit_string_t path) {
 
 // ---- for the canvas's view and the renderer ----
 
+// What the app tells a view beyond its controls (host_native.mbt view_tell): a script for its page, who takes a
+// finger on it, a site's settings.
+void mb_host_view_tell(int32_t vid, int32_t what, moonbit_string_t text) {
+  MBNative *v = views[@(vid)];
+  if (!v || v.kind < 2) return;
+  NSString *t = mb_ns_from_string(text);
+  if (what == 1) {
+    [v.scripts addObject:t];
+    [v runScripts];
+  } else if (what == 2) {
+    NSArray<NSString *> *p = [t componentsSeparatedByString:@" "];
+    v.touchMode = p.firstObject ?: @"all";
+    v.slop = p.count > 1 ? p[1].doubleValue : 0;
+  } else if (what == 3) {
+    NSDictionary *o = [NSJSONSerialization JSONObjectWithData:[t dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    if ([o isKindOfClass:NSDictionary.class] && [o[@"head_wait_ms"] isKindOfClass:NSNumber.class])
+      v.headWaitMs = [o[@"head_wait_ms"] doubleValue];
+  }
+}
+
+// The page's view a point is on (shown, placed), or nil.
+static MBNative *page_at(double x, double y) {
+  for (MBNative *v in views.allValues) {
+    if (v.kind < 2 || !v.shown || !v.placed) continue;
+    double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
+    double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
+    if (x >= x0 && x < x1 && y >= y0 && y < y1) return v;
+  }
+  return nil;
+}
+
+// Who takes a finger (or the mouse) at a point over a page: its mode ("all", "through", "pinch", "vertical") and its
+// slop, or NULL where no page is.
+const char *mb_views_touch_at(double x, double y, double *slop) {
+  MBNative *v = page_at(x, y);
+  if (!v) return NULL;
+  if (slop) *slop = v.slop;
+  return (v.touchMode ?: @"all").UTF8String;
+}
+
 int mb_views_pass_through(double x, double y) {
   for (MBNative *v in views.allValues) {
     if (v.kind < 2 || !v.shown || !v.placed) continue;
+    // (a page that takes no finger: the canvas's)
+    if ([v.touchMode isEqualToString:@"through"]) continue;
     double x0 = fmax(v.cx0, v.x), y0 = fmax(v.cy0, v.y);
     double x1 = fmin(v.cx1, v.x + v.w), y1 = fmin(v.cy1, v.y + v.h);
     if (x >= x0 && x < x1 && y >= y0 && y < y1) return 1;

@@ -814,6 +814,33 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     the_view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [box addSubview:the_view];
     w.contentView = box;
+    // the wheel's upright scroll over a page that gives it to the canvas (ui's Touch: VerticalOut; a list of messages
+    // with a page in it scrolls as a list), the canvas's; any other the page's
+    static id wheel_monitor;
+    if (!wheel_monitor)
+      wheel_monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
+                                                            handler:^NSEvent *(NSEvent *e) {
+                                                              if (!the_view || e.window != the_view.window) return e;
+                                                              NSPoint p = [the_view convertPoint:e.locationInWindow fromView:nil];
+                                                              const char *m = mb_views_touch_at(p.x, p.y, NULL);
+                                                              if (!m || strcmp(m, "vertical") != 0) return e;
+                                                              if (fabs(e.scrollingDeltaY) < fabs(e.scrollingDeltaX)) return e;
+                                                              [the_view scrollWheel:e];
+                                                              return nil;
+                                                            }];
+    // a trackpad's pinch over a page that gives two fingers to the canvas (ui's Touch: PinchOut), the canvas's: the page
+    // does not zoom (the canvas takes no pinch of its own on the Mac yet: it goes no further)
+    static id magnify_monitor;
+    if (!magnify_monitor)
+      magnify_monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
+                                                              handler:^NSEvent *(NSEvent *e) {
+                                                                if (!the_view || e.window != the_view.window) return e;
+                                                                NSPoint p = [the_view convertPoint:e.locationInWindow fromView:nil];
+                                                                const char *m = mb_views_touch_at(p.x, p.y, NULL);
+                                                                if (!m || strcmp(m, "pinch") != 0) return e;
+                                                                [the_view magnifyWithEvent:e];
+                                                                return nil;
+                                                              }];
     [w makeKeyAndOrderFront:nil];
     [w makeFirstResponder:the_view];
     if (setup_inset) {

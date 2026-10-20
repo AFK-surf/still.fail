@@ -665,6 +665,34 @@
     return viewLayer;
   }
   const info = (v) => v.info || (v.info = [-1, 0, 0, 0, 0, 0, 0, 0]);
+  // first in a page's frame: mbuiHost.post to this window, and the scripts this window sends run
+  const PAGE_BRIDGE = '<script>window.mbuiHost={post:function(t){parent.postMessage({mbuiSaid:String(t)},"*")}};' +
+    'addEventListener("message",function(e){if(e.source===parent&&e.data&&typeof e.data.mbuiScript==="string")(0,eval)(e.data.mbuiScript)});</script>';
+  const runScripts = (v) => {
+    if (!v.there || !v.el.contentWindow) return;
+    for (const js of v.scripts) v.el.contentWindow.postMessage({ mbuiScript: js }, '*');
+    v.scripts = [];
+  };
+  // what a page's frame says, from that frame only (no other window may speak for it)
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data.mbuiSaid !== 'string') return;
+    for (const v of views.values()) {
+      if (v.kind !== 2 || e.source !== v.el.contentWindow) continue;
+      v.said.push(JSON.stringify({ said: e.data.mbuiSaid }));
+      v.there = true;
+      runScripts(v);
+      H.requestFrame();
+    }
+  });
+  H.viewSiteNext = (id) => {
+    const v = views.get(id);
+    return v && v.said && v.said.length ? v.said.shift() : '';
+  };
+  H.viewTell = (id, what, text) => {
+    const v = views.get(id);
+    if (!v || v.kind !== 2) return;
+    if (what === 1) { v.scripts.push(text); runScripts(v); }
+  };
   // a view ready (or failed) told to the app, once; not once it is closed (the app let it go)
   const ready = (id, v, state) => {
     if (v.ready || !views.has(id)) return;
@@ -712,9 +740,14 @@
       el.setAttribute('sandbox', 'allow-scripts');
       el.style.cssText = 'position:absolute;border:0;background:#fff';
       // loaded: what a screenshot shows of it is the page itself (in the page's own picture)
-      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); H.requestFrame(); });
+      el.addEventListener('load', () => { v.state = 1; v.info[6] = 1; ready(id, v, 1); v.there = true; runScripts(v); H.requestFrame(); });
       el.addEventListener('error', () => { v.state = -1; ready(id, v, -1); H.requestFrame(); });
-      el.srcdoc = arg;
+      // its way to the app (mbuiHost.post, as the other hosts' pages have it) and the app's scripts run in it: messages
+      // between this window and the frame's own, each side taking only the other's
+      v.said = [];
+      v.scripts = [];
+      v.there = false;
+      el.srcdoc = PAGE_BRIDGE + arg;
       v.info[5] = new TextEncoder().encode(arg).length;
       v.el = el;
     }

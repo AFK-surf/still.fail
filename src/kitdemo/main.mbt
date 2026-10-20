@@ -13,8 +13,12 @@ fn main {
   let marked = @ui.env("MBUI_MARKS")
   // MBUI_VIEWCHECK=1: a native view placed between pixels, where the host put it on the log (viewcheck.mbt)
   let viewed = @ui.env("MBUI_VIEWCHECK") == "1"
+  // MBUI_SITECHECK=1: a site's page and a page speaking with the app, each step on the log (sitecheck.mbt)
+  let sited = @ui.env("MBUI_SITECHECK") == "1"
   @ui.run("mbui kit", fn(c) {
-    if viewed {
+    if sited {
+      site_check_run(c)
+    } else if viewed {
       view_check_run(c)
     } else if marked != "" {
       marks_run(c, marked, @ui.env("MBUI_MARKS_IMAGE"))

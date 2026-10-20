@@ -41,7 +41,51 @@ pub struct NativeView {
   priv mut loading : Bool
   priv mut title : String
   priv mut scale : Double
+  /// a page's: who hears what its page says to the app (`mbuiHost.post`), how a request is answered when its answer
+  /// is late or read too slowly (the app's words for it), what takes a touch on it
+  priv said : ((String) -> Unit)?
+  priv no_answer : String
+  priv too_slow : String
+  priv mut touch : Touch
+  priv mut keeps_cookies : Bool
 }
+
+///|
+/// Who takes a finger on a page's view (`NativeView::touch`): the page (`All`, as a browser's); the canvas under it
+/// (`Through`: the page sees none, as a picture would be); the page until a second finger comes down, the canvas from
+/// then (`PinchOut`: two fingers zoom what holds the page); the page until the finger has gone further up or down
+/// than across, past the slop the canvas's own drags start at, the canvas from there, unless it went sideways past the
+/// slop first, which keeps it the page's to its end (`VerticalOut`: a page in a list that scrolls the list, as
+/// Android's Viz.kt passVerticalDrags). The page told the touch is called off (a cancel) when the canvas takes it; the
+/// canvas given it from where it went down (a pinch's first finger then where it is now). A mouse's wheel goes the
+/// same way: `VerticalOut` and `Through` give the canvas the wheel's upright scroll; `PinchOut` keeps a trackpad's
+/// pinch from the page (the canvas takes none of its own on the Mac yet).
+pub(all) enum Touch {
+  All
+  Through
+  PinchOut
+  VerticalOut
+} derive(Eq, Show)
+
+///|
+fn touch_name(t : Touch) -> String {
+  match t {
+    All => "all"
+    Through => "through"
+    PinchOut => "pinch"
+    VerticalOut => "vertical"
+  }
+}
+
+///|
+/// How long a site's request waits for the head of its answer before the app's words for that (`site`'s `no_answer`)
+/// answer it instead (PreviewWeb.kt HEAD_WAIT_S): the host says when (`{"late":N}`), what the app sees is that event.
+pub let site_head_wait_ms : Double = 60000.0
+
+///|
+/// How much of a site's answer may wait in the host for its page to read it before the answer is stopped (PreviewWeb.kt
+/// BUFFERED_MAX): the host says when (`{"slow":N}`), and the answer ends with the app's words for it (`too_slow`).
+pub let site_backlog_max : Int = 32 * 1024 * 1024
 
 ///|
 /// A request a site's page made of its own host: its method (`verb`), its path (with its query), its headers, whether it is
@@ -125,9 +169,17 @@ fn NativeView::make(
   read : ((Double, Int, (Bytes, Double) -> Unit) -> Unit)?,
   serve? : ((SiteRequest, SiteReply) -> Unit)? = None,
   leave? : (String) -> Unit = fn(_) {  },
+  said? : ((String) -> Unit)? = None,
+  no_answer? : String = "",
+  too_slow? : String = "",
 ) -> NativeView {
   let v = {
     id: h_view_open(kind, arg),
+    said,
+    no_answer,
+    too_slow,
+    touch: All,
+    keeps_cookies: false,
     read,
     serve,
     leave,
@@ -151,6 +203,17 @@ fn NativeView::make(
     v.state = -1
   } else {
     open_views.push(v)
+    // a site's host told how long a request waits for its head and how much of an answer may wait to be read
+    if kind == 3 {
+      h_view_tell(
+        v.id,
+        3,
+        Json::object({
+          "head_wait_ms": Json::number(site_head_wait_ms),
+          "backlog": Json::number(site_backlog_max.to_double()),
+        }).stringify(),
+      )
+    }
   }
   v
 }
@@ -168,8 +231,11 @@ pub fn NativeView::video(
 
 ///|
 /// A page of `html` (its scripts on, nothing of the device's files or the app's reachable, its links not followed).
-pub fn NativeView::page(html : String) -> NativeView {
-  NativeView::make(2, html, None)
+/// What its scripts say to the app (`mbuiHost.post(text)`, in the page and its frames; in the browser's, which only
+/// tests and previews, in the page alone: none of it to be trusted, any script in the page may say anything) goes to
+/// `said`, a text at a time, in the order said, as a frame begins.
+pub fn NativeView::page(html : String, said? : (String) -> Unit) -> NativeView {
+  NativeView::make(2, html, None, said~)
 }
 
 ///|
@@ -177,13 +243,57 @@ pub fn NativeView::page(html : String) -> NativeView {
 /// its own at `start` (a path), each request its page makes of that host handed to `serve` to answer, as a browser
 /// would have it from a server (its scripts on, its cookies kept by the app as it answers); a link elsewhere is not
 /// followed but told to `leave`. Android's WebView and Windows' WebView2 (their requests intercepted), Apple's
-/// WKWebView (a scheme of its own); the browser has none.
+/// WKWebView (a scheme of its own); the browser has none. What its scripts say to the app goes to `said`, as a page's
+/// (`NativeView::page`). A request whose head has not come in `site_head_wait_ms` is answered 502 with `no_answer`;
+/// one whose page reads it so slowly that more than `site_backlog_max` of it waits is stopped with `too_slow` (the
+/// app's words for each: a person may read them on the page), and let go of (its `when_gone`).
 pub fn NativeView::site(
   start : String,
   serve : (SiteRequest, SiteReply) -> Unit,
   leave? : (String) -> Unit = fn(_) {  },
+  said? : (String) -> Unit,
+  no_answer? : String = "no answer in 60 s",
+  too_slow? : String = "read too slowly: stopped",
 ) -> NativeView {
-  NativeView::make(3, start, None, serve=Some(serve), leave~)
+  NativeView::make(3, start, None, serve=Some(serve), leave~, said~, no_answer~, too_slow~)
+}
+
+///|
+/// A script run in a page's (or a site's) page: in the page that is there once it has loaded, or once it has said
+/// something to the app since it started (a script sent while a page loads waits for it), in the order sent. On a
+/// run's tape as `VIEWSCRIPT view length hash`, so that a run replayed that sends another parts there.
+pub fn NativeView::script(self : NativeView, js : String) -> Unit {
+  if self.id != 0 && !self.closed {
+    if taping() {
+      tape_line("VIEWSCRIPT \{self.id} \{js.length()} \{script_hash(js)}")
+    }
+    h_view_tell(self.id, 1, js)
+  }
+}
+
+///|
+/// A script's hash on a run's tape (its UTF-16 code units, FNV-1a, 32 bits in hex).
+fn script_hash(js : String) -> String {
+  let mut h = 0x811c9dc5U
+  for i in 0..<js.length() {
+    h = (h ^ js.unsafe_charcode_at(i).reinterpret_as_uint()) * 0x01000193U
+  }
+  let digits = "0123456789abcdef"
+  let out = StringBuilder::new()
+  for k in 0..<8 {
+    let d = ((h >> (28 - 4 * k)) & 15U).reinterpret_as_int()
+    out.write_char(digits.get_char(d).unwrap())
+  }
+  out.to_string()
+}
+
+///|
+/// Who takes a finger on this page's view from now on (`Touch`; `All` at first).
+pub fn NativeView::touch(self : NativeView, mode : Touch) -> Unit {
+  if self.id != 0 && !self.closed && mode != self.touch {
+    self.touch = mode
+    h_view_tell(self.id, 2, "\{touch_name(mode)} \{touch_slop()}")
+  }
 }
 
 ///|
@@ -232,6 +342,13 @@ pub fn NativeView::set_scale(self : NativeView, k : Double) -> Unit {
 /// forward, whether it is loading, its title.
 pub fn NativeView::page_at(self : NativeView) -> (String, Bool, Bool, Bool, String) {
   (self.path, self.can_back, self.can_forward, self.loading, self.title)
+}
+
+///|
+/// Whether a site's host keeps its cookies as a browser does (a request's Cookie from its jar, an answer's Set-Cookie
+/// kept there, the page's document.cookie theirs: Android's WebView): else they are the app's to keep and send.
+pub fn NativeView::keeps_cookies(self : NativeView) -> Bool {
+  self.keeps_cookies
 }
 
 ///|
@@ -291,8 +408,9 @@ pub fn NativeView::frames(self : NativeView) -> Array[Double]? {
 }
 
 ///|
-/// The video's frame showing at `ms` grabbed whole at its own size, as a PNG (`grabbed` once it is here). One grab of a
-/// view at a time: asked again before the last one's `grabbed` is taken, it aborts.
+/// The video's frame showing at `ms` grabbed whole at its own size, as a PNG (`grabbed` once it is here); a page's (or
+/// a site's) view, what its page shows now, at its view's size in device pixels (`ms` not read). One grab of a view at
+/// a time: asked again before the last one's `grabbed` is taken, it aborts.
 pub fn NativeView::grab_frame(self : NativeView, ms : Double) -> Unit {
   if self.id != 0 && !self.closed {
     // (one grab of a view at a time: its ticket is the view's)
@@ -585,9 +703,8 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     } else if shown && v.loading {
       self.views_moving.push("view \{v.id} loading its page")
     }
-    match v.serve {
-      Some(serve) => v.take_site(serve)
-      None => ()
+    if v.serve is Some(_) || v.said is Some(_) {
+      v.take_site()
     }
     match v.read {
       Some(read) =>
@@ -609,10 +726,12 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
 }
 
 ///|
-/// What a site's host has said since the last frame: requests handed to `serve`, requests let go, links left by;
-/// where its page is now.
-fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> Unit) -> Unit {
+/// What a page's or a site's host has said since the last frame, in the order said: what its page said to the app
+/// (`said`), requests handed to `serve`, requests let go, answered late or read too slowly, links left by; where its
+/// page is now.
+fn NativeView::take_site(self : NativeView) -> Unit {
   let v = self
+  let mut heard = false
   for _ in 0..<64 {
     let said = h_view_site_next(v.id)
     if said == "" {
@@ -639,6 +758,17 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
         _ => ""
       }
     }
+    match e {
+      Object(m) if m.get("said") is Some(String(words)) => {
+        heard = true
+        match v.said {
+          Some(f) => f(words)
+          None => ()
+        }
+        continue
+      }
+      _ => ()
+    }
     let gone = num("gone")
     if gone >= 0 {
       match v.replies.get(gone) {
@@ -648,6 +778,31 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
           (r.on_gone)()
         }
         None => ()
+      }
+      continue
+    }
+    // no head in site_head_wait_ms: answered with the app's words for it; read too slowly: stopped with them; either
+    // way let go (what the app asks for it stopped)
+    let late = num("late")
+    let slow = num("slow")
+    if late >= 0 || slow >= 0 {
+      let req = if late >= 0 { late } else { slow }
+      match v.replies.get(req) {
+        Some(r) if !r.ended && !r.gone => {
+          if late >= 0 && !r.headed {
+            r.head(502, [("Content-Type", "text/plain; charset=utf-8")])
+            r.chunk(@utf8.encode(v.no_answer))
+            r.end()
+          } else if slow >= 0 {
+            r.end(error=v.too_slow)
+          }
+          if r.ended {
+            r.gone = true
+            v.replies.remove(req)
+            (r.on_gone)()
+          }
+        }
+        _ => ()
       }
       continue
     }
@@ -681,6 +836,10 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
       Object(m) => m.get("page") is Some(True)
       _ => false
     }
+    let serve = match v.serve {
+      Some(f) => f
+      None => continue
+    }
     let reply : SiteReply = { view: v.id, req, headed: false, ended: false, gone: false, on_gone: fn() {  } }
     v.replies[req] = reply
     let body = if str("method") == "GET" || str("method") == "HEAD" {
@@ -689,6 +848,10 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
       h_view_site_body(v.id, req)
     }
     serve({ verb: str("method"), path: str("path"), headers, page, body }, reply)
+  }
+  // what the page said comes as an input does: the next frames the framework's
+  if heard {
+    input_came()
   }
   // ended replies kept no longer
   let done = []
@@ -710,6 +873,7 @@ fn NativeView::take_site(self : NativeView, serve : (SiteRequest, SiteReply) -> 
           Some(String(p)) if p != "" => v.path = p
           _ => ()
         }
+        v.keeps_cookies = flag("cookies")
         v.can_back = flag("back")
         v.can_forward = flag("forward")
         v.loading = flag("loading")

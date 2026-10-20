@@ -41,7 +41,7 @@ static jmethodID m_request_frame, m_wake_after, m_set_ime, m_clipboard, m_log, m
     m_bl_open, m_bl_back, m_bl_end, m_back_enabled, m_pk_start, m_pk_state, m_pk_count, m_pk_name, m_pk_bytes,
     m_pk_end, m_drive, m_ref_begin, m_ref_text, m_ref_end, m_ref_frame, m_text_key, m_v_open, m_v_place, m_v_close,
     m_v_control, m_v_info, m_v_read_next, m_v_read_answer, m_v_site_next, m_v_site_body, m_v_site_head,
-    m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
+    m_v_site_chunk, m_v_site_end, m_v_site_state, m_v_site_load, m_v_tell, m_pdf_open, m_pdf_pages, m_pdf_size, m_pdf_load, m_pdf_close,
     m_save, m_system_dark, m_set_dark, m_nt_show, m_nt_cancel, m_nt_state, m_nt_text, m_set_sideways, m_word_at,
     m_open_url, m_open_tab, m_hold_words, m_clipboard_secret, m_over_done, m_text_scale, m_img_hold, m_img_pump;
 static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
@@ -171,6 +171,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_v_site_end = (*env)->GetStaticMethodID(env, views_cls, "siteEnd", "(IILjava/lang/String;)V");
   m_v_site_state = (*env)->GetStaticMethodID(env, views_cls, "siteState", "(I)Ljava/lang/String;");
   m_v_site_load = (*env)->GetStaticMethodID(env, views_cls, "siteLoad", "(ILjava/lang/String;)V");
+  m_v_tell = (*env)->GetStaticMethodID(env, views_cls, "tell", "(IILjava/lang/String;)V");
   m_save = (*env)->GetStaticMethodID(env, views_cls, "save", "(Ljava/lang/String;[B)Z");
   m_v_text = (*env)->GetStaticMethodID(env, views_cls, "text", "(II)Ljava/lang/String;");
   m_cs_known = (*env)->GetStaticMethodID(env, host_cls, "charsetKnown", "(Ljava/lang/String;)Z");
@@ -1631,6 +1632,15 @@ void mb_host_view_site_load(int32_t id, moonbit_string_t path) {
   jstring p = jstr(env, path);
   (*env)->CallStaticVoidMethod(env, views_cls, m_v_site_load, id, p);
   (*env)->DeleteLocalRef(env, p);
+}
+
+// What the app tells a view beyond its controls (host_native.mbt view_tell: a script, who takes a finger, a site's
+// settings): NativeViews.tell.
+void mb_host_view_tell(int32_t id, int32_t what, moonbit_string_t text) {
+  JNIEnv *env = env_();
+  jstring t = jstr(env, text);
+  (*env)->CallStaticVoidMethod(env, views_cls, m_v_tell, id, what, t);
+  (*env)->DeleteLocalRef(env, t);
 }
 
 void mb_host_view_read_answer(int32_t id, int32_t req, moonbit_bytes_t data, double total) {

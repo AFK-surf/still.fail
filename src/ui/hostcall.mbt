@@ -106,6 +106,28 @@ struct FakeHost {
   /// the requests its page made, by (view, request) (view_site_body)
   site_states : Map[Int, String]
   site_bodies : Map[(Int, Int), Bytes]
+  /// what each page's host says, by view, oldest first (Tester::view_says, site_no_answer, site_too_slow; a run's
+  /// record of it): taken before the views' common queue (`site`)
+  site_of : Map[Int, Array[String]]
+  /// the native views: their kind, where each was last placed (its clip rect: x0 y0 x1 y1) and whether shown, and who
+  /// takes a finger on it (NativeView::touch: its mode, the slop)
+  view_kinds : Map[Int, Int]
+  view_at : Map[Int, (Double, Double, Double, Double, Bool)]
+  view_touch : Map[Int, (String, Double)]
+  /// a finger's press as the views take it (Tester's own presses): the view it is on, (0: the canvas's), where it went
+  /// down, where it is
+  mut touch_view : Int
+  mut touch_down : (Double, Double)
+  /// where the finger on a page's view is now, and whether it went sideways past the slop first (VerticalOut: the
+  /// page's to its end)
+  mut touch_at : (Double, Double)
+  mut touch_sideways : Bool
+  /// the scripts sent to each page, waiting for it to be there (loaded, or said something since it started), and those
+  /// run; whether each page is there; every script sent, as its tape line has it ("view length hash")
+  scripts_waiting : Map[Int, Array[String]]
+  scripts_run : Map[Int, Array[String]]
+  page_there : Map[Int, Bool]
+  scripts_sent : Array[String]
 }
 
 ///|
@@ -723,6 +745,7 @@ fn h_view_open(kind : Int, arg : String) -> Int {
     Some(f) => {
       f.view_ids += 1
       f.views.push("open \{f.view_ids} \{kind} \{arg.length()}")
+      f.view_kinds[f.view_ids] = kind
       f.view_ids
     }
     None => @host.view_open(kind, arg)
@@ -745,11 +768,13 @@ fn h_view_place(
   shown : Bool,
 ) -> Unit {
   match fake.val {
-    Some(f) =>
+    Some(f) => {
       f.views.push(
         "place \{id} \{x} \{y} \{w} \{h} in \{cx0} \{cy0} \{cx1} \{cy1}" +
         (if shown { "" } else { " hidden" }),
       )
+      f.view_at[id] = (dmax(x, cx0), dmax(y, cy0), dmin(x + w, cx1), dmin(y + h, cy1), shown)
+    }
     None => @host.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, shown)
   }
 }
@@ -759,7 +784,14 @@ fn h_view_close(id : Int) -> Unit {
   outside_end(outside_view, id)
   views_told.remove(id)
   match fake.val {
-    Some(f) => f.views.push("close \{id}")
+    Some(f) => {
+      f.views.push("close \{id}")
+      f.view_at.remove(id)
+      f.scripts_waiting.remove(id)
+      if f.touch_view == id {
+        f.touch_view = 0
+      }
+    }
     None => @host.view_close(id)
   }
 }
@@ -774,6 +806,17 @@ fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
 
 ///|
 fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
+  let state = h_view_info_of(id, out)
+  // (a fake page there now runs what was sent to it)
+  match fake.val {
+    Some(f) => fake_scripts_flush(f, id)
+    None => ()
+  }
+  state
+}
+
+///|
+fn h_view_info_of(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
     // as the run recorded the host's saying it (Tester::view_said)
     Some(f) if f.view_infos.get(id) is Some((state, at)) => {
@@ -821,12 +864,16 @@ fn h_view_info(id : Int, out : FixedArray[Double]) -> Int {
 fn h_view_site_next(id : Int) -> String {
   match fake.val {
     Some(f) => {
-      ignore(id)
-      if f.site.length() > 0 {
-        f.site.remove(0)
-      } else {
-        ""
+      let e = match f.site_of.get(id) {
+        Some(q) if q.length() > 0 => q.remove(0)
+        _ => if f.site.length() > 0 { f.site.remove(0) } else { "" }
       }
+      // (a page that said something is there: what was sent to it runs)
+      if e.has_prefix("{\"said\"") {
+        f.page_there[id] = true
+        fake_scripts_flush(f, id)
+      }
+      e
     }
     None => {
       let e = @host.view_site_next(id)
@@ -960,6 +1007,82 @@ fn query_kept(path : String) -> String {
 let sites_told_state : Map[Int, String] = {}
 
 ///|
+/// What the app tells a view's host beyond its controls (native.mbt): `what` 1 a script to run in its page
+/// (NativeView::script), 2 who takes a finger on it (NativeView::touch: "all|through|pinch|vertical SLOP"), 3 a site's
+/// settings (`{"head_wait_ms":…,"backlog":…}`). The fake host notes each ("script 1 42 9a0b…", "touch 1 vertical 8",
+/// "settings 1 …") and runs a page's scripts as a host does: once its page is there (ready and not loading, or said
+/// something since it started), in the order sent.
+fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
+  match fake.val {
+    Some(f) => {
+      if what == 1 {
+        f.scripts_sent.push("\{id} \{text.length()} \{script_hash(text)}")
+        match f.scripts_waiting.get(id) {
+          Some(q) => q.push(text)
+          None => f.scripts_waiting[id] = [text]
+        }
+        fake_scripts_flush(f, id)
+      } else if what == 2 {
+        let parts = text.split(" ").map(fn(p) { p.to_owned() }).to_array()
+        let slop = match (try Some(@json.parse(parts.get(1).unwrap_or("0"))) catch { _ => None }) {
+          Some(Number(n, ..)) => n
+          _ => 0.0
+        }
+        f.view_touch[id] = (parts.get(0).unwrap_or("all"), slop)
+        f.views.push("touch \{id} \{text}")
+      } else {
+        f.views.push("settings \{id} \{text}")
+      }
+    }
+    None => @host.view_tell(id, what, text)
+  }
+}
+
+///|
+/// Whether a fake page is there for scripts: said something since it started, or ready and not loading.
+fn fake_page_there(f : FakeHost, id : Int) -> Bool {
+  if f.page_there.get(id) is Some(true) {
+    return true
+  }
+  let ready = match f.view_infos.get(id) {
+    Some((state, _)) => state == 1
+    None => f.auto_finish || f.view_ready.get(id).unwrap_or(0) == 1
+  }
+  let loading = match f.site_states.get(id) {
+    Some(st) =>
+      match (try Some(@json.parse(st)) catch { _ => None }) {
+        Some(Object(m)) => m.get("loading") is Some(True)
+        _ => false
+      }
+    None => false
+  }
+  ready && !loading
+}
+
+///|
+/// A fake page's scripts that wait run, in the order sent, once it is there.
+fn fake_scripts_flush(f : FakeHost, id : Int) -> Unit {
+  match f.scripts_waiting.get(id) {
+    Some(q) if q.length() > 0 && fake_page_there(f, id) => {
+      let run = match f.scripts_run.get(id) {
+        Some(r) => r
+        None => {
+          let r = []
+          f.scripts_run[id] = r
+          r
+        }
+      }
+      for js in q {
+        run.push(js)
+        f.views.push("script \{id} \{js.length()} \{script_hash(js)}")
+      }
+      q.clear()
+    }
+    _ => ()
+  }
+}
+
+///|
 fn h_view_site_body(id : Int, req : Int) -> Bytes {
   match fake.val {
     // as the run recorded it (Tester::view_said); else none
@@ -1006,10 +1129,13 @@ fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
 fn h_view_site_state(id : Int) -> String {
   match fake.val {
     // as the run recorded the host's saying it (Tester::view_said); not said: at its start, loaded, untitled
-    Some(f) =>
-      f.site_states.get(id).unwrap_or(
+    Some(f) => {
+      let st = f.site_states.get(id).unwrap_or(
         "{\"path\":\"/\",\"back\":false,\"forward\":false,\"loading\":false,\"title\":\"\"}",
       )
+      fake_scripts_flush(f, id)
+      st
+    }
     None => {
       let st = @host.view_site_state(id)
       if st != "" && (views_tracer.val is Some(_) || taping()) && sites_told_state.get(id) != Some(st) {

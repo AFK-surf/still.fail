@@ -790,7 +790,10 @@ extern "C" fn ffi_view_site_load(id : Int, path : String) -> Unit = "mb_host_vie
 /// What a site (a view of kind 3) has to say, oldest first: a JSON text, "" when nothing waits. `{"req":n,"method",
 /// "path","headers":[[k,v]…],"page":true|false}` a request of its own host the app answers (`view_site_head`, then
 /// `view_site_chunk`s, then `view_site_end`); `{"gone":n}` a request the page let go of (nothing more of it is taken);
-/// `{"leave":url}` a link to elsewhere tapped (not followed).
+/// `{"leave":url}` a link to elsewhere tapped (not followed); `{"late":n}` a request with no head after `head_wait_ms`
+/// (view_tell 3; it waits on); `{"slow":n}` an answer more of which waits than `backlog` (the host takes no more of
+/// it, and fails its body once what waits is read: the app ends it). Of a page's or a site's, `{"said":text}`: what
+/// its page's scripts said to the app (`mbuiHost.post(text)`), in the order said.
 pub fn view_site_next(id : Int) -> String {
   ffi_view_site_next(id)
 }
@@ -829,6 +832,21 @@ pub fn view_site_state(id : Int) -> String {
 /// The site's page at `path` of its own host.
 pub fn view_site_load(id : Int, path : String) -> Unit {
   ffi_view_site_load(id, path)
+}
+
+///|
+#borrow(text)
+extern "C" fn ffi_view_tell(id : Int, what : Int, text : String) -> Unit = "mb_host_view_tell"
+
+///|
+/// What the app tells a view beyond its controls: `what` 1 a script to run in its page (a page's or a site's): in the
+/// page there once it has loaded, or has said something (`{"said":…}`) since it started; one sent while a page loads
+/// waits for it, all in the order sent. 2 who takes a finger on it: "all", "through", "pinch" or "vertical", then the
+/// slop in points (ui's NativeView::touch). 3 a site's settings, as JSON: `head_wait_ms` (how long a request waits for
+/// its head before the host says `{"late":n}`, still waiting), `backlog` (how many bytes of an answer may wait for the
+/// page to read them before the host says `{"slow":n}` and takes no more of it).
+pub fn view_tell(id : Int, what : Int, text : String) -> Unit {
+  ffi_view_tell(id, what, text)
 }
 
 ///|

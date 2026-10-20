@@ -5,4 +5,5 @@ import {
   "mbui/effect",
   "moonbitlang/core/math",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 }

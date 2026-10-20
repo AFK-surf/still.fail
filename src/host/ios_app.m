@@ -3,6 +3,7 @@
 // methods through UITextInput. Built by scripts/ios.sh, not by moon. Under
 // it, as big, the native views' view (apple_views.m).
 #import <UIKit/UIKit.h>
+#import <UIKit/UIGestureRecognizerSubclass.h>
 #import <PhotosUI/PhotosUI.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <mach/mach.h>
@@ -345,6 +346,103 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 
 @end
 
+// ---- a finger on a page under the canvas ----
+
+// A finger that goes down on a page the app says gives up some of its touches (ui's Touch, mb_views_touch_at): the
+// page's until it has gone further up or down than across past the slop ("vertical") or a second finger comes down
+// ("pinch"); from then the canvas's, from where it went down (the page's touches called off: cancelsTouchesInView).
+// The page's own gestures wait for this one to fail first.
+@interface MBTakeTouch : UIGestureRecognizer <UIGestureRecognizerDelegate>
+@property(nonatomic, weak) UIView *canvas;
+@property(nonatomic, weak) UITouch *one;
+@property(nonatomic, weak) UITouch *two;
+@property(nonatomic) CGPoint from;
+@property(nonatomic) double slop;
+@property(nonatomic, copy) NSString *mode;
+@end
+
+@implementation MBTakeTouch
+- (void)canvasTouch:(int)kind at:(CGPoint)p time:(double)t {
+  event_time = t * 1000.0;
+  mb_cb.pointer(kind, p.x, p.y, 0);
+  event_time = -1;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
+  for (UITouch *u in t) {
+    if (!self.one) {
+      CGPoint p = [u locationInView:self.canvas];
+      double slop = 0;
+      const char *m = mb_views_touch_at(p.x, p.y, &slop);
+      if (!m || (strcmp(m, "vertical") != 0 && strcmp(m, "pinch") != 0)) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+      }
+      self.one = u;
+      self.from = p;
+      self.slop = slop;
+      self.mode = [NSString stringWithUTF8String:m];
+    } else if (!self.two) {
+      self.two = u;
+      if (self.state == UIGestureRecognizerStatePossible && [self.mode isEqualToString:@"pinch"]) {
+        self.state = UIGestureRecognizerStateBegan;
+        [self canvasTouch:0 at:self.from time:self.one.timestamp];
+        [self canvasTouch:1 at:[self.one locationInView:self.canvas] time:self.one.timestamp];
+        [self canvasTouch:4 at:[u locationInView:self.canvas] time:u.timestamp];
+      } else if (self.state == UIGestureRecognizerStateBegan || self.state == UIGestureRecognizerStateChanged) {
+        [self canvasTouch:4 at:[u locationInView:self.canvas] time:u.timestamp];
+      }
+    }
+  }
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
+  UITouch *u = self.one;
+  if (!u) return;
+  CGPoint p = [u locationInView:self.canvas];
+  if (self.state == UIGestureRecognizerStatePossible) {
+    double dx = p.x - self.from.x, dy = p.y - self.from.y;
+    if ([self.mode isEqualToString:@"vertical"] && fabs(dy) > self.slop && fabs(dy) > fabs(dx)) {
+      self.state = UIGestureRecognizerStateBegan;
+      [self canvasTouch:0 at:self.from time:u.timestamp];
+      [self canvasTouch:1 at:p time:u.timestamp];
+    } else if ([self.mode isEqualToString:@"vertical"] && fabs(dx) > self.slop) {
+      // sideways first: the page's
+      self.state = UIGestureRecognizerStateFailed;
+    }
+    return;
+  }
+  self.state = UIGestureRecognizerStateChanged;
+  if ([t containsObject:u]) [self canvasTouch:1 at:p time:u.timestamp];
+  if (self.two && [t containsObject:self.two]) [self canvasTouch:5 at:[self.two locationInView:self.canvas] time:self.two.timestamp];
+}
+- (void)ended:(NSSet<UITouch *> *)t kind:(int)kind {
+  BOOL taken = self.state == UIGestureRecognizerStateBegan || self.state == UIGestureRecognizerStateChanged;
+  if (taken && self.two && [t containsObject:self.two]) {
+    [self canvasTouch:6 at:[self.two locationInView:self.canvas] time:self.two.timestamp];
+    self.two = nil;
+  }
+  if (self.one && [t containsObject:self.one]) {
+    if (taken) [self canvasTouch:kind at:[self.one locationInView:self.canvas] time:self.one.timestamp];
+    self.state = taken ? (kind == 2 ? UIGestureRecognizerStateEnded : UIGestureRecognizerStateCancelled)
+                       : UIGestureRecognizerStateFailed;
+  }
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
+  [self ended:t kind:2];
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)t withEvent:(UIEvent *)e {
+  [self ended:t kind:3];
+}
+- (void)reset {
+  [super reset];
+  self.one = nil;
+  self.two = nil;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)o {
+  return YES;
+}
+@end
+
+
 // ---------------------------------------------------------------------------
 
 @interface MBController : UIViewController
@@ -368,6 +466,13 @@ static MBController *the_controller;
   the_view.opaque = NO;  // the native views under it show through its holes
   UIView *under = mb_views_root(CGRectZero);
   under.translatesAutoresizingMaskIntoConstraints = NO;
+  MBTakeTouch *take = [[MBTakeTouch alloc] initWithTarget:nil action:nil];
+  take.canvas = the_view;
+  take.delegate = take;
+  take.cancelsTouchesInView = YES;
+  take.delaysTouchesBegan = NO;
+  take.delaysTouchesEnded = NO;
+  [under addGestureRecognizer:take];
   [root addSubview:under];
   [root addSubview:the_view];
   UILayoutGuide *g = root.safeAreaLayoutGuide;

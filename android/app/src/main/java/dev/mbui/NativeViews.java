@@ -14,6 +14,9 @@ import android.net.Uri;
 import android.provider.MediaStore;
 import android.view.TextureView;
 import android.view.View;
+import android.view.MotionEvent;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -91,7 +94,7 @@ final class NativeViews {
         final int id, kind;
         /** What it is made in: the activity whose layer it is in, switched as it moves to another's (moveTo). */
         android.content.MutableContextWrapper context;
-        FrameLayout clip;
+        TouchFrame clip;
         View content;
         volatile boolean closed;
         // how it stands, for info (the GL thread reads these)
@@ -162,9 +165,214 @@ final class NativeViews {
         void control(int op, double value) {}
 
         void destroy() {}
+
+        // ---- a page's (kind 2) and a site's (kind 3) ----
+
+        /** What it says to the app (siteNext, on the GL thread), oldest first. */
+        final ConcurrentLinkedQueue<String> said = new ConcurrentLinkedQueue<>();
+        /** Its WebView (a page's, a site's). */
+        WebView web;
+        /** The scripts the app sent (view_tell 1), waiting for the page there (main thread). */
+        final java.util.ArrayList<String> scripts = new java.util.ArrayList<>();
+        /** Whether the page there is one scripts run in: loaded, or said something since it started (main thread). */
+        boolean there;
+        /** A page grabbed (PNG), and how that stands (0 none asked, 1 grabbing, 2 here, -1 failed), as a video's. */
+        volatile byte[] still = new byte[0];
+        volatile int stillState;
+
+        void say(String json) {
+            said.add(json);
+            Host.requestFrame();
+        }
+
+        /** The page's own way to the app (`mbuiHost.post(text)`, in the page and its frames), on the bridge's thread. */
+        final class Bridge {
+            @JavascriptInterface
+            public void post(String text) {
+                if (closed || text == null) return;
+                try {
+                    say(new org.json.JSONObject().put("said", text).toString());
+                } catch (org.json.JSONException e) {
+                    return;
+                }
+                // (said by the page there: what was sent to it runs)
+                Host.main.post(() -> {
+                    there = true;
+                    runScripts();
+                });
+            }
+        }
+
+        /** The page bridged to the app, and told who takes a finger on it (main thread, as it is made). */
+        @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface", "AddJavascriptInterface"})
+        void bridge(WebView w) {
+            w.addJavascriptInterface(new Bridge(), "mbuiHost");
+        }
+
+        /** A new page started: scripts wait for it (main thread). */
+        void pageStarted() {
+            there = false;
+        }
+
+        /** The page loaded: what waits runs (main thread). */
+        void pageLoaded() {
+            there = true;
+            runScripts();
+        }
+
+        void runScripts() {
+            if (!there || web == null || closed) return;
+            for (String js : scripts) web.evaluateJavascript(js, null);
+            scripts.clear();
+        }
+
+        /** A script the app sent: run in the page there, or kept until it is (any thread). */
+        void script(String js) {
+            Host.main.post(() -> {
+                if (closed) return;
+                scripts.add(js);
+                runScripts();
+            });
+        }
+
+        /** What its page shows now, at its view's size, as a PNG (main thread): `still` once it is drawn. */
+        void grabPage() {
+            stillState = 1;
+            still = new byte[0];
+            WebView w = web;
+            if (w == null || w.getWidth() == 0 || w.getHeight() == 0) {
+                stillState = -1;
+                Native.tell(Native.OUTSIDE_GRAB, id, -1);
+                return;
+            }
+            try {
+                Bitmap b = Bitmap.createBitmap(w.getWidth(), w.getHeight(), Bitmap.Config.ARGB_8888);
+                w.draw(new android.graphics.Canvas(b));
+                new Thread(() -> {
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    b.compress(Bitmap.CompressFormat.PNG, 100, out);
+                    b.recycle();
+                    still = out.toByteArray();
+                    stillState = 2;
+                    Host.log("view " + id + ": page grabbed (" + still.length + " bytes)");
+                    Native.tell(Native.OUTSIDE_GRAB, id, 1);
+                }, "mbui-grab").start();
+            } catch (RuntimeException e) {
+                Host.log("view " + id + ": page not grabbed: " + e);
+                stillState = -1;
+                Native.tell(Native.OUTSIDE_GRAB, id, -1);
+            }
+        }
+    }
+
+    /**
+     * The frame a view sits in (its clip rect), which takes a finger as the app says (view_tell 2, ui's
+     * NativeView::touch): its view's ("all"); the canvas's (MBView: "through", none of it to the view); the view's
+     * until a second finger comes down ("pinch") or the finger has gone further up or down than across past the slop
+     * ("vertical"; a finger that went sideways past it first stays the view's to its end), the canvas's from there: the
+     * view told the touch is called off, the canvas given it from where it went down.
+     */
+    static final class TouchFrame extends FrameLayout {
+        String mode = "all";
+        float slop;
+        float downX, downY;
+        boolean taken;
+        /** The finger went sideways past the slop first (vertical): the page's to the end of the touch. */
+        boolean sideways;
+
+        TouchFrame(Context c) {
+            super(c);
+        }
+
+        @Override
+        public boolean dispatchTouchEvent(MotionEvent e) {
+            // (through: none of it is the view's; MBView, under this layer, is given it by the window)
+            if (mode.equals("through")) return false;
+            return super.dispatchTouchEvent(e);
+        }
+
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX = e.getX();
+                    downY = e.getY();
+                    taken = false;
+                    sideways = false;
+                    return false;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    if (mode.equals("pinch")) return take(e);
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (mode.equals("vertical") && !sideways) {
+                        float dx = e.getX() - downX, dy = e.getY() - downY;
+                        if (Math.abs(dy) > slop && Math.abs(dy) > Math.abs(dx)) return take(e);
+                        // sideways first: the page's
+                        if (Math.abs(dx) > slop) sideways = true;
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        /** The touch the canvas's from now on: it is given it from where it went down (then as it is now). */
+        private boolean take(MotionEvent e) {
+            taken = true;
+            MotionEvent down = MotionEvent.obtain(e.getDownTime(), e.getDownTime(), MotionEvent.ACTION_DOWN, downX, downY, e.getMetaState());
+            toCanvas(down);
+            down.recycle();
+            if (e.getActionMasked() == MotionEvent.ACTION_POINTER_DOWN) {
+                // the first finger where it is now, then the second's coming down
+                MotionEvent at = MotionEvent.obtain(e.getDownTime(), e.getEventTime(), MotionEvent.ACTION_MOVE, e.getX(0), e.getY(0), e.getMetaState());
+                toCanvas(at);
+                at.recycle();
+            }
+            toCanvas(e);
+            return true;
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent e) {
+            if (!taken) return false;
+            toCanvas(e);
+            int a = e.getActionMasked();
+            if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) taken = false;
+            return true;
+        }
+
+        private void toCanvas(MotionEvent e) {
+            MBView v = Host.view;
+            if (v == null) return;
+            MotionEvent m = MotionEvent.obtain(e);
+            m.offsetLocation(getLeft() - v.getLeft(), getTop() - v.getTop());
+            v.dispatchTouchEvent(m);
+            m.recycle();
+        }
     }
 
     // ---- the GL thread ----
+
+    /** Whether the WebView's cookies are being cleared (a run's start: clearCookies), and the sites waiting for it (main thread). */
+    static boolean cookiesClearing;
+    static final java.util.ArrayList<Runnable> afterCookies = new java.util.ArrayList<>();
+
+    /**
+     * A run's start (scripted, driven, taped: MainActivity): the WebView's cookies cleared (they live in the app's data,
+     * which a force-stop keeps), so that a run's sites begin with none whatever the last run left; no site opens before
+     * it is done (main thread).
+     */
+    static void clearCookies() {
+        cookiesClearing = true;
+        CookieManager jar = CookieManager.getInstance();
+        jar.removeAllCookies(removed -> {
+            jar.flush();
+            Host.log("views: cookies cleared for the run");
+            cookiesClearing = false;
+            for (Runnable r : afterCookies) r.run();
+            afterCookies.clear();
+        });
+    }
 
     static int open(int kind, String arg) {
         if (kind < 1 || kind > 3) return 0;
@@ -173,20 +381,29 @@ final class NativeViews {
         views.put(id, v);
         Host.log("view " + id + ": open " + (kind == 1 ? "video " + arg : kind == 2 ? "page of " + arg.length() + " characters" : "site at " + arg));
         Host.main.post(() -> {
-            if (v.closed) return;
-            if (layer == null) {
-                v.tell(-1);
+            if (kind == 3 && cookiesClearing) {
+                afterCookies.add(() -> make(v, kind));
                 return;
             }
-            v.context = new android.content.MutableContextWrapper(layer.getContext());
-            v.clip = new FrameLayout(v.context);
-            v.clip.setClipChildren(true);
-            v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
-            v.clip.setVisibility(View.GONE);
-            v.make(v.context);
-            layer.addView(v.clip, new FrameLayout.LayoutParams(0, 0));
+            make(v, kind);
         });
         return id;
+    }
+
+    /** A view made and put in the layer (main thread). */
+    private static void make(NView v, int kind) {
+        if (v.closed) return;
+        if (layer == null) {
+            v.tell(-1);
+            return;
+        }
+        v.context = new android.content.MutableContextWrapper(layer.getContext());
+        v.clip = new TouchFrame(v.context);
+        v.clip.setClipChildren(true);
+        v.clip.setBackgroundColor(kind == 1 ? Color.BLACK : kind == 2 ? Color.WHITE : Color.TRANSPARENT);
+        v.clip.setVisibility(View.GONE);
+        v.make(v.context);
+        layer.addView(v.clip, new FrameLayout.LayoutParams(0, 0));
     }
 
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
@@ -274,23 +491,70 @@ final class NativeViews {
         return v.state;
     }
 
-    /** A video's frames' times (`what` 1: ms, comma between; null not read yet) or how its grab stands (2: "0".."2", "-1"). */
+    /**
+     * A video's frames' times (`what` 1: ms, comma between; null not read yet) or how its grab stands (2: "0".."2",
+     * "-1"); a page's (or a site's) grab, the same.
+     */
     static String text(int id, int what) {
         NView v = views.get(id);
-        if (!(v instanceof Video)) return null;
-        Video vid = (Video) v;
-        return what == 1 ? vid.frames : Integer.toString(vid.stillState);
+        if (v instanceof Video) {
+            Video vid = (Video) v;
+            return what == 1 ? vid.frames : Integer.toString(vid.stillState);
+        }
+        if (v != null && v.kind != 1 && what == 2) return Integer.toString(v.stillState);
+        return null;
     }
 
-    /** A video's frame grabbed (PNG), taken once. */
+    /** A video's frame grabbed (PNG), or a page's, taken once. */
     static byte[] still(int id) {
         NView v = views.get(id);
-        if (!(v instanceof Video)) return new byte[0];
-        Video vid = (Video) v;
-        byte[] b = vid.still;
-        vid.still = new byte[0];
-        if (vid.stillState == 2) vid.stillState = 0;
+        if (v == null) return new byte[0];
+        if (v instanceof Video) {
+            Video vid = (Video) v;
+            byte[] b = vid.still;
+            vid.still = new byte[0];
+            if (vid.stillState == 2) vid.stillState = 0;
+            return b;
+        }
+        byte[] b = v.still;
+        v.still = new byte[0];
+        if (v.stillState == 2) v.stillState = 0;
         return b;
+    }
+
+    /**
+     * What the app tells a view beyond its controls (host_native.mbt view_tell): 1 a script for its page, 2 who takes
+     * a finger on it ("MODE SLOP", the slop in points), 3 a site's settings (JSON: head_wait_ms, backlog).
+     */
+    static void tell(int id, int what, String text) {
+        NView v = views.get(id);
+        if (v == null) return;
+        if (what == 1) {
+            v.script(text);
+        } else if (what == 2) {
+            String[] p = text.split(" ");
+            float slop;
+            try {
+                slop = p.length > 1 ? Float.parseFloat(p[1]) : 0;
+            } catch (NumberFormatException e) {
+                slop = 0;
+            }
+            float px = slop * Host.view.density;
+            Host.main.post(() -> {
+                if (v.clip == null) return;
+                v.clip.mode = p[0];
+                v.clip.slop = px;
+            });
+        } else if (what == 3 && v instanceof Site) {
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(text);
+                Site st = (Site) v;
+                st.headWaitMs = o.optLong("head_wait_ms", st.headWaitMs);
+                st.backlog = o.optLong("backlog", st.backlog);
+            } catch (org.json.JSONException e) {
+                Host.log("view " + id + ": settings unread: " + e);
+            }
+        }
     }
 
     static int readNext(int id, double[] out) {
@@ -332,8 +596,8 @@ final class NativeViews {
 
     static String siteNext(int id) {
         NView v = views.get(id);
-        if (!(v instanceof Site)) return null;
-        return ((Site) v).said.poll();
+        if (v == null || v.kind == 1) return null;
+        return v.said.poll();
     }
 
     static byte[] siteBody(int id, int req) {
@@ -788,7 +1052,6 @@ final class NativeViews {
 
     static final class Page extends NView {
         final String html;
-        WebView web;
 
         Page(int id, String html) {
             super(id, 2);
@@ -805,6 +1068,7 @@ final class NativeViews {
             s.setAllowFileAccess(false);
             s.setAllowContentAccess(false);
             s.setDomStorageEnabled(false);
+            bridge(web);
             web.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -812,7 +1076,13 @@ final class NativeViews {
                 }
 
                 @Override
+                public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                    pageStarted();
+                }
+
+                @Override
                 public void onPageFinished(WebView view, String url) {
+                    pageLoaded();
                     if (state == 0) {
                         state = 1;
                         framed = 1;
@@ -853,6 +1123,11 @@ final class NativeViews {
         }
 
         @Override
+        void control(int op, double value) {
+            if (op == 21) grabPage();
+        }
+
+        @Override
         void destroy() {
             if (web != null) {
                 clip.removeView(web);
@@ -870,21 +1145,27 @@ final class NativeViews {
      * (`siteHead`, `siteChunk`s, `siteEnd`) from the station through the core while the WebView's thread waits here for
      * the head (a minute at most) and then reads the body as it comes. A body the page lets go of is said (`gone`). A
      * link to anywhere else is not followed, only said (`leave`). Scripts and DOM storage on, as the Android app's.
-     * Request bodies are not handed over by a WebView: none here (the Android app's page script carries them).
+     * Request bodies are not handed over by a WebView: none here (the Android app's page script carries them). Its
+     * cookies are the WebView's (CookieManager, for its host: a request's Cookie from there, an answer's Set-Cookie
+     * kept there, as PreviewWeb.kt follow does), so the page's document.cookie is theirs too. A request whose head has
+     * not come in `headWaitMs` is said `late` (the app answers it); an answer more of which waits for the page than
+     * `backlog` is said `slow` and taken no more (the app ends it).
      */
     static final class Site extends NView {
         static final String HOST = "preview.stillfail.invalid";
         static final Object END = new Object();
+        /** Where one cookie ends in a Set-Cookie header holding several (an Expires date's comma is not followed by name=). */
+        static final java.util.regex.Pattern COOKIES_JOINED = java.util.regex.Pattern.compile(",\\s*(?=[!#$%&'*+.^_`|~0-9A-Za-z-]+=)");
         final String start;
-        WebView web;
-        final ConcurrentLinkedQueue<String> said = new ConcurrentLinkedQueue<>();
         final ConcurrentHashMap<Integer, Req> reqs = new ConcurrentHashMap<>();
+        /** The app's settings (view_tell 3: ui's site_head_wait_ms, site_backlog_max). */
+        volatile long headWaitMs = 60000, backlog = 32L << 20;
         final AtomicInteger nextReq = new AtomicInteger();
         volatile String path, title = "";
         volatile boolean back, forward, loading = true;
         float scale = 1;
 
-        /** One request: its head once the app gives it, its body's pieces as they come. */
+        /** One request: its head once the app gives it, its body's pieces as they come, how much of it waits unread. */
         static final class Req {
             final int id;
             boolean headed, failed;
@@ -892,6 +1173,10 @@ final class NativeViews {
             String error;
             final LinkedHashMap<String, String> headers = new LinkedHashMap<>();
             final LinkedBlockingQueue<Object> body = new LinkedBlockingQueue<>();
+            final java.util.concurrent.atomic.AtomicLong waiting = new java.util.concurrent.atomic.AtomicLong();
+            volatile boolean over;
+            /** Its URL, for its cookies. */
+            String url;
 
             Req(int id) {
                 this.id = id;
@@ -910,20 +1195,22 @@ final class NativeViews {
             return (p == null || p.isEmpty() ? "/" : p) + (q != null ? "?" + q : "");
         }
 
-        void say(String json) {
-            said.add(json);
-            Host.requestFrame();
-        }
-
-        /** On the WebView's own thread: the request said to the app, its head waited for. */
+        /** On the WebView's own thread: the request said to the app (its cookies with it), its head waited for. */
         WebResourceResponse answer(WebResourceRequest r) {
             Req q = new Req(nextReq.incrementAndGet());
+            q.url = "https://" + HOST + pathOf(r.getUrl());
             reqs.put(q.id, q);
             boolean page = r.isForMainFrame();
+            boolean cookied = false;
             org.json.JSONArray hs = new org.json.JSONArray();
             for (Map.Entry<String, String> h : r.getRequestHeaders().entrySet()) {
                 if (h.getKey().equalsIgnoreCase("accept") && h.getValue().startsWith("text/html")) page = true;
+                if (h.getKey().equalsIgnoreCase("cookie")) cookied = true;
                 hs.put(new org.json.JSONArray().put(h.getKey()).put(h.getValue()));
+            }
+            if (!cookied) {
+                String jar = CookieManager.getInstance().getCookie(q.url);
+                if (jar != null && !jar.isEmpty()) hs.put(new org.json.JSONArray().put("Cookie").put(jar));
             }
             try {
                 String asked = new org.json.JSONObject().put("req", q.id).put("method", r.getMethod())
@@ -933,13 +1220,18 @@ final class NativeViews {
                 reqs.remove(q.id);
                 return text(500, e.toString());
             }
-            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+            // its head waited for as long as the app takes: past headWaitMs the app is told (`late`), which answers it
+            long until = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(headWaitMs);
+            boolean late = false;
             synchronized (q) {
                 while (!q.headed && !q.failed && !closed) {
                     long left = until - System.nanoTime();
-                    if (left <= 0) break;
+                    if (left <= 0 && !late) {
+                        late = true;
+                        say("{\"late\":" + q.id + "}");
+                    }
                     try {
-                        q.wait(Math.min(250, TimeUnit.NANOSECONDS.toMillis(left) + 1));
+                        q.wait(late ? 250 : Math.min(250, TimeUnit.NANOSECONDS.toMillis(left) + 1));
                     } catch (InterruptedException e) {
                         break;
                     }
@@ -948,7 +1240,7 @@ final class NativeViews {
             if (!q.headed) {
                 reqs.remove(q.id);
                 if (!q.failed) say("{\"gone\":" + q.id + "}");
-                return text(502, q.failed ? q.error : "no answer from the service in 60 s");
+                return text(502, q.failed ? q.error : "closed");
             }
             String type = null;
             for (Map.Entry<String, String> h : q.headers.entrySet()) if (h.getKey().equalsIgnoreCase("content-type")) type = h.getValue();
@@ -958,7 +1250,12 @@ final class NativeViews {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("charset=([^;]+)").matcher(type);
             if (m.find()) charset = m.group(1).trim().replace("\"", "");
             int status = q.status >= 200 && q.status <= 599 && (q.status < 300 || q.status > 399) ? q.status : 200;
-            return new WebResourceResponse(mime, charset, status, reason(status), q.headers, new Body(this, q));
+            boolean encoded = false;
+            for (Map.Entry<String, String> h : q.headers.entrySet())
+                if (h.getKey().equalsIgnoreCase("content-encoding") && !h.getValue().equalsIgnoreCase("identity")) encoded = true;
+            Body body = new Body(this, q);
+            body.events = mime.equals("text/event-stream") && !encoded;
+            return new WebResourceResponse(mime, charset, status, reason(status), q.headers, body);
         }
 
         static String reason(int status) {
@@ -975,10 +1272,13 @@ final class NativeViews {
             if (q == null) return;
             try {
                 org.json.JSONArray a = new org.json.JSONArray(headers);
+                CookieManager jar = CookieManager.getInstance();
                 for (int i = 0; i < a.length(); i++) {
                     org.json.JSONArray h = a.getJSONArray(i);
                     String k = h.getString(0), v = h.getString(1);
                     q.headers.put(k, q.headers.containsKey(k) ? q.headers.get(k) + ", " + v : v);
+                    // the service's cookies kept by the WebView (several may come joined in one header: each kept)
+                    if (k.equalsIgnoreCase("set-cookie")) for (String one : COOKIES_JOINED.split(v)) jar.setCookie(q.url, one);
                 }
             } catch (org.json.JSONException e) {
                 Host.log("view " + id + ": a head's headers unread: " + e);
@@ -992,7 +1292,14 @@ final class NativeViews {
 
         void chunk(int req, byte[] data) {
             Req q = reqs.get(req);
-            if (q != null) q.body.add(data);
+            if (q == null || q.over || data.length == 0) return;
+            // more of it waiting for the page than backlog: the app told (it ends it), none more taken
+            if (q.waiting.addAndGet(data.length) > backlog) {
+                q.over = true;
+                say("{\"slow\":" + q.id + "}");
+                return;
+            }
+            q.body.add(data);
         }
 
         void end(int req, String error) {
@@ -1012,7 +1319,7 @@ final class NativeViews {
         String state() {
             try {
                 return new org.json.JSONObject().put("path", path).put("back", back).put("forward", forward)
-                        .put("loading", loading).put("title", title).toString();
+                        .put("loading", loading).put("title", title).put("cookies", true).toString();
             } catch (org.json.JSONException e) {
                 return null;
             }
@@ -1043,6 +1350,8 @@ final class NativeViews {
             st.setDomStorageEnabled(true);
             st.setAllowFileAccess(false);
             st.setAllowContentAccess(false);
+            CookieManager.getInstance().setAcceptCookie(true);
+            bridge(web);
             web.setWebViewClient(new WebViewClient() {
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -1067,11 +1376,13 @@ final class NativeViews {
 
                 @Override
                 public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                    pageStarted();
                     moved(view, true);
                 }
 
                 @Override
                 public void onPageFinished(WebView view, String url) {
+                    pageLoaded();
                     if (state == 0) {
                         state = 1;
                         framed = 1;
@@ -1131,6 +1442,7 @@ final class NativeViews {
                         moved();
                     }
                     break;
+                case 21: grabPage(); break;
                 default: break;
             }
         }
@@ -1161,6 +1473,9 @@ final class NativeViews {
         byte[] cur;
         int at;
         boolean ended, told;
+        /** An event stream (text/event-stream): what comes goes to the page at once (PreviewWeb.kt Chunks). */
+        boolean events, gave;
+        byte lastByte;
 
         Body(Site site, Site.Req q) {
             this.site = site;
@@ -1172,11 +1487,11 @@ final class NativeViews {
                 if (ended) return false;
                 Object o;
                 try {
-                    o = q.body.poll(120, TimeUnit.SECONDS);
+                    // as long as the service takes (a long poll, an event stream): the page lets it go when it will
+                    o = q.body.take();
                 } catch (InterruptedException e) {
                     throw new InterruptedIOException();
                 }
-                if (o == null) throw new IOException("the service sent nothing for 120 s");
                 if (o == Site.END) {
                     ended = true;
                     return false;
@@ -1187,6 +1502,7 @@ final class NativeViews {
                 }
                 cur = (byte[]) o;
                 at = 0;
+                q.waiting.addAndGet(-cur.length);
             }
             return true;
         }
@@ -1200,10 +1516,26 @@ final class NativeViews {
         @Override
         public int read(byte[] b, int off, int len) throws IOException {
             if (len == 0) return 0;
+            // The WebView reads on until its buffer is full before it hands anything to the page. An event stream's
+            // events are to come as they are sent: with nothing more here yet, after a piece that ended its line, the
+            // rest of the buffer is filled with a comment (which the page's EventSource passes over).
+            if (events && gave && lastByte == '\n' && (cur == null || at >= cur.length) && q.body.isEmpty() && !ended) {
+                gave = false;
+                if (len == 1) {
+                    b[off] = '\n';
+                    return 1;
+                }
+                b[off] = ':';
+                java.util.Arrays.fill(b, off + 1, off + len - 1, (byte) ' ');
+                b[off + len - 1] = '\n';
+                return len;
+            }
             if (!next()) return -1;
             int n = Math.min(len, cur.length - at);
             System.arraycopy(cur, at, b, off, n);
             at += n;
+            gave = true;
+            lastByte = b[off + n - 1];
             return n;
         }
 
