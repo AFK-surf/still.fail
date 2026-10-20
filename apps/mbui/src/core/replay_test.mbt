@@ -153,3 +153,50 @@ test "the run's asks not made again are listed, the skipped ones aside" {
   c.subscribe("accounts") |> ignore
   assert_eq(r.unmade().length(), 0)
 }
+
+///|
+/// Two subscriptions answered at once (a's two values, b's one), then a call's answer that waits for the call.
+let at_once : String =
+  #|{"out":{"id":1,"subscribe":{"topic":"a"},"keyed":true}}
+  #|{"out":{"id":2,"subscribe":{"topic":"b"},"keyed":true}}
+  #|{"in":{"id":1,"value":1},"w":10}
+  #|{"in":{"id":1,"value":2},"w":11}
+  #|{"in":{"id":2,"value":1},"w":12}
+  #|{"out":{"id":3,"call":"c"}}
+  #|{"in":{"id":3,"ok":true},"w":13}
+
+///|
+/// The order the values of a and b came in, one a delivery, under `seed`.
+fn order_of(seed : UInt) -> String raise {
+  let r = @core.Replay::parse(at_once)
+  r.shuffle(seed)
+  let c = r.client()
+  let seen = []
+  let a = c.subscribe("a")
+  let b = c.subscribe("b")
+  while r.deliver(at_most=1) == 1 {
+    seen.push("a\{a.value.map(fn(v) { v.stringify() }).unwrap_or("-")} b\{b.value.map(fn(v) { v.stringify() }).unwrap_or("-")}")
+  }
+  // the call's answer never comes before the call
+  assert_eq(r.left(), 1)
+  assert_true(r.waiting().unwrap().contains("\"c\""))
+  seen.join(", ")
+}
+
+///|
+test "shuffled: what may come at once in an order drawn from the seed, each ask's own in theirs" {
+  // as it came
+  assert_eq(order_of(0), "a1 b-, a2 b-, a2 b1")
+  // every seed: all three given, a's 1 before its 2; the same seed, the same order
+  let orders = []
+  for seed in 1U..<20U {
+    let o = order_of(seed)
+    assert_true(o.has_suffix("a2 b1") || o == "a1 b-, a1 b1, a2 b1" || o == "a- b1, a1 b1, a2 b1")
+    assert_eq(order_of(seed), o)
+    if !orders.contains(o) {
+      orders.push(o)
+    }
+  }
+  // and more than one order among them
+  assert_true(orders.length() > 1)
+}

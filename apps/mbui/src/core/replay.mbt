@@ -32,6 +32,8 @@ pub struct Replay {
   priv fuzzy : Array[String]
   /// the wall clock as the last message given came
   priv mut wall : Double
+  /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
+  priv mut seed : UInt
 }
 
 ///|
@@ -75,6 +77,7 @@ pub fn Replay::parse(log : String) -> Replay {
     diverged: [],
     fuzzy: [],
     wall: 0.0,
+    seed: 0,
   }
   r.advance()
   r
@@ -128,14 +131,16 @@ pub fn Replay::detach() -> Unit {
 
 ///|
 /// What came in, handed on in its order, as long as what it came after has been sent again: at most `at_most` of
-/// them (all that may, by default). How many were.
+/// them (all that may, by default). How many were. With a seed (`shuffle`), what may come at once comes in an order
+/// drawn from it, each ask's own messages still in theirs.
 pub fn Replay::deliver(self : Replay, at_most? : Int = -1) -> Int {
   let mut n = 0
   while at_most < 0 || n < at_most {
-    if self.next_in >= self.evs.length() || self.first_out < self.next_in {
+    let i = self.pick()
+    if i < 0 {
       break
     }
-    let e = self.evs[self.next_in]
+    let e = self.evs[i]
     e.done = true
     self.wall = e.wall
     match self.live(e.msg) {
@@ -151,6 +156,59 @@ pub fn Replay::deliver(self : Replay, at_most? : Int = -1) -> Int {
     self.advance()
   }
   n
+}
+
+///|
+/// Whether a message in may come now (what it came after has all been sent again).
+pub fn Replay::due(self : Replay) -> Bool {
+  self.next_in < self.evs.length() && self.first_out >= self.next_in
+}
+
+///|
+/// From now on, what may come at once (the messages in after the last ask made again, before the next one not
+/// made yet) comes in an order drawn from `seed` (another seed, another order; the same, the same): answers to
+/// different asks in any order, an ask's own (a subscription's values, a stream's parts) in the order they came. A
+/// message with no ask (a fatal) is not passed. 0: as they came.
+pub fn Replay::shuffle(self : Replay, seed : UInt) -> Unit {
+  self.seed = seed
+}
+
+///|
+/// The message in to give next (-1: none may come).
+fn Replay::pick(self : Replay) -> Int {
+  if !self.due() {
+    return -1
+  }
+  if self.seed == 0 {
+    return self.next_in
+  }
+  // what may come: up to the next ask not made again, or a message with no ask; of each ask its first not given
+  let firsts : Array[Int] = []
+  let seen : Array[Int] = []
+  for i in self.next_in..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done {
+      break
+    }
+    if e.out || e.done {
+      continue
+    }
+    guard e.msg is Object(m) && id_of(m) is Some(id) else { break }
+    if !seen.contains(id) {
+      seen.push(id)
+      firsts.push(i)
+    }
+  }
+  if firsts.length() == 0 {
+    return self.next_in
+  }
+  // xorshift32
+  let mut x = self.seed
+  x = x ^ (x << 13)
+  x = x ^ (x >> 17)
+  x = x ^ (x << 5)
+  self.seed = x
+  firsts[(x % firsts.length().reinterpret_as_uint()).reinterpret_as_int()]
 }
 
 ///|

@@ -1,5 +1,5 @@
 import {
-  "stillfail/core",
   "stillfail/sfreplay",
+  "stillfail/sfapp",
   "mbui/ui",
 }
