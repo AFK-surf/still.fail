@@ -68,10 +68,7 @@
       "src/sfapp/newchat_wbtest.mbt": 9,
       "src/sfapp/play_wbtest.mbt": 11,
       "src/sfapp/preview_wbtest.mbt": 12,
-      "src/sfapp/share_wbtest.mbt": 10,
-      "src/sfreplay/agent_reply/agent_reply_test.mbt": 1,
-      "src/sfreplay/send_text/send_text_test.mbt": 1,
-      "src/sfreplay/send_text_frames/send_text_frames_test.mbt": 1
+      "src/sfapp/share_wbtest.mbt": 10
     },
     "flow-wait": {
       "e2e/flows/03-send-text.drive": 1,
@@ -208,7 +205,7 @@
       "src/sfapp/drive_reader.mbt": 17,
       "src/sfapp/drive_sheets.mbt": 1,
       "src/sfapp/emit.mbt": 5,
-      "src/sfapp/flight.mbt": 7,
+      "src/sfapp/flight.mbt": 6,
       "src/sfapp/home.mbt": 7,
       "src/sfapp/newchat.mbt": 4,
       "src/sfapp/pick.mbt": 1,

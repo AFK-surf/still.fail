@@ -38,7 +38,7 @@ let send_flight : Ref[SendFlight?] = { val: None }
 ///|
 /// How long the words take to their place, the share of it they fly (the rest they settle), and from when they
 /// settle (ChatHost.kt FLIGHT_MS, FLY, SETTLE).
-let flight_ms : Double = 600.0
+pub let flight_ms : Double = 600.0
 
 ///|
 /// How long the words wait over the field for their row; it not come by then, they go.
@@ -142,8 +142,9 @@ fn flight_frame(c : @ui.Ctx, chat : String) -> Unit {
         send_flight.val = None
         return
       }
+      // (from the frame after it was placed, timed from its placing: it ends flight_ms after, whenever frames come)
       if f.placed_at >= 0.0 && f.started_at < 0.0 && c.now() > f.placed_at {
-        f.started_at = c.now()
+        f.started_at = f.placed_at
       }
       if f.started_at >= 0.0 && flight_p(c, f) >= 1.0 {
         send_flight.val = None

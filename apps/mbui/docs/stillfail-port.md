@@ -941,16 +941,18 @@ file), a run's own, which flow 15 lends through the app.
 
 A run is also kept to be seen again without a backend: with MBUI_CORE_TRACE=1 (only on a local cloud) the app logs
 every message between it and its core (CORETRACE lines on the flow's log, src/core/trace.mbt), `scripts/trace.py
-out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (with the flow's script as
-the run had it; a sign-in's tokens put as "-"), and a test runs the flow's script in a Tester over the app with that
-conversation as its core (src/core/replay.mbt, src/sfreplay/flow.mbt): what came given as each frame begins, all that
-may or one at a time, the ids of now matched to the run's, and whatever the app asks that the run did not
-(`diverged`), asks with other params (`fuzzy`), or the run asked and the app does not (`unmade`) said. Each Tester
-starts the app's pages anew (sfapp's reset, run by mbui's on_reset; scripts/check.sh checks every global is put back
-or says why it is kept), so a flow seen twice in one process is the same twice (src/sfreplay/send_text_twice). Recorded
-2026-10-20 on Studio (flows 01, 02, 03, 05, all passing): 03 (54 messages) and 05 (62) seen again with nothing
-diverged or fuzzy and every message given; 03 ends on the same screen given all at once or one a frame (正在发送 drawn
-for four frames in the second, none in the first), its one ask not made again a `client.focus` of the run's.
+out/e2e/mac/NN-name.log NAME` makes it e2e/traces/NAME.trace and src/sfreplay/trace_NAME.mbt (a sign-in's tokens put
+as "-"). The flow is then a test of src/sfreplay/flows, its steps written as a Tester's (src/sfreplay/steps.mbt:
+`tap`, `see`, `gone`, `type_text`…, ending in `end`) over the app with that conversation as its core
+(src/core/replay.mbt): an input draws only the frames it causes; what the core said comes at a frame's start, each
+message once what it came after has been asked again; a step that looks looks then, waiting for nothing; time goes on
+only by `run_for` a declared length. At its end every message was given, nothing asked that the run did not
+(`diverged`) or with other params (`fuzzy`), every ask of the run's made again (`unmade`, but those the test names and
+says why), and the app idle (`assert_idle`). Each flow runs as the run had it and again with what may come at once in
+orders drawn from seeds (`Replay::shuffle`: answers to different asks in any order, an ask's own in theirs), ending on
+the same screen each time (`orders`). Only a few flows stay end to end, as smoke (the whole chain: sign-in, send and
+the agent's answer; parts going up; the preview's native views reading through the core; the system's notice; a
+download kept on the device).
 
 The flows (macOS, 390×844, and Android on the emulator, Pixel 7 size). On 2026-10-19 all 14 passed on macOS; on
 Android 13 of 14 in the full run and 11 (the quote) alone, twice, once it waited for the all-done card (it had held
