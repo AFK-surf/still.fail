@@ -102,6 +102,8 @@ fn decisions_page(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
         } else {
           waiting_cards(c, topic.error)
         }
+        // the last one, gone: drawn going over them
+        deck_out(c, src, c.width, c.height)
         return
       }
       deck(c, src, shown)
@@ -277,16 +279,32 @@ fn idle_row(c : @ui.Ctx, key : String, main : String, meta : String, at : String
 }
 
 ///|
-/// The front decision goes (`dir` its side, 2 up after answering), `after` is done once it has, and the next comes in.
-fn go_decision(c : @ui.Ctx, dir : Int, after : () -> Unit) -> Unit {
-  if dui.going != 0 && dui.going != 3 {
-    return
-  }
-  dui.going = dir
-  dui.going_at = c.now()
-  dui.going_from = dui.drag
-  dui.after_go = after
-  c.request_frame()
+/// How long a decision takes to fly off across, to go up after it is answered, to go back where it rests let go short,
+/// and to come in.
+let card_off_ms : Double = 260.0
+
+///|
+let card_up_ms : Double = 360.0
+
+///|
+let card_back_ms : Double = 250.0
+
+///|
+let card_arrive_ms : Double = 260.0
+
+///|
+/// The front decision `item` goes (`dir` its side, 2 up after answering): `after` (what it goes to) done at once, the
+/// deck without it from now on; it is only drawn flying off, as the next comes in (the only one, set aside: it again).
+fn go_decision(c : @ui.Ctx, dir : Int, item : Json, after : () -> Unit) -> Unit {
+  dui.out = Some(item)
+  dui.out_dir = dir
+  let now = c.now()
+  dui.out_at = now
+  dui.out_from = dui.drag
+  dui.drag = 0.0
+  dui.going = 0
+  dui.arrive_at = now
+  after()
 }
 
 ///|
@@ -347,20 +365,20 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
     })
   }
   let set_aside = fn() {
-    go_decision(c, -1, fn() {
+    go_decision(c, -1, item, fn() {
       dui.dlater.retain(fn(k) { k != key })
       dui.dlater.push(key)
       call("decision.defer", tr("android-misc.decisions.deferWhat"), {})
     })
   }
   let dismiss = fn() {
-    go_decision(c, 1, fn() {
+    go_decision(c, 1, item, fn() {
       dui.dgone.push(key)
       call("decision.dismiss", tr("android-misc.decisions.dismissWhat"), {})
     })
   }
   let answer = fn(o : Choice) {
-    go_decision(c, 2, fn() {
+    go_decision(c, 2, item, fn() {
       dui.dgone.push(key)
       call("decision.answer", tr("android-misc.decisions.answerWhat"), { "option": Json::string(o.label) })
     })
@@ -402,7 +420,6 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
       }
       dui.last_x = px
       dui.last_t = c.now()
-      c.request_frame()
     }
   } else if dui.held && !down {
     dui.held = false
@@ -426,56 +443,32 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
   if !down {
     dui.swiping = false
   }
-  // where it is: flying off across (260 ms), up after an answer (360 ms), back where it rests (250 ms)
-  let mut lift = 0.0
-  if dui.going != 0 {
-    let ms = match dui.going {
-      2 => 360.0
-      3 => 250.0
-      _ => 260.0
-    }
-    let p = if c.stable() { 1.0 } else { dmin((c.now() - dui.going_at) / ms, 1.0) }
-    match dui.going {
-      2 => lift = height * @ui.bezier(0.55, 0.0, 0.85, 0.35, p)
-      3 => dui.drag = dui.going_from * (1.0 - @ui.bezier(0.2, 0.0, 0.0, 1.0, p))
-      dir => {
-        let to = dir.to_double() * width * 1.25
-        dui.drag = dui.going_from + (to - dui.going_from) * @ui.bezier(0.2, 0.0, 0.0, 1.0, p)
-      }
-    }
+  // let go short: back where it rests
+  if dui.going == 3 {
+    // (only after a finger: never in a screenshot)
+    let p = dmin((c.now() - dui.going_at) / card_back_ms, 1.0)
+    dui.drag = dui.going_from * (1.0 - @ui.bezier(0.2, 0.0, 0.0, 1.0, p))
     if p < 1.0 {
       c.request_frame()
-    } else if dui.going == 3 {
+    } else {
       dui.going = 0
       dui.drag = 0.0
-    } else {
-      let after = dui.after_go
-      dui.after_go = fn() {  }
-      after()
-      // the only one, set aside: still the one in front; it comes in again
-      if n == 1 && !dui.dgone.contains(key) {
-        dui.drag = 0.0
-        dui.going = 0
-        dui.arrive_at = c.now()
-      }
-      c.request_frame()
     }
   }
   let arrive = if dui.arrive_at < 0.0 || c.stable() {
     1.0
   } else {
-    let p = dmin((c.now() - dui.arrive_at) / 260.0, 1.0)
+    let p = dmin((c.now() - dui.arrive_at) / card_arrive_ms, 1.0)
     if p < 1.0 {
       c.request_frame()
     }
     @ui.bezier(0.2, 0.7, 0.2, 1.0, p)
   }
-  let moving = dui.going == 1 || dui.going == -1 || dui.going == 2
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     c.box(w=Fill(1.0), h=Fill(1.0), clip=true, id=frame, fn() {
       // under it, what letting it go that way does: left 待定 (at the right edge it uncovers), right 不再提醒
       let x = dui.drag
-      if x != 0.0 && !moving {
+      if x != 0.0 {
         c.layer(fn() {
           c.box(
             dir=Row,
@@ -500,22 +493,13 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
         })
         |> ignore
       }
-      if moving && n > 1 {
-        c.layer(fn() {
-          c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
-            decision_face(c, src, shown[1], fn(_) {  }, fn() {  }, false)
-          })
-          |> ignore
-        })
-        |> ignore
-      }
       c.layer(fn() {
         c.box(
           w=Fill(1.0),
           h=Fill(1.0),
           tx=dui.drag,
-          ty=-lift + 12.0 * (1.0 - arrive),
-          opacity=arrive * (if dui.going == 2 { 1.0 - dmin(lift / height / 0.4, 1.0) * 0.6 } else { 1.0 }),
+          ty=12.0 * (1.0 - arrive),
+          opacity=arrive,
           bg=t.p.bg,
           fn() {
             decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, set_aside, true)
@@ -524,6 +508,8 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
         |> ignore
       })
       |> ignore
+      // over it, the one that went
+      deck_out(c, src, width, height)
     })
     |> ignore
     // the hint, and where this one is among them
@@ -533,6 +519,39 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
       })
       |> ignore
       c.text("1 / \{n}", size=12.0, color=t.p.subtle, wrap=false) |> ignore
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// The one that went, flying off across or up after an answer (`width` × `height` the deck's), over what is in front
+/// (the next, or none left): only drawn, a tap there is what is under it's.
+fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit {
+  let o = match dui.out {
+    Some(o) => o
+    None => return
+  }
+  let t = @sf.theme()
+  let up = dui.out_dir == 2
+  let ms = if up { card_up_ms } else { card_off_ms }
+  let p = if c.stable() { 1.0 } else { dmin((c.now() - dui.out_at) / ms, 1.0) }
+  if p >= 1.0 {
+    dui.out = None
+    return
+  }
+  c.request_frame()
+  let (x, y, fade) = if up {
+    let lift = height * @ui.bezier(0.55, 0.0, 0.85, 0.35, p)
+    (dui.out_from, -lift, 1.0 - dmin(lift / height / 0.4, 1.0) * 0.6)
+  } else {
+    let to = dui.out_dir.to_double() * width * 1.25
+    (dui.out_from + (to - dui.out_from) * @ui.bezier(0.2, 0.0, 0.0, 1.0, p), 0.0, 1.0)
+  }
+  c.layer(fn() {
+    c.box(w=Fill(1.0), h=Fill(1.0), tx=x, ty=y, opacity=fade, bg=t.p.bg, fn() {
+      decision_face(c, src, o, fn(_) {  }, fn() {  }, false)
     })
     |> ignore
   })
@@ -729,7 +748,7 @@ fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, place
           } else {
             let taken = c.take_editor_text(fkey)
             c.blur()
-            go_decision(c, 2, fn() { dui.dgone.push(key) })
+            go_decision(c, 2, item, fn() { dui.dgone.push(key) })
             (src.call)(
               "decision.reply",
               {

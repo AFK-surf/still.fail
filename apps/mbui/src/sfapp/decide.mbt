@@ -61,11 +61,16 @@ priv struct Decide {
   mut last_x : Double
   mut last_t : Double
   mut speed : Double
-  /// the front one going: 1 right (不再提醒), -1 left (待定), 2 up (answered), 0 not; since when; what then
+  /// the front one let go short of going: going back where it rests (3), else 0; since when, from where across
   mut going : Int
   mut going_at : Double
   mut going_from : Double
-  mut after_go : () -> Unit
+  /// the one that went (out of the deck at once), only drawn as it flies off: it, which way (1 right 不再提醒, -1
+  /// left 待定, 2 up answered), since when, from where across
+  mut out : Json?
+  mut out_dir : Int
+  mut out_at : Double
+  mut out_from : Double
   /// the front one coming in, since when (-1: there at once)
   mut arrive_at : Double
 }
@@ -100,7 +105,10 @@ let dui : Decide = {
   going: 0,
   going_at: 0.0,
   going_from: 0.0,
-  after_go: fn() {  },
+  out: None,
+  out_dir: 0,
+  out_at: 0.0,
+  out_from: 0.0,
   arrive_at: -1.0,
 }
 
@@ -135,7 +143,10 @@ fn decide_reset() -> Unit {
   dui.going = 0
   dui.going_at = 0.0
   dui.going_from = 0.0
-  dui.after_go = fn() {  }
+  dui.out = None
+  dui.out_dir = 0
+  dui.out_at = 0.0
+  dui.out_from = 0.0
   dui.arrive_at = -1.0
 }
 
@@ -355,7 +366,6 @@ fn ask_dismiss(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
   let id = c.id("ask-dismiss/" + m.ts)
   if shown && c.clicked(id) {
     dui.gone[k] = true
-    c.request_frame()
     act(
       src,
       tr("android-misc.decisions.dismissWhat"),
@@ -688,7 +698,6 @@ fn open_sheet(c : @ui.Ctx, s : Sheet) -> Unit {
   dui.sheet_at = c.now()
   dui.leaving = None
   c.blur()
-  c.request_frame()
 }
 
 ///|
@@ -702,7 +711,6 @@ fn close_sheet(c : @ui.Ctx) -> Unit {
     None => ()
   }
   dui.sheet = None
-  c.request_frame()
 }
 
 ///|
