@@ -140,6 +140,7 @@ fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
                 c,
                 email,
                 fill("android-settings.members.added", [("role", role_label(text(Some(a), "role")))]),
+                wrap_title=false,
               )
               let on = [("workspace", ws), ("email", email)]
               if row_action(

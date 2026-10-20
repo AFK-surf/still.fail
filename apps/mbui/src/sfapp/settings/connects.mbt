@@ -65,6 +65,7 @@ fn connect_row(c : @ui.Ctx, core : Core, station : String, cv : Json?) -> Unit {
           ],
           " · ",
         ),
+        wrap_title=false,
       )
       c.box(dir=Row, gap=5.0, align=ACenter, fn() {
         presence_dot(c, text(cv, "presence"))
@@ -189,6 +190,7 @@ fn connects_page(c : @ui.Ctx, core : Core, here : Here, only : String) -> Unit {
                         }),
                         where_,
                         wrap_sub=true,
+                        wrap_title=false,
                       )
                       if online {
                         c.text(tr("android-settings.waiting.continue"), size=14.0, color=t.p.accent, wrap=false) |> ignore
@@ -278,6 +280,7 @@ fn connect_page(c : @ui.Ctx, core : Core, station : String, id : String) -> Unit
                     }
                     _ => ""
                   }),
+                  wrap_title=false,
                 )
                 let calls = ["connect.reconnect", "connect.put"]
                 let on = [("station", station), ("id", id)]
