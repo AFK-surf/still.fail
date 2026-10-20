@@ -37,15 +37,15 @@ let emit_hop : Double = 34.0
 let emit_rise : Double = 0.42
 
 ///|
-/// A message's turn: its seq and agent, its pose since when (ms); `from`, on from the same agent's message before it
-/// (where its avatar is), dropping on without going home; `fold`, how much of its folding is left.
+/// A message's turn: its seq and agent, its pose and how far through it (`clock`, 0 to 1, said as the pose sets out,
+/// from where the pose before was declared to end); `from`, on from the same agent's message before it (where its
+/// avatar is), dropping on without going home.
 priv struct Turn {
   seq : Double
   agent : String
   pose : Pose
   from : (Double, Double)?
-  fold : Double
-  mut start : Double
+  clock : @motion.Anim
 }
 
 ///|
@@ -53,8 +53,8 @@ priv struct Turn {
 priv struct Emits {
   decided : Map[String, Bool]
   done : Map[String, Bool]
-  /// waiting: seq, agent, since when (the agent's activity folds from then)
-  queue : Array[(Double, String, Double)]
+  /// waiting: seq, agent, its activity's folding (from when it began waiting)
+  queue : Array[(Double, String, @motion.Anim)]
   mut current : Turn?
   /// where the flying avatar was last sent, for which message; where it last let one out
   mut aimed : (Double, Double)?
@@ -115,7 +115,8 @@ fn emit_take(c : @ui.Ctx, e : Emits, v : ChatView, showing : Map[String, Bool]) 
     let goes = e.watched && m.said && agent != "" && showing.contains(agent)
     e.decided[k] = goes
     if goes {
-      e.queue.push((m.seq, agent, c.now()))
+      // its agent's activity folds from now
+      e.queue.push((m.seq, agent, pose_clock(Fold.ms(), None)))
     }
   }
 }
@@ -196,20 +197,23 @@ fn emit_release(e : Emits) -> Unit {
 }
 
 ///|
-fn emit_next(c : @ui.Ctx, e : Emits, agent : String) -> Unit {
+fn emit_next(c : @ui.Ctx, e : Emits, agent : String, at? : Double) -> Unit {
   if e.queue.length() == 0 {
     e.current = None
     return
   }
-  let (seq, who, since) = e.queue.remove(0)
-  let left = Fold.ms() - (c.now() - since)
+  let (seq, who, fold) = e.queue.remove(0)
+  // folded already (or its agent's avatar out already): on its way; else what is left of its folding (how far its
+  // folding has gone, from when it began waiting), from here: from where the turn before was declared to end, else
+  // from this frame
+  let float = who == agent || !fold.moving()
+  let left = Fold.ms() * (1.0 - fold.get())
   e.current = Some({
     seq,
     agent: who,
-    pose: if who == agent || left <= 0.0 { Float } else { Fold },
+    pose: if float { Float } else { Fold },
     from: None,
-    fold: dmax(left, 0.0),
-    start: c.now(),
+    clock: if float { pose_clock(Float.ms(), at) } else { pose_clock(left, at) },
   })
   // said once as a turn sets out: it moves until its poses are played (Emits::rest_at)
   c.moving(e.mover, e as &@ui.Moving)
@@ -222,19 +226,27 @@ impl @ui.Moving for Emits with rest_at(self, now, frame) {
   ignore(now)
   ignore(frame)
   match self.current {
-    Some(t) => t.start + turn_ms(t)
+    Some(t) => t.clock.ends()
     None => -1.0
   }
 }
 
 ///|
-/// How long the turn's pose takes.
-fn turn_ms(t : Turn) -> Double {
-  match t.pose {
-    Fold => t.fold
-    Float => if t.from is Some(_) { emit_drop_ms } else { Float.ms() }
-    _ => t.pose.ms()
+/// How long a pose takes (Float on from the message before: only the drop).
+fn pose_ms(pose : Pose, from : (Double, Double)?) -> Double {
+  match pose {
+    Float => if from is Some(_) { emit_drop_ms } else { Float.ms() }
+    _ => pose.ms()
   }
+}
+
+///|
+/// A pose's way, 0 to 1 over its length, linear: from `at` (where the pose before was declared to end), else from
+/// this frame.
+fn pose_clock(ms : Double, at : Double?) -> @motion.Anim {
+  let a = @motion.Anim::new(0.0)
+  a.animate(1.0, @motion.tween(ms, ease=Linear), start_at?=at)
+  a
 }
 
 ///|
@@ -257,14 +269,14 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
       Some(t) => t
       None => return
     }
-    let ms = turn_ms(t)
-    if c.now() - t.start < ms {
+    if t.clock.moving() {
       break
     }
-    let at = t.start + ms
+    // the next from where this one was declared to end, whichever frame sees it
+    let at = t.clock.ends()
     match t.pose {
-      Fold => e.current = Some({ ..t, pose: Float, start: at })
-      Float => e.current = Some({ ..t, pose: Spit, from: None, start: at })
+      Fold => e.current = Some({ ..t, pose: Float, clock: pose_clock(Float.ms(), Some(at)) })
+      Float => e.current = Some({ ..t, pose: Spit, from: None, clock: pose_clock(Spit.ms(), Some(at)) })
       Spit =>
         match (e.queue.get(0), e.landed) {
           // the same agent's next message is waiting: the avatar drops on to it from here, not going home to hop
@@ -276,19 +288,14 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
               agent: next.1,
               pose: Float,
               from: Some(l),
-              fold: 0.0,
-              start: at,
+              clock: pose_clock(emit_drop_ms, Some(at)),
             })
           }
-          _ => e.current = Some({ ..t, pose: Return, start: at })
+          _ => e.current = Some({ ..t, pose: Return, clock: pose_clock(Return.ms(), Some(at)) })
         }
       Return => {
         e.done[seq_s(t.seq)] = true
-        emit_next(c, e, t.agent)
-        match e.current {
-          Some(n) => n.start = at
-          None => ()
-        }
+        emit_next(c, e, t.agent, at~)
       }
     }
   }
@@ -306,12 +313,8 @@ fn emit_step(c : @ui.Ctx, e : Emits) -> Unit {
 ///|
 /// The current pose's time, 0 to 1, linear.
 fn emit_clock(c : @ui.Ctx, t : Turn) -> Double {
-  let ms = turn_ms(t)
-  if ms <= 0.0 {
-    1.0
-  } else {
-    dclamp((c.now() - t.start) / ms, 0.0, 1.0)
-  }
+  ignore(c)
+  t.clock.get()
 }
 
 ///|
