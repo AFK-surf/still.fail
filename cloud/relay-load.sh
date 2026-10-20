@@ -3,7 +3,7 @@
 # run every minute by a systemd timer on the relays on machines of their own (Beijing's, Hong Kong's). /etc/iroh-relay/load.env
 # says which relay this is and what to send with:
 #   RELAY_URL=https://39.105.157.122
-#   RELAY_LOAD_TOKEN=<deploy.py's keys.json RELAY_LOAD_TOKEN>
+#   RELAY_LOAD_TOKEN=<deploy.py's relay_load_token(keys.json's ADMIN_TOKEN)>
 #   CLOUD=https://app.still.fail   (optional)
 # Installing it (as root):
 #   install -m 755 relay-load.sh /usr/local/bin/relay-load
