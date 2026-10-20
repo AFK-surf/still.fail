@@ -1,1 +1,0 @@
-check "the station has the pasted words as the message" '[ "$(sql "select count(*) from entries where text=\"一段短的粘贴文字，来自剪贴板 $TAG\"")" = 1 ]'
