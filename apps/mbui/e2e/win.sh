@@ -47,11 +47,14 @@ relay_exe=$(find "$WORK" -name 'iroh-relay.exe' | head -1)
 relay=$!
 
 # the cloud: fresh, its own ports
+# (its READY line read from its output as it comes, cloud.ready made then: Windows tells nothing of a log file growing
+# while the cloud holds it open, so not the log's change events; scripts/waitfor.mjs --tee)
 (cd "$EMBER/cloud" && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT \
-  exec pnpm exec tsx test/dev.ts > "$OUT/cloud.log" 2>&1) &
+  exec node "$(w "$ROOT/scripts/waitfor.mjs")" --tee "$(w "$OUT/cloud.log")" --mark "$(w "$OUT/cloud.ready")" \
+    --line 'READY still.fail cloud' -- pnpm exec tsx test/dev.ts) &
 cloud=$!
-for _ in $(seq 240); do grep -q 'READY still.fail cloud' "$OUT/cloud.log" 2>/dev/null && break; sleep 0.5; done
-grep -q 'READY still.fail cloud' "$OUT/cloud.log" || { tail -30 "$OUT/cloud.log"; echo "e2e: the cloud did not start"; exit 1; }
+node "$ROOT/scripts/waitfor.mjs" --deadline 120 --what "the cloud's READY line" --exists "$(w "$OUT/cloud.ready")" > /dev/null ||
+  { tail -30 "$OUT/cloud.log"; echo "e2e: the cloud did not start"; exit 1; }
 echo "e2e: cloud up at $ORIGIN"
 
 # the station: its own data and HOME, ember's fake agents first on PATH, no discovery on the LAN, its Windows natives
@@ -71,17 +74,22 @@ station_ok=0
 if (station_env && node "$SF/station/dist/main.js" enroll "$ORIGIN" "$token" --data "$(w "$STATION/data")") > "$OUT/enroll.log" 2>&1; then
   # (straight on Node, not under its launcher: the app directory is only where its build's files would be)
   mkdir -p "$STATION/app"
-  (station_env && exec node "$SF/station/dist/main.js" run --app "$(w "$STATION/app")" --data "$(w "$STATION/data")" > "$OUT/station.log" 2>&1) &
+  # (its `station up` line read from its output, as the cloud's)
+  (station_env && exec node "$(w "$ROOT/scripts/waitfor.mjs")" --tee "$(w "$OUT/station.log")" \
+    --mark "$(w "$OUT/station.ready")" --line 'station up' -- \
+    node "$(w "$SF/station/dist/main.js")" run --app "$(w "$STATION/app")" --data "$(w "$STATION/data")") &
   station=$!
-  for _ in $(seq 120); do [ -f "$STATION/data/stillfail.db" ] && break; sleep 0.5; done
-  # alice's other device: the chat the app's Home shows, made on the station, with its first words
-  if (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
+  # alice's other device, once the station is up: the chat the app's Home shows, made on the station, with its first
+  # words
+  if node "$ROOT/scripts/waitfor.mjs" --deadline 60 --what "the station up" \
+       --exists "$(w "$OUT/station.ready")" > "$OUT/station-up.log" 2>&1 &&
+     (export HOME="$(w "$WORK/peer-home")" USERPROFILE="$(w "$WORK/peer-home")" STILLFAIL_MESH_NATIVE="$mesh" \
         E2E_EMBER="$(w "$SF")" E2E_ORIGIN=$ORIGIN E2E_PEER_DATA="$(w "$WORK/peer")" E2E_FILES="$(w "$WORK")" &&
       timeout 180 node "$D/peer.ts" setup) > "$OUT/peer.log" 2>&1; then
     station_ok=1
   fi
 fi
-echo "e2e: station $([ $station_ok = 1 ] && echo up, the chat made || echo "not up ($(tail -3 "$OUT/enroll.log" "$OUT/peer.log" 2>/dev/null | tr '\n' ' '))")"
+echo "e2e: station $([ $station_ok = 1 ] && echo up, the chat made || echo "not up ($(tail -3 "$OUT/enroll.log" "$OUT/station-up.log" "$OUT/peer.log" 2>/dev/null | tr '\n' ' '))")"
 
 : > "$OUT/result.txt"
 fails=0

@@ -93,7 +93,7 @@ otherwise Home at the root of a `@ui.Nav` (src/sfapp, Home.kt and its parts):
   mark, the illustrations and the 314 station glyphs.
 - `APP=sffix` (src/sffix) is the same Home over made-up chats in the core's
   shapes (src/sfapp/fixture.mbt), no core: `scripts/shots.sh home web-home`
-  compares it with goldens/mac-home*.png and web-home.png.
+  pictures it (out/shots/mac-home*.png and web-home.png).
 
 Not yet, against the current app: the bottom bar (slice 7: 奏 N and 令 in
 it, so no new-chat button here), the long-press menu (pin, rename, copy link)
@@ -175,8 +175,8 @@ ChatFiles.kt, Decisions.kt, LoginCards.kt, Follow.kt):
   a version, Markdown parsed once a text.
 - `APP=sffix MBUI_FIXTURE=chat` opens a made-up chat with every kind of
   message (src/sfapp/chat_fixture.mbt; `chat-loading`, `chat-long` with
-  3000 messages): `scripts/shots.sh chat web-chat` compares it with
-  goldens/mac-chat*.png and web-chat.png.
+  3000 messages): `scripts/shots.sh chat web-chat` pictures it
+  (out/shots/mac-chat*.png and web-chat.png).
 
 Not yet, against the current app:
 the file preview (slice 11); the activity's floor (the room it leaves kept as it
@@ -248,8 +248,8 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   a made-up answer; words with 失败 fail first and go on 重试), keeps drafts
   while it runs and takes files at once. MBUI_FIXTURE=chat-compose,
   chat-attach, chat-quote, chat-sending, chat-failed open the chat with its
-  composer so: `scripts/shots.sh composer web-composer` compares them with
-  goldens/mac-composer-*.png and web-composer-*.png.
+  composer so: `scripts/shots.sh composer web-composer` pictures them
+  (out/shots/mac-composer-*.png and web-composer-*.png).
 
 Words with a reference to another chat (`@[title]`) are looked at before they
 go (`chat.outsideRefs`, src/sfapp/outside.mbt): another workspace's chats they
@@ -309,7 +309,7 @@ DriveScreen.kt, Reader.kt, TextModel.kt, Novel.kt, ReaderMarkdown.kt; chat/scree
 - `APP=sffix MBUI_FIXTURE=files|drive|drive-sub|drive-chosen|drive-entry|drive-upload|drive-empty|reader|reader-bars|
   reader-contents|reader-layout|reader-md|chat-station-files|chat-station-ref` (src/sfapp/drive_fixture.mbt, a
   made-up drive that takes renames, deletes, new folders and uploads while it runs): `scripts/shots.sh drive
-  web-drive` compares them with goldens/mac-<mode>.png and web-<mode>.png.
+  web-drive` pictures them (out/shots/mac-<mode>.png and web-<mode>.png).
 
 Not yet, against the current app (GB18030, the serif face, the system bars following the paper: branch
 mbui-media-complete, below): 跟随's swatch drawn half and half on a diagonal (here the dark page as a disc in the light
@@ -346,8 +346,8 @@ the core.
   (`station.file.part`); the preview's bar over it as over any file.
 - `APP=sffix MBUI_FIXTURE=player-video|player-audio|player-ended|player-opening` (src/sfapp/play_fixture.mbt: a folder
   no listing shows, its films' reads never answered, how the player stands pinned for the shot) and `chat-preview-audio`:
-  `scripts/shots.sh player web-player` and `preview web-preview` compare them with goldens/mac-player-*.png,
-  web-player-*.png, mac-preview-audio.png and web-preview-audio.png.
+  `scripts/shots.sh player web-player` and `preview web-preview` picture them (out/shots/mac-player-*.png,
+  web-player-*.png, mac-preview-audio.png and web-preview-audio.png).
 
 Not yet, against the current app: the frosted glass of the player's bars (a native view under them cannot be blurred: a
 deeper solid tint, as the preview's), the subtitle's shadow (a dark ground under its words only), the bytes played kept on
@@ -408,7 +408,7 @@ OpenJobs.kt, History.kt, ui/ToolStep.kt, ui/Sheet.kt):
   end, 还有 N 个 folding the rest. A message's files in a chat (ChatFiles.kt) were slice 4's.
 - `APP=sffix MBUI_FIXTURE=decisions | decisions-text | decisions-idle | history | history-details | chat-info |
   chat-agent | chat-jobs | chat-job | home-jobs` (src/sfapp/decide_fixture.mbt): `scripts/shots.sh decide web-decide`
-  compares them with goldens/mac-decide-*.png and web-decide-*.png.
+  pictures them (out/shots/mac-decide-*.png and web-decide-*.png).
 
 Tool steps' code is highlighted by its language (a command as shell, a file by its extension: ToolStep.kt Block) and
 a capped block scrolls within its height (mbui's `Ctx::capped`: a finger up or down moves it while it can go that way,
@@ -612,8 +612,8 @@ src/sfapp/bar.mbt, sheet.mbt, newchat.mbt; src/ui/drag.mbt; Bar.kt, Places.kt, S
   view as it fades (140 ms) and its choices fading (80 ms), the chat's list coming up out of the composer (480 ms after
   90); Home lists it at once (the core's row). Refused, the words come back and why is said.
 - `APP=sffix MBUI_FIXTURE=newchat|newchat-station|newchat-model|home-bars|place` (src/sfapp/newchat_fixture.mbt):
-  `scripts/shots.sh newchat web-newchat` compares them with goldens/mac-newchat-*.png and web-newchat-*.png. Home's
-  goldens (mac-home, mac-home-dark, mac-home-sheet, mac-home-swipe, web-home, and slice 8's mac-decide-home-jobs and
+  `scripts/shots.sh newchat web-newchat` pictures them (out/shots/mac-newchat-*.png and web-newchat-*.png). Home's
+  pictures (mac-home, mac-home-dark, mac-home-sheet, mac-home-swipe, web-home, and slice 8's mac-decide-home-jobs and
   web-decide-home-jobs) changed on purpose: the bar on Home, the workspaces' sheet in the new sheet.
 - MBUI_DRIVE has `drag X Y DX DY [MS]` and `dragon DX DY MS TEXT` (a finger moved a frame at a time, then lifted).
 
@@ -678,8 +678,8 @@ FileData; Zoom.kt):
   sees the hole, not the view.
 - `APP=sffix MBUI_FIXTURE=chat-preview-image|pdf|video|audio|html|code|md|csv|none` opens a made-up file
   (src/sfapp/preview_fixture.mbt: a picture, a PDF of two pages, a video whose reads are never answered, a page with a
-  script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` compares them with
-  goldens/mac-preview-*.png and web-preview-*.png.
+  script, code, Markdown, a table, a file of no kind): `scripts/shots.sh preview web-preview` pictures them
+  (out/shots/mac-preview-*.png and web-preview-*.png).
 
 Not yet, against the current app (the viewer's flight, stepping, pinching on iOS, marking, a video's frames and
 landscape: branch mbui-media-complete, below): code highlighting and a code file's sideways scroll,
@@ -772,7 +772,7 @@ notifications (src/host/notify.mbt).
 - A push delivered while the app runs is shown unless the core says not (`notice.pushed`: off, a page in view, another
   workspace's, its kind off), and what it is about is brought onto the device (`notice.bring`).
 - `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
-  `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* goldens).
+  `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* pictures).
 
 Hosts (@host.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
 push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
@@ -809,7 +809,7 @@ FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetch
   its own), then it is read and kept as any file; the folder's row shows it under way (0% while zipped, then how far:
   the Android app shows nothing there). 分享 reads the same way, its row's progress shown too. The chat's preview's 下载
   keeps its file through the same host (a save panel nowhere: Downloads as the Android app has it).
-- `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): goldens/mac-drive-download.png,
+- `APP=sffix MBUI_FIXTURE=drive-download` (a file and a folder under way): out/shots/mac-drive-download.png,
   web-drive-download.png.
 
 Not yet: the bytes downloaded kept for the drive's next open (DriveCache: each download reads through the core again),
@@ -823,7 +823,7 @@ and taken by the app (@host.shared_in's `files`, shared_in_file). The sheet head
 link (the site's last chat not said: files have none); a tap opens that chat (or a new chat on that station, made the
 one new chats start on: `newChat.pick`) with the files in its composer, going up at once as ＋'s do; words shared with
 them still go in through `shareIn.open`. MBUI_SHARE_FILES (paths split by |) stands for another app on macOS.
-`APP=sffix MBUI_FIXTURE=share-in-files`: goldens/mac-share-in-files.png, web-share-in-files.png. Flow 93 share-files
+`APP=sffix MBUI_FIXTURE=share-in-files`: out/shots/mac-share-in-files.png, web-share-in-files.png. Flow 93 share-files
 (Android: an ACTION_SEND intent with the photo through the app's own provider, `#android-intent`; macOS: a photo and a
 PDF).
 
@@ -881,7 +881,7 @@ VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
   (paused): the frame showing grabbed at its own size (MediaMetadataRetriever, AVAssetImageGenerator) and kept with the
   downloads as name-n.png. 横屏: the phone turned for it, upright again as the viewer closes.
 - `APP=sffix MBUI_FIXTURE=chat-preview-step | chat-preview-swipe` (a second picture beside the first: the ways to it;
-  halfway to it under a finger): goldens/mac-preview-step.png, mac-preview-swipe.png; mac-preview-image changed on
+  halfway to it under a finger): out/shots/mac-preview-step.png, mac-preview-swipe.png; mac-preview-image changed on
   purpose (标注图片 in its bar, as the Android app's).
 
 Not yet: a video flown back into its thumbnail at the frame it was left at (videos fade), marks' text drawn with the
@@ -897,7 +897,7 @@ web's reader's download):
 - The serif face: 字体 宋体 draws the text in the serif face (mbui's run `serif`: Noto Serif and its CJK on Android,
   Songti SC on Apple, SimSun on Windows).
 - 下载 in the top bar's right end (the web's reader has it): the whole file kept on the device as the drive's 下载 keeps
-  it (keep.mbt), a novel cut at 16 MB too. reader-bars' golden changed on purpose.
+  it (keep.mbt), a novel cut at 16 MB too. reader-bars' picture changed on purpose.
 - The system bars follow the paper: a reader's as dark as its paper (night on a light theme, white on a dark one), the
   viewer over a picture or a video dark, the player dark; the theme's again as each goes.
 - Flow 98 reader.
@@ -1179,7 +1179,7 @@ pushed, words sent flying from the field into their bubble with the rows above g
 change of shape, the way to the newest, toasts, ＋'s sheet on the sheet's spring, the filter's menu, pressed grounds on
 the ripple's timing. MBUI_MOTION_LOG=1 logs every moving frame; scripts/record.sh records a motion on macOS frame by
 frame (MBUI_RECORD), `scripts/android.sh record` on the emulator, scripts/motionplot.py compares the frames with the
-Android app's curves. At rest nothing of it is drawn: every golden is unchanged.
+Android app's curves. At rest nothing of it is drawn: every picture is unchanged.
 
 ## A chat's messages in motion (branch mbui-chat-complete)
 

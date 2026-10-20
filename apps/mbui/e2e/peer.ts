@@ -20,7 +20,8 @@
 //   node e2e/peer.ts lock-on               safe mode turned on by this device (the owner's, a signer), every other device
 //                                          left out (the app's among them): LOCK ON <entry>
 //   node e2e/peer.ts lock-await [SECONDS]  this device online for that long (60) to be met face to face: the first new
-//                                          device showing its code, PAIRING <code>\t<person>\t<its label> (then 12 s more)
+//                                          device showing its code, PAIRING <code>\t<person>\t<its label> (then until
+//                                          that device is done with it: its prompt gone)
 //   node e2e/peer.ts lock-off              safe mode turned off again: LOCK OFF
 //
 // E2E_EMBER (the ember checkout), E2E_ORIGIN (the dev cloud), E2E_PEER_DATA (this core's own data directory).
@@ -237,19 +238,12 @@ try {
     const opened = await call("lock.open", { workspace });
     console.log(`LOCK ON ${opened?.head?.seq ?? "?"}`);
   } else if (cmd === "lock-await") {
-    // (online until the code has been met and a while after it, for the new device's tries: then gone, so that
-    // another of these commands may take this device's data)
-    let end = Date.now() + Number(rest[0] ?? 60) * 1000;
-    let said = false;
-    while (Date.now() < end) {
-      const p = (await call("lockPrompt.state", {}))?.pairing?.[0];
-      if (p && !said) {
-        console.log(`PAIRING ${p.code}\t${p.name || p.email}\t${p.label}`);
-        said = true;
-        end = Math.min(end, Date.now() + 12_000);
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
+    // (online until a new device shows this one's code, then until it is done with it, confirmed or turned down: its
+    // prompt gone from the lockPrompts topic; then gone, so that another of these commands may take this device's data)
+    const most = Number(rest[0] ?? 60) * 1000;
+    const p = await until({ topic: "lockPrompts" }, (v) => v?.pairing?.[0], most);
+    console.log(`PAIRING ${p.code}\t${p.name || p.email}\t${p.label}`);
+    await until({ topic: "lockPrompts" }, (v) => !(v?.pairing ?? []).some((q: J) => q.code === p.code) || undefined, most);
   } else if (cmd === "lock-off") {
     await call("lock.disable", { workspace });
     console.log("LOCK OFF");

@@ -227,22 +227,21 @@ win() {
   summary "- Windows app 0.1.$n: $(wc -c < "$zip" | tr -d ' ') bytes, zipped in $(secs $t0) s"
 }
 
-# fetched back from where it is served (the public URL; Cloudflare's API while the cloud does not serve it yet), and
-# the same bytes as made: tried a few times (R2 and the line from mini1 fail now and then)
+# fetched back and the same bytes as made: from R2 itself through Cloudflare's API when there is a token (R2 reads what
+# was written, at once: no waiting for it to show), else from the public URL; a request the line from mini1 drops
+# tried again by curl itself (--retry: its network errors, not a wait for the object)
 check_put() {
-  local name=$1 file=$2 want got tries
+  local name=$1 file=$2 want got account
   want=$(shasum -a 256 "$file" | cut -d' ' -f1)
-  for tries in 1 2 3 4 5; do
-    got=$(curl -fsS --max-time 60 "$ORIGIN/releases/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-    if [ "$got" != "$want" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-      local account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
-      got=$(curl -fsS --max-time 60 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-        "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-    fi
-    [ "$got" = "$want" ] && return 0
-    echo "beta: $name is not there as made yet (try $tries)" >&2
-    sleep 5
-  done
+  if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+    account=${CLOUDFLARE_ACCOUNT_ID:-$(curl -fsS --retry 4 --retry-all-errors -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" https://api.cloudflare.com/client/v4/accounts | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4)}
+    got=$(curl -fsS --retry 4 --retry-all-errors --max-time 60 -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      "https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets/stillfail-releases/objects/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  else
+    got=$(curl -fsS --retry 4 --retry-all-errors --max-time 60 "$ORIGIN/releases/$name" 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+  fi
+  [ "$got" = "$want" ] && return 0
+  echo "beta: $name is not as made in the bucket (sha256 $got, made $want)" >&2
   return 1
 }
 
