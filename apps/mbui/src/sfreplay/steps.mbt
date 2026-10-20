@@ -455,6 +455,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   // motions of its own: each run to the end it says, Tester::rest_of; and again while what those motions' frames asked
   // is answered, a page gone at its slide's end telling the core where it was)
   let mut rounds = 0
+  let wakes : Map[String, Int] = {}
   while true {
     rounds += 1
     // (what never stops asking: said, not hidden behind the idle check)
@@ -476,6 +477,21 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
     }
     // (the frame the last one left owed: what it asks (a page gone, its player's place told) answered too)
     self.t.draw()
+    // (and what is told to happen at a time of its own (a timer: an agent's activity lingering, a toast's time), to that
+    // time, as a motion to its end; one that keeps telling itself again never ends: said, not run on)
+    match self.t.next_wake() {
+      Some((at, by)) if at > self.t.time() => {
+        let n = wakes.get(by).unwrap_or(0) + 1
+        wakes[by] = n
+        if n > end_wakes {
+          self.fail("a timer that keeps telling itself again (\{by}): the flow's end never quiet")
+          break
+        }
+        self.t.run_for(at - self.t.time())
+        continue
+      }
+      _ => ()
+    }
     if self.r.next_due() is None && self.t.posted() == 0 {
       break
     }
@@ -522,6 +538,10 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
 /// How many times a flow's end gives what came, runs what moves to its end and draws the frame left owed, before it
 /// says it never goes quiet (Flow::end).
 let end_rounds : Int = 10
+
+///|
+/// How many times one timer may be run to at a flow's end before it is said to keep telling itself again (Flow::end).
+let end_wakes : Int = 3
 
 ///|
 /// The other passes a flow is run in (pace_of): at once, twice as fast, twice as slow, each in an order of its seed's.
