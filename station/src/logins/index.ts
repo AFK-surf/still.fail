@@ -274,11 +274,12 @@ export class Logins {
     const e = this.#entry(id);
     if (!e.run.active) throw new Refused(409, tr(this.#lang(), "station.machineLogin.ended"));
     if (!e.run.paste) throw new Refused(409, "this login does not wait for a code from its page");
+    if (e.run.state === "verifying") throw new Refused(409, "its code was entered: it is being checked");
     if (typeof text !== "string" || text.trim() === "") throw new Refused(400, "text");
     if (text.length > 10_000 || /[\r\n]/.test(text.trim())) throw new Refused(400, "one line of text");
     e.run.input({ text: text.trim() });
     e.run.input({ key: "Enter" });
-    e.run.askPaste(false);
+    e.run.answeredNow();
     if (by) e.doneBy = by;
     return this.#shown(e);
   }

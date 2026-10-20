@@ -91,7 +91,8 @@ class ProfileSignInTest {
     private fun claudeCode(dark: Boolean) {
         shot(profile("claude", "login", job("claude", "needs_code")), "claude-code", dark)
         rule.onAllNodesWithText("打开授权页面", substring = true)[0].assertIsDisplayed()
-        rule.onNodeWithText("完成").assertIsDisplayed()
+        // 完成 only once a code is in the field (LoginCards.kt CodeField): the page first.
+        rule.onAllNodesWithText("完成").assertCountEquals(0)
         rule.onNodeWithText("取消登录").assertIsDisplayed()
     }
 
@@ -101,7 +102,8 @@ class ProfileSignInTest {
         shot(profile("devin", "login", job("devin", "needs_code")), "devin-code", dark)
         rule.onNodeWithText("Devin 账号登录", substring = true).assertIsDisplayed()
         rule.onAllNodesWithText("打开授权页面", substring = true)[0].assertIsDisplayed()
-        rule.onNodeWithText("完成").assertIsDisplayed()
+        // 完成 only once a code is in the field (LoginCards.kt CodeField): the page first.
+        rule.onAllNodesWithText("完成").assertCountEquals(0)
         rule.onNodeWithText("取消登录").assertIsDisplayed()
     }
 }
