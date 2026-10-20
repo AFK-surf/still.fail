@@ -27,11 +27,11 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
 }
 
 ///|
-let dump : Bool = @host.env("MBUI_CORE_DUMP") == "1"
+let dump : Bool = @ui.env("MBUI_CORE_DUMP") == "1"
 
 ///|
 /// MBUI_CALL_LOG=1: every call the app makes, and its answer, on the log (CALL …, ANSWER …), for scripted runs.
-let call_log : Bool = @host.env("MBUI_CALL_LOG") == "1"
+let call_log : Bool = @ui.env("MBUI_CALL_LOG") == "1"
 
 ///|
 /// People's pictures as the core gives them (`picture`): asked once each, kept as images.
@@ -50,7 +50,6 @@ fn picture(url : String) -> String {
             let key = "mem:picture/\{url.hash()}/\{url.length()}"
             @ui.add_image(key, bytes)
             pictures[url] = key
-            @host.request_frame()
           }
           _ => ()
         }
@@ -88,7 +87,6 @@ fn chat_file(station : String, key : String, name : String) -> String {
           }
           _ => chat_files[id] = "!"
         }
-        @host.request_frame()
       })
       ""
     }
@@ -98,7 +96,7 @@ fn chat_file(station : String, key : String, name : String) -> String {
 ///|
 /// MBUI_READONLY=1: nothing the reader does is told to the core (no read marks, no place kept, nothing sent, no draft
 /// kept, no file put up), for runs on a real account that must change nothing in it.
-let read_only : Bool = @host.env("MBUI_READONLY") == "1"
+let read_only : Bool = @ui.env("MBUI_READONLY") == "1"
 
 ///|
 /// What a read-only run may still ask of the core: reads, and the prefs this device keeps (the workspace in view, the
@@ -137,7 +135,6 @@ let core_source : @sfapp.Source = {
         }
       }
       done(r)
-      @host.request_frame()
     })
   },
   call_bytes: fn(name, params, bytes, done) {
@@ -156,7 +153,6 @@ let core_source : @sfapp.Source = {
         }
       }
       done(r)
-      @host.request_frame()
     })
   },
   read_bytes: fn(name, params, done) {
@@ -182,7 +178,6 @@ let core_source : @sfapp.Source = {
           done(Err(e))
         }
       }
-      @host.request_frame()
     })
   },
   stream: fn(name, params, bytes, on_value, done) {
@@ -196,7 +191,6 @@ let core_source : @sfapp.Source = {
     }
     @core.stream(name, params~, bytes~, on_value=fn(v, b) {
       on_value(v, b)
-      @host.request_frame()
     }, on_done=fn(r) {
       if call_log {
         match r {
@@ -205,7 +199,6 @@ let core_source : @sfapp.Source = {
         }
       }
       done(r)
-      @host.request_frame()
     })
   },
   cancel: fn(id) { @core.cancel(id) },
@@ -224,8 +217,8 @@ fn main {
   // MBUI_CORE_TRACE=1: the app's conversation with its core kept on the log (CORETRACE …), for a Tester to give
   // again (src/core/replay.mbt). Only on a local cloud (MBUI_CLOUD on this machine: its made-up account): what a real
   // account's core says (its tokens, a vault's values) is never put on a log.
-  let cloud = @host.env("MBUI_CLOUD")
-  if @host.env("MBUI_CORE_TRACE") == "1" &&
+  let cloud = @ui.env("MBUI_CLOUD")
+  if @ui.env("MBUI_CORE_TRACE") == "1" &&
     (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
   }
@@ -243,26 +236,26 @@ fn main {
   }
   // scripted runs: a chat opened by words in its title once Home lists it (MBUI_OPEN_CHAT), or by its station and
   // session at once (MBUI_OPEN_SESSION=<workspace>/<station>|<session>)
-  @sfapp.open_titled.val = @host.env("MBUI_OPEN_CHAT")
-  match @host.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
+  @sfapp.open_titled.val = @ui.env("MBUI_OPEN_CHAT")
+  match @ui.env("MBUI_OPEN_SESSION").split("|").map(fn(v) { v.to_string() }).to_array() {
     [station, session] =>
       @sfapp.open_chat({ station, session, title: "", station_name: "" })
     _ => ()
   }
   // MBUI_OPEN_PAGE=files: 文件 pushed over Home (scripted runs; the bottom bar's place until there is one)
-  if @host.env("MBUI_OPEN_PAGE") == "files" {
+  if @ui.env("MBUI_OPEN_PAGE") == "files" {
     @sfapp.open_page(Files)
   }
   // MBUI_OPEN_PAGE=decisions: the 奏 page over Home from the start (its way in is the bottom bar's)
-  if @host.env("MBUI_OPEN_PAGE") == "decisions" {
+  if @ui.env("MBUI_OPEN_PAGE") == "decisions" {
     @sfapp.open_decisions()
   }
   // where newer builds of the app come from (src/sfapp/updates.mbt): still.fail cloud's feed MBUI_UPDATE_FEED (the
   // local cloud's in e2e); none by default, as this build ships apart from still.fail's own (its release elsewhere)
-  match @host.env("MBUI_UPDATE_FEED") {
+  match @ui.env("MBUI_UPDATE_FEED") {
     "" => ()
     feed => {
-      let origin = match @host.env("MBUI_CLOUD") {
+      let origin = match @ui.env("MBUI_CLOUD") {
         "" => "https://app.still.fail"
         o => o
       }

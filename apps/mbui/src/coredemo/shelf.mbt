@@ -68,7 +68,6 @@ fn picture(station : String, book : String, ref_ : String) -> String {
       match r {
         Ok((_, Some(bytes))) => {
           @ui.add_image(key, bytes)
-          @host.request_frame()
         }
         _ => ()
       }
@@ -214,7 +213,6 @@ fn core_chapter(book : String, index : Int) -> Result[Array[@ui.Block], String]?
             Err(e) => Err(str(Some(e), "message"))
           },
         )
-        @host.request_frame()
       })
       None
     }
