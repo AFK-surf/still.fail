@@ -45,7 +45,7 @@ import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
 import { useDoing } from "../doing.ts";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
-import type { CarriedStation } from "../core/client.ts";
+import type { CarriedStation, LocalStationState } from "../core/client.ts";
 import * as nav from "../Sidebar.css.ts";
 import { useRailItems, type RailItem } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
@@ -733,38 +733,60 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
   );
 }
 
-/**
- * 「添加这台 Mac」, in the desktop app: the station it carries joined to this workspace at a click, while it is in none
- * (never joined, or removed from its workspace: the app joins a removed one again only when asked), or in another one,
- * which it stays in (docs/multi-workspace.md; an app that says which it joined). Nothing in a browser, or in an app
- * from before it. Once joined, the station shows in the list by itself, as one added by command.
- */
 /** Whether a station in a workspace joins `workspace` beside it: not one it is in, and the app says which it joined. */
 const joinsMore = (here: CarriedStation, workspace: string) =>
   here.joined !== undefined && here.workspace !== workspace && !here.joined.includes(workspace);
 
+/**
+ * 「添加这台 Mac」, in the desktop app: the station it carries joined to this workspace at a click, while it is in none
+ * (never joined, or removed from its workspace: the app joins a removed one again only when asked), or in another one,
+ * which it stays in (docs/multi-workspace.md; an app that says which it joined), and started when it is not running.
+ * In this workspace already but not running (stopped on the 本机 Station page, its service stopped): 「启动这台 Mac」,
+ * for nobody to have to know it is stopped. Nothing in a browser, or in an app from before it. Once joined, the
+ * station shows in the list by itself, as one added by command.
+ */
 export function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
-  const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
+  const desktop = typeof window !== "undefined" ? window.stillfailDesktop : undefined;
   // The desktop app on Windows: a PC, not a Mac.
   const pc = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent);
   const toast = useToast();
   const [here, setHere] = useState<CarriedStation | null>(null);
-  // Read again every few seconds: a station removed from its workspace marks itself so only once the cloud has told it.
+  const [local, setLocal] = useState<LocalStationState | null>(null);
+  // Read again every few seconds: a station removed from its workspace marks itself so only once the cloud has told it,
+  // and one starts and stops on its own time.
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop?.station) return;
     let live = true;
-    const read = () => void desktop.state().then((s) => { if (live) setHere(s); }, () => undefined);
+    const read = () => {
+      void desktop.station!.state().then((s) => { if (live) setHere(s); }, () => undefined);
+      void desktop.local?.state().then((s) => { if (live) setLocal(s); }, () => undefined);
+    };
     read();
     const timer = setInterval(read, 3000);
     return () => { live = false; clearInterval(timer); };
   }, [desktop]);
-  const join = useAction(async () => {
-    const done = await desktop!.join(account.sub, workspace);
+  const stopped = local?.runner === "none" && (!!local.service || local.carried);
+  const start = async () => {
+    const done = await desktop!.local!.act("start");
     if (!done) throw new Error(t("web-pages.settings.thisMac.noAnswer"));
     if ("error" in done) throw new Error(done.error);
+    if ("station" in done) setLocal(done.station);
+  };
+  const join = useAction(async () => {
+    const done = await desktop!.station!.join(account.sub, workspace);
+    if (!done) throw new Error(t("web-pages.settings.thisMac.noAnswer"));
+    if ("error" in done) throw new Error(done.error);
+    if (stopped) await start();
     return done.station;
   }, (s) => { setHere(s); toast(t(pc ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")); });
-  if (!desktop || !here?.carried || (here.state === "running" && !joinsMore(here, workspace))) return null;
+  const starting = useAction(start, () => toast(t(pc ? "web-pages.settings.thisPc.started" : "web-pages.settings.thisMac.started")));
+  if (!desktop?.station || !here?.carried) return null;
+  if (here.state === "running" && !joinsMore(here, workspace)) {
+    // In another workspace, by an app that cannot join it beside it: nothing to offer here; in this one, running: none.
+    const mine = here.workspace === workspace || !!here.joined?.includes(workspace);
+    if (!mine || !stopped) return null;
+    return <Button icon={Monitor} className={className} busy={starting.busy || local?.doing === "start"} onClick={() => starting.run()}>{t(pc ? "web-pages.settings.thisPc.start" : "web-pages.settings.thisMac.start")}</Button>;
+  }
   return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t(pc ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>;
 }
 
