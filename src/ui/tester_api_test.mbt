@@ -306,6 +306,41 @@ test "a scripted run's answered line takes an answer come before the step that a
 }
 
 ///|
+test "a scripted run taps words only where a finger reaches them: not under what lies over them" {
+  // a row's words under a bar over the page's foot (a composer): tapped only once the bar has gone from over them
+  let covered = Ref::new(true)
+  let tapped = Ref::new(0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      let row = c.id("row")
+      if c.clicked(row) {
+        tapped.val += 1
+      }
+      c.box(w=Fill(1.0), h=Fill(1.0), fn() {
+        c.box(h=Px(80.0), fn() {  }) |> ignore
+        c.box(id=row, h=Px(20.0), fn() { c.text("忽略", wrap=false) |> ignore }) |> ignore
+        if covered.val {
+          c.layer(fn() {
+            c.box(h=Px(60.0), fn() {  }) |> ignore
+            c.box(id=c.id("bar"), w=Fill(1.0), h=Px(60.0), bg=0xFFFFFFFFL, fn() {  }) |> ignore
+          })
+          |> ignore
+        }
+      })
+      |> ignore
+    },
+    w=200.0,
+    h=200.0,
+  )
+  let log = t.drive("timeout 300\ntap =忽略\nexit")
+  assert_eq(tapped.val, 0)
+  assert_true(log.iter().any(fn(l) { l.contains("under something else to press") }), msg=log.join("\n"))
+  covered.val = false
+  let log2 = t.drive("timeout 300\ntap =忽略\nexit")
+  assert_eq(tapped.val, 1, msg=log2.join("\n"))
+}
+
+///|
 test "a scripted run that waits for a call never answered fails within its timeout, saying what is awaited" {
   let t = @ui.Tester::new(fn(c) { c.text("page", wrap=false) |> ignore })
   let log = t.drive("timeout 200\nanswered drive.read\nexit")

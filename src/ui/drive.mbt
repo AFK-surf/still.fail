@@ -14,7 +14,8 @@
 //   field TEXT                  a field's words contain TEXT (\n a new line)     empty   the focused field is empty
 //   clear                       the focused field emptied (all selected, deleted)
 //   tap TEXT                    taps the lowest TEXT on screen (in a chat, the newest), once there (within the
-//                               timeout) and holding still; tap1 TEXT the highest
+//                               timeout), holding still and not under something else a press would go to (a
+//                               composer over a list's last row, a sheet); tap1 TEXT the highest
 //   tapxy X Y                   taps there (negative: from the right, the bottom)
 //   hold MS TEXT                pressed on TEXT for MS, then let go (a long press)
 //   type TEXT                   committed by the input method      mark TEXT    composed (not yet committed)
@@ -193,6 +194,39 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
 /// The words on screen a step looks for: text, rich text, a field's placeholder; `icon:NAME` an @sf icon. Only what
 /// is laid out inside the window counts; what is only drawn (Ctx::draw_only) does not.
 fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
+  on_screen_nodes(c, what).map(fn(p) { (p.0, p.1) })
+}
+
+///|
+/// Those of them a finger reaches: what the press there goes to (the last frame's hit targets) is the words' own
+/// (theirs, or what holds them), or nothing; not words under what lies over them (a composer over a list's last row,
+/// a sheet, a scrim): a step waits for them to come out from under it, as someone would.
+fn reachable(c : Ctx, what : String) -> Array[(Double, Double)] {
+  on_screen_nodes(c, what).filter(fn(p) { !under_another(c, p.2, p.0, p.1) }).map(fn(p) { (p.0, p.1) })
+}
+
+///|
+/// Whether (x, y), where node `i` is, is another's to press: the hit target there neither the node nor what holds it.
+fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
+  let top = hit_in(c.hit_ids, c.hit_rects, x, y)
+  if top == 0 {
+    return false
+  }
+  let mut j = i
+  let mut up = 0
+  while j >= 0 && j < c.count && up < c.count {
+    if c.nodes[j].id == top {
+      return false
+    }
+    j = c.nodes[j].parent
+    up += 1
+  }
+  true
+}
+
+///|
+/// The words looked for on screen with their node: (x, y, node).
+fn on_screen_nodes(c : Ctx, what : String) -> Array[(Double, Double, Int)] {
   let found = []
   let icon = if what.has_prefix("icon:") {
     Some("/icon/" + what.unsafe_substring(start=5, end=what.length()) + "/")
@@ -234,11 +268,22 @@ fn on_screen(c : Ctx, what : String) -> Array[(Double, Double)] {
         _ => (n.x + n.fw / 2.0, n.y + n.fh / 2.0)
       }
       if x >= 0.0 && x <= c.width && y >= 0.0 && y <= c.height {
-        found.push((x, y))
+        found.push((x, y, i))
       }
     }
   }
   found
+}
+
+///|
+/// Why a step that presses on `what` found nothing to press, after `ms`: not on screen, or only under something else.
+fn not_reachable(c : Ctx, what : String, ms : Double) -> String {
+  if on_screen(c, what).length() == 0 {
+    "not on screen after \{ms.to_int()} ms"
+  } else {
+    "on screen but under something else to press (what lies over it: a composer, a sheet, a scrim) after " +
+    "\{ms.to_int()} ms"
+  }
 }
 
 ///|
@@ -615,10 +660,10 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       }
       "tap" | "tap1" => {
-        let at = on_screen(c, arg)
+        let at = reachable(c, arg)
         if at.length() == 0 {
           if waited > d.timeout {
-            drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+            drive_fail(c, d, not_reachable(c, arg, d.timeout))
           }
           return
         }
@@ -648,10 +693,10 @@ fn drive_steps(c : Ctx) -> Unit {
             )
           None => (600.0, arg)
         }
-        let at = on_screen(c, what)
+        let at = reachable(c, what)
         if at.length() == 0 {
           if waited > d.timeout {
-            drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
           }
           return
         }
@@ -685,10 +730,10 @@ fn drive_steps(c : Ctx) -> Unit {
             return
           }
           let what = words[3:].to_owned().join(" ")
-          let at = on_screen(c, what)
+          let at = reachable(c, what)
           if at.length() == 0 {
             if waited > d.timeout {
-              drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+              drive_fail(c, d, not_reachable(c, what, d.timeout))
             }
             return
           }
@@ -808,10 +853,11 @@ fn drive_steps(c : Ctx) -> Unit {
         } else {
           (0.0, arg)
         }
-        let at = on_screen(c, what)
+        // (a wheel goes to the list under the words, whatever lies over them; a hover or a click is the finger's)
+        let at = if cmd == "wheelat" { on_screen(c, what) } else { reachable(c, what) }
         if at.length() == 0 {
           if waited > d.timeout {
-            drive_fail(c, d, "not on screen after \{d.timeout.to_int()} ms")
+            drive_fail(c, d, not_reachable(c, what, d.timeout))
           }
           return
         }
