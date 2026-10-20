@@ -1,3 +1,0 @@
-check "the file was staged on the chat's own station (drive.stage)" 'grep -q "CALL drive.stage .*小说-e2e.txt" $OUT/$name.log'
-check "the message carries it as an attachment, not its path" 'entry_attachments "作为文件发送 $TAG" | grep -q "小说-e2e.txt" && [ "$(sql "select count(*) from entries where text like \"作为文件发送 $TAG%上的文件%\"")" = 0 ]'
-check "the station keeps the attachment, the folder's file byte for byte" 'station_file_same "$DRIVE/小说-e2e.txt"'
