@@ -7,11 +7,11 @@
 timeout 60000
 until 端到端测试
 tap icon:settings
-# settings' home pushed in and at rest (a drag while the page still moves in is not the list's), then scrolled to its
-# version row (under the fold)
+# settings' home pushed in, then scrolled to its version row (under the fold): dragged from 此设备 where the frame
+# has it, as a person may while the page slides in (Android's list takes that drag: AnimatedContent holds no input
+# back)
 until 此设备
-rest
-drag 195 700 0 -500 400
+dragon 0 -500 400 此设备
 until 更新到 0.1.1
 shot 1-settings
 # the runner asked first to wait for the system's installer in front (the activity manager's top activity), keep its
@@ -20,7 +20,9 @@ shot 1-settings
 log do: android-installer
 tap 更新到 0.1.1
 # downloaded and checked (正在安装, before the build is handed over); then the runner's word that the installer came in
-# front and was declined (the app in front again), and the app at rest: its update ended (handed to the installer)
+# front and was declined; the update's own end (handed to the installer: the host works at it no more), and the
+# host's word that the app is shown again
 until 正在安装
 done 1-android-installer
-rest
+outside_done an update downloading
+shown

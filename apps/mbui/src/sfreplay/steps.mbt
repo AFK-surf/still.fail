@@ -301,9 +301,9 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
   self.one_by_one.val = true
   let began = self.t.time()
   while !so() {
-    // (bounded on the run's clock: an app never at rest, or what it waits for never coming, said, not run on)
+    // (bounded on the run's clock: what it waits for never coming, said, not run on)
     if self.t.time() - began > until_most_ms {
-      self.fail("not so after \{until_most_ms.to_int()} ms; the app not at rest for: \{self.t.rest_why()}")
+      self.fail("not so after \{until_most_ms.to_int()} ms; moving: \{self.t.moving().join("; ")}")
       break
     }
     let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
@@ -311,25 +311,16 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
       self.t.draw()
       continue
     }
-    // (nothing due yet at the run's pace: the clock on to it, a frame at a time; nothing more to come, on while what
-    // moves has an end, as the run's step waited on through it: a page pushed when its answer came, sliding in)
-    match self.r.next_due() {
-      Some(_) => self.t.run_for(frame_ms)
-      // (nothing more to come: on a frame at a time while the app is not at its rest, what it owes still to come (a
-      // motion with an end, a wake, a frame asked for between frames: what the host said taken by the next frame))
-      None =>
-        if !self.t.at_rest() {
-          self.t.run_for(frame_ms)
-        } else {
-          break
-        }
-    }
+    // (nothing due yet at the run's pace, or nothing more to come: the clock on a frame at a time, as the run's step
+    // waited on, until what it waits for is so (a page pushed when its answer came, sliding in; a line a timer brings)
+    // or the most it waits)
+    self.t.run_for(frame_ms)
   }
   self.one_by_one.val = false
 }
 
 ///|
-/// The most a step waits on the run's clock (Flow::until) for what it waits for, or for the app to come to its rest.
+/// The most a step waits on the run's clock (Flow::until) for what it waits for.
 let until_most_ms : Double = 60000.0
 
 ///|
@@ -581,8 +572,6 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
-  // (in the script written, on until the app is at its rest, as the end ran here to it: not ended mid-motion)
-  emit_rest()
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
   // written waits for its answers too, so the run keeps them)
   emit_answered(self.r.take_asked())
@@ -640,10 +629,7 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
   }
   let now = self.t.time()
   if end > now {
-    // (in a scripted run, the same time on: a step that does not wait for words, a tap at a place, comes after the
-    // motion as here)
-    // (in a scripted run, until the app is at its rest: the motion's end there as here, the run's frames its own)
-    emit_rest()
+    // (in a scripted run, nothing: its steps after wait for what they look for, not for this motion's end)
     self.t.run_for(end - now)
   }
   self.core()

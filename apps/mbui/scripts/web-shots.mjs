@@ -1,7 +1,8 @@
 // The browser build's screenshots, many in one browser: node web-shots.mjs list.txt, each line `<query>\t<out.png>`
 // (the query: more of the page's, as mbui's scripts/web-shot.mjs takes it in QUERY; empty for none). What mbui's
-// web-shot.mjs does for one (at the app's rest), with one server and one Chromium for all of them and SHOT_JOBS (4) pages at a time, each
-// in a fresh context: a browser's start (a second or two) once, not once a shot.
+// web-shot.mjs does for one (at a declared moment of the app's clock: SHOT_MS, 1000 ms), with one server and one
+// Chromium for all of them and SHOT_JOBS (4) pages at a time, each in a fresh context: a browser's start (a second or
+// two) once, not once a shot.
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -29,8 +30,8 @@ async function worker() {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
       try {
         const page = await ctx.newPage();
-        await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1&shot_at=rest${query ? '&' + query : ''}`);
-        // the first frame at the app's rest drawn (window.__shot, mbui's web/host.js), or the run ended before it
+        await page.goto(`http://127.0.0.1:${server.address().port}/?bench=-1&shot_at=${process.env.SHOT_MS || 1000}${query ? '&' + query : ''}`);
+        // the frame at the declared moment drawn (window.__shot, mbui's web/host.js), or the run ended before it
         // (window.__done); SHOT_DEADLINE (60000 ms) is what a run that hangs is given, not a wait
         const shot = await (await page.waitForFunction(() => window.__shot || (window.__done !== undefined && { done: window.__done }),
           null, { timeout: Number(process.env.SHOT_DEADLINE || 60000) })).jsonValue();
