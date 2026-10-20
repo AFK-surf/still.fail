@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """A scripted run's conversation with its core (MBUI_CORE_TRACE=1: CORETRACE lines on a flow's log, e2e/run.sh) made a
 test's: e2e/traces/NAME.trace, and src/sfreplay/trace_NAME.mbt holding it (`@sfreplay.trace_NAME`), for a Tester to
-give again (src/core/replay.mbt, src/sfreplay/steps.mbt). Bytes beside a message over MAX_BYTES (16 KB)
-are left out (a picture comes as none). A sign-in's tokens (the values of keys SECRET names) are put as "-": not even
-the local cloud's made-up account's are kept.
+give again (src/core/replay.mbt, src/sfreplay/steps.mbt). Bytes beside a message over MAX_BYTES (16 KB) are left out,
+their length kept ("bn": they come as that many zeros, a picture as none it can decode). A sign-in's tokens (the values
+of keys SECRET names) are put as "-": not even the local cloud's made-up account's are kept.
 
   scripts/trace.py out/e2e/mac/03-send-text.log [NAME]
 """
@@ -32,7 +32,8 @@ for line in open(src, encoding="utf-8", errors="replace"):
         continue
     ev = scrub(json.loads(line[i + 10:]))
     if len(ev.get("b", "")) > MAX_BYTES * 2:
-        del ev["b"]
+        # (how many there were kept: a part read comes as that many, so what reads on asks for the next)
+        ev["bn"] = len(ev.pop("b")) // 2
     lines.append(json.dumps(ev, ensure_ascii=False, separators=(",", ":")))
 if not lines:
     sys.exit(f"trace.py: no CORETRACE lines in {src} (was the run's app given MBUI_CORE_TRACE=1?)")

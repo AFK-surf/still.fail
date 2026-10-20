@@ -882,7 +882,7 @@ let dv_part_first : Int = 256 * 1024
 ///|
 /// The system's file picker, for files to go up into `at`.
 fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
-  match @host.pick(Files) {
+  match @ui.pick(Files) {
     Some(p) => {
       dv.picking = Some(p)
       dv.picking_for = at
