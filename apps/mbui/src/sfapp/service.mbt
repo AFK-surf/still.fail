@@ -160,6 +160,7 @@ fn service_left(src : Source, station : String, job : String) -> Unit {
         (src.cancel)(id)
       }
       service_pages.remove(key)
+      service_files.remove(key)
     }
     None => ()
   }
@@ -249,6 +250,7 @@ fn service_body(
   name : String,
   restarting : Bool,
   restarts : Int,
+  file? : FilePage? = None,
 ) -> Unit {
   let p = service_page_for(station, job)
   p.port = port
@@ -258,7 +260,18 @@ fn service_body(
       // (made once a page; the build places it, so it is made in it)
       let v = @ui.NativeView::site(
         "/",
-        fn(req, reply) { service_serve(src, p, req, reply) },
+        fn(req, reply) {
+          match file {
+            Some(f) => file_serve(f, req, reply)
+            None => service_serve(src, p, req, reply)
+          }
+        },
+        said=fn(words) {
+          match file {
+            Some(f) => file_said(src, f, words)
+            None => ()
+          }
+        },
         leave=fn(url) {
           // a link elsewhere: not followed in the page, handed to the system's browser (PreviewWeb.kt); copied and
           // said so when nothing takes it
@@ -280,7 +293,7 @@ fn service_body(
     c.tell("service-reload", fn() { site.reload() })
   }
   p.restarting = restarting
-  service_page_bar(c, src, p, site, name, station, port)
+  service_page_bar(c, src, p, site, name, station, port, fixed=file is Some(_))
   service_stage(c, p, site, name, restarting, restarts)
   if !p.folded {
     service_toolbar(c, p)
@@ -556,6 +569,7 @@ fn service_page_bar(
   name : String,
   station : String,
   port : Int,
+  fixed? : Bool = false,
 ) -> Unit {
   let t = @sf.theme()
   let (at, can_back, can_forward, _, _) = site.page_at()
@@ -568,7 +582,7 @@ fn service_page_bar(
   }
   // a tap anywhere on the address types there
   let pill = c.id("service/address")
-  if c.clicked(pill) && !editing {
+  if c.clicked(pill) && !editing && !fixed {
     c.focus_editor(field_key)
   }
   c.box(dir=Row, w=Fill(1.0), pl=14.0, pr=10.0, pt=4.0, pb=6.0, gap=2.0, align=ACenter, fn() {
@@ -581,11 +595,13 @@ fn service_page_bar(
     if bar_icon(c, "service/reload", "refresh", true) {
       site.reload()
     }
-    // how far the page's resources came (PreviewLoad.kt): a ring, red with one failed; tapped, each of them
-    let load = (src.topic)("previewLoad", {
-      "station": Json::string(station),
-      "port": Json::number(port.to_double()),
-    }).value
+    // how far the page's resources came (PreviewLoad.kt): a ring, red with one failed; tapped, each of them (a
+    // visualization's page has none: it is served from here)
+    let load = if fixed {
+      None
+    } else {
+      (src.topic)("previewLoad", { "station": Json::string(station), "port": Json::number(port.to_double()) }).value
+    }
     match load {
       Some(Object(_)) => {
         let ring = c.id("service/load")
@@ -616,6 +632,11 @@ fn service_page_bar(
         id=pill,
         fn() {
           @sf.icon(c, "web", size=14.0, color=t.p.muted) |> ignore
+          if fixed {
+            // nowhere else to go (a visualization): the address is only its name
+            c.box(style=file_name_box, fn() { c.text(name, style=file_name_words) |> ignore }) |> ignore
+            return
+          }
           c.text(name, size=13.0, weight=500, color=t.p.text, wrap=false) |> ignore
           // where it went is what the bar says, unless someone is typing there
           if !editing && at != p.shown_path {
@@ -1083,5 +1104,116 @@ fn load_label(v : Json?) -> String {
     ])
   } else {
     svc("android-chat.load.label", args=[("percent", n("percent")), ("finished", n("finished")), ("total", n("total"))])
+  }
+}
+
+// ── a visualization as a page of its own (Preview.kt PreviewFileScreen) ─
+
+///|
+/// A visualization's page for service_body: its file, what its widget keeps now, where it is kept.
+priv struct FilePage {
+  html : String
+  mut state : Json?
+  station : String
+  key : String
+  path : String
+}
+
+///|
+/// The visualization at `path` of the session `key` of `station`, as a page of its own (web mobile's Preview.tsx for a
+/// `file:` service): the file served to the preview's page from here, with what its widget kept (and keeps from now
+/// on); its bar has only its name.
+fn preview_file_page(c : @ui.Ctx, src : Source, station : String, key : String, path : String, name : String) -> Unit {
+  c.box(style=file_view_page, fn() {
+    service_bar(c, name, station_name(src, station))
+    match viz_load(c, src, station, key, path) {
+      Some(Err(_)) => service_note(c, viz_tr("android-chat.preview.unreadable", args=[("name", name)]))
+      None =>
+        c.box(style=file_wait, fn() { @sf.wait_line(c, viz_tr("common.opening"), key="preview-file") }) |> ignore
+      Some(Ok((html, state))) => {
+        let job = "file:" + key + "\n" + path
+        let f = match service_files.get(service_key(station, job)) {
+          Some(f) => f
+          None => {
+            let f : FilePage = { html, state, station, key, path }
+            service_files[service_key(station, job)] = f
+            f
+          }
+        }
+        service_body(c, src, station, job, 0, name, false, 0, file=Some(f))
+      }
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The page, on the page's ground; what it waits on where its note would be (PreviewWait: 20 in, 8 over and under,
+/// in the middle); the name in the address's place (13, medium, the ink, one line).
+// kept across runs: a value (no field of it changes)
+let file_view_page : @ui.Style = @ui.style(w=Full, h=Full, bg=Bg)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_wait : @ui.Style = @ui.style(w=Full, px=S5, py=S2, align=ACenter)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_name_box : @ui.Style = @ui.style(w=Full, clip=true)
+
+///|
+// kept across runs: a value (no field of it changes)
+let file_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Medium, color=Fg, wrap=false)
+
+///|
+/// The visualizations' pages open, by their key as service pages (their station, `file:<session>\n<path>`).
+let service_files : Map[String, FilePage] = Map([])
+
+///|
+/// A request of a visualization's page answered from here (Preview.kt's serve): its page (any path with no
+/// extension, reloaded with what it kept since), and nothing else there is.
+fn file_serve(f : FilePage, req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
+  let bare = match req.path.find("?") {
+    Some(i) => req.path.view(end_offset=i).to_owned()
+    None => req.path
+  }
+  let last = match bare.rev_find("/") {
+    Some(i) => bare.view(start_offset=i + 1).to_owned()
+    None => bare
+  }
+  let served = req.verb == "GET" && !last.contains(".")
+  if !served {
+    reply.head(404, [("Content-Type", "text/plain; charset=utf-8")])
+    reply.chunk(utf8_bytes("Not found"))
+    reply.end()
+    return
+  }
+  let doc = viz_served(f.html, f.state, @sf.theme().dark, 0xFFFFFFFFL, page_script())
+  reply.head(200, [("Content-Type", "text/html; charset=utf-8"), ("Cache-Control", "no-store")])
+  reply.chunk(utf8_bytes(doc))
+  reply.end()
+}
+
+///|
+/// page.js as served, the language said first (PreviewWeb.kt pageScript).
+fn page_script() -> String {
+  "self.__stillfailLang = \"zh\";\n" + page_js
+}
+
+///|
+/// What a visualization's page says to the app (its bridge's relay: Viz.kt VizKeeper): here only what its widget keeps.
+fn file_said(src : Source, f : FilePage, words : String) -> Unit {
+  match (try Some(@json.parse(words)) catch { _ => None }) {
+    Some(Object(m)) if m.get("type") == Some(Json::string("state")) => {
+      let s = m.get("state").unwrap_or(Json::null())
+      if s.stringify().length() <= viz_max_state {
+        f.state = match s {
+          Null => None
+          x => Some(x)
+        }
+        viz_keep(src, f.station, f.key, f.path, s)
+      }
+    }
+    _ => ()
   }
 }

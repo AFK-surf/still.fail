@@ -23,6 +23,9 @@ pub(all) enum Page {
   DrivePlay(DriveAt)
   /// a web service an agent started, its page (service.mbt): its station, its job
   Service(String, String)
+  /// a visualization as a page of its own (Preview.kt PreviewFileScreen): its station, the session that keeps it, its
+  /// path and its name
+  PreviewFile(String, String, String, String)
   /// the decisions waiting for the viewer, one at a time (奏: decisions.mbt); the bar's 奏 place
   Decisions
   /// an agent's execution history (history.mbt): its chat, its session
@@ -184,6 +187,12 @@ fn reset() -> Unit {
   play_srcs.clear()
   service_pages.clear()
   svc_viewports.clear()
+  viz_loads.clear()
+  viz_frames.clear()
+  viz_heights.clear()
+  viz_full.val = None
+  viz_unmade.clear()
+  service_files.clear()
   share_in.shared = None
   share_in.files = []
   share_in.raised = false
@@ -334,10 +343,14 @@ fn home() -> Unit {
 fn pages_left(src : Source) -> Unit {
   for p in left_pages {
     match p {
-      Chat(r) => chat_left(src, r)
+      Chat(r) => {
+        chat_left(src, r)
+        viz_chat_left(r.station, r.session)
+      }
       DriveRead(at) => reader_left(at)
       DrivePlay(at) => play_left(at)
       Service(station, job) => service_left(src, station, job)
+      PreviewFile(station, key, path, _) => service_left(src, station, "file:" + key + "\n" + path)
       History(r, key) => history_left(src, r, key)
       _ => ()
     }
@@ -430,6 +443,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         wide_overlays(c, src, w)
         pick_back(c)
         preview(c, src)
+        viz_full_layer(c, src)
       } else {
         c.nav(app.nav, fn(page) { page_view(c, src, w, all, invited, page) }, bg=t.p.bg)
         |> ignore
@@ -452,6 +466,8 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)
+        // a visualization over the whole screen (viz.mbt)
+        viz_full_layer(c, src)
         filter_menu(c, src, w)
         // a row's menu, held long (home_menu.mbt)
         home_row_menu(c, src)
@@ -536,6 +552,7 @@ fn page_view(
         DriveRead(at) => reader_page(c, src, at)
         DrivePlay(at) => play_page(c, src, at)
         Service(station, job) => service_page(c, src, station, job)
+        PreviewFile(station, key, path, name) => preview_file_page(c, src, station, key, path, name)
         Archived => setting_page(c, src, w, @settings.Route::Archive)
         Settings => setting_page(c, src, w, @settings.Route::Home)
         Setting(r) => setting_page(c, src, w, r)

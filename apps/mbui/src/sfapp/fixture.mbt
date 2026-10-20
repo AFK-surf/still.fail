@@ -397,6 +397,9 @@ pub fn fixture(mode : String) -> Source {
           f.version += 1
           done(Ok(Json::object({})))
         }
+        // a visualization's widget kept nothing yet; what it keeps is taken (viz.mbt)
+        "widget.state" => done(Ok({ "state": Json::null() }))
+        "widget.setState" => done(Ok(Json::object({})))
         "chat.older" => {
           f.older += 1
           f.version += 1
