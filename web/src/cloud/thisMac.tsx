@@ -82,9 +82,10 @@ function started(local: LocalStationState | null): void {
  * 添加这台 Mac: the station the app carries joined to `workspace` at a click, while it is in none (never joined, or
  * removed from its workspace: the app joins a removed one again only when asked), or in another one, which it stays
  * in (docs/multi-workspace.md; an app that says which it joined); started too when nobody runs it. `offered` false in
- * a browser, an app from before it, or where it is in `workspace` already.
+ * a browser, an app from before it, or where it is in `workspace` already. `announce`: said in a toast once joined
+ * (not where the place it was asked in says it).
  */
-export function useJoinThisMac(account: Account, workspace: string) {
+export function useJoinThisMac(account: Account, workspace: string, { announce = true }: { announce?: boolean } = {}) {
   const { station, local } = useHere();
   const toast = useToast();
   const join = useAction(async () => {
@@ -94,7 +95,7 @@ export function useJoinThisMac(account: Account, workspace: string) {
     set({ station: done.station });
     if (stopped(here.local)) started(await start());
     return done.station;
-  }, () => toast(t(PC ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")));
+  }, () => { if (announce) toast(t(PC ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")); });
   const offered = !!desktop()?.station && !!station?.carried && (station.state !== "running" || joinsMore(station, workspace));
   return { offered, join, busy: join.busy || local?.doing === "start" };
 }
@@ -110,11 +111,13 @@ export function JoinThisMac({ account, workspace, className }: { account: Accoun
  * `s` when it is this machine's station and nobody runs it: said as stopped at once, without waiting for the cloud to
  * see it gone; `start` starts it (the app's own, or its service).
  */
-export function useStoppedHere(s: StationView) {
+export function useStoppedHere(s: StationView | undefined) {
   const { station, local } = useHere();
   const toast = useToast();
   const run = useAction(async () => started(await start()), () => toast(t("web-pages.stations.page.started")));
   const key = station?.station;
-  const mine = !!key && (s.id === key || s.station.endsWith(`/${key}`));
+  const mine = !!key && !!s && (s.id === key || s.station.endsWith(`/${key}`));
   return { stopped: mine && stopped(local), start: run, starting: run.busy || local?.doing === "start" };
 }
+
+export type StoppedHere = ReturnType<typeof useStoppedHere>;

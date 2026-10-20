@@ -29,7 +29,7 @@ import { SearchSection } from "../StationSearch.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
-import { useStoppedHere } from "./thisMac.tsx";
+import { useStoppedHere, type StoppedHere } from "./thisMac.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -126,6 +126,8 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   const { view, manager } = useWorkspace(entry);
   const edits = useStationEdits(view, entry.account, listed ?? []);
   const found = listed?.find((s) => s.id === id);
+  // This machine's, stopped here: said at once (not when the cloud has seen it go), and started from its head.
+  const here = useStoppedHere(found);
   const back = `/w/${entry.id}/settings/stations`;
   if (!listed) {
     return (
@@ -137,11 +139,11 @@ export function StationSettings({ entry }: { entry: WorkspaceEntry }) {
   }
   // Removed (or a link from before): the list, or the first of them.
   if (!found) return <Navigate to={back} replace />;
-  const s = edits.shown(found);
+  const s = edits.shown(here.stopped ? { ...found, online: false } : found);
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       {side ? <MobileBack to={back} label="Station" /> : <BackLink to={back} label="Station" />}
-      <Head s={s} manager={manager} edits={edits} />
+      <Head s={s} here={here} manager={manager} edits={edits} />
       {edits.dialogs}
       <Body s={s} manager={manager} />
     </div>
@@ -152,15 +154,13 @@ type Edits = ReturnType<typeof useStationEdits>;
 
 /** Its mark and name (a title its managers rename where it is, as the workspace's), how it is and what it is; beside
  * them trying it again while away, and its ⋯ (its 文件 are opened from the overview's folders). */
-function Head({ s: listed, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
-  // This machine's, stopped here: said at once, and started from here.
-  const here = useStoppedHere(listed);
-  const s = here.stopped ? { ...listed, online: false } : listed;
+function Head({ s, here, manager, edits }: { s: StationView; here: StoppedHere; manager: boolean; edits: Edits }) {
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
   const silent = useLong(s.online && !s.host, 15_000);
-  const wrong = problems(s, silent);
+  // Stopped here: its 启动 says what to do, not how to reach it again.
+  const wrong = here.stopped ? [] : problems(s, silent);
   const items = edits.menu(s, manager, false);
   return (
     <>

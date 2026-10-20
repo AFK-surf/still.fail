@@ -659,7 +659,8 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
   const [name, setName] = useState("");
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(view.id).value;
-  const mac = useJoinThisMac(account, view.id);
+  // Its joining said in the dialog, not in a toast as well.
+  const mac = useJoinThisMac(account, view.id, { announce: false });
   const macJoined = mac.join.result !== undefined;
   const offersMac = thisMac && (mac.offered || macJoined);
   const offersExisting = !!joinable?.offered && joinable.items.length > 0;
