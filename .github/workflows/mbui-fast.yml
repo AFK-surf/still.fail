@@ -59,6 +59,22 @@ jobs:
           APP=stillfail VARIANT=release EMBER=$PWD bash apps/mbui/scripts/android.sh build > $L 2>&1 || { grep -av '│\|Warning\|╭\|╰\|warning:' $L | tail -60; exit 1; }
           grep -a '^android.sh\|^core.hbc\|compiled (\|units in\|BUILD \|^moon:\|Finished' $L | cut -c1-240 | tail -20
           ls -la apps/mbui/android/app/build/outputs/apk/*/*.apk
+      - name: "Gradle's time, task by task (the same build again, libmbui.so touched: as a new build's)"
+        run: |
+          cd apps/mbui/android
+          touch app/src/main/jniLibs/arm64-v8a/libmbui.so
+          /usr/bin/time -p ./gradlew -q assembleRelease --profile -PstillfailBuild=2 2>&1 | tail -5
+          python3 - build/reports/profile/*.html <<'PY'
+          import re, sys, html
+          t = open(sys.argv[1]).read()
+          rows = re.findall(r'<td>(:[^<]+)</td>\s*<td class="numeric">([0-9.]+)s</td>\s*<td>([^<]*)</td>', t)
+          rows.sort(key=lambda r: -float(r[1]))
+          for task, s, res in rows[:15]:
+              print(f'{float(s):6.2f} s  {task}  {res}')
+          for k in ('Startup', 'Settings and buildSrc', 'Loading Projects', 'Configuring Projects', 'Task Execution', 'Total Build Time'):
+              m = re.search(re.escape(k) + r'</td>\s*<td class="numeric">([^<]+)</td>', t)
+              if m: print(f'{k}: {m.group(1)}')
+          PY
 
   mac:
     runs-on: macos-15
