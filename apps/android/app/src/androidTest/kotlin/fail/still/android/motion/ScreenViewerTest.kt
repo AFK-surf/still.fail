@@ -596,6 +596,26 @@ class ScreenViewerTest {
         assertTrue(v.exited)
     }
 
+    /** Over in the dark theme: the screen's dark still its own, its words and 重新打开 light on it. */
+    @Test fun overDark() {
+        val v = Viewer(dark = true)
+        v.open()
+        v.state("live")
+        v.config()
+        v.frame(1000)
+        rule.waitUntil(5_000) { v.acked(1000) }
+        v.state("ended", message = "agent 关掉了这个标签页")
+        v.h.fake.finish(VIEW)
+        v.h.deliver()
+        v.shot("screen-ended-dark")
+        rule.onNodeWithText("重新打开").assertIsDisplayed()
+        v.open()
+        v.state("gone", others = emptyList(), message = "此屏幕已不存在")
+        v.h.fake.finish(VIEW)
+        v.h.deliver()
+        v.shot("screen-gone-dark")
+    }
+
     private fun MotionRule.onAllNodesWithTextCount(text: String) =
         onAllNodes(androidx.compose.ui.test.hasText(text)).fetchSemanticsNodes().size
 
