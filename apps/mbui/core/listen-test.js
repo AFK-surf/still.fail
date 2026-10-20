@@ -1,5 +1,5 @@
 // The core's stand-in for core/listen_test.m: what client/core-ts's bridge host asks of `listen.*` (hosts/bridge.ts),
-// straight on apple_core.m's __native, and what it got, told to the test as messages. Plain ES2017, not bundled.
+// straight on apple_core.mm's __native, and what it got, told to the test as messages. Plain ES2017, not bundled.
 var pending = {};
 var nextCall = 1;
 var client = 0;

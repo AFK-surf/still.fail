@@ -1,5 +1,5 @@
-// The still.fail client core (client/core-ts of ember) in JavaScriptCore on its Rust shell (client/shell), for the
-// macOS and iOS hosts: apple_core.m. See core/README.md.
+// The still.fail client core (client/core-ts) in Hermes on its Rust shell (client/shell), for the native hosts:
+// apple_core.mm (macOS, iOS), android_core.c. See core/README.md.
 //
 // One core, one UI client. What the UI says goes in with mb_core_send as the protocol's JSON (protocol.ts:
 // {id, call, params}, {id, subscribe: {topic, ...}}, {id, unsubscribe: true}, ...), with bytes beside it when a call
@@ -20,8 +20,8 @@ extern "C" {
 typedef void (*mb_core_message_fn)(const char *json, size_t len, const uint8_t *bytes, size_t blen, void *ctx);
 
 /// Starts the core: its files (accounts, sign-ins, databases) in `data_dir`, still.fail cloud at `cloud_origin`
-/// (https://app.still.fail), `beta` the test channel. The script is $MB_CORE_BUNDLE, else core.js in the app's
-/// bundle. Returns once the core's thread is up (the script still loading): mb_core_send can follow at once.
+/// (https://app.still.fail), `beta` the test channel. The script is $MB_CORE_BUNDLE, else core.hbc in the app's
+/// bundle (Android: its assets). Returns once the core's thread is up (the script still loading): mb_core_send can follow at once.
 /// A failure to start (no script, the files' directory) comes as {"fatal": ...}.
 void mb_core_start(const char *data_dir, const char *cloud_origin, int beta, mb_core_message_fn on_message, void *ctx);
 

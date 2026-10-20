@@ -11,10 +11,11 @@ meanwhile.
 ## What stays the same
 
 - The core: still.fail's TypeScript core (client/core-ts) with its Rust shell
-  for IO, as the current app runs it. On Android in Hermes (the prebuilt
-  `engine` and `shell` parts: `node scripts/native.ts path engine
-  android-arm64`), on Apple in JavaScriptCore (src/coredemo already does),
-  later on Windows. The protocol is the one src/core speaks (docs/client-core.md
+  for IO, as the current app runs it, in Hermes everywhere (React Native
+  0.81.4's, the same `core.hbc`): on Android the prebuilt `engine` and
+  `shell` parts (`node scripts/native.ts path engine android-arm64`), on
+  macOS and iOS src/host/apple_core.mm on Hermes's Apple frameworks (until
+  2026-10-19 JavaScriptCore), later on Windows. The protocol is the one src/core speaks (docs/client-core.md
   "Protocol": calls, keyed topics with deltas, `secure.*` and `listen.*` asked
   of the host).
 - The design: src/sf, from the web's tokens and ui-panels rules, which the

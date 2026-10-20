@@ -1,4 +1,4 @@
-// listen.* in the core's engine (src/host/apple_core.m on src/host/apple_listen.m), with core/listen-test.js in the
+// listen.* in the core's engine (src/host/apple_core.mm on src/host/apple_listen.m), with core/listen-test.js in the
 // core's place: it opens a listener, takes one request and answers it, then closes; this program is the browser.
 // Built and run by `scripts/core.sh listen`.
 //   listen_test <data dir>        (MB_CORE_BUNDLE: core/listen-test.js)

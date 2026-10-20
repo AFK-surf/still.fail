@@ -1,5 +1,5 @@
-// The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell) linked into the app, its messages
-// posted by core_native.c to mbui's queue on the channel "core" (mb_post, any thread), which hands each to `receive`
+// The app's one core: the engine (src/host/core_api.h; Hermes on the Rust shell, on macOS, iOS, Android and Windows)
+// linked into the app, its messages posted by core_native.c to mbui's queue on the channel "core" (mb_post, any thread), which hands each to `receive`
 // on the UI thread as the next frame begins (the app's `@ui.on_message("core", @core.receive)`). On the web there is no
 // engine yet (js.mbt): `start` says so.
 

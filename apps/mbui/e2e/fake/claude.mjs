@@ -15,6 +15,7 @@
 // What it writes of a turn goes to its transcript as the real claude's does (<config>/projects/<dir>/<session>.jsonl),
 // which is what the station reads an agent's execution history from.
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import readline from "node:readline";
 import { spawn } from "node:child_process";
@@ -119,6 +120,19 @@ async function turn(text) {
     said = await post(to, { text: md, kind: "all_done", done: "answered the question that was asked" });
   } else if (text.includes("serve:")) {
     const [name, port, words] = line("serve:").split("|");
+    // a port another process holds (another run's service on the same machine) is said, not served over: the page
+    // would be that other server's
+    const taken = await new Promise((done) => {
+      const probe = net.createServer().once("error", () => done(true));
+      probe.listen(Number(port), "127.0.0.1", () => probe.close(() => done(false)));
+    });
+    if (taken) {
+      process.stderr.write(`fake claude: serve: port ${port} is taken by another process\n`);
+      said = await post(to, { text: `serve: port ${port} is taken by another process`, kind: "all_done", done: "the port was taken" });
+      message(said);
+      say({ type: "result", subtype: "success", is_error: false, duration_ms: 1, num_turns: 1, session_id: sessionId, result: said });
+      return;
+    }
     const dir = path.join(process.cwd(), `e2e-site-${port}`);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "index.html"), PAGE_A);

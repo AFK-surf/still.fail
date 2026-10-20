@@ -8,6 +8,8 @@ timeout 60000
 until 发到
 until e2e-photo.jpg
 until 新 chat
+# the sheet's own row, beside the list's under it (the sheet can come before the chats have: 新 chat alone)
+untiln 2 端到端测试
 wait 1000
 shot 1-sheet
 tap 端到端测试

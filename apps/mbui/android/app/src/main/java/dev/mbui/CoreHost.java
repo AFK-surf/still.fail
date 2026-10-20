@@ -139,7 +139,7 @@ final class CoreHost {
         return e.getClass().getSimpleName() + ": " + (e.getMessage() != null ? e.getMessage() : "");
     }
 
-    // ── listen.* (ember client/core-ts hosts/bridge.ts; ember's Loopback.kt, as apple_core.m answers them) ──
+    // ── listen.* (ember client/core-ts hosts/bridge.ts; ember's Loopback.kt, as apple_core.mm answers them) ──
     //   listen.open {port, host} → {id, port}, or the error (the port taken: "… Address already in use")
     //   listen.next {id} → {request, method, path, headers} + the body, or {end: true} once the listener is closed
     //   listen.respond {id, request, status, headers: [[name, value]]} + the body → {}
