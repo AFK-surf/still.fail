@@ -27,6 +27,9 @@ import { deferralKey } from "../src/decisions.ts";
 import { encode } from "../src/ops.ts";
 import { EXPORT_MS } from "../src/trace.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 // deno-lint-ignore no-explicit-any
 type J = any;
 
@@ -488,7 +491,7 @@ test("a_draft_written_as_it_is_typed_is_one_write_and_read_by_its_key", async ()
   await host.time.pass(SOON_MS + 50);
   await host.settle();
   assert.deepEqual(kept(), ["修一下"]);
-  assert.deepEqual(await ask(host, core, ui, 7, "draft.get", { key: "new:ws/st" }), { text: "", quotes: [], files: [] });
+  assert.deepEqual(noId(await ask(host, core, ui, 7, "draft.get", { key: "new:ws/st" })), { text: "", quotes: [], files: [] });
   core.close();
 });
 

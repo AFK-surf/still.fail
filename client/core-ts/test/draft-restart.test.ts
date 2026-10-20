@@ -9,6 +9,9 @@ import { HostWire } from "../src/station/wire.ts";
 import { FakeHost, jsonResponse } from "../src/testing.ts";
 import { answers, call, signIn } from "./helpers.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 async function setup() {
   const host = new FakeHost();
   signIn(host);
@@ -35,7 +38,7 @@ async function setup() {
       await host.settle();
       const answer = answers(host.takeEmitted(), at);
       assert.ok(answer && "ok" in answer, `${name} did not succeed: ${JSON.stringify(answer)}`);
-      return answer.ok;
+      return name === "draft.get" ? noId(answer.ok) : answer.ok;
     },
     async restart() {
       await host.time.pass(SOON_MS + 50);

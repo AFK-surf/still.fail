@@ -599,6 +599,8 @@ fn send_first(
   d.quotes.clear()
   d.comments.clear()
   d.error = None
+  // sent: what is written next is another draft, which the core names as this one is kept empty
+  sent_draft(d, taken_files.length())
   save_draft(src, d)
   fresh.starting = true
   let sig = picked_sig(v)

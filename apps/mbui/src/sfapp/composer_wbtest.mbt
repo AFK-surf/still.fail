@@ -22,6 +22,8 @@ fn fake_core(
   made? : Ref[Source?] = Ref(None),
 ) -> @ui.Tester {
   reset()
+  // the drafts the fake core has named (its `draft.put`)
+  let drafts_named = Ref(0)
   let base = fixture("chat")
   let src : Source = {
     ..base,
@@ -29,7 +31,19 @@ fn fake_core(
       calls.push({ name, params, bytes: None, done })
       match name {
         "draft.get" => done(Ok(kept))
-        "draft.put" | "session.warm" | "client.focus" | "chat.place" => done(Ok(Json::object({})))
+        // the core's name for the draft (DraftView.id): another once it is put back empty
+        "draft.put" => {
+          let blank = text(Some(params), "text") == "" &&
+            (match field(Some(params), "files") {
+              Some(Array(fs)) => fs.length() == 0
+              _ => true
+            })
+          if blank {
+            drafts_named.val += 1
+          }
+          done(Ok({ "id": Json::string("draft-\{drafts_named.val}") }))
+        }
+        "session.warm" | "client.focus" | "chat.place" => done(Ok(Json::object({})))
         _ => ()
       }
     },
@@ -174,39 +188,10 @@ test "a long paste goes up by the same id and name whatever the clocks say: from
 }
 
 ///|
-test "the same paste in the next message is another upload: the chat moved on by the message before" {
+test "the same paste in the next message is another upload: the core names the next draft anew" {
   let long = "第一行要点\n" + String::make(6000, 'x')
   let calls : Array[Made] = []
-  // the core's chat once the first message is in it: one more message, after the last
-  let sent = Ref(false)
-  let t = fake_core(calls, over=fn(name, tp) {
-    if name != "chat" || !sent.val {
-      return tp
-    }
-    match tp.value {
-      Some(Object(o)) =>
-        match o.get("messages") {
-          Some(Array(ms)) if ms.length() > 0 =>
-            match ms[ms.length() - 1] {
-              Object(m) => {
-                let seq = match m.get("seq") {
-                  Some(Number(n, ..)) => n
-                  _ => 0.0
-                }
-                let next = m.copy()
-                next["seq"] = Json::number(seq + 1.0)
-                next["text"] = Json::string("这条带着粘贴的文字发出去了")
-                let o2 = o.copy()
-                o2["messages"] = Json::array(ms + [Json::object(next)])
-                { ..tp, value: Some(Json::object(o2)), version: tp.version + 1 }
-              }
-              _ => tp
-            }
-          _ => tp
-        }
-      _ => tp
-    }
-  })
+  let t = fake_core(calls)
   let up = fn() {
     t.tap_text("发消息")
     t.type_text(long)
@@ -222,8 +207,8 @@ test "the same paste in the next message is another upload: the chat moved on by
   let first = up()
   tap_send(t)
   assert_eq(named(calls, "chat.send").length(), 1)
-  sent.val = true
-  t.draw()
+  // the draft emptied as it went is kept so (draft.put), and the core names the next one
+  t.run_for(draft_keep_ms)
   let second = up()
   assert_true(first.0 != second.0)
   assert_true(first.1 != second.1)
@@ -260,7 +245,7 @@ test "a file going up keeps the id it was given as it went in, whatever comes to
   })
   let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
   let d = drafts.get(draft_key(r)).unwrap()
-  let before = d.after
+  let before = d.id
   // two parts' worth
   let bytes = Bytes::make(part_size + 10, b'x')
   add_file(made.val.unwrap(), d, r.station, "big.bin", bytes, None)
@@ -268,12 +253,74 @@ test "a file going up keeps the id it was given as it went in, whatever comes to
   assert_eq(first.length(), 1)
   came.val = true
   t.draw()
-  assert_true(d.after != before)
+  assert_eq(d.id, before)
   (first[0].done)(Ok({ "have": Json::number(part_size.to_double()) }))
   let parts = named(calls, "station.upload.part")
   assert_eq(parts.length(), 2)
   assert_eq(text(Some(parts[1].params), "id"), text(Some(parts[0].params), "id"))
   assert_eq(text(Some(parts[1].params), "name"), text(Some(parts[0].params), "name"))
+}
+
+///|
+test "the same file twice in a draft is two uploads, and again after it was sent a third; none is the draft's name" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let _t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  // the core's name for the draft as it was last kept (the fake core's draft.put)
+  sent_draft(d, 1)
+  save_draft(src, d)
+  let named_as = d.id
+  assert_true(named_as != "")
+  let bytes = b"the same bytes"
+  let ids = fn() { named(calls, "station.upload.part").map(fn(m) { text(Some(m.params), "id") }) }
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  // sent: the draft emptied, kept so, named anew; the same file put in again
+  d.files.clear()
+  sent_draft(d, 2)
+  save_draft(src, d)
+  assert_true(d.id != named_as)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let all = ids()
+  assert_eq(all.length(), 3)
+  assert_true(all[0] != all[1])
+  assert_true(all[2] != all[0] && all[2] != all[1])
+  // each as the station takes an upload's id (32 hex digits), none the draft's name as it is
+  for id in all {
+    assert_eq(id.length(), 32)
+    assert_true(id.iter().all(fn(ch) { (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') }))
+    assert_true(id != named_as && id != d.id)
+  }
+}
+
+///|
+test "a draft emptied, not sent: the core names the next, and the same file put in again is another upload" {
+  let calls : Array[Made] = []
+  let made : Ref[Source?] = Ref(None)
+  let _t = fake_core(calls, made~)
+  let src = made.val.unwrap()
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  let d = drafts.get(draft_key(r)).unwrap()
+  let bytes = b"the same bytes"
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let first = named(calls, "station.upload.part")[0]
+  // up: the draft holds it, kept so (draft.put with the file: the same draft, its name kept)
+  (first.done)(Ok({ "file": { "name": "a.txt", "path": "uploads/u/a.txt", "size": 14 } }))
+  save_draft(src, d)
+  let named_as = d.id
+  assert_true(named_as != "")
+  // taken out again, nothing sent: kept empty, and the core names the next draft
+  d.files.clear()
+  save_draft(src, d)
+  assert_true(d.id != named_as)
+  assert_eq(named(calls, "chat.send").length(), 0)
+  add_file(src, d, r.station, "a.txt", bytes, None)
+  let parts = named(calls, "station.upload.part")
+  assert_eq(parts.length(), 2)
+  assert_true(text(Some(parts[1].params), "id") != text(Some(first.params), "id"))
 }
 
 ///|
