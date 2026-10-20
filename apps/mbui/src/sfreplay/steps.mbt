@@ -77,6 +77,12 @@ pub fn Flow::start(
   // what the core says comes through mbui's queue, as the app's does (src/stillfail: sfcore.start)
   @ui.on_message("core", @core.receive)
   let t = @ui.Tester::new(app, w~, h~, env~)
+  // (the time of day the run's: its first event that has happened here (the app's first ask, made as it started) at
+  // the run's moment of it, going on with the frames' clock from there, @ui.wall_ms)
+  match r.first_happened() {
+    Some((at, wall)) => t.set_wall(wall + (t.time() - at))
+    None => ()
+  }
   // what the run's host said of its views (a player's state, a video's frames) said to the Tester's in its place
   r.host(fn(line) { ignore(t.view_said(line)) })
   // the run's pace kept on the Tester's clock: when an ask is made again, when a message is given
@@ -118,6 +124,8 @@ pub fn Flow::start(
           }
           frames_to.val = run.last().unwrap_or(wall)
           let now = t.time()
+          // (and the time of day the run's again from here: this run of frames' first line's on its clock)
+          t.set_wall(wall + (now - at))
           let times = run.map(fn(w) { w - wall + at }).filter(fn(x) { x > now })
           if times.length() > 0 {
             t.set_frame_times(times)
