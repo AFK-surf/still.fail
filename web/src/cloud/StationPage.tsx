@@ -29,6 +29,7 @@ import { SearchSection } from "../StationSearch.tsx";
 import { LoginsSection } from "../MachineLogins.tsx";
 import { NavAction, NavList, NavItem, NavLine, NavTop, navFill } from "../SidebarList.tsx";
 import { AddStationDialog, useStationEdits, useWorkspace } from "./settings.tsx";
+import { useStoppedHere } from "./thisMac.tsx";
 import type { WorkspaceEntry } from "./workspace.tsx";
 import * as railCss from "../Rail.css.ts";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -71,7 +72,10 @@ export function StationsNav({ entry, top }: { entry: WorkspaceEntry; top?: React
  * seen while away); where it is from, if another workspace lent it; then, while it is up, what is left of its CPU, memory and disk in
  * small boxes (as in a chat's bar: their edge in their level's colour), and how this device reaches it, a newer version
  * there said too. Nothing in colour but what is off. */
-function StationRow({ s, to }: { s: StationView; to: string }) {
+function StationRow({ s: listed, to }: { s: StationView; to: string }) {
+  // This machine's, stopped here: said at once, not when the cloud has seen it go.
+  const here = useStoppedHere(listed);
+  const s = here.stopped ? { ...listed, online: false } : listed;
   const meters = s.online ? s.host?.meters ?? [] : [];
   const net = useStationNet(s.online ? s.station : null);
   const lanKept = useLanKept(net?.lan);
@@ -79,7 +83,7 @@ function StationRow({ s, to }: { s: StationView; to: string }) {
   return (
     <NavItem to={to} title={s.name}
       mark={s.emoji || s.icon ? <StationMark emoji={s.emoji} icon={s.icon} size={16} /> : <WorkspaceMark w={{ name: s.name }} size={16} />}
-      end={<><span className={railCss.dot} data-online={s.online || undefined} />{brief(s)}</>}>
+      end={<><span className={railCss.dot} data-online={s.online || undefined} />{here.stopped ? <span className={css.low} data-level="amber">{t("web-pages.stations.page.stopped")}</span> : brief(s)}</>}>
       {/* Where it is from, for one another workspace lent (what the machine is, its page says). */}
       {joinedText(s) && <NavLine><span className={navFill}>{joinedText(s)}</span></NavLine>}
       {meters.length > 0 && (
@@ -148,7 +152,10 @@ type Edits = ReturnType<typeof useStationEdits>;
 
 /** Its mark and name (a title its managers rename where it is, as the workspace's), how it is and what it is; beside
  * them trying it again while away, and its ⋯ (its 文件 are opened from the overview's folders). */
-function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
+function Head({ s: listed, manager, edits }: { s: StationView; manager: boolean; edits: Edits }) {
+  // This machine's, stopped here: said at once, and started from here.
+  const here = useStoppedHere(listed);
+  const s = here.stopped ? { ...listed, online: false } : listed;
   const [name, setName] = useState(s.name);
   useEffect(() => setName(s.name), [s.name]);
   const keep = () => { const to = name.trim(); if (!to) setName(s.name); else edits.rename(s, to); };
@@ -167,7 +174,7 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) e.currentTarget.blur(); if (e.key === "Escape") { setName(s.name); e.currentTarget.blur(); } }} />
             : <h1 className={pagesCss.identityName}>{s.name}</h1>}
           <p className={settingsCss.workspaceFacts}>
-            <span className={css.status}><StatusDot state={s.online ? "online" : "offline"} />{state(s)}</span>
+            <span className={css.status}><StatusDot state={s.online ? "online" : "offline"} />{here.stopped ? t("web-pages.stations.page.stopped") : state(s)}</span>
             {s.host && <span>{s.host.identity}</span>}
             {s.version && <span>Station {s.version}</span>}
             {joinedText(s) && <span>{joinedText(s)}</span>}
@@ -176,7 +183,9 @@ function Head({ s, manager, edits }: { s: StationView; manager: boolean; edits: 
           {wrong.length > 0 && <div className={css.warn}>{wrong.map((p) => <span key={p.key} data-level={p.level}>{p.text}</span>)}</div>}
         </div>
         <div className={css.headActions}>
-          {(!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
+          {here.stopped
+            ? <Button variant="primary" busy={here.starting} onClick={() => here.start.run()}>{t("web-pages.stations.page.start")}</Button>
+            : (!s.online || silent) && <RetryPill trying={s.link.retrying === true} />}
           {manager && edits.busy(s)}
           {items.length > 0 && <Menu items={items} />}
         </div>
