@@ -19,12 +19,14 @@ test "74-markdown" {
     // (the post all done: its 归档 under it coming in, its room opening: at rest before where the rows are is taken)
     f.run_to_rest("under/")
     let x0 = f.t.locate("placeRows")[0].0
-    let y0 = f.t.locate("聊天页的列表和输入框")[0].1
+    assert_true(f.t.at_end())
     f.drag("placeRows", -220.0, 0.0, steps=30)
     // the code scrolled sideways under the finger (its words gone left, or out of its box), not the list
     let after = f.t.locate("placeRows")
     assert_true(after.length() == 0 || after[0].0 < x0)
-    assert_true(f.t.locate("聊天页的列表和输入框")[0].1 == y0)
+    // (the list at its end still: the field let go of with the touch, the composer smaller, the list following its
+    // end down as it would, not scrolled by the finger)
+    assert_true(f.t.at_end())
     f.hold("example.com/e2e", @ui.long_press_ms)
     f.see("=复制链接")
     f.tap("=复制链接")
