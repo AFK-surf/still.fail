@@ -283,14 +283,16 @@ case $CMD in
           | "$PY" scripts/done_runner.py --log $O/done.log --dir "$DIR" $SAID || true ;;
       android)
         APPID=${MBUI_APP_ID:-dev.mbui.demo}
-        $ADB shell "run-as $APPID rm -rf files/done" || true
-        $ADB logcat -c
+        # (the app's own log, empty before it starts: followed from its first line, whatever the app opens it as)
+        $ADB shell "run-as $APPID sh -c 'rm -rf files/done; : > files/done-app.log'" || true
         EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 \
           ENV="MBUI_DRIVE_B64=$DRV;MBUI_DONE_DIR=/data/data/$APPID/files/done;MBUI_LOG_FILE=done-app.log" \
           bash scripts/android.sh run
+        # the run as the app writes it in its own log (run-as tail -f, begun again where it stopped should it end):
+        # not logcat's stream, which on an emulator stopped handing on lines while the app went on
         # (a run that hangs given 3 minutes before it fails, what it said kept: not a wait, the run ends itself)
-        timeout 180 $ADB logcat -v brief -e "DRIVE |FATAL EXCEPTION|Fatal signal|ANR in" \
-          | "$PY" scripts/done_runner.py --log $O/done.log --adb "$ADB" --app $APPID $SAID || true
+        timeout 180 "$PY" scripts/done_runner.py --log $O/done.log --adb "$ADB" --app $APPID --file done-app.log $SAID \
+          || true
         $ADB exec-out run-as $APPID cat files/done-app.log > $O/done-app.log 2>/dev/null || true
         $ADB shell dumpsys activity activities 2>/dev/null | grep -aE "ResumedActivity|mFocusedApp" | head -5 >> $O/done.log || true ;;
     esac
