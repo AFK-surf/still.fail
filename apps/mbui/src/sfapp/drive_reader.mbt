@@ -120,11 +120,9 @@ priv struct TextReading {
   mut chunk : Int
   mut within : Double
   mut chrome : Bool
-  mut chrome_at : Double
   mut panel : ReaderPanel
   mut panel_at : Double
   mut closing : ReaderPanel
-  mut closed_at : Double
   mut query : String
   mut searched : String
   mut typed_at : Double
@@ -161,11 +159,9 @@ fn reading_for(key : String) -> TextReading {
         chunk: 0,
         within: 0.0,
         chrome: false,
-        chrome_at: -1.0e9,
         panel: NoPanel,
         panel_at: 0.0,
         closing: NoPanel,
-        closed_at: 0.0,
         query: "",
         searched: "",
         typed_at: 0.0,
@@ -303,11 +299,12 @@ pub fn reader_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
               }
             }
             None =>
-              if waited > 1000.0 || place.error is Some(_) {
+              if waited >= reader_place_ms || place.error is Some(_) {
                 r.started = true
               } else {
-                c.wake_in(1000.0 - waited)
+                c.wake_in(reader_place_ms - waited)
               }
+
           }
         }
         if r.started {
@@ -479,7 +476,8 @@ fn reader_book(
   if r.moved_at > r.kept_at && c.now() - r.moved_at >= reader_still_ms {
     reader_keep(src, at, r, novel, false, c.now())
   } else if r.moved_at > r.kept_at {
-    c.wake_in(reader_still_ms - (c.now() - r.moved_at))
+    // (nothing shown waits for it)
+    c.wake_in(reader_still_ms - (c.now() - r.moved_at), later=true)
   }
   // a jump: its block at the top, then slid to the offset in it once it is laid out
   if r.jump_step == 1 {
@@ -518,12 +516,12 @@ fn reader_book(
       r.searched = r.query
       r.matches = []
       r.hit = -1
-    } else if c.now() - r.typed_at > 250.0 {
+    } else if c.now() - r.typed_at >= reader_search_ms {
       r.searched = r.query
       r.matches = search_chunks(novel.chunks, r.query)
       r.hit = -1
     } else {
-      c.wake_in(260.0 - (c.now() - r.typed_at))
+      c.wake_in(reader_search_ms - (c.now() - r.typed_at))
     }
   }
   let size = prefs.size.to_double()
@@ -550,14 +548,8 @@ fn reader_book(
     |> ignore
   })
   |> ignore
-  // the bars
-  let k = {
-    let e = dmin(1.0, (c.now() - r.chrome_at) / reader_bars_ms)
-    if e < 1.0 {
-      c.request_frame()
-    }
-    if r.chrome { e } else { 1.0 - e }
-  }
+  // the bars, coming or going (a motion: it asks for its frames)
+  let k = @motion.animate(c, "reader-bars", if r.chrome { 1.0 } else { 0.0 }, spec=@motion.tween(reader_bars_ms, ease=Linear))
   let chapter = reader_chapter(r, novel)
   let has_chapters = novel.chapters.length() >= 2
   let sub = dv_words(
@@ -1051,7 +1043,6 @@ fn reader_open_panel(c : @ui.Ctx, r : TextReading, panel : ReaderPanel) -> Unit 
 ///|
 fn reader_close_panel(c : @ui.Ctx, r : TextReading) -> Unit {
   r.closing = r.panel
-  r.closed_at = c.now()
   r.panel = NoPanel
   c.blur()
 }
@@ -1069,19 +1060,13 @@ fn reader_panels(
   has_chapters : Bool,
 ) -> Unit {
   let (panel, closing) = match r.panel {
-    NoPanel =>
-      if r.closing != NoPanel && c.now() - r.closed_at < 300.0 {
-        c.request_frame()
-        (r.closing, true)
-      } else {
-        r.closing = NoPanel
-        return
-      }
+    // closed: drawn sinking away until it has gone (dv_sheet_frame)
+    NoPanel => if r.closing != NoPanel { (r.closing, true) } else { return }
     x => (x, false)
   }
   let t = @sf.theme()
-  let at = if closing { r.closed_at } else { r.panel_at }
   let close = Some(fn() { reader_close_panel(c, r) })
+  let gone = fn() { r.closing = NoPanel }
   match panel {
     NoPanel => ()
     Contents =>
@@ -1090,7 +1075,8 @@ fn reader_panels(
         tr("android-misc.drive.reader.contents"),
         if has_chapters { c.height * 0.75 } else { 200.0 },
         closing~,
-        at~,
+        reader=true,
+        gone~,
         close~,
         fn() {
           if !has_chapters {
@@ -1120,7 +1106,7 @@ fn reader_panels(
         },
       )
     Find =>
-      dv_sheet_frame(c, tr("android-misc.drive.reader.search"), c.height * 0.75, closing~, at~, close~, fn() {
+      dv_sheet_frame(c, tr("android-misc.drive.reader.search"), c.height * 0.75, closing~, reader=true, close~, gone~, fn() {
         c.box(w=Fill(1.0), padx=20.0, gap=10.0, fn() {
           c.box(w=Fill(1.0), radius=24.0, border=1.0, border_color=t.p.line, padx=18.0, pady=11.0, fn() {
             let res = c.editor(
@@ -1183,7 +1169,7 @@ fn reader_panels(
         |> ignore
       })
     Layout =>
-      dv_sheet_frame(c, tr("android-misc.drive.reader.type"), c.height * 0.62, closing~, at~, close~, fn() {
+      dv_sheet_frame(c, tr("android-misc.drive.reader.type"), c.height * 0.62, closing~, reader=true, close~, gone~, fn() {
         c.box(w=Fill(1.0), padx=20.0, gap=14.0, fn() {
           reader_stepper(c, "size", tr("android-misc.drive.reader.size"), "\{prefs.size}", prefs.size > 12, prefs.size < 32, fn(d) {
             reader_put(src, "size", Json::number((prefs.size + d).to_double()))
@@ -1379,8 +1365,17 @@ fn reader_toggle(c : @ui.Ctx, r : TextReading) -> Unit {
     return
   }
   r.chrome = !r.chrome
-  r.chrome_at = c.now()
+  // (the bars' way in or out drawn from the next frame: a block's tap is seen as its row is built, after this frame
+  // has drawn its bars; a click handled asks for that frame)
 }
+
+///|
+/// The search goes this long after the last thing typed.
+let reader_search_ms : Double = 250.0
+
+///|
+/// Where it was left on this device is waited on this long at most (no wait for a station).
+let reader_place_ms : Double = 1000.0
 
 ///|
 /// The paper's darkness while a reader is on top (Reader.kt PaperBars: the system bars' icons readable on it), None

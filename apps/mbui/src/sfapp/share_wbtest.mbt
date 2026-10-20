@@ -6,15 +6,16 @@ fn share_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_drive_fixture(mode)
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.draw()
+  // the fixture's pages in
+  nav_rested(t)
+  t
 }
 
 ///|
 test "shared in: what is shared, 发到 the chats (the one the site went to last first, saying so), 新 chat" {
   let t = share_tester("share-in")
-  t.settle(unsettled_ok=true) |> ignore
-  t.frame()
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("列表滑动的十个细节") is Some(_))
   assert_true(t.find("发到") is Some(_))
   assert_true(t.find("youtube.com 的链接上次发到这里") is Some(_))
@@ -25,30 +26,17 @@ test "shared in: what is shared, 发到 the chats (the one the site went to last
 ///|
 test "a chat tapped: what is shared goes to its composer and the chat opens; a new chat on a station chosen rises" {
   let t = share_tester("share-in")
-  t.settle(unsettled_ok=true) |> ignore
-  t.frame()
-  t.settle(unsettled_ok=true) |> ignore
   t.tap_text("收集视频")
-  t.settle() |> ignore
-  t.advance(500.0)
-  t.frame()
-  t.settle() |> ignore
   match app.nav.top() {
     Chat(r) => assert_eq(r.session, "s-c4")
     _ => fail("not the chat")
   }
   assert_true(share_in.shared is None)
   let n = share_tester("share-in-stations")
-  n.settle(unsettled_ok=true) |> ignore
-  n.frame()
-  n.settle(unsettled_ok=true) |> ignore
   assert_true(n.find("MBA") is Some(_))
   n.tap_text("MBA")
-  n.settle() |> ignore
-  n.advance(500.0)
-  n.frame()
-  n.settle() |> ignore
   assert_true(app.nav.top() is NewChat)
+  nav_rested(n)
 }
 
 ///|

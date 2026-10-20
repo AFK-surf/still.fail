@@ -119,9 +119,10 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
       share_in.env_taken = true
     } else if !share_in.env_taken {
       share_in.env_taken = true
-      let words = @host.env("MBUI_SHARE_TEXT")
+      let words = @ui.env("MBUI_SHARE_TEXT")
       if words != "" {
-        let title = @host.env("MBUI_SHARE_TITLE")
+        let title = @ui.env("MBUI_SHARE_TITLE")
+
         got = Some((words, if title == "" { None } else { Some(title) }))
       }
     }
@@ -507,7 +508,6 @@ fn share_open(
       }
       Err(e) => share_in.error = sh("android-misc.shareIn.failed", args=[("error", text(Some(e), "message"))])
     }
-    c.request_frame()
   })
 }
 
@@ -550,7 +550,6 @@ fn share_opened(
   } else {
     app.nav.push(Chat({ station, session, title, station_name: "" }))
   }
-  c.request_frame()
 }
 
 ///|
@@ -649,7 +648,6 @@ fn share_drive_file(c : @ui.Ctx, src : Source, at : DriveAt, e : DvEntry) -> Uni
           app.toast_at = -1.0
         }
       }
-      c.request_frame()
     },
   )
 }

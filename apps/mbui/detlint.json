@@ -42,25 +42,16 @@
     "frame-request": {
       "src/sfapp/chat.mbt": 1,
       "src/sfapp/composer.mbt": 4,
-      "src/sfapp/drive_reader.mbt": 4,
-      "src/sfapp/drive_sheets.mbt": 1,
-      "src/sfapp/keep.mbt": 3,
-      "src/sfapp/open_file.mbt": 1,
+      "src/sfapp/drive_reader.mbt": 2,
       "src/sfapp/pick.mbt": 2,
-      "src/sfapp/preview.mbt": 16,
       "src/sfapp/recent.mbt": 1,
       "src/sfapp/service.mbt": 1,
-      "src/sfapp/share.mbt": 4,
+      "src/sfapp/share.mbt": 1,
       "src/sfapp/sheet.mbt": 1,
-      "src/sfapp/station_files.mbt": 4,
       "src/sfapp/updates.mbt": 1
     },
     "settle": {
-      "src/sfapp/drive_wbtest.mbt": 20,
-      "src/sfapp/newchat_wbtest.mbt": 5,
-      "src/sfapp/play_wbtest.mbt": 11,
-      "src/sfapp/preview_wbtest.mbt": 12,
-      "src/sfapp/share_wbtest.mbt": 10
+      "src/sfapp/newchat_wbtest.mbt": 5
     },
     "flow-wait": {
       "e2e/flows/09-paste-long.drive": 1,
@@ -113,17 +104,10 @@
     "page-settle": {},
     "frame-count": {
       "src/sfapp/cards_wbtest.mbt": 1,
-      "src/sfapp/drive_wbtest.mbt": 3,
       "src/sfapp/notices_wbtest.mbt": 1
     },
     "literal-time": {
-      "src/sfapp/drive_wbtest.mbt": 3,
-      "src/sfapp/notices_wbtest.mbt": 1,
-      "src/sfapp/play_wbtest.mbt": 1,
-      "src/sfapp/preview.mbt": 2,
-      "src/sfapp/preview_wbtest.mbt": 3,
-      "src/sfapp/recent.mbt": 1,
-      "src/sfapp/share_wbtest.mbt": 2
+      "src/sfapp/notices_wbtest.mbt": 1
     },
     "stable-mode": {},
     "retired-api": {},
@@ -135,16 +119,13 @@
       "src/sfapp/composer.mbt": 4,
       "src/sfapp/decide.mbt": 3,
       "src/sfapp/decisions.mbt": 3,
-      "src/sfapp/drive.mbt": 2,
-      "src/sfapp/drive_parts.mbt": 5,
-      "src/sfapp/drive_reader.mbt": 17,
-      "src/sfapp/drive_sheets.mbt": 1,
+      "src/sfapp/drive_parts.mbt": 1,
+      "src/sfapp/drive_reader.mbt": 13,
       "src/sfapp/emit.mbt": 5,
       "src/sfapp/home.mbt": 7,
       "src/sfapp/pick.mbt": 1,
       "src/sfapp/play.mbt": 1,
-      "src/sfapp/preview.mbt": 17,
-      "src/sfapp/station_files.mbt": 6
+      "src/sfapp/preview.mbt": 9
     },
     "wall-clock": {
       "src/coredemo/shelf.mbt": 1,
@@ -154,19 +135,14 @@
     "poll": {
       "src/sfapp/composer.mbt": 1,
       "src/sfapp/drive_reader.mbt": 1,
-      "src/sfapp/keep.mbt": 1,
-      "src/sfapp/preview.mbt": 6,
+      "src/sfapp/preview.mbt": 2,
       "src/sfapp/recent.mbt": 2,
       "src/sfapp/service.mbt": 1
     },
-    "host-read": {
-      "src/sfapp/preview.mbt": 3,
-      "src/sfapp/share.mbt": 2
-    },
+    "host-read": {},
     "globals": {},
     "unsettled-ok": {
       "src/sfapp/newchat_wbtest.mbt": 5,
-      "src/sfapp/share_wbtest.mbt": 6,
       "src/sfreplay/flows/appearance_kept_test.mbt": 1,
       "src/sfreplay/flows/bar_glass_test.mbt": 1,
       "src/sfreplay/flows/delete_failed_test.mbt": 1,

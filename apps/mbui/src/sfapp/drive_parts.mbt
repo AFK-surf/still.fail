@@ -52,22 +52,21 @@ priv struct DvUpload {
 priv struct DriveUi {
   mut sheet : DvSheet
   mut sheet_at : Double
-  /// the sheet closing (from when), what it showed kept until it is down
+  /// the sheet closing, what it showed kept until it is down
   mut closing : DvSheet
-  mut closed_at : Double
   /// what is chosen in a folder (by its page's key), by name
   chosen : Map[String, Array[String]]
   uploads : Array[DvUpload]
   mut serial : Int
   mut pumping : Bool
-  /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words, when)
+  /// what is under way on an entry ("remove|<station>|<root>|<path>"), and what failed a moment ago (its words: shown
+  /// on its row for dv_failed_ms)
   busy : Map[String, Bool]
-  failed : Map[String, (String, Double)]
+  failed : Map[String, String]
   /// folders being read again
   refreshing : Map[String, Bool]
-  /// a row held: its id, since when, whether the hold has acted
+  /// a row held: its id, whether the hold has acted
   mut held : Int
-  mut held_at : Double
   mut held_done : Bool
   /// the views chosen here, before the prefs say
   mut sort_set : String?
@@ -92,7 +91,6 @@ let dv : DriveUi = {
   sheet: NoSheet,
   sheet_at: 0.0,
   closing: NoSheet,
-  closed_at: 0.0,
   chosen: {},
   uploads: [],
   serial: 0,
@@ -101,7 +99,6 @@ let dv : DriveUi = {
   failed: {},
   refreshing: {},
   held: 0,
-  held_at: 0.0,
   held_done: false,
   sort_set: None,
   hidden_set: None,
@@ -122,7 +119,6 @@ fn dv_reset() -> Unit {
   dv.sheet = NoSheet
   dv.sheet_at = 0.0
   dv.closing = NoSheet
-  dv.closed_at = 0.0
   dv.chosen.clear()
   dv.uploads.clear()
   dv.serial = 0
@@ -131,7 +127,6 @@ fn dv_reset() -> Unit {
   dv.failed.clear()
   dv.refreshing.clear()
   dv.held = 0
-  dv.held_at = 0.0
   dv.held_done = false
   dv.sort_set = None
   dv.hidden_set = None
@@ -151,14 +146,12 @@ fn dv_reset() -> Unit {
   fix_places.clear()
   draft_refs.clear()
   sfs.open = false
-  sfs.at = 0.0
-  sfs.closed_at = -1.0e9
+  sfs.closing = false
   sfs.draft = ""
   sfs.place = None
   sfs.ticked.clear()
   sfs.ref = None
-  sfs.ref_at = 0.0
-  sfs.ref_closed = -1.0e9
+  sfs.ref_closing = false
 }
 
 ///|
@@ -174,7 +167,6 @@ fn dv_close(c : @ui.Ctx) -> Unit {
     NoSheet => ()
     s => {
       dv.closing = s
-      dv.closed_at = c.now()
     }
   }
   dv.sheet = NoSheet
@@ -420,21 +412,23 @@ fn dv_fit(rows : Int) -> Double {
 /// A sheet from the bottom over the page (Sheet.kt SheetHost, mbui's @kit.sheet): the scrim (black at 28%, a tap beside
 /// it closes it), top corners of 26, frosted over the page and the scrim (@sf.sheet_look; `ground`: on that instead),
 /// only drawn while it closes; `h` tall (most of the screen at most). Its grabber (SheetGrab) and head (SheetHead), then
-/// `body`. The drive's sheets are one sheet, the reader's panels (`at` given) another.
+/// `body`. The drive's sheets are one sheet, the reader's panels and Station 文件's (`reader`) another. `closing`: closed, drawn sinking
+/// away on the sheet's springs (they ask for their frames) until it has gone, `gone` then told.
 fn dv_sheet_frame(
   c : @ui.Ctx,
   title : String,
   h : Double,
   body : () -> Unit,
   closing~ : Bool,
-  at? : Double = -1.0,
+  reader? : Bool = false,
   close? : (() -> Unit)? = None,
+  gone? : () -> Unit = fn() { dv.closing = NoSheet },
   ground? : Int64 = 0L,
 ) -> Unit {
   let t = @sf.theme()
   let r = @kit.sheet(
     c,
-    if at >= 0.0 { "dv-reader-sheet" } else { "dv-sheet" },
+    if reader { "dv-reader-sheet" } else { "dv-sheet" },
     !closing,
     h=dmin(h, c.height * 0.9),
     scrim=@sf.sheet_scrim,
@@ -453,6 +447,9 @@ fn dv_sheet_frame(
       c.box(w=Fill(1.0), h=Fill(1.0), clip=true, body) |> ignore
     },
   )
+  if closing && !r.shown {
+    gone()
+  }
   if !closing && !r.open {
     match close {
       Some(f) => f()
@@ -524,25 +521,30 @@ fn dv_card_row(
 /// A row held (a long press, 400 ms as the system's): true on the frame the hold acts, once; the tap that ends it is
 /// then no tap (`dv_tapped`).
 fn dv_held(c : @ui.Ctx, id : Int) -> Bool {
-  if c.pressed(id) {
-    if dv.held != id {
-      dv.held = id
-      dv.held_at = c.now()
-      dv.held_done = false
-    }
-    let held = c.now() - dv.held_at
-    if !dv.held_done && !cui.moved {
-      if held >= 400.0 {
-        dv.held_done = true
-        return true
-      }
-      c.wake_in(400.0 - held)
-    }
-  } else if dv.held == id && !c.clicked(id) {
+  let pressed = c.pressed(id)
+  if pressed && dv.held != id {
+    dv.held = id
+    dv.held_done = false
+  }
+  // (`after` asks for the frame it acts on)
+  if @kit.after(c, "dv-held/\{id}", pressed && dv.held == id && !dv.held_done && !cui.moved, dv_hold_ms) {
+    dv.held_done = true
+    return true
+  }
+  if !pressed && dv.held == id && !c.clicked(id) {
     dv.held = 0
   }
   false
 }
+
+///|
+/// How long a row is held before the hold acts (the system's long press).
+
+let dv_hold_ms : Double = 400.0
+
+///|
+/// How long what failed on a row is said on it.
+let dv_failed_ms : Double = 4000.0
 
 ///|
 /// A tap on a row that was not a hold.
@@ -607,7 +609,8 @@ fn dv_doing(
     match r {
       Ok(v) => then(v)
       Err(e) => {
-        dv.failed[key] = (dv_error(e), c.now())
+        dv.failed[key] = dv_error(e)
+
         (dv_act(c, what))(r)
       }
     }

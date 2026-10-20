@@ -149,7 +149,6 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
         m => m
       },
     )
-    c.request_frame()
   }
   if r.station == station {
     (src.call)(
@@ -165,7 +164,6 @@ fn ref_send_up(c : @ui.Ctx, src : Source, d : Draft, station : String, r : Draft
           Ok(a) => {
             p.done = Some(a)
             p.sent = p.size
-            c.request_frame()
           }
           Err(e) => failed(e)
         }
@@ -215,35 +213,33 @@ priv struct SfPlace {
 /// The sheet: open (for which draft, the chat's station), where it is, what is ticked (by station and path).
 priv struct StationFilesUi {
   mut open : Bool
-  mut at : Double
-  mut closed_at : Double
+  /// closed, drawn sinking away until it has gone
+  mut closing : Bool
   mut draft : String
   mut place : SfPlace?
   ticked : Map[String, DraftRef]
-  /// a station file's card tapped: its sheet (the draft's key, the file), open since, closed since
+  /// a station file's card tapped: its sheet (the draft's key, the file), closed (drawn sinking away until it has gone)
   mut ref : (String, DraftRef)?
-  mut ref_at : Double
-  mut ref_closed : Double
+  mut ref_closing : Bool
 }
 
 ///|
 let sfs : StationFilesUi = {
   open: false,
-  at: 0.0,
-  closed_at: -1.0e9,
+  closing: false,
   draft: "",
   place: None,
   ticked: Map([]),
   ref: None,
-  ref_at: 0.0,
-  ref_closed: -1.0e9,
+  ref_closing: false,
 }
 
 ///|
 /// ＋'s Station 文件 tapped: the places, for the draft `key`.
 fn station_files_open(c : @ui.Ctx, key : String) -> Unit {
+  ignore(c)
   sfs.open = true
-  sfs.at = c.now()
+  sfs.closing = false
   sfs.draft = key
   sfs.place = None
   sfs.ticked.clear()
@@ -251,8 +247,9 @@ fn station_files_open(c : @ui.Ctx, key : String) -> Unit {
 
 ///|
 fn station_files_close(c : @ui.Ctx) -> Unit {
+  ignore(c)
   sfs.open = false
-  sfs.closed_at = c.now()
+  sfs.closing = true
 }
 
 ///|
@@ -260,11 +257,8 @@ fn station_files_close(c : @ui.Ctx) -> Unit {
 /// 取消 and 添加.
 fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> Unit {
   let closing = !sfs.open
-  if closing && (c.now() - sfs.closed_at >= 300.0 || sfs.draft != key) {
+  if closing && !sfs.closing {
     return
-  }
-  if closing {
-    c.request_frame()
   }
   if sfs.draft != key {
     return
@@ -275,8 +269,10 @@ fn station_files_sheet(c : @ui.Ctx, src : Source, w : String, key : String) -> U
     tr("web-pages.chat.files"),
     c.height * 0.86,
     closing~,
-    at=if closing { sfs.closed_at } else { sfs.at },
+    // (the reader's sheet: one of its own over the chat, not the drive's)
+    reader=true,
     close=Some(fn() { station_files_close(c) }),
+    gone=fn() { sfs.closing = false },
     fn() {
       sf_crumbs(c)
       c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
@@ -492,7 +488,7 @@ fn ref_cards(c : @ui.Ctx, key : String) -> Unit {
         draft_refs[key] = refs_of(key).filter(fn(x) { !(x.station == r.station && x.path == r.path) })
       } else if c.clicked(card) {
         sfs.ref = Some((key, r))
-        sfs.ref_at = c.now()
+        sfs.ref_closing = false
       }
       let named = r.mode == "path"
       let up = if named { None } else { r.up }
@@ -563,11 +559,7 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
   if k != key {
     return
   }
-  let closing = sfs.ref_closed > sfs.ref_at
-  if closing && c.now() - sfs.ref_closed >= 300.0 {
-    sfs.ref = None
-    return
-  }
+  let closing = sfs.ref_closing
   let t = @sf.theme()
   let zips = r.dir && r.station == station
   let folder = match r.path.rev_find("/") {
@@ -580,8 +572,12 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
     r.name,
     dv_fit(rows) + 30.0,
     closing~,
-    at=if closing { sfs.ref_closed } else { sfs.ref_at },
-    close=Some(fn() { sfs.ref_closed = c.now() }),
+    reader=true,
+    close=Some(fn() { sfs.ref_closing = true }),
+    gone=fn() {
+      sfs.ref = None
+      sfs.ref_closing = false
+    },
     fn() {
       c.box(w=Fill(1.0), pl=20.0, pr=20.0, pb=14.0, fn() {
         c.text(r.station_name + " · " + folder, size=13.0, color=t.p.muted, w=Fill(1.0)) |> ignore
@@ -604,8 +600,8 @@ fn ref_sheet(c : @ui.Ctx, src : Source, key : String, station : String) -> Unit 
           )
           if picked != now {
             r.mode = if picked == 0 { "path" } else { "file" }
-            // (the composer puts it up: ref_send_up)
-            c.request_frame()
+            // (the composer puts it up: ref_send_up; a pick asks for its frame)
+
           }
         })
         |> ignore

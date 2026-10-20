@@ -9,14 +9,8 @@ fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     NoSheet =>
       match dv.closing {
         NoSheet => return
-        x =>
-          if c.now() - dv.closed_at < 300.0 {
-            c.request_frame()
-            (x, true)
-          } else {
-            dv.closing = NoSheet
-            return
-          }
+        // closed: drawn sinking away until it has gone (dv_sheet_frame)
+        x => (x, true)
       }
     x => (x, false)
   }

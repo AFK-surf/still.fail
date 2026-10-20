@@ -197,6 +197,15 @@ let rest_ms : Double = 2000.0
 let tap_rest_ms : Double = 4000.0
 
 ///|
+/// A finger held still this long before it is let go flings nothing (its speed is of moves long past).
+let swipe_still_ms : Double = 100.0
+
+///|
+/// How often the host's work for the viewer is looked at until it is done (a marked image drawn, a video's frame
+/// saved): the host tells no event for them yet.
+let host_poll_ms : Double = 50.0
+
+///|
 /// Dark whatever the theme, as a viewer of pictures: its text, what is quieter, its canvas.
 let dark_text : Int64 = 0xF4F4F5FFL
 
@@ -215,8 +224,9 @@ priv struct Zoom {
   mut x : Double
   mut y : Double
   mut fitted : Bool
-  // a glide (260 ms on (0.16, 1, 0.3, 1)): when it started (-1: none), from, to
-  mut g0 : Double
+  // a glide (zoom_glide_ms on (0.16, 1, 0.3, 1)): whether one goes on, how far (0 … 1, a motion), from, to
+  mut gliding : Bool
+  glide : @motion.Value
   g_from : FixedArray[Double]
   g_to : FixedArray[Double]
 }
@@ -232,7 +242,8 @@ fn Zoom::new() -> Zoom {
     x: 0.0,
     y: 0.0,
     fitted: true,
-    g0: -1.0,
+    gliding: false,
+    glide: @motion.Value::new(1.0),
     g_from: FixedArray::make(3, 0.0),
     g_to: FixedArray::make(3, 0.0),
   }
@@ -328,7 +339,7 @@ fn Zoom::rect(self : Zoom) -> (Double, Double, Double, Double)? {
 ///|
 /// Moved by a finger (dx, dy), a glide called off.
 fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
-  self.g0 = -1.0
+  self.stop_glide()
   self.fitted = false
   self.x = self.x + dx
   self.y = self.y + dy
@@ -338,7 +349,7 @@ fn Zoom::pan(self : Zoom, dx : Double, dy : Double) -> Unit {
 ///|
 /// By `zoom` around (ax, ay) on the stage, and moved by (dx, dy): two fingers pinching (Zoom.kt transform).
 fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx : Double, dy : Double) -> Unit {
-  self.g0 = -1.0
+  self.stop_glide()
   let next = dmax(self.min_scale(), dmin(max_scale, self.scale * zoom))
   let f = next / self.scale
   let px = ax - self.bw / 2.0
@@ -352,7 +363,7 @@ fn Zoom::transform(self : Zoom, ax : Double, ay : Double, zoom : Double, dx : Do
 
 ///|
 /// To `target` (at once, or gliding from `now`), the picture's point under (ax, ay) on the stage staying put.
-fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, now : Double, glide : Bool) -> Unit {
+fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, glide : Bool) -> Unit {
   let next = dmax(self.min_scale(), dmin(max_scale, target))
   let px = ax - self.bw / 2.0
   let py = ay - self.bh / 2.0
@@ -364,19 +375,28 @@ fn Zoom::zoom_to(self : Zoom, target : Double, ax : Double, ay : Double, now : D
   tx = dmax(-sx, dmin(sx, tx))
   ty = dmax(-sy, dmin(sy, ty))
   self.fitted = false
-  self.glide(next, tx, ty, now, glide)
+  self.glide_to(next, tx, ty, glide)
 }
 
 ///|
-fn Zoom::reset(self : Zoom, now : Double) -> Unit {
-  self.glide(self.fit(), 0.0, 0.0, now, true)
+fn Zoom::reset(self : Zoom) -> Unit {
+  self.glide_to(self.fit(), 0.0, 0.0, true)
   self.fitted = true
 }
 
 ///|
-fn Zoom::glide(self : Zoom, s : Double, x : Double, y : Double, now : Double, glide : Bool) -> Unit {
+/// A glide called off where it is (a finger took it).
+fn Zoom::stop_glide(self : Zoom) -> Unit {
+  if self.gliding {
+    self.gliding = false
+    self.glide.set(1.0)
+  }
+}
+
+///|
+fn Zoom::glide_to(self : Zoom, s : Double, x : Double, y : Double, glide : Bool) -> Unit {
   if !glide {
-    self.g0 = -1.0
+    self.stop_glide()
     self.scale = s
     self.x = x
     self.y = y
@@ -388,34 +408,34 @@ fn Zoom::glide(self : Zoom, s : Double, x : Double, y : Double, now : Double, gl
   self.g_to[0] = s
   self.g_to[1] = x
   self.g_to[2] = y
-  self.g0 = now
+  // said once as it sets out: the motion asks the frames until it is there
+  self.gliding = true
+  self.glide.set(0.0)
+  ignore(self.glide.start(1.0, @motion.tween(zoom_glide_ms, ease=Soft)))
 }
 
 ///|
-/// A glide's step; true while it goes on.
-fn Zoom::step(self : Zoom, now : Double) -> Bool {
-  if self.g0 < 0.0 {
-    return false
+/// Where a glide has got to this frame.
+fn Zoom::step(self : Zoom) -> Unit {
+  if !self.gliding {
+    return
   }
-  let t = dmin(1.0, (now - self.g0) / 260.0)
-  let e = @ui.bezier(0.16, 1.0, 0.3, 1.0, t)
+  let e = self.glide.get()
   self.scale = self.g_from[0] + (self.g_to[0] - self.g_from[0]) * e
   self.x = self.g_from[1] + (self.g_to[1] - self.g_from[1]) * e
   self.y = self.g_from[2] + (self.g_to[2] - self.g_from[2]) * e
-  if t >= 1.0 {
-    self.g0 = -1.0
-    return false
+  if !self.glide.is_animating() {
+    self.gliding = false
   }
-  true
 }
 
 ///|
 /// A double tap: fitted, in to 2.5× the fitted size (at least 100%) around it; zoomed, back to fitted.
-fn Zoom::double_tap(self : Zoom, ax : Double, ay : Double, now : Double) -> Unit {
+fn Zoom::double_tap(self : Zoom, ax : Double, ay : Double) -> Unit {
   if self.zoomed() {
-    self.reset(now)
+    self.reset()
   } else {
-    self.zoom_to(dmax(self.fit() * 2.5, 1.0), ax, ay, now, true)
+    self.zoom_to(dmax(self.fit() * 2.5, 1.0), ax, ay, true)
   }
 }
 
@@ -456,10 +476,14 @@ priv struct Viewer {
   mut text : String?
   /// the image's key once its bytes are given
   mut image : String
-  mut opened : Double
-  mut closing : Double
+  /// drawn once (its way in set going), closed (only drawn going), how far it has faded in (0 … 1, a motion)
+  mut started : Bool
+  mut closing : Bool
+  fade : @motion.Value
   // a finger on the stage: where it was last frame, how far it has gone, the last tap (time, where)
   mut held : Bool
+  /// a finger on a video's timeline: the bars stay while it is (their rest counted from when it is let go)
+  mut scrubbing : Bool
   mut last_x : Double
   mut last_y : Double
   mut moved : Double
@@ -487,8 +511,10 @@ priv struct Viewer {
   /// where the finger went down
   mut down_x : Double
   mut down_y : Double
-  /// its flight from the chat's thumbnail (or back into it): since when (-1 none), back or not, from where
-  mut fly_at : Double
+  /// its flight from the chat's thumbnail (or back into it): whether it flies, how far (0 the thumbnail … 1 the
+  /// stage, a motion), back or not, from where
+  mut flies : Bool
+  fly : @motion.Value
   mut fly_back : Bool
   mut fly_from : Thumb?
   /// a video's frame asked for to be saved (and which), the phone turned for it
@@ -499,7 +525,7 @@ priv struct Viewer {
 
 ///|
 /// A thumbnail of the chat's the viewer flies from and back into (FilePreview.kt Thumb): where it was drawn (in the
-/// window), its corners, the frame it was last drawn in.
+/// window), its corners, the frame its row was last built in.
 priv struct Thumb {
   x : Double
   y : Double
@@ -522,7 +548,14 @@ let pv_hidden : Ref[String] = { val: "" }
 fn note_thumb(c : @ui.Ctx, id : String, node : Int, radius : Double) -> Unit {
   match c.rect_of(node) {
     Some((x, y, w, h)) if w > 0.0 && h > 0.0 => pv_thumbs[id] = { x, y, w, h, radius, frame: c.frame_number() }
-    _ => pv_thumbs.remove(id)
+    _ =>
+      match pv_thumbs.get(id) {
+        // under the viewer nothing of the page is hit, so its place is not read back (Ctx::rect_of): where it was
+        // last seen, its row still built (the chat under the viewer does not move)
+        Some(t) if pv_hidden.val == id || viewer.val is Some(_) || pv_leaving.val is Some(_) =>
+          pv_thumbs[id] = { ..t, frame: c.frame_number() }
+        _ => pv_thumbs.remove(id)
+      }
   }
 }
 
@@ -544,6 +577,19 @@ let fly_open_ms : Double = 320.0
 let fly_close_ms : Double = 280.0
 
 ///|
+/// The viewer fading in and out where there is no thumbnail to grow from (FilePreview.css.ts fp: 140 ms).
+let pv_fade_ms : Double = 140.0
+
+///|
+/// A zoom gliding to where it was told.
+let zoom_glide_ms : Double = 260.0
+
+///|
+/// Two taps within this long are a double tap.
+let double_tap_ms : Double = 300.0
+
+
+///|
 /// What an image opened in the viewer steps through (FilePreview.kt Gallery): the images of the chat it is opened from,
 /// of which the core tells those beside the one shown (`imageNear`: by the chat's thread, else its session), not the
 /// chat's every image; or a folder's of a drive.
@@ -555,6 +601,11 @@ priv enum Stepping {
 
 ///|
 let viewer : Ref[Viewer?] = { val: None }
+
+///|
+/// The viewer closed and still drawn going (its fade or its flight back), no longer the one open: closing takes it
+/// out of `viewer` at once, and what is under it is the page's again.
+let pv_leaving : Ref[Viewer?] = { val: None }
 
 ///|
 /// Opens `a` of the chat on `station` (kept by the session `key`) over everything; `steps`: what an image steps
@@ -601,9 +652,11 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     pdf: None,
     text: None,
     image: "",
-    opened: -1.0,
-    closing: -1.0,
+    started: false,
+    closing: false,
+    fade: @motion.Value::new(0.0),
     held: false,
+    scrubbing: false,
     last_x: 0.0,
     last_y: 0.0,
     moved: 0.0,
@@ -623,7 +676,8 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     swiping: false,
     down_x: 0.0,
     down_y: 0.0,
-    fly_at: -1.0,
+    flies: false,
+    fly: @motion.Value::new(0.0),
     fly_back: false,
     fly_from: None,
     grabbing: false,
@@ -697,28 +751,44 @@ priv struct Strip {
 let pv_strip : Strip = { leaving: None, pinned: None, near: Map([]) }
 
 ///|
-/// The viewer gone at once, what it holds let go (its player stopped, its page and PDF closed).
+/// The viewer gone at once (the one open and the one going), what it holds let go (its player stopped, its page and
+/// PDF closed).
 fn close_now() -> Unit {
   marks_leave()
   match viewer.val {
-    Some(v) => {
-      if v.turned {
-        @host.set_sideways(false)
-      }
-      match v.video {
-        Some(n) => n.close()
-        None => ()
-      }
-      match v.page {
-        Some(n) => n.close()
-        None => ()
-      }
-      match v.pdf {
-        Some(p) => p.close()
-        None => ()
-      }
-      viewer.val = None
-    }
+    Some(v) => v.let_go()
+    None => ()
+  }
+  viewer.val = None
+  leaving_done()
+}
+
+///|
+/// The viewer that was going, gone.
+fn leaving_done() -> Unit {
+  match pv_leaving.val {
+    Some(v) => v.let_go()
+    None => ()
+  }
+  pv_leaving.val = None
+}
+
+///|
+/// What a viewer holds of the host's, let go.
+fn Viewer::let_go(self : Viewer) -> Unit {
+  if self.turned {
+    @host.set_sideways(false)
+  }
+  match self.video {
+    Some(n) => n.close()
+    None => ()
+  }
+  match self.page {
+    Some(n) => n.close()
+    None => ()
+  }
+  match self.pdf {
+    Some(p) => p.close()
     None => ()
   }
 }
@@ -1026,11 +1096,15 @@ fn upper(s : String) -> String {
 fn preview(c : @ui.Ctx, src : Source) -> Unit {
   let v = match viewer.val {
     Some(v) => v
-    None => return
+    None =>
+      match pv_leaving.val {
+        Some(v) => v
+        None => return
+      }
   }
   let now = c.now()
-  if v.opened < 0.0 {
-    v.opened = now
+  if !v.started {
+    v.started = true
     v.rest_at = if v.rests && bars_rest() { now + rest_ms } else { -1.0 }
     // it comes up in the keyboard's place: what was being typed into lets go of it first
     c.blur()
@@ -1039,49 +1113,46 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
       Some(_) =>
         match thumb_of(c, v.id()) {
           Some(t) => {
-            v.fly_at = now
+            v.flies = true
             v.fly_back = false
             v.fly_from = Some(t)
+            v.fly.set(0.0)
+            ignore(v.fly.start(1.0, @motion.tween(fly_open_ms, ease=Arrive)))
             pv_hidden.val = v.id()
           }
           None => ()
         }
       None => ()
     }
+    // as web's: fading in (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
+    if !v.flies {
+      ignore(v.fade.start(1.0, @motion.tween(pv_fade_ms, ease=Out)))
+    } else {
+      v.fade.set(1.0)
+    }
   }
   src_now.val = src.now
   v.marks_frame(c)
-  let p = v.flying(now)
-  if v.fly_at >= 0.0 && v.fly_back && p <= 0.0 {
-    // landed in its thumbnail
-    close_now()
-    pv_hidden.val = ""
-    c.request_frame()
-    return
-  }
-  if v.fly_at >= 0.0 && !v.fly_back && p >= 1.0 {
-    v.fly_at = -1.0
+  let p = v.flying()
+  // (the motions ask for their frames, said once as they set out: the flight, the fade)
+  let landed = v.flies && v.fly_back && !v.fly.is_animating()
+  if landed {
+    // landed in its thumbnail: drawn there this once (where the thumbnail is, hidden this frame), then gone
+    leaving_done()
     pv_hidden.val = ""
   }
-  // as web's: fading in and out (FilePreview.css.ts fp: 140 ms ease-out), when there is no thumbnail to grow from
-  let faded = if v.fly_at >= 0.0 {
-    1.0
-  } else if v.closing >= 0.0 {
-    1.0 - dmin(1.0, (now - v.closing) / 140.0)
-  } else {
-    dmin(1.0, (now - v.opened) / 140.0)
+  if v.flies && !v.fly_back && !v.fly.is_animating() {
+    v.flies = false
+    pv_hidden.val = ""
   }
-  if v.closing >= 0.0 && v.fly_at < 0.0 && faded <= 0.0 {
-    close_now()
-    c.request_frame()
+  let faded = if v.flies { 1.0 } else { v.fade.get() }
+  if v.closing && !v.flies && !v.fade.is_animating() {
+    // faded out: gone
+    leaving_done()
     return
   }
-  if faded < 1.0 || v.fly_at >= 0.0 {
-    c.request_frame()
-  }
-  let faded = @ui.bezier(0.2, 0.7, 0.2, 1.0, faded)
   // the ground and the bars: with the flight, or fading
-  let shown = if v.fly_at >= 0.0 { p } else { faded }
+  let shown = if v.flies { p } else { faded }
   v.fetch(c, src)
   // asked for to be saved, and come: saved
   if v.save_after && v.bytes is Some(_) {
@@ -1134,31 +1205,45 @@ fn preview(c : @ui.Ctx, src : Source) -> Unit {
     }
   })
   |> ignore
-  c.take_back(fn() { if marking.on { marks_back(c) } else { v.close(c) } })
+  // (one going takes back no more: it is the page's)
+  if !v.closing {
+    c.take_back(fn() { if marking.on { marks_back(c) } else { v.close(c) } })
+  }
 }
 
 ///|
 fn Viewer::close(self : Viewer, c : @ui.Ctx) -> Unit {
-  if self.closing < 0.0 {
-    self.closing = c.now()
-    // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to)
+  if !self.closing {
+    self.closing = true
+    // closed at once: the one going is only drawn (what was going before it, gone)
+    marks_leave()
+    leaving_done()
+    viewer.val = None
+    pv_leaving.val = Some(self)
+    // an image shrinks back into its thumbnail when the chat shows it (from where a flight in has got to), else
+    // it fades out
     match (thumb_of(c, self.id()), self.shown_kind(), self.zoom.rect()) {
       (Some(t), Some(KImage), Some(_)) => {
-        let p = self.flying(c.now())
+        let p = self.flying()
         self.fly_from = Some(t)
         self.fly_back = true
-        // as far along as it was: back from there
-        self.fly_at = c.now() - (1.0 - p) * fly_close_ms
+        if !self.flies {
+          self.flies = true
+          self.fly.set(1.0)
+        }
+        // as far along as it was: back from there, in as much of its time
+        ignore(self.fly.start(0.0, @motion.tween(dmax(1.0, fly_close_ms * p), ease=Arrive)))
         pv_hidden.val = self.id()
       }
-      _ => ()
+      // the way in played backwards (web's fp: ease-out on the way in, the same curve run back on the way out): the
+      // ground and the picture stay nearly whole at first, then go
+      _ => ignore(self.fade.start(0.0, @motion.tween(pv_fade_ms, ease=Bezier(0.8, 0.0, 0.8, 0.3))))
     }
     // the views under the canvas go at once (they cannot fade)
     match self.video {
       Some(n) => n.pause()
       None => ()
     }
-    c.request_frame()
   }
 }
 
@@ -1193,7 +1278,7 @@ fn Viewer::wake(self : Viewer, now : Double, ms : Double) -> Unit {
 /// emulator a flow's next step can outlast their rest), where only a tap hides them.
 fn bars_rest() -> Bool {
   if viewer_awake_env.val < 0 {
-    viewer_awake_env.val = if @host.env("MBUI_VIEWER_AWAKE") == "1" { 1 } else { 0 }
+    viewer_awake_env.val = if @ui.env("MBUI_VIEWER_AWAKE") == "1" { 1 } else { 0 }
   }
   viewer_awake_env.val == 0
 }
@@ -1242,7 +1327,6 @@ fn Viewer::finish_marks(self : Viewer, c : @ui.Ctx, to_draft : Bool) -> Unit {
     }
     None => marking.error = pv("android-chat.file.drawFailed")
   }
-  c.request_frame()
 }
 
 ///|
@@ -1283,7 +1367,7 @@ fn Viewer::marks_frame(self : Viewer, c : @ui.Ctx) -> Unit {
             keep_bytes(c, marking.job_name, "image/png", png)
           }
         }
-        None => c.wake_in(50.0)
+        None => c.wake_in(host_poll_ms)
       }
     None => ()
   }
@@ -1444,24 +1528,17 @@ fn Viewer::ask_save(self : Viewer, c : @ui.Ctx) -> Unit {
       self.save_after = true
     }
   }
-  c.request_frame()
 }
 
 // ── an image ───────────────────────────────────────────────────────────
 
 ///|
 /// How far its flight has got (0 the thumbnail, 1 the stage), on (.2, .8, .2, 1); 1 when it is not flying.
-fn Viewer::flying(self : Viewer, now : Double) -> Double {
-  if self.fly_at < 0.0 {
+fn Viewer::flying(self : Viewer) -> Double {
+  if !self.flies {
     return 1.0
   }
-  let t = dmin(1.0, (now - self.fly_at) / (if self.fly_back { fly_close_ms } else { fly_open_ms }))
-  let e = @ui.bezier(0.2, 0.8, 0.2, 1.0, t)
-  if self.fly_back {
-    1.0 - e
-  } else {
-    e
-  }
+  self.fly.get()
 }
 
 ///|
@@ -1478,6 +1555,21 @@ fn Viewer::flight_target(self : Viewer, c : @ui.Ctx, src : Source) -> (Double, D
   match self.zoom.rect() {
     Some(r) => Some(r)
     None => fitted_rect(nw, nh, c.width, c.height)
+  }
+}
+
+///|
+/// What flies: the picture once it is decoded, until then the chat's thumbnail it grows from (the same picture, already
+/// on the screen: no frame where the thumbnail's place is empty).
+fn Viewer::flight_picture(self : Viewer, src : Source, picture : String) -> String {
+  if @ui.image_state(picture) == 1 {
+    return picture
+  }
+  let thumb = if self.drive is Some(_) { "" } else { (src.file)(self.station, self.key, self.name) }
+  if thumb != "" && thumb != "!" {
+    thumb
+  } else {
+    picture
   }
 }
 
@@ -1523,9 +1615,7 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
   let z = v.zoom
   z.boxed(c.width, c.height)
   z.natural(nw, nh)
-  if z.step(now) {
-    c.request_frame()
-  }
+  z.step()
   let (before, after) = v.near(src)
   v.read_near(src, before, after)
   if marking.on {
@@ -1556,7 +1646,6 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
               v.held = true
             }
             moved_to()
-            c.request_frame()
           } else if v.held || c.clicked(stage) {
             if !v.held {
               down()
@@ -1579,15 +1668,22 @@ fn Viewer::image_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
     None => ()
   }
   let sx = strip.get()
-  if strip.moving() {
-    c.request_frame()
-  } else {
+  if !strip.moving() {
     pv_strip.leaving = None
   }
   let width = c.width + slide_gap
-  let flying = v.fly_at >= 0.0
+  let flying = v.flies
   match z.rect() {
-    Some(r) if picture != "" && flying => v.draw_flight(c, picture, r, v.flying(now))
+    Some(r) if picture != "" && flying => {
+      v.draw_flight(c, v.flight_picture(src, picture), r, v.flying())
+      // the picture it lands as, asked for meanwhile out of sight (cut to a point): decoded by the time the flight
+      // ends, so no frame goes without it
+      let (x, y, w, h) = r
+      c.box(w=Px(1.0), h=Px(1.0), opacity=0.01, clip=true, fn() {
+        c.picture(picture, x=x + sx, y~, w~, h~, max_px=4096) |> ignore
+      })
+      |> ignore
+    }
     Some((x, y, w, h)) if picture != "" =>
       c.picture(picture, x=x + sx, y~, w~, h~, max_px=4096) |> ignore
     // its size not sent with it: a small decode, out of sight, says it
@@ -1842,14 +1938,14 @@ fn Viewer::go(self : Viewer, c : @ui.Ctx, src : Source, dir : Int, velocity : Do
         _ => None
       }
       // shown at once: no fade; a step wakes the bars (FilePreview.kt: LaunchedEffect(file.path) { wake() })
-      n.opened = c.now() - 1000.0
+      n.started = true
+      n.fade.set(1.0)
       n.wake(c.now(), rest_ms)
       viewer.val = Some(n)
       pv_strip.near.remove(n.id())
       strip.snap(from + dir.to_double() * width)
       strip.animate(0.0, @motion.spring(ratio=1.0, stiffness=400.0), velocity~)
       @ui.log("preview: stepped to \{n.file.name}")
-      c.request_frame()
     }
   }
 }
@@ -1886,7 +1982,6 @@ fn Viewer::gestures(
       v.pinched = true
       // one finger again after it: followed from where it is then
       v.held = false
-      c.request_frame()
       return
     }
     _ => v.pinch_d = 0.0
@@ -1927,8 +2022,11 @@ fn Viewer::gestures(
     }
     v.last_x = px
     v.last_y = py
-    c.request_frame()
   } else {
+    // held still a while before it was let go: no speed left (its frames come only as it moves)
+    if v.held && now - v.vt > swipe_still_ms {
+      v.vx = 0.0
+    }
     // let go further sideways than its frames showed (a slow frame took the whole swipe, down and up in one or two
     // frames): from where it went down to where it was let go, as a swipe
     if (v.held || c.clicked(stage)) && !v.swiping && !z.zoomed() && !v.pinched && (has_before || has_after) {
@@ -1963,12 +2061,11 @@ fn Viewer::gestures(
     v.pinched = false
   }
   if c.clicked(stage) && v.moved <= 8.0 && !pinched {
-    if now - v.tap_at < 300.0 && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
+    if now - v.tap_at < double_tap_ms && (px - v.tap_x).abs() < 40.0 && (py - v.tap_y).abs() < 40.0 {
       // the second of two: zoom (and the first's toggle undone)
       v.tap_at = -1.0e9
       v.toggle(now)
-      z.double_tap(px, py, now)
-      c.request_frame()
+      z.double_tap(px, py)
     } else {
       v.tap_at = now
       v.tap_x = px
@@ -1978,8 +2075,7 @@ fn Viewer::gestures(
   }
   let dy = @ui.wheel(c, stage)
   if dy != 0.0 && z.nw > 0.0 {
-    z.zoom_to(z.scale * @math.pow(1.0015, -dy), px, py, now, false)
-    c.request_frame()
+    z.zoom_to(z.scale * @math.pow(1.0015, -dy), px, py, false)
   }
 }
 
@@ -2000,11 +2096,9 @@ fn Viewer::video_stage(self : Viewer, c : @ui.Ctx, src : Source, stage : Int) ->
       } else if v.file.width > 0.0 && v.file.height > 0.0 {
         z.natural(v.file.width, v.file.height)
       }
-      if z.step(c.now()) {
-        c.request_frame()
-      }
+      z.step()
       v.gestures(c, src, stage, z, false, false)
-      if v.closing < 0.0 && n.here() {
+      if !v.closing && n.here() {
         match z.rect() {
           Some(r) => c.native(n, content=Some(r)) |> ignore
           // its size not known yet (not sent with it): placed all the same, a point in the middle, so the player has
@@ -2095,7 +2189,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
           say(c, pv("android-chat.video.saveFrame.failed"))
         }
       }
-      None => c.wake_in(50.0)
+      None => c.wake_in(host_poll_ms)
     }
   }
   let controls = c.id("preview/video-controls")
@@ -2244,14 +2338,26 @@ fn frame_at(starts : Array[Double], ms : Double) -> Int {
 fn timeline(c : @ui.Ctx, v : Viewer, n : @ui.NativeView, dur : Double, pos : Double) -> Unit {
   let id = c.id("preview/timeline")
   let part = if dur > 0.0 { dmax(0.0, dmin(1.0, pos / dur)) } else { 0.0 }
-  match c.rect_of(id) {
+  let held = match c.rect_of(id) {
     Some((x, _, w, _)) if c.pressed(id) && dur > 0.0 => {
       let (px, _, _) = c.pointer()
       n.seek(dmax(0.0, dmin(1.0, (px - x) / dmax(1.0, w))) * dur)
-      v.wake(c.now(), tap_rest_ms)
-      c.request_frame()
+      true
     }
-    _ => ()
+    _ => false
+  }
+  if held {
+    // held there: the bars stay (seen again as it moves; a finger held still asks nothing)
+    v.awake = true
+    v.rest_at = -1.0
+    v.scrubbing = true
+  } else if v.scrubbing {
+    // let go: the bars rest from now
+    v.scrubbing = false
+    v.wake(c.now(), tap_rest_ms)
+    if v.rest_at > 0.0 {
+      c.wake_in(tap_rest_ms)
+    }
   }
   c.box(w=Fill(1.0), h=Px(22.0), padx=6.0, justify=JCenter, id~, fn() {
     // what has played, then the rest (Fill shares the row: one alone would fill it)
@@ -2330,7 +2436,8 @@ fn Viewer::pdf_stage(self : Viewer, c : @ui.Ctx, b : Bytes, stage : Int) -> Unit
     tap_stage(c, v, stage)
     v.note(c, fn() {
       c.text(
-        pv_fill("android-chat.file.pdf.failed", [("error", if @host.platform() == 3 || @host.platform() == 4 { "此平台不能显示 PDF" } else { "" })]),
+        pv_fill("android-chat.file.pdf.failed", [("error", if @ui.platform() == 3 || @ui.platform() == 4 {
+ "此平台不能显示 PDF" } else { "" })]),
         size=15.0,
         color=t.p.muted,
         center=true,
@@ -2396,7 +2503,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       }
     }
     c.box(w=Fill(1.0), h=Fill(1.0), pt=60.0, fn() {
-      if page.here() && v.closing < 0.0 {
+      if page.here() && !v.closing {
         c.native(page) |> ignore
       } else if !page.here() {
         v.note(c, fn() {
@@ -2640,19 +2747,19 @@ fn Viewer::bar(self : Viewer, c : @ui.Ctx, src : Source, shown : Double) -> Unit
           Some(KImage) if !v.coming() => {
             let z = v.zoom
             if picture_button(c, "preview/zoom-out", "minus", tint, on, enabled=z.scale > z.min_scale() + 0.0001) {
-              z.zoom_to(z.scale / 1.25, z.bw / 2.0, z.bh / 2.0, c.now(), true)
+              z.zoom_to(z.scale / 1.25, z.bw / 2.0, z.bh / 2.0, true)
               v.wake(c.now(), tap_rest_ms)
             }
             let pct = c.id("preview/zoom-reset")
             if c.clicked(pct) && on {
-              z.reset(c.now())
+              z.reset()
             }
             c.box(h=Px(32.0), min_w=52.0, radius=12.0, align=ACenter, justify=JCenter, id=if on { pct } else { 0 }, fn() {
               c.text("\{(z.scale * 100.0).round().to_int()}%", size=13.0, color=tint, wrap=false) |> ignore
             })
             |> ignore
             if picture_button(c, "preview/zoom-in", "plus", tint, on, enabled=z.scale < max_scale - 0.0001) {
-              z.zoom_to(z.scale * 1.25, z.bw / 2.0, z.bh / 2.0, c.now(), true)
+              z.zoom_to(z.scale * 1.25, z.bw / 2.0, z.bh / 2.0, true)
               v.wake(c.now(), tap_rest_ms)
             }
             // 标注图片: once its whole picture is here (ImageMarks.kt)
