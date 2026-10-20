@@ -156,7 +156,7 @@ id mb_views_root(CGRect frame) {
 @property(nonatomic) int32_t vid, kind;
 @property(nonatomic, strong) PView *box;      // clips: at the clip rect
 @property(nonatomic, strong) PView *content;  // in it: at the view's rect
-@property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1;
+@property(nonatomic) double x, y, w, h, cx0, cy0, cx1, cy1, radius;
 @property(nonatomic) BOOL shown, placed, failed, closed;
 // a player's
 @property(nonatomic, strong) AVPlayer *player;
@@ -963,12 +963,12 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, int32_t shown) {
+                        double cy1, double radius, int32_t shown) {
   MBNative *v = views[@(vid)];
   if (!v) return;
   BOOL s = shown != 0;
   if (v.placed && v.shown == s && v.x == x && v.y == y && v.w == w && v.h == h && v.cx0 == cx0 && v.cy0 == cy0 &&
-      v.cx1 == cx1 && v.cy1 == cy1)
+      v.cx1 == cx1 && v.cy1 == cy1 && v.radius == radius)
     return;
   BOOL resized = !v.placed || v.w != w || v.h != h;
   v.placed = YES;
@@ -981,6 +981,15 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
   v.box.hidden = !s;
   v.box.frame = CGRectMake(cx0, cy0, fmax(0, cx1 - cx0), fmax(0, cy1 - cy0));
   v.content.frame = CGRectMake(x - cx0, y - cy0, fmax(0, w), fmax(0, h));
+  // its corners round (as the hole the app paints for it): its own layer cut to them, what it holds with it
+  if (radius > 0 || v.radius > 0) {
+#if TARGET_OS_OSX
+    v.content.wantsLayer = YES;
+#endif
+    v.content.layer.cornerRadius = fmax(0, radius);
+    v.content.layer.masksToBounds = radius > 0;
+  }
+  v.radius = radius;
   [CATransaction commit];
   // where it is now, in device pixels: its content and its clip (scripts/host_contract.sh HOST views compares it with
   // what the app told: VIEWTOLD)
@@ -991,9 +1000,9 @@ void mb_host_view_place(int32_t vid, double x, double y, double w, double h, dou
     double px = UIScreen.mainScreen.scale;
 #endif
     CGRect b = v.box.frame, c = v.content.frame;
-    vlog(@"VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, (b.origin.x + c.origin.x) * px,
+    vlog(@"VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", vid, (b.origin.x + c.origin.x) * px,
          (b.origin.y + c.origin.y) * px, c.size.width * px, c.size.height * px, b.origin.x * px, b.origin.y * px,
-         (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px);
+         (b.origin.x + b.size.width) * px, (b.origin.y + b.size.height) * px, v.content.layer.cornerRadius * px);
   }
   if (resized && v.kind >= 2) [v refreshSnap];
 }

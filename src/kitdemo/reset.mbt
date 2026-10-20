@@ -6,6 +6,7 @@
 fn reset() -> Unit {
   sw_on.val = true
   view_check_view.val = None
+  view_check_placed.val = false
   view_check_page.val = None
   site_check_view.val = None
   site_check_page.val = None

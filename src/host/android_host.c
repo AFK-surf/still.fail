@@ -158,7 +158,7 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_pk_photo = (*env)->GetStaticMethodID(env, picks_cls, "photo", "(Ljava/lang/String;)I");
   views_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/NativeViews"));
   m_v_open = (*env)->GetStaticMethodID(env, views_cls, "open", "(ILjava/lang/String;)I");
-  m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFZ)V");
+  m_v_place = (*env)->GetStaticMethodID(env, views_cls, "place", "(IFFFFFFFFFZ)V");
   m_v_close = (*env)->GetStaticMethodID(env, views_cls, "close", "(I)V");
   m_v_control = (*env)->GetStaticMethodID(env, views_cls, "control", "(IID)V");
   m_v_info = (*env)->GetStaticMethodID(env, views_cls, "info", "(I[D)I");
@@ -348,7 +348,7 @@ static const char *FS =
     "// what it shows at p, as if uncut\n"
     "void shade(vec2 p) {\n"
     "  int kind = int(v_p.y + 0.5);\n"
-    "  if (kind == 9) { o = vec4(0.0); return; }\n"
+    "  if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }\n"
     "  vec4 col = v_color;\n"
     "  if (kind == 10) {\n"
     "    // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), p.x half its width, its ends round\n"
@@ -1556,10 +1556,11 @@ int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 void mb_host_view_place(int32_t id, double x, double y, double w, double h, double cx0, double cy0, double cx1,
-                        double cy1, int32_t shown) {
+                        double cy1, double radius, int32_t shown) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, views_cls, m_v_place, id, (jfloat)x, (jfloat)y, (jfloat)w, (jfloat)h,
-                               (jfloat)cx0, (jfloat)cy0, (jfloat)cx1, (jfloat)cy1, shown ? JNI_TRUE : JNI_FALSE);
+                               (jfloat)cx0, (jfloat)cy0, (jfloat)cx1, (jfloat)cy1, (jfloat)radius,
+                               shown ? JNI_TRUE : JNI_FALSE);
 }
 
 void mb_host_view_close(int32_t id) {

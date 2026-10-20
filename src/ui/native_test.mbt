@@ -74,6 +74,36 @@ test "a native view inside a clip shows only in it: its hole cut to the clip" {
 }
 
 ///|
+test "a native view's corners round: the host told its radius, its hole as round over its content's rect, a clip cutting it" {
+  let cell : Ref[@ui.NativeView?] = { val: None }
+  let radius : Ref[Double] = { val: 44.0 }
+  let t = @ui.Tester::new(
+    fn(c) {
+      let v = once(cell, fn() { @ui.NativeView::page("<p>hi</p>") })
+      // a phone's screen of 300 × 600 laid out at (40, 20), the stage cutting it at 500 down
+      c.box(w=Px(390.0), h=Px(500.0), clip=true, fn() {
+        c.native(v, w=Px(390.0), h=Px(700.0), content=Some((40.0, 20.0, 300.0, 600.0)), radius=radius.val)
+        |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=844.0,
+  )
+  // the hole is the content's own rect, rounded; the clip cuts it as it cuts what is painted
+  assert_eq(t.holes(), [(40.0, 20.0, 300.0, 600.0)])
+  assert_eq(t.hole_radii(), [44.0])
+  assert_true(t.views().contains("place 1 40 20 300 600 in 0 0 390 500 round 44"))
+  // square again: told so, its hole cut to where it shows
+  radius.val = 0.0
+  t.frame()
+  assert_eq(t.holes(), [(40.0, 20.0, 300.0, 480.0)])
+  assert_eq(t.hole_radii(), [0.0])
+  assert_true(t.views().contains("place 1 40 20 300 600 in 0 0 390 500"))
+  cell.val.unwrap().close()
+}
+
+///|
 test "a PDF's pages are images the host draws at the size they are shown" {
   let cell : Ref[@ui.Pdf?] = { val: None }
   let t = @ui.Tester::new(

@@ -743,6 +743,7 @@ extern "C" fn ffi_view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
+  radius : Double,
   shown : Int,
 ) -> Unit = "mb_host_view_place"
 
@@ -864,8 +865,8 @@ pub fn view_open(kind : Int, arg : String) -> Int {
 
 ///|
 /// Where the view shows, in the app's coordinates (logical pixels from the window's top left): its content in (x, y,
-/// w, h) (a video's picture is stretched to it), seen only within the clip (cx0, cy0)-(cx1, cy1); hidden when not
-/// `shown`. Told again whenever it moves (each frame it does).
+/// w, h) (a video's picture is stretched to it), its corners round by `radius` (0: square), seen only within the clip
+/// (cx0, cy0)-(cx1, cy1); hidden when not `shown`. Told again whenever it moves (each frame it does).
 pub fn view_place(
   id : Int,
   x : Double,
@@ -876,9 +877,10 @@ pub fn view_place(
   cy0 : Double,
   cx1 : Double,
   cy1 : Double,
+  radius : Double,
   shown : Bool,
 ) -> Unit {
-  ffi_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, if shown { 1 } else { 0 })
+  ffi_view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, if shown { 1 } else { 0 })
 }
 
 ///|

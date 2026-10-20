@@ -9,3 +9,4 @@ bench/flutter/.dart_tool/
 bench/flutter/build/
 bench/flutter/pubspec.lock
 bench/flutter/macos/Flutter/ephemeral/
+__pycache__/

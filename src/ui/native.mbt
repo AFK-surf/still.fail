@@ -193,8 +193,8 @@ fn NativeView::make(
     info: FixedArray::make(10, 0.0),
     state: 0,
     painted: -1,
-    at: FixedArray::make(8, 0.0),
-    told: FixedArray::make(8, -1.0),
+    at: FixedArray::make(9, 0.0),
+    told: FixedArray::make(9, -1.0),
     told_shown: false,
     closed: false,
     frames_asked: false,
@@ -538,28 +538,31 @@ pub fn NativeView::ended(self : NativeView) -> Bool {
 ///|
 /// Where `v` shows: a node of `w` × `h` (filling its parent by default), the view's content at `content` within it
 /// (x, y, w, h from the node's top left; the whole node when None: a video's picture is stretched to it), seen only
-/// inside the node and whatever clips it. What is painted after it draws over it.
+/// inside the node and whatever clips it, its content's corners round by `radius` (points: a page laid out as a
+/// phone's screen, its screen's corners; the host cuts the view itself, the canvas's hole is as round). What is
+/// painted after it draws over it.
 pub fn Ctx::native(
   self : Ctx,
   v : NativeView,
   w? : Size = Fill(1.0),
   h? : Size = Fill(1.0),
   content? : (Double, Double, Double, Double)? = None,
+  radius? : Double = 0.0,
 ) -> Int {
   let i = self.box(w~, h~, fn() {  })
   let n = self.nodes[i]
   n.kind = kind_native
-  native_nodes[i] = (v, content)
+  native_nodes[i] = (v, content, dmax(radius, 0.0))
   i
 }
 
 ///|
-/// The native views' nodes this frame, by their index in the pool.
-let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?)] = Map([])
+/// The native views' nodes this frame, by their index in the pool: the view, where its content is, its corners.
+let native_nodes : Map[Int, (NativeView, (Double, Double, Double, Double)?, Double)] = Map([])
 
 ///|
 fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
-  let (v, content) = match native_nodes.get(i) {
+  let (v, content, radius) = match native_nodes.get(i) {
     Some(x) => x
     None => return
   }
@@ -586,12 +589,15 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   let hx1 = snap(dmin(x + w, x1))
   let hy1 = snap(dmin(y + h, y1))
   if hx1 > hx0 && hy1 > hy0 {
+    // round: the content's own rounded rect, cut by the clips it is painted in (its corners where the content's are,
+    // not where the clip cuts it)
+    let round = radius > 0.0
     self.push_inst(
-      hx0,
-      hy0,
-      hx1 - hx0,
-      hy1 - hy0,
-      0.0,
+      if round { snap(x) } else { hx0 },
+      if round { snap(y) } else { hy0 },
+      if round { snap(x + w) - snap(x) } else { hx1 - hx0 },
+      if round { snap(y + h) - snap(y) } else { hy1 - hy0 },
+      radius,
       9.0,
       0.0,
       0.0,
@@ -616,6 +622,7 @@ fn Ctx::paint_native(self : Ctx, i : Int, n : Node) -> Unit {
   v.at[5] = snap(y0)
   v.at[6] = snap(x1)
   v.at[7] = snap(y1)
+  v.at[8] = radius
 }
 
 ///|
@@ -653,14 +660,14 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
     let shown = v.painted == self.frame_no
     let mut moved = shown != v.told_shown
     if shown {
-      for j in 0..<8 {
+      for j in 0..<9 {
         if (v.at[j] - v.told[j]).abs() > 0.01 {
           moved = true
         }
       }
     }
     if moved {
-      for j in 0..<8 {
+      for j in 0..<9 {
         v.told[j] = v.at[j]
       }
       v.told_shown = shown
@@ -668,7 +675,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
       // put it (VIEWAT) to be compared with (scripts/host_contract.sh HOST views)
       if draw_logging() && fake.val is None && shown {
         let px = StringBuilder()
-        for j in 0..<8 {
+        for j in 0..<9 {
           px.write_string(" " + (v.at[j] * self.scale).to_string())
         }
         h_log("VIEWTOLD \{v.id}" + px.to_string())
@@ -683,6 +690,7 @@ fn Ctx::sync_views(self : Ctx) -> Unit {
         v.at[5],
         v.at[6],
         v.at[7],
+        v.at[8],
         shown,
       )
     }

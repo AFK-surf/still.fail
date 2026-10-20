@@ -17,7 +17,8 @@
 #        host's system: `done ok` goes on, `done bad` fails saying why (scripts/done_runner.py the runner)
 #   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
 #        src/kitdemo/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
-#        to (VIEWTOLD), on whole device pixels, or it fails
+#        to (VIEWTOLD), on whole device pixels, and as round, or it fails; on Android the round page pictured too, its
+#        four corners the canvas's ground outside the round and the page inside
 #   scripts/host_contract.sh HOST site          a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK,
 #        src/kitdemo/sitecheck.mbt): a script and its answer, the host's cookies (where it keeps them), an event
 #        stream's events as they are sent, the page grabbed; each step begun by the page's last, the run ending itself
@@ -325,8 +326,8 @@ for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
         i = line.find(key)
         if i >= 0:
             p = line[i + len(key):].split()
-            out[p[0]] = [float(x) for x in p[1:9]]
-names = ["x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1"]
+            out[p[0]] = [float(x) for x in p[1:10]]
+names = ["x", "y", "w", "h", "clip x0", "clip y0", "clip x1", "clip y1", "corners' radius"]
 bad = []
 if not told or not at:
     bad.append(f"told {len(told)}, placed {len(at)}: the app or the host said nothing")
@@ -335,8 +336,8 @@ for v, t in told.items():
     if a is None:
         bad.append(f"view {v}: told {t}, the host said not where it put it")
         continue
-    for n, tv, av in zip(names, t, a):
-        if abs(tv - round(tv)) > 1e-3:
+    for k, (n, tv, av) in enumerate(zip(names, t, a)):
+        if k < 8 and abs(tv - round(tv)) > 1e-3:
             bad.append(f"view {v}: told {n} {tv}, not on a device pixel")
         if abs(tv - av) > 1e-3:
             bad.append(f"view {v}: {n} told {tv}, put at {av}")
@@ -346,6 +347,64 @@ if bad:
 print(f"views contract ({sys.argv[2]}): {len(told)} native view put where it was told, on whole device pixels: " +
       " ".join(f"{x:g}" for x in next(iter(at.values()))))
 PYEOF
+    # (Android) the round page pictured (MBUI_VIEWCHECK=hold: left on the screen once placed): at each of its four
+    # corners, just inside its rect but outside its round, the canvas's ground (the view cut there, and its hole as
+    # round: no square corner of the page, nothing of what is under the canvas); a little further in, the page
+    if [ "$H" = android ]; then
+      $ADB logcat -c
+      EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 ENV="MBUI_DRAW_LOG=1;MBUI_VIEWCHECK=hold;MBUI_LOG_FILE=round.log" \
+        bash scripts/android.sh run
+      $ADB logcat -v brief -m 1 --uid=$(EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh uid) \
+        -e "VIEWCHECK placed|FATAL EXCEPTION|Fatal signal" | tr -d '\r'
+      EMU_PORT=${SERIAL#emulator-} APP=kitdemo bash scripts/android.sh shown && $ADB exec-out screencap -p > $O/views-round.png
+      $ADB exec-out run-as dev.mbui.demo cat files/round.log > $O/views-round.log
+      $ADB shell am force-stop dev.mbui.demo
+      "$PY" - "$O/views-round.log" "$O/views-round.png" <<'PYEOF'
+import sys
+sys.path.insert(0, "scripts")
+from gallery_shot import pixels
+page = None
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    i = line.find("VIEWTOLD ")
+    if i >= 0:
+        p = [float(x) for x in line[i + 9:].split()[1:10]]
+        if len(p) == 9 and p[8] > 0:
+            page = p
+if page is None:
+    sys.exit("views contract (android): no round view told (VIEWTOLD with a radius)")
+w, h, bpp, rows = pixels(sys.argv[2])
+px = lambda x, y: tuple(rows[int(y)][int(x) * bpp:int(x) * bpp + 3])
+near = lambda a, b: sum(abs(u - v) for u, v in zip(a, b)) <= 24
+x, y, vw, vh, r = page[0], page[1], page[2], page[3], page[8]
+grey = (0x88, 0x88, 0x88)
+# (the picture is the screen's, the app's place its window's: moved by where the window is, found by the page's own
+# straight edges, the middle of its top and of its left, which its round leaves as they are)
+def first(at, n):
+    for k in range(n):
+        if near(at(k), grey):
+            return k
+    sys.exit("views contract (android): the page not found in the picture")
+dy = first(lambda j: px(x + vw / 2, j), h) - y
+dx = first(lambda k: px(k, y + dy + vh / 2), w) - x
+x, y = x + dx, y + dy
+ground = px(x - 4, y + vh / 2)
+bad = []
+if not near(px(x + vw / 2, y + vh / 2), grey):
+    bad.append(f"the page not shown (its middle {px(x + vw / 2, y + vh / 2)})")
+for name, cx, cy, sx, sy in (("top left", x, y, 1, 1), ("top right", x + vw - 1, y, -1, 1),
+                             ("bottom left", x, y + vh - 1, 1, -1), ("bottom right", x + vw - 1, y + vh - 1, -1, -1)):
+    out = px(cx + sx * 2, cy + sy * 2)
+    inside = px(cx + sx * r, cy + sy * r)
+    if not near(out, ground):
+        bad.append(f"{name}: {out} just inside the rect, outside the round, not the ground {ground}")
+    if not near(inside, grey):
+        bad.append(f"{name}: {inside} inside the round, not the page")
+if bad:
+    print("views contract (android): its round corners: " + "; ".join(bad))
+    sys.exit(1)
+print(f"views contract (android): the page's four corners round ({r:g} px), the ground outside them, the page inside")
+PYEOF
+    fi
     ;;
   site)
     # a site's page and a page speaking with the app (kitdemo's MBUI_SITECHECK, src/kitdemo/sitecheck.mbt), each step

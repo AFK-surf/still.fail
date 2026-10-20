@@ -11,8 +11,9 @@ fn main {
   let check = @ui.env("MBUI_TEXTCHECK")
   // MBUI_MARKS (with MBUI_MARKS_IMAGE): marks drawn by the host onto a picture, the PNG on the log (markscheck.mbt)
   let marked = @ui.env("MBUI_MARKS")
-  // MBUI_VIEWCHECK=1: a native view placed between pixels, where the host put it on the log (viewcheck.mbt)
-  let viewed = @ui.env("MBUI_VIEWCHECK") == "1"
+  // MBUI_VIEWCHECK=1: a native view placed between pixels, where the host put it on the log (viewcheck.mbt); =hold:
+  // left on the screen once placed (VIEWCHECK placed), for a picture of its round corners
+  let viewed = @ui.env("MBUI_VIEWCHECK") == "1" || @ui.env("MBUI_VIEWCHECK") == "hold"
   // MBUI_SITECHECK=1: a site's page and a page speaking with the app, each step on the log (sitecheck.mbt)
   let sited = @ui.env("MBUI_SITECHECK") == "1"
   @ui.run("mbui kit", fn(c) {

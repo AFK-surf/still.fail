@@ -152,7 +152,7 @@ static const char *shader_src =
     "    if (cover <= 0.0) discard;\n"
     "  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
-    "  if (kind == 9) return (float4(0.0, 0.0, 0.0, 0.0)) * cover;\n"
+    "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(I.prm.x, min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
     "  if (kind == 10) {\n"
     "    // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), prm.x half its width, its ends round\n"

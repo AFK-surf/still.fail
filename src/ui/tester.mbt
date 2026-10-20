@@ -673,6 +673,20 @@ pub fn Tester::holes(self : Tester) -> Array[(Double, Double, Double, Double)] {
 }
 
 ///|
+/// The holes' corners in the last frame (kind 9, in the order of holes): 0 square, else their radius.
+pub fn Tester::hole_radii(self : Tester) -> Array[Double] {
+  ignore(self)
+  let out = []
+  for i in 0..<g().ninst {
+    let b = i * inst_size
+    if g().inst[b + 5] == 9.0 {
+      out.push(g().inst[b + 4])
+    }
+  }
+  out
+}
+
+///|
 fn r(x : Double) -> Int {
   x.round().to_int()
 }

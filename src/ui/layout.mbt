@@ -371,8 +371,12 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // changes the width, grow, basis or alignment; with the parent's
   // direction, which changes the parent; with a text's wrapping or kind.
   // A node's own size does not depend on it, only its parent's layout)
-  // in what scrolls sideways, as wide as it is (Ctx::sideways)
+  // in what scrolls sideways, as wide as it is (Ctx::sideways): what it holds directly, and in its rows at any depth
+  // what is as wide as its content (a row of chips, a table's cells), not squeezed to the box's width
   if (in_row || in_col) && n.parent >= 0 && self.nodes[n.parent].sideways {
+    shrink = 0.0
+  }
+  if in_row && n.in_sideways && n.w is Auto {
     shrink = 0.0
   }
   if s.shrink != shrink {

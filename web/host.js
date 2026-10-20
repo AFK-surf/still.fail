@@ -266,7 +266,7 @@
   // what it shows at p, as if uncut
   void shade(vec2 p) {
     int kind = int(v_p.y + 0.5);
-    if (kind == 9) { o = vec4(0.0); return; }
+    if (kind == 9) { vec2 hh = v_rect.zw * 0.5; float rr = min(v_p.x, min(hh.x, hh.y)); vec2 q = abs(p - v_rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; o = vec4(0.0); return; }
     vec4 col = v_color;
     if (kind == 10) {
       // a piece of a line (scene.mbt): from c2.xy to c2.zw (shares of its rect), p.x half its width, its ends round
@@ -763,12 +763,14 @@
     views.set(id, v);
     return id;
   };
-  H.viewPlace = (id, x, y, w, h, cx0, cy0, cx1, cy1, shown) => {
+  H.viewPlace = (id, x, y, w, h, cx0, cy0, cx1, cy1, shown, radius = 0) => {
     const v = views.get(id);
     if (!v) return;
     Object.assign(v.clip.style, { left: cx0 + 'px', top: cy0 + 'px', width: Math.max(0, cx1 - cx0) + 'px',
       height: Math.max(0, cy1 - cy0) + 'px', display: shown ? 'block' : 'none' });
-    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px' });
+    // (its corners round, as the hole the app paints for it: the element cut to them, what it shows with it)
+    Object.assign(v.el.style, { left: x - cx0 + 'px', top: y - cy0 + 'px', width: w + 'px', height: h + 'px',
+      borderRadius: radius > 0 ? radius + 'px' : '', overflow: radius > 0 ? 'hidden' : '' });
     // where it is now, in device pixels, as the page laid it out (scripts/host_contract.sh web views: against VIEWTOLD)
     if (shown && H.log) {
       const d = window.devicePixelRatio || 1, r = v.el.getBoundingClientRect(), k = v.clip.getBoundingClientRect();
@@ -776,7 +778,8 @@
       const o = cv ? cv.getBoundingClientRect() : { left: 0, top: 0 };
       const f = (n) => n.toFixed(4);
       H.log(`VIEWAT ${id} ${f((r.left - o.left) * d)} ${f((r.top - o.top) * d)} ${f(r.width * d)} ${f(r.height * d)} ` +
-        `${f((k.left - o.left) * d)} ${f((k.top - o.top) * d)} ${f((k.right - o.left) * d)} ${f((k.bottom - o.top) * d)}`);
+        `${f((k.left - o.left) * d)} ${f((k.top - o.top) * d)} ${f((k.right - o.left) * d)} ${f((k.bottom - o.top) * d)} ` +
+        `${f((parseFloat(v.el.style.borderRadius) || 0) * d)}`);
     }
   };
   H.viewClose = (id) => {

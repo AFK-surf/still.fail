@@ -121,3 +121,35 @@ test "a node drawn as its top only: its bottom cut, its taps whole" {
   assert_eq(t.drawn_rects().filter(fn(r) { r.4 == 0x55667788L }).length(), 0)
 }
 
+
+///|
+test "sideways: a row in it is as wide as what it holds, not squeezed to the box (a toolbar's chips beside its tools)" {
+  let t = @ui.Tester::new(
+    fn(c) {
+      // a bar 200 wide: the chips scroll sideways in what the tools (100) leave
+      c.box(dir=Row, w=Px(200.0), h=Px(40.0), fn() {
+        c.sideways("chips", w=Fill(1.0), fn() {
+          c.box(dir=Row, gap=2.0, fn() {
+            for k in 0..<6 {
+              c.box(padx=13.0, fn() { c.text("ab\{k}", size=10.0, wrap=false) |> ignore }) |> ignore
+            }
+          })
+          |> ignore
+        })
+        |> ignore
+        c.box(w=Px(100.0), fn() {  }) |> ignore
+      })
+      |> ignore
+    },
+    w=390.0,
+    h=300.0,
+  )
+  t.draw()
+  // each chip its words (15) and its sides (13 each), 2 apart: 43 from one to the next, as with room for all
+  let (x0, _, w0, _) = t.rect_of("ab0").unwrap()
+  let (x1, _, _, _) = t.rect_of("ab1").unwrap()
+  let (x5, _, _, _) = t.rect_of("ab5").unwrap()
+  assert_eq(w0, 15.0)
+  assert_eq(x1 - x0, 43.0)
+  assert_eq(x5 - x0, 215.0)
+}

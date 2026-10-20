@@ -3,7 +3,9 @@
 // across, its top 147.3625 down; a page under it at 410.4375, 120.25 tall), each kind the host has (Windows has no
 // video player yet: its page alone), what the app told the host on the log (VIEWTOLD, in device pixels: ui's native.mbt) beside where the
 // host put it (VIEWAT, each host's own), then `VIEWCHECK done` and the app's end. The two the same, on whole device
-// pixels, or the contract fails: else the row its edge half covers shows what is under the canvas.
+// pixels, or the contract fails: else the row its edge half covers shows what is under the canvas. The page's corners
+// round (view_check_round: told the host, its hole as round); MBUI_VIEWCHECK=hold leaves both on the screen once placed
+// (`VIEWCHECK placed`) for the contract's picture of those corners (Android: scripts/host_contract.sh android views).
 
 ///|
 let view_check_view : Ref[@ui.NativeView?] = Ref(None)
@@ -16,6 +18,13 @@ let view_check_page : Ref[@ui.NativeView?] = Ref(None)
 /// the run ends: the host's placing done by then (Android's, on its main thread, after the frame that told it; a
 /// page's on Windows, once its WebView2 is made).
 let view_check_ms : Double = 500.0
+
+///|
+/// The page's corners' radius (points): a phone's screen's, as a page laid out as one shows (still.fail's preview).
+let view_check_round : Double = 24.0
+
+///|
+let view_check_placed : Ref[Bool] = Ref(false)
 
 ///|
 fn view_check_run(c : @ui.Ctx) -> Unit {
@@ -38,12 +47,20 @@ fn view_check_run(c : @ui.Ctx) -> Unit {
   // (a picture fitted between pixels: 147.3625 down, 205.875 tall; a page under it, its top 410.4375 down)
   c.column(fn() {
     c.native(v, h=Px(400.0), content=Some((12.0, 147.3625, 366.0, 205.875))) |> ignore
-    c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25))) |> ignore
+    c.native(p, h=Px(200.0), content=Some((12.0, 10.4375, 366.0, 120.25)), radius=view_check_round) |> ignore
   })
   |> ignore
   // (each the host has, open: a view it has not is not here)
   let open = [v, p].iter().all(fn(x) { !x.here() || x.state() != 0 })
   if @kit.after(c, "viewcheck", open, view_check_ms) {
+    if @ui.env("MBUI_VIEWCHECK") == "hold" {
+      // (left as it is, for its picture: the contract ends the app)
+      if !view_check_placed.val {
+        view_check_placed.val = true
+        @host.log("VIEWCHECK placed")
+      }
+      return
+    }
     @host.log("VIEWCHECK done")
     @host.exit(0)
   }

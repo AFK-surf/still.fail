@@ -52,7 +52,9 @@ pub fn Ctx::sideways(
   let py = if pady >= 0.0 { pady } else { pad }
   let mut inner = -1
   let b = self.box(dir=Row, w~, clip=true, id~, fn() {
+    self.sideways_depth += 1
     inner = self.box(tx=-st.x, pl=px, pr=px, pt=py, pb=py, body)
+    self.sideways_depth -= 1
   })
   self.nodes[b].sideways = true
   // a scroll target (the pointer's), not a tap's

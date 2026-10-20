@@ -175,7 +175,7 @@ MB_CORNER_SL
 "  float band = 1.0 + 2.0 / u.scale + (kind == 2 ? max(I.p.w, 0.5) : max(I.p.z, 0.0));\n"
 "  float d = mb_sd_box(p - c, hs, I.p.x, band);\n"
 "  if (kind == 0 || kind == 5) d = notch_cut(d, p, I.rect, I.pad);\n"
-"  if (kind == 9) { if (d > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
+"  if (kind == 9) { float rr = min(I.p.x, min(hs.x, hs.y)); float2 q = abs(p - c) - hs + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard_fragment(); return (float4(0.0)) * cover; }\n"
 "  if (kind == 4) {\n"
 "    constexpr sampler si(filter::linear, address::clamp_to_edge);\n"
 "    float2 uv = I.c2.xy + clamp((p - I.rect.xy) / I.rect.zw, 0.0, 1.0) * I.c2.zw;\n"

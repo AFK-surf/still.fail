@@ -142,6 +142,8 @@ pub struct Ctx {
   mut dt : Double
   mut last_now : Double
   mut frame_no : Int
+  /// how many sideways boxes' content is being built now (Ctx::sideways): what is made in it is marked in_sideways
+  mut sideways_depth : Int
   // the layout epoch: when it moves on, nothing laid out before is reused
   // (Ctx::flex_tree)
   mut epoch : Int
@@ -335,6 +337,7 @@ fn Ctx::new() -> Ctx {
     dt: 16.0,
     last_now: -1.0,
     frame_no: 0,
+    sideways_depth: 0,
     epoch: 0,
     wants_frame: false,
     wake_at: -1.0,
@@ -515,6 +518,7 @@ fn Ctx::alloc_part(self : Ctx, kind : Int, look : Bool, words : Bool) -> Int {
   self.count = i + 1
   let n = self.nodes[i]
   n.kind = kind
+  n.in_sideways = self.sideways_depth > 0
   n.parent = self.cur
   if self.cur >= 0 {
     let p = self.nodes[self.cur]

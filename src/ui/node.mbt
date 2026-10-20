@@ -140,8 +140,10 @@ struct Node {
   // takes every press and wheel that what lies over it does not (a modal's ground)
   mut portal : Bool
   mut blocks : Bool
-  // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways)
+  // what it holds laid out as wide as it is, scrolled sideways inside it (Ctx::sideways); built inside such a box's
+  // content, at any depth (none of it shrinks to the box: Ctx::layout_node)
   mut sideways : Bool
+  mut in_sideways : Bool
   // layout results, absolute, in logical pixels, kept from frame to frame
   // in the slot (a subtree laid out as last frame is moved, not laid out)
   mut x : Double
@@ -258,6 +260,7 @@ fn Node::new() -> Node {
     portal: false,
     blocks: false,
     sideways: false,
+    in_sideways: false,
     x: 0.0,
     y: 0.0,
     fw: 0.0,
@@ -316,6 +319,7 @@ fn Node::reset_rest(self : Node) -> Unit {
   self.portal = false
   self.blocks = false
   self.sideways = false
+  self.in_sideways = false
   self.rich = None
   self.lines = []
   // (its cut runs go with its layout, kept with it: rl, rl_for)

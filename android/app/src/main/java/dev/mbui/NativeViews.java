@@ -100,8 +100,8 @@ final class NativeViews {
         // how it stands, for info (the GL thread reads these)
         volatile int state;
         volatile double duration = -1, position, playing, nw, nh, bytes, framed, buffering, buffered, ended;
-        // placed: x y w h cx0 cy0 cx1 cy1, in pixels; shown
-        final float[] at = new float[8];
+        // placed: x y w h cx0 cy0 cx1 cy1, the content's corners' radius, in pixels; shown
+        final float[] at = new float[9];
         boolean shown;
         private boolean told;
 
@@ -407,17 +407,17 @@ final class NativeViews {
     }
 
     static void place(int id, float x, float y, float w, float h, float cx0, float cy0, float cx1, float cy1,
-                      boolean shown) {
+                      float radius, boolean shown) {
         NView v = views.get(id);
         if (v == null) return;
         float d = Host.view.density;
-        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d};
+        float[] to = {x * d, y * d, w * d, h * d, cx0 * d, cy0 * d, cx1 * d, cy1 * d, radius * d};
         Host.main.post(() -> {
             if (v.closed || v.clip == null) return;
             boolean same = v.shown == shown;
-            for (int i = 0; i < 8 && same; i++) same = Math.abs(v.at[i] - to[i]) < 0.5f;
+            for (int i = 0; i < 9 && same; i++) same = Math.abs(v.at[i] - to[i]) < 0.5f;
             if (same) return;
-            System.arraycopy(to, 0, v.at, 0, 8);
+            System.arraycopy(to, 0, v.at, 0, 9);
             v.shown = shown;
             int l = Math.round(to[4]), t = Math.round(to[5]);
             int cw = Math.max(0, Math.round(to[6]) - l), ch = Math.max(0, Math.round(to[7]) - t);
@@ -431,12 +431,36 @@ final class NativeViews {
             }
             v.clip.setVisibility(shown && cw > 0 && ch > 0 ? View.VISIBLE : View.GONE);
             v.moved();
+            round(v);
             // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
             if (shown) {
-                Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d", id, to[0], to[1],
-                        to[2], to[3], l, t, l + cw, t + ch));
+                Host.log(String.format(java.util.Locale.ROOT, "VIEWAT %d %.4f %.4f %.4f %.4f %d %d %d %d %.4f", id, to[0],
+                        to[1], to[2], to[3], l, t, l + cw, t + ch, to[8]));
             }
         });
+    }
+
+    /**
+     * The content's corners round (at[8], pixels; 0 square): its clipping frame cut to the content's rect within it,
+     * rounded (an outline the render thread clips the frame's drawing to, whatever the view in it is: a page, a site,
+     * a video's texture), as the hole the app paints for it is.
+     */
+    private static void round(NView v) {
+        boolean on = v.at[8] > 0f;
+        if (on && !v.clip.getClipToOutline()) {
+            v.clip.setOutlineProvider(new android.view.ViewOutlineProvider() {
+                @Override
+                public void getOutline(View view, android.graphics.Outline o) {
+                    int l = Math.round(v.at[0] - v.at[4]), t = Math.round(v.at[1] - v.at[5]);
+                    o.setRoundRect(l, t, l + Math.round(v.at[2]), t + Math.round(v.at[3]), v.at[8]);
+                }
+            });
+            v.clip.setClipToOutline(true);
+        } else if (!on && v.clip.getClipToOutline()) {
+            v.clip.setClipToOutline(false);
+            v.clip.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        }
+        if (on) v.clip.invalidateOutline();
     }
 
     /**

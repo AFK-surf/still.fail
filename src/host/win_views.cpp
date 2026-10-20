@@ -168,7 +168,8 @@ struct Req {
 
 struct View {
   int vid, kind;
-  double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0;
+  double x = 0, y = 0, w = 0, h = 0, cx0 = 0, cy0 = 0, cx1 = 0, cy1 = 0, radius = 0;
+  ComPtr<IDCompositionRectangleClip> round;  // its content cut to its rect, rounded (radius > 0)
   bool shown = false, placed = false;
   bool loaded = false, failed = false, closed = false, told = false, loading = true;
   std::string html;    // a page's
@@ -256,12 +257,36 @@ static void apply_place(View *v) {
   v->content->SetOffsetY((float)(py0 - by));
   RECT r = {0, 0, (LONG)pw, (LONG)ph};
   v->ctl->put_Bounds(r);
+  // its corners round (as the hole the app paints for it): its content's visual cut to its rect, rounded
+  if (v->radius > 0) {
+    IDCompositionDevice *dc = (IDCompositionDevice *)mb_render_dcomp();
+    if (!v->round && dc) dc->CreateRectangleClip(&v->round);
+    if (v->round) {
+      float rr = (float)(v->radius * s);
+      v->round->SetLeft(0.0f);
+      v->round->SetTop(0.0f);
+      v->round->SetRight((float)pw);
+      v->round->SetBottom((float)ph);
+      v->round->SetTopLeftRadiusX(rr);
+      v->round->SetTopLeftRadiusY(rr);
+      v->round->SetTopRightRadiusX(rr);
+      v->round->SetTopRightRadiusY(rr);
+      v->round->SetBottomLeftRadiusX(rr);
+      v->round->SetBottomLeftRadiusY(rr);
+      v->round->SetBottomRightRadiusX(rr);
+      v->round->SetBottomRightRadiusY(rr);
+      v->content->SetClip(v->round.Get());
+    }
+  } else if (v->round) {
+    v->content->SetClip((IDCompositionClip *)NULL);
+    v->round.Reset();
+  }
   v->ctl->put_IsVisible(v->shown ? TRUE : FALSE);
   mb_render_commit();
   // where it is now, in device pixels (scripts/host_contract.sh HOST views compares it with VIEWTOLD)
   if (v->shown)
-    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by, bx + clip.right,
-         by + clip.bottom);
+    vlog("VIEWAT %d %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", v->vid, px0, py0, pw, ph, bx, by, bx + clip.right,
+         by + clip.bottom, v->round ? v->radius * s : 0.0);
 }
 
 // ---- its picture for snapshots ----
@@ -729,18 +754,19 @@ extern "C" int32_t mb_host_view_open(int32_t kind, moonbit_string_t arg) {
 }
 
 extern "C" void mb_host_view_place(int32_t vid, double x, double y, double w, double h, double cx0, double cy0,
-                                   double cx1, double cy1, int32_t shown) {
+                                   double cx1, double cy1, double radius, int32_t shown) {
   View *v = find(vid);
   if (!v) return;
   bool s = shown != 0;
   if (v->placed && v->shown == s && v->x == x && v->y == y && v->w == w && v->h == h && v->cx0 == cx0 &&
-      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1)
+      v->cy0 == cy0 && v->cx1 == cx1 && v->cy1 == cy1 && v->radius == radius)
     return;
   bool resized = !v->placed || v->w != w || v->h != h;
   v->placed = true;
   v->shown = s;
   v->x = x; v->y = y; v->w = w; v->h = h;
   v->cx0 = cx0; v->cy0 = cy0; v->cx1 = cx1; v->cy1 = cy1;
+  v->radius = radius;
   apply_place(v);
   if (resized) refresh_snap(v);
 }
