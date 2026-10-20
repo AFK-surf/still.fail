@@ -35,7 +35,9 @@ permissions:
 jobs:
   # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
   # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21); iOS as Android
-  # (no feed of its own yet). A branch's push, or a run by hand, builds them all.
+  # (no feed of its own yet). A run by hand builds them all; a branch's push only Android and Windows: its macOS and iOS
+  # builds put nothing and took two of the organization's 5 macOS jobs at once for each push, check-mbui's native
+  # waiting 1.5 to 15 minutes for one (2026-10-21).
   what:
     if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
@@ -44,14 +46,17 @@ jobs:
       android: ${{ steps.what.outputs.android }}
       mac: ${{ steps.what.outputs.mac }}
       win: ${{ steps.what.outputs.win }}
+      ios: ${{ steps.what.outputs.ios }}
     steps:
       # (the history's commits and trees, the files' contents only for beta.sh: what changed is told by the trees)
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, filter: "blob:none", sparse-checkout: apps/mbui/scripts }
       - id: what
         run: |
-          for p in android mac win; do
-            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed $p); else v=yes; fi
+          branch=; [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ] || branch=1
+          for p in android mac win ios; do
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed ${p/ios/android}); else v=yes; fi
+            case "$branch$p" in 1mac|1ios) v=no ;; esac
             echo "$p=$v" >> "$GITHUB_OUTPUT"
             echo "$p: $v"
           done
@@ -179,7 +184,7 @@ jobs:
 
   ios:
     needs: what
-    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.android == 'yes'
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
     runs-on: macos-15
     timeout-minutes: 20
     env:
