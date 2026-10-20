@@ -245,10 +245,14 @@ test "a picture goes to the preview, read by drive.read" {
   let t = drive_tester("drive")
   let log = t.drive("tap 首页截图.png\n")
   assert_true(log.contains("EXIT 0"))
+  // (the run ends at its tap: the preview grows in from its row, and reads it as it does)
+  t.run_for(fly_open_ms)
   let v = viewer.val.unwrap()
   assert_eq(v.file.name, "首页截图.png")
   assert_true(v.drive is Some(_))
   assert_true(v.bytes is Some(_))
+  // its bars, left alone, go
+  t.run_for(rest_ms)
   t.assert_idle()
 }
 
@@ -300,9 +304,11 @@ test "＋'s Station 文件: a file ticked in a folder lent goes into the draft, 
   )
   assert_true(log.contains("EXIT 0"))
   assert_eq(refs_of("ws1/st1:s-c1").length(), 0)
-  // its sheet sunk away, the words sent flown to their row
+  // its sheet sunk away, the words sent flown to their row; the station takes them in, its agent answers, its turn
+  // ends (the fixture's times: the run ends as it sends)
   sheet_rested(t, "dv-reader-sheet")
   t.run_for(flight_ms)
+  t.run_for(fix_deliver_ms + fix_answer_ms + fix_turn_end_ms)
   t.assert_idle()
 }
 
