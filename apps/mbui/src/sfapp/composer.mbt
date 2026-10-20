@@ -69,7 +69,7 @@ let composer_files_row : @ui.Style = @ui.style(
 ///|
 /// What waits in the files' row (a picture's tile, a file's card, a pasted text's): its corner concentric with the
 /// capsule's (Glass.kt InComposerFiles) where the row is the capsule's first (in its corner: `Inner`); under a quote
-/// or a notice, what Android gives Smooth there (@sf.files_corner), the row then in no corner.
+/// or a notice, what Android gives Smooth there (Xl2 in @sf.radii), the row then in no corner.
 fn files_card() -> @ui.Style {
   if files_cornered.val {
     files_card_inner
@@ -84,7 +84,7 @@ let files_card_inner : @ui.Style = @ui.style(radius=Inner)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let files_card_set : @ui.Style = @ui.style(radius=@sf.files_corner)
+let files_card_set : @ui.Style = @ui.style(radius=Xl2)
 
 ///|
 /// Whether the files' row (or the station files') is in the capsule's top left corner this frame (capsule_top).

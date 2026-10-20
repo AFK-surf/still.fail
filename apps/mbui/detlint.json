@@ -127,7 +127,7 @@
       "src/coredemo/main.mbt": 39,
       "src/gallery/view.mbt": 66,
       "src/player/audio.mbt": 34,
-      "src/player/player.mbt": 109,
+      "src/player/player.mbt": 102,
       "src/sf/glass.mbt": 5,
       "src/sf/markdown.mbt": 54,
       "src/sf/parts.mbt": 70,
@@ -188,7 +188,7 @@
       "src/coredemo/main.mbt": 20,
       "src/gallery/view.mbt": 33,
       "src/player/audio.mbt": 15,
-      "src/player/player.mbt": 46,
+      "src/player/player.mbt": 42,
       "src/sf/glass.mbt": 1,
       "src/sf/markdown.mbt": 31,
       "src/sf/parts.mbt": 29,
@@ -246,7 +246,7 @@
       "src/videos/view.mbt": 48
     },
     "style-exact": {
-      "src/sf/tokens.mbt": 20
+      "src/sf/tokens.mbt": 6
     },
     "build-effect": {},
     "unsettled-ok": {

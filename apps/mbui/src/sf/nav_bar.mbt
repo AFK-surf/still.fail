@@ -22,7 +22,7 @@ let nav_back_box : @ui.Style = @ui.style(
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_back_words : @ui.TextStyle = @ui.text_style(size=nav_back_size, color=Accent, wrap=false)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=Accent, wrap=false)
 
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).
@@ -44,7 +44,7 @@ let nav_line : @ui.Style = @ui.style(h=S8, justify=JCenter, clip=true)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let nav_title_words : @ui.TextStyle = @ui.text_style(size=nav_title_size, weight=Semibold, color=Fg, wrap=false)
+let nav_title_words : @ui.TextStyle = @ui.text_style(size=Xl, leading=Font, weight=Semibold, color=Fg, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)

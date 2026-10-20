@@ -370,69 +370,44 @@ pub fn mix(a : Int64, share : Double, b : Int64) -> Int64 {
 // nowhere else; a value off mbui's scale is one of the few `Exact`s below.
 
 ///|
-/// still.fail's sizes of words on mbui's scale (Tailwind's names), as the Android app has them: where a `Text` there
-/// says no `lineHeight`, its line is the theme's (ui/Theme.kt WebType: 1.4em, the web phone's root.css.ts). Xs a
-/// note in lines (12/18, Security.kt:110), Sm the meta line (13/18), Base the body (15/21: 15sp with no line, 206
-/// places), Xl2 a title (22/30.8: 22sp bold with no line, Security.kt:473, NewChat.kt:183, Usage.kt:130,
-/// Workspaces.kt:191). The other sizes Android has for their own roles: below.
+/// still.fail's sizes of words on mbui's scale (Tailwind's names, still.fail's values), the eight the Android app
+/// has, each with the line it has where a `Text` there says no `lineHeight` (ui/Theme.kt WebType: 1.4em, the web
+/// phone's root.css.ts): Xs 12 (120 places), Sm 13 (292), Base 14 (156), Lg 15 (206: the body), Xl 16 (a bar's
+/// title, Parts.kt:527), Xl2 17 (back, Parts.kt:491), Xl3 22 (a title, bold: Security.kt:473, NewChat.kt:183,
+/// Usage.kt:130, Workspaces.kt:191), Xl4 32 (a large title, Parts.kt:559).
 pub let text_scale : @ui.TextScale = {
-  ..@ui.TextScale::tailwind(),
-  xs: (12.0, 18.0),
-  sm: (13.0, 18.0),
-  base: (15.0, 21.0),
-  xl2: (22.0, 30.8),
+  xs: (12.0, 16.8),
+  sm: (13.0, 18.2),
+  base: (14.0, 19.6),
+  lg: (15.0, 21.0),
+  xl: (16.0, 22.4),
+  xl2: (17.0, 23.8),
+  xl3: (22.0, 30.8),
+  xl4: (32.0, 44.8),
 }
 
 ///|
-/// A page's lead, a security page's account of itself (15/22: Security.kt:105, 106, 286; a quote's comment,
-/// Composer.kt:562, 708).
-pub let lead_size : @ui.TextSize = Exact(15.0, 22.0)
+/// The lines Android says (`lineHeight`), in place of the size's own (Leading): L4 16 (a row's small line in a list:
+/// OpenJobs.kt:98, AgentSheet.kt:217, DriveScreen.kt:409, Attach.kt:197), L5 18 (a note, a meta line: Security.kt:110,
+/// 485), L6 20 (a file's or a link's card's name: Composer.kt:781, 803; ChatFiles.kt:567; DriveScreen.kt:408), L7 22
+/// (a lead, a paragraph: Security.kt:105, 106, 286; Composer.kt:562, 708).
+pub let leading_scale : @ui.LeadingScale = {
+  ..@ui.LeadingScale::tailwind(),
+  l4: 16.0,
+  l5: 18.0,
+  l6: 20.0,
+  l7: 22.0,
+}
 
 ///|
-/// A file's or a link's card's name (15/20: Composer.kt:781, 803; ChatFiles.kt:567; DriveScreen.kt:408).
-pub let card_title_size : @ui.TextSize = Exact(15.0, 20.0)
+/// still.fail's corners on mbui's scale (in order): Xl 16 (a settings list's ground), Xl2 18 (what waits in the
+/// composer, where it is in none of the capsule's corners: Glass.kt InComposerFiles, concentric(ComposerCorner 26,
+/// ComposerFilesIn 10), what Android gives Smooth), Xl3 20 (a settings page's card, r_card).
+pub let radii : @ui.RadiusScale = { ..@ui.RadiusScale::tailwind(), xl: 16.0, xl2: 18.0, xl3: 20.0 }
 
 ///|
-/// A message's words (15/24.75: Chat.kt:1363, 1367, 1374).
-pub let message_size : @ui.TextSize = Exact(15.0, 24.75)
-
-///|
-/// Small words with no line said (12/16.8: 12sp with no line, 120 places).
-pub let caption_size : @ui.TextSize = Exact(12.0, 16.8)
-
-///|
-/// What says more about something, a row's second line, a page's account of itself (13/18.2: 13sp with no line, 292
-/// places: Settings.kt:163, 191, 258).
-pub let secondary_size : @ui.TextSize = Exact(13.0, 18.2)
-
-///|
-/// A row's value at its end (14/19.6: 14sp with no line, 156 places: SettingParts.kt:258, Settings.kt:176).
-pub let value_size : @ui.TextSize = Exact(14.0, 19.6)
-
-///|
-/// A row's line of small words under its title, in a list (12/16: OpenJobs.kt:98, AgentSheet.kt:217,
-/// DriveScreen.kt:409, Attach.kt:197).
-pub let row_caption_size : @ui.TextSize = Exact(12.0, 16.0)
-
-///|
-/// The code face's size in a line of its own, its line the font's own (mono).
-pub let code_size : @ui.TextSize = Exact(13.0, 0.0)
-
-///|
-/// Back in a bar, the word for where it goes (17/23.8: 17sp with no line, Parts.kt:491 NavBack).
-pub let back_size : @ui.TextSize = Exact(17.0, 23.8)
-
-///|
-/// A compact bar's title (16/22.4: 16sp with no line, Parts.kt:527 NavBar).
-pub let bar_title_size : @ui.TextSize = Exact(16.0, 22.4)
-
-///|
-/// A page's large title, its big word (32/44.8: 32sp with no line, Parts.kt:559, 562 LargeTitle).
-pub let large_title_size : @ui.TextSize = Exact(32.0, 44.8)
-
-///|
-/// A settings page's card's corner, and the shapes of cards to come (20, r_card).
-pub let card_radius : @ui.Radius = Exact(20.0)
+/// A message's line (24.75: Chat.kt:1363, 1367, 1374), the one place Android says it.
+pub let message_line : @ui.Leading = Exact(24.75)
 
 ///|
 /// A small dot's side, how a thing stands (7: PageParts.kt:465 PresenceDot, Security.kt:101 Dot).
@@ -462,7 +437,7 @@ pub fn ui_theme() -> @ui.Theme {
     (true, false) => @ui.Theme::narrow_light()
     (true, true) => @ui.Theme::narrow_dark()
   }
-  { ..base, text: text_scale }
+  { ..base, text: text_scale, leading: leading_scale, radii }
 }
 
 ///|
@@ -474,19 +449,7 @@ pub let files_gap : @ui.Space = Exact(11.0)
 pub let files_row_end : @ui.Space = Exact(7.0)
 
 ///|
-/// What waits in the composer, its corner where it is in none of the capsule's (Glass.kt InComposerFiles:
-/// concentric(ComposerCorner 26, ComposerFilesIn 10), what Android gives Smooth).
-pub let files_corner : @ui.Radius = Exact(18.0)
-
-///|
-/// A page's bar (Parts.kt NavBar): back's word (17) and the title (16), each on the font's own line; the title kept
-/// 84 clear of the bar's sides; the gap in the line under the title (5).
-pub let nav_back_size : @ui.TextSize = Exact(17.0, 0.0)
-
-///|
-pub let nav_title_size : @ui.TextSize = Exact(16.0, 0.0)
-
-///|
+/// A page's bar (Parts.kt NavBar): the title kept 84 clear of the bar's sides; the gap in the line under the title (5).
 pub let nav_title_clear : @ui.Space = Exact(84.0)
 
 ///|
