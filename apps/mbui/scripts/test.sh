@@ -16,14 +16,18 @@ for t in ${TARGETS:-js}; do
   # (native on macOS: the hosts' Objective-C linked in by mbui's own wrapper, as a test's binary is given no
   # cc-link-flags: mbui's scripts/cc_apple.sh)
   if [ $t = native ] && [ "$(uname)" = Darwin ]; then export MOON_CC="$MBUI_DIR/scripts/cc_apple.sh"; else unset MOON_CC; fi
+  # (the parts' packages in one moon test, which runs a package's tests in one executable and the packages side by
+  # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
+  pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
-  screens=; [ $t = js ] && screens="-p stillfail/sfscreens"
-  moon test --target $t -p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p stillfail/player $screens ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
-  [ ${PIPESTATUS[0]} = 0 ] || code=1
+    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p stillfail/player"
+    [ $t = js ] && pkgs="$pkgs -p stillfail/sfscreens"
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
-  moon test --target $t -p stillfail/core -p stillfail/sfreplay $(for g in src/sfreplay/flows/*/; do printf -- '-p stillfail/sfreplay/flows/%s ' "$(basename "$g")"; done) 2>&1 | grep -v "$F" | tail -${LINES_OUT:-8}
-  [ ${PIPESTATUS[0]} = 0 ] || code=1
+    pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
+    for g in src/sfreplay/flows/*/; do pkgs="$pkgs -p stillfail/sfreplay/flows/$(basename "$g")"; done
   fi
+  moon test --target $t $pkgs ${UPDATE:+--update} 2>&1 | grep -v "$F" | tail -${LINES_OUT:-60}
+  [ ${PIPESTATUS[0]} = 0 ] || code=1
 done
 exit $code
