@@ -47,7 +47,7 @@ fn picture(url : String) -> String {
       @core.call_bytes("picture", params=Json::object(params), on_done=fn(r) {
         match r {
           Ok((_, Some(bytes))) if bytes.length() > 0 => {
-            let key = "mem:picture/\{url.hash()}/\{url.length()}"
+            let key = "mem:picture/\{@ui.stable_hash(url)}/\{url.length()}"
             @ui.add_image(key, bytes)
             pictures[url] = key
           }
@@ -81,7 +81,7 @@ fn chat_file(station : String, key : String, name : String) -> String {
         match r {
           Ok((_, Some(bytes))) if bytes.length() > 0 => {
             // its name at the end: a scripted run finds it by it (`tap img:NAME`)
-            let k = "mem:chat-file/\{id.hash()}/\{id.length()}/\{name}"
+            let k = "mem:chat-file/\{@ui.stable_hash(id)}/\{id.length()}/\{name}"
             @ui.add_image(k, bytes)
             chat_files[id] = k
           }

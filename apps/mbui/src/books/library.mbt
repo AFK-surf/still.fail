@@ -55,7 +55,7 @@ fn lcg(seed : Int) -> Int {
 /// Chapter `index` of `book`, as the media service would send it.
 fn chapter_blocks(book : Book, index : Int) -> Array[@ui.Block] {
   let english = book.id == "b3" || book.id == "b6"
-  let mut seed = (book.id.hash() & 0xFFFF) * 131 + index * 7919 + 1
+  let mut seed = (@ui.stable_hash(book.id).to_int() & 0xFFFF) * 131 + index * 7919 + 1
   let out : Array[@ui.Block] = [Heading(book.chapters[index])]
   let paras = 14 + index % 9
   for p in 0..<paras {

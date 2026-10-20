@@ -482,7 +482,7 @@ pub fn station_mark(
   if icon.has_prefix("data:image/") {
     match icon.find("base64,") {
       Some(i) => {
-        let key = "mem:sf/station/\{icon.length()}/\{icon.hash()}"
+        let key = "mem:sf/station/\{icon.length()}/\{@ui.stable_hash(icon)}"
         if !made.contains(key) {
           made[key] = true
           @ui.add_image(key, base64(icon.view(start_offset=i + 7).to_owned()))

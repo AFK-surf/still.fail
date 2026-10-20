@@ -481,13 +481,13 @@ fn upload_id(what : String, n : Int) -> String {
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
   ]
   let out = StringBuilder::new()
-  let mut h = seed.hash()
-  for i in 0..<32 {
-    if i % 8 == 0 {
-      h = (seed + "\{i}").hash()
+  // two FNV-1a (@ui.stable_hash: the same in every run and on js and native), 16 digits each
+  for half in [@ui.stable_hash(seed), @ui.stable_hash(seed + "\u{1}")] {
+    let mut h = half
+    for _ in 0..<16 {
+      out.write_char(hex[(h & 15L).to_int()])
+      h = h >> 4
     }
-    out.write_char(hex[h & 15])
-    h = h >> 4
   }
   out.to_string()
 }
@@ -598,7 +598,7 @@ fn add_file(src : Source, d : Draft, station : String, name : String, bytes : By
 ///|
 /// What a file going up is known by for its id (upload_id): the station, its name, its size and its bytes' hash.
 fn file_seed(station : String, name : String, bytes : Bytes) -> String {
-  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{bytes.hash()}"
+  "\{station}\u{1}\{name}\u{1}\{bytes.length()}\u{1}\{@ui.stable_hash_bytes(bytes)}"
 }
 
 

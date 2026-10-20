@@ -131,10 +131,7 @@
       "src/sfapp/service.mbt": 1
     },
     "host-read": {},
-    "builtin-hash": {
-      "src/books/library.mbt": 1,
-      "src/sfapp/composer.mbt": 2
-    },
+    "builtin-hash": {},
     "hash-order": {},
     "globals": {},
     "style-literal": {
