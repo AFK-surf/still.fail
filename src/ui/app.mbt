@@ -959,8 +959,13 @@ fn on_app_state(s : Int) -> Unit {
   took_input("app", h_now(), [s.to_double()])
   // a scripted run stands for someone looking at the app: what the host says meanwhile (a locked screen's window
   // is covered, a task's app not active) is let be
-  if driver.val is Some(_) {
+  if driver.val is Some(d) {
     h_log("DRIVE the host says the app is \{s} (1 shown, 2 in front): kept in front for the run")
+    // (shown again after it was not: what a run's `shown` waits for)
+    if (s & 1) != 0 && (d.said_state & 1) == 0 {
+      d.shown += 1
+    }
+    d.said_state = s
     return
   }
   if s == app_state.val {

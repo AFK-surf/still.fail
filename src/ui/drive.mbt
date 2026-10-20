@@ -53,10 +53,17 @@
 //                               value) answered, and a frame drawn after it, within the timeout: the run's k-th
 //                               `answered CALL` line its k-th answer, counted from the run's start (one come before
 //                               the step that acted ahead of the line is as good), each line an answer of its own
-//   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") decoded,
-//                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
+//   decoded SRC                 a picture whose source ends with SRC (e2e-photo.jpg; a PDF's page: "PDF") or
+//                               begins with it (a prefix: a gallery's content://media/) decoded, from its address or
+//                               from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
+//   outside_done NAME           work outside the app (a wait on the host or the core, by its name: "an update
+//                               downloading") with NAME in it done since the last step that acted (what it set off),
+//                               and a frame drawn after it, within the timeout; NAME naming more than one done, the
+//                               run fails. Never a motion: no step waits for one to end
+//   shown                       the host's word that the app is shown again (after it was not: another app's page
+//                               over it gone) since the last step that acted, and a frame drawn after it
 //   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
 //                               file X come in the directory the run names (MBUI_DONE_DIR, else $MBUI_SHOT_DIR/done),
 //                               the host told of it by its system (src/host/done_watch.h: macOS, Android, Windows);
@@ -71,8 +78,9 @@
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
 // frame just drawn has them, once they hold still from one frame to the next. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready, done, rest), within the timeout. The run asks for no frame of its
-// own: what it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake at that time.
+// for by name (until, gone, answered, decoded, ready, outside_done, shown, done, rest), within the timeout. The run asks for
+// no frame of its own: what it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake
+// at that time.
 // `wait` stays a pause in real time, for what is outside the app (a command beside the run, the other device, the
 // station) that no `until` can see, and that the runner does not say it has done (`done`).
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
@@ -101,6 +109,12 @@ priv struct Driver {
   // answered, decoded, ready: how many waits on outside had ended as the last step that acted did (or the run began:
   // Runtime::outside_ended), and the frame the step saw its own end in (-1: not yet)
   mut mark : Int
+  // shown: how often the host had said the app is shown again (`shown`) as the last step that acted did
+  mut shown_mark : Int
+  // how often the host has said the app is shown again after it was not (app.mbt's on_app_state), and what it said
+  // last
+  mut shown : Int
+  mut said_state : Int
   // the answers come of each call since the run began (`answered CALL`), by its name, counted up to the ended wait
   // `counted` (each frame, and before a step that acts takes its mark: Runtime::outside_ended lets go of what came
   // before), and how many of them the run's `answered` lines have taken
@@ -224,6 +238,9 @@ fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
     gms: 0.0,
     shot_at: -1.0,
     mark: runtime().outside_ended(),
+    shown_mark: 0,
+    shown: 0,
+    said_state: 3,
     answers: {},
     counted: runtime().outside_ended(),
     answers_taken: {},
@@ -676,6 +693,7 @@ fn drive_steps(c : Ctx) -> Unit {
       next()
       d.count_answers()
       d.mark = runtime().outside_ended()
+      d.shown_mark = d.shown
     }
     match cmd {
       "" => next()
@@ -749,6 +767,38 @@ fn drive_steps(c : Ctx) -> Unit {
           next()
         } else if waited > d.timeout {
           drive_fail(c, d, "not at rest after \{d.timeout.to_int()} ms: \{c.rest_why()}")
+          return
+        } else {
+          return
+        }
+      }
+      "outside_done" | "shown" => {
+        // what it names done outside (or the app shown again) since the last step that acted, and a frame drawn after
+        // the one that saw it
+        let come = if cmd == "shown" {
+          d.shown > d.shown_mark
+        } else {
+          let named = []
+          for w in runtime().outside_ended_since(d.mark) {
+            if w.contains(arg) {
+              named.push(w)
+            }
+          }
+          // (one thing named: more than one done, the name does not say which the run means)
+          if named.length() > 1 {
+            drive_fail(c, d, "\{arg} names more than one thing done outside: \{named.join("; ")}")
+            return
+          }
+          named.length() == 1
+        }
+        if d.seen_frame < 0 && come {
+          d.seen_frame = c.frame_no
+        }
+        if d.seen_frame >= 0 && c.frame_no > d.seen_frame {
+          h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+          next()
+        } else if waited > d.timeout {
+          drive_fail(c, d, "not so after \{d.timeout.to_int()} ms (awaiting \{runtime().awaiting()} from outside)")
           return
         } else {
           return
@@ -1212,7 +1262,9 @@ fn outside_named(cmd : String, arg : String, what : String) -> Bool {
     // "core: NAME (call N)", a subscription's "core: KEY"
     "answered" => what.has_prefix("core: " + arg + " (call ") || what == "core: " + arg
     // "image N SRC", "image N (B bytes) SRC" (bytes handed over for SRC), "image N (PDF D, page P)"
-    "decoded" => what.has_prefix("image ") && (what.has_suffix(arg) || (arg == "PDF" && what.contains("(PDF ")))
+    "decoded" =>
+      what.has_prefix("image ") &&
+      (what.has_suffix(arg) || what.contains(" " + arg) || (arg == "PDF" && what.contains("(PDF ")))
     _ =>
       if arg == "pdf" {
         what.has_prefix("image ") && what.contains("(PDF ")
