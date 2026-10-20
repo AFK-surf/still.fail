@@ -360,6 +360,9 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         onDispose { if (full) { controller?.show(WindowInsetsCompat.Type.systemBars()); activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
     }
     BackHandler(full) { full = false }
+    // Over (ended, gone…): out of 全屏, the bar's × and what happened in sight.
+    val over = !open(session)
+    LaunchedEffect(over) { if (over) full = false }
     val tools = Tools(pasting, ::paste, ::send, ::choosePad, full) { full = it }
     val dropActs = DropActs(
         pastePath = { d -> act(t("android-misc.screen.pasteWhat")) { session.paste(d.path) } },
@@ -371,14 +374,14 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         AndroidView({ KeyCatcher(it, held) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
         val sideways = maxWidth > maxHeight
         if (full) Box(Modifier.fillMaxSize()) {
-            Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
+            Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize())
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
             if (session.driving && typing) KeysRow(session, held, Modifier.align(Alignment.BottomCenter).padding(8.dp).floatingStill(CircleShape).padding(4.dp))
             FullTools(session, typing, ::keyboard, tools, Modifier.align(Alignment.TopEnd).padding(12.dp))
         } else if (sideways) Row(Modifier.fillMaxSize()) {
             Rail(session, typing, ::keyboard, tools, onExit)
             Box(Modifier.weight(1f).fillMaxHeight()) {
-                Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
+                Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize())
                 // Sideways the frame takes the height: who drives it floats over its top, while it does.
                 if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
                 // The keys a phone's keyboard has not, over the frame's foot while it is up.
@@ -387,7 +390,7 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         } else Column(Modifier.fillMaxSize()) {
             Bar(session, title, tools, onExit)
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 12.dp, vertical = 4.dp))
-            Stage(session, zoom, pad, dropActs, Modifier.weight(1f).fillMaxWidth(), onExit)
+            Stage(session, zoom, pad, dropActs, Modifier.weight(1f).fillMaxWidth())
             // Upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard.
             if (session.driving) Foot(session, held, typing, ::keyboard, tools)
         }
@@ -450,7 +453,7 @@ private fun Bar(session: ScreenSession, title: String?, tools: Tools, onExit: ()
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
         ClipButtons(session, tools)
-        FullButton(tools)
+        if (open(session)) FullButton(tools)
     }
 }
 
@@ -574,7 +577,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
-            FullButton(tools)
+            if (open(session)) FullButton(tools)
         }
         if (saying && state != null) Text(
             state.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -622,7 +625,7 @@ private fun RoundButton(icon: ImageVector, label: String, pressed: Boolean = fal
 
 /** The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it. */
 @Composable
-private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropActs: DropActs, modifier: Modifier, onExit: () -> Unit) {
+private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropActs: DropActs, modifier: Modifier) {
     val picture = session.picture
     val size = session.size ?: picture?.let { IntSize(it.bitmap.width, it.bitmap.height) }
     var box by remember { mutableStateOf(Size.Zero) }
@@ -674,7 +677,7 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
             // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
             if (phase !in OVER) Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
-        Over(session, phase, Modifier.align(Alignment.Center), onExit)
+        Over(session, phase, Modifier.align(Alignment.Center))
         Column(
             Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 420.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -798,15 +801,15 @@ private val OVER = setOf("ended", "outdated", "gone", "denied", "failed")
 
 /** How the view is, when it is not simply live: on its way, back on its way, or over (why, and what can be done). */
 @Composable
-private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onExit: () -> Unit) {
+private fun Over(session: ScreenSession, phase: String, modifier: Modifier) {
     val message = session.message
     when (phase) {
         "live" -> if (!session.shownAny) Waiting(t("android-misc.screen.starting"), modifier)
         "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
         else -> Column(
-            // Said on the page itself (nothing left on it to float over): the screen's sign, what happened and why, the
-            // ways on under them, all in the middle.
+            // Said on the page itself (nothing left on it to float over): the screen's sign, what happened and why, and
+            // 重新打开 where it may be had again, all in the middle; the way out is the bar's ×, not a second one here.
             modifier.padding(32.dp).widthIn(max = 320.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -817,11 +820,7 @@ private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onEx
             listOfNotNull(message, session.state?.access?.message).filter { it.isNotEmpty() && it != headline }.distinct().forEach {
                 Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
             }
-            val again = phase in setOf("ended", "denied", "failed")
-            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(t("common.back"), primary = !again, onClick = onExit)
-                if (again) Button(t("web-pages.screen.again"), primary = true) { session.open() }
-            }
+            if (phase in setOf("ended", "denied", "failed")) Button(t("web-pages.screen.again"), primary = true, modifier = Modifier.padding(top = 20.dp)) { session.open() }
         }
     }
 }
