@@ -40,6 +40,7 @@ jobs:
       MBUI_CACHE: /Users/runner/stillfail-ci/mbui
       STILLFAIL_BUILD_CACHE: /Users/runner/Library/Caches/stillfail-build
       SAVE: ${{ github.ref == 'refs/heads/main' }}
+      SIM_DATA: /Users/runner/stillfail-ci/simdata
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -49,6 +50,7 @@ jobs:
           echo "hermes=$(sed -n 's/^HERMES_RN=//p' apps/mbui/scripts/core.sh)" >> "$GITHUB_OUTPUT"
           echo "rustc=$(rustc --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
           echo "sysroot=$(rustc --print sysroot)" >> "$GITHUB_OUTPUT"
+          echo "sim=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']];print(r[-1]['buildversion'])")" >> "$GITHUB_OUTPUT"
           touch "$RUNNER_TEMP/start"
       - uses: actions/cache/restore@v4
         id: hermes
@@ -113,6 +115,13 @@ jobs:
           python3 "$RUNNER_TEMP/mtimes.py" apply "$MBUI_CACHE/cargo-target-ios/mtimes.json" apps/mbui/ out
       - name: Tools (MoonBit, mbui, the core's packages)
         run: bash apps/mbui/scripts/beta.sh tools
+      # a simulator's data after its first boot (ios-smoke.sh boot), by its runtime's build: kept once (1.1 GB), by
+      # main's first run of a new runtime
+      - uses: actions/cache/restore@v4
+        id: sim
+        with:
+          path: ${{ env.SIM_DATA }}
+          key: mbui-ios-sim-${{ steps.keys.outputs.sim }}
       # (booted in the background while the app builds: a fresh simulator's first boot is a minute or more)
       - name: The simulator, this run's alone, booting
         run: bash apps/mbui/scripts/ios-smoke.sh take && bash apps/mbui/scripts/ios-smoke.sh boot
@@ -157,7 +166,14 @@ jobs:
         run: bash apps/mbui/scripts/ios-smoke.sh run
       - name: The simulator shut down, its lock given back
         if: always()
+        env:
+          SIM_SAVE: ${{ env.SAVE == 'true' && job.status == 'success' && steps.sim.outputs.cache-hit != 'true' && '1' || '' }}
         run: bash apps/mbui/scripts/ios-smoke.sh done
+      - if: env.SIM_KEPT == '1'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.SIM_DATA }}
+          key: mbui-ios-sim-${{ steps.keys.outputs.sim }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
