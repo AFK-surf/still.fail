@@ -1,16 +1,17 @@
 ///|
-/// The made-up chat open over Home (chat_fixture.mbt), from its start.
+/// The made-up chat open over Home (chat_fixture.mbt), from its start: pushed in.
 fn chat_tester(mode : String) -> @ui.Tester {
   reset()
   let src = fixture(mode)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t
 }
 
 ///|
 test "a chat opens at its end: its bar, its last messages, the composer's room under them" {
   let t = chat_tester("chat")
-  t.settle() |> ignore
   assert_true(t.find("整理发布清单") is Some(_))
   let (_, y) = t.find("做完了：列表、跳到最新的按钮").unwrap()
   // the last message over the composer's capsule
@@ -23,12 +24,12 @@ test "a chat opens at its end: its bar, its last messages, the composer's room u
   assert_true(t.find("Studio 上 codex 的登录已失效") is Some(_))
   // no way to the newest at the newest
   assert_true(!readings.get("ws1/st1\u{1}s-c1").unwrap().jump)
+  t.assert_idle()
 }
 
 ///|
 test "scrolled up, the way to the newest shows; tapped, the list glides back to its end" {
   let t = chat_tester("chat")
-  t.settle() |> ignore
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -900.0)
   let rd = readings.get("ws1/st1\u{1}s-c1").unwrap()
@@ -36,7 +37,6 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
   assert_true(t.find("做完了：列表、跳到最新的按钮") is None)
   // over the send button, the composer's room under it
   t.tap(390.0 - 18.0 - 18.0, 844.0 - 112.0 - 18.0)
-  t.settle() |> ignore
   assert_true(t.find("做完了：列表、跳到最新的按钮") is Some(_))
   assert_true(!rd.jump)
 }
@@ -44,7 +44,6 @@ test "scrolled up, the way to the newest shows; tapped, the list glides back to 
 ///|
 test "the viewer's words on the right, everyone else's under their name" {
   let t = chat_tester("chat")
-  t.settle() |> ignore
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -500.0)
   // a bubble ending at the list's right edge (14 in), an agent's words from its left
@@ -57,7 +56,6 @@ test "the viewer's words on the right, everyone else's under their name" {
 ///|
 test "near the top the page before comes in, and what is in view stays where it is" {
   let t = chat_tester("chat")
-  t.settle() |> ignore
   t.move(195.0, 400.0)
   // up to the first message: the page before is asked for there, and comes in above it
   let mut tries = 0
@@ -81,7 +79,6 @@ test "near the top the page before comes in, and what is in view stays where it 
 ///|
 test "a reference to another chat is its chip, and opens that chat" {
   let t = chat_tester("chat")
-  t.settle() |> ignore
   t.move(195.0, 400.0)
   for _ in 0..<4 {
     if t.find("性能数据放在") is Some(_) {
@@ -91,7 +88,6 @@ test "a reference to another chat is its chip, and opens that chat" {
   }
   assert_true(t.find("@首页的列表改成按天分组") is Some(_))
   t.tap_run("首页的列表改成按天分组")
-  t.settle() |> ignore
   assert_eq(app.nav.depth(), 3)
   match app.nav.top() {
     Chat(r) => {
@@ -100,12 +96,14 @@ test "a reference to another chat is its chip, and opens that chat" {
     }
     _ => fail("not a chat")
   }
+  // the chat pushed in
+  t.run_for(@ui.nav_push_ms)
+  t.assert_idle()
 }
 
 ///|
 test "while the chat is read: its bar, the messages to come, the composer" {
   let t = chat_tester("chat-loading")
-  t.settle(unsettled_ok=true) |> ignore
   assert_true(t.find("发消息") is Some(_))
   assert_true(t.find("整理发布清单") is None)
 }
@@ -149,12 +147,14 @@ test "a file card in the chat opens its preview" {
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
-  t.settle() |> ignore
+  t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -600.0)
-  t.settle() |> ignore
   t.tap_text("build.log")
-  t.settle() |> ignore
   assert_true(viewer.val is Some(_))
   assert_eq(viewer.val.unwrap().file.name, "build.log")
+  // the preview flown open, its bars left alone till they rest
+  t.run_for(fly_open_ms)
+  t.run_for(rest_ms)
+  t.assert_idle()
 }
