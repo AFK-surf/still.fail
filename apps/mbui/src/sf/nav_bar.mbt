@@ -23,7 +23,7 @@ let nav_back_box : @ui.Style = @ui.style(
 ///|
 /// Back's word in a link's ink, its chevron the accent (Parts.kt:491 C.link, 490 C.accent).
 // kept across runs: a value (no field of it changes)
-let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=AccentText, wrap=false)
+let nav_back_words : @ui.TextStyle = @ui.text_style(size=Xl2, leading=Font, color=Link, wrap=false)
 
 ///|
 /// The bar: 10 in at its start, 16 at its end, 6 over and 10 under (NavBar).

@@ -465,7 +465,14 @@ pub fn ui_theme() -> @ui.Theme {
     (true, false) => @ui.Theme::narrow_light()
     (true, true) => @ui.Theme::narrow_dark()
   }
-  { ..base, text: text_scale, leading: leading_scale, radii }
+  // a link's ink as Android's C.link (Theme.kt): the accent's darker ink on paper, the accent itself in the dark
+  {
+    ..base,
+    text: text_scale,
+    leading: leading_scale,
+    radii,
+    link: if t.dark { base.accent } else { base.accent_text },
+  }
 }
 
 ///|
