@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Waits for an event, not a time (detlint's script-wait): a line of a log another process writes, or a process's end.
 
-  scripts/logwait.py [--log FILE --line REGEX] [--pid PID] [--deadline S]
+  scripts/logwait.py [--log FILE --line REGEX] [--pid PID] [--gone PATH] [--deadline S]
 
 --log/--line: until a line of FILE (as it is written: kqueue's vnode events, from the start) matches REGEX; that line
 printed, exit 0. --pid: the process PID (any of this user's: a simulator's app, a child left running) watched for its
 end (kqueue's NOTE_EXIT): with --line, its end without such a line is exit 1 (what was read gone over once more
-first); alone, its end is exit 0. --deadline: how long at most (s, default 600; what a run that hangs is given before it
+first); alone, its end is exit 0. --gone: until PATH is no more (its directory's changes, kqueue's: a lock let go),
+exit 0. --deadline: how long at most (s, default 600; what a run that hangs is given before it
 fails, not what it is expected to take): exit 2.
 """
 import argparse
@@ -22,10 +23,11 @@ def main():
     ap.add_argument("--log")
     ap.add_argument("--line")
     ap.add_argument("--pid", type=int)
+    ap.add_argument("--gone")
     ap.add_argument("--deadline", type=float, default=600.0)
     a = ap.parse_args()
-    if bool(a.log) != bool(a.line) or not (a.log or a.pid):
-        ap.error("--log with --line, and/or --pid")
+    if bool(a.log) != bool(a.line) or not (a.log or a.pid or a.gone):
+        ap.error("--log with --line, and/or --pid, or --gone")
     pat = re.compile(a.line) if a.line else None
     kq = select.kqueue()
     gone = False
@@ -35,6 +37,10 @@ def main():
                                       select.KQ_NOTE_EXIT)], 0)
         except ProcessLookupError:
             gone = True
+    if a.gone:
+        d = os.open(os.path.dirname(os.path.abspath(a.gone)) or ".", os.O_RDONLY)
+        kq.control([select.kevent(d, select.KQ_FILTER_VNODE, select.KQ_EV_ADD | select.KQ_EV_CLEAR,
+                                  select.KQ_NOTE_WRITE)], 0)
     f = None
     buf = ""
     if a.log:
@@ -54,6 +60,8 @@ def main():
 
     end = time.monotonic() + a.deadline
     while True:
+        if a.gone and not os.path.exists(a.gone):
+            return 0
         if f and found():
             return 0
         if gone:
@@ -64,7 +72,8 @@ def main():
         left = end - time.monotonic()
         if left <= 0:
             print(f"logwait: past the deadline ({a.deadline:g} s): "
-                  + (f"no line /{a.line}/ in {a.log}" if f else f"process {a.pid} still running"), file=sys.stderr)
+                  + (f"no line /{a.line}/ in {a.log}" if f else f"{a.gone} still there" if a.gone and not a.pid
+                     else f"process {a.pid} still running"), file=sys.stderr)
             return 2
         for ev in kq.control(None, 4, left):
             if ev.filter == select.KQ_FILTER_PROC:
