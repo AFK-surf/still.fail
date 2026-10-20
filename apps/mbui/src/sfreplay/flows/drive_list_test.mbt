@@ -21,6 +21,8 @@ test "16-drive-list" {
     f.run_to(@ui.nav_rest())
     f.see("小说-e2e.txt")
     f.gone("里面.txt")
+    // the bottom bar, gone as 文件 was pushed, comes back with the folder's page: at its end
+    f.run_to(@sfapp.bar_rest())
     f.end()
   })
 }

@@ -567,6 +567,13 @@ fn BarModel::rest(self : BarModel) -> Double {
 }
 
 ///|
+/// When the bottom bar is at rest (BarModel::rest): for a test of the app over its pages (src/sfreplay), as for this
+/// package's own, only at a test's end or where a page is pushed, never a point waited for midway.
+pub fn bar_rest() -> Double {
+  bar.rest()
+}
+
+///|
 /// Everything where it is going, at once (the first frame; reduced motion).
 fn BarModel::jump(self : BarModel) -> Unit {
   for s in [self.o, self.k, self.held, self.ball_x, self.ball_y] {
