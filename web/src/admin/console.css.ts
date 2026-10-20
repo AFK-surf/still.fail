@@ -105,7 +105,9 @@ export const hint = style({ fontSize: vars.textMeta, color: vars.muted, whiteSpa
 export const lineAside = style({ flex: "none", fontSize: vars.textMeta, color: vars.muted, whiteSpace: "nowrap" });
 globalStyle(`${lineAside} [data-off]`, { color: vars.amber });
 export const link = style({ color: vars.text, textDecoration: "underline", textDecorationColor: vars.lineStrong, textUnderlineOffset: "3px" });
-export const actions = style({ display: "flex", gap: "8px", marginTop: "20px" });
+export const actions = style({ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "20px" });
+/** A command as wide as the dialog, scrolled within rather than spilling past it. */
+export const command = style({ display: "grid", gridTemplateColumns: "minmax(0, 1fr)" });
 
 // ── a bug report ──
 export const fbNumber = style({ flex: "none", fontSize: vars.textMeta });
