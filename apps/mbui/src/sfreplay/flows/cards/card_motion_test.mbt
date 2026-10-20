@@ -18,9 +18,10 @@ test "70-card-motion" {
     f.see("=灰色 083209")
     f.tap_now("=橙色 083209") |> ignore
     // answered (decision.answer): the options fade and shrink to 90% on their 200 ms from the frame that took the
-    // answer, their room closing on the rows' spring after them; how it went comes in their place, its room opening
+    // chat's change saying the card decided (its `chosen`: messages.mbt's `resolved`), their room closing on the rows'
+    // spring after them; how it went comes in their place, its room opening
     f.until_moving("under-look/options/") |> ignore
-    let from = f.answer_taken("decision.answer")
+    let from = f.message_taken(fn(m) { m.stringify().contains("\"chosen\"") })
     assert_eq(f.t.rest_of("under-look/options/"), from + @sfapp.options_out_ms)
     assert_true(f.t.rest_of("under/options/") > from + @sfapp.options_out_ms)
     assert_true(f.t.rest_of("under/outcome/") > from)
