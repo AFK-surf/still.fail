@@ -403,7 +403,7 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
               let most = opt_number(wait, "seconds")
               // (at its most it stands still)
               if most is None || now - since < most.unwrap_or(0.0) * second_ms {
-                wake_next_second(c, now - since)
+                each_second(c, now - since)
               }
               let waited = dmax((now - since) / second_ms, 0.0)
               let waited = match most {
@@ -832,11 +832,10 @@ let second_ms : Double = 1000.0
 let detail_settle_ms : Double = 1000.0
 
 ///|
-/// A clock showing `ms` gone by in whole seconds is drawn again when it shows the next second (not a second after
-/// whatever frame came last).
-fn wake_next_second(c : @ui.Ctx, ms : Double) -> Unit {
-  let shown = (dmax(ms, 0.0) / second_ms).floor()
-  c.wake_in((shown + 1.0) * second_ms - ms)
+/// A clock showing `ms` gone by in whole seconds, drawn again as it shows the next (Ctx::every by how far it is: a
+/// frame where its second changes, said as what comes again, none between).
+fn each_second(c : @ui.Ctx, ms : Double) -> Unit {
+  c.every(second_ms, elapsed=dmax(ms, 0.0)) |> ignore
 }
 
 ///|
@@ -844,7 +843,7 @@ fn wake_next_second(c : @ui.Ctx, ms : Double) -> Unit {
 fn phase_line(c : @ui.Ctx, src : Source, p : Json?) -> Unit {
   let t = @sf.theme()
   let ran = (src.now)() - number(p, "since")
-  wake_next_second(c, ran)
+  each_second(c, ran)
   let secs = dmax(ran / second_ms, 0.0).to_int()
   c.box(dir=Row, gap=8.0, align=ACenter, fn() {
     c.box(w=Px(7.0), h=Px(7.0), radius=3.5, bg=t.p.accent, fn() {  }) |> ignore

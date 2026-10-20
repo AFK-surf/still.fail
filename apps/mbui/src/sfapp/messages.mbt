@@ -1520,12 +1520,6 @@ fn unsent_button(
 /// A running clock's second.
 let clock_tick_ms : Double = 1000.0
 
-///|
-/// From `ms` shown (elapsed) to the next whole second it shows.
-fn to_next_second(ms : Double) -> Double {
-  let ms = dmax(ms, 0.0)
-  clock_tick_ms * ((ms / clock_tick_ms).floor() + 1.0) - ms
-}
 
 ///|
 /// A running clock's reading in short (Chat.kt elapsed): 45s, 3m 20s, 1h 5m.
@@ -1584,7 +1578,7 @@ fn activity(
       }
       // (stopped at the most it waits)
       if waited >= now {
-        c.wake_in(to_next_second(waited - since))
+        c.every(clock_tick_ms, elapsed=dmax(waited - since, 0.0)) |> ignore
       }
       elapsed(waited - since) +
       (match most {
@@ -1595,7 +1589,7 @@ fn activity(
     None =>
       match a.since {
         Some(s) => {
-          c.wake_in(to_next_second(now - s))
+          c.every(clock_tick_ms, elapsed=dmax(now - s, 0.0)) |> ignore
           elapsed(now - s)
         }
         None => ""
