@@ -193,6 +193,7 @@
   "android-settings.login.codexNote": "在打开的 OpenAI 页面中，用供 {app} 使用的 ChatGPT 账号登录并粘贴代码。完成后此处会自动继续。如果页面提示设备码登录未开启，先在 ChatGPT 的安全设置中开启。",
   "android-settings.login.opencodeNote": "在打开的 OpenCode 页面登录，确认页面上的代码与此处一致，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.grokNote": "在打开的 xAI 页面，用订阅了 SuperGrok 或 X Premium+ 的账号登录，输入代码后批准。完成后此处会自动继续，无需返回操作。",
+  "android-settings.login.cursorNote": "在打开的 Cursor 页面登录并确认。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.copyOpen": "复制代码并打开登录页",
   "android-settings.login.done": "登录成功",
   "android-settings.login.failed": "上次登录失败：{error}",

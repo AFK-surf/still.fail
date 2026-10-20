@@ -154,7 +154,7 @@ data class AgentEnvDraft (
 	val pending: Boolean
 )
 
-/// A runtime: Claude Code, Codex, DeepSeek Harness or Grok Build.
+/// A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build or Cursor.
 typealias RuntimeKind = String
 
 @Serializable
@@ -188,10 +188,10 @@ data class ApiProvider (
 	val mark: String? = null,
 	/// How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand).
 	val kind: String? = null,
-	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok).
+	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok; Cursor: its account, a plan alone).
 	val hasKey: Boolean? = null,
 	val hasPlan: Boolean? = null,
-	/// Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok).
+	/// Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok | cursor).
 	val runtime: String? = null,
 	/// Its address is the person's own: asked for with the key.
 	val endpointRequired: Boolean? = null,
@@ -201,7 +201,7 @@ data class ApiProvider (
 	val protocols: List<String>? = null,
 	/// Works without a key.
 	val keyOptional: Boolean? = null,
-	/// What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `decision`.
+	/// What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `decision`.
 	val uses: List<String>? = null,
 	/// What the core says of it: what it can do, in words.
 	val usesText: String? = null
@@ -888,7 +888,7 @@ data class Session (
 	val boundTo: List<String>? = null,
 	val creator: Creator? = null,
 	val participants: List<Creator>? = null,
-	/// claude | codex | dsh | grok
+	/// claude | codex | dsh | grok | cursor
 	val runtime: RuntimeKind,
 	val profile: String? = null,
 	val profilePinned: Boolean? = null,
@@ -1062,6 +1062,8 @@ data class LoginJob (
 	/// starting | needs_code | needs_approval | verifying | done | failed | cancelled
 	val state: String,
 	val url: String? = null,
+	/// needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm
+	/// (Cursor).
 	val userCode: String? = null,
 	val error: String? = null,
 	val startedAt: Long,
@@ -1134,7 +1136,7 @@ data class Profile (
 	val checkTone: Tone,
 	/// The first problem to resolve, with its next step; absent when nothing needs attention.
 	val trouble: ProfileTrouble? = null,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). A station's
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), key (the rest). A station's
 	/// profiles come by kind, in that order.
 	val group: String? = null,
 	/// That kind in words: Claude 订阅.
@@ -1150,7 +1152,7 @@ data class Profile (
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
 	val available: List<String>? = null,
-	/// What it can do: `claude`, `codex`, `dsh`, `grok`, `decision` (the automatic decisions). The core works it out from where its
+	/// What it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `decision` (the automatic decisions). The core works it out from where its
 	/// provider speaks and what its check found.
 	val uses: List<String>? = null,
 	/// What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策).
@@ -1631,7 +1633,7 @@ data class ChatJobsView (
 /// (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
 @Serializable
 data class RuntimeInstall (
-	/// claude | codex | dsh | grok: what `software.update` installs ({station, id: runtime}).
+	/// claude | codex | dsh | grok | cursor: what `software.update` installs ({station, id: runtime}).
 	val runtime: String,
 	/// missing | installing | failed | installed
 	val state: String,
@@ -1735,7 +1737,7 @@ data class ChatMessage (
 	val system: Boolean,
 	/// still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
 	val profile: String? = null,
-	/// still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok).
+	/// still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok | cursor).
 	val runtime: String? = null,
 	/// With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
 	/// than it.
@@ -2630,7 +2632,7 @@ data class FlowSignIn (
 	val runtime: RuntimeKind,
 	/// opencode-go: the OpenCode Console instead (`login.new` access).
 	val access: String? = null,
-	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok.
+	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok, Cursor.
 	val provider: String
 )
 
@@ -3670,10 +3672,10 @@ data class PendingLogin (
 )
 
 /// A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
-/// runtime (`claude`, `codex`, `dsh`, `grok`).
+/// runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`).
 @Serializable
 data class SoftwareVersion (
-	/// station | claude | codex | dsh | grok
+	/// station | claude | codex | dsh | grok | cursor
 	val id: String,
 	val name: String,
 	/// On the machine (a runtime may not be: then `updatable` says it can be installed from here).
@@ -4153,7 +4155,7 @@ data class ShareStation (
 data class WorkspaceProfile (
 	/// The share's id, or station/profile for one on a station only.
 	val key: String,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest).
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), key (the rest).
 	val group: String,
 	/// That kind in words: Claude 订阅.
 	val groupTitle: String,

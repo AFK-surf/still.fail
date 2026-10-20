@@ -22,7 +22,7 @@ function part(id: string): [string, string, string] {
 }
 
 function elsewhere(id: string): string {
-  return ["claude", "codex", "dsh", "grok", "playwright", "pnpm", "npm", "cargo"].includes(id) ? t(`core-logic.footprint.elsewhere.${id}`) : t("core-logic.footprint.part.other");
+  return ["claude", "codex", "dsh", "grok", "cursor", "playwright", "pnpm", "npm", "cargo"].includes(id) ? t(`core-logic.footprint.elsewhere.${id}`) : t("core-logic.footprint.part.other");
 }
 
 const n = (v: J, key: string): number => (typeof get(v, key) === "number" ? v[key] : 0);

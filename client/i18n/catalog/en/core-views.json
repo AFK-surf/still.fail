@@ -411,6 +411,7 @@
   "core-views.profiles.group.claude": "Claude subscriptions",
   "core-views.profiles.group.chatgpt": "ChatGPT subscriptions",
   "core-views.profiles.group.grok": "SuperGrok subscriptions",
+  "core-views.profiles.group.cursor": "Cursor subscriptions",
   "core-views.profiles.group.key": "API keys",
   "core-views.profiles.signedIn": "Signed in on {station}",
   "core-views.profiles.allowed": "Only for {stations}",

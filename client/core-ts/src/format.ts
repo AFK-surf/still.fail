@@ -380,6 +380,7 @@ export function makerOf(modelName: string): [string, string] | null {
   if (has(["kimi", "moonshot"])) return ["kimi", "Kimi"];
   if (has(["minimax", "abab"])) return ["minimax", "MiniMax"];
   if (has(["grok"])) return ["xai", "xAI"];
+  if (has(["composer"])) return ["cursor", "Cursor"];
   return null;
 }
 
@@ -395,10 +396,10 @@ export function efforts(runtime: string): string[] {
 }
 
 /// The runtimes a chat can run on, in the order they are offered.
-export const RUNTIMES = ["claude", "codex", "dsh", "grok"];
+export const RUNTIMES = ["claude", "codex", "dsh", "grok", "cursor"];
 
 /// The runtimes by name, the same in every language.
-const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build" };
+const RUNTIME_NAMES: Record<string, string> = { claude: "Claude Code", codex: "Codex", dsh: "DeepSeek Harness", grok: "Grok Build", cursor: "Cursor" };
 
 export function runtimeLabel(runtime: string): string {
   return RUNTIME_NAMES[runtime] ?? "Claude Code";
