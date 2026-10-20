@@ -31,6 +31,7 @@ let keepings : Array[Keeping] = []
 ///|
 /// Each frame (app.mbt): the keeps the host has answered, said in a toast.
 fn keeps_frame(c : @ui.Ctx) -> Unit {
+  // (what the host says of its keeps, the same in each build of the frame; each said once, then let go)
   if keepings.is_empty() {
     return
   }
@@ -60,6 +61,7 @@ fn keeps_frame(c : @ui.Ctx) -> Unit {
 /// Bytes all here (a chat's file the preview has read) kept: said once the host has answered; 下载失败 at once where
 /// the host keeps nothing.
 fn keep_bytes(c : @ui.Ctx, name : String, mime : String, bytes : Bytes) -> Unit {
+  // det-ok(build-effect): asked as the host gives the bytes or a button is used (its callers'), once each
   match @ui.keep(name, mime, bytes) {
     Some(k) => keepings.push({ keep: k, name })
     None => say(c, tr("android-chat.file.saveFailed"))

@@ -313,15 +313,8 @@ fn home() -> Unit {
 }
 
 ///|
-/// The app over `src`: call each frame.
-pub fn view(c : @ui.Ctx, src : Source) -> Unit {
-  fix_ctx.val = Some(c)
-  appearance(src)
-  let t = @sf.begin(c)
-  // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
-  wide_on.val = is_wide(c)
-  @settings.wide.val = wide_on.val
-  track_press(c)
+/// The pages left since a build last began, told so (where each was left, what it held let go).
+fn pages_left(src : Source) -> Unit {
   for p in left_pages {
     match p {
       Chat(r) => chat_left(src, r)
@@ -333,6 +326,20 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
     }
   }
   left_pages.clear()
+}
+
+///|
+/// The app over `src`: call each frame.
+pub fn view(c : @ui.Ctx, src : Source) -> Unit {
+  fix_ctx.val = Some(c)
+  appearance(src)
+  let t = @sf.begin(c)
+  // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
+  wide_on.val = is_wide(c)
+  @settings.wide.val = wide_on.val
+  track_press(c)
+  // det-ok(build-effect): a page left is built no more: where it was left is what a later build would see too
+  pages_left(src)
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     let accounts = (src.topic)("accounts", {})
     match (accounts.value, (src.fatal)()) {
@@ -378,10 +385,13 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
   }
   match current {
     Some(w) => {
-      attend(src, w.id)
-      // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off
-      notices_frame(src, w)
+      // (told once the frame's builds are over, as the last saw the app and the workspace)
+      c.after_build("attend", fn() { attend(src, w.id) })
+      // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
+      // frame's builds are over: a build let go of follows no workspace)
+      c.after_build("notices", fn() { notices_frame(src, w) })
       // a newer build of the app asked for once (updates.mbt)
+      // (asked once, with the app's version: nothing a build changes)
       update_first(src)
       // what another app shared in (share.mbt)
       share_in_frame(c)
@@ -659,9 +669,14 @@ fn appearance(src : Source) -> Unit {
     Some(d) => d
     None => dark
   }
+  // (told once the frame's builds are over, as the last saw the page)
   if prefs is Some(_) && told_bars.val != Some(bars) {
-    told_bars.val = Some(bars)
-    @host.set_dark(bars)
+    @ui.current().after_build("bars", fn() {
+      if told_bars.val != Some(bars) {
+        told_bars.val = Some(bars)
+        @host.set_dark(bars)
+      }
+    })
   }
 }
 

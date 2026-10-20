@@ -863,6 +863,7 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     })
   }
   // picked from what it runs on now, each time it is opened
+  // (said once as it opens, with nothing of a build's in it)
   if !run_picker_opened.val {
     run_picker_opened.val = true
     set({ "open": Json::boolean(true) })

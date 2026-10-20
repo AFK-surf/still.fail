@@ -438,7 +438,8 @@ fn keep_draft_soon(c : @ui.Ctx, src : Source, d : Draft) -> Unit {
   let unsaved = d.loaded && !src.read_only && draft_sig(d) != d.kept
   // (asked each frame, unsaved or not: kept, its time starts again; nothing shown waits for it)
   if @kit.after(c, "draft/" + d.key, unsaved, draft_keep_ms, later=true) && unsaved {
-    save_draft(src, d)
+    // (once the frame's builds are over: what the composer took in further on in this one kept with it)
+    c.after_build("draft/" + d.key, fn() { save_draft(src, d) })
   }
 }
 
@@ -869,10 +870,11 @@ fn send_draft(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView, d : Draft) -
 /// wrong; ＋'s sheet over the page when open. `v` None while the chat is read the first time (it takes nothing yet).
 fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fresh? = None) -> Unit {
   let t = @sf.theme()
-  let d = match fresh {
-    Some(f) => draft_by(src, f.key)
-    None => draft_of(src, r)
-  }
+  // det-ok(build-effect): asked once, by the draft's key alone: nothing a build changes
+  let d = draft_by(src, match fresh {
+    Some(f) => f.key
+    None => draft_key(r)
+  })
   let offline = match v {
     Some(v) => v.offline
     None => false
@@ -1035,6 +1037,7 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     cui.outside = false
   }
   // what the system's picker answered
+  // (taken once from where it waits: what goes up is what was picked, whichever build takes it)
   match cui.picking {
     Some(p) =>
       match p.files() {
@@ -1056,6 +1059,36 @@ fn composer(c : @ui.Ctx, src : Source, r : ChatRef, v : ChatView?, fresh? : Fres
     if x.mode == "file" && x.up is None {
       ref_send_up(c, src, d, r.station, x)
     }
+  }
+  // marked images of this chat's pictures (preview_marks.mbt), up as ＋'s files go, each with a quote per mark
+  // (taken once from where they wait: the pictures as they were marked, whichever build takes them)
+  match marked_into.get(d.key) {
+    Some(list) => {
+      marked_into.remove(d.key)
+      for x in list {
+        add_file(src, d, r.station, x.0, x.1, None)
+        for q in x.2 {
+          let id = next_pending.val
+          next_pending.val += 1
+          d.quotes.push({ id, author: q.0, text: q.1, ts: "", role: "image", file: "" })
+          d.comments[id] = q.2
+        }
+      }
+      c.request_frame()
+    }
+    None => ()
+  }
+  // files another app shared into this chat (share.mbt), up as ＋'s are
+  // (taken once from where they wait: the files as they were shared, whichever build takes them)
+  match shared_into.get(d.key) {
+    Some(list) => {
+      shared_into.remove(d.key)
+      for f in list {
+        add_file(src, d, r.station, f.name, f.bytes, None)
+      }
+      c.request_frame()
+    }
+    None => ()
   }
   // ＋'s sheet: up from below and back down on the sheet's spring, the scrim in and out (Sheet.kt SheetHost, mbui's
   // @kit.sheet); drawn until it has gone

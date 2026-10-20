@@ -882,6 +882,7 @@ let dv_part_first : Int = 256 * 1024
 ///|
 /// The system's file picker, for files to go up into `at`.
 fn dv_upload(c : @ui.Ctx, at : DriveAt) -> Unit {
+  // det-ok(build-effect): asked only as a button is used (dv_pick_row's, dv_empty's)
   match @ui.pick(Files) {
     Some(p) => {
       dv.picking = Some(p)
@@ -931,6 +932,7 @@ fn dv_pump(src : Source) -> Unit {
   if dv.pumping {
     return
   }
+  // (the next file waiting, sent once: its bytes are what was picked, whichever build sends it)
   match dv.uploads.iter().find_first(fn(u) { u.state == "waiting" }) {
     Some(u) => {
       if src.read_only {
