@@ -233,7 +233,8 @@ fun AppearanceScreen() {
         val themes = themes()
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
-        FontRows()
+        Spacer(Modifier.height(12.dp))
+        ListCard { FontRow() }
         Motions()
         Language()
         ArchiveHints()

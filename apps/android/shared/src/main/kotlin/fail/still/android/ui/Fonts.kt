@@ -143,10 +143,47 @@ object FaceFiles {
         }
     }
 
-    /** Only the files of `keep` stay: another face's go once it is not chosen. */
+    /** Faces' previews made, by face (the fonts page's characters alone: each face shown in itself before it is fetched). */
+    val previews = mutableStateMapOf<String, FontFamily>()
+
+    private fun previewFile(face: FontFace): File? = face.preview?.let { url -> dir?.let { File(it, "${face.id}-${url.substringAfterLast('/')}") } }
+
+    @OptIn(ExperimentalTextApi::class)
+    private fun previewOf(file: File, variable: Boolean): FontFamily =
+        if (variable) FontFamily(listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold).map { Font(file, it, variationSettings = FontVariation.Settings(FontVariation.weight(it.weight))) })
+        else FontFamily(Font(file, FontWeight.Normal))
+
+    /** Its preview, fetched if it is not here (a few tens of KB); kept whatever is chosen. */
+    suspend fun fetchPreview(face: FontFace) {
+        if (face.id in previews) return
+        val file = previewFile(face) ?: return
+        val variable = face.files.orEmpty().any { it.weight == 0L }
+        try {
+            withContext(Dispatchers.IO) {
+                if (!file.exists()) {
+                    val connection = URL(face.preview).openConnection() as HttpURLConnection
+                    connection.connectTimeout = 15_000
+                    connection.readTimeout = 30_000
+                    try {
+                        if (connection.responseCode != 200) return@withContext
+                        val part = File(file.path + ".part")
+                        connection.inputStream.use { input -> part.outputStream().use { input.copyTo(it) } }
+                        part.renameTo(file)
+                    } finally {
+                        connection.disconnect()
+                    }
+                }
+            }
+            if (file.exists()) previews[face.id] = previewOf(file, variable)
+        } catch (_: Exception) {
+            // Not shown in itself: its name in the app's face.
+        }
+    }
+
+    /** Only the files of `keep` stay: another face's go once it is not chosen (the previews stay, being small). */
     fun prune(keep: List<FontFace>) {
         val wanted = keep.flatMap { it.files.orEmpty() }.map { "${it.sha256}.ttf" }.toSet()
-        dir?.listFiles()?.forEach { if (it.name !in wanted && !it.name.endsWith(".part")) it.delete() }
+        dir?.listFiles()?.forEach { if (it.name !in wanted && !it.name.endsWith(".part") && !it.name.contains("-preview-")) it.delete() }
         made.keys.retainAll(keep.map { key(it) }.toSet())
     }
 }

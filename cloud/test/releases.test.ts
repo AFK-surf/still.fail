@@ -123,7 +123,8 @@ test("a face's files: a page's stylesheet and slices, the Android app's file, ca
     await bucket.put("fonts/noto-sans-sc/2.004/font.css", "@font-face{}");
     await bucket.put("fonts/noto-sans-sc/2.004/var-12.woff2", new Uint8Array([1, 2, 3]));
     await bucket.put("fonts/lxgw-wenkai/1.530/400.ttf.gz", new Uint8Array([4, 5]));
-    for (const [path, type] of [["fonts/noto-sans-sc/2.004/font.css", "text/css; charset=utf-8"], ["fonts/noto-sans-sc/2.004/var-12.woff2", "font/woff2"], ["fonts/lxgw-wenkai/1.530/400.ttf.gz", "application/gzip"]] as const) {
+    await bucket.put("fonts/lxgw-wenkai/1.530/preview-0a1b2c3d.ttf", new Uint8Array([6]));
+    for (const [path, type] of [["fonts/noto-sans-sc/2.004/font.css", "text/css; charset=utf-8"], ["fonts/noto-sans-sc/2.004/var-12.woff2", "font/woff2"], ["fonts/lxgw-wenkai/1.530/400.ttf.gz", "application/gzip"], ["fonts/lxgw-wenkai/1.530/preview-0a1b2c3d.ttf", "font/ttf"]] as const) {
       const got = await h.fetch(`/releases/${path}`);
       assert.equal(got.status, 200, path);
       assert.equal(got.headers.get("content-type"), type);
@@ -131,7 +132,7 @@ test("a face's files: a page's stylesheet and slices, the Android app's file, ca
       assert.equal(got.headers.get("access-control-allow-origin"), "*");
       await got.arrayBuffer();
     }
-    for (const path of ["fonts/noto-sans-sc/font.css", "fonts/noto-sans-sc/2.004/../x.css", "fonts/Noto/2.004/font.css", "fonts/noto-sans-sc/2.004/font.js"]) {
+    for (const path of ["fonts/noto-sans-sc/font.css", "fonts/noto-sans-sc/2.004/../x.css", "fonts/Noto/2.004/font.css", "fonts/noto-sans-sc/2.004/font.js", "fonts/noto-sans-sc/2.004/preview.ttf"]) {
       const got = await h.fetch(`/releases/${path}`);
       assert.equal(got.status, 404, path);
       await got.arrayBuffer();

@@ -57,7 +57,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       <Route path="settings/appearance" element={<AppearanceScreen />} />
-      <Route path="settings/appearance/fonts/:place" element={<FontScreen />} />
+      <Route path="settings/appearance/fonts" element={<FontScreen />} />
       <Route path="settings/bar" element={<BarSettingsScreen />} />
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />

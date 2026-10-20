@@ -2656,6 +2656,8 @@ data class FontFace (
 	val css: String? = null,
 	/// What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own).
 	val files: List<FontFile>? = null,
+	/// Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched.
+	val preview: String? = null,
 	/// What `files` come to.
 	val bytes: Long
 )

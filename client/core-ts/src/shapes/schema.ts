@@ -1507,6 +1507,7 @@ export const SHAPES: Record<string, Shape> = {
     ["family", "String", { doc: "The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own." }],
     ["css", opt("String"), { doc: "A page's stylesheet for it: its slices, fetched as their characters are shown." }],
     ["files", vec("FontFile"), { default: true, doc: "What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own)." }],
+    ["preview", opt("String"), { doc: "Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched." }],
     ["bytes", "i64", { client: "I54", doc: "What `files` come to." }],
   ]),
   FontFile: struct([

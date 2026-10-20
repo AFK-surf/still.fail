@@ -28,6 +28,18 @@ origin):
 - `<weight>.ttf.gz` (`var` for a variable face) for the Android app, which fetches a face's files whole when it is
   chosen, checks each one's sha256, keeps them in `files/fonts/<sha256>.ttf` and uses the face once all are there
   (until then the app's own stands in). A face no longer chosen has its files removed.
+- `preview-<hash>.ttf` for the Android app too: the face's glyphs for the fonts page's own words alone (its catalog
+  keys `web-pages.appearance.fonts.*`, the faces' names, ASCII; tens of KB), fetched as the page opens so each face
+  is shown in itself before it is chosen. Changing those words: `scripts/fonts.py --put --previews` and copy the
+  names it prints into `FACES`.
+
+## The page
+
+外观 › 字体: the places as a switch (界面 / 正文 / 代码), under it the faces of the place in view, each drawn in
+itself, and a chat (a message in its bubble, an agent's with inline code and a block of it) as the faces set it. On
+the wide screen the faces are tiles (`Aa 字` and the name) and one pointed at is tried in the preview before it is
+chosen; installed families are a last tile opening a searchable list. On a phone (web and Android) they are rows, the
+name and a line of the face.
 
 A new face, or a new version of one: add it to `FACES` in fonts.py, run `python3 scripts/fonts.py --put` (fontTools
 and brotli; wrangler logged in, from `cloud/`), and copy the files it prints into `FACES` in fonts.ts. Put files are
