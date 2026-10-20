@@ -18,7 +18,6 @@ test "signed out: the sign-in page" {
 ///|
 test "Home: the workspace's name, the search, the days and their rows" {
   let t = tester("home")
-  t.draw()
   assert_true(t.find("星火工作室") is Some(_))
   assert_true(t.find("搜索全部内容") is Some(_))
   assert_true(t.find("今天") is Some(_))
@@ -40,7 +39,6 @@ test "Home: the workspace's name, the search, the days and their rows" {
 ///|
 test "a row tapped pushes its chat, its title in the bar; back comes home" {
   let t = tester("home")
-  t.draw()
   t.tap_text("夜里的构建又失败了")
   assert_eq(app.nav.depth(), 2)
   t.run_for(@ui.nav_push_ms)
@@ -56,7 +54,6 @@ test "a row tapped pushes its chat, its title in the bar; back comes home" {
 ///|
 test "the workspaces' sheet: another workspace tapped is the one in view" {
   let t = tester("home")
-  t.draw()
   t.tap_text("星火工作室")
   assert_true(sheet_open())
   assert_true(t.find("切换 workspace") is Some(_))
@@ -72,7 +69,6 @@ test "the workspaces' sheet: another workspace tapped is the one in view" {
 ///|
 test "the filter: 我参与的 shows only the chats the viewer is in" {
   let t = tester("home")
-  t.draw()
   match t.rect_of("星火工作室") {
     Some(_) => ()
     None => fail("no title")
@@ -89,7 +85,6 @@ test "the filter: 我参与的 shows only the chats the viewer is in" {
 ///|
 test "归档 at a row's start archives its chat" {
   let t = tester("home")
-  t.draw()
   t.scroll_to(12)
   t.draw()
   assert_true(t.find("把旧的截图都换成新的") is Some(_))

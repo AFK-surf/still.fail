@@ -10,7 +10,6 @@ test "Home: a chat with news goes to the top on the rows' spring, the rows it pa
   fix_wake.val = fn(_) {  }
   let src = fixture("home-motion")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.draw()
   let (_, y_ci) = t.drawn_of("盯着 CI，绿了告诉我").unwrap()
   let (_, y_top) = t.drawn_of("整理发布清单").unwrap()
   // its news comes (the fixture's first step)
@@ -98,7 +97,6 @@ test "Home: the first rows, after the list waited, come as they are and a tap on
     },
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.draw()
   assert_true(t.find("整理发布清单") is None)
   // the list is read: its rows are there, drawn where they are laid out, from the first frame (as the e2e's drive
   // taps them: where they are, as soon as they are still)
@@ -234,7 +232,6 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
 ///|
 test "the workspaces' sheet sinking takes no tap: the bar's 文件 tapped under it opens its page" {
   let t = tester("home")
-  t.draw()
   t.tap_text("星火工作室")
   assert_true(sheet_open())
   t.tap_once(195.0, 60.0)
@@ -267,7 +264,6 @@ test "a drive sheet going down takes no tap: its 重命名 tapped meanwhile does
 ///|
 test "the bar going down under a page pushed takes no tap: the field tapped where it was is the field's" {
   let t = tester("home")
-  t.draw()
   tap_once_on(t, "夜里的构建又失败了")
   // the chat half way in (its composer in the window), the bar still going down over it
   t.run_for(@ui.nav_push_ms / 2.0)

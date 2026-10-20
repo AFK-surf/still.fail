@@ -9,7 +9,6 @@ fn bar_places_at() -> (Array[Double], Double) {
 ///|
 test "the bar: 文件 tapped is its page in place of the chats', back is the chats again" {
   let t = tester("home")
-  t.draw()
   let (xs, y) = bar_places_at()
   t.tap(xs[1], y)
   assert_eq(app.nav.depth(), 1)
@@ -27,7 +26,6 @@ test "the bar: 文件 tapped is its page in place of the chats', back is the cha
 ///|
 test "the bar: drawn up, the panel of the other bar; let go on its first place, that bar and 奏" {
   let t = tester("home")
-  t.draw()
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   // the panel on its way open, to where it rests
@@ -49,7 +47,6 @@ test "the bar: drawn up, the panel of the other bar; let go on its first place, 
 ///|
 test "the bar: hidden under a page pushed, back as it comes back" {
   let t = tester("home")
-  t.draw()
   assert_true(bar.vis.value > 0.99)
   t.tap_text("夜里的构建又失败了")
   t.run_for(bar_hide_ms)
@@ -62,7 +59,6 @@ test "the bar: hidden under a page pushed, back as it comes back" {
 ///|
 test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
   let t = tester("home")
-  t.draw()
   t.tap_text("星火工作室")
   sheet_rested(t, "sheet")
   assert_true((t.get(@ui.Dialog).rect.3 - 844.0 * 0.7).abs() < 1.0)
@@ -85,7 +81,6 @@ test "the workspaces' sheet: drawn up to 94%, dragged down past 30% it closes" {
 ///|
 test "a sheet takes the drags on it: the list under it does not scroll" {
   let t = tester("home")
-  t.draw()
   let before = t.list_offset()
   t.tap_text("星火工作室")
   sheet_rested(t, "sheet")
@@ -97,7 +92,6 @@ test "a sheet takes the drags on it: the list under it does not scroll" {
 ///|
 test "a new chat: 令 raises it; the first message makes the chat and the page becomes it" {
   let t = tester("home")
-  t.draw()
   let (_, y) = bar_places_at()
   // 令 stands over the bar's middle
   t.tap(195.0, y - 28.0 - 4.0)
@@ -170,7 +164,6 @@ test "a new chat: its station picked in the sheet, its model in the run picker" 
 ///|
 test "the bar is glass of one capture: the bar with its notch, 令 and the ball frosting the page under them" {
   let t = tester("home")
-  t.draw()
   let gs = t.drawn_glass().filter(fn(g) { g.1 > 844.0 - 22.0 - 56.0 - 40.0 })
   assert_true(gs.length() >= 3)
   let (_, _, _, _, _, run) = gs[0]
@@ -215,7 +208,6 @@ test "the notch's icon swaps with a short scale and fade while it stays open; cl
 ///|
 test "the bar chosen in the panel slides down into the bar's place, its places laid out there from the first" {
   let t = tester("home")
-  t.draw()
   let (xs, y) = bar_places_at()
   t.drag(xs[0], y, xs[0], y - 64.0, steps=20)
   // let go over the rows before the panel was all the way open, it stays open: its row tapped

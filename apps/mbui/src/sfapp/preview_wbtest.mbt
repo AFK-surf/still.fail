@@ -66,8 +66,10 @@ test "a video plays in a native view, its bytes read through the core; its contr
   let (x, _, w, h) = holes[0]
   assert_eq(x, 12.0)
   assert_true((w - 366.0).abs() < 0.5 && (h - 366.0 * 720.0 / 1280.0).abs() < 0.5)
-  // its frames' times asked of the host and counted (the fake host's file: three frames a 30th of a second apart)
+  // its frames' times asked of the host and counted, once it says them (three frames a 30th of a second apart)
   assert_true(t.views().iter().any(fn(l) { l.has_prefix("control 1 20 ") }))
+  assert_true(t.view_said("{\"view\":{\"view\":1,\"what\":1,\"text\":\"0,33.333,66.667\"}}"))
+  t.draw()
   assert_true(t.find(" / 3 帧") is Some(_))
   let v = viewer.val.unwrap()
   t.back()
@@ -193,7 +195,6 @@ test "a picture of the chat grows from its thumbnail; back closes it at once and
   let src = fixture("chat")
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.draw()
   nav_rested(t)
   // the picture's message is above what shows first (the chat opens at its end): the list put a row up at a time
   // (not wheeled: a wheel shows the list's scroll bar, which goes after a while of its own)

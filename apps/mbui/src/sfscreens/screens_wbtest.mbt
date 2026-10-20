@@ -544,7 +544,7 @@ test "chat-preview-video" (it : @test.Test) {
     it,
     "chat-preview-video",
     @ui.nav_push_ms,
-    unlike_mac="its video's frames: the fake host has them at once, the Mac is still reading them",
+    unlike_mac="its video: ready at once on the fake host (its controls shown), the Mac's still opening it",
   )
 }
 

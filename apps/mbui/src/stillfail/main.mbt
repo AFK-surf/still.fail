@@ -221,6 +221,11 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" &&
     (cloud.has_prefix("http://127.0.0.1") || cloud.has_prefix("http://localhost")) {
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
+    // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
+    @ui.trace_views(fn(m) {
+      m["w"] = Json::number(@core.wall_ms())
+      @host.log("CORETRACE " + Json::object(m).stringify())
+    })
   }
   if core_linked() == 0 || !@sfcore.start() {
     @sfapp.desktop_window()
