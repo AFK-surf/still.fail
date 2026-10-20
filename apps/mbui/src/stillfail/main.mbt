@@ -207,9 +207,16 @@ let core_source : @sfapp.Source = {
   picture,
   fatal: fn() { @core.fatal() },
   file: chat_file,
-  now: fn() { @core.wall_ms() },
+  now: wall,
   leave: fn(name, params) { @core.unsubscribe(@core.subscribe(name, params~)) },
   read_only,
+}
+
+///|
+/// The machine's clock, the one place the app reads it: the app's time (Source.now), and what a run's trace keeps
+/// stamped with it.
+fn wall() -> Double {
+  @core.wall_ms()
 }
 
 ///|
@@ -223,7 +230,7 @@ fn main {
     @core.trace_to(fn(line) { @host.log("CORETRACE " + line) })
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) {
-      m["w"] = Json::number(@core.wall_ms())
+      m["w"] = Json::number(wall())
       @host.log("CORETRACE " + Json::object(m).stringify())
     })
   }
