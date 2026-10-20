@@ -15,6 +15,8 @@
 pub struct Flow {
   r : @core.Replay
   t : @ui.Tester
+  /// what may come is given a message at a time (Flow::until), not all at each frame's end
+  priv one_by_one : Ref[Bool]
 }
 
 ///|
@@ -57,20 +59,20 @@ pub fn Flow::start(
   // what the run's host said of its views (a player's state, a video's frames) said to the Tester's in its place
   r.host(fn(line) { ignore(t.view_said(line)) })
   // the run's core answering as soon as asked: what may come is posted as each frame ends, taken by the next
-  t.between_frames(fn() { r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore })
+  let one_by_one = Ref::new(false)
+  t.between_frames(fn() {
+    if !one_by_one.val {
+      r.deliver(to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore
+    }
+  })
   // what the system lets the app show as the run's host said it (its app's notify.permission): a Tester's own lets it
   match notice_permission_of(trace) {
     Some(state) => t.set_notice_permission(state)
     None => ()
   }
-  let f = { r, t }
+  let f = { r, t, one_by_one }
   // each step the test says lets what came after it in the run come (Replay::step_taken)
-  // (a step that waits for what came after it in the run, `until X`, has it given before it looks)
-  step_hook.val = Some(fn(line) {
-    if r.step_taken(line) && waits(line) {
-      f.core()
-    }
-  })
+  step_hook.val = Some(fn(line) { ignore(r.step_taken(line)) })
   f.core()
   f
 }
@@ -83,12 +85,6 @@ fn notice_permission_of(trace : String) -> String? {
   let rest = trace.view(start_offset=i + key.length())
   guard rest.find("\"") is Some(j) else { return None }
   Some(rest.view(end_offset=j).to_owned())
-}
-
-///|
-/// Whether a step's line waits for something to be so (what came for it in the run given first: Flow::start).
-fn waits(line : String) -> Bool {
-  ["until ", "untiln ", "gone ", "noticed ", "nonotice ", "field ", "empty"].iter().any(fn(p) { line.has_prefix(p) })
 }
 
 ///|
@@ -129,9 +125,23 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
 }
 
 ///|
+/// What the run's script waited through at a step that waits (`until`, `gone`: what came after it began, Replay::
+/// step_taken), given a message at a time, each with its frame, until `so` holds: as the run's script saw it come,
+/// not past it (a player's place told after the script saw 0:02 is not given before it looks).
+fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
+  self.one_by_one.val = true
+  while !so() && (self.r.due() || self.t.posted() > 0) {
+    self.r.deliver(at_most=1, to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
+    self.t.draw()
+  }
+  self.one_by_one.val = false
+}
+
+///|
 /// `what` is on screen now.
 pub fn Flow::see(self : Flow, what : String) -> Unit {
   emit("until " + what)
+  self.until(fn() { self.spots(what).length() > 0 })
   if self.spots(what).length() == 0 {
     self.fail("not on screen: " + what)
   }
@@ -141,6 +151,7 @@ pub fn Flow::see(self : Flow, what : String) -> Unit {
 /// `n` or more of `what` on screen now.
 pub fn Flow::see_n(self : Flow, n : Int, what : String) -> Unit {
   emit("untiln \{n} " + what)
+  self.until(fn() { self.spots(what).length() >= n })
   let k = self.spots(what).length()
   if k < n {
     self.fail("\{k} of \{what} on screen, not \{n}")
@@ -151,6 +162,7 @@ pub fn Flow::see_n(self : Flow, n : Int, what : String) -> Unit {
 /// `what` is not on screen now.
 pub fn Flow::gone(self : Flow, what : String) -> Unit {
   emit("gone " + what)
+  self.until(fn() { self.spots(what).length() == 0 })
   if self.spots(what).length() > 0 {
     self.fail("still on screen: " + what)
   }

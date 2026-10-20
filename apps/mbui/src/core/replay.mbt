@@ -236,6 +236,7 @@ pub fn Replay::deliver(
         Some(said) => said(e.msg.stringify())
         None => ()
       }
+      n += 1
       self.advance()
       continue
     }
