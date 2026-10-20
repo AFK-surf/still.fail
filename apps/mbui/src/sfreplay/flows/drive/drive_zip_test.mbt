@@ -14,8 +14,9 @@ test "92-drive-zip" {
     f.tap("icon:more")
     f.run_to(@kit.sheet_rest("dv-sheet"))
     f.tap("下载为 zip")
-    f.run_to(@kit.sheet_rest("dv-sheet"))
+    // kept, said at once, the sheet still going down (its toast's time its own: looked at as it shows)
     f.see("已保存到「下载」")
+    f.run_to(@kit.sheet_rest("dv-sheet"))
     // the zip the station made, kept whole (the run's 277 bytes) as a zip
     let kept = f.t.kept()
     assert_eq(kept.length(), 1)

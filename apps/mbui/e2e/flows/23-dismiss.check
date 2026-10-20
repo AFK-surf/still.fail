@@ -1,2 +1,0 @@
-check "the station has the card let go by alice" '[ "$(sql "select count(*) from dismissed d join entries e on e.thread = d.thread and e.n = d.n where e.text = \"先合并哪个分支 $TAG\" and d.viewer = \"alice@example.test\"")" = 1 ]'
-check "nothing was answered for it" '[ "$(sql "select count(*) from entries where author_kind=\"person\" and text like \"%先合 _ $TAG%\" and text not like \"%card:%\"")" = 0 ]'

@@ -972,7 +972,15 @@ fn file_card(c : @ui.Ctx, a : Attachment, w : Double, id? : Int = 0) -> Unit {
 
 ///|
 /// Options answered fade out in this long (Decisions.kt DecisionUnder); how it went fades in after them as long.
-let options_out_ms : Double = 200.0
+pub let options_out_ms : Double = 200.0
+
+///|
+/// The answered options' curve (CSS's ease-out) and how small they are as they have gone: 90%.
+// kept across runs: a curve, never written
+pub let options_ease : @motion.Ease = CssOut
+
+///|
+pub let options_scale : Double = 0.9
 
 ///|
 /// Under a post (Decisions.kt DecisionUnder): a login card as its login stands; an options card's options while it
@@ -1057,7 +1065,7 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
     c,
     "options/" + key,
     !resolved,
-    exit=@motion.trans(fade=0.0, scale=0.9, spec=@motion.tween(options_out_ms, ease=CssOut)),
+    exit=@motion.trans(fade=0.0, scale=options_scale, spec=@motion.tween(options_out_ms, ease=options_ease)),
     close=close_gap,
     fn() {
       // (who decides over the options as the message's column has them: 4 apart)

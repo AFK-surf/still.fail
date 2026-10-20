@@ -233,13 +233,16 @@ fn main {
       m["w"] = Json::number(wall())
       @host.log("CORETRACE " + Json::object(m).stringify())
     })
-    // and each line of a scripted run's script as it began (`{"step":…}`), at the same clock: when the run took each
-    // step, for a replay to take it when the run did (src/core/replay.mbt: Replay::step_at)
-    // (as each begins, as before; mbui's moment it acts, its input handed over, not kept yet)
+    // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input
+    // went to the host (`"acted":true`), at the same clock: when the run took each step and when it acted, for a replay
+    // to take it when the run did (src/core/replay.mbt: Replay::step_at)
     @ui.trace_steps(fn(step, moment) {
-      if moment == Began {
-        @host.log("CORETRACE " + Json::object({ "step": Json::string(step), "w": Json::number(wall()) }).stringify())
+      let m : Map[String, Json] = { "step": Json::string(step) }
+      if moment == @ui.Acted {
+        m["acted"] = Json::boolean(true)
       }
+      m["w"] = Json::number(wall())
+      @host.log("CORETRACE " + Json::object(m).stringify())
     })
   }
   if core_linked() == 0 || !@sfcore.start() {

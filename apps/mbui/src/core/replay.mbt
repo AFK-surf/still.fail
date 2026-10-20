@@ -13,8 +13,16 @@ priv struct Ev {
   out : Bool
   msg : Json
   bytes : Bytes?
+  /// the wall clock in the run as it was sent or came (`has_wall`: the trace says it; old traces say it of those in only)
   wall : Double
+  has_wall : Bool
   mut done : Bool
+  /// the clock (Replay::clock) when it happened again: the ask made again, the message given (-1: not yet; one left
+  /// out, skipped or dropped, never)
+  mut at : Double
+  /// when what it was handed to took it here (a message in: the frame that takes what is posted, Replay::deliver's
+  /// `taken_at`): `at` is when it was due
+  mut given : Double
   /// what the run's host said of its views (`{"view":…}`, `{"still":…}`, `{"info":…}`: mbui's trace_views), the line
   /// whole: given in its place like a message in, to the Tester's host (Replay::host)
   host : Bool
@@ -40,12 +48,36 @@ pub struct Replay {
   priv walls : Array[Double]
   /// the order what may come is given in: as it came (0), or drawn from this seed (`shuffle`)
   priv mut seed : UInt
+  /// when what came is given (`pace`): at once, or at the run's own pace
+  priv mut pace : Pace
+  /// whether every ask of the run's before a message waits it (else only its own and those that are not reports)
+  priv mut strict : Bool
+  /// the clock the replay's events are timed on (a Tester's: when an ask is made again, a message given)
+  priv mut clock : () -> Double
   /// the calls made since the last take_asked that the run answered (or that it did not make: a live backend answers
   /// them), by name, in the order made
   priv asked : Array[String]
+  /// the calls set aside (Replay::skip)
+  priv skipped : Array[String]
   /// where what the run's host said of its views goes (Replay::host)
   priv mut host_said : ((String) -> Unit)?
 }
+
+///|
+/// When a run's messages are given again (Replay::pace): `AtOnce`, as soon as what they came after has been asked
+/// again; `AsRun(scale)`, also not before the clock has gone on from its anchor by the gap the run had between them
+/// (in its wall clock), times `scale` (1: as the run had it; 2: twice as slow; 0.5: twice as fast). A message's anchor
+/// is the latest event before it in the run that has happened again: an ask made again, a message given (Replay::
+/// due_at); a trace whose asks have no wall clock (an older one) anchors to the messages in only.
+pub(all) enum Pace {
+  AtOnce
+  AsRun(Double)
+} derive(Eq, Show)
+
+///|
+/// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft, where it was read to):
+/// how many and when depends on the run's timing. Not strict (Replay::pace), they wait nothing and none is required.
+let reports : Array[String] = ["client.focus", "chat.place", "draft.put"]
 
 ///|
 /// The conversation in `log`: a trace's lines (`{"out":…}`, `{"in":…}`), or a log with them after CORETRACE. Other
@@ -64,16 +96,20 @@ pub fn Replay::parse(log : String) -> Replay {
     guard j is Object(m) else { continue }
     match (m.get("out"), m.get("in")) {
       (Some(o), _) => {
+        let (wall, has_wall) = match m.get("w") {
+          Some(Number(d, ..)) => (d, true)
+          _ => (0.0, false)
+        }
         let bytes = match m.get("b") {
           Some(String(h)) => Some(unhex(h))
           _ => None
         }
-        evs.push({ out: true, msg: o, bytes, wall: 0.0, done: false, host: false })
+        evs.push({ out: true, msg: o, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
       }
       (_, Some(i)) => {
-        let wall = match m.get("w") {
-          Some(Number(d, ..)) => d
-          _ => 0.0
+        let (wall, has_wall) = match m.get("w") {
+          Some(Number(d, ..)) => (d, true)
+          _ => (0.0, false)
         }
         let bytes = match (m.get("b"), m.get("bn")) {
           (Some(String(h)), _) => Some(unhex(h))
@@ -81,17 +117,49 @@ pub fn Replay::parse(log : String) -> Replay {
           (_, Some(Number(n, ..))) => Some(Bytes::new(n.to_int()))
           _ => None
         }
-        evs.push({ out: false, msg: i, bytes, wall, done: false, host: false })
+        evs.push({ out: false, msg: i, bytes, wall, has_wall, done: false, at: -1.0, given: -1.0, host: false })
       }
       _ =>
         if m.contains("view") || m.contains("still") || m.contains("info") {
-          let wall = match m.get("w") {
-            Some(Number(d, ..)) => d
-            _ => 0.0
+          let (wall, has_wall) = match m.get("w") {
+            Some(Number(d, ..)) => (d, true)
+            _ => (0.0, false)
           }
-          evs.push({ out: false, msg: j, bytes: None, wall, done: false, host: true })
+          evs.push({ out: false, msg: j, bytes: None, wall, has_wall, done: false, at: -1.0, given: -1.0, host: true })
         } else {
           match (m.get("step"), m.get("w")) {
+            // (a step that acts, when its input was handed to the host (`"acted":true`): the step there, at that
+            // moment, not where its line began, for what came meanwhile (the frames before the host took it) to come
+            // before it)
+            (Some(String(line)), Some(Number(wall, ..))) if m.get("acted") == Some(Json::boolean(true)) =>
+              match step_of(line) {
+                Some(step) => {
+                  let mut k = evs.length() - 1
+                  while k >= 0 {
+                    if evs[k].msg is Object(o) &&
+                      o.get("step") == Some(Json::string(step)) &&
+                      o.get("acted") is None {
+                      break
+                    }
+                    k = k - 1
+                  }
+                  if k >= 0 {
+                    evs.remove(k) |> ignore
+                  }
+                  evs.push({
+                    out: true,
+                    msg: Json::object({ "step": Json::string(step), "acted": Json::boolean(true) }),
+                    bytes: None,
+                    wall,
+                    has_wall: true,
+                    done: false,
+                    at: -1.0,
+                    given: -1.0,
+                    host: false,
+                  })
+                }
+                None => ()
+              }
             // (a step's line with the run's clock: mbui's trace_steps; a live run's own, #before's, have none)
             (Some(String(line)), Some(Number(wall, ..))) =>
               match step_of(line) {
@@ -101,7 +169,10 @@ pub fn Replay::parse(log : String) -> Replay {
                     msg: Json::object({ "step": Json::string(step) }),
                     bytes: None,
                     wall,
+                    has_wall: true,
                     done: false,
+                    at: -1.0,
+                    given: -1.0,
                     host: false,
                   })
                 None => ()
@@ -122,9 +193,13 @@ pub fn Replay::parse(log : String) -> Replay {
     fuzzy: [],
     wall: 0.0,
     walls: [],
+    pace: AtOnce,
+    strict: true,
+    clock: fn() { 0.0 },
     seed: 0,
     asked: [],
     host_said: None,
+    skipped: [],
   }
   r.advance()
   r
@@ -134,6 +209,7 @@ pub fn Replay::parse(log : String) -> Replay {
 /// The run's calls named `call` not waited for: what the run did that a test does not do again (`migrate`: the
 /// account a scripted run was given by its environment). Their answers are left out too.
 pub fn Replay::skip(self : Replay, call : String) -> Unit {
+  self.skipped.push(call)
   let gone : Array[Int] = []
   for e in self.evs {
     if e.out && !e.done && e.msg is Object(m) && kind_of(m) == "call" && name_of(m) == call {
@@ -214,23 +290,55 @@ pub fn Replay::detach() -> Unit {
 }
 
 ///|
-/// What came in, handed on in its order, as long as what it came after has been sent again: at most `at_most` of
-/// them (all that may, by default). How many were. With a seed (`shuffle`), what may come at once comes in an order
-/// drawn from it, each ask's own messages still in theirs. `to`: each handed there (its JSON, its bytes) instead of to
-/// the client at once: an app's, the app's queue (a Tester's `post` on "core"), whose next frame gives it to `receive`.
+/// From now on, what came is given at `pace`; `strict`: each message waits every ask of the run's before it (else its
+/// own, and those before it that are not reports: a run's timing made those, another timing makes others).
+pub fn Replay::pace(self : Replay, pace : Pace, strict? : Bool = true) -> Unit {
+  self.pace = pace
+  self.strict = strict
+}
+
+///|
+/// The clock the run's pace is kept on (a Tester's `time`): when an ask is made again, when a message is given.
+pub fn Replay::clock(self : Replay, clock : () -> Double) -> Unit {
+  self.clock = clock
+}
+
+///|
+/// What came in, handed on in its order, as long as what it came after has been sent again and (at the run's pace)
+/// the clock `now` has come to it: at most `at_most` of them (all that may, by default). How many were. With a seed
+/// (`shuffle`), what may come at this moment comes in an order drawn from it, each ask's own messages still in theirs.
+/// `to`: each handed there (its JSON, its bytes) instead of to the client at once: an app's, the app's queue (a
+/// Tester's `post` on "core"), whose next frame gives it to `receive`.
 pub fn Replay::deliver(
   self : Replay,
   at_most? : Int = -1,
+  now? : Double = @double.infinity,
+  host_by? : Double = now,
+  taken_at? : Double = now,
   to? : (String, Bytes?) -> Unit,
 ) -> Int {
   let mut n = 0
   while at_most < 0 || n < at_most {
-    let i = self.pick()
+    let i = self.pick(now, host_by)
     if i < 0 {
       break
     }
     let e = self.evs[i]
+    // (given at a frame after it was due, it stands at its due time for what comes after it: the run's gaps kept, not
+    // a frame's wait added at each, as a host's lines two to a frame would lag a frame more each two)
+    let due = self.due_at(i)
     e.done = true
+    let by = if e.host { host_by } else { now }
+    e.at = if now < @double.infinity {
+      if due > -@double.infinity && due <= by {
+        due
+      } else {
+        now
+      }
+    } else {
+      (self.clock)()
+    }
+    e.given = if now < @double.infinity { taken_at } else { (self.clock)() }
     if e.host {
       match self.host_said {
         Some(said) => said(e.msg.stringify())
@@ -281,7 +389,13 @@ pub fn Replay::host(self : Replay, said : (String) -> Unit) -> Unit {
 /// test to have said it (Replay::step_taken): a player's state its host told once the run was past `until 0:02 /` is
 /// not given before.
 pub fn step_of(line : String) -> String? {
-  let l = if line.has_prefix("now ") { line.view(start_offset=4).to_owned() } else { line }
+  let l0 = if line.has_prefix("now ") { line.view(start_offset=4).to_owned() } else { line }
+  // (`=words`, words alone: the drive says the line it took as it parsed it)
+  // (and without the spaces after it: the drive's line as it took it, trimmed)
+  let mut l = l0.replace_all(old=" =", new=" ")
+  while l.has_suffix(" ") {
+    l = l.view(end_offset=l.length() - 1).to_owned()
+  }
   let verb = match l.find(" ") {
     Some(k) => l.view(end_offset=k).to_owned()
     None => l
@@ -307,35 +421,28 @@ fn is_step(m : Json) -> Bool {
 }
 
 ///|
-/// How long after a step its runner took beside the script (`log do: freeze`) the run took its next one, `line`, by
-/// the run's clock (its trace's `w`): what a step after the runner's waits here (Flow::start), the app's own doings
-/// meanwhile (a draft kept) with it. None after any other step, or for a line that is not the run's next.
-pub fn Replay::after_runner(self : Replay, line : String) -> Double? {
-  guard step_of(line) is Some(l) else { return None }
-  let mut prev : Ev? = None
-  for i in 0..<self.evs.length() {
+/// The run's next step not taken again (its line, step_of's), if what comes next waits for it.
+pub fn Replay::next_step(self : Replay) -> String? {
+  for i in self.first_out..<self.evs.length() {
     let e = self.evs[i]
-    if !(e.out && is_step(e.msg)) {
-      continue
-    }
-    if !e.done {
-      guard e.msg is Object(m) && m.get("step") == Some(Json::string(l)) else { return None }
-      return match prev {
-        Some(p) if p.msg is Object(pm) &&
-          pm.get("step") is Some(String(ps)) &&
-          ps.has_prefix("log ") => Some(e.wall - p.wall)
+    if e.out && !e.done {
+      return match e.msg {
+        Object(m) =>
+          match m.get("step") {
+            Some(String(l)) => Some(l)
+            _ => None
+          }
         _ => None
       }
     }
-    prev = Some(e)
   }
   None
 }
 
 ///|
 /// The run's next step not taken again, when it is `line` (step_of: as the test says it), taken: what came after it
-/// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it waiting, said by
-/// `waiting`.
+/// may come. Whether it was. Another line (a test that says a step the run did not, or in another order) leaves it
+/// waiting, said by `waiting`.
 pub fn Replay::step_taken(self : Replay, line : String) -> Bool {
   guard step_of(line) is Some(l) else { return false }
   for i in self.first_out..<self.evs.length() {
@@ -343,6 +450,7 @@ pub fn Replay::step_taken(self : Replay, line : String) -> Bool {
     if e.out && !e.done && is_step(e.msg) {
       if e.msg is Object(m) && m.get("step") == Some(Json::string(l)) {
         e.done = true
+        e.at = (self.clock)()
         self.advance()
         return true
       }
@@ -386,48 +494,152 @@ pub fn Replay::take_asked(self : Replay) -> Array[String] {
 }
 
 ///|
-/// Whether a message in may come now (what it came after has all been sent again).
+/// Whether a message in may come (what it came after has been sent again), whenever its time.
 pub fn Replay::due(self : Replay) -> Bool {
-  self.next_in < self.evs.length() && self.first_out >= self.next_in
+  self.ready().length() > 0
 }
 
 ///|
-/// From now on, what may come at once (the messages in after the last ask made again, before the next one not
-/// made yet) comes in an order drawn from `seed` (another seed, another order; the same, the same): answers to
-/// different asks in any order, an ask's own (a subscription's values, a stream's parts) in the order they came. A
-/// message with no ask (a fatal) is not passed. 0: as they came.
+/// When the next message in may come, on the clock `deliver` is given (None: none may, each waits an ask not made
+/// again, or its anchor has not happened yet; at once: -inf).
+pub fn Replay::next_due(self : Replay) -> Double? {
+  let mut at : Double? = None
+  for i in self.ready() {
+    let t = self.due_at(i)
+    if t == @double.infinity {
+      continue
+    }
+    at = match at {
+      Some(a) if a <= t => Some(a)
+      _ => Some(t)
+    }
+  }
+  at
+}
+
+///|
+/// When message `i` may come at this pace (+inf: not until an ask before it is made again): at once; or at its anchor's
+/// time on by the run's gap between them. Its anchor: the latest event before it that has happened again (an ask made
+/// again, a message given); one left out (skipped, dropped; not strict, a report not made) is passed over, as is a
+/// message in not given yet (what may come at once in another order: its own time stands for it), as are asks with no
+/// wall clock (an older trace: anchored to the messages in). None before it: at once.
+fn Replay::due_at(self : Replay, i : Int) -> Double {
+  let scale = match self.pace {
+    AtOnce => return -@double.infinity
+    AsRun(scale) => scale
+  }
+  let mut j = i - 1
+  while j >= 0 {
+    let e = self.evs[j]
+    if e.at >= 0.0 && (e.has_wall || !e.out) {
+      let gap = self.evs[i].wall - e.wall
+      return e.at + (if gap > 0.0 { gap * scale } else { 0.0 })
+    }
+    // (a step of the script's is the run's own: timed from what happened again before it, the app's asks it has not
+    // made again aside, as they may be made in that time: a draft kept while the run waited to tap)
+    if e.out && !e.done && (self.strict || !is_report(e.msg)) && !is_step(self.evs[i].msg) {
+      return @double.infinity
+    }
+    j = j - 1
+  }
+  -@double.infinity
+}
+
+///|
+/// When the run took the step `line` (Flow's emitted line: step_of), on the clock at this pace (Replay::due_at: its
+/// anchor's time on by the run's gap; at once: -inf). None: the trace has no such step (an older one, or one the test
+/// does not take again where it is).
+pub fn Replay::step_at(self : Replay, line : String) -> Double? {
+  match self.step_index(line) {
+    Some(i) => Some(self.due_at(i))
+    None => None
+  }
+}
+
+///|
+/// The run's next step not taken again, when it is `line`.
+fn Replay::step_index(self : Replay, line : String) -> Int? {
+  guard step_of(line) is Some(l) else { return None }
+  for i in self.first_out..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done && is_step(e.msg) {
+      return if e.msg is Object(m) && m.get("step") == Some(Json::string(l)) { Some(i) } else { None }
+    }
+  }
+  None
+}
+
+///|
+/// Whether `m` (an ask of the run's) is a report (`reports`).
+fn is_report(m : Json) -> Bool {
+  guard m is Object(o) else { return false }
+  kind_of(o) == "call" && reports.contains(name_of(o))
+}
+
+///|
+/// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
+/// the run's order. Strict: up to the first ask not made again; else past those that are reports, an ask's own coming
+/// once it was made (an answer to an ask not made again does not).
+fn Replay::ready(self : Replay) -> Array[Int] {
+  let firsts : Array[Int] = []
+  let seen : Array[Int] = []
+  let from = if self.first_out < self.next_in { self.first_out } else { self.next_in }
+  for i in from..<self.evs.length() {
+    let e = self.evs[i]
+    if e.out && !e.done {
+      if self.strict || !is_report(e.msg) {
+        break
+      }
+      continue
+    }
+    if e.out || e.done {
+      continue
+    }
+    match e.msg {
+      Object(m) =>
+        match id_of(m) {
+          Some(id) => {
+            if seen.contains(id) {
+              continue
+            }
+            seen.push(id)
+            // (an answer to an ask not made again waits; strict, there is none here)
+            if self.ids.contains(id) {
+              firsts.push(i)
+            }
+          }
+          None => {
+            // a message with no ask (a fatal): in its place, after what came before it
+            if firsts.length() == 0 {
+              firsts.push(i)
+            }
+            break
+          }
+        }
+      _ => break
+    }
+  }
+  firsts
+}
+
+///|
+/// From now on, what may come at once (the messages in due at the same moment) comes in an order drawn from `seed`
+/// (another seed, another order; the same, the same): answers to different asks in any order, an ask's own (a
+/// subscription's values, a stream's parts) in the order they came. A message with no ask (a fatal) is not passed. 0:
+/// as they came.
 pub fn Replay::shuffle(self : Replay, seed : UInt) -> Unit {
   self.seed = seed
 }
 
 ///|
-/// The message in to give next (-1: none may come).
-fn Replay::pick(self : Replay) -> Int {
-  if !self.due() {
+/// The message in to give next at `now` (-1: none may come yet).
+fn Replay::pick(self : Replay, now : Double, host_by : Double) -> Int {
+  let due = self.ready().filter(fn(i) { self.due_at(i) <= (if self.evs[i].host { host_by } else { now }) })
+  if due.length() == 0 {
     return -1
   }
-  if self.seed == 0 {
-    return self.next_in
-  }
-  // what may come: up to the next ask not made again, or a message with no ask; of each ask its first not given
-  let firsts : Array[Int] = []
-  let seen : Array[Int] = []
-  for i in self.next_in..<self.evs.length() {
-    let e = self.evs[i]
-    if e.out && !e.done {
-      break
-    }
-    if e.out || e.done {
-      continue
-    }
-    guard e.msg is Object(m) && id_of(m) is Some(id) else { break }
-    if !seen.contains(id) {
-      seen.push(id)
-      firsts.push(i)
-    }
-  }
-  if firsts.length() == 0 {
-    return self.next_in
+  if self.seed == 0 || due.length() == 1 {
+    return due[0]
   }
   // xorshift32
   let mut x = self.seed
@@ -435,7 +647,20 @@ fn Replay::pick(self : Replay) -> Int {
   x = x ^ (x >> 17)
   x = x ^ (x << 5)
   self.seed = x
-  firsts[(x % firsts.length().reinterpret_as_uint()).reinterpret_as_int()]
+  due[(x % due.length().reinterpret_as_uint()).reinterpret_as_int()]
+}
+
+///|
+/// How many of the messages in for asks the app made are not handed on yet: at a test's end, what it asked and was
+/// never answered.
+pub fn Replay::unanswered(self : Replay) -> Int {
+  let mut n = 0
+  for e in self.evs {
+    if !e.out && !e.done && e.msg is Object(m) && id_of(m) is Some(id) && self.ids.contains(id) {
+      n += 1
+    }
+  }
+  n
 }
 
 ///|
@@ -535,6 +760,7 @@ fn Replay::out(self : Replay, text : String) -> Unit {
   }
   let e = self.evs[found]
   e.done = true
+  e.at = (self.clock)()
   if e.msg is Object(r) && (kind == "subscribe" || kind == "call") {
     match (id_of(r), id_of(m)) {
       (Some(then), Some(now)) => {
@@ -664,4 +890,95 @@ fn canon(j : Json) -> String {
     Array(a) => "[" + a.map(canon).join(",") + "]"
     _ => j.stringify()
   }
+}
+
+///|
+/// When the answer to the run's latest call `call` given so far was given here (the clock, Replay::clock): what a
+/// test times a motion the answer starts from, as the tape has it at this pace, not as the app says it. None while
+/// none is given.
+pub fn Replay::given_at(self : Replay, call : String) -> Double? {
+  let asked : Map[Int, Bool] = {}
+  let mut at : Double? = None
+  for e in self.evs {
+    guard e.msg is Object(m) && m.get("id") is Some(Number(id, ..)) else { continue }
+    if e.out {
+      if kind_of(m) == "call" && name_of(m) == call {
+        asked[id.to_int()] = true
+      }
+    } else if e.done && !e.host && asked.contains(id.to_int()) && !m.contains("delta") && !m.contains("value") {
+      at = Some(e.given)
+    }
+  }
+  at
+}
+
+///|
+/// When the latest message in given so far that `which` holds for (its JSON) was given here (the clock): a change a
+/// subscription's topic came with, what a motion starts from as the tape has it. None while none is.
+pub fn Replay::given_at_where(self : Replay, which : (Json) -> Bool) -> Double? {
+  let mut at : Double? = None
+  for e in self.evs {
+    if !e.out && !e.host && e.done && which(e.msg) {
+      at = Some(e.given)
+    }
+  }
+  at
+}
+
+///|
+/// The run's display's frame period as its host's lines measure it (a player's `info` each frame: the first of a
+/// frame's lines its moment, those a frame apart and less of it the same frame's), its frames' mean spacing; None
+/// where the trace has fewer than two frames of them.
+pub fn Replay::frame_period(self : Replay) -> Double? {
+  let frames : Array[Double] = []
+  for e in self.evs {
+    if e.host && e.has_wall {
+      match frames.last() {
+        // (two lines of one frame come within a few ms of each other)
+        Some(last) if e.wall - last < 4.0 => ()
+        _ => frames.push(e.wall)
+      }
+    }
+  }
+  let gaps = []
+  for i in 1..<frames.length() {
+    let g = frames[i] - frames[i - 1]
+    // (a frame's spacing, not a pause between two showings)
+    if g < 25.0 {
+      gaps.push(g)
+    }
+  }
+  if gaps.length() < 2 {
+    return None
+  }
+  Some(gaps.fold(init=0.0, fn(a, b) { a + b }) / gaps.length().to_double())
+}
+
+///|
+/// The run's display's frames as its host's lines have them, the first line of each (lines within a few ms of it the
+/// same frame's): their moments on the run's clock, in order.
+pub fn Replay::host_frames(self : Replay) -> Array[Double] {
+  let frames : Array[Double] = []
+  for e in self.evs {
+    if e.host && e.has_wall {
+      match frames.last() {
+        Some(last) if e.wall - last < 4.0 => ()
+        _ => frames.push(e.wall)
+      }
+    }
+  }
+  frames
+}
+
+///|
+/// The latest host line given here: when it was due on this clock, and its moment on the run's (what maps the run's
+/// frames onto this clock from then on). None while none is.
+pub fn Replay::host_given(self : Replay) -> (Double, Double)? {
+  let mut last : (Double, Double)? = None
+  for e in self.evs {
+    if e.host && e.done && e.has_wall {
+      last = Some((e.at, e.wall))
+    }
+  }
+  last
 }

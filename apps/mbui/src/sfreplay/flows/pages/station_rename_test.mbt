@@ -25,6 +25,11 @@ test "35-station-rename" {
       f.run_to(@kit.sheet_rest("settings-sheet"))
       f.see("=" + name)
     }
+    // 已重命名 said for its time, then gone
+    // (its time out at the last frame: it starts going with the one after)
+    f.run_for(@sfapp.toast_ms)
+    f.t.draw()
+    f.run_to_rest("toast")
     f.end()
   })
 }

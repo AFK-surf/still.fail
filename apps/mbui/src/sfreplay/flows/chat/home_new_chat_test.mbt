@@ -6,10 +6,12 @@ test "02-home-new-chat" {
   @sfreplay.orders(fn(seed) raise {
     let f = @sfreplay.Flow::start(@sfreplay.trace_home_new_chat, seed~)
     f.see("端到端测试")
+    // (alice's other device makes the chat: a live run's step beside the app)
+    f.peer("peer create 另一台设备新建的对话 082947 post:新对话里的回复 082947")
     f.see("另一台设备新建的对话 082947")
     f.see("=新对话里的回复 082947")
     // its row grown in, the rows under it moved down: to the end of their motions, as each set out
-    f.run_to(@sfapp.home_rest())
+    f.run_to_rest("layout home/")
     f.end()
   })
 }

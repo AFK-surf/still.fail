@@ -1,3 +1,0 @@
-check "the other device was reached, and showed a code for this app by its own name" 'grep -q "^PAIRING [0-9][0-9]*	.*	still.fail mbui " $OUT/$name.log'
-check "the wrong code was refused, tries left said" 'grep -q "DRIVE ok until 安全码不对" $OUT/$name.log'
-check "safe mode off again" 'grep -q "^LOCK OFF" $OUT/$name.log'

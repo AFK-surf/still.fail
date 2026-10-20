@@ -1,0 +1,62 @@
+// e2e/traces/lock-wait.trace, made by scripts/trace.py from 01-lock_wait.log: not edited by hand.
+
+///|
+/// What the app and its core said in the run, a line each.
+pub let trace_lock_wait : String =
+  #|{"step":"peer lock-on"}
+  #|{"out":{"id":1,"call":"client.device","params":{"client":"still.fail mbui","app":"desktop","userAgent":"Macintosh; Mac OS X"}},"w":1792493055428.675}
+  #|{"in":{"id":1,"ok":null},"w":1792493055520.721}
+  #|{"out":{"id":2,"subscribe":{"topic":"accounts"},"keyed":true},"w":1792493055520.749}
+  #|{"out":{"id":3,"subscribe":{"topic":"prefs"},"keyed":true},"w":1792493055520.758}
+  #|{"step":"# written by scripts/rerecord.sh from its test (src/sfreplay/emit.mbt): not edited by hand","w":1792493055522.26}
+  #|{"step":"timeout 90000","w":1792493055522.266}
+  #|{"step":"#before peer lock-on","w":1792493055522.268}
+  #|{"step":"until 等待批准此设备","w":1792493055522.27}
+  #|{"in":{"id":2,"value":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""}]},"w":1792493055632.081}
+  #|{"in":{"id":3,"value":{"onlyMine":false,"onlyWatching":false,"onlyDecisions":false,"listFilter":{},"appearance":"system","rowPicture":"auto","absoluteTime":false,"lang":"zh","keys":{},"lastChat":{},"openChat":{},"chatTabs":{},"dropFiles":{},"driveViews":{},"resume":{},"stationUpdatesDismissed":{},"device":{"app":"desktop","phone":false,"handoff":false},"reader":{"size":18,"line":1.7,"margin":22,"face":"sans","indent":true,"paper":"follow"},"rails":{},"bars":{"sets":[["chats","files","profiles","stations"],["decisions","usage","connects","archive"]],"current":0},"barsBy":{}}},"w":1792493055632.105}
+  #|{"out":{"id":4,"subscribe":{"topic":"workspaces"},"keyed":true},"w":1792493055632.133}
+  #|{"out":{"id":5,"subscribe":{"topic":"status"},"keyed":true},"w":1792493055632.146}
+  #|{"in":{"id":4,"value":[{"account":{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""},"workspaces":[{"id":"01M5CEH5N9VC6SZSFNBDNRN373","name":"Dev","role":"owner","created_at":1792493000,"stations":1,"members":1,"relays":[],"time":{"created_at":{"past":true,"at":1792493000000,"ago":"1 分钟前","full":"10/20 18:43:20","until":"1 分钟内"}}}],"invitations":[],"relay_url":"http://127.0.0.1:19140","loaded":true,"beta":true}]},"w":1792493055648.378}
+  #|{"in":{"id":5,"value":{"items":[]}},"w":1792493055648.393}
+  #|{"out":{"id":6,"subscribe":{"topic":"lock","workspace":"01M5CEH5N9VC6SZSFNBDNRN373"},"keyed":true},"w":1792493055648.424}
+  #|{"out":{"id":7,"subscribe":{"topic":"chats","scope":"01M5CEH5N9VC6SZSFNBDNRN373","mine":false},"keyed":true},"w":1792493055648.441}
+  #|{"out":{"id":8,"subscribe":{"topic":"workspaceMarks","workspace":"01M5CEH5N9VC6SZSFNBDNRN373"},"keyed":true},"w":1792493055648.562}
+  #|{"out":{"id":9,"call":"client.focus","params":{"visible":true,"focused":true,"workspace":"01M5CEH5N9VC6SZSFNBDNRN373"}},"w":1792493055654.404}
+  #|{"out":{"id":10,"subscribe":{"topic":"notify"},"keyed":true},"w":1792493055654.417}
+  #|{"out":{"id":11,"subscribe":{"topic":"notify","workspace":"01M5CEH5N9VC6SZSFNBDNRN373"},"keyed":true},"w":1792493055654.425}
+  #|{"in":{"id":6,"value":{"available":true,"locked":true,"notice":false,"role":"owner","manages":true,"owner":true,"canSign":true,"signs":false,"me":{"device":"fe31abe0510508fd80ac7575be7655669d5ac56f8f4351b836172b8d991ebbb5","code":"5LE-EMG","kind":"app","confirmed":false,"waiting":true,"asked":false},"signers":1,"members":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","role":"owner","you":true,"devices":[{"id":"2f09c54406133d82c3a61e0759de6f9f8cac914f18d230e837a4f8a5f424a5e5","kind":"app","label":"","signs":true,"older":false,"mine":false,"renewSoon":false,"recent":false}]}],"stations":[{"id":"39e0a623f5a9c18fd800fe301ab960dd2874d4cff30c3c5312d0ff5bcba505b2","name":"studio","version":"0.1.0","online":true,"protected":true}],"protected":1,"requests":[],"renew":[],"attention":0}},"w":1792493055665.065}
+  #|{"in":{"id":7,"value":{"me":{"id":"alice@example.test","email":"alice@example.test"},"stations":[{"station":"01M5CEH5N9VC6SZSFNBDNRN373/39e0a623f5a9c18fd800fe301ab960dd2874d4cff30c3c5312d0ff5bcba505b2","id":"39e0a623f5a9c18fd800fe301ab960dd2874d4cff30c3c5312d0ff5bcba505b2","name":"studio","state":"offline"}],"loading":false,"days":[{"daysAgo":0,"at":1792493004483,"label":"今天","items":[{"id":"ember:c-c975b824a3","session":"ember:c-c975b824a3","thread":1,"title":"端到端测试的对话 post:你好，我是测试用的 agent","agents":[{"key":"ember:c-c975b824a3","runtime":"claude","process":"warm","pending":0,"lastTurn":{"id":"ff0bbec3-bf35-4f06-95a3-70f7e547d714","kind":"input","outcome":"completed","declared":"final","ending":"all_done","need":"answered the question that was asked","startedAt":1792493004399,"endedAt":1792493004485},"agentText":"默认模型","statusText":"已完成：answered the question that was asked"}],"last":{"seq":2,"authorKind":"agent","author":"ember:c-c975b824a3","text":"你好，我是测试用的 agent","createdAt":1792493004483,"by":{"kind":"agent","name":"agent","mine":false,"runtime":"claude","label":"agent"},"preview":"你好，我是测试用的 agent","time":{"createdAt":{"at":1792493004483,"ago":"1 分钟前","full":"10/20 18:43:24","until":"1 分钟内","past":true}}},"unread":true,"mine":true,"lastActiveAt":1792493004483,"station":"01M5CEH5N9VC6SZSFNBDNRN373/39e0a623f5a9c18fd800fe301ab960dd2874d4cff30c3c5312d0ff5bcba505b2","stationName":"studio","offline":"studio 离线","time":{"lastActiveAt":{"at":1792493004483,"ago":"1 分钟前","full":"10/20 18:43:24","until":"1 分钟内","past":true}},"people":[{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}}],"creator":{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}},"peopleText":"你 发起","clientKey":"new:chat-390d8b3b8eec01aefa","pinned":false,"tone":"done"}]}],"trouble":{"text":"studio 离线","state":"offline","retry":false},"members":1,"leading":"agents","glyph":{"online":0,"dim":1,"connecting":0,"failing":0,"working":0,"summary":"studio","label":"1 台 station，0 台在线，1 台离线"},"note":{"reading":false,"text":null,"failing":[],"empty":false}}},"w":1792493055665.097}
+  #|{"in":{"id":8,"value":{"workspaces":{"01M5CEH5N9VC6SZSFNBDNRN373":{"alert":0,"unread":1,"tone":"done","label":"1 个有新消息","badge":0,"items":[],"mineTone":"done"}},"badge":0,"badgeCounts":"attention","badgeKinds":{"on":true,"wait":true,"failed":true,"done":false,"message":false}}},"w":1792493055665.122}
+  #|{"in":{"id":9,"ok":null},"w":1792493055665.127}
+  #|{"in":{"id":10,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792493055665.133}
+  #|{"in":{"id":11,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792493055665.137}
+  #|{"out":{"id":12,"subscribe":{"topic":"doing"},"keyed":true},"w":1792493055665.165}
+  #|{"out":{"id":13,"call":"notify.permission","params":{"state":"unknown"}},"w":1792493055671.661}
+  #|{"step":"until 发送批准请求","w":1792493055684.582}
+  #|{"step":"log do: peer lock-await 60","w":1792493055684.591}
+  #|{"step":"peer lock-await 60"}
+  #|{"step":"tap 发送批准请求","w":1792493055684.595}
+  #|{"in":{"id":12,"value":{"doing":[]}},"w":1792493055684.65}
+  #|{"in":{"id":13,"ok":null},"w":1792493055684.657}
+  #|{"step":"tap 发送批准请求","acted":true,"w":1792493055696.345}
+  #|{"out":{"id":14,"call":"lock.pair","params":{"workspace":"01M5CEH5N9VC6SZSFNBDNRN373"}},"w":1792493055698.407}
+  #|{"step":"answered lock.pair","w":1792493055707.633}
+  #|{"in":{"id":6,"delta":[{"path":["me","pair"],"set":{"state":"finding","devices":0}}]},"w":1792493055715.054}
+  #|{"in":{"id":14,"ok":null},"w":1792493055715.07}
+  #|{"step":"answered notify.permission","w":1792493055732.073}
+  #|{"step":"until 输入你的受信任设备上显示的安全码","w":1792493055748.649}
+  #|{"in":{"id":6,"delta":[{"path":["me","pair","devices"],"set":1},{"path":["me","pair","state"],"set":"code"}]},"w":1792493056865.054}
+  #|{"step":"type 000000","w":1792493056881.385}
+  #|{"step":"type 000000","acted":true,"w":1792493056881.4}
+  #|{"out":{"id":15,"call":"lock.pairCode","params":{"workspace":"01M5CEH5N9VC6SZSFNBDNRN373","code":"000000"}},"w":1792493056882.331}
+  #|{"step":"answered lock.pairCode","w":1792493056895.514}
+  #|{"in":{"id":15,"error":{"code":"pair_wrong","message":"安全码不对，还可以试 2 次"}},"w":1792493056931.696}
+  #|{"step":"until 安全码不对","w":1792493056948.516}
+  #|{"in":{"id":6,"delta":[{"path":["me","pair","left"],"set":2},{"path":["me","pair","state"],"set":"wrong"}]},"w":1792493056981.704}
+  #|{"step":"log do: peer lock-off","w":1792493056985.858}
+  #|{"step":"peer lock-off"}
+  #|{"step":"done 2-peer","w":1792493056985.872}
+  #|{"step":"until 端到端测试","w":1792493068737.462}
+  #|{"in":{"id":6,"delta":[{"path":["locked"],"set":false},{"path":["me","waiting"],"set":false},{"path":["me","pair"],"remove":true},{"path":["notice"],"set":true}]},"w":1792493068753.562}
+  #|{"out":{"id":16,"subscribe":{"topic":"longJobs","scope":"01M5CEH5N9VC6SZSFNBDNRN373"},"keyed":true},"w":1792493068753.624}
+  #|{"step":"","w":1792493068757.677}

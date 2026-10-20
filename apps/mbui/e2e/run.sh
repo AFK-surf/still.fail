@@ -205,6 +205,12 @@ run_flow() {
   local extra=$(grep '^#env ' $script | sed 's/^#env //' | tr '\n' ' ')
   # (a starting point's run: the trace says which, scripts/trace.py keeps it as its first line)
   [ -n "${E2E_START:-}" ] && printf 'CORETRACE {"start":"%s"}\n' "$E2E_START" >> $log
+  # (and the starting point's drive folder under this run's tag, a step on the trace: the restored station holds the
+  # starting point's own)
+  if [ -n "${E2E_START:-}" ] && [ $PLATFORM = mac ]; then
+    step_line "drive-seed $TAG" >> $log
+    "$ROOT/scripts/e2e-local.sh" drive-seed $TAG < /dev/null > /dev/null
+  fi
   # what the runner does before the app starts (`#before WORDS`: scripts/e2e-local.sh WORDS, as a chat made elsewhere),
   # each said on the trace where it happened (a step of the run's own, what a contract test does again there)
   sed -n 's/^#before //p' $script | while IFS= read -r words; do
@@ -251,8 +257,6 @@ start_flow() {
   [ -n "${E2E_START:-}" ] && [ $PLATFORM = mac ] || return 0
   "$ROOT/scripts/e2e-local.sh" restore "$E2E_START" > /dev/null || { echo "e2e: could not restore $E2E_START"; return 1; }
   rm -rf $CORE && cp -a "$WORK/snapshots/$E2E_START/core" $CORE
-  # (the restored station holds the starting point's drive folder: this run's lives under its own tag)
-  "$ROOT/scripts/e2e-local.sh" drive-seed $TAG >/dev/null
 }
 
 TABLE=$OUT/../$PLATFORM.txt

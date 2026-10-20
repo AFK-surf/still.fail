@@ -21,8 +21,19 @@ die() { echo "rerecord: $*" >&2; exit 1; }
 command -v moon > /dev/null || die "no moon on PATH (MoonBit: MBUI_TOOLS, or its bin on PATH)"
 mkdir -p "$A/out" && TMP=$(mktemp -d "$A/out/rerecord.XXXXXX") || exit 1
 tag=""; station=""; tests=""; i=0
-# a run's first flow is given the account by its environment (its trace has `migrate`): sign-in first, kept apart
-if [ -f e2e/flows/01-signin.drive ]; then cp e2e/flows/01-signin.drive "$TMP/00-01-signin.drive"; fi
+# a run's first flow is given the account by its environment (its trace has `migrate`): sign-in first, kept apart;
+# unless the first test's own trace is a first start (it has `migrate`: what the app does once, as asking about
+# notifications, is in it), where that test is the run's first flow
+first_start=""
+for n in "$@"; do
+  [ -f "e2e/flows/$n.drive" ] && break
+  ident=$(grep -o '@sfreplay\.trace_[a-z0-9_]*' $(ls src/sfreplay/flows/*/"${n}_test.mbt" 2> /dev/null | head -1) 2> /dev/null | head -1 | sed 's/.*trace_//')
+  for t in e2e/traces/*.trace; do
+    [ "$(basename "$t" .trace | tr -c 'a-z0-9\n' '_')" = "$ident" ] && grep -q '"call":"migrate"' "$t" && first_start=1
+  done
+  break
+done
+if [ -z "$first_start" ] && [ -f e2e/flows/01-signin.drive ]; then cp e2e/flows/01-signin.drive "$TMP/00-01-signin.drive"; fi
 for n in "$@"; do
   i=$((i + 1)); idx=$(printf %02d $i)
   if [ -f "e2e/flows/$n.drive" ]; then
