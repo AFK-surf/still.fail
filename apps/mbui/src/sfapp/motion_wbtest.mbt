@@ -222,7 +222,9 @@ test "the chat's sheet going down: its own rows take no tap, the scrim none" {
   t.frame()
   tap_once_on(t, "固定到列表顶部")
   t.tap_once(195.0, 60.0)
-  t.settle() |> ignore
+  // (the tap through the sinking sheet lands on the chat under it, whose 归档 spins on: sf/icons' spinner until it
+  // is a cycle; the sheet's rows took nothing, which is what this asserts)
+  t.settle(unsettled_ok=true) |> ignore
   assert_eq(named(calls, "chat.pin").length(), 0)
   assert_true(dui.sheet is None && dui.leaving is None)
 }
