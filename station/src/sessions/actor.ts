@@ -7,8 +7,8 @@
 // next take it up (`snapshot` / `adopt`), its turn going on all along.
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
-import type { AgentDriver, AgentSession, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -82,8 +82,9 @@ export type SessionDeps = {
   store: SessionStore;
   chat(connect: string): Surface | undefined;
   driver(runtime: RuntimeKind): AgentDriver;
-  /// The profile a session's runtime starts on now: its own while usable, else another that can take it on.
-  runOn(key: string): Profile & { spelling?(model: string): string | null };
+  /// The profile a session's runtime starts on now: its own while usable, else another that can take it on (`holding`:
+  /// its process has work going in the background, kept on an account nearly full).
+  runOn(key: string, holding?: boolean): Profile & { spelling?(model: string): string | null };
   /// A turn ran into its profile's allowance: the profile left and the one moved to, when it moved.
   spend(key: string): [string, string] | null;
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
@@ -99,6 +100,9 @@ export type SessionDeps = {
   /// What it is told when it goes on on `to` in a new runtime session rather than take up `id` (last run on `was`, when
   /// the store does not know); null: it takes it up (sessions/afresh.ts).
   startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
+  /// Its subagents `ids` of runtime session `from`, stopped with its process, taken to runtime session `to` begun on
+  /// `on`, so that they are taken up there (sessions/afresh.ts): the ids taken.
+  carrySubagents?(from: string, to: string, on: Profile, ids: string[]): string[];
   /// The runtime session it runs in, on `profile` (null: not known).
   ranIn?(key: string, id: string, profile: string | null): void;
   idle(key: string): void;
@@ -198,6 +202,10 @@ export class SessionActor {
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
   private afresh: string | null = null;
+  /// What its processes ended by the station had going in the background (ended with them), until the next starts;
+  /// then what it is told of it with its next prompt.
+  private stopped: BackgroundTask[] = [];
+  private stoppedNote: string | null = null;
   private idleSince: number;
   private workingFor: Working[] = [];
   private tools: [string, string][] = [];
@@ -330,7 +338,7 @@ export class SessionActor {
       }
       this.agent = null;
       log.warn("session", "the process taken up was told another address of the station's tools; ending it, its next turn resumes in a new one", { session: this.key, was, now: url });
-      await agent.session.dispose();
+      await this.endProcess(agent);
       this.deps.store.notify(this.key);
     });
   }
@@ -433,7 +441,8 @@ export class SessionActor {
   evict(): Promise<void> {
     return this.enqueue(async () => {
       const agent = this.agent;
-      if (!agent || agent.session.busy() || this.turn || this.waiting !== null) return;
+      // Work it has going in the background would end with it.
+      if (!agent || agent.session.busy() || this.turn || this.waiting !== null || this.holding()) return;
       this.agent = null;
       log.info("session", "evicting idle session process", { session: this.key });
       await agent.session.dispose();
@@ -705,6 +714,9 @@ export class SessionActor {
       const lost = this.resumeLost;
       this.resumeLost = false;
       let prompt = lost ? `${RESUME_LOST}\n\n${text}` : text;
+      const stopped = this.stoppedNote;
+      this.stoppedNote = null;
+      if (stopped !== null) prompt = `${stopped}\n\n${prompt}`;
       const afresh = this.afresh;
       this.afresh = null;
       if (afresh !== null) prompt = `${afresh}\n\n${prompt}`;
@@ -779,7 +791,7 @@ export class SessionActor {
     const row = this.deps.store.getSession(this.key);
     let profile: ReturnType<SessionDeps["runOn"]> | null = null;
     try {
-      profile = row ? this.deps.runOn(this.key) : null;
+      profile = row ? this.deps.runOn(this.key, this.holding()) : null;
     } catch {}
     if (!this.restart && row && profile && profile.id === this.profile && agent.session.retune?.(openOptions(row, profile, this.deps))) {
       this.stale = false;
@@ -790,17 +802,31 @@ export class SessionActor {
     this.stale = false;
     this.restart = false;
     this.agent = null;
-    log.info("session", "ending the process from before the session was changed", { session: this.key });
-    await agent.session.dispose();
+    log.info("session", "ending the process from before the session was changed", { session: this.key, background: agent.session.background?.().length ?? 0 });
+    await this.endProcess(agent);
     this.deps.store.notify(this.key);
+  }
+
+  /// Whether its process has work going in the background (which ends with it).
+  private holding(): boolean {
+    return (this.agent?.session.background?.().length ?? 0) > 0;
+  }
+
+  /// Ends a process of its the station leaves: what it had going in the background ends with it, and its next turn is
+  /// told (`stoppedNote`).
+  private async endProcess(agent: { session: AgentSession } | null) {
+    if (!agent) return;
+    this.stopped.push(...(agent.session.background?.() ?? []));
+    await agent.session.dispose();
   }
 
   private async ensureAgent(): Promise<AgentSession> {
     // Before each turn the account is asked about again: one whose five hours are nearly full is left for one with
-    // room when its context was just compacted or is about to be (accounts.ts runOn), before a turn runs into it.
+    // room when its context was just compacted or is about to be (accounts.ts runOn), before a turn runs into it; not
+    // while its process has work going in the background, which would end with it.
     if (this.agent && !this.stale && !this.agent.session.busy()) {
       try {
-        if (this.deps.runOn(this.key).id !== this.profile) this.stale = true;
+        if (this.deps.runOn(this.key, this.holding()).id !== this.profile) this.stale = true;
       } catch {}
     }
     await this.catchUp(true);
@@ -823,13 +849,20 @@ export class SessionActor {
     // Recorded before it may be left, so the history reads on from it.
     if (row.runtimeSessionId) this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
     const afresh = row.runtimeSessionId ? (this.deps.startsAfresh?.(this.key, row.runtimeSessionId, profile, this.profile) ?? null) : null;
+    // What its process before had going in the background, stopped with it: its subagents are taken up again in the
+    // runtime session resumed, or taken to the new one.
+    const stopped = this.stopped;
+    const subagents = stopped.filter((t) => t.kind === "agent").map((t) => t.id);
+    let resumable: string[] = [];
     if (afresh !== null) {
       log.info("session", "going on in a new runtime session on another account", { session: this.key, left: row.runtimeSessionId, profile: profile.id });
       agent = await driver.open(base, this.listener(generation));
       this.afresh = afresh;
+      resumable = this.deps.carrySubagents?.(row.runtimeSessionId!, agent.id(), profile, subagents) ?? [];
     } else if (row.runtimeSessionId) {
       try {
         agent = await driver.open({ ...base, resume: row.runtimeSessionId }, this.listener(generation));
+        resumable = subagents;
       } catch (error) {
         log.warn("session", "resume failed; starting a new runtime session", { session: this.key, id: row.runtimeSessionId, error: (error as Error).message });
         agent = await driver.open(base, this.listener(generation));
@@ -843,6 +876,8 @@ export class SessionActor {
       if (row.runtimeSessionId) this.deps.live?.moved?.(this.key);
     }
     this.deps.ranIn?.(this.key, agent.id(), profile.id);
+    this.stopped = [];
+    if (stopped.length > 0) this.stoppedNote = backgroundStopped(stopped, resumable);
     this.agent = { generation, session: agent };
     this.stale = false;
     this.restart = false;
@@ -884,6 +919,8 @@ export class SessionActor {
         void this.enqueue(async () => {
           if (!this.isCurrent(generation)) return;
           log.info("session", "session runtime closed", { session: this.key, reason: event.why });
+          // What it had going in the background is gone with it.
+          this.stopped.push(...(this.agent?.session.background?.() ?? []));
           this.agent = null;
           this.deps.store.notify(this.key);
         });
@@ -923,7 +960,7 @@ export class SessionActor {
       const agent = this.agent;
       this.agent = null;
       log.warn("session", "ending the process that lost the station's tools; the next one resumes it", { session: this.key, why: lost });
-      await agent?.session.dispose();
+      await this.endProcess(agent);
       store.notify(this.key);
     }
     if (turn?.declared) this.toolsRestarts = 0;
@@ -933,7 +970,7 @@ export class SessionActor {
       this.nudges = 0;
       const agent = this.agent;
       this.agent = null;
-      await agent?.session.dispose();
+      await this.endProcess(agent);
       log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
     }
@@ -952,7 +989,7 @@ export class SessionActor {
         // Its process runs on the account left: the next starts on the one taken.
         const agent = this.agent;
         this.agent = null;
-        await agent?.session.dispose();
+        await this.endProcess(agent);
         log.info("session", "allowance ran out; going on on another profile", { session: this.key, from: moved[0], to: moved[1] });
         this.refill = null;
         if (store.pendingMessages(this.key).length > 0) return this.pump();

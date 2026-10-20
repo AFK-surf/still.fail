@@ -82,8 +82,9 @@ export class Accounts {
   /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
   /// on afresh, afresh.ts), else the one the pool picks among those of its runtime allowed in its workspace. One whose
   /// short window is nearly full it leaves for one that is not, when that loses little (pool.ts `cheapToLeave`): its
-  /// context was just compacted, or is about to be.
-  runOn(key: string): RunOn {
+  /// context was just compacted, or is about to be, and not while its process has work going in the background
+  /// (`holding`: commands and subagents, which end with it).
+  runOn(key: string, holding = false): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
@@ -104,7 +105,7 @@ export class Accounts {
       if (row.profilePinned || !crowded(current)) return withSpelling(current);
       // Nearly full: it moves only to one that is not (the pool puts those last), and only when that loses little.
       const room = candidates.some((p) => p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && !crowded(p));
-      if (!room || !this.cheapToLeave(key)) return withSpelling(current);
+      if (!room || holding || !this.cheapToLeave(key)) return withSpelling(current);
     }
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
     const next = this.pick(keeps ? candidates.filter((p) => p.id !== current!.id) : candidates, row.model, false);

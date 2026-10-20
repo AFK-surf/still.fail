@@ -89,7 +89,13 @@ export interface AgentSession {
   /// The address of the station's tools the runtime was given (one taken up from another station: as it was given
   /// then); null when not known.
   mcpUrl?(): string | null;
+  /// What it has going in the background past its turns (Claude's background commands and subagents): it ends with
+  /// the process, and nothing of it reports back. Empty for a runtime that does not say.
+  background?(): BackgroundTask[];
 }
+
+/// A background task of a runtime process: a subagent (resumed by its id) or a command.
+export type BackgroundTask = { id: string; kind: "agent" | "command"; description: string };
 
 /// The station's tools by their server's name (before the rename: ember).
 export const TOOL_SERVERS = ["stillfail", "ember"];

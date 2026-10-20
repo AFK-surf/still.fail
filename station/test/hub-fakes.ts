@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CommandMissing } from "../src/agents/runner.ts";
-import type { AgentDriver, AgentSession, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
+import type { AgentDriver, AgentSession, BackgroundTask, OpenOptions, RuntimeEvent, TurnOutcome } from "../src/agents/runtime.ts";
 import type { ChatMessage, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "../src/sessions/chat.ts";
 import { type HubConfig, hubConfig } from "../src/sessions/config.ts";
 import { type ColdStorage, Hub } from "../src/sessions/hub.ts";
@@ -98,6 +98,8 @@ export class FakeSession implements AgentSession {
   retunable = true;
   /// The address of the station's tools it was given (one taken up: as the station before gave it).
   toolsUrl: string;
+  /// What the test has it run in the background.
+  tasks: BackgroundTask[] = [];
 
   constructor(id: string, options: OpenOptions, events: (event: RuntimeEvent) => void, busy = false) {
     this.sessionId = id;
@@ -129,6 +131,9 @@ export class FakeSession implements AgentSession {
   }
   busy() {
     return this.busyNow;
+  }
+  background() {
+    return this.tasks;
   }
   async prompt(text: string) {
     if (this.disposed) throw new Error("disposed");

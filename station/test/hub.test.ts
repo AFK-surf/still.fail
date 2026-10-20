@@ -1389,8 +1389,17 @@ test("a session leaves an account whose five hours are nearly full for one with 
   assert.equal(r.claude.last(), first);
   assert.equal(r.session(key).profile, own);
   await done();
-  // Its runtime compacted it: the next turn starts afresh on the other, its process ended first.
+  // Its runtime compacted it, but its process has work going in the background, which would end with it: it stays.
   calls(key, own, [["t2", 120_000], ["t2", 20_000]]);
+  first.tasks = [{ id: "a1", kind: "agent", description: "profile the build" }];
+  await r.hub.evict(key);
+  assert.ok(!first.disposed);
+  await turn("meanwhile");
+  assert.equal(r.claude.last(), first);
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // That work over: the next turn starts afresh on the other, its process ended first.
+  first.tasks = [];
   await turn("and again");
   assert.ok(first.disposed);
   assert.equal(r.session(key).profile, other);
@@ -1744,6 +1753,54 @@ test("on another account a conversation goes on in a new runtime session, its hi
   assert.equal(fourth.options.resume, undefined);
   assert.ok(matches(fourth.prompts[0]!, ["This is a new conversation", GO_ON_AFTER_SPENT]), fourth.prompts[0]);
   assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id(), fourth.id()]);
+  await r.close();
+});
+
+test("a process ended with work going in the background: its next turn is told what stopped, its subagents taken to the new runtime session", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const used: Record<string, number> = {};
+  r.hub.accounts.setHealth((id) => ({ quota: { state: "ok", windows: [{ label: "每周", usedPercent: used[id] ?? 10, resetsAt: now + 100 * 3600_000, minutes: 7 * 24 * 60 }], detail: null, checkedAt: now } }));
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  // Its transcript and its subagent's, where Claude Code keeps them (the profiles share a home here).
+  const project = join(r.config.profiles[0]!.home, "projects", "-w");
+  mkdirSync(join(project, first.id(), "subagents"), { recursive: true });
+  writeFileSync(join(project, `${first.id()}.jsonl`), `${JSON.stringify({ type: "user", message: { role: "user", content: "hi" } })}\n`);
+  writeFileSync(join(project, first.id(), "subagents", "agent-a1.jsonl"), "{}\n");
+  writeFileSync(join(project, first.id(), "subagents", "agent-a1.meta.json"), "{}");
+  first.tasks = [{ id: "a1", kind: "agent", description: "profile the build" }, { id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "the build" });
+  first.complete();
+  await settle();
+  // Its account used up: the next turn is on the other, in a new runtime session.
+  used[on] = 100;
+  await r.accept({ ...message(), threadTs: m.threadTs });
+  await settle();
+  assert.ok(first.disposed);
+  const second = r.claude.last();
+  assert.notEqual(second.options.profile.id, on);
+  assert.notEqual(second.id(), first.id());
+  assert.ok(matches(second.prompts[0]!, ["This is a new conversation", "background was stopped", "- subagent a1 (profile the build): SendMessage to it goes on from where it stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
+  assert.ok(existsSync(join(project, second.id(), "subagents", "agent-a1.jsonl")));
+  assert.ok(existsSync(join(project, second.id(), "subagents", "agent-a1.meta.json")));
+  // Told once.
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  second.complete();
+  await settle();
+  await r.accept({ ...message(), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.claude.last(), second);
+  assert.ok(!second.prompts[1]!.includes("background was stopped"), second.prompts[1]);
   await r.close();
 });
 

@@ -1,6 +1,7 @@
 // What the agent is told about its situation, appended to the runtime's own system prompt, and how messages are put to
 // it. A change to how agents work gets a note in migrations.ts too, for the sessions begun before it.
 import type { MessageRow, PendingMessage, WidgetModel } from "../store/store.ts";
+import type { BackgroundTask } from "./runtime.ts";
 
 /// The connect and surface of the station's own chats.
 const STILLFAIL_SURFACE = "ember";
@@ -103,6 +104,12 @@ export const RESUME_LOST = `Your earlier conversation could not be restored. Rea
 
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
 export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
+
+/// Its process was ended with work going in the background (agents/runtime.ts `background`), which ended with it:
+/// `resumable` are the subagents SendMessage takes up where they stopped.
+export const backgroundStopped = (tasks: BackgroundTask[], resumable: string[]) => `The station ended your earlier process (to move this session to another account, take a change to it, or start it again), and the work it had going in the background was stopped with it. None of it will report back:
+${tasks.map((t) => `- ${t.kind === "agent" ? "subagent" : "background command"} ${t.id}${t.description === "" ? "" : ` (${t.description})`}${resumable.includes(t.id) ? ": SendMessage to it goes on from where it stopped" : ""}`).join("\n")}
+Before you wait on any of it, check where each got to and start again what is still needed.`;
 
 /// The agent said it would wait this long, and nothing has brought it back.
 export const waitOver = (seconds: number) => `You said you were waiting on work you started (${seconds} seconds), and nothing has brought you back yet. Check on it now.

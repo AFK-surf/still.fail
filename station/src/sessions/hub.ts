@@ -42,7 +42,7 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
-import { startsAfresh } from "./afresh.ts";
+import { carrySubagents, startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { imageSize } from "./image-size.ts";
@@ -911,7 +911,7 @@ export class Hub {
       store: this.store,
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
-      runOn: (key) => this.accounts.runOn(key),
+      runOn: (key, holding) => this.accounts.runOn(key, holding),
       spend: (key) => this.accounts.spend(key),
       refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
@@ -925,6 +925,7 @@ export class Hub {
       },
       live: this.live,
       startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
+      carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),
       archiveIsCold: (key) => this.cold.isCold(key),
