@@ -1,7 +1,6 @@
-# Every platform but Windows (windows.yml) on each push: the tests, the macOS
-# apps with their screenshot against goldens/mac.png, the iOS simulator app,
-# and the Android APK; each job's time is what this measures too (the
-# summary lists the steps' seconds).
+# On each push: the tests (JS, and native on Mini1) and the Android APK; the macOS apps and the iOS simulator app are
+# mac.yml's (when what they are built of changes), Windows windows.yml's. Each job's time is what this measures too
+# (the summary lists the steps' seconds).
 name: ci
 on:
   push:
@@ -60,42 +59,6 @@ jobs:
           echo "$MOON_HOME/bin" >> $GITHUB_PATH
       - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
         run: scripts/test_native.sh
-
-  macos:
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | MOON_HOME=$MOON_HOME bash
-          echo "$MOON_HOME/bin" >> $GITHUB_PATH
-      - name: macOS apps
-        run: |
-          for app in demo textdiff kitdemo; do
-            /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
-          done
-      - name: Screenshot against the golden
-        continue-on-error: true
-        run: scripts/shots.sh mac kit
-      - name: "Text against Core Text's own (scripts/textdiff.sh mac; Studio's run is the one that gates)"
-        continue-on-error: true
-        run: |
-          mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
-          scripts/textdiff.sh mac
-      - name: "A Tester's draw list drawn offscreen (mbui-render) against the host's own picture of it (scripts/render_check.sh); its md5, to compare machines"
-        continue-on-error: true
-        run: scripts/render_check.sh
-      - name: iOS simulator app
-        run: scripts/ios.sh build
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: macos-shots
-          path: |
-            out/shots/
-            out/textdiff/
-            out/render-check/
-          if-no-files-found: ignore
 
   android:
     runs-on: ubuntu-24.04
