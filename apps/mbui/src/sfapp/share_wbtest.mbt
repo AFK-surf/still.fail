@@ -7,7 +7,6 @@ fn share_tester(mode : String) -> @ui.Tester {
   let src = fixture(mode)
   open_drive_fixture(mode)
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.draw()
   // the fixture's pages in
   nav_rested(t)
   t

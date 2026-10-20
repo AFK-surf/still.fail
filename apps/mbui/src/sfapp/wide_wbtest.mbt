@@ -16,7 +16,6 @@ fn wide_tester(calls : Array[Made], mode? : String = "home", w? : Double = 1280.
     open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
   }
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w~, h~, platform=0)
-  t.draw()
   t
 }
 
