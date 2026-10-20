@@ -517,7 +517,7 @@ pub fn Player::view(
     }
     // what it waits on, why it failed, what comes next
     c.layer(fn() {
-      c.box(w=Fill(1.0), h=Fill(1.0), align=ACenter, justify=JCenter, fn() {
+      c.box(style=centred, fn() {
         match phase {
           Opening | Buffering =>
             if waited {
@@ -692,7 +692,7 @@ fn Player::controls(
     })
     |> ignore
     p.timeline(c, s, on)
-    c.box(dir=Row, w=Fill(1.0), align=ACenter, fn() {
+    c.box(style=keys_row, fn() {
       if list.length() > 1 &&
         key_button(c, p.key + "/prev", "skip-back", on && prev is Some(_)) {
         match prev {
@@ -826,7 +826,7 @@ fn Player::timeline(self : Player, c : @ui.Ctx, s : Status, on : Bool) -> Unit {
       share_bar(c, shown, th, ink)
       // the head
       c.layer(fn() {
-        c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
+        c.box(style=filled_row, fn() {
           if shown > 0.0 {
             c.box(w=Fill(shown), fn() {  }) |> ignore
           }
@@ -855,7 +855,7 @@ fn share_bar(c : @ui.Ctx, part : Double, h : Double, color : Int64) -> Unit {
     return
   }
   c.layer(fn() {
-    c.box(dir=Row, w=Fill(1.0), h=Fill(1.0), align=ACenter, fn() {
+    c.box(style=filled_row, fn() {
       c.box(w=Fill(part), h=Px(h), radius=h / 2.0, bg=color, fn() {  }) |> ignore
       if part < 1.0 {
         c.box(w=Fill(1.0 - part), fn() {  }) |> ignore
@@ -865,6 +865,21 @@ fn share_bar(c : @ui.Ctx, part : Double, h : Double, color : Int64) -> Unit {
   })
   |> ignore
 }
+
+///|
+/// What fills the stage, in its middle (what it waits on, why it failed, what comes next).
+// kept across runs: a value (no field of it changes)
+let centred : @ui.Style = @ui.style(w=Full, h=Full, align=ACenter, justify=JCenter)
+
+///|
+/// The controls' keys, a row across the bar.
+// kept across runs: a value (no field of it changes)
+let keys_row : @ui.Style = @ui.style(row=true, w=Full, align=ACenter)
+
+///|
+/// A row filling its place, what it holds in its middle (a track, a filled part over it).
+// kept across runs: a value (no field of it changes)
+let filled_row : @ui.Style = @ui.style(row=true, w=Full, h=Full, align=ACenter)
 
 ///|
 /// The controls' bar: its corner, its sides' and its foot's room; a key's size, the speed's height.

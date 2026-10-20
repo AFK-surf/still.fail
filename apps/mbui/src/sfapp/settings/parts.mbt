@@ -314,7 +314,7 @@ let page_note_box : @ui.Style = @ui.style(w=Full, px=S6, pb=S2_5)
 ///|
 /// A card's corner, and how far in from every edge what it holds stands (what is in its corners as far from both
 /// edges: docs/ui-panels.md); what has a ground of its own there takes @ui.concentric(card_radius, card_pad). The
-/// card's style says them as tokens (@sf.card_radius, S4).
+/// card's style says them as tokens (Xl3 in @sf.radii, S4).
 let card_radius : Double = 20.0
 
 ///|
@@ -340,7 +340,7 @@ let card_room : @ui.Style = @ui.style(w=Full, px=S3, pb=S2_5)
 let card_ground : @ui.Style = @ui.style(
   w=Full,
   p=S4,
-  radius=@sf.card_radius,
+  radius=Xl3,
   bg=Card,
   clip=true,
   pressed=@ui.patch(bg=Over(Card, A(Fg, O5))),
@@ -355,7 +355,7 @@ fn list_card(c : @ui.Ctx, body : () -> Unit) -> Unit {
 ///|
 /// A list card: 16 round, its rows to its edges.
 // kept across runs: a value (no field of it changes)
-let list_ground : @ui.Style = @ui.style(w=Full, radius=Xl2, bg=Card, clip=true)
+let list_ground : @ui.Style = @ui.style(w=Full, radius=Xl, bg=Card, clip=true)
 
 ///|
 /// A row of a list card (Parts.kt ListRow): 16 and 12 in, what it holds 12 apart; tapped when `key` is given. True on
@@ -598,7 +598,7 @@ fn seg(
               c.text(
                 label,
                 style=@ui.text_style(
-                  size=if fill { @sf.value_size } else { @sf.secondary_size },
+                  size=if fill { Base } else { Sm },
                   color=if i == picked { Fg } else { Muted },
                   wrap=false,
                 ),
@@ -837,7 +837,7 @@ let wait_card_list : @ui.Style = @ui.style(w=Full, px=S3, gap=S4)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let wait_card : @ui.Style = @ui.style(w=Full, radius=@sf.card_radius, bg=Neutral)
+let wait_card : @ui.Style = @ui.style(w=Full, radius=Xl3, bg=Neutral)
 
 ///|
 // kept across runs: a table, never written
