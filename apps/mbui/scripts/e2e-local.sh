@@ -168,6 +168,8 @@ EOF
   # the cloud: fresh each time (its test identities and workspace made anew), what it holds kept in $RUN/cloud-state
   # and its sign-ins' key in $RUN/auth-key, so that a starting point taken of it can be put back (snapshot, restore)
   rm -rf $RUN/cloud-state && mkdir -p $RUN/cloud-state
+  # (starting points taken of an earlier backend are not this one's)
+  rm -rf $WORK/snapshots
   python3 -c 'import secrets; print(secrets.token_urlsafe(48))' > $RUN/auth-key
   start_cloud
   local token=$(grep -m1 '^ENROLL ' $RUN/cloud.log | awk '{print $NF}')
