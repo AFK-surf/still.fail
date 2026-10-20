@@ -19,8 +19,7 @@
 //
 // Not yet, against the Android app (each waits on something mbui's hosts or the core do not do yet): the size chosen
 // and the toolbar folded kept on the device across runs (kept while the app runs: there is no store of the device's
-// own), the address's keyboard for addresses with 前往 (an editor's keyboard is not chosen), a sized page's corners
-// round on the hosts (its view is cut square: the screen's corners are drawn under it), a marked picture's pin and
+// own), the address's keyboard for addresses with 前往 (an editor's keyboard is not chosen), a marked picture's pin and
 // edge as the page shows them (drawn as an image's marks are), and on Android the top page's fetch() on its port (the
 // WebView's cookies are not the app's to send along: it goes as the page's other requests do).
 
@@ -1191,7 +1190,12 @@ fn service_stage(
           |> ignore
         })
         |> ignore
-        c.layer(fn() { c.native(site, content=Some((pl.x, pl.y, pl.w * pl.scale, pl.h * pl.scale))) |> ignore }) |> ignore
+        // (its screen's corners the page's own too: the host cuts it round, as Preview.kt's place() does)
+        c.layer(fn() {
+          c.native(site, content=Some((pl.x, pl.y, pl.w * pl.scale, pl.h * pl.scale)), radius=corner * pl.scale)
+          |> ignore
+        })
+        |> ignore
       }
       None =>
         if p.viewport is None {
@@ -1400,9 +1404,10 @@ fn service_toolbar(c : @ui.Ctx, p : ServicePage) -> Unit {
       // Preview.kt's glass (the surface at 72%; dark, surface2 at 84%) as it shows over the dock's ground: laid on it
       // here, so its shadow does not show through it (Compose draws an elevation's shadow outside the shape only)
       bg=if t.dark { @sf.mix(0x2C2D31FFL, 0.84, ground) } else { @sf.mix(t.p.card, 0.72, ground) },
-      // (Preview.kt: shadow(4.dp) in black at 12%, ambient and spot)
+      // (Preview.kt: shadow(4.dp) in black at 12%, ambient and spot; Compose's elevation shadow at that is as light as
+      // this blur at 5%: its darkest 247 on white, as measured side by side on the same emulator)
       shadow=4.0,
-      shadow_color=0x0000001FL,
+      shadow_color=0x0000000DL,
       padx=6.0,
       gap=4.0,
       align=ACenter,

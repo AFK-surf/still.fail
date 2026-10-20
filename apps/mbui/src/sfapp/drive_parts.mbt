@@ -84,8 +84,8 @@ priv struct DriveUi {
   /// again
   mut picker_asking : Bool
   /// the Ask sheet's words and the folder picker's filter (their fields show them)
-  ask_field : @ui.Field
-  picker_filter : @ui.Field
+  mut ask_field : @ui.Field
+  mut picker_filter : @ui.Field
 }
 
 ///|
@@ -135,8 +135,10 @@ fn dv_reset() -> Unit {
   dv.picking = None
   dv.picking_for = { station: "", root: None, path: "" }
   dv.asked = ""
-  dv.ask_field.set("")
-  dv.picker_filter.set("")
+  // (a new one: an editor knows its Field by the build it was last given in, and a run started again counts builds
+  // from the start)
+  dv.ask_field = @ui.Field::new()
+  dv.picker_filter = @ui.Field::new()
   dv.picker_at = None
   dv.picker = None
   dv.picker_error = ""
