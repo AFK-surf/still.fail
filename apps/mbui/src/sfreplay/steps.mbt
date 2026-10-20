@@ -450,6 +450,7 @@ pub fn Flow::run_for(self : Flow, ms : Double) -> Unit {
 /// as it ends, in a number (screen_sum). The app's core the engine again.
 pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   self.core()
+  let began = self.t.time()
   // (the rest of the run's conversation as it came, the clock on to each; what came after the test's last step, that
   // it did not wait for (an agent's turn ending after the run's last step, and in another timing later still), told
   // motions of its own: each run to the end it says, Tester::rest_of; and again while what those motions' frames asked
@@ -523,6 +524,11 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
   }
   let sum = screen_sum(self.t)
   @core.Replay::detach()
+  // (in the script written, as long on as the end ran here (what moved to its rest, a list gliding to its end after
+  // rows that came, what was told for a time of its own): the run not ended in the middle of it)
+  if self.t.time() > began {
+    emit_wait(self.t.time() - began)
+  }
   // (what the app asked as the flow ended (a page gone at its slide's end, its player's place told): the script
   // written waits for its answers too, so the run keeps them)
   emit_answered(self.r.take_asked())
