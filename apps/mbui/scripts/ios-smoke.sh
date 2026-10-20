@@ -8,8 +8,8 @@
 #   scripts/ios-smoke.sh build  the app for the simulator (scripts/ios.sh build: the Rust shell for aarch64-apple-ios-sim
 #                               in a Cargo target kept in ~/stillfail-ci/mbui, Hermes's xcframework from its cache)
 #   scripts/ios-smoke.sh take   the simulator (ios-mbui-sf) for this run alone: its lock taken (LOCK, ~/.mbui-ios-sim.lock,
-#                               mbui's host-ios contracts take it too), once no other run holds it nor runs an app on
-#                               it; IOS_GATE_MIN minutes at most. Without it mbui's contracts ran beside these flows,
+#                               mbui's host-ios contracts take it too), waiting while another run holds it (the job's
+#                               timeout the limit: take_lock). Without it mbui's contracts ran beside these flows,
 #                               put the app in the background and shut the simulator down under it (2026-10-20).
 #   scripts/ios-smoke.sh run    a local still.fail of its own (scripts/e2e-local.sh up: its directory kept, so its
 #                               packages stay installed), the flows, then that still.fail down
@@ -48,31 +48,48 @@ busy() {
   load=$(sysctl -n vm.loadavg | awk '{print int($3)}')
   [ "$load" -lt "${IOS_LOAD_MAX:-20}" ] || { echo "load $load (5 minutes; under ${IOS_LOAD_MAX:-20} needed)"; }
 }
-# takes the simulator's lock, or says who keeps it from this run
+# takes the simulator's lock, waiting while another holds it (mbui's scripts/host_contract.sh ios free does the same):
+# its owner says who and `pid N`, the process that holds it as long as it is used (on CI the job's runner worker,
+# which ends with the run). Held, this waits for that process's end (mbui's scripts/logwait.py: kqueue's, no time; a
+# line every five minutes saying whose it is, the job's timeout the limit), or, an owner that says no pid, for the
+# lock's going. An owner whose process is gone is left over and taken over; one that says no pid, after an hour.
 take_lock() {
-  local id st a
-  if ! mkdir "$LOCK" 2>/dev/null; then
-    if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
-      echo "ios-smoke: taking over a lock older than an hour: $(cat "$LOCK/owner" 2>/dev/null)" >&2
-      rm -rf "$LOCK"; mkdir "$LOCK" 2>/dev/null || { echo "another run took it first"; return; }
+  local who opid lw="python3 $MBUI_DIR/scripts/logwait.py"
+  while ! mkdir "$LOCK" 2>/dev/null; do
+    who=$(head -1 "$LOCK/owner" 2>/dev/null)
+    opid=$(sed -n 's/^pid \([0-9][0-9]*\)$/\1/p' "$LOCK/owner" 2>/dev/null | head -1)
+    if [ -n "$opid" ] && ! kill -0 "$opid" 2>/dev/null; then
+      echo "ios-smoke: taking over the lock of ${who:-another run}: its process $opid is gone"
+      rm -rf "$LOCK"
+    elif [ -z "$opid" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
+      echo "ios-smoke: taking over a lock left an hour ago, its process not said: ${who:-another run}"
+      rm -rf "$LOCK"
+    elif [ -n "$opid" ]; then
+      echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s (pid $opid): waiting for its end"
+      $lw --pid "$opid" --deadline 300 >/dev/null || true
+    elif grep -q -- --gone "$MBUI_DIR/scripts/logwait.py"; then
+      echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s ($LOCK, its process not said): waiting for it to go"
+      $lw --gone "$LOCK" --deadline 300 >/dev/null || true
     else
-      echo "the simulator is $(cat "$LOCK/owner" 2>/dev/null || echo "another run")'s"; return
+      echo "ios-smoke: $MBUI_IOS_DEVICE is ${who:-another run}'s ($LOCK, its process not said), and this mbui's logwait.py cannot wait for a lock's going: not run"
+      exit 1
     fi
-  fi
-  echo "$ME" > "$LOCK/owner"
-  # (a run by hand that does not take the lock: its app running on it)
-  read -r id st <<< "$(device)"
-  if [ "$st" = Booted ]; then
-    a=$(apps "$id")
-    [ -z "$a" ] || { rm -rf "$LOCK"; echo "$MBUI_IOS_DEVICE runs another's app: $a"; }
-  fi
+  done
+  # the process that holds it: on CI the job's runner worker (ends with the run), by hand the shell that runs this
+  local holder=$PPID p=$$
+  while [ "$p" -gt 1 ]; do
+    case "$(ps -o comm= -p "$p" 2>/dev/null)" in *Runner.Worker*) holder=$p; break ;; esac
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')
+    [ -n "$p" ] || break
+  done
+  printf '%s\npid %s\n' "$ME" "$holder" > "$LOCK/owner"
 }
-wait_for() {  # wait_for WHAT CHECK: until CHECK says nothing, IOS_GATE_MIN minutes at most
+wait_for() {  # wait_for WHAT CHECK: until CHECK says nothing, IOS_GATE_MIN minutes at most (the load: no event)
   local end=$(( $(date +%s) + ${IOS_GATE_MIN:-30} * 60 )) why
   while why=$($2); [ -n "$why" ]; do
     [ "$(date +%s)" -lt $end ] || { echo "ios-smoke: not run, $1 for ${IOS_GATE_MIN:-30} minutes: $why"; exit 1; }
     echo "ios-smoke: waiting: $why"
-    # det-ok(script-wait): Mini1's load and another's run on the simulator have no event to wait for
+    # det-ok(script-wait): Mini1's load has no event to wait for
     sleep 30
   done
 }
@@ -86,8 +103,13 @@ case "${1:-}" in
     CARGO_TARGET_DIR=$C/cargo-target-ios APP=stillfail bash "$D/ios.sh" build ;;
   take)
     rm -f "$STATE/booted-here"
-    wait_for "the simulator not free" take_lock
+    MBUI_DIR=${MBUI_DIR:-$(sh "$A/scripts/mbui.sh")} || exit 1
+    take_lock
+    # (a run by hand that takes no lock: its app running on it)
     read -r id st <<< "$(device)"
+    if [ "$st" = Booted ] && a=$(apps "$id") && [ -n "$a" ]; then
+      rm -rf "$LOCK"; echo "ios-smoke: $MBUI_IOS_DEVICE runs another's app, not run over it: $a"; exit 1
+    fi
     [ "$st" = Booted ] || touch "$STATE/booted-here"
     echo "ios-smoke: $MBUI_IOS_DEVICE is this run's ($ME): ${st:-to be made}" ;;
   run)
@@ -103,7 +125,7 @@ case "${1:-}" in
       echo "ios-smoke: $MBUI_IOS_DEVICE ($id) shut down"
     fi
     rm -f "$STATE/booted-here"
-    [ "$(cat "$LOCK/owner" 2>/dev/null)" = "$ME" ] && rm -rf "$LOCK" && echo "ios-smoke: the simulator's lock given back"
+    [ "$(head -1 "$LOCK/owner" 2>/dev/null)" = "$ME" ] && rm -rf "$LOCK" && echo "ios-smoke: the simulator's lock given back"
     true ;;
   *) sed -n '2,19p' "$0"; exit 1 ;;
 esac
