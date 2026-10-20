@@ -10,7 +10,8 @@ in its own repository; what knows still.fail is here: its design system (`src/sf
 client and its engine hosts (`src/core`, `src/sfcore`, `src/host/*_core.*`), the apps (`src/stillfail`, `src/sffix`
 over made-up data, `src/sfkit`, `src/coredemo`), the media screens (`src/gallery`, `src/shelf`, `src/videos`, with
 `src/photos` and `src/books` over made-up data, and the player, `src/player`), the core's bundling (`core/`, from this repository's
-`client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`), the goldens, and the Android project
+`client/core-ts`), the end-to-end flows against a local still.fail (`e2e/`), the screens' pixel references (`goldens/render/macos15`,
+`scripts/screens.sh render`), and the Android project
 (`android/`: mbui's host Java with `CoreHost.java`).
 
 `src/player` (the full-screen player and the audio viewer) knows nothing of still.fail's core, but draws with its design
@@ -30,7 +31,7 @@ apps/mbui/scripts/check.sh                          # moon check, js and native
 apps/mbui/scripts/test.sh                           # the design system's, the pages' and the core client's tests
 APP=sffix apps/mbui/scripts/mac.sh build            # macOS: sffix (Home over made-up chats), sfkit, stillfail, coredemo…
 APP=sffix apps/mbui/scripts/web.sh build            # the browser build (tests and previews only)
-apps/mbui/scripts/shots.sh home web-home            # screenshots against goldens/ (UPDATE=1 accepts them)
+apps/mbui/scripts/shots.sh home web-home            # screenshots to look at, in out/shots (no references: see screens.sh render)
 apps/mbui/scripts/android.sh build                  # the Android app, debug (APP=stillfail); VARIANT=release the beta
 apps/mbui/scripts/e2e-local.sh all                  # the end-to-end flows against a local still.fail (e2e/)
 apps/mbui/scripts/win.sh build                      # Windows (Git Bash, MSVC): APP=stillfail, the core in Hermes (engine/)

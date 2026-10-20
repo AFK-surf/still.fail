@@ -266,10 +266,8 @@ login_test() {
   chmod +x $dir/browser
   MB_CORE_BUNDLE=$OUT/core.hbc MBUI_CORE_DATA=$dir/data BROWSER=$dir/browser MBUI_AUTH_LOGIN=1 $exe > $dir/out.log 2>&1 &
   local pid=$!
-  # Not waited for forever: a minute is ample for what follows.
-  (sleep 60; kill $pid 2> /dev/null) &
-  local watchdog=$!
-  for _ in $(seq 60); do [ -s $dir/url ] && break; sleep 0.5; done
+  # (the page given to BROWSER, as its stand-in writes it: scripts/waitfor.mjs, the file's events)
+  node "$D/waitfor.mjs" --deadline 60 --what "the page given to BROWSER" --exists $dir/url > /dev/null
   local url=$(cat $dir/url 2>/dev/null)
   ok() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; code=1; fi; }
   ok "the page went to BROWSER" '[ -n "$url" ]'
@@ -293,9 +291,9 @@ console.log(b && b.state ? b.host + ':' + b.port + b.path : 'none');" "$url" 2>&
   local page=$(curl -s "http://127.0.0.1:$port/oauth/callback?code=x&state=not-this-one")
   ok "the browser coming back gets the host's page" 'echo "$page" | grep -q "已回到 app"'
   local exit_code=0
+  # (its end, as the system tells it: mbui's scripts/logwait.py --pid, kqueue's; not waited for forever, then killed)
+  python3 "$MBUI_DIR/scripts/logwait.py" --pid $pid --deadline 60 > /dev/null || kill $pid 2> /dev/null
   wait $pid || exit_code=$?
-  kill $watchdog 2> /dev/null || true
-  wait $watchdog 2> /dev/null || true
   ok "the app exits 1 (the state was not the sign-in's: $(grep -a 'Sign-in failed' $dir/out.log | head -1))" '[ $exit_code = 1 ] && grep -q "Sign-in failed" $dir/out.log'
   ok "it no longer listens" '! lsof -iTCP:$port -sTCP:LISTEN -n -P > /dev/null'
   [ $code = 0 ] || cat $dir/out.log

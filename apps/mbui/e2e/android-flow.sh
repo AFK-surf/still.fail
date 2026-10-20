@@ -22,56 +22,65 @@ $ADB shell am force-stop $PKG
 # (an earlier run's word of what it did, not this one's)
 $ADB shell "run-as $PKG rm -rf files/done" 2>/dev/null
 $ADB logcat -c
-$ADB shell "screenrecord --time-limit 180 /sdcard/e2e-$NAME.mp4" >/dev/null 2>&1 &
+# The recording in the shell user's own directory (/data/local/tmp: there once the system runs; /sdcard is only once
+# the emulated storage is mounted, which a first flow on an emulator just booted may come before), begun before the
+# app: screenrecord says when it has its display. Its failure the flow's: no recording, no evidence.
+VIDEO=/data/local/tmp/e2e-$NAME.mp4
+$ADB shell "screenrecord --verbose --time-limit 180 $VIDEO" > $OUT/screenrecord.log 2>&1 &
 REC=$!
-sleep 1
+started=$(node "$ROOT/scripts/waitfor.mjs" --deadline 20 --what "screenrecord recording" --log $OUT/screenrecord.log \
+  --line 'Configuring recorder|Main display is|ERROR|Unable|rror') || started="its first words never came (screenrecord.log)"
+case "$started" in
+  Configuring*|*"Main display is"*) ;;
+  *) echo "the screen not recorded: $started" >> $LOG; kill $REC 2>/dev/null; wait $REC 2>/dev/null; exit 1 ;;
+esac
 # a flow's `#android-intent ARGS`: the intent it starts with (another app's share: -a …SEND --eu …STREAM content://…)
 INTENT=$(sed -n 's/^#android-intent //p' $SCRIPT | head -1)
 $ADB shell am start -n $PKG/dev.mbui.MainActivity $INTENT --es env "'$ENVS'" >/dev/null
 result=1
 deadline=$(($(date +%s) + ${E2E_FLOW_TIMEOUT:-300}))
-# the log, line by line (into a file, read as it grows: macOS's bash has no way to end a process substitution), until
-# the run ends or its time is up; the logcat ended after
-CAT=$LOG.cat
-$ADB logcat -v raw -s mbui:I StillFailCore:I AndroidRuntime:E DEBUG:I libc:F > $CAT 2>/dev/null &
+# the log, line by line as logcat writes it (a FIFO read with the deadline's time left: no waiting for a time), until
+# the run ends, the app is gone (ActivityManager's word of its process dying) or the time is up
+FIFO=$LOG.fifo
+rm -f $FIFO && mkfifo $FIFO
+$ADB logcat -v raw -s mbui:I StillFailCore:I AndroidRuntime:E DEBUG:I libc:F > $FIFO 2>/dev/null &
 LCAT=$!
-seen=0
+# (two processes of their own, not a pipeline: each one's pid known, both ended at the end; a pipeline's first part
+# would outlive a kill of its last, and `wait` on it never return)
+AMF=$LOG.am.fifo
+rm -f $AMF && mkfifo $AMF
+$ADB logcat -v raw -s ActivityManager:I > $AMF 2>/dev/null &
+AM=$!
+grep --line-buffered "Process $PKG (pid [0-9]*) has died" < $AMF > $FIFO &
+GONE=$!
+exec 3< $FIFO
 done_=0
 dos=0
-while [ $done_ = 0 ] && [ $(date +%s) -lt $deadline ]; do
-  sleep 0.3
-  n=$(wc -l < $CAT | tr -d ' ')
-  if [ "$n" -le "$seen" ]; then
-    # quiet: still there? (asked now and then, twice before giving up)
-    idle=$((${idle:-0} + 1))
-    # (by what pidof prints: adb's exit code does not say)
-    alive() { [ -n "$($ADB shell pidof $PKG </dev/null 2>/dev/null | tr -d '\r\n ')" ]; }
-    if [ $((idle % 20)) = 0 ] && ! alive; then
-      sleep 3
-      alive || { sleep 3; alive || { echo "the app is gone" >> $LOG; break; }; }
-    fi
-    continue
-  fi
-  while IFS= read -r line; do
-    echo "$line" >> $LOG
-    case "$line" in
-      "SHOT "*) n_=${line#SHOT }; $ADB exec-out screencap -p < /dev/null > $OUT/$n_.png ;;
-      # (done beside the run, then said done to the app: the n-th do's file, e2e/runner-do.sh)
-      "DRIVE LOG do: "*) dos=$((dos + 1))
-        ADB="$ADB" PKG=$PKG "$D/runner-do.sh" $dos android ${line#DRIVE LOG do: } >> $LOG 2>&1 & ;;
-      "DRIVE PASS"*) result=0; done_=1 ;;
-      "DRIVE FAIL on screen"*) sleep 1; $ADB exec-out screencap -p < /dev/null > $OUT/fail.png; done_=1 ;;
-    esac
-  done < <(sed -n "$((seen + 1)),${n}p" $CAT)
-  seen=$n
+while [ $done_ = 0 ]; do
+  left=$((deadline - $(date +%s)))
+  [ $left -gt 0 ] || { echo "the flow's time is up (${E2E_FLOW_TIMEOUT:-300} s)" >> $LOG; break; }
+  IFS= read -r -t $left line <&3
+  rc=$?
+  # (a read past the time left: the deadline, seen above; the FIFO's writers gone: the logcats ended)
+  [ $rc = 0 ] || [ -n "$line" ] || { [ $rc -gt 128 ] && continue; echo "the log ended" >> $LOG; break; }
+  echo "$line" >> $LOG
+  case "$line" in
+    "SHOT "*) n_=${line#SHOT }; $ADB exec-out screencap -p < /dev/null > $OUT/$n_.png ;;
+    # (done beside the run, then said done to the app: the n-th do's file, e2e/runner-do.sh)
+    "DRIVE LOG do: "*) dos=$((dos + 1))
+      ADB="$ADB" PKG=$PKG "$D/runner-do.sh" $dos android ${line#DRIVE LOG do: } >> $LOG 2>&1 & ;;
+    "DRIVE PASS"*) result=0; done_=1 ;;
+    "DRIVE FAIL on screen"*) $ADB exec-out screencap -p < /dev/null > $OUT/fail.png; done_=1 ;;
+    *"Process $PKG (pid "*") has died"*) echo "the app is gone" >> $LOG; done_=1 ;;
+  esac
 done
-kill $LCAT 2>/dev/null
-wait $LCAT 2>/dev/null
-rm -f $CAT
-sleep 2
+exec 3<&-
+kill $LCAT $AM $GONE 2>/dev/null
+wait $LCAT $AM $GONE 2>/dev/null
+rm -f $FIFO $AMF
+# (screenrecord ended by its interrupt writes the file out and exits, and the adb shell with it)
 $ADB shell pkill -INT screenrecord >/dev/null 2>&1
 wait $REC 2>/dev/null
-sleep 1
-$ADB pull /sdcard/e2e-$NAME.mp4 $OUT/$NAME.mp4 >/dev/null 2>&1
-$ADB shell rm -f /sdcard/e2e-$NAME.mp4
+$ADB pull $VIDEO $OUT/$NAME.mp4 >/dev/null 2>&1
+$ADB shell rm -f $VIDEO
 exit $result

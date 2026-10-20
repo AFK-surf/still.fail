@@ -48,18 +48,7 @@
     "frame-request": {},
     "settle": {},
     "flow-wait": {},
-    "script-wait": {
-      "e2e/android-flow.sh": 7,
-      "e2e/peer.ts": 1,
-      "e2e/win.sh": 2,
-      "scripts/android-core.sh": 3,
-      "scripts/beta.sh": 1,
-      "scripts/core.sh": 2,
-      "scripts/e2e-local.sh": 6,
-      "scripts/shots.sh": 8,
-      "scripts/web-ref.mjs": 3,
-      "scripts/web-shots.mjs": 1
-    },
+    "script-wait": {},
     "page-settle": {},
     "frame-count": {},
     "literal-time": {},
@@ -204,9 +193,7 @@
     "frame-request": {},
     "settle": {},
     "flow-wait": {},
-    "script-wait": {
-      "scripts/ios-smoke.sh": 1
-    },
+    "script-wait": {},
     "page-settle": {},
     "frame-count": {},
     "literal-time": {},

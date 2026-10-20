@@ -65,8 +65,9 @@ detach() { exec python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], 
 die() { echo "e2e: $*" >&2; exit 1; }
 listening() { lsof -nP -iTCP:$1 -sTCP:LISTEN >/dev/null 2>&1; }
 alive() { [ -f $RUN/$1.pid ] && kill -0 $(cat $RUN/$1.pid) 2>/dev/null; }
-# waits up to $2 s for $1 (a command) to succeed
-wait_for() { local i=0; while ! eval "$1" >/dev/null 2>&1; do i=$((i + 1)); [ $i -gt $(($2 * 5)) ] && return 1; sleep 0.2; done; }
+# waits for an event, not a time (scripts/waitfor.mjs: the file system's events, or a command's output); its first
+# argument the most it is given, in s, before it fails
+waitfor() { local s=$1; shift; node "$D/waitfor.mjs" --deadline $s "$@" > /dev/null; }
 
 # ember, cloned (read only from $EMBER: never built or installed in), its packages installed, the station built
 ember() {
@@ -99,14 +100,14 @@ start_cloud() {
   : > $RUN/cloud.log
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
     AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
-  wait_for "grep -q 'READY still.fail cloud' $RUN/cloud.log" 120 || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+  waitfor 120 --what "the cloud's READY line" --log $RUN/cloud.log --line 'READY still.fail cloud' || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
 }
 
 # the test station (enrolled), its launcher over its own data
 start_station() {
   local launcher=$(native launcher)
   (. $RUN/station-env.sh && detach "$launcher" run --app $STATION/app --data $STATION/data >$RUN/station.log 2>&1 & echo $! > $RUN/station.pid)
-  wait_for "[ -f $STATION/data/stillfail.db ]" 60 || { tail -20 $RUN/station.log; die "the station did not start"; }
+  waitfor 60 --what "the station's database" --exists $STATION/data/stillfail.db || { tail -20 $RUN/station.log; die "the station did not start"; }
 }
 
 # the station and the cloud stopped, their files at rest (the relay holds nothing: it stays)
@@ -115,7 +116,7 @@ stop_held() {
   pkill -f "$STATION/data" 2>/dev/null || true
   stop cloud
   pkill -f "$E/cloud/node_modules" 2>/dev/null || true
-  wait_for "! listening $PORT" 5 || true
+  # (its port let go with it: stop waited for its end)
 }
 
 # A starting point (e2e/run.sh's E2E_START: every flow begins at the same one, its trace on its own): what the cloud
@@ -165,9 +166,12 @@ http_bind_addr = "127.0.0.1:$RELAY_PORT"
 enable_metrics = false
 enable_quic_addr_discovery = false
 EOF
-  detach "$(native iroh-relay)" --dev --config-path $RUN/relay.toml >$RUN/relay.log 2>&1 &
+  # (its log at info, which says when it serves: "[HTTP/WS] relay: serving on 127.0.0.1:PORT", waited for)
+  : > $RUN/relay.log
+  RUST_LOG=${RUST_LOG:-info} detach "$(native iroh-relay)" --dev --config-path $RUN/relay.toml >$RUN/relay.log 2>&1 &
   echo $! > $RUN/relay.pid
-  wait_for "listening $RELAY_PORT" 20 || die "the relay did not start ($RUN/relay.log)"
+  waitfor 20 --what "the relay serving on :$RELAY_PORT" --log $RUN/relay.log --line "serving on 127\.0\.0\.1:$RELAY_PORT" ||
+    die "the relay did not start ($RUN/relay.log)"
   # the cloud: fresh each time (its test identities and workspace made anew), what it holds kept in $RUN/cloud-state
   # and its sign-ins' key in $RUN/auth-key, so that a starting point taken of it can be put back (snapshot, restore)
   rm -rf $RUN/cloud-state && mkdir -p $RUN/cloud-state
@@ -215,7 +219,8 @@ stop() {
     local pid=$(cat $RUN/$1.pid)
     # its process group: it and what it started (pnpm → tsx → node → workerd; the launcher → node → runner)
     kill -TERM -- -$pid 2>/dev/null || true
-    for i in $(seq 1 25); do kill -0 $pid 2>/dev/null || break; sleep 0.2; done
+    # (its end as the system tells it, mbui's scripts/logwait.py --pid: kqueue's; 5 s at most, then killed)
+    python3 "$MBUI_DIR/scripts/logwait.py" --pid $pid --deadline 5 > /dev/null 2>&1
     kill -9 -- -$pid 2>/dev/null || true
   fi
   rm -f $RUN/$1.pid
@@ -235,7 +240,6 @@ down() {
   pkill -f "$E/cloud/node_modules" 2>/dev/null || true
   stop relay
   pkill -f "$RUN/relay.toml" 2>/dev/null || true
-  sleep 1
   for p in $PORT $((PORT + 1)) $RELAY_PORT; do
     if listening $p; then
       say "port $p still taken: $(lsof -nP -iTCP:$p -sTCP:LISTEN | tail -1)"
@@ -275,8 +279,16 @@ android_ime() {
 android_installer() {
   local adb="${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb -s emulator-${EMU_PORT:-5586}"
   rm -f $RUN/installer.png
-  wait_for '$adb shell dumpsys activity activities < /dev/null | grep -i "topResumedActivity\|mResumedActivity" | grep -qi packageinstaller' 60 ||
-    { say "the system's installer never came in front"; return 1; }
+  # in front already, or once ActivityTaskManager says it has shown it (its log from before the first look: nothing
+  # said between the two missed)
+  local since
+  since=$($adb shell date +"'%m-%d %H:%M:%S.000'" < /dev/null | tr -d '\r')
+  if ! $adb shell dumpsys activity activities < /dev/null | grep -i "topResumedActivity\|mResumedActivity" | grep -qi packageinstaller; then
+    node "$D/waitfor.mjs" --deadline 60 --what "the system's installer shown" \
+      --run "$adb logcat -v brief -T '$since' -s ActivityTaskManager:I" --line '[Dd]isplayed .*[Pp]ackage[Ii]nstaller' > /dev/null ||
+      { $adb logcat -d -s ActivityTaskManager:I < /dev/null | grep -i installer | tail -5 >&2
+        say "the system's installer never came in front"; return 1; }
+  fi
   $adb exec-out screencap -p < /dev/null > $RUN/installer.png
   $adb shell input keyevent KEYCODE_BACK < /dev/null
   say "the system's installer was in front (its page kept), declined"
@@ -396,10 +408,11 @@ release_seed() {
 
 # waits (a minute at most) until the test station has a chat whose first words begin with WORDS, said in it
 wait_chat() {
-  local w="$*" i=0
-  until [ "$(sql "select count(*) from entries where n = 1 and text like '$w%'")" -ge 1 ]; do
-    i=$((i + 1)); [ $i -gt 120 ] && { say "no chat \"$w\" on the station"; return 1; }; sleep 0.5
-  done
+  local w="$*"
+  # (asked at once and each time the station's data directory changes: its database, its WAL)
+  waitfor 60 --what "a chat \"$w\" on the station" --watch $STATION/data \
+    --check "[ \"\$(sqlite3 -readonly $STATION/data/stillfail.db \"select count(*) from entries where n = 1 and text like '$w%'\")\" -ge 1 ]" ||
+    { say "no chat \"$w\" on the station"; return 1; }
   say "the station has the chat \"$w\""
 }
 
@@ -416,31 +429,23 @@ freeze() {
   kill -STOP $(station_tree $p)
   say "station frozen ($(station_tree $p | tr '\n' ' '))"
 }
-# the station up and settled: its Node there with what it starts (its mesh), the same one two seconds on (a Node the
-# launcher starts anew may end at once and be started again)
-station_settled() {
-  local i p q
-  for i in $(seq 1 90); do
-    p=$(station_node)
-    if [ -n "$p" ] && [ -n "$(pgrep -P $p)" ]; then
-      sleep 2; q=$(station_node)
-      [ "$p" = "$q" ] && return 0
-    fi
-    sleep 1
-  done
-  return 1
+# the station up again: the Node the launcher starts anew says so in its log once it is (main.ts's "station up": its
+# mesh and its parts made, the launcher told it is ready), what was written after FROM (a byte offset of the log)
+station_up_after() {
+  waitfor 90 --what "the station up again" --from $1 --log $RUN/station.log --line 'station up'
 }
 # thawed, the frozen Node and its own are ended and the launcher starts them anew: what the system's sockets kept for
 # them while they were stopped (a message sent "offline") goes with them, as it would have with the network gone; let
 # go on (CONT), they would still read it and take the message after all. Either way it returns once the station is
-# settled, so the next flow does not start on one still starting.
+# up again (its log says so), so the next flow does not start on one still starting.
 thaw() {
-  local p=$(station_node)
+  local p=$(station_node) from=$(wc -c < $RUN/station.log | tr -d ' ')
   if [ -n "$p" ] && case "$(ps -o state= -p $p 2>/dev/null)" in T*) true ;; *) false ;; esac; then
     kill -KILL $(station_tree $p)
     say "station ended ($p), started anew"
+    station_up_after $from || die "the station did not start again ($RUN/station.log)"
   fi
-  station_settled || die "the station did not start again ($RUN/station.log)"
+  [ -n "$(station_node)" ] || die "no station ($RUN/station.log)"
   say "station thawed ($(station_node))"
 }
 

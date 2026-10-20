@@ -11,6 +11,21 @@ import { fileURLToPath } from 'node:url';
 import { build, preview } from 'vite';
 
 const playwright = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
+
+// The page as it will stay: loaded (its network quiet), its fonts in, and every animation it runs that ends (a CSS
+// transition, an animation with a count) ended, by the animations' own `finished`: what the picture waits for, not a
+// time. (A spinner's endless one is left running.)
+async function settled(page) {
+  await page.waitForLoadState('networkidle');
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    for (;;) {
+      const ending = document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getComputedTiming().endTime !== Infinity);
+      if (ending.length === 0) break;
+      await Promise.all(ending.map((a) => a.finished.catch(() => {})));
+    }
+  });
+}
 const out = process.argv[2] || 'out/web-ref';
 const ids = (process.argv[3] || 'app-chat,app-new-chat,app-todo,app-files,settings-appearance').split(',');
 const sizes = (process.argv[4] || '1280x800,1440x900').split(',').map((s) => s.split('x').map(Number));
@@ -32,7 +47,7 @@ try {
       for (const theme of ['light', 'dark']) {
         const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1, locale: 'zh-CN' });
         await page.goto(`${base}?story=${story.id}&theme=${theme}`);
-        await page.waitForTimeout(1200);
+        await settled(page);
         for (const step of story.steps ?? []) {
           try {
             const at = (selector) => page.locator(selector).filter({ visible: true }).first();
@@ -42,13 +57,13 @@ try {
             if (step.text) await page.getByText(step.text, { exact: true }).filter({ visible: true }).first().click({ timeout: 5000 });
             if (step.key) await page.keyboard.press(step.key);
             if (step.move) await page.mouse.move(step.move[0], step.move[1]);
-            await page.waitForTimeout(500);
+            await settled(page);
           } catch (e) {
             console.log(`${story.id}: step ${JSON.stringify(step)} not taken (${e.message.split('\n')[0]})`);
           }
         }
         await page.evaluate(() => window.endDemo?.());
-        await page.waitForTimeout(800);
+        await settled(page);
         const name = `${out}/${story.id}-${width}x${height}-${theme}.png`;
         await page.screenshot({ path: name });
         console.log(`took ${name}`);

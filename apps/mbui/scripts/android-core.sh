@@ -86,16 +86,19 @@ listen_test() {
     APP=coredemo CORE_SCRIPT=$PWD/core/listen-test.js "$0" build
     $ADB -s $SERIAL logcat -c
     APP=coredemo ENV="MB_CORE_TRACE=1" "$0" run
-    port=
-    for i in $(seq 1 30); do
-      port=$($ADB -s $SERIAL logcat -d -s mbui:I | sed -n 's/.*core says {"opened":\([0-9]*\).*/\1/p' | head -1)
-      [ -n "$port" ] && break
-      sleep 1
-    done
+    # (the script's word of its listener, as logcat has it: scripts/waitfor.mjs)
+    port=$(node "$H/waitfor.mjs" --deadline 60 --what "the script's listener" --run "$ADB -s $SERIAL logcat -s mbui:I" \
+      --line 'core says \{"opened":[0-9]+' | sed -n 's/.*core says {"opened":\([0-9]*\).*/\1/p')
     [ -n "$port" ] || { echo "FAIL the script opened no listener"; "$0" log 60; exit 1; }
     echo "listening on 127.0.0.1:$port"
-    answer=$($ADB -s $SERIAL shell "(printf 'POST /oauth/callback?code=c%%20d&state=s HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nstate=s&x=1'; sleep 3) | nc 127.0.0.1 $port")
-    sleep 2
+    # the POST from here through adb's forward, by curl, which reads the answer to its end (the Host the device's)
+    hp=$($ADB -s $SERIAL forward tcp:0 tcp:$port)
+    answer=$(curl -sS -i --max-time 30 -H "Host: 127.0.0.1:$port" -H 'Content-Type: application/x-www-form-urlencoded' \
+      --data-raw 'state=s&x=1' "http://127.0.0.1:$hp/oauth/callback?code=c%20d&state=s")
+    $ADB -s $SERIAL forward --remove tcp:$hp
+    # (its last word: the listener closed with a listen.next waiting, and one after)
+    node "$H/waitfor.mjs" --deadline 60 --what "the listener's end" --run "$ADB -s $SERIAL logcat -s mbui:I" \
+      --line '"ended":\{"end":true\}' > /dev/null
     log=$($ADB -s $SERIAL logcat -d -s mbui:I)
     code=0
     ok() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; code=1; fi; }
