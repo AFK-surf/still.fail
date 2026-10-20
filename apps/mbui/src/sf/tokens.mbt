@@ -30,6 +30,10 @@ pub(all) struct Palette {
   accent_text : Int64
   accent_bg : Int64
   green : Int64
+  /// green and amber as words, dark enough to read on paper (Theme.kt greenInk, warnInk; the web's --green,
+  /// --amber)
+  green_ink : Int64
+  warn_ink : Int64
   red : Int64
   red_bg : Int64
   /// placeholders' grey (waiting), a quiet pill's ground
@@ -164,6 +168,8 @@ let wide_light : Palette = {
   accent_text: 0xA23203FFL,
   accent_bg: 0xFFEFE6FFL,
   green: 0x006A3FFFL,
+  green_ink: 0x006A3FFFL,
+  warn_ink: 0x7F5306FFL,
   red: 0xA12F35FFL,
   red_bg: 0xFFF0EFFFL,
   neutral_bg: 0xEDEFF1FFL,
@@ -199,6 +205,8 @@ let wide_dark : Palette = {
   accent_text: 0xFC9B6FFFL,
   accent_bg: 0x43251AFFL,
   green: 0x68C894FFL,
+  green_ink: 0x68C894FFL,
+  warn_ink: 0xE6B55DFFL,
   red: 0xF68482FFL,
   red_bg: 0x442322FFL,
   neutral_bg: 0x2A2B2FFFL,
@@ -230,6 +238,8 @@ let narrow_light : Palette = {
   accent_text: 0xB9471FFFL,
   accent_bg: 0xFBE6DCFFL,
   green: 0x2F8F5BFFL,
+  green_ink: 0x287A4DFFL,
+  warn_ink: 0x98691EFFL,
   red: 0xC9412EFFL,
   // its placeholders in its bubbles' grey, a step darker than the page
   neutral_bg: 0xE8E4DCFFL,
@@ -252,6 +262,8 @@ let narrow_dark : Palette = {
   accent_text: 0xF6A383FFL,
   accent_bg: 0x4A2F25FFL,
   green: 0x5CC08AFFL,
+  green_ink: 0x5CC08AFFL,
+  warn_ink: 0xD9962BFFL,
   red: 0xEB6B58FFL,
   neutral_bg: 0x313237FFL,
   card: 0x26272BFFL,

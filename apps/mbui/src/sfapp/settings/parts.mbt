@@ -558,19 +558,6 @@ fn tone_dot(tone : String) -> String {
 }
 
 ///|
-/// A check's tone as a colour (PageParts.kt toneColor).
-fn tone_color(tone : String) -> Int64 {
-  let t = @sf.theme()
-  match tone {
-    "green" => t.p.green
-    "red" => t.p.red
-    "blue" => t.p.blue
-    "accent" => t.p.accent
-    _ => t.p.muted
-  }
-}
-
-///|
 /// A segmented choice (Parts.kt Seg): a track the ink at 6%, a light thumb (a hairline round it) sliding to the one
 /// chosen. `fill`: as wide as where it is, each option an equal share. Answers the one chosen (a tap's, this frame).
 fn seg(
@@ -1264,11 +1251,25 @@ fn dot(c : @ui.Ctx, on : Bool, warned? : Bool = false) -> Unit {
 }
 
 ///|
-/// A tone's words in a pill of its colour (Profiles.kt TonePill).
+/// A check's state in its words on a soft pill of its tone (Profiles.kt TonePill): green, the accent and amber in
+/// their inks; its ground its colour at 12% (amber's 14%), the chip's grey for neutral.
 fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
-  let ink = tone_color(tone)
-  // (9 round, off the scale; its ground its tone's at 12%)
-  c.box(style=tone_pill_box, radius=9.0, bg=@sf.alpha(ink, 0.12), fn() {
+  let t = @sf.theme()
+  let ink = match tone {
+    "green" => t.p.green_ink
+    "red" => t.p.red
+    "blue" => t.p.blue
+    "accent" => t.p.accent_text
+    "amber" => t.p.warn_ink
+    _ => t.p.muted
+  }
+  // (its ground its tone's at 12%, 14%: off the scale of opacities)
+  let ground = match tone {
+    "neutral" => t.p.chip
+    "amber" => @sf.alpha(ink, 0.14)
+    _ => @sf.alpha(ink, 0.12)
+  }
+  c.box(style=tone_pill_box, bg=ground, fn() {
     // Profiles.kt:760 (12sp)
     c.text(words, style=tone_pill_words, color=ink) |> ignore
   })
@@ -1276,12 +1277,13 @@ fn tone_pill(c : @ui.Ctx, words : String, tone : String) -> Unit {
 }
 
 ///|
+/// TonePill: 6 in at its sides, 1 over and under, 6 round.
 // kept across runs: a value (no field of it changes)
-let tone_pill_box : @ui.Style = @ui.style(px=S2, py=S0_5)
+let tone_pill_box : @ui.Style = @ui.style(px=S1_5, py=SPx, radius=Md)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let tone_pill_words : @ui.TextStyle = @sf.caption.then(@ui.text_style(weight=Medium, wrap=false))
+let tone_pill_words : @ui.TextStyle = @sf.caption.then(@sf.one_line)
 
 ///|
 /// Words in the code face (CodeFont: a code, a key, a variable), one line unless `wrap`.
