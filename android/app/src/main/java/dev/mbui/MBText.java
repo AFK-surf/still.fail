@@ -92,12 +92,25 @@ final class MBText {
         reset();
     }
 
+    /** A Han ideograph: what the font Chinese words fall back to is measured by. */
+    private static final String HAN = "国";
+
     static void fontMetrics(double size, int weight, int style, double[] out) {
+        // in whole pixels, as android.text.StaticLayout (and so Compose) sets a line by them
         float d = density();
-        Paint.FontMetrics m = paint((float) size * d, weight, style).getFontMetrics();
+        Paint p = paint((float) size * d, weight, style);
+        Paint.FontMetricsInt m = p.getFontMetricsInt();
         out[0] = -m.ascent / d;
         out[1] = m.descent / d;
         out[2] = Math.round(size * 1.42);
+        // the font a Han ideograph is drawn in (Noto Sans CJK, taller than the Latin face): a line with Chinese in it is
+        // measured by the taller of the two, as StaticLayout's fallback line spacing does
+        Paint.FontMetricsInt c = new Paint.FontMetricsInt();
+        p.getFontMetricsInt(HAN, 0, HAN.length(), 0, HAN.length(), false, c);
+        out[3] = -c.ascent / d;
+        out[4] = c.descent / d;
+        // lines set on whole pixels, as StaticLayout sets them
+        out[5] = 1;
     }
 
     static int shape(String text, double size, int weight, int style, double[] out) {

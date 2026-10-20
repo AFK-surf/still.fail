@@ -1089,6 +1089,11 @@
     out[0] = m.fontBoundingBoxAscent;
     out[1] = m.fontBoundingBoxDescent;
     out[2] = Math.round(size * 1.42);
+    // the Han font's: a canvas tells only the first face's box, so the font's own
+    out[3] = out[0];
+    out[4] = out[1];
+    // lines as asked, not on whole pixels
+    out[5] = 0;
   };
 
   const textKey = (c, size, weight, style) => {

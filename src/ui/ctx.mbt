@@ -864,9 +864,9 @@ pub fn Ctx::text(
   let i = self.alloc_part(kind_text, true, false)
   let n = self.nodes[i]
   n.center = first(center, st.center).unwrap_or(false)
-  n.line_h = first(line, s_line).unwrap_or(0.0)
   n.text = s
   n.font_size = first(size, s_size).unwrap_or(15.0)
+  n.line_h = first(line, s_line).unwrap_or(self.theme.text_line * n.font_size)
   n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
   n.wrap = first(wrap, st.wrap).unwrap_or(true)

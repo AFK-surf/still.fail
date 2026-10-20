@@ -211,10 +211,20 @@ fn Rich::run_bg(self : Rich, r : Run) -> Int64 {
 
 ///|
 fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
+  let sc = g().scale
   let (a0, d0, own0) = font_metrics(r.size, r.weight)
+  // Chinese in it: measured by the CJK font's too (taller), as Android measures a line by the fonts it draws in
+  let cjk = r.runs.iter().any(fn(run) { words_cjk(run.text) })
+  let (a0, d0) = if cjk {
+    let (ha, hd) = han_metrics(r.size, r.weight)
+    (dmax(a0, ha), dmax(d0, hd))
+  } else {
+    (a0, d0)
+  }
   let lh = if r.line > 0.0 { r.line } else { own0 }
-  let base_asc = (lh - a0 - d0) / 2.0 + a0
-  let base_desc = lh - base_asc
+  let px = whole_pixel_lines(r.size, r.weight)
+  let (pitch0, base_asc, extra) = set_line(lh, a0, d0, sc, px)
+  let base_desc = pitch0 - base_asc
   let sb = StringBuilder()
   let run_start = []
   let run_c0 = []
@@ -238,8 +248,13 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     let style = run_style(run)
     let s = shape(run.text, size, weight, style~, spacing=r.spacing)
     let (a, d, _) = font_metrics(size, weight, style~)
-    let l = lh * size / r.size
-    let lasc = (l - a - d) / 2.0 + a
+    let (a, d) = if words_cjk(run.text) {
+      let (ha, hd) = han_metrics(size, weight, style~)
+      (dmax(a, ha), dmax(d, hd))
+    } else {
+      (a, d)
+    }
+    let (l, lasc, _) = set_line(lh * size / r.size, a, d, sc, px)
     run_start.push(off)
     run_size.push(size)
     run_a.push(a)
@@ -403,7 +418,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
     lay.line_base.push(asc)
     y = y + asc + desc
   }
-  { ..lay, w: w_max, h: y }
+  { ..lay, w: w_max, h: y + extra }
 }
 
 ///|
@@ -639,7 +654,7 @@ pub fn Ctx::rich(
   let size = first(size, s_size).unwrap_or(15.0)
   let weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   let color = first(color, opt_color(self.theme, st.color)).unwrap_or(0x1D1D1FFFL)
-  let line = first(line, s_line).unwrap_or(0.0)
+  let line = first(line, s_line).unwrap_or(self.theme.text_line * size)
   let wrap = first(wrap, st.wrap).unwrap_or(true)
   let w = first(w, opt_size(st.w)).unwrap_or(Auto)
   let spacing = match (tracking, st.tracking) {

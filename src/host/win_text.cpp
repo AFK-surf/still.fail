@@ -129,29 +129,43 @@ static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int 
   return l;
 }
 
-extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
-  init();
+// A family's metrics at this weight and style (false: not on this system, `m` as it was).
+static bool family_metrics(const WCHAR *name, int weight, int style, DWRITE_FONT_METRICS *m) {
   IDWriteFontCollection *fc = NULL;
   IDWriteFontFamily *fam = NULL;
   IDWriteFont *font = NULL;
   UINT32 i = 0;
   BOOL found = FALSE;
+  bool ok = false;
+  dw->GetSystemFontCollection(&fc, FALSE);
+  if (SUCCEEDED(fc->FindFamilyName(name, &i, &found)) && found && SUCCEEDED(fc->GetFontFamily(i, &fam)) &&
+      SUCCEEDED(fam->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
+                                          (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font))) {
+    font->GetMetrics(m);
+    ok = true;
+  }
+  if (font) font->Release();
+  if (fam) fam->Release();
+  fc->Release();
+  return ok;
+}
+
+extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
+  init();
   DWRITE_FONT_METRICS m = {};
   m.designUnitsPerEm = 2048;
   m.ascent = 2210;
   m.descent = 514;
-  dw->GetSystemFontCollection(&fc, FALSE);
-  if (SUCCEEDED(fc->FindFamilyName((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, &i, &found)) && found &&
-      SUCCEEDED(fc->GetFontFamily(i, &fam)) &&
-      SUCCEEDED(fam->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
-                                          (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font)))
-    font->GetMetrics(&m);
-  if (font) font->Release();
-  if (fam) fam->Release();
-  fc->Release();
+  family_metrics((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, weight, style, &m);
   out[0] = size * m.ascent / m.designUnitsPerEm;
   out[1] = size * m.descent / m.designUnitsPerEm;
   out[2] = round(size * 1.42);
+  // the face Han falls back to (Chinese Windows' UI font): a line with Chinese in it is measured by the taller
+  DWRITE_FONT_METRICS h = m;
+  family_metrics(L"Microsoft YaHei UI", weight, style, &h);
+  out[3] = size * h.ascent / h.designUnitsPerEm;
+  out[4] = size * h.descent / h.designUnitsPerEm;
+  out[5] = 0;  // lines as asked, not on whole pixels
 }
 
 static uint32_t hash(const WCHAR *s, int len, double size, int weight, int style) {

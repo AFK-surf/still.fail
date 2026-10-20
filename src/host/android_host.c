@@ -1173,7 +1173,7 @@ void mb_host_wake_after(double ms) {
 void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *out) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, text_cls, m_metrics, size, weight, style, small_buf);
-  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 3, out);
+  (*env)->GetDoubleArrayRegion(env, small_buf, 0, 6, out);
 }
 
 int32_t mb_host_shape(moonbit_string_t text, double size, int32_t weight, int32_t style, double *out) {

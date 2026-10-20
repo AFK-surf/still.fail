@@ -126,7 +126,7 @@ fn corpus_rows(only : String) -> Array[Row] {
 /// The font's line height and ascent, as mbui's text puts its baseline in a line of its own height (Ctx::text) or a
 /// paragraph's (Ctx::rich: the larger of the paragraph's font's and the run's).
 fn line_of(r : Row) -> (Double, Double) {
-  let o = FixedArray::make(4, 0.0)
+  let o = FixedArray::make(6, 0.0)
   @host.font_metrics(r.size, r.weight, 0, o)
   let lh = o[2]
   let asc0 = (lh - o[0] - o[1]) / 2.0 + o[0]

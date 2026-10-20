@@ -266,7 +266,10 @@ pub fn wake_after(ms : Double) -> Unit {
 
 ///|
 /// Ascent, descent and line height of the system font (or its code face,
-/// `style` & style_mono; slanted with style_italic) at this size and weight.
+/// `style` & style_mono; slanted with style_italic) at this size and weight,
+/// then the ascent and descent of the font a Han ideograph falls back to, then
+/// 1 where the host sets lines of words on whole device pixels (Android), 0
+/// where not (six numbers in `out`).
 pub fn font_metrics(
   size : Double,
   weight : Int,

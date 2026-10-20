@@ -164,6 +164,7 @@ pub fn wake_after(ms : Double) -> Unit {
 }
 
 ///|
+/// As host_native's: ascent, descent, line height, the Han font's ascent and descent, whole-pixel lines.
 pub fn font_metrics(
   size : Double,
   weight : Int,

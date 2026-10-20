@@ -92,6 +92,13 @@ void mb_host_font_metrics(double size, int32_t weight, int32_t style, double *ou
   out[0] = CTFontGetAscent(f);
   out[1] = CTFontGetDescent(f);
   out[2] = round(size * 1.42);
+  // the font a Han ideograph falls back to: a line with Chinese in it is measured by the taller of the two (the system
+  // font's is .PingFangUITextSC, made to the San Francisco's ascent and descent: the same numbers, macOS 26)
+  CTFontRef han = CTFontCreateForString(f, CFSTR("\u56FD"), CFRangeMake(0, 1));
+  out[3] = han ? CTFontGetAscent(han) : out[0];
+  out[4] = han ? CTFontGetDescent(han) : out[1];
+  if (han) CFRelease(han);
+  out[5] = 0;  // lines as asked, not on whole pixels
 }
 
 // style & 8: no ligatures (words with letter spacing, each cluster spaced on its own)

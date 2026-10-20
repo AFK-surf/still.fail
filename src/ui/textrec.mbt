@@ -6,7 +6,9 @@
 //   MBUI_TEXT_RECORD=1   on a real host: each answer, once, on the log as TEXTREC {…}
 //   Tester::new(text=)   a test's fake host answers from those lines; what they lack is said (text_missing)
 //
-// The lines: {"m":[size,weight,style],"r":[ascent,descent,line]}, {"s":[size,weight,style,text],"r":[clusters…]}
+// The lines: {"m":[size,weight,style],"r":[ascent,descent,line,han ascent,han descent,whole]}
+// (the font Han falls back to's two, then 1 where the host sets lines on whole pixels; kept from before without
+// them: the font's own, not), {"s":[size,weight,style,text],"r":[clusters…]}
 // (start, length, advance, key: four numbers each), {"k":[size,weight,style,text],"r":key}, {"g":key,"r":[box…]}.
 
 ///|
@@ -65,7 +67,7 @@ fn text_say(key : String, line : Json) -> Unit {
 fn rec_metrics(size : Double, weight : Int, style : Int, out : FixedArray[Double]) -> Unit {
   if text_recording() {
     let args : Json = [Json::number(size), Json::number(weight.to_double()), Json::number(style.to_double())]
-    text_say("m" + style_key(size, weight, style), { "m": args, "r": nums(out, 3) })
+    text_say("m" + style_key(size, weight, style), { "m": args, "r": nums(out, 6) })
   }
 }
 

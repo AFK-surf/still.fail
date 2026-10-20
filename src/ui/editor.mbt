@@ -355,6 +355,7 @@ pub fn Ctx::editor(
   self.focusable(id, node=i, keys=0, on_press=true)
   self.semantics(i, TextField, id~, label=placeholder, value=if secret { "" } else { st.text })
   let n = self.nodes[i]
+  let line = if line > 0.0 { line } else { self.theme.text_line * font_size }
   let (_, _, own_lh) = font_metrics(font_size, 400)
   let lh = if line > 0.0 { line } else { own_lh }
   n.id = id

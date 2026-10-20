@@ -95,6 +95,9 @@ pub(all) struct Theme {
   text : TextScale
   leading : LeadingScale
   radii : RadiusScale
+  /// the height of a line of words that say none, a size of words (1.4: CSS's `line-height: 1.4`, still.fail's
+  /// apps'); 0: the host's own (its system's, about 1.42)
+  text_line : Double
 }
 
 ///|
@@ -219,6 +222,7 @@ pub fn Theme::light() -> Theme {
     wash: 0x322D2411L,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
+    text_line: 0.0,
     radii: RadiusScale::tailwind(),
   }
 }
@@ -365,6 +369,7 @@ pub fn Theme::ios_light() -> Theme {
     wash: 0x322D2411L,
     text: TextScale::tailwind(),
     leading: LeadingScale::tailwind(),
+    text_line: 0.0,
     radii: RadiusScale::tailwind(),
   }
 }
