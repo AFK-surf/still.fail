@@ -424,6 +424,52 @@ class BuildEffect(unittest.TestCase):
         self.assertIn(".reload", got[2].what)
 
 
+    def test_build_effect_inputs_it_knows_by_shape(self):
+        files = {
+            "src/app/view.mbt": """
+                fn empty(c : @ui.Ctx, words : String, on_tap : () -> Unit) -> Unit {
+                  if c.clicked(3) {
+                    on_tap()
+                  }
+                }
+                fn shown(c : @ui.Ctx, body : () -> Unit) -> Unit {
+                  body()
+                }
+                fn view(c : @ui.Ctx, src : Source, p : Player, prefs : Prefs) -> Unit {
+                  let k = @sf.segmented(c, "face", ["a", "b"], 0)
+                  let want = if k == 0 { "a" } else { "b" }
+                  if want != prefs.face {
+                    (src.call)("face", Json::null(), fn(_) {  })
+                  }
+                  if k == 0 {
+                    (src.call)("every", Json::null(), fn(_) {  })
+                  }
+                  let typed = c.code_field(4)
+                  if typed is Some(code) {
+                    (src.call)("code", Json::null(), fn(_) {  })
+                  }
+                  empty(c, "none", fn() { (src.call)("up", Json::null(), fn(_) {  }) })
+                  shown(c, fn() { (src.call)("built", Json::null(), fn(_) {  }) })
+                  match c.rect_of(5) {
+                    Some((x, _, _, _)) if c.pressed(5) => p.scrub = x
+                    _ =>
+                      if p.scrub >= 0.0 {
+                        p.seek(p.scrub)
+                        p.scrub = -1.0
+                      }
+                  }
+                  if p.ready {
+                    p.seek(0.0)
+                  }
+                }
+                """,
+        }
+        got = sorted(found(self, files, "build-effect", 3), key=lambda f: f.line)
+        # a choice other than what is kept, a code typed in, a button's callback, a press let go: the input's; a
+        # choice as it stands each frame, a closure built as it is given, a seek on what is not the finger's: not
+        self.assertEqual([f.line for f in got], [17, 24, 34], "\n".join(f.what for f in got))
+
+
 class Exceptions(unittest.TestCase):
     def test_reason_on_the_line_or_over_it(self):
         t = Tree({"src/app/view.mbt": """

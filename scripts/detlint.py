@@ -606,6 +606,8 @@ LATER_LABELS = {"done", "answer", "then", "leave", "serve", "read", "back", "can
 # called with the Ctx in a condition, not a widget's use: a time, a hold, a layout's read
 NOT_INPUT_CALLS = {"after", "held", "within", "mark", "list_info", "rect_of", "words_of", "is_wide", "presence",
                    "animate", "theme", "window_size", "list_place"}
+# a widget whose answer is what the finger or the keys chose this frame (a choice, a code typed in)
+INPUT_VALUE_CALLS = {"segmented", "code_field", "toggle", "switch", "slider", "stepper"}
 INPUT_WORDS = {"clicked", "tapped", "take_end", "take_tap", "take_key", "key_pressed", "chosen", "dismissed", "acted",
                "submitted", "right_clicked", "shortcut", "take_move", "pasted", "took"}
 
@@ -1105,6 +1107,40 @@ def lint_build_effects(files, cfg, out):
         b = header(f, it)
         return any(f.toks[k].kind == "ident" and f.toks[k].text == "Ctx" for k in range(it.start, min(b, it.end)))
 
+    # the app's functions by (package, name): where they are defined (their file and definition's call)
+    defs = {}
+    calls_at = {}
+    for f in app:
+        for c in f.calls:
+            calls_at[(f.rel, c.at)] = c
+            if c.is_def and c.kind == "bare":
+                defs[(os.path.dirname(f.rel), c.name)] = (f, c)
+
+    def positional(f, args):
+        """The positional ones of a call's arguments or a definition's parameters (not `x=`, `x~`, `x? :`)."""
+        return [a for lab, a in args if lab is None and a and not (len(a) > 1 and f.toks[a[1]].text == "?")]
+
+    handlers, asking = {}, set()
+
+    def handler_param(key, i):
+        """Whether function key calls its i-th positional parameter only as an input is taken (a button's answer:
+        dv_empty(c, …, fn() { … }) whose `on_tap()` is under its `clicked`)."""
+        if (key, i) in handlers:
+            return handlers[(key, i)]
+        if key not in defs or (key, i) in asking:
+            return False
+        df, dc = defs[key]
+        params = positional(df, dc.args)
+        if i >= len(params) or df.toks[params[i][0]].kind != "ident":
+            return False
+        name = df.toks[params[i][0]].text
+        asking.add((key, i))
+        sites = [c.at for c in df.calls if c.item is dc.item and c.kind == "bare" and not c.is_def and c.name == name]
+        got = bool(sites) and all(exempt(df, k) for k in sites)
+        asking.discard((key, i))
+        handlers[(key, i)] = got
+        return got
+
     def later(f, o):
         """Whether the closure whose body opens at o runs later than the build (a callback: what an effect is answered
         with, an event's handler, a fiber's body), not as it builds (a box's children: c.box(fn() { … }))."""
@@ -1141,7 +1177,15 @@ def lint_build_effects(files, cfg, out):
         if callee.kind == "op" and callee.text == ")" and p >= 4 and toks[p - 2].kind == "ident" and \
                 toks[p - 2].text in cfg.effect_fields:
             return True
-        return callee.kind == "ident" and callee.text in LATER_CALLS
+        if callee.kind == "ident" and callee.text in LATER_CALLS:
+            return True
+        # given to an app's function that calls it only under an input (a button's own callback)
+        call = calls_at.get((f.rel, p - 1))
+        if call is not None and call.kind == "bare":
+            for i, a in enumerate(positional(f, call.args)):
+                if a[0] <= o <= a[-1]:
+                    return handler_param((os.path.dirname(f.rel), call.name), i)
+        return False
 
     def built_by_ctx(f, o):
         """Whether the closure at o (its `fn`) is given to one of the Ctx's own (c.list(…, fn(i) { … }): its rows,
@@ -1155,6 +1199,45 @@ def lint_build_effects(files, cfg, out):
             p -= 1
         return p >= 3 and toks[p - 1].kind == "ident" and toks[p - 2].text == "." and toks[p - 3].kind == "ident" and \
             toks[p - 3].text == "c"
+
+    shapes = {}
+
+    def item_shapes(f, it):
+        """In function it: the lets that hold what a widget took (`let k = segmented(c, …)`, `let typed =
+        c.code_field(…)`, and the lets worked out from them), and the fields a press sets (`p.scrub = …` under a
+        `pressed`): a condition comparing the one (`!=`, `is`) or testing the other once let go is an input's."""
+        key = (f.rel, it.start)
+        if key in shapes:
+            return shapes[key]
+        toks, values, pressed_fields = f.toks, set(), set()
+        for k in range(it.start, it.end - 2):
+            t = toks[k]
+            if t.kind == "ident" and t.text == "let" and toks[k + 1].kind == "ident" and toks[k + 2].text == "=":
+                # the let's expression: to the end of its line, its brackets whole
+                e, j = [], k + 3
+                while j <= it.end and toks[j].line == toks[k].line:
+                    if toks[j].kind == "op" and toks[j].text in "([{" and toks[j].end is not None:
+                        e.extend(range(j, toks[j].end + 1))
+                        j = toks[j].end + 1
+                        continue
+                    e.append(j)
+                    j += 1
+                took = False
+                for i in e[:5]:
+                    ti = toks[i]
+                    if ti.kind == "ident" and i + 1 < len(toks) and toks[i + 1].text == "(":
+                        # a widget whose answer is what it took (segmented(c, …), c.code_field(…))
+                        took = ti.text in INPUT_VALUE_CALLS
+                        break
+                if took or any(toks[i].kind == "ident" and toks[i].text in values for i in e):
+                    values.add(toks[k + 1].text)
+            if t.kind == "op" and t.text == "." and toks[k + 1].kind == "ident" and toks[k + 2].kind == "op" and \
+                    toks[k + 2].text == "=":
+                if any(any(toks[i].kind == "ident" and toks[i].text == "pressed" for i in cond)
+                       for cond in f.enclosing_conditions(k)):
+                    pressed_fields.add(toks[k + 1].text)
+        shapes[key] = (values, pressed_fields)
+        return shapes[key]
 
     def exempt(f, k):
         toks = f.toks
@@ -1180,8 +1263,18 @@ def lint_build_effects(files, cfg, out):
                             return True
                         if j > ob + 1 and not built_by_ctx(f, ob - 1):
                             return True
+        it = f.item_of[k]
+        values, pressed_fields = item_shapes(f, it) if it is not None else (set(), set())
         for cond in f.enclosing_conditions(k):
             if any(toks[i].kind == "ident" and toks[i].text in INPUT_WORDS for i in cond):
+                return True
+            names = {toks[i].text for i in cond if toks[i].kind == "ident"}
+            # what a widget took, compared: its choice other than what is kept, a code typed in
+            if names & values and ("is" in names or any(toks[i].text == "!=" for i in cond)):
+                return True
+            # what a press left, acted on once it is let go (a timeline's seek to where it was dragged)
+            if "pressed" not in names and any(toks[i].text == "." and i + 1 < len(toks) and
+                                              toks[i + 1].text in pressed_fields for i in cond):
                 return True
             # a widget asked whether it was used (button(c, …), row(c, …): given the Ctx first), not a time or a
             # layout read (after(c, …), held(c, …))
