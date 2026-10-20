@@ -472,7 +472,7 @@ fn page_view(
   // a place switched to on the bar comes in from the side the ball goes to, fading in (220 ms; 180 from no side)
   let root = app.nav.depth() == 1
   let since = c.now() - app.switch_at
-  let span = if app.switch_way == 0 { 180.0 } else { 220.0 }
+  let span = if app.switch_way == 0 { switch_fade_ms } else { switch_side_ms }
   let e = if root && since < span && !c.stable() {
     c.request_frame()
     @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(since / span, 0.0, 1.0))
@@ -636,11 +636,18 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
 }
 
 ///|
+/// How long a place switched to on the bar takes to come in: fading in from no side, from the side the ball goes to.
+let switch_fade_ms : Double = 180.0
+
+///|
+let switch_side_ms : Double = 220.0
+
+///|
 /// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
-  let dark = @settings.dark(prefs, @host.system_dark())
+  let dark = @settings.dark(prefs, @ui.system_dark())
   @sf.set_dark(Some(dark))
   // (the host told once the prefs are read: not the system's first, then the one chosen)
   if prefs is Some(_) && told_dark.val != Some(dark) {
@@ -676,7 +683,7 @@ fn toast(c : @ui.Ctx) -> Unit {
     app.toast_at = c.now()
   }
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_at}", app.toast)] } else { [] }
-  let r = @kit.toaster(c, "toast", said, duration=2600.0, bottom=90.0, look=fn(c, s, _action, _close) {
+  let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
       c.text(s.toast.title, size=14.0, color=t.p.bg, line=20.0) |> ignore
@@ -687,6 +694,10 @@ fn toast(c : @ui.Ctx) -> Unit {
     app.toast = ""
   }
 }
+
+///|
+/// How long a toast stays (paused while the pointer is on it).
+let toast_ms : Double = 2600.0
 
 ///|
 fn say(c : @ui.Ctx, words : String) -> Unit {
@@ -713,7 +724,7 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       } else {
         c.request_frame()
         // 900 ms up, 900 down, eased
-        let k = c.now() / 1800.0
+        let k = c.now() / splash_float_ms
         let f = k - k.floor()
         let p = if f < 0.5 { f * 2.0 } else { 2.0 - f * 2.0 }
         p * p * (3.0 - 2.0 * p)
@@ -733,9 +744,9 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
       |> ignore
       match label {
         Some(s) => {
-          let shown = now || c.now() - since > 1000.0
+          let shown = now || c.now() - since > splash_label_ms
           if !shown {
-            c.wake_in(1000.0 - (c.now() - since))
+            c.wake_in(splash_label_ms - (c.now() - since))
           }
           c.box(opacity=if shown { 1.0 } else { 0.0 }, fn() {
             c.text(s, size=13.0, color=t.p.muted, center=true, line=18.0)
@@ -749,6 +760,14 @@ fn splash(c : @ui.Ctx, label : String?, now : Bool) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// How long the splash waits before it says what it waits for.
+let splash_label_ms : Double = 1000.0
+
+///|
+/// The splash's mark floating: up and down once in this long.
+let splash_float_ms : Double = 1800.0
 
 ///|
 let splash_first : Ref[Double] = { val: -1.0 }

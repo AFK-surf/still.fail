@@ -77,8 +77,6 @@ fn pick_new(c : @ui.Ctx, src : Source, ws : String, fill : Map[String, Json]) ->
     return
   }
   fill["scope"] = Json::string(ws)
-  // drawn again for what it changes (the core's answer brings a frame too; a source that answers at once does not)
-  c.request_frame()
   (src.call)("newChat.pick", Json::object(fill), fn(res) {
     match res {
       Err(e) => {
@@ -251,8 +249,8 @@ fn new_chat_on(
   let (up, fade) = if leaving {
     let ms = c.now() - fresh.became_at
     (
-      @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / 140.0, 0.0, 1.0)),
-      @ui.bezier(0.3, 0.0, 0.5, 1.0, dclamp(ms / 80.0, 0.0, 1.0)),
+      @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / new_leave_ms, 0.0, 1.0)),
+      @ui.bezier(0.3, 0.0, 0.5, 1.0, dclamp(ms / new_fade_ms, 0.0, 1.0)),
     )
   } else {
     (0.0, 0.0)
@@ -668,6 +666,21 @@ fn send_first(
 }
 
 ///|
+/// A new chat's scene leaving as it becomes the chat: up out of view as it fades; its choices fading where they are.
+let new_leave_ms : Double = 140.0
+
+///|
+let new_fade_ms : Double = 80.0
+
+///|
+/// The list of the chat a new chat became rising into its place (the words' way up out of the composer), after a
+/// little.
+let new_rise_ms : Double = 480.0
+
+///|
+let new_rise_after_ms : Double = 90.0
+
+///|
 /// Over the chat a new chat became: its scene leaving (140 ms), then nothing.
 fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
   match fresh.became {
@@ -678,7 +691,7 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
     fresh.became_at = c.now()
   }
   let ms = c.now() - fresh.became_at
-  if ms >= 140.0 || c.stable() {
+  if ms >= new_leave_ms || c.stable() {
     return
   }
   c.request_frame()
@@ -697,12 +710,12 @@ fn new_chat_leaving(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Un
 fn new_chat_rise(c : @ui.Ctx, r : ChatRef) -> Double {
   match fresh.became {
     Some(b) if b == r && fresh.became_at >= 0.0 && !c.stable() => {
-      let ms = c.now() - fresh.became_at - 90.0
-      if ms >= 480.0 {
+      let ms = c.now() - fresh.became_at - new_rise_after_ms
+      if ms >= new_rise_ms {
         return 0.0
       }
       c.request_frame()
-      let e = @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / 480.0, 0.0, 1.0))
+      let e = @ui.bezier(0.2, 0.8, 0.2, 1.0, dclamp(ms / new_rise_ms, 0.0, 1.0))
       let rise = dmax(0.0, c.height - composer_room_of(c) - chat_bar_h - 120.0)
       rise * (1.0 - e)
     }
@@ -849,7 +862,6 @@ fn run_picker_sheet(c : @ui.Ctx, src : Source, station : String) -> Unit {
     }
     fill["station"] = Json::string(station)
     fill["of"] = Json::string("new")
-    c.request_frame()
     (src.call)("pick.set", Json::object(fill), fn(res) {
       match res {
         Err(e) => {

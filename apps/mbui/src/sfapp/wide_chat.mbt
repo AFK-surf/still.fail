@@ -90,7 +90,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
   let station = stations.iter().find_first(fn(s) { s.address == r.station })
   let bar = c.id("chat-bar")
   // the bar's empty part drags the window (in one with its buttons in the app's top row)
-  if @host.window_inset() {
+  if @ui.window_inset() {
     c.window_drag(bar)
   }
   c.box(dir=Row, w=Fill(1.0), h=Px(45.0), pl=12.0, pr=12.0, pb=1.0, gap=16.0, align=ACenter, bg=t.p.bg, id=bar, fn() {
@@ -192,7 +192,7 @@ fn icon_button(c : @ui.Ctx, key : String, icon : String) -> Bool {
 fn page_bar_wide(c : @ui.Ctx, title : String, back : Bool, trailing : () -> Unit) -> Bool {
   let t = @sf.theme()
   let bar = c.id("page-bar")
-  if @host.window_inset() {
+  if @ui.window_inset() {
     c.window_drag(bar)
   }
   let mut went = false
