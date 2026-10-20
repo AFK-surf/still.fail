@@ -81,9 +81,18 @@ fn model_mark_big(c : @ui.Ctx, maker : String, runtime : String, size : Double, 
 }
 
 ///|
-/// A fitted sheet's side margin, and as much under its last card: the cards stand as far from its bottom as from its
-/// sides (Android has 30 under the chat's and 24 under the agent's, ChatInfo.kt and AgentSheet.kt).
+/// A sheet's side margin (Android ChatInfo.kt, AgentSheet.kt: padding(start = 18.dp, end = 18.dp)).
 let sheet_side : Double = 18.0
+
+///|
+/// What is under a fitted sheet's last card. Android: its column's padding(bottom = …) (ChatInfo.kt 30.dp,
+/// AgentSheet.kt 24.dp), the sheet then made taller by the navigation bar (Sheet.kt: fit + foot, foot
+/// WindowInsets.navigationBars). mbui draws inside the system bars (its Android host's view is set in by them,
+/// MainActivity's onApplyWindowInsets), so that part is outside what it draws: the padding alone.
+let chat_info_foot : Double = 30.0
+
+///|
+let agent_sheet_foot : Double = 24.0
 
 ///|
 /// A row of an info card, its ground under the finger: Android ChatInfo.kt INFO_ROW (14.dp).
@@ -433,7 +442,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
     let thread = field(chat, "thread")
     let link = if view is Some(_) { chat_link(r.station, r.session) } else { "" }
     let title = text(chat, "title")
-    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=sheet_side, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=chat_info_foot, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=AStart, fn() {
         c.box(w=Fill(1.0), max_h=48.0, clip=true, fn() {
           c.text(title, size=18.0, weight=700, color=t.p.text, line=24.0) |> ignore
@@ -743,7 +752,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
   sheet_frame(c, "agent", c.height * 0.55, fit=true, fn() {
     let s = field(a, "session")
     let status = text(a, "status")
-    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=sheet_side, fn() {
+    c.box(w=Fill(1.0), pl=sheet_side, pr=sheet_side, pb=agent_sheet_foot, fn() {
       c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=12.0, align=ACenter, fn() {
         model_mark_big(
           c,

@@ -190,12 +190,12 @@ fn fitted_foot(t : @ui.Tester, last : String) -> Double raise {
 }
 
 ///|
-test "a fitted sheet is as tall as what it shows: its last card as far from its bottom as from its sides" {
+test "a fitted sheet is as tall as what it shows: under its last card its padding as Android's (30 the chat's, 24 the agent's)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info")
   let foot = fitted_foot(t, "归档对话")
-  assert_true((foot - sheet_side).abs() < 0.5, msg="under the chat's sheet: \{foot}")
+  assert_true((foot - chat_info_foot).abs() < 0.5, msg="under the chat's sheet: \{foot}")
   let t = decide_core(calls, "chat-agent")
   let foot = fitted_foot(t, "服务在线：web · 在盯着：CI")
-  assert_true((foot - sheet_side).abs() < 0.5, msg="under the agent's sheet: \{foot}")
+  assert_true((foot - agent_sheet_foot).abs() < 0.5, msg="under the agent's sheet: \{foot}")
 }
