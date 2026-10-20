@@ -478,7 +478,9 @@ pub fn update_state() -> String {
 /// view's InputConnection), `drive_newline` its Enter, `drive_paste` the system's paste of the clipboard (Cmd+V,
 /// KEYCODE_PASTE), `drive_backspace`, `drive_shot` the window's picture saved at `text` (a path); 6 and 7 one of the
 /// app's notifications (notify.mbt) whose title or words hold `text`, tapped (6) or only looked for (7), false when none
-/// does. False where the host has no such path (the caller sends it to the app itself).
+/// does; 8 the window resized to "<w>x<h>"; 9 the directory `text` watched for what the run's runner has done, each
+/// file come there posted on channel "runner" (done_watch.h: macOS, Android, Windows). False where the host has no
+/// such path (the caller sends it to the app itself).
 pub fn drive(kind : Int, text : String) -> Bool {
   ffi_drive(kind, text) != 0
 }

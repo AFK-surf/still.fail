@@ -13,6 +13,7 @@
 #include <zlib.h>
 #include "moonbit.h"
 #include "post.h"
+#include "done_watch.h"
 #include "corner_sl.h"
 
 #define LOG(...) __android_log_print(ANDROID_LOG_INFO, "mbui", __VA_ARGS__)
@@ -1224,6 +1225,8 @@ void mb_host_back_enabled(int32_t on) {
 // A scripted run's input (src/ui/drive.mbt), as the system sends it (Host.drive: the view's InputConnection, a
 // KEYCODE_PASTE); 0 for what it has no path for (the window's picture: adb's screencap takes it).
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
+  // the directory the run's runner says what it has done in, watched (done_watch.h)
+  if (kind == 9) return mb_done_watch(text);
   JNIEnv *env = env_();
   jstring s = jstr(env, text);
   jint r = (*env)->CallStaticIntMethod(env, host_cls, m_drive, (jint)kind, s);

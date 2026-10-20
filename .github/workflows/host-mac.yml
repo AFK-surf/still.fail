@@ -11,6 +11,9 @@ on:
       - "src/host/apple_*"
       - "src/host/apple.h"
       - "src/host/mac_app.m"
+      - "src/host/done_watch.h"
+      - "src/ui/drive.mbt"
+      - "scripts/done_runner.py"
       - "scripts/mac.sh"
       - "scripts/host_contract.sh"
       - "scripts/textrec_test.py"
@@ -54,6 +57,9 @@ jobs:
               - "src/host/apple_*"
               - "src/host/apple.h"
               - "src/host/mac_app.m"
+              - "src/host/done_watch.h"
+              - "src/ui/drive.mbt"
+              - "scripts/done_runner.py"
               - "scripts/mac.sh"
               - "scripts/host_contract.sh"
               - "scripts/textrec_test.py"
@@ -95,6 +101,9 @@ jobs:
       - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
         if: (success() || failure()) && steps.f.outputs.host != 'false'
         run: scripts/host_contract.sh mac views
+      - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac runner
       - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
         if: (success() || failure()) && steps.f.outputs.marks != 'false'
         run: scripts/host_contract.sh mac marks

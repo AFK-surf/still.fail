@@ -12,6 +12,9 @@
 #        test/marks/base.png (@host.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
 #        the same to the byte (out/host/HOST/marks.png), and the same as goldens/marks/HOST.png, on what drew it
 #        (goldens/marks/HOST.txt's checked lines: the system's build, its fonts; out/host/HOST/marks.txt this run's)
+#   scripts/host_contract.sh HOST runner        (mac, windows, android) the run's runner says it has done what was
+#        asked (a file in the directory the run names, src/host/done_watch.h): the run told of each as it comes, by the
+#        host's system: `done ok` goes on, `done bad` fails saying why (scripts/done_runner.py the runner)
 #   scripts/host_contract.sh HOST views         a native view placed between pixels (kitdemo's MBUI_VIEWCHECK,
 #        src/kitdemo/viewcheck.mbt): where the host put it (its VIEWAT line, device pixels) is where the app told it
 #        to (VIEWTOLD), on whole device pixels, or it fails
@@ -260,6 +263,43 @@ case $CMD in
       exit 1
     fi
     echo "text contract ($H): every answer $NAME kept is the host's" ;;
+  runner)
+    # the runner's word that it has done what the run asked (src/host/done_watch.h; drive.mbt `done X`): a file written
+    # in the directory the run names, the run told of it by the host's system as it comes. kitdemo's run asks the
+    # runner (scripts/done_runner.py, reading its log as it comes) for `ok` and for `bad`: `done ok` passes once ok's
+    # file is there, `done bad` fails saying what bad's file says; anything else (a file never told: the run's
+    # timeout) breaks the contract
+    case $H in mac|windows|android) ;; *) echo "runner contract: $H watches no runner's directory"; exit 1 ;; esac
+    DRV=$(printf 'timeout 20000\nlog do: ok\ndone ok\nlog do: bad\ndone bad\nexit\n' | base64 | tr -d '\n\r')
+    SAID="--said bad=failed_on_purpose"
+    case $H in
+      mac|windows)
+        rm -rf $O/done && mkdir -p $O/done
+        DIR=$PWD/$O/done
+        [ "$H" = windows ] && DIR=$(cygpath -m "$DIR")
+        EXE=./_build/native/release/build/kitdemo/kitdemo.exe
+        [ "$H" = windows ] && EXE=./out/win/mod/_build/native/release/build/kitdemo/kitdemo.exe
+        env MBUI_BENCH=-1 MBUI_WIN=960x720 MBUI_DRIVE_B64=$DRV MBUI_DONE_DIR="$DIR" $EXE 2>&1 \
+          | "$PY" scripts/done_runner.py --log $O/done.log --dir "$DIR" $SAID || true ;;
+      android)
+        APPID=${MBUI_APP_ID:-dev.mbui.demo}
+        $ADB shell "run-as $APPID rm -rf files/done" || true
+        $ADB logcat -c
+        EMU_PORT=${SERIAL#emulator-} APP=kitdemo BENCH=-1 \
+          ENV="MBUI_DRIVE_B64=$DRV;MBUI_DONE_DIR=/data/data/$APPID/files/done;MBUI_LOG_FILE=done-app.log" \
+          bash scripts/android.sh run
+        # (a run that hangs given 3 minutes before it fails, what it said kept: not a wait, the run ends itself)
+        timeout 180 $ADB logcat -v brief -e "DRIVE |FATAL EXCEPTION|Fatal signal|ANR in" \
+          | "$PY" scripts/done_runner.py --log $O/done.log --adb "$ADB" --app $APPID $SAID || true
+        $ADB exec-out run-as $APPID cat files/done-app.log > $O/done-app.log 2>/dev/null || true
+        $ADB shell dumpsys activity activities 2>/dev/null | grep -aE "ResumedActivity|mFocusedApp" | head -5 >> $O/done.log || true ;;
+    esac
+    tr -d '\r' < $O/done.log | grep -aE "DRIVE (start|ok done|runner done|FAIL|PASS)|RUNNER did" || true
+    if grep -aq "DRIVE ok done ok" $O/done.log && grep -a "DRIVE FAIL" $O/done.log | grep -aq "failed_on_purpose"; then
+      echo "runner contract ($H): the runner's word came as its file did: ok went on, bad failed the run saying why"
+    else
+      echo "runner contract ($H): the runner's files were not told as they came ($O/done.log)"; tail -20 $O/done.log; exit 1
+    fi ;;
   views)
     # a native view placed between pixels (kitdemo's MBUI_VIEWCHECK, src/kitdemo/viewcheck.mbt): where the host put it
     # (VIEWAT, in device pixels) is where the app told it to (VIEWTOLD), on whole device pixels: its edges the hole's,

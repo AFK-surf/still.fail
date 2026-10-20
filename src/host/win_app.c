@@ -18,6 +18,7 @@
 #include <string.h>
 #include "win.h"
 #include "post.h"
+#include "done_watch.h"
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -737,9 +738,11 @@ moonbit_string_t mb_host_notice_text(int32_t what) {
   return moonbit_make_string_raw(0);
 }
 
-// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4) and the window resized to
-// "<w>x<h>" points (8); the rest is sent to the app itself.
+// Scripted runs' input given to the host (src/ui/drive.mbt): the window's picture saved (4), the window resized to
+// "<w>x<h>" points (8), the runner's directory watched (9); the rest is sent to the app itself.
 int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
+  // the directory the run's runner says what it has done in, watched (done_watch.h)
+  if (kind == 9) return mb_done_watch(text);
   int n = Moonbit_array_length(text);
   wchar_t w[1024];
   if (n > 1023) n = 1023;

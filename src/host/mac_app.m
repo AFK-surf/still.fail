@@ -7,6 +7,7 @@
 #import <mach/mach.h>
 #import "apple.h"
 #include "post.h"
+#include "done_watch.h"
 
 mb_callbacks mb_cb;
 
@@ -1199,6 +1200,8 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
     // a notification kept here (below), by its words: tapped (6) or looked for (7)
     case 6:
     case 7: return notice_drive(kind == 6, s);
+    // the directory the run's runner says what it has done in, watched (done_watch.h)
+    case 9: return mb_done_watch(text);
     default: return 0;
   }
   [v requestFrame];

@@ -50,14 +50,20 @@
 //                               from its address or from bytes handed over for it (Ctx::image_bytes, add_image)
 //   ready VIEW                  a native view ready: by its kind's name (video, audio, web, site), pdf (a PDF's page
 //                               drawn), its kind's number (1 video or audio, 2 web, 3 site), #ID its id
+//   done X                      the run's runner (still.fail's run.sh: what `log do: X` asked of it) has done X: its
+//                               file X come in the directory the run names (MBUI_DONE_DIR, else $MBUI_SHOT_DIR/done),
+//                               the host told of it by its system (src/host/done_watch.h: macOS, Android, Windows);
+//                               its words "ok" (or none): done; else what went wrong, and the run fails saying it.
+//                               Where the host watches no such directory (a Tester's, the web's, iOS's), it fails
+//                               at once
 //   now STEP                    STEP (as written before steps waited for nothing: kept, the same as STEP)
 // No step waits for the app to be settled. What a step looks for comes with a frame (an input's, a message's, the
 // host's event's, a motion's), and it is looked for at each; a tap, a hold, a hover or a drag on words goes where the
 // frame just drawn has them, once they hold still from one frame to the next. What comes later than a frame is waited
-// for by name (until, gone, answered, decoded, ready), within the timeout. The run asks for no frame of its own: what
-// it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake at that time. `wait` stays
-// a pause in real time, for what is outside the app (a command beside the run, the other device, the station) that no
-// `until` can see.
+// for by name (until, gone, answered, decoded, ready, done), within the timeout. The run asks for no frame of its
+// own: what it waits for in time (a timeout, a hold let go, a `wait`, a shot another takes) is a wake at that time.
+// `wait` stays a pause in real time, for what is outside the app (a command beside the run, the other device, the
+// station) that no `until` can see, and that the runner does not say it has done (`done`).
 // A step that fails logs DRIVE FAIL (its line, what was on screen), takes a shot "fail" and exits 1.
 
 ///|
@@ -86,6 +92,9 @@ priv struct Driver {
   mut mark : Int
   // how many answers of each call (`answered CALL`) the steps since the last that acted have waited on already
   answers_taken : Map[String, Int]
+  // whether the host watches the runner's directory (`done`), and what the runner said it has done, by name
+  watching : Bool
+  runner_done : Map[String, String]
   mut seen_frame : Int
   dir : String
 }
@@ -98,7 +107,12 @@ let driver : Ref[Driver?] = { val: None }
 fn drive_init() -> Unit {
   let script = @host.env_text("MBUI_DRIVE")
   if script != "" {
-    drive_start(script, @host.env("MBUI_SHOT_DIR"))
+    let dir = @host.env("MBUI_SHOT_DIR")
+    let done_dir = match @host.env("MBUI_DONE_DIR") {
+      "" => if dir == "" { "" } else { dir + "/done" }
+      d => d
+    }
+    drive_start(script, dir, done_dir~)
   }
 }
 
@@ -116,8 +130,31 @@ pub fn trace_steps(step : (String) -> Unit) -> Unit {
 }
 
 ///|
-fn drive_start(script : String, dir : String) -> Unit {
+/// What the host posted of the runner (done_watch.h: {"done": X, "said": WORDS}) kept in `done`, by X.
+fn runner_said(done : Map[String, String], j : String) -> Unit {
+  match (try Some(@json.parse(j)) catch { _ => None }) {
+    Some(Object(o)) =>
+      match (o.get("done"), o.get("said")) {
+        (Some(String(x)), Some(String(said))) => {
+          h_log("DRIVE runner done \{x}: \{said.trim(chars=" \n\r\t")}")
+          done[x] = said
+        }
+        _ => ()
+      }
+    _ => ()
+  }
+}
+
+///|
+fn drive_start(script : String, dir : String, done_dir? : String = "") -> Unit {
   let steps = script.split("\n").map(fn(l) { l.trim(chars=" \t\r").to_string() }).to_array()
+  // what the runner has done, as the host posts it (done_watch.h: {"done": X, "said": WORDS}), the frame its post
+  // wakes taking it
+  let runner_done : Map[String, String] = {}
+  let watching = done_dir != "" && h_drive(9, done_dir)
+  if watching {
+    on_message("runner", fn(j, _) { runner_said(runner_done, j) })
+  }
   driver.val = Some({
     steps,
     at: 0,
@@ -137,10 +174,13 @@ fn drive_start(script : String, dir : String) -> Unit {
     shot_at: -1.0,
     mark: runtime().outside_ended(),
     answers_taken: {},
+    watching,
+    runner_done,
     seen_frame: -1,
     dir,
   })
-  h_log("DRIVE start: \{steps.length()} lines")
+  let watched = if watching { " (the runner's directory \{done_dir} watched)" } else { "" }
+  h_log("DRIVE start: \{steps.length()} lines" + watched)
 }
 
 ///|
@@ -512,6 +552,37 @@ fn drive_steps(c : Ctx) -> Unit {
           return
         } else {
           return
+        }
+      }
+      "done" => {
+        if !d.watching {
+          drive_fail(
+            c,
+            d,
+            "the host watches no directory of the runner's (MBUI_DONE_DIR or MBUI_SHOT_DIR unset, or the host has " +
+            "none: a Tester's, the web's, iOS's)",
+          )
+          return
+        }
+        match d.runner_done.get(arg) {
+          Some(said) =>
+            match said.trim(chars=" \n\r\t").to_string() {
+              "" | "ok" => {
+                h_log("DRIVE ok \{line} (\{waited.to_int()} ms)")
+                next()
+              }
+              why => {
+                drive_fail(c, d, "the runner did not do it: \{why}")
+                return
+              }
+            }
+          None =>
+            if waited > d.timeout {
+              drive_fail(c, d, "not done after \{d.timeout.to_int()} ms (the runner said nothing of it)")
+              return
+            } else {
+              return
+            }
         }
       }
       "notice" | "noticed" | "nonotice" => {
