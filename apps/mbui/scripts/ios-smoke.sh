@@ -1,7 +1,7 @@
 #!/bin/bash
-# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), as
-# .github/workflows/mbui-ios.yml runs them on a GitHub macOS runner (take, boot, prepare, build, run, done), or by hand on Mini1
-# (gate, build, take, run, done):
+# still.fail mbui's iOS smoke flows (e2e/run.sh ios: 01-signin, 03-send-text, 05-agent-reply), by hand: on Mini1 (gate,
+# build, take, run, done), or on a fresh Mac as CI ran them until 2026-10-22 (take, boot, prepare, build, run, done; no
+# workflow runs them now, as asked):
 #   scripts/ios-smoke.sh gate   whether Mini1 can take it, asked once (a load is no event to wait for): too little disk
 #                               (3 GB free), it fails; the load high (IOS_LOAD_MAX, the 5 minutes' average: 20, twice
 #                               Mini1's 10 cores; the simulator's SimLaunchHost crashed above it on 2026-10-20), it runs
