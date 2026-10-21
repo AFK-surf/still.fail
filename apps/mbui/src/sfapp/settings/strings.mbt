@@ -344,6 +344,7 @@ let zh : Map[String, String] = {
   "web-main.memory.gone": "此 station 上已不存在该项",
   "web-main.memory.overview": "总览",
   "web-main.memory.projects.when": "处理相关任务时读取",
+  "web-main.memory.share.conflicts": "两台 station 同时修改，有冲突的改动：{names}",
   "web-main.memory.share.from": "来自 {station}",
   "web-main.memory.share.shared": "已分享",
   "web-main.memory.share.switch": "分享给其他 station",
