@@ -70,12 +70,14 @@ export function workspaceProfiles(stations: J[]): J {
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription";
     const share = list.map(([, x]) => x.share).find((x) => isObject(x)) ?? null;
-    const signedIn = members.filter(owns).map((m) => m.stationName);
+    // Each station once: two of its profiles signed in to the same account are one place it is signed in.
+    const stationsOf = (ms: J[]): string[] => [...new Map(ms.map((m) => [m.stationId, m.stationName])).values()];
+    const signedIn = stationsOf(members.filter(owns));
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
     if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
     else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join(t("core-views.list_separator")) }));
-    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join(t("core-views.list_separator")) }));
+    else if (!share) parts.push(t("core-views.profiles.on", { stations: stationsOf(members).join(t("core-views.list_separator")) }));
     if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
     const host = share ? String(share.host) : String(s.id);
     const kind = group(p);

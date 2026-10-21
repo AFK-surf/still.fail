@@ -1623,7 +1623,7 @@
   "web-pages.vault.lib.plain": "Not locked",
   "web-pages.vault.lib.plainWhy": "Stored in plain text on the station",
   "web-pages.vault.lib.plainLong": "Items are stored in plain text on the station, where agents can read them without approval. Subscriptions and model API keys are used by the station directly anyway; turn on security mode before saving other secrets.",
-  "web-pages.vault.lib.sealed": "Locked",
+  "web-pages.vault.lib.sealed": "Encrypted",
   "web-pages.vault.lib.sealedWhy": "Only your devices can decrypt",
   "web-pages.vault.lib.turnOn": "Turn on security mode",
   "web-pages.vault.risk.row": "Not encrypted",
