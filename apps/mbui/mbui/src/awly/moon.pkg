@@ -1,0 +1,10 @@
+import {
+  "mbui/flex",
+}
+
+options(
+  "is-main": true,
+  targets: { "platform_native.mbt": [ "native" ], "platform_js.mbt": [ "js" ] },
+  "native-stub": [ "awly_stub.c" ],
+  link: { "js": { "format": "iife" }, "native": { "stub-cc-flags": "-O2" } },
+)
