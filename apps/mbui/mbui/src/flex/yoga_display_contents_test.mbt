@@ -6,22 +6,22 @@ test "test1" {
   let root = @flex.Node::new()
   root.style.direction = Row
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)

@@ -22,15 +22,15 @@ fn chat_rows(n : Int) -> @flex.Node {
   for i in 0..<n {
     let r = @flex.Node::new()
     r.style.direction = Row
-    r.style.padding.left = Pt(16.0)
-    r.style.padding.right = Pt(16.0)
-    r.style.padding.top = Pt(6.0)
-    r.style.padding.bottom = Pt(6.0)
-    r.style.gap_col = Pt(10.0)
+    r.style.set_padding_left(Pt(16.0))
+    r.style.set_padding_right(Pt(16.0))
+    r.style.set_padding_top(Pt(6.0))
+    r.style.set_padding_bottom(Pt(6.0))
+    r.style.set_gap_col(Pt(10.0))
     r.style.align_items = FlexStart
     let avatar = @flex.Node::new()
-    avatar.style.width = Pt(36.0)
-    avatar.style.height = Pt(36.0)
+    avatar.style.set_width(Pt(36.0))
+    avatar.style.set_height(Pt(36.0))
     avatar.style.align_items = Center
     avatar.style.justify = Center
     let initial = @flex.Node::new()
@@ -40,12 +40,12 @@ fn chat_rows(n : Int) -> @flex.Node {
     let body = @flex.Node::new()
     body.style.grow = 1.0
     body.style.shrink = 1.0
-    body.style.basis = Pt(0.0)
-    body.style.gap_row = Pt(4.0)
+    body.style.set_basis(Pt(0.0))
+    body.style.set_gap_row(Pt(4.0))
     body.style.align_items = FlexStart
     let head = @flex.Node::new()
     head.style.direction = Row
-    head.style.gap_col = Pt(8.0)
+    head.style.set_gap_col(Pt(8.0))
     let name = @flex.Node::new()
     name.measure = Some(cheap_text(7))
     let time = @flex.Node::new()
@@ -54,10 +54,10 @@ fn chat_rows(n : Int) -> @flex.Node {
     head.add(time)
     body.add(head)
     let bubble = @flex.Node::new()
-    bubble.style.padding.left = Pt(12.0)
-    bubble.style.padding.right = Pt(12.0)
-    bubble.style.padding.top = Pt(8.0)
-    bubble.style.padding.bottom = Pt(8.0)
+    bubble.style.set_padding_left(Pt(12.0))
+    bubble.style.set_padding_right(Pt(12.0))
+    bubble.style.set_padding_top(Pt(8.0))
+    bubble.style.set_padding_bottom(Pt(8.0))
     let text = @flex.Node::new()
     text.style.shrink = 1.0
     text.measure = Some(cheap_text(20 + i * 7 % 90))

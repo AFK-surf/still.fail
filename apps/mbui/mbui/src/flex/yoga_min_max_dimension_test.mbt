@@ -5,11 +5,11 @@
 test "max_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.max_width = Pt(50.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_max_width(Pt(50.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -20,12 +20,12 @@ test "max_width" {
 test "max_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
-  root_child0.style.max_height = Pt(50.0)
+  root_child0.style.set_width(Pt(10.0))
+  root_child0.style.set_max_height(Pt(50.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -36,13 +36,13 @@ test "max_height" {
 test "justify_content_min_max" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.max_height = Pt(200.0)
-  root.style.min_height = Pt(100.0)
-  root.style.width = Pt(100.0)
+  root.style.set_max_height(Pt(200.0))
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_width(Pt(100.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(60.0)
-  root_child0.style.height = Pt(60.0)
+  root_child0.style.set_width(Pt(60.0))
+  root_child0.style.set_height(Pt(60.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -53,13 +53,13 @@ test "justify_content_min_max" {
 test "align_items_min_max" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.max_width = Pt(200.0)
-  root.style.min_width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_max_width(Pt(200.0))
+  root.style.set_min_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(60.0)
-  root_child0.style.height = Pt(60.0)
+  root_child0.style.set_width(Pt(60.0))
+  root_child0.style.set_height(Pt(60.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -70,20 +70,20 @@ test "align_items_min_max" {
 test "justify_content_overflow_min_max" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(100.0)
-  root.style.max_height = Pt(110.0)
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_max_height(Pt(110.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(50.0)
-  root_child2.style.height = Pt(50.0)
+  root_child2.style.set_width(Pt(50.0))
+  root_child2.style.set_height(Pt(50.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 50.0, 110.0)
@@ -96,15 +96,15 @@ test "justify_content_overflow_min_max" {
 test "flex_grow_to_min" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(100.0)
-  root.style.max_height = Pt(500.0)
-  root.style.width = Pt(100.0)
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_max_height(Pt(500.0))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -116,8 +116,8 @@ test "flex_grow_to_min" {
 test "flex_grow_in_at_most_container" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
@@ -125,7 +125,7 @@ test "flex_grow_in_at_most_container" {
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
-  root_child0_child0.style.basis = Pt(0.0)
+  root_child0_child0.style.set_basis(Pt(0.0))
   root_child0.add(root_child0_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -139,9 +139,9 @@ test "flex_grow_child" {
   root.style.position = Absolute
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(100.0)
+  root_child0.style.set_height(Pt(100.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(0.0)
+  root_child0.style.set_basis(Pt(0.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 0.0, 100.0)
@@ -152,13 +152,13 @@ test "flex_grow_child" {
 test "flex_grow_within_constrained_min_max_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(100.0)
-  root.style.max_height = Pt(200.0)
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_max_height(Pt(200.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 0.0, 100.0)
@@ -170,14 +170,14 @@ test "flex_grow_within_constrained_min_max_column" {
 test "flex_grow_within_max_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.max_width = Pt(100.0)
+  root_child0.style.set_max_width(Pt(100.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.height = Pt(20.0)
+  root_child0_child0.style.set_height(Pt(20.0))
   root_child0_child0.style.grow = 1.0
   root_child0.add(root_child0_child0)
   @flex.compute(root)
@@ -190,14 +190,14 @@ test "flex_grow_within_max_width" {
 test "flex_grow_within_constrained_max_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.max_width = Pt(300.0)
+  root_child0.style.set_max_width(Pt(300.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.height = Pt(20.0)
+  root_child0_child0.style.set_height(Pt(20.0))
   root_child0_child0.style.grow = 1.0
   root_child0.add(root_child0_child0)
   @flex.compute(root)
@@ -210,16 +210,16 @@ test "flex_grow_within_constrained_max_width" {
 test "flex_root_ignored" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.min_height = Pt(100.0)
-  root.style.max_height = Pt(500.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_max_height(Pt(500.0))
   root.style.grow = 1.0
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(200.0)
+  root_child0.style.set_basis(Pt(200.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(100.0)
+  root_child1.style.set_height(Pt(100.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 300.0)
@@ -231,20 +231,20 @@ test "flex_root_ignored" {
 test "flex_grow_root_minimized" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.min_height = Pt(100.0)
-  root.style.max_height = Pt(500.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_max_height(Pt(500.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.min_height = Pt(100.0)
-  root_child0.style.max_height = Pt(500.0)
+  root_child0.style.set_min_height(Pt(100.0))
+  root_child0.style.set_max_height(Pt(500.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.basis = Pt(200.0)
+  root_child0_child0.style.set_basis(Pt(200.0))
   root_child0_child0.style.grow = 1.0
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
-  root_child0_child1.style.height = Pt(100.0)
+  root_child0_child1.style.set_height(Pt(100.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 300.0)
@@ -257,19 +257,19 @@ test "flex_grow_root_minimized" {
 test "flex_grow_height_maximized" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(500.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(500.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.min_height = Pt(100.0)
-  root_child0.style.max_height = Pt(500.0)
+  root_child0.style.set_min_height(Pt(100.0))
+  root_child0.style.set_max_height(Pt(500.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.basis = Pt(200.0)
+  root_child0_child0.style.set_basis(Pt(200.0))
   root_child0_child0.style.grow = 1.0
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
-  root_child0_child1.style.height = Pt(100.0)
+  root_child0_child1.style.set_height(Pt(100.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 500.0)
@@ -282,14 +282,14 @@ test "flex_grow_height_maximized" {
 test "flex_grow_within_constrained_min_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_min_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -301,12 +301,12 @@ test "flex_grow_within_constrained_min_row" {
 test "flex_grow_within_constrained_min_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(100.0)
+  root.style.set_min_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 0.0, 100.0)
@@ -318,18 +318,18 @@ test "flex_grow_within_constrained_min_column" {
 test "flex_grow_within_constrained_max_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
+  root.style.set_width(Pt(200.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(100.0)
-  root_child0.style.max_width = Pt(100.0)
+  root_child0.style.set_height(Pt(100.0))
+  root_child0.style.set_max_width(Pt(100.0))
   root_child0.style.direction = Row
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pt(100.0)
+  root_child0_child0.style.set_basis(Pt(100.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
-  root_child0_child1.style.width = Pt(50.0)
+  root_child0_child1.style.set_width(Pt(50.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 100.0)
@@ -342,14 +342,14 @@ test "flex_grow_within_constrained_max_row" {
 test "flex_grow_within_constrained_max_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.max_height = Pt(100.0)
-  root.style.width = Pt(100.0)
+  root.style.set_max_height(Pt(100.0))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.shrink = 1.0
-  root_child0.style.basis = Pt(100.0)
+  root_child0.style.set_basis(Pt(100.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -361,18 +361,18 @@ test "flex_grow_within_constrained_max_column" {
 test "child_min_max_width_flexing" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(120.0)
-  root.style.height = Pt(50.0)
+  root.style.set_width(Pt(120.0))
+  root.style.set_height(Pt(50.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.min_width = Pt(60.0)
+  root_child0.style.set_min_width(Pt(60.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(0.0)
+  root_child0.style.set_basis(Pt(0.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.max_width = Pt(20.0)
+  root_child1.style.set_max_width(Pt(20.0))
   root_child1.style.grow = 1.0
-  root_child1.style.basis = Pct(50.0)
+  root_child1.style.set_basis(Pct(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 120.0, 50.0)
@@ -384,8 +384,8 @@ test "child_min_max_width_flexing" {
 test "min_width_overrides_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_width = Pt(100.0)
-  root.style.width = Pt(50.0)
+  root.style.set_min_width(Pt(100.0))
+  root.style.set_width(Pt(50.0))
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 0.0)
 }
@@ -394,8 +394,8 @@ test "min_width_overrides_width" {
 test "max_width_overrides_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.max_width = Pt(100.0)
-  root.style.width = Pt(200.0)
+  root.style.set_max_width(Pt(100.0))
+  root.style.set_width(Pt(200.0))
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 0.0)
 }
@@ -404,8 +404,8 @@ test "max_width_overrides_width" {
 test "min_height_overrides_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(100.0)
-  root.style.height = Pt(50.0)
+  root.style.set_min_height(Pt(100.0))
+  root.style.set_height(Pt(50.0))
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 0.0, 100.0)
 }
@@ -414,8 +414,8 @@ test "min_height_overrides_height" {
 test "max_height_overrides_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.max_height = Pt(100.0)
-  root.style.height = Pt(200.0)
+  root.style.set_max_height(Pt(100.0))
+  root.style.set_height(Pt(200.0))
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 0.0, 100.0)
 }
@@ -424,14 +424,14 @@ test "max_height_overrides_height" {
 test "min_max_percent_no_width_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
-  root_child0.style.min_width = Pct(10.0)
-  root_child0.style.max_width = Pct(10.0)
-  root_child0.style.min_height = Pct(10.0)
-  root_child0.style.max_height = Pct(10.0)
+  root_child0.style.set_min_width(Pct(10.0))
+  root_child0.style.set_max_width(Pct(10.0))
+  root_child0.style.set_min_height(Pct(10.0))
+  root_child0.style.set_max_height(Pct(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)

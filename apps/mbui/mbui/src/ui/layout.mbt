@@ -147,50 +147,18 @@ fn whole_px_layout() -> Bool {
 }
 
 ///|
-/// A length for the flex engine; zero, the most common, is not made anew.
-fn pt(v : Double) -> @flex.Dim {
-  if v == 0.0 {
-    @flex.pt_zero
-  } else {
-    Pt(v)
-  }
+/// Whether a style's length (its kind and number: @flex.Style's `<name>_k`, `<name>_v`) is not `v` points.
+fn pt_differs(k : Int, cur : Double, v : Double) -> Bool {
+  k != @flex.LEN_PT || cur != v
 }
 
 ///|
-/// What `d` must become to be `Pt(v)`; None when it is.
-fn pt_change(d : @flex.Dim, v : Double) -> @flex.Dim? {
-  match d {
-    Pt(x) if x == v => None
-    _ => Some(pt(v))
-  }
-}
-
-///|
-/// What `d` must become to be `Pt(v)` when `has`, else Auto; None when it
-/// is.
-fn opt_change(d : @flex.Dim, has : Bool, v : Double) -> @flex.Dim? {
+/// Whether a style's length is not what it is to be: `v` points when `has`, else Auto.
+fn opt_differs(k : Int, cur : Double, has : Bool, v : Double) -> Bool {
   if has {
-    pt_change(d, v)
-  } else if is_auto(d) {
-    None
+    pt_differs(k, cur, v)
   } else {
-    Some(Auto)
-  }
-}
-
-///|
-fn is_pct100(d : @flex.Dim) -> Bool {
-  match d {
-    Pct(p) => p == 100.0
-    _ => false
-  }
-}
-
-///|
-fn is_auto(d : @flex.Dim) -> Bool {
-  match d {
-    Auto => true
-    _ => false
+    k != @flex.LEN_AUTO
   }
 }
 
@@ -261,41 +229,31 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.direction = dir
     ch = true
   }
-  match pt_change(s.padding.left, len(n.pad_l)) {
-    Some(d) => {
-      s.padding.left = d
-      ch = true
-    }
-    None => ()
+  let pad_l = len(n.pad_l)
+  if pt_differs(s.padding_left_k, s.padding_left_v, pad_l) {
+    s.set_padding_left(Pt(pad_l))
+    ch = true
   }
-  match pt_change(s.padding.top, len(n.pad_t)) {
-    Some(d) => {
-      s.padding.top = d
-      ch = true
-    }
-    None => ()
+  let pad_t = len(n.pad_t)
+  if pt_differs(s.padding_top_k, s.padding_top_v, pad_t) {
+    s.set_padding_top(Pt(pad_t))
+    ch = true
   }
-  match pt_change(s.padding.right, len(n.pad_r)) {
-    Some(d) => {
-      s.padding.right = d
-      ch = true
-    }
-    None => ()
+  let pad_r = len(n.pad_r)
+  if pt_differs(s.padding_right_k, s.padding_right_v, pad_r) {
+    s.set_padding_right(Pt(pad_r))
+    ch = true
   }
-  match pt_change(s.padding.bottom, len(n.pad_b)) {
-    Some(d) => {
-      s.padding.bottom = d
-      ch = true
-    }
-    None => ()
+  let pad_b = len(n.pad_b)
+  if pt_differs(s.padding_bottom_k, s.padding_bottom_v, pad_b) {
+    s.set_padding_bottom(Pt(pad_b))
+    ch = true
   }
-  match pt_change(s.gap_row, len(n.gap)) {
-    Some(d) => {
-      s.gap_row = d
-      s.gap_col = d
-      ch = true
-    }
-    None => ()
+  let gap = len(n.gap)
+  if pt_differs(s.gap_row_k, s.gap_row_v, gap) {
+    s.set_gap_row(Pt(gap))
+    s.set_gap_col(Pt(gap))
+    ch = true
   }
   if s.aspect != n.aspect {
     s.aspect = n.aspect
@@ -322,33 +280,29 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   // 0 and 1e9: none (Auto)
-  match opt_change(s.min_height, n.min_h > 0.0, len(n.min_h)) {
-    Some(d) => {
-      s.min_height = d
-      ch = true
-    }
-    None => ()
+  let has_min_h = n.min_h > 0.0
+  let min_h = len(n.min_h)
+  if opt_differs(s.min_height_k, s.min_height_v, has_min_h, min_h) {
+    s.set_min_height(if has_min_h { Pt(min_h) } else { Auto })
+    ch = true
   }
-  match opt_change(s.max_height, n.max_h < 1.0e9, len(n.max_h)) {
-    Some(d) => {
-      s.max_height = d
-      ch = true
-    }
-    None => ()
+  let has_max_h = n.max_h < 1.0e9
+  let max_h = len(n.max_h)
+  if opt_differs(s.max_height_k, s.max_height_v, has_max_h, max_h) {
+    s.set_max_height(if has_max_h { Pt(max_h) } else { Auto })
+    ch = true
   }
-  match opt_change(s.min_width, n.min_w > 0.0, len(n.min_w)) {
-    Some(d) => {
-      s.min_width = d
-      ch = true
-    }
-    None => ()
+  let has_min_w = n.min_w > 0.0
+  let min_w = len(n.min_w)
+  if opt_differs(s.min_width_k, s.min_width_v, has_min_w, min_w) {
+    s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
+    ch = true
   }
-  match opt_change(s.max_width, n.max_w < 1.0e9, len(n.max_w)) {
-    Some(d) => {
-      s.max_width = d
-      ch = true
-    }
-    None => ()
+  let has_max_w = n.max_w < 1.0e9
+  let max_w = len(n.max_w)
+  if opt_differs(s.max_width_k, s.max_width_v, has_max_w, max_w) {
+    s.set_max_width(if has_max_w { Pt(max_w) } else { Auto })
+    ch = true
   }
   let in_row = pdir == 1
   let in_col = pdir == 2
@@ -421,8 +375,8 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.overflow = flow
     ch = true
   }
-  if is_auto(s.basis) == basis0 {
-    s.basis = if basis0 { @flex.pt_zero } else { Auto }
+  if (s.basis_k == @flex.LEN_AUTO) == basis0 {
+    s.set_basis(if basis0 { Pt(0.0) } else { Auto })
     ch = true
   }
   let als : @flex.Align = if stretch { Stretch } else { Auto }
@@ -432,37 +386,33 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   if over {
     // (only when it has just become a layer: its position changes too)
-    if !is_pct100(s.width) {
-      s.width = Pct(100.0)
+    if !(s.width_k == @flex.LEN_PCT && s.width_v == 100.0) {
+      s.set_width(Pct(100.0))
     }
   } else {
-    match opt_change(s.width, has_w, len(wpx)) {
-      Some(d) => {
-        s.width = d
-        ch = true
-      }
-      None => ()
+    let w = len(wpx)
+    if opt_differs(s.width_k, s.width_v, has_w, w) {
+      s.set_width(if has_w { Pt(w) } else { Auto })
+      ch = true
     }
   }
   if !has_h && over {
-    if !is_pct100(s.height) {
-      s.height = Pct(100.0)
+    if !(s.height_k == @flex.LEN_PCT && s.height_v == 100.0) {
+      s.set_height(Pct(100.0))
       ch = true
     }
   } else {
-    match opt_change(s.height, has_h, len(hpx)) {
-      Some(d) => {
-        s.height = d
-        ch = true
-      }
-      None => ()
+    let h = len(hpx)
+    if opt_differs(s.height_k, s.height_v, has_h, h) {
+      s.set_height(if has_h { Pt(h) } else { Auto })
+      ch = true
     }
   }
   let pos : @flex.PositionType = if over { Absolute } else { Relative }
   if s.position != pos {
     s.position = pos
-    s.inset.left = if over { @flex.pt_zero } else { Auto }
-    s.inset.top = if over { @flex.pt_zero } else { Auto }
+    s.set_inset_left(if over { Pt(0.0) } else { Auto })
+    s.set_inset_top(if over { Pt(0.0) } else { Auto })
     ch = true
   }
   let mut up = 0

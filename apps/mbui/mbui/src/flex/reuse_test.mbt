@@ -39,22 +39,31 @@ fn fresh(n : @flex.Node) -> @flex.Node {
   c.style.align_content = s.align_content
   c.style.grow = s.grow
   c.style.shrink = s.shrink
-  c.style.basis = s.basis
-  c.style.width = s.width
-  c.style.height = s.height
-  c.style.min_width = s.min_width
-  c.style.min_height = s.min_height
-  c.style.max_width = s.max_width
-  c.style.max_height = s.max_height
-  for e in [(c.style.margin, s.margin), (c.style.padding, s.padding), (c.style.border, s.border), (c.style.inset, s.inset)] {
-    let (to, from) = e
-    to.left = from.left
-    to.top = from.top
-    to.right = from.right
-    to.bottom = from.bottom
-  }
-  c.style.gap_row = s.gap_row
-  c.style.gap_col = s.gap_col
+  c.style.set_basis(s.get_basis())
+  c.style.set_width(s.get_width())
+  c.style.set_height(s.get_height())
+  c.style.set_min_width(s.get_min_width())
+  c.style.set_min_height(s.get_min_height())
+  c.style.set_max_width(s.get_max_width())
+  c.style.set_max_height(s.get_max_height())
+  c.style.set_margin_left(s.get_margin_left())
+  c.style.set_margin_top(s.get_margin_top())
+  c.style.set_margin_right(s.get_margin_right())
+  c.style.set_margin_bottom(s.get_margin_bottom())
+  c.style.set_padding_left(s.get_padding_left())
+  c.style.set_padding_top(s.get_padding_top())
+  c.style.set_padding_right(s.get_padding_right())
+  c.style.set_padding_bottom(s.get_padding_bottom())
+  c.style.set_border_left(s.get_border_left())
+  c.style.set_border_top(s.get_border_top())
+  c.style.set_border_right(s.get_border_right())
+  c.style.set_border_bottom(s.get_border_bottom())
+  c.style.set_inset_left(s.get_inset_left())
+  c.style.set_inset_top(s.get_inset_top())
+  c.style.set_inset_right(s.get_inset_right())
+  c.style.set_inset_bottom(s.get_inset_bottom())
+  c.style.set_gap_row(s.get_gap_row())
+  c.style.set_gap_col(s.get_gap_col())
   c.style.aspect = s.aspect
   c.style.box_sizing = s.box_sizing
   c.style.overflow = s.overflow
@@ -94,14 +103,14 @@ fn restyle(r : Rng, n : @flex.Node) -> Unit {
   let s = n.style
   match r.below(19) {
     0 => s.direction = if r.chance(50) { Row } else { Column }
-    1 => s.width = rand_dim(r)
-    2 => s.height = rand_dim(r)
+    1 => s.set_width(rand_dim(r))
+    2 => s.set_height(rand_dim(r))
     3 => s.grow = r.below(3).to_double()
     4 => s.shrink = r.below(2).to_double()
-    5 => s.padding.left = Pt(r.below(12).to_double())
-    6 => s.padding.top = Pt(r.below(12).to_double())
-    7 => s.gap_row = Pt(r.below(8).to_double())
-    8 => s.gap_col = Pt(r.below(8).to_double())
+    5 => s.set_padding_left(Pt(r.below(12).to_double()))
+    6 => s.set_padding_top(Pt(r.below(12).to_double()))
+    7 => s.set_gap_row(Pt(r.below(8).to_double()))
+    8 => s.set_gap_col(Pt(r.below(8).to_double()))
     9 =>
       s.align_items = match r.below(5) {
         0 => FlexStart
@@ -117,13 +126,13 @@ fn restyle(r : Rng, n : @flex.Node) -> Unit {
         _ => FlexEnd
       }
     11 => s.wrap = if r.chance(70) { NoWrap } else { Wrap }
-    12 => s.basis = if r.chance(50) { Auto } else { Pt(r.below(60).to_double()) }
+    12 => s.set_basis(if r.chance(50) { Auto } else { Pt(r.below(60).to_double()) })
     13 => {
       s.position = if r.chance(85) { Relative } else { Absolute }
-      s.inset.left = if r.chance(50) { Auto } else { Pt(r.below(30).to_double()) }
-      s.inset.top = if r.chance(50) { Auto } else { Pt(r.below(30).to_double()) }
+      s.set_inset_left(if r.chance(50) { Auto } else { Pt(r.below(30).to_double()) })
+      s.set_inset_top(if r.chance(50) { Auto } else { Pt(r.below(30).to_double()) })
     }
-    14 => s.max_width = if r.chance(70) { Auto } else { Pt(r.below(200).to_double()) }
+    14 => s.set_max_width(if r.chance(70) { Auto } else { Pt(r.below(200).to_double()) })
     15 =>
       s.align_self = match r.below(5) {
         0 => FlexStart
@@ -133,8 +142,8 @@ fn restyle(r : Rng, n : @flex.Node) -> Unit {
         _ => Auto
       }
     16 => s.wrap = if r.chance(40) { NoWrap } else { Wrap }
-    17 => s.padding.left = Pct(r.below(20).to_double())
-    _ => s.margin.left = Pt(r.below(10).to_double())
+    17 => s.set_padding_left(Pct(r.below(20).to_double()))
+    _ => s.set_margin_left(Pt(r.below(10).to_double()))
   }
 }
 
@@ -204,7 +213,7 @@ test "reused layouts are the layouts a fresh tree gets" {
       if what == 0 {
         // the space offered (or the root's own limit, and what is beside)
         if r.chance(25) {
-          root.style.max_width = if r.chance(30) { Auto } else { Pt((150 + r.below(300)).to_double()) }
+          root.style.set_max_width(if r.chance(30) { Auto } else { Pt((150 + r.below(300)).to_double()) })
           root.dirty = true
         } else if r.chance(50) {
           w = (150 + r.below(450)).to_double()
@@ -318,9 +327,9 @@ test "reused: a root placed absolutely, offered another width (the space, not th
 test "reused: a box of fixed width whose padding is a share of its parent's width" {
   let root = @flex.Node::new()
   let b = @flex.Node::new()
-  b.style.width = Pt(100.0)
+  b.style.set_width(Pt(100.0))
   b.style.align_self = FlexStart
-  b.style.padding.left = Pct(10.0)
+  b.style.set_padding_left(Pct(10.0))
   let t = @flex.Node::new()
   t.measure = Some(text_of(5))
   b.add(t)
@@ -337,20 +346,20 @@ test "reused: absolute boxes in absolute boxes" {
   let root = @flex.Node::new()
   let a = @flex.Node::new()
   a.style.position = Absolute
-  a.style.width = Pt(100.0)
-  a.style.height = Pt(50.0)
-  a.style.inset.left = Pt(10.0)
+  a.style.set_width(Pt(100.0))
+  a.style.set_height(Pt(50.0))
+  a.style.set_inset_left(Pt(10.0))
   let b = @flex.Node::new()
   b.style.position = Absolute
-  b.style.width = Pt(20.0)
-  b.style.height = Pt(20.0)
-  b.style.inset.right = Pt(5.0)
+  b.style.set_width(Pt(20.0))
+  b.style.set_height(Pt(20.0))
+  b.style.set_inset_right(Pt(5.0))
   a.add(b)
   root.add(a)
   @flex.compute(root, width=300.0, height=200.0, round=false)
   assert_eq(b.left, 75.0)
   check_reuse(root, 300.0, 200.0, "again")
-  a.style.width = Pt(120.0)
+  a.style.set_width(Pt(120.0))
   a.dirty = true
   root.dirty = true
   check_reuse(root, 300.0, 200.0, "wider")
@@ -376,8 +385,8 @@ test "reused: nothing under a kept root is visited" {
   let root = @flex.Node::new()
   let a = @flex.Node::new()
   a.style.position = Absolute
-  a.style.width = Pt(10.0)
-  a.style.height = Pt(10.0)
+  a.style.set_width(Pt(10.0))
+  a.style.set_height(Pt(10.0))
   let b = @flex.Node::new()
   b.measure = Some(text_of(5))
   root.add(a)
@@ -398,16 +407,16 @@ test "reused: nothing under a kept root is visited" {
 test "reused: not with rounding" {
   let root = @flex.Node::new()
   let a = @flex.Node::new()
-  a.style.height = Pt(10.4)
+  a.style.set_height(Pt(10.4))
   let b = @flex.Node::new()
   let c = @flex.Node::new()
-  c.style.height = Pt(10.5)
-  c.style.margin.top = Pt(0.5)
+  c.style.set_height(Pt(10.5))
+  c.style.set_margin_top(Pt(0.5))
   b.add(c)
   root.add(a)
   root.add(b)
   @flex.compute(root, width=100.0, height=100.0, reuse=true)
-  a.style.height = Pt(10.8)
+  a.style.set_height(Pt(10.8))
   a.dirty = true
   root.dirty = true
   @flex.compute(root, width=100.0, height=100.0, reuse=true)
@@ -422,7 +431,7 @@ test "reused: a root placed absolutely, offered another height" {
   root.style.position = Absolute
   for _ in 0..<3 {
     let t = @flex.Node::new()
-    t.style.height = Pt(100.0)
+    t.style.set_height(Pt(100.0))
     t.style.shrink = 1.0
     root.add(t)
   }

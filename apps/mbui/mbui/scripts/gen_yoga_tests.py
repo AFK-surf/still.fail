@@ -74,14 +74,14 @@ def setter(node, prop, args):
     simple_dims = {"Width": "width", "Height": "height", "MinWidth": "min_width", "MinHeight": "min_height",
                    "MaxWidth": "max_width", "MaxHeight": "max_height", "FlexBasis": "basis"}
     if prop in simple_dims:
-        return [f"{s}.{simple_dims[prop]} = {dim(a[0])}"]
+        return [f"{s}.set_{simple_dims[prop]}({dim(a[0])})"]
     if prop in ("Margin", "Padding", "Border", "Position"):
         field = {"Margin": "margin", "Padding": "padding", "Border": "border", "Position": "inset"}[prop]
         edge = a[0].split(".")[1]
-        return [f"{s}.{field}.{e} = {dim(a[1])}" for e in EDGES[edge]]
+        return [f"{s}.set_{field}_{e}({dim(a[1])})" for e in EDGES[edge]]
     if prop == "PositionAuto":
         edge = a[0].split(".")[1]
-        return [f"{s}.inset.{e} = Auto" for e in EDGES[edge]]
+        return [f"{s}.set_inset_{e}(Auto)" for e in EDGES[edge]]
     if prop == "FlexDirection":
         return [f"{s}.direction = {enum(a[0])}"]
     if prop == "PositionType":
@@ -98,7 +98,7 @@ def setter(node, prop, args):
     if prop == "Gap":
         g = a[0].split(".")[1]
         fields = {"Column": ["gap_col"], "Row": ["gap_row"], "All": ["gap_col", "gap_row"]}[g]
-        return [f"{s}.{f} = {dim(a[1])}" for f in fields]
+        return [f"{s}.set_{f}({dim(a[1])})" for f in fields]
     if prop == "Display":
         return [f"{s}.display = {enum(a[0])}"]
     if prop == "BoxSizing":

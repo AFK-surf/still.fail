@@ -5,8 +5,8 @@
 test "rounding_flex_basis_flex_grow_row_width_of_100" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
@@ -28,8 +28,8 @@ test "rounding_flex_basis_flex_grow_row_width_of_100" {
 test "rounding_flex_basis_flex_grow_row_prime_number_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(113.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(113.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
@@ -59,18 +59,18 @@ test "rounding_flex_basis_flex_grow_row_prime_number_width" {
 test "rounding_flex_basis_flex_shrink_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(101.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(101.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(100.0)
+  root_child0.style.set_basis(Pt(100.0))
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.basis = Pt(25.0)
+  root_child1.style.set_basis(Pt(25.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.basis = Pt(25.0)
+  root_child2.style.set_basis(Pt(25.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 101.0, 100.0)
@@ -83,19 +83,19 @@ test "rounding_flex_basis_flex_shrink_row" {
 test "rounding_flex_basis_overrides_main_size" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(113.0)
-  root.style.width = Pt(100.0)
+  root.style.set_height(Pt(113.0))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -109,19 +109,19 @@ test "rounding_flex_basis_overrides_main_size" {
 test "rounding_total_fractional" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(113.4)
-  root.style.width = Pt(87.4)
+  root.style.set_height(Pt(113.4))
+  root.style.set_width(Pt(87.4))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.3)
+  root_child0.style.set_height(Pt(20.3))
   root_child0.style.grow = 0.7
-  root_child0.style.basis = Pt(50.3)
+  root_child0.style.set_basis(Pt(50.3))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.6
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.7)
+  root_child2.style.set_height(Pt(10.7))
   root_child2.style.grow = 1.1
   root.add(root_child2)
   @flex.compute(root)
@@ -135,31 +135,31 @@ test "rounding_total_fractional" {
 test "rounding_total_fractional_nested" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(113.4)
-  root.style.width = Pt(87.4)
+  root.style.set_height(Pt(113.4))
+  root.style.set_width(Pt(87.4))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.3)
+  root_child0.style.set_height(Pt(20.3))
   root_child0.style.grow = 0.7
-  root_child0.style.basis = Pt(50.3)
+  root_child0.style.set_basis(Pt(50.3))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.inset.bottom = Pt(13.3)
-  root_child0_child0.style.height = Pt(9.9)
+  root_child0_child0.style.set_inset_bottom(Pt(13.3))
+  root_child0_child0.style.set_height(Pt(9.9))
   root_child0_child0.style.grow = 1.0
-  root_child0_child0.style.basis = Pt(0.3)
+  root_child0_child0.style.set_basis(Pt(0.3))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
-  root_child0_child1.style.inset.top = Pt(13.3)
-  root_child0_child1.style.height = Pt(1.1)
+  root_child0_child1.style.set_inset_top(Pt(13.3))
+  root_child0_child1.style.set_height(Pt(1.1))
   root_child0_child1.style.grow = 4.0
-  root_child0_child1.style.basis = Pt(0.3)
+  root_child0_child1.style.set_basis(Pt(0.3))
   root_child0.add(root_child0_child1)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.6
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.7)
+  root_child2.style.set_height(Pt(10.7))
   root_child2.style.grow = 1.1
   root.add(root_child2)
   @flex.compute(root)
@@ -175,19 +175,19 @@ test "rounding_total_fractional_nested" {
 test "rounding_fractional_input_1" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(113.4)
-  root.style.width = Pt(100.0)
+  root.style.set_height(Pt(113.4))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -201,19 +201,19 @@ test "rounding_fractional_input_1" {
 test "rounding_fractional_input_2" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(113.6)
-  root.style.width = Pt(100.0)
+  root.style.set_height(Pt(113.6))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -227,20 +227,20 @@ test "rounding_fractional_input_2" {
 test "rounding_fractional_input_3" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.inset.top = Pt(0.3)
-  root.style.height = Pt(113.4)
-  root.style.width = Pt(100.0)
+  root.style.set_inset_top(Pt(0.3))
+  root.style.set_height(Pt(113.4))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -254,20 +254,20 @@ test "rounding_fractional_input_3" {
 test "rounding_fractional_input_4" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.inset.top = Pt(0.7)
-  root.style.height = Pt(113.4)
-  root.style.width = Pt(100.0)
+  root.style.set_inset_top(Pt(0.7))
+  root.style.set_height(Pt(113.4))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -281,22 +281,22 @@ test "rounding_fractional_input_4" {
 test "rounding_inner_node_controversy_horizontal" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(320.0)
+  root.style.set_width(Pt(320.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child1_child0 = @flex.Node::new()
-  root_child1_child0.style.height = Pt(10.0)
+  root_child1_child0.style.set_height(Pt(10.0))
   root_child1_child0.style.grow = 1.0
   root_child1.add(root_child1_child0)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -311,21 +311,21 @@ test "rounding_inner_node_controversy_horizontal" {
 test "rounding_inner_node_controversy_vertical" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(320.0)
+  root.style.set_height(Pt(320.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child1_child0 = @flex.Node::new()
-  root_child1_child0.style.width = Pt(10.0)
+  root_child1_child0.style.set_width(Pt(10.0))
   root_child1_child0.style.grow = 1.0
   root_child1.add(root_child1_child0)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -340,35 +340,35 @@ test "rounding_inner_node_controversy_vertical" {
 test "rounding_inner_node_controversy_combined" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(640.0)
-  root.style.height = Pt(320.0)
+  root.style.set_width(Pt(640.0))
+  root.style.set_height(Pt(320.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pct(100.0)
+  root_child0.style.set_height(Pct(100.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pct(100.0)
+  root_child1.style.set_height(Pct(100.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child1_child0 = @flex.Node::new()
-  root_child1_child0.style.width = Pct(100.0)
+  root_child1_child0.style.set_width(Pct(100.0))
   root_child1_child0.style.grow = 1.0
   root_child1.add(root_child1_child0)
   let root_child1_child1 = @flex.Node::new()
-  root_child1_child1.style.width = Pct(100.0)
+  root_child1_child1.style.set_width(Pct(100.0))
   root_child1_child1.style.grow = 1.0
   root_child1.add(root_child1_child1)
   let root_child1_child1_child0 = @flex.Node::new()
   root_child1_child1_child0.style.grow = 1.0
-  root_child1_child1_child0.style.width = Pct(100.0)
+  root_child1_child1_child0.style.set_width(Pct(100.0))
   root_child1_child1.add(root_child1_child1_child0)
   let root_child1_child2 = @flex.Node::new()
-  root_child1_child2.style.width = Pct(100.0)
+  root_child1_child2.style.set_width(Pct(100.0))
   root_child1_child2.style.grow = 1.0
   root_child1.add(root_child1_child2)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pct(100.0)
+  root_child2.style.set_height(Pct(100.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)

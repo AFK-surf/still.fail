@@ -59,25 +59,31 @@ fn edge_pct(p : Double, base : Double) -> Double {
 }
 
 ///|
-/// A dimension against a reference length (NaN when it can't be resolved).
-/// (Where it is done for every node, the match is written out in place: a
-/// call takes a reference to the Dim and gives it back, a match on the
-/// field reads its tag.)
-fn resolve(d : Dim, base : Double) -> Double {
-  match d {
-    Auto => undef
-    Pt(v) => v
-    Pct(p) => pct(p, base)
+/// A length of a style (its kind and number: Style's `<name>_k` and
+/// `<name>_v`) against a reference length (NaN when it can't be resolved).
+fn resolve_of(k : Int, v : Double, base : Double) -> Double {
+  if k == LEN_PT {
+    v
+  } else if k == LEN_PCT {
+    pct(v, base)
+  } else {
+    undef
   }
 }
 
 ///|
 /// An edge length (margin, padding, border): auto and unresolved are 0.
-fn edge(d : Dim, base : Double) -> Double {
-  match d {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, base)
+fn edge_of(k : Int, v : Double, base : Double) -> Double {
+  if k == LEN_PT {
+    if known(v) {
+      v
+    } else {
+      0.0
+    }
+  } else if k == LEN_PCT {
+    edge_pct(v, base)
+  } else {
+    0.0
   }
 }
 
@@ -142,123 +148,51 @@ fn box_of(
   into? : Box? = None,
 ) -> Box {
   ignore(cb_h)
-  let pad_l = match s.padding.left {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let pad_r = match s.padding.right {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let pad_t = match s.padding.top {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let pad_b = match s.padding.bottom {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let bor_l = match s.border.left {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let bor_r = match s.border.right {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let bor_t = match s.border.top {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let bor_b = match s.border.bottom {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
+  let pad_l = edge_of(s.padding_left_k, s.padding_left_v, cb_w)
+  let pad_r = edge_of(s.padding_right_k, s.padding_right_v, cb_w)
+  let pad_t = edge_of(s.padding_top_k, s.padding_top_v, cb_w)
+  let pad_b = edge_of(s.padding_bottom_k, s.padding_bottom_v, cb_w)
+  let bor_l = edge_of(s.border_left_k, s.border_left_v, cb_w)
+  let bor_r = edge_of(s.border_right_k, s.border_right_v, cb_w)
+  let bor_t = edge_of(s.border_top_k, s.border_top_v, cb_w)
+  let bor_b = edge_of(s.border_bottom_k, s.border_bottom_v, cb_w)
   let pbw = pad_l + pad_r + bor_l + bor_r
   let pbh = pad_t + pad_b + bor_t + bor_b
   // content-box sizes grow by the padding and border (NaN stays NaN)
   let content_box = s.box_sizing == ContentBox
   let adj_w = if content_box { pbw } else { 0.0 }
   let adj_h = if content_box { pbh } else { 0.0 }
-  let mut min_w = (match s.min_width {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_w)
-  }) + adj_w
-  let mut min_h = (match s.min_height {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_h)
-  }) + adj_h
+  let mut min_w = resolve_of(s.min_width_k, s.min_width_v, cb_w) + adj_w
+  let mut min_h = resolve_of(s.min_height_k, s.min_height_v, cb_h) + adj_h
   // a box is never smaller than its padding and border
   min_w = if known(min_w) { fmax(min_w, pbw) } else { pbw }
   min_h = if known(min_h) { fmax(min_h, pbh) } else { pbh }
-  let mar_l = match s.margin.left {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let mar_t = match s.margin.top {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let mar_r = match s.margin.right {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let mar_b = match s.margin.bottom {
-    Pt(v) => if known(v) { v } else { 0.0 }
-    Auto => 0.0
-    Pct(p) => edge_pct(p, cb_w)
-  }
-  let w = (match s.width {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_w)
-  }) + adj_w
-  let h = (match s.height {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_h)
-  }) + adj_h
-  let max_w = (match s.max_width {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_w)
-  }) + adj_w
-  let max_h = (match s.max_height {
-    Pt(v) => v
-    Auto => undef
-    Pct(p) => pct(p, cb_h)
-  }) + adj_h
-  let of_cb_w = s.padding.left is Pct(_) ||
-    s.padding.right is Pct(_) ||
-    s.padding.top is Pct(_) ||
-    s.padding.bottom is Pct(_) ||
-    s.border.left is Pct(_) ||
-    s.border.right is Pct(_) ||
-    s.border.top is Pct(_) ||
-    s.border.bottom is Pct(_) ||
-    s.margin.left is Pct(_) ||
-    s.margin.right is Pct(_) ||
-    s.margin.top is Pct(_) ||
-    s.margin.bottom is Pct(_) ||
-    s.width is Pct(_) ||
-    s.min_width is Pct(_) ||
-    s.max_width is Pct(_)
-  let of_cb_h = s.height is Pct(_) ||
-    s.min_height is Pct(_) ||
-    s.max_height is Pct(_)
+  let mar_l = edge_of(s.margin_left_k, s.margin_left_v, cb_w)
+  let mar_t = edge_of(s.margin_top_k, s.margin_top_v, cb_w)
+  let mar_r = edge_of(s.margin_right_k, s.margin_right_v, cb_w)
+  let mar_b = edge_of(s.margin_bottom_k, s.margin_bottom_v, cb_w)
+  let w = resolve_of(s.width_k, s.width_v, cb_w) + adj_w
+  let h = resolve_of(s.height_k, s.height_v, cb_h) + adj_h
+  let max_w = resolve_of(s.max_width_k, s.max_width_v, cb_w) + adj_w
+  let max_h = resolve_of(s.max_height_k, s.max_height_v, cb_h) + adj_h
+  let of_cb_w = s.padding_left_k == LEN_PCT ||
+    s.padding_right_k == LEN_PCT ||
+    s.padding_top_k == LEN_PCT ||
+    s.padding_bottom_k == LEN_PCT ||
+    s.border_left_k == LEN_PCT ||
+    s.border_right_k == LEN_PCT ||
+    s.border_top_k == LEN_PCT ||
+    s.border_bottom_k == LEN_PCT ||
+    s.margin_left_k == LEN_PCT ||
+    s.margin_right_k == LEN_PCT ||
+    s.margin_top_k == LEN_PCT ||
+    s.margin_bottom_k == LEN_PCT ||
+    s.width_k == LEN_PCT ||
+    s.min_width_k == LEN_PCT ||
+    s.max_width_k == LEN_PCT
+  let of_cb_h = s.height_k == LEN_PCT ||
+    s.min_height_k == LEN_PCT ||
+    s.max_height_k == LEN_PCT
   match into {
     Some(o) => {
       o.pad_l = pad_l
@@ -422,15 +356,15 @@ pub fn compute(
   root.height = fh
   let s = root.style
   let dx = if s.position == Relative || s.position == Absolute {
-    let l = resolve(s.inset.left, width)
-    let r = resolve(s.inset.right, width)
+    let l = resolve_of(s.inset_left_k, s.inset_left_v, width)
+    let r = resolve_of(s.inset_right_k, s.inset_right_v, width)
     if known(l) { l } else if known(r) { -r } else { 0.0 }
   } else {
     0.0
   }
   let dy = if s.position == Relative || s.position == Absolute {
-    let t = resolve(s.inset.top, height)
-    let bt = resolve(s.inset.bottom, height)
+    let t = resolve_of(s.inset_top_k, s.inset_top_v, height)
+    let bt = resolve_of(s.inset_bottom_k, s.inset_bottom_v, height)
     if known(t) { t } else if known(bt) { -bt } else { 0.0 }
   } else {
     0.0
@@ -451,40 +385,23 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
   if s.position != Relative {
     return 0.0
   }
-  // (resolve written out: see resolve)
   if horizontal {
-    let l = match s.inset.left {
-      Pt(v) => v
-      Auto => undef
-      Pct(p) => pct(p, cb_w)
-    }
+    let l = resolve_of(s.inset_left_k, s.inset_left_v, cb_w)
     if known(l) {
       return l
     }
-    let r = match s.inset.right {
-      Pt(v) => v
-      Auto => undef
-      Pct(p) => pct(p, cb_w)
-    }
+    let r = resolve_of(s.inset_right_k, s.inset_right_v, cb_w)
     if known(r) {
       -r
     } else {
       0.0
     }
   } else {
-    let t = match s.inset.top {
-      Pt(v) => v
-      Auto => undef
-      Pct(p) => pct(p, cb_h)
-    }
+    let t = resolve_of(s.inset_top_k, s.inset_top_v, cb_h)
     if known(t) {
       return t
     }
-    let b = match s.inset.bottom {
-      Pt(v) => v
-      Auto => undef
-      Pct(p) => pct(p, cb_h)
-    }
+    let b = resolve_of(s.inset_bottom_k, s.inset_bottom_v, cb_h)
     if known(b) {
       -b
     } else {
@@ -978,8 +895,16 @@ fn layout_flex(
   let inner_cross = if row { inner_h } else { inner_w }
   let avail_main = if row { avail_inner_w } else { avail_inner_h }
   let avail_cross = if row { avail_inner_h } else { avail_inner_w }
-  let gap_main = edge(if row { s.gap_col } else { s.gap_row }, inner_main)
-  let gap_cross = edge(if row { s.gap_row } else { s.gap_col }, inner_cross)
+  let gap_main = if row {
+    edge_of(s.gap_col_k, s.gap_col_v, inner_main)
+  } else {
+    edge_of(s.gap_row_k, s.gap_row_v, inner_main)
+  }
+  let gap_cross = if row {
+    edge_of(s.gap_row_k, s.gap_row_v, inner_cross)
+  } else {
+    edge_of(s.gap_col_k, s.gap_col_v, inner_cross)
+  }
   // percentages of children resolve against this content box
   let cb_w = inner_w
   let cb_h = inner_h
@@ -1023,25 +948,25 @@ fn layout_flex(
     let margin_cross = if row { cb.mar_t + cb.mar_b } else { cb.mar_l + cb.mar_r }
     let cross_style = if row { cb.h } else { cb.w }
     let auto_cross_margin = if row {
-      cs.margin.top is Auto || cs.margin.bottom is Auto
+      cs.margin_top_k == LEN_AUTO || cs.margin_bottom_k == LEN_AUTO
     } else {
-      cs.margin.left is Auto || cs.margin.right is Auto
+      cs.margin_left_k == LEN_AUTO || cs.margin_right_k == LEN_AUTO
     }
     let k = pool.add(c, cb, al)
     let f = pool.f
     let i = k * ITEM
     let stretch = al == Stretch && !known(cross_style) && !auto_cross_margin
     let mut fl = 0
-    if cs.margin.left is Auto {
+    if cs.margin_left_k == LEN_AUTO {
       fl = fl | AUTO_L
     }
-    if cs.margin.top is Auto {
+    if cs.margin_top_k == LEN_AUTO {
       fl = fl | AUTO_T
     }
-    if cs.margin.right is Auto {
+    if cs.margin_right_k == LEN_AUTO {
       fl = fl | AUTO_R
     }
-    if cs.margin.bottom is Auto {
+    if cs.margin_bottom_k == LEN_AUTO {
       fl = fl | AUTO_B
     }
     if fl != 0 {
@@ -1052,10 +977,10 @@ fn layout_flex(
       any_stretch = true
     }
     if cs.position == Relative &&
-      !(cs.inset.left is Auto &&
-      cs.inset.right is Auto &&
-      cs.inset.top is Auto &&
-      cs.inset.bottom is Auto) {
+      !(cs.inset_left_k == LEN_AUTO &&
+      cs.inset_right_k == LEN_AUTO &&
+      cs.inset_top_k == LEN_AUTO &&
+      cs.inset_bottom_k == LEN_AUTO) {
       fl = fl | INSET
     }
     pool.flags[k] = fl
@@ -1076,13 +1001,9 @@ fn layout_flex(
     f[i + GROW] = cs.grow
     f[i + SHRINK] = cs.shrink
     // flex base size
-    let basis_style = match cs.basis {
-      Pt(v) => v
-      Auto => undef
-      Pct(p) => pct(p, inner_main)
-    }
+    let basis_style = resolve_of(cs.basis_k, cs.basis_v, inner_main)
     let main_style = if row { cb.w } else { cb.h }
-    let mut basis = if known(basis_style) && !(cs.basis is Auto) {
+    let mut basis = if known(basis_style) && cs.basis_k != LEN_AUTO {
       if cs.box_sizing == ContentBox {
         basis_style + (if row { cb.pbw() } else { cb.pbh() })
       } else {
@@ -1715,10 +1636,10 @@ fn place_absolute(cb : Node, parent : Node, c : Node, ox : Double, oy : Double) 
   let cw = cb.width - cbb.bor_l - cbb.bor_r
   let ch = cb.height - cbb.bor_t - cbb.bor_b
   let b = box_of(cs, cw, ch)
-  let l = resolve(cs.inset.left, cw)
-  let r = resolve(cs.inset.right, cw)
-  let t = resolve(cs.inset.top, ch)
-  let bt = resolve(cs.inset.bottom, ch)
+  let l = resolve_of(cs.inset_left_k, cs.inset_left_v, cw)
+  let r = resolve_of(cs.inset_right_k, cs.inset_right_v, cw)
+  let t = resolve_of(cs.inset_top_k, cs.inset_top_v, ch)
+  let bt = resolve_of(cs.inset_bottom_k, cs.inset_bottom_v, ch)
   let mut w = b.w
   let mut h = b.h
   if !known(w) && known(l) && known(r) {

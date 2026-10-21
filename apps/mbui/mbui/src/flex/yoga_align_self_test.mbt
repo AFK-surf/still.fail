@@ -5,11 +5,11 @@
 test "align_self_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_width(Pt(10.0))
   root_child0.style.align_self = Center
   root.add(root_child0)
   @flex.compute(root)
@@ -21,11 +21,11 @@ test "align_self_center" {
 test "align_self_flex_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_width(Pt(10.0))
   root_child0.style.align_self = FlexEnd
   root.add(root_child0)
   @flex.compute(root)
@@ -37,11 +37,11 @@ test "align_self_flex_end" {
 test "align_self_flex_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_width(Pt(10.0))
   root_child0.style.align_self = FlexStart
   root.add(root_child0)
   @flex.compute(root)
@@ -53,12 +53,12 @@ test "align_self_flex_start" {
 test "align_self_flex_end_override_flex_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_width(Pt(10.0))
   root_child0.style.align_self = FlexEnd
   root.add(root_child0)
   @flex.compute(root)
@@ -70,22 +70,22 @@ test "align_self_flex_end_override_flex_start" {
 test "align_self_baseline" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
   root_child0.style.align_self = Baseline
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(20.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(20.0))
   root_child1.style.align_self = Baseline
   root.add(root_child1)
   let root_child1_child0 = @flex.Node::new()
-  root_child1_child0.style.width = Pt(50.0)
-  root_child1_child0.style.height = Pt(10.0)
+  root_child1_child0.style.set_width(Pt(50.0))
+  root_child1_child0.style.set_height(Pt(10.0))
   root_child1.add(root_child1_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
