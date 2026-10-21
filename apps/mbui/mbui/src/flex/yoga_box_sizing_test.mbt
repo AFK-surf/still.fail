@@ -15,7 +15,7 @@ test "box_sizing_content_box_simple" {
   root.style.set_border_top(Pt(10.0))
   root.style.set_border_right(Pt(10.0))
   root.style.set_border_bottom(Pt(10.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 130.0, 130.0)
 }
@@ -55,7 +55,7 @@ test "box_sizing_content_box_percent" {
   root_child0.style.set_border_top(Pt(16.0))
   root_child0.style.set_border_right(Pt(16.0))
   root_child0.style.set_border_bottom(Pt(16.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -101,7 +101,7 @@ test "box_sizing_content_box_absolute" {
   root_child0.style.set_border_top(Pt(8.0))
   root_child0.style.set_border_right(Pt(8.0))
   root_child0.style.set_border_bottom(Pt(8.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.position = Absolute
   root.add(root_child0)
   @flex.compute(root)
@@ -146,7 +146,7 @@ test "box_sizing_content_box_containing_block" {
   root.style.set_border_top(Pt(8.0))
   root.style.set_border_right(Pt(8.0))
   root.style.set_border_bottom(Pt(8.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   let root_child0 = @flex.Node::new()
   root_child0.style.position = Static
   root.add(root_child0)
@@ -199,7 +199,7 @@ test "box_sizing_content_box_padding_only" {
   root.style.set_padding_top(Pt(5.0))
   root.style.set_padding_right(Pt(5.0))
   root.style.set_padding_bottom(Pt(5.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 110.0, 110.0)
 }
@@ -217,7 +217,7 @@ test "box_sizing_content_box_padding_only_percent" {
   root_child0.style.set_padding_top(Pct(10.0))
   root_child0.style.set_padding_right(Pct(10.0))
   root_child0.style.set_padding_bottom(Pct(10.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 150.0)
@@ -267,7 +267,7 @@ test "box_sizing_content_box_border_only" {
   root.style.set_border_top(Pt(10.0))
   root.style.set_border_right(Pt(10.0))
   root.style.set_border_bottom(Pt(10.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 120.0, 120.0)
 }
@@ -280,7 +280,7 @@ test "box_sizing_content_box_border_only_percent" {
   root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pct(50.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -321,7 +321,7 @@ test "box_sizing_content_box_no_padding_no_border" {
   root.style.position = Absolute
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
 }
@@ -350,7 +350,7 @@ test "box_sizing_content_box_children" {
   root.style.set_border_top(Pt(10.0))
   root.style.set_border_right(Pt(10.0))
   root.style.set_border_bottom(Pt(10.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pt(25.0))
   root_child0.style.set_height(Pt(25.0))
@@ -426,7 +426,7 @@ test "box_sizing_content_box_siblings" {
   let root_child1 = @flex.Node::new()
   root_child1.style.set_width(Pt(25.0))
   root_child1.style.set_height(Pt(25.0))
-  root_child1.style.box_sizing = ContentBox
+  root_child1.style.set_box_sizing(ContentBox)
   root_child1.style.set_padding_left(Pt(10.0))
   root_child1.style.set_padding_top(Pt(10.0))
   root_child1.style.set_padding_right(Pt(10.0))
@@ -499,7 +499,7 @@ test "box_sizing_content_box_max_width" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_max_width(Pt(50.0))
   root_child0.style.set_height(Pt(25.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(5.0))
   root_child0.style.set_padding_top(Pt(5.0))
   root_child0.style.set_padding_right(Pt(5.0))
@@ -556,7 +556,7 @@ test "box_sizing_content_box_max_height" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pt(50.0))
   root_child0.style.set_max_height(Pt(50.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(5.0))
   root_child0.style.set_padding_top(Pt(5.0))
   root_child0.style.set_padding_right(Pt(5.0))
@@ -613,7 +613,7 @@ test "box_sizing_content_box_min_width" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_min_width(Pt(50.0))
   root_child0.style.set_height(Pt(25.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(5.0))
   root_child0.style.set_padding_top(Pt(5.0))
   root_child0.style.set_padding_right(Pt(5.0))
@@ -670,7 +670,7 @@ test "box_sizing_content_box_min_height" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pt(50.0))
   root_child0.style.set_min_height(Pt(50.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(5.0))
   root_child0.style.set_padding_top(Pt(5.0))
   root_child0.style.set_padding_right(Pt(5.0))
@@ -725,7 +725,7 @@ test "box_sizing_content_box_no_height_no_width" {
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(2.0))
   root_child0.style.set_padding_top(Pt(2.0))
   root_child0.style.set_padding_right(Pt(2.0))
@@ -767,7 +767,7 @@ test "box_sizing_content_box_nested" {
   root.style.position = Absolute
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   root.style.set_padding_left(Pt(15.0))
   root.style.set_padding_top(Pt(15.0))
   root.style.set_padding_right(Pt(15.0))
@@ -779,7 +779,7 @@ test "box_sizing_content_box_nested" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pt(20.0))
   root_child0.style.set_height(Pt(20.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(2.0))
   root_child0.style.set_padding_top(Pt(2.0))
   root_child0.style.set_padding_right(Pt(2.0))
@@ -792,7 +792,7 @@ test "box_sizing_content_box_nested" {
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.set_width(Pt(10.0))
   root_child0_child0.style.set_height(Pt(5.0))
-  root_child0_child0.style.box_sizing = ContentBox
+  root_child0_child0.style.set_box_sizing(ContentBox)
   root_child0_child0.style.set_padding_left(Pt(1.0))
   root_child0_child0.style.set_padding_top(Pt(1.0))
   root_child0_child0.style.set_padding_right(Pt(1.0))
@@ -858,7 +858,7 @@ test "box_sizing_content_box_nested_alternating" {
   root.style.position = Absolute
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   root.style.set_padding_left(Pt(3.0))
   root.style.set_padding_top(Pt(3.0))
   root.style.set_padding_right(Pt(3.0))
@@ -882,7 +882,7 @@ test "box_sizing_content_box_nested_alternating" {
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.set_width(Pt(20.0))
   root_child0_child0.style.set_height(Pt(25.0))
-  root_child0_child0.style.box_sizing = ContentBox
+  root_child0_child0.style.set_box_sizing(ContentBox)
   root_child0_child0.style.set_padding_left(Pt(3.0))
   root_child0_child0.style.set_padding_top(Pt(3.0))
   root_child0_child0.style.set_padding_right(Pt(3.0))
@@ -928,7 +928,7 @@ test "box_sizing_border_box_nested_alternating" {
   let root_child0 = @flex.Node::new()
   root_child0.style.set_width(Pt(40.0))
   root_child0.style.set_height(Pt(40.0))
-  root_child0.style.box_sizing = ContentBox
+  root_child0.style.set_box_sizing(ContentBox)
   root_child0.style.set_padding_left(Pt(8.0))
   root_child0.style.set_padding_top(Pt(8.0))
   root_child0.style.set_padding_right(Pt(8.0))
@@ -953,7 +953,7 @@ test "box_sizing_border_box_nested_alternating" {
   let root_child0_child0_child0 = @flex.Node::new()
   root_child0_child0_child0.style.set_width(Pt(10.0))
   root_child0_child0_child0.style.set_height(Pt(5.0))
-  root_child0_child0_child0.style.box_sizing = ContentBox
+  root_child0_child0_child0.style.set_box_sizing(ContentBox)
   root_child0_child0_child0.style.set_padding_left(Pt(1.0))
   root_child0_child0_child0.style.set_padding_top(Pt(1.0))
   root_child0_child0_child0.style.set_padding_right(Pt(1.0))
@@ -1024,7 +1024,7 @@ test "box_sizing_content_box_padding_start" {
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
   root.style.set_padding_left(Pt(5.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 105.0, 100.0)
 }
@@ -1047,7 +1047,7 @@ test "box_sizing_content_box_padding_end" {
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
   root.style.set_padding_right(Pt(5.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 105.0, 100.0)
 }
@@ -1070,7 +1070,7 @@ test "box_sizing_content_box_border_start" {
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
   root.style.set_border_left(Pt(5.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 105.0, 100.0)
 }
@@ -1093,7 +1093,7 @@ test "box_sizing_content_box_border_end" {
   root.style.set_width(Pt(100.0))
   root.style.set_height(Pt(100.0))
   root.style.set_border_right(Pt(5.0))
-  root.style.box_sizing = ContentBox
+  root.style.set_box_sizing(ContentBox)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 105.0, 100.0)
 }

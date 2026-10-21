@@ -230,27 +230,27 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   let pad_l = len(n.pad_l)
-  if pt_differs(s.padding_left_k, s.padding_left_v, pad_l) {
+  if pt_differs(s.padding_left_kind(), s.padding_left_value(), pad_l) {
     s.set_padding_left(Pt(pad_l))
     ch = true
   }
   let pad_t = len(n.pad_t)
-  if pt_differs(s.padding_top_k, s.padding_top_v, pad_t) {
+  if pt_differs(s.padding_top_kind(), s.padding_top_value(), pad_t) {
     s.set_padding_top(Pt(pad_t))
     ch = true
   }
   let pad_r = len(n.pad_r)
-  if pt_differs(s.padding_right_k, s.padding_right_v, pad_r) {
+  if pt_differs(s.padding_right_kind(), s.padding_right_value(), pad_r) {
     s.set_padding_right(Pt(pad_r))
     ch = true
   }
   let pad_b = len(n.pad_b)
-  if pt_differs(s.padding_bottom_k, s.padding_bottom_v, pad_b) {
+  if pt_differs(s.padding_bottom_kind(), s.padding_bottom_value(), pad_b) {
     s.set_padding_bottom(Pt(pad_b))
     ch = true
   }
   let gap = len(n.gap)
-  if pt_differs(s.gap_row_k, s.gap_row_v, gap) {
+  if pt_differs(s.gap_row_kind(), s.gap_row_value(), gap) {
     s.set_gap_row(Pt(gap))
     s.set_gap_col(Pt(gap))
     ch = true
@@ -282,25 +282,25 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   // 0 and 1e9: none (Auto)
   let has_min_h = n.min_h > 0.0
   let min_h = len(n.min_h)
-  if opt_differs(s.min_height_k, s.min_height_v, has_min_h, min_h) {
+  if opt_differs(s.min_height_kind(), s.min_height_value(), has_min_h, min_h) {
     s.set_min_height(if has_min_h { Pt(min_h) } else { Auto })
     ch = true
   }
   let has_max_h = n.max_h < 1.0e9
   let max_h = len(n.max_h)
-  if opt_differs(s.max_height_k, s.max_height_v, has_max_h, max_h) {
+  if opt_differs(s.max_height_kind(), s.max_height_value(), has_max_h, max_h) {
     s.set_max_height(if has_max_h { Pt(max_h) } else { Auto })
     ch = true
   }
   let has_min_w = n.min_w > 0.0
   let min_w = len(n.min_w)
-  if opt_differs(s.min_width_k, s.min_width_v, has_min_w, min_w) {
+  if opt_differs(s.min_width_kind(), s.min_width_value(), has_min_w, min_w) {
     s.set_min_width(if has_min_w { Pt(min_w) } else { Auto })
     ch = true
   }
   let has_max_w = n.max_w < 1.0e9
   let max_w = len(n.max_w)
-  if opt_differs(s.max_width_k, s.max_width_v, has_max_w, max_w) {
+  if opt_differs(s.max_width_kind(), s.max_width_value(), has_max_w, max_w) {
     s.set_max_width(if has_max_w { Pt(max_w) } else { Auto })
     ch = true
   }
@@ -375,7 +375,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.overflow = flow
     ch = true
   }
-  if (s.basis_k == @flex.LEN_AUTO) == basis0 {
+  if (s.basis_kind() == @flex.LEN_AUTO) == basis0 {
     s.set_basis(if basis0 { Pt(0.0) } else { Auto })
     ch = true
   }
@@ -386,24 +386,24 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   }
   if over {
     // (only when it has just become a layer: its position changes too)
-    if !(s.width_k == @flex.LEN_PCT && s.width_v == 100.0) {
+    if !(s.width_kind() == @flex.LEN_PCT && s.width_value() == 100.0) {
       s.set_width(Pct(100.0))
     }
   } else {
     let w = len(wpx)
-    if opt_differs(s.width_k, s.width_v, has_w, w) {
+    if opt_differs(s.width_kind(), s.width_value(), has_w, w) {
       s.set_width(if has_w { Pt(w) } else { Auto })
       ch = true
     }
   }
   if !has_h && over {
-    if !(s.height_k == @flex.LEN_PCT && s.height_v == 100.0) {
+    if !(s.height_kind() == @flex.LEN_PCT && s.height_value() == 100.0) {
       s.set_height(Pct(100.0))
       ch = true
     }
   } else {
     let h = len(hpx)
-    if opt_differs(s.height_k, s.height_v, has_h, h) {
+    if opt_differs(s.height_kind(), s.height_value(), has_h, h) {
       s.set_height(if has_h { Pt(h) } else { Auto })
       ch = true
     }

@@ -102,7 +102,7 @@ def setter(node, prop, args):
     if prop == "Display":
         return [f"{s}.display = {enum(a[0])}"]
     if prop == "BoxSizing":
-        return [f"{s}.box_sizing = {enum(a[0])}"]
+        return [f"{s}.set_box_sizing({enum(a[0])})"]
     if prop == "Overflow":
         return [f"{s}.overflow = {enum(a[0])}"]
     if prop == "MeasureFunc":

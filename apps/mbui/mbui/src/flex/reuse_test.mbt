@@ -65,7 +65,7 @@ fn fresh(n : @flex.Node) -> @flex.Node {
   c.style.set_gap_row(s.get_gap_row())
   c.style.set_gap_col(s.get_gap_col())
   c.style.aspect = s.aspect
-  c.style.box_sizing = s.box_sizing
+  c.style.set_box_sizing(s.get_box_sizing())
   c.style.overflow = s.overflow
   c.measure = n.measure
   for k in n.children {
