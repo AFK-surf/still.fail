@@ -1246,7 +1246,7 @@ pub fn update_state() -> String {
 
 ///|
 /// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm (Android:
-/// still.fail's Install.kt installApk). What comes of it, when it is not installed, comes on @host.system_channel
+/// still.fail's Install.kt installApk). What comes of it, when it is not installed, comes on @hostapi.system_channel
 /// (system.mbt `install`: the leave to install apps asked for, or why it failed: "unsupported" where there is no
 /// installer).
 pub fn install_package(name : String, data : Bytes) -> Unit {
@@ -1506,7 +1506,7 @@ pub fn open_tab(url : String) -> Bool {
 }
 
 ///|
-/// What the notice says that holds the app up while it listens for a browser coming back (@host.browser_login, the
+/// What the notice says that holds the app up while it listens for a browser coming back (@hostapi.browser_login, the
 /// core's loopback listeners: Android's foreground service, in `channel`, named as the system's settings list it);
 /// said before the browser opens, kept for the next. Other hosts keep no notice.
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
