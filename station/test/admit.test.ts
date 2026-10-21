@@ -9,7 +9,7 @@ import { after, describe, test } from "node:test";
 import { type Clock, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { BUSY_SPAN_MS, Busy, LOOK_MS, RAMP_MS, type Pressure, cpusFor, pick, place } from "../src/jobs/admit.ts";
-import { Jobs, type Machine } from "../src/jobs/jobs.ts";
+import { Jobs, type Machine, STOP_LOOK_MS } from "../src/jobs/jobs.ts";
 import { signalGroup } from "../src/ops/group.ts";
 import { Store } from "../src/store/store.ts";
 import { WINDOWS } from "../src/platform/index.ts";
@@ -132,6 +132,18 @@ function rig(state: { busy: number; pressure: Pressure }, store?: Store, data?: 
   return { jobs, store: s, clock, start, dir, told };
 }
 
+/// Stops a job. Its group may outlive its leader a moment (what it ran not yet reaped), and the stop's grace looks again
+/// on the rig's clock: moved here, a look of the stop at a time, until the stop is over.
+async function stop(r: { jobs: Jobs; clock: { move: (ms: number) => Promise<void> } }, id: string) {
+  let over = false;
+  const stopped = r.jobs.stop(id).finally(() => (over = true));
+  while (!over) {
+    await r.clock.move(STOP_LOOK_MS);
+    await sleep(5);
+  }
+  return stopped;
+}
+
 /// Moves the clock on, a look at a time, until `check` holds.
 async function looks(clock: { move: (ms: number) => Promise<void> }, check: () => boolean) {
   while (!check()) {
@@ -156,7 +168,7 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     // However long the CPUs stay busy, it waits.
     await r.clock.move(RAMP_MS * 4);
     assert.equal(r.store.getJob(second.id)!.queued, true);
-    await r.jobs.stop(first.id);
+    await stop(r, first.id);
     await until("it starts and ends", () => r.store.getJob(second.id)!.state === "exited");
     assert.equal(r.jobs.queueOf(second.id), null);
   });
@@ -179,7 +191,7 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     const second = r.start("two", "b", "true");
     await r.clock.move(LOOK_MS);
     await sleep(5);
-    await r.jobs.stop(first.id);
+    await stop(r, first.id);
     await r.clock.move(RAMP_MS * 2);
     await sleep(5);
     assert.equal(r.store.getJob(second.id)!.queued, true);
@@ -199,7 +211,7 @@ describe("the queue", { skip: WINDOWS && "jobs' groups and sh" }, () => {
     await sleep(5);
     await r.jobs.stop(stopped.id);
     assert.equal(r.store.getJob(stopped.id)!.state, "stopped");
-    await r.jobs.stop(first.id);
+    await stop(r, first.id);
     assert.equal(r.store.getJob(kept.id)!.queued, true, "the memory still under pressure");
     // The station stops while it waits, and the next takes it up once the memory has eased.
     await r.jobs.shutdown();

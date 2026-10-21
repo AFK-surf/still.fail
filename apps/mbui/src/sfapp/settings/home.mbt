@@ -374,6 +374,13 @@ fn settings_home(c : @ui.Ctx, core : Core, here : Here) -> Unit {
         if go_row(c, "go-changelog", tr("android-settings.changelog.title")) {
           (core.push)(Changelog)
         }
+        // still.fail's terms and privacy policy, on the web (SettingsHome.kt Legal)
+        if go_row(c, "go-terms", tr("android-settings.legal.terms")) {
+          (core.open_link)(legal_url("terms"))
+        }
+        if go_row(c, "go-privacy", tr("android-settings.legal.privacy")) {
+          (core.open_link)(legal_url("privacy"))
+        }
       })
     },
     fn() { gap(c, 30.0) },
@@ -590,8 +597,38 @@ fn me_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
     },
     fn() { section_header(c, tr("android-settings.me.devices"), start=S6) },
     fn() { devices(c, core, here) },
+    // deleting the account in view, at the foot as deleting a workspace is: asked first (Me.kt)
+    fn() { gap(c, 18.0) },
+    fn() {
+      list_card(c, fn() {
+        if list_row(c, key="delete-account", fn() { row_title(c, tr("android-settings.me.delete"), color=t.p.red) }) {
+          confirm(
+            tr("android-settings.me.deleteTitle"),
+            fill("android-settings.me.deleteText", [("email", here.email)]),
+            tr("android-settings.me.deleteAction"),
+            danger=true,
+            fn() {
+              (core.home)()
+              act(
+                core,
+                tr("android-settings.me.deleteAction"),
+                "auth.deleteAccount",
+                obj([("account", str(here.sub))]),
+                done=fill("android-settings.me.deleted", [("email", here.email)]),
+              )
+            },
+          )
+        }
+      })
+    },
     fn() { gap(c, 30.0) },
   ])
+}
+
+///|
+/// still.fail's terms or privacy policy on the web (SettingsHome.kt Legal; the app speaks Chinese: no /en).
+fn legal_url(page : String) -> String {
+  "https://still.fail/" + page
 }
 
 ///|

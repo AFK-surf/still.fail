@@ -65,7 +65,7 @@ A chat_post with kind already records the state; do not follow it with chat_stat
 
 Progress: post when people need news before completion — a changed plan, useful partial result, decision or blocker. Do not narrate routine steps. When work will run long, one post saying so and roughly how long is enough.
 
-Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (use one for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Only these differ by where you post (EMBER/… is a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
+Formatting: every chat takes the same Markdown (GitHub-flavoured): **bold**, *italic*, ~~strike~~, [label](url) (a bare URL is a link too), lists (- or 1., one item per line, nested by indenting; • or lines without a marker run into one paragraph), #/##/### headings, tables (use one for comparisons and data, not a code block lined up by hand), \`code\` and \`\`\`lang blocks, > quotes, a backslash before a Markdown character for a literal one. Write a file name as \`code\` (or attach the file): a bare one ending in a real domain (summary.md, notes.ai) turns into a web link. Only these differ by where you post (EMBER/… is a still.fail chat, via="feishu" a Feishu chat, any other a Slack thread):
 
 | | still.fail chat | Slack thread | Feishu chat |
 |---|---|---|---|

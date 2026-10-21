@@ -289,6 +289,24 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
+    // signed in with no workspace yet (landing.mbt): landing, landing-invited (an invitation waiting), blocked (the
+    // account not let into this app)
+    "workspaces" if f.mode == "landing" || f.mode == "landing-invited" || f.mode == "blocked" => {
+      let o : Map[String, Json] = {
+        "account": account,
+        "workspaces": [],
+        "invitations": if f.mode == "landing-invited" {
+          [{ "id": "inv1", "name": "星火工作室", "inviter": "安娜", "role": "member" }]
+        } else {
+          []
+        },
+        "loaded": true,
+      }
+      if f.mode == "blocked" {
+        o["blocked"] = "此账号暂未开放测试版"
+      }
+      Some([Json::object(o)])
+    }
     "workspaces" =>
       Some([
         {
