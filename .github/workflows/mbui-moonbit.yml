@@ -16,12 +16,12 @@ on:
   pull_request:
     paths: *paths
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   put:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +45,7 @@ jobs:
             | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
           [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c | tr -d ' ')" = 4 ] || { echo "::error::no ETags from $base: $tag"; exit 1; }
           echo "key=moonbit-${{ runner.os }}-${{ runner.arch }}-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        working-directory: ${{ github.workspace }}
       - uses: actions/cache/restore@v4
         id: had
         with:
@@ -63,6 +64,7 @@ jobs:
           fi
           ls "$MOON_HOME/bin"
           PATH="$MOON_HOME/bin:$PATH" moon version --all
+        working-directory: ${{ github.workspace }}
       - if: steps.had.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:

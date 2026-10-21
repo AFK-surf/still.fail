@@ -14,11 +14,12 @@ if [ -n "$TOOLS" ] && [ -d "$TOOLS" ]; then
 fi
 
 # Where moon builds package $1 (its directory under src) for target $2 (native, js) in mode $3 (release, debug), from
-# the module's directory: a workspace's (moon.work: an app of a module outside mbui, MBUI_APP_MOD) under its module's
-# name.
+# the module's directory: a workspace's of more than one module (moon.work: an app of a module beside mbui,
+# MBUI_APP_MOD) under its module's name; mbui's own (moon.work, itself alone: kept from the app's workspace above it in
+# the repository) as a module's.
 pkg_build() {
   local mod=
-  [ -f moon.work ] && mod=$(sed -n 's/^name *= *"\(.*\)"/\1/p' moon.mod)/
+  [ -f moon.work ] && [ "$(grep -c '^ *"' moon.work)" -gt 1 ] && mod=$(sed -n 's/^name *= *"\(.*\)"/\1/p' moon.mod)/
   echo "_build/$2/$3/build/$mod$1"
 }
 

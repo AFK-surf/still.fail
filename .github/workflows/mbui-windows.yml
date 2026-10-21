@@ -16,18 +16,17 @@ on:
         required: false
         default: ""
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   demo:
     runs-on: windows-latest
     defaults:
       run:
+        working-directory: apps/mbui/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
@@ -96,9 +95,11 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
+        working-directory: apps/mbui/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:

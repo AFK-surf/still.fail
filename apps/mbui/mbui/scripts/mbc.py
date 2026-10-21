@@ -142,9 +142,11 @@ def cmd_gen(a):
         text = f.read()
     m = re.search(r'^\s*source\s*=\s*"([^"]*)"', text, re.M)
     source = m.group(1) if m else '.'
-    # a workspace's (moon.work) packages are built under their module's name
+    # a workspace's (moon.work) packages are built under their module's name: one of more than one module (an app's
+    # beside mbui); mbui's own, itself alone (kept from the app's workspace above it), as a module's
     name = re.search(r'^\s*name\s*=\s*"([^"]*)"', text, re.M)
-    in_work = os.path.isfile(os.path.join(mod, 'moon.work')) and name
+    work = os.path.join(mod, 'moon.work')
+    in_work = os.path.isfile(work) and name and len(re.findall(r'^\s*"', open(work, encoding='utf-8').read(), re.M)) > 1
     pkg = a.pkg.rstrip('/')
     rel = os.path.relpath(pkg, source) if source not in ('', '.') else pkg
     mode = 'debug' if a.debug else 'release'

@@ -29,9 +29,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   contracts:
@@ -39,9 +36,11 @@ jobs:
     timeout-minutes: 30
     defaults:
       run:
+        working-directory: apps/mbui/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: ./.github/actions/mbui-moonbit

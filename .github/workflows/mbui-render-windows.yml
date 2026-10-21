@@ -29,9 +29,6 @@ on:
     paths: *paths
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   offscreen:
@@ -43,9 +40,11 @@ jobs:
     timeout-minutes: 40
     defaults:
       run:
+        working-directory: apps/mbui/mbui
         shell: bash
     steps:
       - run: git config --global core.autocrlf false
+        working-directory: ${{ github.workspace }}
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: ./.github/actions/mbui-moonbit
@@ -73,3 +72,5 @@ jobs:
           md5sum runs/*/controls.png
           grep -h '^cpu ' runs/*/machine.txt
           cmp runs/render-windows-a/controls.png runs/render-windows-b/controls.png && echo "the two jobs' pictures: the same to the byte"
+
+        working-directory: ${{ github.workspace }}

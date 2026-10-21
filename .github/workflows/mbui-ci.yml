@@ -14,9 +14,6 @@ on:
   workflow_dispatch:
 
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   test:
@@ -24,7 +21,8 @@ jobs:
     # (every step's script run with no network: a test that reaches for it fails every time, scripts/offline.sh)
     defaults:
       run:
-        shell: bash scripts/offline.sh {0}
+        working-directory: apps/mbui/mbui
+        shell: bash ${{ github.workspace }}/apps/mbui/mbui/scripts/offline.sh {0}
     steps:
       - uses: actions/checkout@v4
       - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
@@ -69,6 +67,9 @@ jobs:
         run: python3 scripts/mbc_test.py
 
   native:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
     # the same tests on native, on macOS (Mini1, mbui's runner: the hosts' Objective-C linked in by scripts/cc_apple.sh)
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, mbui-render]
@@ -78,10 +79,13 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
         # (with no network: scripts/offline.sh)
-        shell: bash scripts/offline.sh {0}
+        shell: bash ${{ github.workspace }}/apps/mbui/mbui/scripts/offline.sh {0}
         run: scripts/test_native.sh
 
   macos:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -112,6 +116,9 @@ jobs:
           if-no-files-found: ignore
 
   android:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

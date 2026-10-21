@@ -32,12 +32,12 @@ on:
   workflow_dispatch:
 
 
-defaults:
-  run:
-    working-directory: apps/mbui/mbui
 
 jobs:
   offscreen:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
     strategy:
       fail-fast: false
       matrix:
@@ -79,3 +79,5 @@ jobs:
           md5sum runs/*/controls.png
           grep -h '^cpu ' runs/*/machine.txt
           cmp runs/render-android-a/controls.png runs/render-android-b/controls.png && echo "the two jobs' pictures: the same to the byte"
+
+        working-directory: ${{ github.workspace }}
