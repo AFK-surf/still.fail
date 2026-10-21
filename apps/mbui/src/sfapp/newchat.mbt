@@ -399,6 +399,7 @@ fn new_chat_on(
         wide_center(c, fn() {
           composer(c, src, r, None, fresh=Some({
             key: "new:" + address,
+            placeholder: tr("android-chat.new.placeholder"),
             send: fn(d) { send_first(c, src, w, v, address, name, d) },
           }))
         })

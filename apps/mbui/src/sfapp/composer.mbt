@@ -241,6 +241,8 @@ fn draft_of(c : @ui.Ctx, src : Source, r : ChatRef) -> Draft {
 /// new chat's on the device) and what sending does.
 priv struct Fresh {
   key : String
+  /// what its field says while empty
+  placeholder : String
   send : (Draft) -> Unit
 }
 
@@ -1379,7 +1381,7 @@ fn composer_bar(
     part(b, "send")
   }
   let placeholder = match (fresh, v) {
-    (Some(_), _) => tr("android-chat.new.placeholder")
+    (Some(f), _) => f.placeholder
     (_, Some(view)) if view.archived => tr("android-chat.composer.archived.placeholder")
     // with a mouse and nothing focused, the web's says Space takes the keyboard there (Chat.tsx)
     _ if wide_on.val && !c.field_focused() =>
