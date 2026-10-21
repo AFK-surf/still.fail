@@ -544,6 +544,9 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       })
       // a chat's sheets (slice 8's: sheets.mbt, framed in decide.mbt)
       sheets(c, src, w)
+      // a new device waiting on this one's code, in any workspace of the person's, over whichever page is open
+      // (App.kt LockPrompts): put up when no other sheet is
+      @settings.lock_prompts(settings_core(src, w), !sheet_open() && dui.sheet is None)
       @settings.overlay(c, settings_core(src, w))
       toast(c)
     }

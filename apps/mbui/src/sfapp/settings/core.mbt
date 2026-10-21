@@ -499,6 +499,7 @@ pub fn left(route : Route) -> Unit {
 pub fn reset() -> Unit {
   archive_reset()
   login_marked.val = None
+  lock_prompts_reset()
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
