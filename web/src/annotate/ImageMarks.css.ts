@@ -1,6 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { darkGlass as glass } from "../FilePreview.css.ts";
+import { darkGlass, glass } from "../FilePreview.css.ts";
 import { note as marksNote, said as marksSaid } from "./Marks.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 
@@ -32,7 +32,7 @@ globalStyle(`${sheet}[data-tool="text"] ${hits}`, { cursor: "text" });
 export const pickedBox = style({ fill: "none", stroke: "#fff", opacity: ".85", pointerEvents: "none", mixBlendMode: "difference" });
 export const handle = style({ fill: "#fff", stroke: INK, pointerEvents: "auto" });
 
-/** The tools, at the bottom over the image, frosted as the top bar. */
+/** The tools, at the bottom over the image, frosted as the top bar (in the theme's colours, as its icons are). */
 export const toolbar = style({
   ...glass, position: "absolute", zIndex: "3", left: "50%", bottom: "max(16px, var(--safe-bottom))", transform: "translateX(-50%)",
   display: "flex", alignItems: "center", gap: "2px", height: "44px", padding: "0 6px", boxSizing: "border-box",
@@ -85,8 +85,8 @@ export const pins = style({
 /** A pin's point on the image, drawn back at its own size (`scale(1 / zoom)`) from there. */
 export const pinAt = style({ position: "absolute", width: "0", height: "0", transformOrigin: "0 0", pointerEvents: "auto" });
 /** A mark's bubble and what was said, as a preview's (Marks.css.ts) but in the viewer's own dark glass: readable over any picture. */
-export const note = style([marksNote, { ...glass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
-export const said = style([marksSaid, { ...glass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
+export const note = style([marksNote, { ...darkGlass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
+export const said = style([marksSaid, { ...darkGlass, boxShadow: "0 2px 10px rgb(0 0 0 / .25)", color: "rgba(255, 255, 255, .94)" }]);
 globalStyle(`${note} input`, { color: "inherit" });
 globalStyle(`${note} input::placeholder, ${note} span`, { color: "rgba(255, 255, 255, .5)" });
 
