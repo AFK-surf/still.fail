@@ -1,18 +1,24 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The demo on Windows: build with MoonBit and MSVC, take the scripted
 # screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
 # it with goldens/windows.png when there is one; then the text against
 # DirectWrite's own.
-name: windows
+name: mbui-windows
 on:
   push:
     branches: [main, windows, images-android-win]
   pull_request:
+    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**"]
   workflow_dispatch:
     inputs:
       stillfail_ref:
         description: "also build still.fail's apps/mbui sffix (AFK-surf/still.fail at this ref) and shoot its wide frame"
         required: false
         default: ""
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   demo:
@@ -27,7 +33,7 @@ jobs:
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: Build
         run: |
           moon version --all
@@ -74,13 +80,13 @@ jobs:
         with:
           name: windows-shots
           path: |
-            out/webviews/
-            out/shots/
-            out/shot-win/
-            out/shot-kit/
-            out/ime/
-            out/photos/
-            out/textdiff/
+            apps/mbui/mbui/out/webviews/
+            apps/mbui/mbui/out/shots/
+            apps/mbui/mbui/out/shot-win/
+            apps/mbui/mbui/out/shot-kit/
+            apps/mbui/mbui/out/ime/
+            apps/mbui/mbui/out/photos/
+            apps/mbui/mbui/out/textdiff/
           if-no-files-found: warn
 
   # still.fail's app over made-up data (its apps/mbui sffix, against this mbui), asked for by a run's stillfail_ref:
@@ -98,13 +104,13 @@ jobs:
         with:
           repository: AFK-surf/still.fail
           ref: ${{ inputs.stillfail_ref }}
-          path: sf
+          path: apps/mbui/mbui/sf
           sparse-checkout: apps/mbui
       - uses: ilammy/msvc-dev-cmd@v1
       # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
       # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
       # key, installed as before.
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: Build sffix
         run: MBUI_APP_MOD=sf/apps/mbui APP=sffix scripts/win.sh build
       - name: Screenshots
@@ -130,5 +136,5 @@ jobs:
         if: always()
         with:
           name: stillfail-windows-shots
-          path: out/shot-sf/
+          path: apps/mbui/mbui/out/shot-sf/
           if-no-files-found: warn

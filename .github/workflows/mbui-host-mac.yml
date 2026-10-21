@@ -1,41 +1,46 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh), on Mini1 (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
 # scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape Mini1 kept
 # (mini1_controls) asked of Core Text again (every answer the same). When the macOS host changes.
-name: host-mac
+name: mbui-host-mac
 on:
   pull_request:
     paths: &paths
-      - "src/ui/native.mbt"
-      - "src/kitdemo/viewcheck.mbt"
-      - "src/host/apple_*"
-      - "src/host/apple.h"
-      - "src/host/mac_app.m"
-      - "src/host/done_watch.h"
-      - "src/ui/drive.mbt"
-      - "scripts/done_runner.py"
-      - "scripts/mac.sh"
-      - "scripts/host_contract.sh"
-      - "scripts/textrec_test.py"
-      - "test/host/**"
-      - "src/kitdemo/textcheck.mbt"
-      - "src/kitdemo/textrec_mini1_*"
-      - ".github/workflows/host-mac.yml"
-      - "src/host/marks.mbt"
-      - "src/host/host_native.mbt"
-      - "src/kitdemo/markscheck.mbt"
-      - "src/kitdemo/main.mbt"
-      - "test/marks/**"
-      - "goldens/marks/mac*"
-      - "src/host/moon.pkg"
+      - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/viewcheck.mbt"
+      - "apps/mbui/mbui/src/host/apple_*"
+      - "apps/mbui/mbui/src/host/apple.h"
+      - "apps/mbui/mbui/src/host/mac_app.m"
+      - "apps/mbui/mbui/src/host/done_watch.h"
+      - "apps/mbui/mbui/src/ui/drive.mbt"
+      - "apps/mbui/mbui/scripts/done_runner.py"
+      - "apps/mbui/mbui/scripts/mac.sh"
+      - "apps/mbui/mbui/scripts/host_contract.sh"
+      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/test/host/**"
+      - "apps/mbui/mbui/src/kitdemo/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/textrec_mini1_*"
+      - ".github/workflows/mbui-host-mac.yml"
+      - "apps/mbui/mbui/src/host/marks.mbt"
+      - "apps/mbui/mbui/src/host/host_native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/markscheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/main.mbt"
+      - "apps/mbui/mbui/test/marks/**"
+      - "apps/mbui/mbui/goldens/marks/mac*"
+      - "apps/mbui/mbui/src/host/moon.pkg"
   push:
     branches: [main]
     paths: *paths
   workflow_dispatch:
 
 concurrency:
-  group: host-mac-${{ github.ref }}
+  group: mbui-host-mac-${{ github.ref }}
   cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   contracts:
@@ -67,7 +72,7 @@ jobs:
               - "test/host/**"
               - "src/kitdemo/textcheck.mbt"
               - "src/kitdemo/textrec_mini1_*"
-              - ".github/workflows/host-mac.yml"
+              - ".github/workflows/mbui-host-mac.yml"
               - "src/host/host_native.mbt"
               - "src/kitdemo/main.mbt"
               - "src/host/moon.pkg"
@@ -83,10 +88,10 @@ jobs:
               - "goldens/marks/mac*"
               - "scripts/mac.sh"
               - "scripts/host_contract.sh"
-              - ".github/workflows/host-mac.yml"
+              - ".github/workflows/mbui-host-mac.yml"
               - "src/host/moon.pkg"
         run: python3 scripts/ci_paths.py
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh mac build
       - name: "The host's contract: a run's tape = a Tester's frames"
@@ -111,5 +116,5 @@ jobs:
         if: always()
         with:
           name: host-mac
-          path: out/host/
+          path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

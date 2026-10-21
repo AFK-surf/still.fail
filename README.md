@@ -78,7 +78,7 @@ Desktop and Android builds connect to the hosted service at `app.still.fail` by 
 | `client/` | Shared client core (`core-ts`), its native shells and translations (`i18n`) |
 | `web/` | Web app, official site and component stories |
 | `apps/desktop/`, `apps/android/` | Electron and native Android clients |
-| `apps/mbui/` | An Android and macOS client written in [mbui](https://github.com/zzj3720/mbui), in testing |
+| `apps/mbui/` | An Android and macOS client written in mbui (`apps/mbui/mbui`), in testing |
 | `cloud/` | Accounts, workspaces, relays and releases on Cloudflare |
 | `media/` | Photos, video and books apps built on the same platform, in development |
 | `docs/` | Design and operation notes; release notes in `docs/releases/` |

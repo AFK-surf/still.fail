@@ -106,7 +106,7 @@ scripts/win.sh script ime                       # scripted IME run, snapshots in
 scripts/shots.sh windows                        # screenshot compared with goldens/windows.png
 ```
 
-CI (`.github/workflows/windows.yml`) builds it on `windows-latest`, runs the
+CI (the repository's `.github/workflows/mbui-windows.yml`) builds it on `windows-latest`, runs the
 `shot` and `ime` scripts and compares the screenshot with the golden.
 
 ## Licence

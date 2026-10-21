@@ -1,8 +1,9 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
 # build the references were made with (16428233, from Google's repository as a zip) and the API 34 x86_64 system
 # images, each by its revision (sdkmanager's, here alone). Asked each day; what is in already, nothing done. A download
 # that breaks off fails this run alone, the jobs going on with what is in.
-name: android-sdk
+name: mbui-android-sdk
 on:
   schedule:
     - cron: "41 5 * * *"
@@ -10,11 +11,15 @@ on:
   push:
     branches: [main]
     paths: &paths
-      - ".github/workflows/android-sdk.yml"
-      - ".github/actions/android-emulator/**"
+      - ".github/workflows/mbui-android-sdk.yml"
+      - ".github/actions/mbui-android-emulator/**"
   # (a change to it tried on its pull request: what it puts in is that pull request's own)
   pull_request:
     paths: *paths
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   put:
@@ -69,5 +74,5 @@ jobs:
         with: { sparse-checkout: .github/actions }
       - name: Boot once (the action as the jobs take it)
         run: sudo rm -rf /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
-      - uses: ./.github/actions/android-emulator
+      - uses: ./.github/actions/mbui-android-emulator
         with: { target: "${{ matrix.target }}", profile: pixel_7 }

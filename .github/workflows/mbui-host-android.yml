@@ -1,39 +1,44 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts on Android (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run on an x86_64 emulator with its scripted taps, its tape made a
 # Tester's test and run here (every frame the same), then the committed tape's text (android_controls) asked of the
 # emulator's text system again (every answer the same). When Android's host changes.
-name: host-android
+name: mbui-host-android
 on:
   pull_request:
     paths: &paths
-      - "src/ui/native.mbt"
-      - "src/kitdemo/viewcheck.mbt"
-      - "src/host/android_host.c"
-      - "src/host/done_watch.h"
-      - "src/ui/drive.mbt"
-      - "scripts/done_runner.py"
-      - "android/**"
-      - "scripts/android.sh"
-      - "scripts/host_contract.sh"
-      - "scripts/textrec_test.py"
-      - "test/host/**"
-      - "src/kitdemo/textcheck.mbt"
-      - "src/kitdemo/textrec_android_*"
-      - ".github/workflows/host-android.yml"
-      - "src/host/marks.mbt"
-      - "src/host/host_native.mbt"
-      - "src/kitdemo/markscheck.mbt"
-      - "src/kitdemo/main.mbt"
-      - "test/marks/**"
-      - "goldens/marks/android*"
-      - "src/host/moon.pkg"
-      - "src/host/post.h"
-      - "src/ui/app.mbt"
+      - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/viewcheck.mbt"
+      - "apps/mbui/mbui/src/host/android_host.c"
+      - "apps/mbui/mbui/src/host/done_watch.h"
+      - "apps/mbui/mbui/src/ui/drive.mbt"
+      - "apps/mbui/mbui/scripts/done_runner.py"
+      - "apps/mbui/mbui/android/**"
+      - "apps/mbui/mbui/scripts/android.sh"
+      - "apps/mbui/mbui/scripts/host_contract.sh"
+      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/test/host/**"
+      - "apps/mbui/mbui/src/kitdemo/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/textrec_android_*"
+      - ".github/workflows/mbui-host-android.yml"
+      - "apps/mbui/mbui/src/host/marks.mbt"
+      - "apps/mbui/mbui/src/host/host_native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/markscheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/main.mbt"
+      - "apps/mbui/mbui/test/marks/**"
+      - "apps/mbui/mbui/goldens/marks/android*"
+      - "apps/mbui/mbui/src/host/moon.pkg"
+      - "apps/mbui/mbui/src/host/post.h"
+      - "apps/mbui/mbui/src/ui/app.mbt"
   push:
     branches: [main]
     paths: *paths
   workflow_dispatch:
 
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   contracts:
@@ -62,7 +67,7 @@ jobs:
               - "test/host/**"
               - "src/kitdemo/textcheck.mbt"
               - "src/kitdemo/textrec_android_*"
-              - ".github/workflows/host-android.yml"
+              - ".github/workflows/mbui-host-android.yml"
               - "src/host/host_native.mbt"
               - "src/kitdemo/main.mbt"
               - "src/host/moon.pkg"
@@ -82,13 +87,13 @@ jobs:
               - "goldens/marks/android*"
               - "scripts/android.sh"
               - "scripts/host_contract.sh"
-              - ".github/workflows/host-android.yml"
+              - ".github/workflows/mbui-host-android.yml"
               - "src/host/moon.pkg"
         run: python3 scripts/ci_paths.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
       - uses: gradle/actions/setup-gradle@v4
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo's APK for an x86_64 emulator
         run: ABI=x86_64 scripts/host_contract.sh android build
       - name: KVM for the emulator
@@ -115,5 +120,5 @@ jobs:
         if: always()
         with:
           name: host-android
-          path: out/host/
+          path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

@@ -1,32 +1,37 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts on Windows (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run in a window with its scripted taps, its tape made a Tester's test and
 # run here (every frame the same), then the committed tape's text (windows_controls) asked of DirectWrite again (every
 # answer the same); streamdemo's JPEG stream decoded by WIC to its end. When Windows' host changes.
-name: host-windows
+name: mbui-host-windows
 on:
   pull_request:
     paths: &paths
-      - "src/ui/native.mbt"
-      - "src/kitdemo/viewcheck.mbt"
-      - "src/host/win_*"
-      - "src/host/win.h"
-      - "src/host/done_watch.h"
-      - "src/ui/drive.mbt"
-      - "scripts/done_runner.py"
-      - "scripts/win.sh"
-      - "scripts/host_contract.sh"
-      - "scripts/textrec_test.py"
-      - "test/host/**"
-      - "src/kitdemo/textcheck.mbt"
-      - "src/kitdemo/textrec_windows_*"
-      - "src/host/stream*"
-      - "src/ui/stream*"
-      - "src/streamdemo/**"
-      - ".github/workflows/host-windows.yml"
+      - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/viewcheck.mbt"
+      - "apps/mbui/mbui/src/host/win_*"
+      - "apps/mbui/mbui/src/host/win.h"
+      - "apps/mbui/mbui/src/host/done_watch.h"
+      - "apps/mbui/mbui/src/ui/drive.mbt"
+      - "apps/mbui/mbui/scripts/done_runner.py"
+      - "apps/mbui/mbui/scripts/win.sh"
+      - "apps/mbui/mbui/scripts/host_contract.sh"
+      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/test/host/**"
+      - "apps/mbui/mbui/src/kitdemo/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/textrec_windows_*"
+      - "apps/mbui/mbui/src/host/stream*"
+      - "apps/mbui/mbui/src/ui/stream*"
+      - "apps/mbui/mbui/src/streamdemo/**"
+      - ".github/workflows/mbui-host-windows.yml"
   push:
     branches: [main]
     paths: *paths
   workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   contracts:
@@ -39,7 +44,7 @@ jobs:
       - run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo
         run: scripts/host_contract.sh windows build
       - name: "The host's contract: a run's tape = a Tester's frames"
@@ -69,5 +74,5 @@ jobs:
         if: always()
         with:
           name: host-windows
-          path: out/host/
+          path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

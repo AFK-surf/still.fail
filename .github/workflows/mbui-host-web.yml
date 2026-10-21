@@ -1,33 +1,38 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # The host's and the text's contracts in the browser (docs/determinism.md, "What is compared, and where"; scripts/
 # host_contract.sh): kitdemo's controls page run in headless Chromium with its scripted taps, its tape made a Tester's
 # test and run here (every frame the same), then the committed tape's text (web_controls) asked of the browser's text
 # again (every answer the same); streamdemo's stream decoded to its end (JPEG in Chromium, H.264 in Chrome: Playwright's
 # Chromium decodes no H.264). When the web host changes.
-name: host-web
+name: mbui-host-web
 on:
   pull_request:
     paths: &paths
-      - "src/ui/native.mbt"
-      - "src/kitdemo/viewcheck.mbt"
-      - "web/**"
-      - "src/host/host_js.mbt"
-      - "src/host/textref_js.mbt"
-      - "scripts/web.sh"
-      - "scripts/host-web.mjs"
-      - "scripts/host_contract.sh"
-      - "scripts/textrec_test.py"
-      - "test/host/**"
-      - "src/kitdemo/textcheck.mbt"
-      - "src/kitdemo/textrec_web_*"
-      - "src/host/stream*"
-      - "src/ui/stream*"
-      - "src/streamdemo/**"
-      - ".github/workflows/host-web.yml"
+      - "apps/mbui/mbui/src/ui/native.mbt"
+      - "apps/mbui/mbui/src/kitdemo/viewcheck.mbt"
+      - "apps/mbui/mbui/web/**"
+      - "apps/mbui/mbui/src/host/host_js.mbt"
+      - "apps/mbui/mbui/src/host/textref_js.mbt"
+      - "apps/mbui/mbui/scripts/web.sh"
+      - "apps/mbui/mbui/scripts/host-web.mjs"
+      - "apps/mbui/mbui/scripts/host_contract.sh"
+      - "apps/mbui/mbui/scripts/textrec_test.py"
+      - "apps/mbui/mbui/test/host/**"
+      - "apps/mbui/mbui/src/kitdemo/textcheck.mbt"
+      - "apps/mbui/mbui/src/kitdemo/textrec_web_*"
+      - "apps/mbui/mbui/src/host/stream*"
+      - "apps/mbui/mbui/src/ui/stream*"
+      - "apps/mbui/mbui/src/streamdemo/**"
+      - ".github/workflows/mbui-host-web.yml"
   push:
     branches: [main]
     paths: *paths
   workflow_dispatch:
 
+
+defaults:
+  run:
+    working-directory: apps/mbui/mbui
 
 jobs:
   contracts:
@@ -35,7 +40,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo for the browser, and Chromium
         run: scripts/host_contract.sh web build
       - name: "The host's contract: a run's tape = a Tester's frames"
@@ -63,5 +68,5 @@ jobs:
         if: always()
         with:
           name: host-web
-          path: out/host/
+          path: apps/mbui/mbui/out/host/
           if-no-files-found: ignore

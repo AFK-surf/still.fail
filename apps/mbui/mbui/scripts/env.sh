@@ -1,6 +1,6 @@
 # Sourced by the scripts: a toolchain of its own when there is one (MBUI_TOOLS, by default where the development
 # machine keeps it), else (Windows, CI, anyone else) the toolchain on PATH as it is.
-# In CI, only what the job set up itself (.github/actions/moonbit; MBUI_TOOLS where a job says so): never the
+# In CI, only what the job set up itself (the repository's .github/actions/mbui-moonbit; MBUI_TOOLS where a job says so): never the
 # development machine's toolchain, which a self-hosted runner on that machine (Mini1) would otherwise pick up from
 # another's session (2026-10-19: another's moonc).
 if [ -n "${GITHUB_ACTIONS:-}" ]; then

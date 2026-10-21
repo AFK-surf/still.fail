@@ -47,8 +47,13 @@ def main():
             sets[name].append(regex(s[1:].strip().strip('"').strip("'")))
         else:
             sys.exit(f"ci_paths: not a filter line: {line!r}")
-    files = subprocess.run(["git", "diff", "--name-only", "HEAD^1", "HEAD"], check=True, capture_output=True,
-                           text=True).stdout.split()
+    # (the repository's paths, mbui's own said from its directory: apps/mbui/mbui/src/ui/x.mbt as src/ui/x.mbt; others,
+    # as the workflows', as they are)
+    prefix = subprocess.run(["git", "rev-parse", "--show-prefix"], check=True, capture_output=True,
+                            text=True).stdout.strip()
+    files = [p[len(prefix):] if prefix and p.startswith(prefix) else p
+             for p in subprocess.run(["git", "diff", "--name-only", "HEAD^1", "HEAD"], check=True,
+                                     capture_output=True, text=True).stdout.split()]
     out = os.environ.get("GITHUB_OUTPUT")
     with open(out, "a") if out else sys.stdout as f:
         for n, pats in sets.items():

@@ -32,7 +32,7 @@ yet and you can add one, add it.
 
 ## Before a PR
 
-- Run what CI runs for what you touched (`scripts/test.sh`, the `moon test` packages of `.github/workflows/ci.yml`,
+- Run what CI runs for what you touched (`scripts/test.sh`, the `moon test` packages of the repository's `.github/workflows/mbui-ci.yml`,
   `python3 scripts/detlint.py`), not a subset of your own.
 - One PR per piece of work. Squash with `git reset --soft $(git merge-base HEAD origin/main)`, never onto
   `origin/main`; check `git diff origin/main --stat` lists only your files.
