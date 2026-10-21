@@ -286,6 +286,8 @@ fn chat_page(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Unit {
         pick_layer(c, src, r)
         // a link held: its menu (link_menu.mbt)
         link_menu_layer(c)
+        // the station's update opened under the bar's word (station_update.mbt)
+        station_update_popover(c, src, r.station, v.station_update)
       }
     }
   })
@@ -1316,6 +1318,9 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       None => ()
     }
   }
+  if v.station_update is Some(Object(_)) {
+    room = room + 8.0 + update_control_w(v.station_update)
+  }
   if people.length() > 0 {
     room = room + 8.0 + 19.0 + 14.0 * (people.length() - 1).to_double()
   }
@@ -1333,10 +1338,12 @@ fn chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : ChatView)
       fn() {
         if v.agents.length() == 0 {
           match station {
-            Some(s) => station_tag(c, s)
+            Some(s) => station_chip(c, r.station, s)
             None => ()
           }
         }
+        // its station's update (station_update.mbt)
+        station_update_control(c, src, r.station, v.station_update)
         if people.length() > 0 {
           people_stack(c, src, people, 16.0)
         }
@@ -1442,6 +1449,18 @@ fn station_tag(c : @ui.Ctx, s : Station) -> Unit {
     },
   )
   |> ignore
+}
+
+///|
+/// The station's tag in a chat's bar while no agent is in it (PageParts.kt ChatStationChip): a tap opens its card
+/// (Stations.kt openStationPeek).
+fn station_chip(c : @ui.Ctx, address : String, s : Station) -> Unit {
+  let id = c.id("bar-station")
+  c.cursor(id, Hand)
+  if c.clicked(id) {
+    @settings.open_station_peek(address)
+  }
+  c.box(id~, fn() { station_tag(c, s) }) |> ignore
 }
 
 ///|

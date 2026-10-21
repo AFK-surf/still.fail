@@ -6,7 +6,7 @@
 //
 // An agent's station opens the station's card in its place (settings/station_peek.mbt), its account how it runs.
 //
-// Not here yet, against the Android app: dragging a sheet by its grabber.
+// The jobs' and a job's sheets drag between half and nearly all of the screen, as Android's (Jobs.kt: draggable).
 
 // ── parts ───────────────────────────────────────────────────────────────
 
@@ -430,6 +430,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
     _ => None
   }
   let slack = text(chat, "slackUrl")
+  let feishu = text(chat, "feishuUrl")
   let xshare = field(chat, "xshare")
   // as tall as what it shows (ChatInfo.kt openChatInfo: SheetSpec(0.55f, fit)), its share until it is laid out
   sheet_frame(c, "info", c.height * 0.55, fit=true, fn() {
@@ -604,16 +605,24 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             Some(Object(_)) => xshare_row(c, r, opt_number(thread, "id"), xshare)
             _ => ()
           }
-          if slack != "" {
-            info_row(c, "", fn() {
+          // where it came from, opened there (the system's app for its link)
+          if slack != "" &&
+            info_row(c, "info/slack", fn() {
               @sf.slack_mark(c, 16.0) |> ignore
-              c.box(w=Fill(1.0), fn() {
-                c.text(tr("android-chat.info.slack.open"), size=14.0, color=t.p.text, wrap=false) |> ignore
-              })
+              c.box(style=@sf.full_width, fn() { c.text(tr("android-chat.info.slack.open"), style=info_words) |> ignore })
               |> ignore
               chevron(c)
-            })
-            |> ignore
+            }) {
+            open_outside(slack)
+          }
+          if feishu != "" &&
+            info_row(c, "info/feishu", fn() {
+              @sf.feishu_mark(c, 16.0) |> ignore
+              c.box(style=@sf.full_width, fn() { c.text(tr("web-mobile.chat.openFeishu"), style=info_words) |> ignore })
+              |> ignore
+              chevron(c)
+            }) {
+            open_outside(feishu)
           }
           // into the archive, back to the list at once
           if open &&
@@ -1163,7 +1172,7 @@ fn job_groups(c : @ui.Ctx, r : ChatRef, view : Json?, jobs : Array[Json]) -> Uni
 fn jobs_sheet(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("chatJobs", chat_params(r))
-  sheet_frame(c, "jobs", c.height * 0.62, fn() {
+  sheet_frame(c, "jobs", c.height * 0.62, draggable=true, fn() {
     sheet_head(c, tr("android-misc.jobs.title"))
     let view = match topic.value {
       Some(Object(_)) as v => v
@@ -1310,7 +1319,7 @@ fn job_sheet(c : @ui.Ctx, src : Source, r : ChatRef, id : String) -> Unit {
   let t = @sf.theme()
   let topic = (src.topic)("chatJobs", chat_params(r))
   let job = items(topic.value, "jobs").iter().find_first(fn(j) { text(Some(j), "id") == id })
-  sheet_frame(c, "job", c.height * 0.8, fn() {
+  sheet_frame(c, "job", c.height * 0.8, draggable=true, fn() {
     let j = match job {
       Some(j) => Some(j)
       None => {
@@ -1603,4 +1612,17 @@ fn open_job_row(c : @ui.Ctx, src : Source, job : Json?) -> Unit {
     },
   )
   |> ignore
+}
+
+///|
+/// An info row's words (14, the ink, on one line).
+// kept across runs: a value (no field of it changes)
+let info_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
+
+///|
+/// A link opened in the system's app for it (ChatInfo.kt: ACTION_VIEW), said when there is none.
+fn open_outside(url : String) -> Unit {
+  if !@ui.open_url(url) {
+    toast_later(tr("android-chat.link.failed"))
+  }
 }

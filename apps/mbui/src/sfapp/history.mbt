@@ -6,10 +6,8 @@
 // runs, the station. What it shows is the core's `history {station, key}` view; a call in brief is read whole as it is
 // opened (`history.detail`), the page before as the reader nears the top (`history.older`).
 //
-// Not here yet, against the Android app: code highlighting (code is the code face in the ink), a capped block's own
-// scroll (it is cut at its height), the run settings page (its row is shown), opening at an entry, a Slack user's
-// 这是我, a place's link. Opened at an entry (a link's `?history=…&entry=…`), that entry's item comes near the top, for
-// a moment marked.
+// Opened at an entry (a link's `?history=…&entry=…`), that entry's item comes near the top, for a moment marked. A
+// Slack user's name offers 这是我 or 不是我 (`slack.identity`); a place is a way there.
 
 ///|
 /// A page's compact bar (Parts.kt NavBar): back, with where it goes back to, in the accent; the title in the middle;
@@ -97,6 +95,8 @@ fn history_page(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : In
       }
     })
     |> ignore
+    // a Slack user's name tapped: its menu (link_menu.mbt)
+    link_menu_layer(c)
   })
   |> ignore
 }
@@ -492,20 +492,25 @@ fn history_item(c : @ui.Ctx, src : Source, r : ChatRef, key : String, item : Jso
                   "android-chat.history.received.message"
                 },
               )
-              let name = if notice == "stillfail" {
-                "still.fail"
+              let from = field(mv, "from")
+              let user = text(from, "slackUser")
+              if user != "" {
+                // a Slack user's name: 这是我 or 不是我 (History.kt SlackName)
+                history_label(c, [(b, false)])
+                slack_name(c, src, r.station, user, text(from, "name"), flag(from, "bound"))
+                history_label(c, [(a, false)])
               } else {
-                text(field(mv, "from"), "name")
+                let name = if notice == "stillfail" { "still.fail" } else { text(from, "name") }
+                history_label(c, [(b, false), (name, true), (a, false)])
               }
-              let parts = [(b, false), (name, true), (a, false)]
+              // where it came from, a way there (History.kt Place)
               match field(mv, "place") {
                 Some(Object(_)) as p => {
-                  parts.push((" · ", false))
-                  parts.push((text(p, "name"), true))
+                  history_label(c, [(" · ", false)])
+                  history_place(c, r, ik + "/message/" + k.to_string(), p)
                 }
                 _ => ()
               }
-              history_label(c, parts)
             },
             text(mv, "text"),
             false,
@@ -626,6 +631,61 @@ fn history_label(c : @ui.Ctx, parts : Array[(String, Bool)]) -> Unit {
   )
   |> ignore
 }
+
+///|
+/// A Slack user's name in a history (History.kt SlackName): 你 once the viewer said it is them, the core says; in the
+/// accent's ink, 13 semibold. A tap offers 这是我 (the station then takes that Slack user for the viewer), or 不是我
+/// once it does (`slack.identity`); said and not answered yet, a spinner beside it and no menu, failed a red mark.
+fn slack_name(c : @ui.Ctx, src : Source, station : String, user : String, name : String, mine : Bool) -> Unit {
+  let key = "slack.identity/" + station + "/" + user
+  let busy = doing(key)
+  let id = if busy { 0 } else { c.id("slack-name/" + user) }
+  if id != 0 && c.clicked(id) {
+    match c.rect_of(id) {
+      Some((x, y, w, h)) =>
+        menu_under(
+          [
+            if mine {
+              (tr("android-chat.history.identity.notMe"), "close")
+            } else {
+              (tr("android-chat.history.identity.me"), "check")
+            },
+          ],
+          x + w / 2.0,
+          y,
+          y + h,
+          fn(_, _) {
+            act(
+              src,
+              tr(if mine { "android-chat.history.identity.unbind" } else { "android-chat.history.identity.bind" }),
+              key,
+              "slack.identity",
+              { "station": Json::string(station), "user": Json::string(user), "bound": Json::boolean(!mine) },
+            )
+          },
+        )
+      None => ()
+    }
+  }
+  c.box(style=slack_name_row, fn() {
+    c.box(style=slack_name_ground, id~, fn() { c.text(name, style=slack_name_words) |> ignore }) |> ignore
+    @settings.doing_mark(c, busy, if failed_lately(c, key) { Some("") } else { None }, inline=true)
+  })
+  |> ignore
+}
+
+///|
+// kept across runs: a value (no field of it changes)
+let slack_name_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+
+///|
+/// Its ground under the finger rounded 4 (Smooth(4)).
+// kept across runs: a value (no field of it changes)
+let slack_name_ground : @ui.Style = @ui.style(radius=Base, pressed=@ui.patch(bg=A(Fg, O5)))
+
+///|
+// kept across runs: a value (no field of it changes)
+let slack_name_words : @ui.TextStyle = @ui.text_style(size=Sm, weight=Semibold, color=AccentText, wrap=false)
 
 ///|
 /// A place, as the core names it (History.kt Place): its platform's mark (still.fail's for a chat here, Slack's for
@@ -1780,7 +1840,8 @@ fn tool_step_body(
 }
 
 ///|
-/// The language a file is in, by its extension (not drawn yet: there is no highlighting).
+/// The file a call is about (its `file_path`, `notebook_path` or `path`): its extension says the language its code is
+/// highlighted in.
 fn file_of(a : Map[String, Json]) -> String? {
   match jstr(a.get("file_path")) {
     Some(f) => Some(f)

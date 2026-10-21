@@ -69,6 +69,8 @@ fn pick_reset() -> Unit {
   pk.grab_y = 0.0
   pk.picked_frame = -1
   link_menu.href = ""
+  link_menu.items = []
+  link_menu.pick = fn(_, _) {  }
   link_menu.x = 0.0
   link_menu.top = 0.0
   link_menu.bottom = 0.0

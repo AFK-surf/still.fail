@@ -571,3 +571,31 @@ pub fn line_art(
   }
   draw_drawable(c, "art/" + key, { w: vw, h: vh, layers }, w, Some(tint))
 }
+
+///|
+/// A popover's arrow, pointing up at what it is from (StationUpdate.kt: 14 across, 7 up, in the popover's colour; a
+/// pixel more under it, into the popover).
+// kept across runs: a value (no field of it changes)
+let popover_arrow_shape : Drawable = {
+  w: 14.0,
+  h: 8.0,
+  layers: [
+    {
+      d: "M 0 8 L 7 0 L 14 8 Z",
+      fill: 0x000000FFL,
+      stroke: 0x00000000L,
+      width: 0.0,
+      even_odd: false,
+      sx: 1.0,
+      sy: 1.0,
+      tx: 0.0,
+      ty: 0.0,
+    },
+  ],
+}
+
+///|
+/// The arrow of a popover (14 by 8) in `tint`.
+pub fn popover_arrow(c : @ui.Ctx, tint : Int64) -> Int {
+  draw_drawable(c, "popover-arrow", popover_arrow_shape, popover_arrow_shape.w, Some(tint))
+}
