@@ -828,7 +828,9 @@ function tileOf(source: providers.Source, hasKey: boolean, hasPlan: boolean, run
   const kind = source.legacy === "opencode-go" ? "opencode-go" : source.legacy === "anthropic-api" ? "anthropic-api" : "api-provider";
   // xAI's plan (SuperGrok) runs Grok Build.
   const runtime = source.id === "openai" ? "codex" : source.id === "anthropic" ? "claude" : source.id === "xai" && hasPlan ? "grok" : null;
-  const uses = usesOf(source, null, null, runtimes);
+  // Kimi's plan (Kimi Code signed in to) runs Claude Code, besides what its open platform's key does.
+  const planned = source.id === "moonshotai" && hasPlan && runtimes.includes("claude") ? ["claude"] : [];
+  const uses = [...planned, ...usesOf(source, null, null, runtimes).filter((u) => !planned.includes(u))];
   const cn = providers.chinaOf(source.id);
   return {
     id: source.id,
@@ -860,15 +862,16 @@ function planTile(runtime: string): J {
 
 /// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
 /// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan); one
-/// that lists Kimi Code signs it in to Kimi too (its plan, KIMI_PLAN). xAI
+/// that lists Kimi Code signs Kimi in to the person's Kimi account (Kimi's plan, as ChatGPT's is OpenAI's: one tile,
+/// the open platform's key beside it; Kimi Code has no tile of its own). xAI
 /// has a plan (SuperGrok) where the station runs Grok Build; Cursor and Devin, last of the makers, where it runs them.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
   const out: J[] = [];
   for (const group of providers.GROUPS) {
-    const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
+    const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id) && s.id !== "kimi-code").flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "kimi-code" && hasKey) || (s.id === "xai" && runtimes.includes("grok"));
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "moonshotai" && listed("kimi-code")) || (s.id === "xai" && runtimes.includes("grok"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "labs") for (const r of PLAN_ALONE) if (runtimes.includes(r)) tiles.push(planTile(r));
@@ -911,7 +914,7 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does; Kimi
   // Code's with a Kimi account, and runs Claude Code (the only one that reads its token again as it is renewed).
   const opencode = tile.id === "opencode-go";
-  const kimi = tile.id === "kimi-code";
+  const kimi = tile.id === "moonshotai";
   if (method === null) {
     const plan = opencode ? "OpenCode Go" : kimi ? "Kimi Code" : planOf(runtime).plan;
     out.step = "method";

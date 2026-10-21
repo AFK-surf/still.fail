@@ -37,7 +37,7 @@ import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
 import { LONG_COMMAND, libraryDemo, vaultDemo } from "./vault.ts";
 import { filesDemo, TRANSFERS } from "./files.ts";
-import { cursorPickDemo, installDemo, installFlowDemo } from "./install.ts";
+import { cursorPickDemo, installDemo, installFlowDemo, kimiMethodDemo } from "./install.ts";
 import { ADD, pickModelsDemo } from "./pickModels.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
@@ -730,6 +730,7 @@ export const stories: Story[] = [
   { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-add-installing", group: "应用", title: "添加 Profile · SuperGrok · 正在安装 Grok Build", app: true, demo: installFlowDemo("installing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-kimi", group: "应用", title: "添加 Profile · Kimi：订阅 Kimi Code 或 API key", app: true, demo: kimiMethodDemo(), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-add-cursor", group: "应用", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-cursor", group: "应用", title: "Profile · Cursor 订阅", app: true, demo: cursorAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-cursor-signing-in", group: "应用", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
@@ -1074,6 +1075,7 @@ export const stories: Story[] = [
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-add-kimi", group: "手机", title: "添加 Profile · Kimi：订阅 Kimi Code 或 API key", app: true, phone: true, demo: kimiMethodDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-cursor-signing-in", group: "手机", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, phone: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-pick-models-reading", group: "手机", title: "添加 Profile · 选择模型 · 正在读取", app: true, phone: true, demo: pickModelsDemo(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }, { text: ADD }] },
