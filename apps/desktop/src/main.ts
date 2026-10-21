@@ -17,6 +17,8 @@ import { FETCH_LINK, socketScript, withSocketTag } from "../../../cloud/src/prev
 import { applyDelta, type DeltaOp } from "../../../web/src/core/delta";
 import { verifyDesktop } from "../../../station/src/updates/signed.ts";
 import { LocalStation, type Place } from "./station";
+import { desktopDiagnostics } from "./diagnostics";
+import type { DiagnosticLog } from "./diagnostic-log.mts";
 import { controlService, installedService, servicePath, updateInstalled } from "./installed";
 import { contextMenu, type Action } from "./context-menu.mts";
 import { systemPermission } from "./notify-permission.ts";
@@ -161,6 +163,7 @@ async function migrateOrigin(): Promise<void> {
 }
 
 let core: UtilityProcess | null = null;
+let diagnostics: DiagnosticLog | undefined;
 
 /**
  * The core's iroh: the station's addon, carried once in the station the app carries (build.sh); an app without a
@@ -209,7 +212,9 @@ function coreProcess(): UtilityProcess {
   if (core) return core;
   const files = sealedFiles();
   const child = utilityProcess.fork(join(__dirname, "core.js"), [join(app.getPath("userData"), "core"), CLOUD_ORIGIN, meshAddon(), BETA ? "beta" : "", files ? "sealed" : ""], { serviceName: `${NAME} core` });
-  child.on("message", (message: { sealed?: SealedAsk }) => {
+  child.on("spawn", () => diagnostics?.write("core-start", { childPid: child.pid }));
+  child.on("message", (message: { sealed?: SealedAsk; diagnostic?: { name: string; message: string; stack?: string } }) => {
+    if (message?.diagnostic) diagnostics?.write("core-exception", { error: message.diagnostic });
     const ask = message?.sealed;
     if (!ask || !files) return;
     answerSealed(files, ask).then(
@@ -218,6 +223,7 @@ function coreProcess(): UtilityProcess {
     );
   });
   child.on("exit", (code) => {
+    diagnostics?.write("core-exit", { code });
     if (core === child) core = null;
     dropOwnLink(t("desktop.core.exited"));
     // Its ports are dead with it: every page opens a new one.
@@ -1313,6 +1319,7 @@ function keepUpdated(): void {
   });
   if (process.platform === "win32") verifyWindowsUpdates();
   autoUpdater.on("update-downloaded", ({ version }) => {
+    diagnostics?.write("quit-for-update", { version });
     sayUpdate({ phase: "installing", version });
     void stopStation().then(() => autoUpdater.quitAndInstall(true, true));
   });
@@ -1672,13 +1679,16 @@ let startup: Promise<void>;
 /** Stops the station (and its runtimes) before the app quits: after it, quitting goes ahead without waiting again. */
 async function stopStation(): Promise<void> {
   if (stationStopped) return;
-  await station.stop().catch(() => {});
+  diagnostics?.write("station-stop-requested");
+  await station.stop().catch((error: unknown) => diagnostics?.write("station-stop-error", { error }));
   stationStopped = true;
+  diagnostics?.write("station-stop-finished");
 }
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  diagnostics = desktopDiagnostics();
   // Run from the source (Electron's own app with this directory, dev.sh), the links open it with the directory. One
   // tried apart (STILLFAIL_USER_DATA) leaves the links to the app in use. Outside macOS the links would name the
   // directory itself, often a worktree that is gone later, leaving every link to a launcher that cannot start: there a
@@ -1738,6 +1748,7 @@ if (!app.requestSingleInstanceLock()) {
     if (started && BrowserWindow.getAllWindows().length === 0) open();
   });
   app.on("window-all-closed", () => {
+    diagnostics?.write("window-all-closed", { quitting: started && process.platform !== "darwin" });
     if (started && process.platform !== "darwin") app.quit();
   });
 }

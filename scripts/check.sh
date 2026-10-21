@@ -317,6 +317,7 @@ if part ts; then
     prep core deps client/core-ts
     step "desktop: its shell's files" after root after desktop after core node scripts/desktop-web.ts check
     step "desktop: what it keeps sealed" node --test apps/desktop/test/secure.test.ts
+    step "desktop: local diagnostic records" node --test apps/desktop/test/diagnostic-log.test.ts
     step "desktop: its station's PATH" node --test apps/desktop/test/station-path.test.ts
     step "desktop: where its station stands, joining it" node --test apps/desktop/test/station-place.test.ts
     step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
