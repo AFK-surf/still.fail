@@ -21,6 +21,14 @@ yet and you can add one, add it.
   comes from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a fact of state (a row by its id
   appears).
 
+## Pictures come from the Tester's draw list
+
+- A screen is compared as the Tester's draw list at a declared moment; its pixels as each host's offscreen render of
+  that list (`scripts/render_*.sh`) against that host's references. No check runs an app on a device, an emulator, a
+  simulator or a desktop window and compares its picture with a kept one. A device runs the host's contracts (a tape
+  replayed frame by frame, the text, the marks) and a few end-to-end smoke flows that wait for named events; their
+  pictures are for people. detlint's `device-shot` counts each picture taken off a device: a new one fails.
+
 ## There are no flaky failures
 
 > 不稳定测试是整个系统最严重的故障。我们的系统就不应该存在偶发失败。存在偶发失败说明整个系统就是烂的，而不是某个测试有问题。

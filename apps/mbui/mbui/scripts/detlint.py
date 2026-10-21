@@ -25,6 +25,10 @@ The rules (see RULES below for each one's words):
     script-wait    a test or screenshot script waits a fixed time or a fixed frame count (sleep N, MBUI_SHOT_AT=N,
                    setTimeout(…, N), waitForTimeout(N), time.sleep(N))
     page-settle    a script waits on a web page until the app is settled (__mbhost.settled(), unsettled())
+    device-shot    a script takes a picture of the app off a device, an emulator or a simulator (adb's screencap,
+                   simctl io … screenshot): the app's screens are compared in the Tester, its draw list at a declared
+                   moment, and pixels by each host's offscreen render of that list; a device runs only the host's
+                   contracts and a few end-to-end smoke flows. Each place counted; a new one fails
     frame-wait     a fiber waits for the next frame (@effect.next_frame()) outside the runtime itself: an animation
                    waits until the moment its run ends, a step until its time or its event, never a frame (how many
                    frames come is the display's)
@@ -557,6 +561,9 @@ RULES = {
                    "picture at a time the animations declare",
     "page-settle": "a script waits on a web page until the app is settled (__mbhost.settled): take it at a declared "
                    "time, or wait for the named thing",
+    "device-shot": "a script takes a picture of the app off a device, an emulator or a simulator: what it shows is "
+                   "compared in the Tester (its draw list at a declared moment), pixels by the hosts' offscreen "
+                   "render of that list; a device runs the host's contracts and a few smoke flows only",
     "frame-wait": "a fiber waits for the next frame: wait until the moment (an animation's declared end, a timer) or the "
                   "event, not a frame: how many frames come is the display's",
     "at-rest-wait": "goes on until the app is at rest (settled by another name): at_rest is asserted (assert_true("
@@ -1101,6 +1108,11 @@ DRIVE_REST = re.compile(r"^\s*rest\s*(#.*)?$")
 DRIVE_REST_TEXT = re.compile(r"(\\n|^\s*#\||\"|')rest\s*(\\n|\"|'|$)")
 # a picture at the app's rest
 SHOT_REST = re.compile(r"\b(MBUI_SHOT_MS|shot_at|SHOT_AT)\s*=\s*[\"']?rest\b")
+# a picture of the app taken off a device, an emulator or a simulator
+DEVICE_SHOTS = [
+    re.compile(r"\bscreencap\b"),
+    re.compile(r"\bsimctl\s+io\b.*\bscreenshot\b"),
+]
 SCRIPT_WAITS = [
     re.compile(r"(?<![\w-])sleep\s+[\"'$0-9.]"),
     re.compile(r"\bMBUI_SHOT_AT=[\"'$0-9]"),
@@ -1183,6 +1195,7 @@ def collect(root, cfg):
                 comment = "//" if n.endswith((".mjs", ".js", ".ts")) else "#"
                 lint_lines(rel, src, "script-wait", SCRIPT_WAITS, findings, comment)
                 lint_lines(rel, src, "page-settle", [PAGE_SETTLE], findings, comment)
+                lint_lines(rel, src, "device-shot", DEVICE_SHOTS, findings, comment)
                 lint_lines(rel, src, "at-rest-wait", [SHOT_REST, DRIVE_REST_TEXT], findings, comment)
     returns = {}
     for f in mbts:

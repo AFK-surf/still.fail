@@ -1,8 +1,8 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
-# The demo on Windows: build with MoonBit and MSVC, take the scripted
-# screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
-# it with goldens/windows.png when there is one; then the text against
-# DirectWrite's own.
+# The demo on Windows: build with MoonBit and MSVC, its input method's script run in a window (Direct3D falls back to
+# WARP on the GPU-less runner); then the text against DirectWrite's own. No picture of the app's window is compared
+# with a kept one (goldens/windows.png is scripts/shots.sh's, by hand): what Direct3D draws is held to its references
+# by mbui-render-windows (a Tester's draw list drawn offscreen), as the macOS job does (mbui-ci.yml).
 name: mbui-windows
 on:
   push:
@@ -38,22 +38,8 @@ jobs:
           moon version --all
           scripts/win.sh build
           echo "binary: $(stat -c %s out/win/mod/_build/native/release/build/demo/demo.exe) bytes"
-      - name: Screenshot
-        run: |
-          scripts/win.sh shot
-          ls -la out/shot-win
       - name: IME script
         run: scripts/win.sh script ime
-      - name: Compare with the golden
-        run: |
-          mkdir -p out/shots
-          cp out/shot-win/main.png out/shots/windows.png
-          if [ -f goldens/windows.png ]; then
-            mkdir -p out/node && cd out/node && npm init -y >/dev/null && npm i pngjs pixelmatch >/dev/null && cd ../..
-            node scripts/imgdiff.mjs goldens/windows.png out/shots/windows.png out/shots/windows-review.png
-          else
-            echo "no goldens/windows.png yet"
-          fi
       - name: Text against DirectWrite's own (scripts/textdiff.sh windows; the report is in the artifact)
         run: |
           mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
@@ -80,8 +66,6 @@ jobs:
           name: windows-shots
           path: |
             apps/mbui/mbui/out/webviews/
-            apps/mbui/mbui/out/shots/
-            apps/mbui/mbui/out/shot-win/
             apps/mbui/mbui/out/shot-kit/
             apps/mbui/mbui/out/ime/
             apps/mbui/mbui/out/photos/

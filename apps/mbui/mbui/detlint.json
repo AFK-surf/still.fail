@@ -51,6 +51,12 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "device-shot": {
+      "scripts/android.sh": 1,
+      "scripts/host_contract.sh": 1,
+      "scripts/ios.sh": 1,
+      "scripts/shots.sh": 1
+    },
     "frame-wait": {},
     "at-rest-wait": {},
     "frame-count": {},
@@ -154,6 +160,7 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "device-shot": {},
     "frame-wait": {
       "src/ui/fx_test.mbt": 1
     },
