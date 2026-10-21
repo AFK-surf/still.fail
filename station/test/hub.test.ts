@@ -939,6 +939,83 @@ test("in sandboxes an idle session's process ends after the sandbox idle time, w
   }
 });
 
+/// A stand-in l4es front door in `dir`, on PATH: `ls` answers what `<dir>/ls` holds, `rm NAME` says it deleted it;
+/// each call kept in `<dir>/ssh-calls`.
+function frontDoor(dir: string): { calls: () => string[]; restore: () => void } {
+  const calls = join(dir, "ssh-calls");
+  writeFileSync(join(dir, "ssh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nfor a; do prev=$last; last=$a; done\nif [ "$last" = ls ]; then cat '${join(dir, "ls")}'; else echo "deleting $last"; fi\n`);
+  chmodSync(join(dir, "ssh"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${dir}:${path}`;
+  return { calls: () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").map((l) => l.split(" ").slice(-2).join(" ")) : []), restore: () => (process.env.PATH = path) };
+}
+
+test("a session's idle time goes with it to the next station: taken up, it is not idle afresh", async () => {
+  const time = testClock();
+  const first = new Rig({ clock: time.clock });
+  const door = frontDoor(first.dir);
+  const unplace = placeIn(first.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
+  try {
+    await first.accept(message());
+    await settle();
+    first.claude.last().end({ kind: "aborted" });
+    await settle();
+    await time.adjust(100);
+    await settle();
+    const handed = await first.hub.handOver();
+    assert.equal(handed.sessions[0]!.idleMs, 100);
+    const claude = new FakeDriver("claude");
+    const hub = first.newHub({ chats: (id) => (id === "cl" ? first.chat : undefined), drivers: [claude, new FakeDriver("codex")], internal: false });
+    await hub.takeUp();
+    hub.recover();
+    await settle();
+    await time.adjust(19);
+    await settle();
+    assert.ok(!claude.last().disposed, "not idle long enough yet");
+    await time.adjust(1);
+    await settle();
+    assert.ok(claude.last().disposed, "ended 120 ms after it went idle, not 120 ms after it was taken up");
+    await hub.shutdown();
+  } finally {
+    unplace();
+    door.restore();
+    await first.close();
+  }
+});
+
+test("a sandbox of a session nothing runs in is stopped; one in use, or not this station's, is left", async () => {
+  const r = new Rig();
+  const door = frontDoor(r.dir);
+  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []);
+  try {
+    const busy = message();
+    await r.accept(busy);
+    const cold = say("<@UBOT> other", { threadTs: "1700000002.000300", ts: "1700000002.000300" });
+    await r.accept(cold);
+    await settle();
+    // The second's process ended some other way than going idle (it exited).
+    r.claude.last().end({ kind: "aborted" });
+    await settle();
+    await r.hub.evict(sessionKey("cl", "C1", cold.threadTs));
+    await settle();
+    const name = (m: { threadTs: string }) => sandboxName(keyPart(sessionKey("cl", "C1", m.threadTs)));
+    writeFileSync(join(r.dir, "ls"), [
+      "Workspace ws",
+      "NAME                            STATE     CPU   IDLE",
+      `${name(busy)}   running   0%    deleted in 50 min if unused  labels=`,
+      `${name(cold)}   running   0%    deleted in 50 min if unused  labels=`,
+      "s-someone-else-0123456789       running   0%    deleted in 50 min if unused  labels=",
+      `${name({ threadTs: "1700000003.000400" })}   running   0%    1 session(s)  labels=`,
+    ].join("\n") + "\n");
+    await r.hub.sweepSandboxes();
+    assert.deepEqual(door.calls(), ["_.ws@host ls", `rm ${name(cold)}`]);
+  } finally {
+    unplace();
+    door.restore();
+    await r.close();
+  }
+});
+
 test("a running turn is never evicted", async () => {
   const time = testClock();
   const r = new Rig({ maxWarmClaude: 0, warmMinutes: 0, clock: time.clock });

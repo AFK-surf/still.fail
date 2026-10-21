@@ -164,6 +164,17 @@ export function sandboxIdleMs(data: string): number | null {
   return config === null ? null : config.idleMinutes * 60_000;
 }
 
+/// The sandboxes of the l4es workspace no connection holds now, by name (`ls` says when idle expiry would take them).
+export function idleSandboxes(data: string, timeoutMs = 60_000): Promise<string[]> {
+  const config = placed.get(data)?.config() ?? null;
+  if (config === null) return Promise.resolve([]);
+  const [ssh, ...args] = sshArgs(config, "_");
+  return new Promise((resolve) =>
+    execFile(ssh, [...args, "ls"], { timeout: timeoutMs }, (error, out) =>
+      resolve(error ? [] : out.split("\n").flatMap((line) => (/^\S+\s+running\s.*\sdeleted in /.test(line) ? [line.split(/\s+/)[0]!] : [])))),
+  );
+}
+
 /// Stops (deletes) `key`'s sandbox, `size`'s of it when given: what it has on its own disk goes, its files in
 /// `persist` stay for the next. The front door refuses while anything still has a connection to it (a job, a program
 /// started since): then it stays, and is stopped when that ends. Whether it was stopped.
