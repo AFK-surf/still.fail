@@ -101,20 +101,22 @@ jobs:
   # compiles only the units whose functions changed: two lines added to sfapp, the job 153 s against debug's 180-245 s
   # (no objects: 250-300 s; the C unchanged: 80 s; 2026-10-20). Without ThinLTO, whose link is 30-40 s a test; on
   # main the same tests with it too, as the apps are built (lto: what only inlining across units shows, undefined
-  # behaviour; main's run holds nothing back), on a runner of its own. done waits for neither. 10 minutes at most.
+  # behaviour; main's run holds nothing back), on runners of its own: its tests' two parts (scripts/test.sh's PARTS)
+  # on one each, as one took 9-10 minutes and ran out of the 10 every job has (2026-10-22). done waits for neither.
   native:
     if: ${{ github.ref == 'refs/heads/main' || inputs.native }}
-    name: native${{ matrix.lto && ' (ThinLTO)' || '' }}
+    name: ${{ matrix.lto && format('native (ThinLTO, {0})', matrix.part) || 'native' }}
     runs-on: macos-15
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        lto: ${{ github.ref == 'refs/heads/main' && fromJSON('[false, true]') || fromJSON('[false]') }}
+        include: ${{ fromJSON(github.ref == 'refs/heads/main' && '[{"lto":false,"part":"app replay","store":"test"},{"lto":true,"part":"app","store":"lto-app"},{"lto":true,"part":"replay","store":"lto-replay"}]' || '[{"lto":false,"part":"app replay","store":"test"}]') }}
     env:
       MBC_LOG: ${{ github.workspace }}/../mbc.log
       MBC_LTO: ${{ matrix.lto && 'thin' || '0' }}
-      CACHE_PREFIX: mbui-native-store-${{ matrix.lto && 'lto' || 'test' }}-
+      PARTS: ${{ matrix.part }}
+      CACHE_PREFIX: mbui-native-store-${{ matrix.store }}-
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
@@ -157,5 +159,5 @@ jobs:
         if: failure()
         run: |
           failed=$(grep -a 'test .* failed' "$RUNNER_TEMP/mbui-native.log" | sed 's/^\[stillfail\] test //; s/ failed.*//' | sort -u)
-          lto=; [ "$MBC_LTO" = 0 ] || lto=" with ThinLTO (native without it: the other job)"
+          lto=; [ "$MBC_LTO" = 0 ] || lto=" with ThinLTO, $PARTS (native without it: the other job)"
           echo "::error title=check-mbui-native failed at ${GITHUB_SHA:0:9}$lto::$(printf '%s' "$failed" | tr '\n' ';')"
