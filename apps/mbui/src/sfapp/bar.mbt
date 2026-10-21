@@ -1001,14 +1001,15 @@ fn bar_glass(c : @ui.Ctx, w : Double, top : Double, bottom : Double, cy : Double
       )
       |> ignore
       // the notch's outline alone: the glass's outline grown by half the line, its line inside that, seen between
-      // the lips and under the glass's top
+      // the lips and under the glass's top; its foot below the clip (else its bottom edge was a white line under the
+      // bar's middle, between the lips)
       at(c, l, top + 0.5, rr - l, h, clip=true, body=fn() {
         at(
           c,
           -l - 0.5,
           -1.0,
           w + 1.0,
-          h + 1.0,
+          h + 4.0,
           radius=corner + 0.5,
           border=1.0,
           border_color=@sf.alpha(0xFFFFFFFFL, if t.dark { 0.22 } else { 0.7 }),

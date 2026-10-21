@@ -515,13 +515,15 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
         play_back(c)
         // words picked in a chat, a link's menu: back lets go of them first (pick.mbt)
         pick_back(c)
-        // the bottom bar: on a place's top page with nothing over it
+        // the bottom bar: on a place's top page with nothing over it; none while this device waits to be confirmed in
+        // the workspace's safe mode (its Home is the wait: lock_gate; App.kt PlaceBar)
+        let waiting = root == Home && @settings.lock_waiting(settings_core(src, w), w.id)
         bottom_bar(
           c,
           src,
           w,
           place_of(root),
-          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away(),
+          app.nav.depth() == 1 && place_of(root) is Some(_) && !search_bar_away() && !waiting,
         )
         // a file open over the pages (preview.mbt), under the menu, the sheet and the toasts
         preview(c, src)

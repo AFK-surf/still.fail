@@ -228,7 +228,7 @@ fn flight_waiting(c : @ui.Ctx, chat : String) -> Unit {
           fn() {
             c.box(style=@sf.full_width, tx=f.from_x - f.field_x, ty=f.from_y - f.field_y, fn() {
               // as the field had them: in the face chosen for what people write (ChatHost.kt SendTextFaced)
-              c.rich([@ui.span(f.text)], key="flight/words", size=send_size, color=t.p.text, line=send_line, w=Fill(1.0), words=true)
+              c.rich([@ui.span(f.text)], key="flight/words", size=send_size, color=t.p.text, line=send_line, trim=true, w=Fill(1.0), words=true)
               |> ignore
             })
             |> ignore

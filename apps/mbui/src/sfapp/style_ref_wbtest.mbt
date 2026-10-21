@@ -42,43 +42,44 @@ test "styles: the lock's waiting page, every state, drawn as before" {
     }
   }
   inspect(out.to_string(), content=(
-    #|waiting narrow 14226:92684e1f
+    #|waiting narrow 12472:e53757e2
     #|waiting wide 14459:96eb6d3d
-    #|waiting-dark narrow 14416:497cfce6
+    #|waiting-dark narrow 12589:e79d43c8
     #|waiting-dark wide 14592:44f0c809
-    #|finding narrow 16983:827cbfc9
+    #|finding narrow 15229:ea877f46
     #|finding wide 17359:8f74485b
-    #|finding-dark narrow 17142:451c09c0
+    #|finding-dark narrow 15315:5962a222
     #|finding-dark wide 17371:2432f037
-    #|code narrow 11315:e853ce72
+    #|code narrow 9561:d6cc91dd
     #|code wide 11744:5c15de72
-    #|code-dark narrow 11429:321f7f3e
+    #|code-dark narrow 9602:f429afba
     #|code-dark wide 11615:85a91664
-    #|wrong narrow 12736:993ce597
+    #|wrong narrow 10982:e8f4ed8e
     #|wrong wide 13108:6c63721d
-    #|wrong-dark narrow 12898:8aa92193
+    #|wrong-dark narrow 11071:753b081
     #|wrong-dark wide 12973:869866e5
-    #|checking narrow 19161:cf796b1d
+    #|checking narrow 17407:42e4cd96
     #|checking wide 19505:9a9d6460
-    #|checking-dark narrow 19361:b53072de
+    #|checking-dark narrow 17534:5e601b52
     #|checking-dark wide 19464:e59003b3
-    #|none narrow 13716:3ac4a9d7
+    #|none narrow 11962:5ae45fa
     #|none wide 13940:e8660877
-    #|none-dark narrow 13898:edf41050
+    #|none-dark narrow 12071:b8e67b36
     #|none-dark wide 14085:264d58f3
-    #|failed narrow 9620:6caf20ba
+    #|failed narrow 7866:f19bf2d7
     #|failed wide 9676:497f5a39
-    #|failed-dark narrow 9738:83c6b857
+    #|failed-dark narrow 7911:567e864d
     #|failed-dark wide 9925:9f5245f1
-    #|refused narrow 11904:fb795c7d
+    #|refused narrow 10150:73c0b298
     #|refused wide 12034:7fb5c594
-    #|refused-dark narrow 12058:f7379a40
+    #|refused-dark narrow 10231:c2b3fd62
     #|refused-dark wide 12265:119b583e
-    #|nocode narrow 12902:a3468695
+    #|nocode narrow 11148:d8c6db1c
     #|nocode wide 13138:1daffea2
-    #|nocode-dark narrow 13122:93a5f5c6
+    #|nocode-dark narrow 11295:b79d0e00
     #|nocode-dark wide 13281:8767585c
     #|
+
 
 
 

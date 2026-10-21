@@ -662,6 +662,8 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       size=16.0,
       color=k.text,
       line=21.0,
+      // (SendTextStyle's lines: a TextStyle of its own, no LineHeightStyle)
+      trim=true,
       link_color=t.p.blue,
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
       on_link=fn(h) { open_link(h) },

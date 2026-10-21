@@ -108,6 +108,8 @@ struct Rich {
   weight : Int
   color : Int64
   line : Double
+  // a font taller than its line not padded beyond its own reach (set_line `trim`)
+  trim : Bool
   wrap : Bool
   link_color : Int64
   pressed_bg : Int64
@@ -227,7 +229,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   }
   let lh = if r.line > 0.0 { r.line } else { own0 }
   let px = whole_pixel_lines(r.size, r.weight)
-  let (pitch0, base_asc, extra) = set_line(lh, a0, d0, sc, px)
+  let (pitch0, base_asc, extra) = set_line(lh, a0, d0, sc, px, trim=r.trim)
   let base_desc = pitch0 - base_asc
   let sb = StringBuilder()
   let run_start = []
@@ -642,6 +644,7 @@ pub fn Ctx::rich(
   weight? : Int,
   color? : Int64,
   line? : Double,
+  trim? : Bool = false,
   wrap? : Bool,
   w? : Size,
   link_color? : Int64 = 0x0A84FFFFL,
@@ -716,6 +719,7 @@ pub fn Ctx::rich(
   n.color = color
   n.wrap = wrap
   n.line_h = line
+  n.line_trim = trim
   n.w = w
   n.spacing = spacing
   n.rich = Some({
@@ -724,6 +728,7 @@ pub fn Ctx::rich(
     weight,
     color,
     line,
+    trim,
     wrap,
     link_color,
     pressed_bg,

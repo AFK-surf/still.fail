@@ -57,6 +57,10 @@ fn Entry::id(self : Entry) -> String {
 let chat_bar_h : Double = 54.0
 
 ///|
+/// The title's line in the bar (Chat.kt BarFrame: a Text with no line height of its own, 16 on the theme's 1.4em).
+let chat_title_line : Double = 16.0 * 1.4
+
+///|
 let composer_room : Double = 110.0
 
 ///|
@@ -1271,7 +1275,7 @@ fn bar_frame(
     c.box(dir=Row, w=Fill(1.0), pr=8.0, gap=8.0, align=ACenter, fn() {
       // the title as long as there is room for it beside what follows it
       c.box(max_w=dmax(c.width - 4.0 - 40.0 - 16.0 - 8.0 - room, 40.0), fn() {
-        c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=22.0)
+        c.text(title, size=16.0, weight=600, color=t.p.text, wrap=false, line=chat_title_line)
         |> ignore
       })
       |> ignore

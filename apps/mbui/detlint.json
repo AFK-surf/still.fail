@@ -55,6 +55,7 @@
       "e2e/android-flow.sh": 2,
       "scripts/e2e-local.sh": 1
     },
+    "host-import": {},
     "frame-wait": {
       "src/sfcore/clock.mbt": 1
     },
@@ -87,7 +88,7 @@
       "src/sf/picture.mbt": 1,
       "src/sfapp/app.mbt": 36,
       "src/sfapp/bar.mbt": 38,
-      "src/sfapp/chat.mbt": 148,
+      "src/sfapp/chat.mbt": 147,
       "src/sfapp/composer.mbt": 118,
       "src/sfapp/decide.mbt": 14,
       "src/sfapp/decisions.mbt": 120,
@@ -223,8 +224,7 @@
       "src/sf/tokens.mbt": 23
     },
     "build-effect": {},
-    "unsettled-ok": {},
-    "host-import": {}
+    "unsettled-ok": {}
   },
   "excused": {
     "frame-request": {},
@@ -233,6 +233,7 @@
     "script-wait": {},
     "page-settle": {},
     "device-shot": {},
+    "host-import": {},
     "frame-wait": {},
     "at-rest-wait": {},
     "frame-count": {},
@@ -253,7 +254,6 @@
     },
     "style-exact": {},
     "build-effect": {},
-    "unsettled-ok": {},
-    "host-import": {}
+    "unsettled-ok": {}
   }
 }

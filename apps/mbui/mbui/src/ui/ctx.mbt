@@ -862,6 +862,8 @@ pub fn Ctx::spacer(self : Ctx) -> Unit {
 /// Words, in the theme's colour unless `color`. `style` (style.mbt) says how they look, its dark and narrow blocks by
 /// the theme; what is said here besides wins over the style's same property (a size said here keeps the style's line).
 /// `tracking`: letter spacing in pixels; `max_lines`: wrapped words cut after that many lines, ending in an ellipsis.
+/// `trim`: a font taller than the line not padded beyond its own reach where a host sets lines on whole pixels (as
+/// Compose sets words in a TextStyle of their own; else as a theme's words: set_line).
 pub fn Ctx::text(
   self : Ctx,
   s : String,
@@ -872,6 +874,7 @@ pub fn Ctx::text(
   wrap? : Bool,
   w? : Size,
   line? : Double,
+  trim? : Bool = false,
   center? : Bool,
   tracking? : Double,
   max_lines? : Int,
@@ -884,6 +887,7 @@ pub fn Ctx::text(
   n.text = s
   n.font_size = first(size, s_size).unwrap_or(15.0)
   n.line_h = first(line, s_line).unwrap_or(self.theme.text_line * n.font_size)
+  n.line_trim = trim
   n.weight = first(weight, opt_weight(st.weight)).unwrap_or(400)
   n.color = first(color, opt_color(self.theme, st.color)).unwrap_or(self.theme.fg)
   n.wrap = first(wrap, st.wrap).unwrap_or(true)

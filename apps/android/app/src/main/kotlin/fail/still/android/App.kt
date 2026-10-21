@@ -474,7 +474,10 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
         val ime = androidx.compose.foundation.layout.WindowInsets.ime
         val keyboardUp by remember(density) { androidx.compose.runtime.derivedStateOf { ime.getBottom(density) > 0 } }
         val root = app.stack.singleOrNull()
-        PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway)
+        // A device waiting to be confirmed into the workspace's lock (its Home is the wait: LockGate): no places to go.
+        val lock by rememberTopic<fail.still.android.data.LockView>(app.core, Topics.lock(current.workspace.id))
+        val waiting = root == Screen.Home && lock.value?.me?.waiting == true
+        PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway && !waiting)
     }
     }
     if (wide) WideCorners(current, top)

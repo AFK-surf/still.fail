@@ -334,6 +334,7 @@ pub fn Ctx::editor(
   max_lines? : Int = 5,
   plain? : Bool = false,
   line? : Double = 0.0,
+  trim? : Bool = false,
   color? : Int64 = 0x1D1D1FFFL,
   placeholder_color? : Int64 = 0x8E8E93FFL,
   caret_color? : Int64 = 0x0A84FFFFL,
@@ -403,6 +404,7 @@ pub fn Ctx::editor(
   n.w = w
   n.font_size = font_size
   n.line_h = line
+  n.line_trim = trim
   n.clip = true
   n.text = placeholder
   if plain {
@@ -485,7 +487,7 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   }
   if st.text.length() == 0 && ml == 0 && n.text.length() > 0 {
     // on one line, as a text that does not wrap
-    let ph = layout_text(n.text, n.font_size, 400, 1.0e9, false, line=st.line)
+    let ph = layout_text(n.text, n.font_size, 400, 1.0e9, false, line=st.line, trim=n.line_trim)
     self.emit_text(ph, st.ox, st.oy, st.ph_color, alpha)
   } else {
     let spans = if st.secret { [] } else { st.look_of(st.display()).1 }
