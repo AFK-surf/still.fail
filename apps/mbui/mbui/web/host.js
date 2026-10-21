@@ -15,7 +15,7 @@
   const U = {}, PU = {};
   let cssW = 0, cssH = 0, dpr = 1;
   // the numbers of an instance (src/ui/scene.mbt)
-  const INST = 32;
+  const INST = 36;
   let f32 = new Float32Array(INST * 4096);
   let pending = false;
   window.__logs = [];
@@ -139,9 +139,10 @@
   layout(location=5) in vec4 a_pad;
   layout(location=6) in vec4 a_rc;
   layout(location=7) in vec4 a_rs;
+  layout(location=8) in vec4 a_rot;
   uniform vec2 u_vp;
   uniform vec4 u_gb;
-  out vec2 v_pos;
+  out vec2 v_pos; out vec2 v_cpos;
   flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;
   flat out vec4 v_rc; flat out vec4 v_rs;
   void main() {
@@ -151,12 +152,16 @@
     float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);
     vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);
     if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);
-    gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);
-    v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;
+    // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (v_pos), its clip there
+    // too or (35: one from outside what turned) where it is drawn (v_cpos)
+    vec2 at = pos;
+    if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }
+    gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);
+    v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;
   }`;
   const FS = `#version 300 es
   precision highp float;
-  in vec2 v_pos;
+  in vec2 v_pos; in vec2 v_cpos;
   flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;
   flat in vec4 v_rc; flat in vec4 v_rs;
   uniform float u_scale;
@@ -365,12 +370,12 @@
   }
   // cut to its clip: a rect's, hard; a rounded one's, covered as edges are
   void main() {
-    vec2 p = v_pos;
+    vec2 p = v_pos, cp = v_cpos;
     float cover = 1.0;
     if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {
-      cover = clip_cover(p, v_clip, v_rc, v_rs, u_scale);
+      cover = clip_cover(cp, v_clip, v_rc, v_rs, u_scale);
       if (cover <= 0.0) discard;
-    } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;
+    } else if (cp.x < v_clip.x || cp.y < v_clip.y || cp.x > v_clip.z || cp.y > v_clip.w) discard;
     shade(p);
     o *= cover;
   }`;
@@ -445,9 +450,9 @@
     gl.bindVertexArray(vao);
     instBuf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       const loc = i;
-      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth (vec4 each)
+      // instance layout: rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how it is turned (vec4 each)
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, INST * 4, i * 16);
       gl.vertexAttribDivisor(loc, 1);
@@ -628,7 +633,7 @@
           mainState();
         }
         if (shows) {
-          for (let i = 0; i < 8; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+          for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
           // liquid: the group as one shape, drawn once
           gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, Math.round(f32[start * INST + 5]) === 6 ? 1 : end - start);
         }
@@ -643,7 +648,7 @@
       }
       gl.activeTexture(gl.TEXTURE1);
       gl.bindTexture(gl.TEXTURE_2D, im && im.tex ? im.tex : atlasTex);
-      for (let i = 0; i < 8; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
+      for (let i = 0; i < 9; i++) gl.vertexAttribPointer(i, 4, gl.FLOAT, false, INST * 4, start * INST * 4 + i * 16);
       if (h) gl.disable(gl.BLEND);
       gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, end - start);
       if (h) gl.enable(gl.BLEND);

@@ -103,7 +103,8 @@ test "a rounded clip's draw lists printed when asked (MBUI_DL_PRINT=clip-cut or 
 /// picture): in its top 40 a line from (20, 20) to (100, 20) 8 wide, and 40 under it a box 88 by 8 rounded 4 at (16,
 /// 56), the same shape drawn as a rounded rect; under them, in a box from (0, 80), a line from (20, 10) to (60, 50) 6
 /// wide, an arc about (120, 40) of radius 20 from 0 through 3π/2 3 wide, and a line from (20, 70) to (140, 70) 4 wide
-/// drawn half its length.
+/// drawn half its length; over them a red box 20 by 20 at (70, 85) turned 30° clockwise about its top left (a look's
+/// `rot`).
 fn lines_shown() -> @ui.Tester {
   let red = 0xFF3B30FFL
   let blue = 0x1559C4FFL
@@ -124,6 +125,14 @@ fn lines_shown() -> @ui.Tester {
           w=Px(160.0),
           h=Px(80.0),
         )
+        |> ignore
+        c.layer(fn() {
+          c.box(w=Fill(1.0), h=Fill(1.0), pl=70.0, pt=85.0, align=AStart, fn() {
+            let b = c.box(w=Px(20.0), h=Px(20.0), bg=red, fn() { () })
+            c.look(b, @ui.look(ox=0.0, oy=0.0, rot=30.0 * 3.141592653589793 / 180.0))
+          })
+          |> ignore
+        })
         |> ignore
       })
       |> ignore

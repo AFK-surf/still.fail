@@ -9,6 +9,11 @@
 //   · 28-31 how smooth those corners are (smooth.mbt: 0 round, 1 wholly
 //   smooth; as the box whose corner it is had room for). A shape's own
 //   corner is as smooth as its rect has room for: the renderers say.
+//   · 32-35 how it is turned (a look's `rot`: draw.mbt): by 32 radians,
+//   clockwise on the screen, about the point 33, 34; everything else above
+//   (its rect, its clip) as before it is turned, the renderers turning
+//   where it is drawn and nothing of how; 35 1: its clip is not turned
+//   (one from outside what turned: where it is drawn).
 // kinds: 0 rounded rect, 1 glyph (alpha mask), 2 shadow (12 > 0: only
 // outside its box, which is 13 above it), 3 color glyph, 4 image (12-15 its
 // uv rect, 0-1), 5 frosted glass, 6 liquid glass, 7 a glyph in liquid glass
@@ -19,7 +24,7 @@
 // round).
 
 ///|
-let inst_size = 32
+let inst_size = 36
 
 ///|
 fn Ctx::grow(self : Ctx) -> Unit {
@@ -262,6 +267,11 @@ fn Ctx::push_inst(
   a[b + 21] = 0.0
   a[b + 22] = 0.0
   a[b + 23] = 0.0
+  // not turned
+  a[b + 32] = 0.0
+  a[b + 33] = 0.0
+  a[b + 34] = 0.0
+  a[b + 35] = 0.0
   self.ninst = self.ninst + 1
 }
 

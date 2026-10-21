@@ -1352,6 +1352,49 @@ pub fn Tester::drawn_of(self : Tester, s : String) -> (Double, Double)? {
 /// scale across and down and its opacity, its own look's and all its ancestors' together (a card shrunk to 90% as it
 /// goes: (0.9, 0.9, 1.0)). None when there is no such node.
 pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)? {
+  let c = g()
+  let found = self.node_named(what)
+  guard found >= 0 else { return None }
+  let mut sx = 1.0
+  let mut sy = 1.0
+  let mut alpha = 1.0
+  let mut p = found
+  while p >= 0 {
+    match c.drawn_entry(p) {
+      Some(e) => {
+        sx = sx * e.look.sx
+        sy = sy * e.look.sy
+        alpha = alpha * e.look.alpha
+      }
+      None => ()
+    }
+    p = c.nodes[p].parent
+  }
+  Some((sx, sy, alpha))
+}
+
+///|
+/// How far the node `what` (as look_of finds it) was turned in the last frame, in radians clockwise: its own look's
+/// and all its ancestors' together. None when there is no such node.
+pub fn Tester::turn_of(self : Tester, what : String) -> Double? {
+  let c = g()
+  let found = self.node_named(what)
+  guard found >= 0 else { return None }
+  let mut rot = 0.0
+  let mut p = found
+  while p >= 0 {
+    match c.drawn_entry(p) {
+      Some(e) => rot = rot + e.look.rot
+      None => ()
+    }
+    p = c.nodes[p].parent
+  }
+  Some(rot)
+}
+
+///|
+/// The node keyed `what`, else the first text node containing `what` (`=WORDS`: exactly): its index, -1 when none.
+fn Tester::node_named(self : Tester, what : String) -> Int {
   ignore(self)
   let c = g()
   let id = c.id(what)
@@ -1380,23 +1423,7 @@ pub fn Tester::look_of(self : Tester, what : String) -> (Double, Double, Double)
       }
     }
   }
-  guard found >= 0 else { return None }
-  let mut sx = 1.0
-  let mut sy = 1.0
-  let mut alpha = 1.0
-  let mut p = found
-  while p >= 0 {
-    match c.drawn_entry(p) {
-      Some(e) => {
-        sx = sx * e.look.sx
-        sy = sy * e.look.sy
-        alpha = alpha * e.look.alpha
-      }
-      None => ()
-    }
-    p = c.nodes[p].parent
-  }
-  Some((sx, sy, alpha))
+  found
 }
 
 ///|

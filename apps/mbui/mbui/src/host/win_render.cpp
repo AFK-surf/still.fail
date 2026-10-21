@@ -69,7 +69,7 @@ static size_t last_cap;
 static float last_bg[3];
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 32
+#define MB_INST 36
 
 static const char *shader_src =
     "cbuffer U : register(b0) { float2 vp; float scale; float pad; };\n"
@@ -81,8 +81,9 @@ static const char *shader_src =
     "Texture2D bd : register(t2);\n"
     "SamplerState samp : register(s0);\n"
     "struct VIn { float4 rect : INST0; float4 p : INST1; float4 color : INST2; float4 c2 : INST3;\n"
-    "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; uint vid : SV_VertexID; };\n"
-    "struct VOut { float4 pos : SV_Position; float2 p : POS;\n"
+    "  float4 clip : INST4; float4 pd : INST5; float4 rc : INST6; float4 rs : INST7; float4 rot : INST8;\n"
+    "  uint vid : SV_VertexID; };\n"
+    "struct VOut { float4 pos : SV_Position; float2 p : POS; float2 cp : CPOS;\n"
     "  nointerpolation float4 rect : INST0; nointerpolation float4 prm : INST1;\n"
     "  nointerpolation float4 color : INST2; nointerpolation float4 c2 : INST3;\n"
     "  nointerpolation float4 clip : INST4; nointerpolation float4 pd : INST5; nointerpolation float4 rc : INST6;\n"
@@ -95,9 +96,14 @@ static const char *shader_src =
     "  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
     "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = lerp(ggb.xy, ggb.zw, corner);\n"
+    "  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (o.p), its clip\n"
+    "  // there too or (35: one from outside what turned) where it is drawn (o.cp)\n"
+    "  float2 at = pos;\n"
+    "  if (I.rot.x != 0.0) { float2 d = pos - I.rot.yz; float c = cos(I.rot.x), s = sin(I.rot.x);\n"
+    "    at = I.rot.yz + float2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
     "  VOut o;\n"
-    "  o.pos = float4(pos.x / vp.x * 2.0 - 1.0, 1.0 - pos.y / vp.y * 2.0, 0.0, 1.0);\n"
-    "  o.p = pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs;\n"
+    "  o.pos = float4(at.x / vp.x * 2.0 - 1.0, 1.0 - at.y / vp.y * 2.0, 0.0, 1.0);\n"
+    "  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.rect = I.rect; o.prm = I.p; o.color = I.color; o.c2 = I.c2; o.clip = I.clip; o.pd = I.pd; o.rc = I.rc; o.rs = I.rs;\n"
     "  return o;\n"
     "}\n"
     MB_CORNER_SL
@@ -144,13 +150,13 @@ static const char *shader_src =
     "  return saturate(0.5 - d * sc);\n"
     "}\n"
     "float4 fmain(VOut I) : SV_Target {\n"
-    "  float2 p = I.p;\n"
+    "  float2 p = I.p, cp = I.cp;\n"
     "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
     "  float cover = 1.0;\n"
     "  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
-    "    cover = clip_cover(p, I.clip, I.rc, I.rs, scale);\n"
+    "    cover = clip_cover(cp, I.clip, I.rc, I.rs, scale);\n"
     "    if (cover <= 0.0) discard;\n"
-    "  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard;\n"
+    "  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard;\n"
     "  int kind = int(I.prm.y + 0.5);\n"
     "  if (kind == 9) { float2 hh = I.rect.zw * 0.5; float rr = min(I.prm.x, min(hh.x, hh.y)); float2 q = abs(p - I.rect.xy - hh) - hh + rr; if (length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rr > 0.0) discard; return (float4(0.0, 0.0, 0.0, 0.0)) * cover; }\n"
     "  float4 col = I.color;\n"
@@ -398,11 +404,12 @@ static void make_pipeline(void) {
   ID3DBlob *vcode = compile("vmain", "vs_4_0"), *pcode = compile("fmain", "ps_4_0");
   dev->CreateVertexShader(vcode->GetBufferPointer(), vcode->GetBufferSize(), NULL, &vs);
   dev->CreatePixelShader(pcode->GetBufferPointer(), pcode->GetBufferSize(), NULL, &ps);
-  // the instance's eight float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth
-  D3D11_INPUT_ELEMENT_DESC el[8];
-  for (UINT i = 0; i < 8; i++)
+  // the instance's nine float4s (scene.mbt): rect, p, color, c2, clip, pad, the clip's corners' radii, how smooth, how
+  // it is turned
+  D3D11_INPUT_ELEMENT_DESC el[9];
+  for (UINT i = 0; i < 9; i++)
     el[i] = {"INST", i, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, i * 16, D3D11_INPUT_PER_INSTANCE_DATA, 1};
-  dev->CreateInputLayout(el, 8, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
+  dev->CreateInputLayout(el, 9, vcode->GetBufferPointer(), vcode->GetBufferSize(), &layout);
   vcode->Release();
   pcode->Release();
   ID3DBlob *pv = compile("vpost", "vs_4_0", post_src), *pp = compile("fpost", "ps_4_0", post_src);

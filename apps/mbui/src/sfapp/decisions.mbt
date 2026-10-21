@@ -8,8 +8,8 @@
 // day went, where the next may come from, what was answered today.
 //
 // It is reached from the bottom bar's 奏 (slice 7's): `open_decisions()`, or `decisions_capsule` drawn where the bar
-// puts it. The reply is the chat's composer whole (its files, its quotes, its draft the core keeps). Not here yet,
-// against the Android app: the card's tilt as it moves (boxes do not turn yet).
+// puts it. The reply is the chat's composer whole (its files, its quotes, its draft the core keeps); the card turns
+// as it is moved across, as the Android app's does.
 
 ///|
 /// The 奏 page over what is open.
@@ -292,6 +292,11 @@ let card_back_ms : Double = 250.0
 let card_arrive_ms : Double = 260.0
 
 ///|
+/// How far a card is turned as it is moved across, a width's worth (Decisions.kt: 4°), about its top's middle.
+// kept across runs: a value
+let card_tilt : Double = 4.0 * @math.PI / 180.0
+
+///|
 /// How small a card comes in from, and goes up to (Decisions.kt: 0.94, 0.88), about its top's middle.
 let card_arrive_scale : Double = 0.94
 
@@ -544,8 +549,16 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
         let card = c.box(w=Fill(1.0), h=Fill(1.0), tx=dui.drag, opacity=arrive, bg=t.p.bg, fn() {
           decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, set_aside, true)
         })
-        // coming in from a little smaller, about its top's middle (Decisions.kt: lerp(0.94, 1, arrive))
-        c.look(card, @ui.look(scale=card_arrive_scale + (1.0 - card_arrive_scale) * arrive, oy=0.0))
+        // coming in from a little smaller, about its top's middle (Decisions.kt: lerp(0.94, 1, arrive)); turned as it
+        // is moved across, 4° a width (rotationZ = drag / width * 4)
+        c.look(
+          card,
+          @ui.look(
+            scale=card_arrive_scale + (1.0 - card_arrive_scale) * arrive,
+            oy=0.0,
+            rot=dui.drag / width * card_tilt,
+          ),
+        )
       })
       |> ignore
       // over it, the one that went
@@ -593,7 +606,8 @@ fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit 
     let card = c.box(w=Fill(1.0), h=Fill(1.0), tx=x, ty=y, bg=t.p.bg, fn() {
       decision_face(c, src, o, fn(_) {  }, fn() {  }, false)
     })
-    c.look(card, @ui.look(scale~, oy=0.0))
+    // turned as it is across, on as it flies (Decisions.kt: rotationZ = drag / width * 4)
+    c.look(card, @ui.look(scale~, oy=0.0, rot=x / width * card_tilt))
   })
   |> ignore
 }
