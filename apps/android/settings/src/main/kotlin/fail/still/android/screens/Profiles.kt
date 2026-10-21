@@ -1139,7 +1139,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 d.step == "method" -> RowsCard {
                     d.choices.forEach { c ->
-                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go" && d.tile?.id != "kimi-code") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
+                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go" && d.tile?.id != "moonshotai") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
                 }
                 d.method == "plan" -> {

@@ -272,7 +272,7 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               let cid = text(cv, "id")
               let kind = if cid == "plan" &&
                 text(tile, "kind") != "opencode-go" &&
-                text(tile, "id") != "kimi-code" {
+                text(tile, "id") != "moonshotai" {
                 "subscription"
               } else {
                 match text(tile, "kind") {

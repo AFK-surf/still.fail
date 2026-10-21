@@ -96,3 +96,20 @@ export function cursorPickDemo(devin = false): DemoExtension {
     call: (name) => (name.startsWith("profile.flow.") ? {} : undefined),
   };
 }
+
+/** The add-profile pages at Kimi's tile, where the station signs Kimi Code in (core forms.ts): its plan or the open
+ *  platform's key, as OpenAI's tile has ChatGPT's plan beside its key. */
+export function kimiMethodDemo(): DemoExtension {
+  const view: ProfileFlowView = {
+    step: "method", station: "", title: "连接 Kimi", hint: "", choices: [
+      { id: "plan", title: "订阅 · Kimi Code", hint: "Kimi Code 会员，用于运行 Claude Code。用 Kimi 账号登录一次。" },
+      { id: "key", title: "API key", hint: "使用 Kimi 的 API key，按量计费" },
+    ],
+    showEndpoint: false, endpoint: "", protocols: [], regions: [], showKey: false, key: "", keyLabel: "", canSubmit: false, pending: false, submitLabel: "", usesLine: "", groups: [],
+    tile: { id: "moonshotai", name: "Kimi", group: "labs", mark: "kimi", kind: "api-provider", hasKey: true, hasPlan: true, endpointRequired: false, protocols: [], keyOptional: false, uses: ["claude", "decision"], usesText: "Claude Code · 自动决策" },
+  };
+  return {
+    topic: (t) => (t.topic === "profileFlow" ? { ...view, station: String(t.station) } : undefined),
+    call: (name) => (name.startsWith("profile.flow.") ? {} : undefined),
+  };
+}

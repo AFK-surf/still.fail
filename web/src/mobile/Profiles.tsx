@@ -1037,7 +1037,7 @@ export function NewProfileScreen() {
           </>
         ) : d.step === "method" ? (
           <ListCard>
-            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" && d.tile?.id !== "kimi-code" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
+            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" && d.tile?.id !== "moonshotai" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
           </ListCard>
         ) : d.method === "plan" ? (
           d.install ? <InstallStep install={d.install} />
