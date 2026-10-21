@@ -1,7 +1,7 @@
 // What macOS lets still.fail Helper do, as the station's page and the agents see it and ask for it (src/helper/grants.ts,
 // src/api/routes/permissions.ts, src/tools/permissions.ts; docs/remote-screens.md "Grants"): the grants as the helper
 // says them, told again as they change; one asked for puts the helper's window up once (not again while it is up, nor
-// within AGAIN_MS, whoever asks: a person, an agent, the drive); the answer says whether the screen can be driven (the
+// within AGAIN_MS when an agent or the drive asks; a person's own ask puts it up again); the answer says whether the screen can be driven (the
 // client then opens it) or the person has to go to the Mac. The helper is a fake in this process speaking main.swift's
 // `status`, `permissions.show`, `files.access` and `watch`; the station's clock is the test's.
 import assert from "node:assert/strict";
@@ -196,14 +196,11 @@ test("the station's Local Network: listed once on a LAN, asked for it opens Syst
   const view = s.grants.view()!;
   assert.deepEqual(view.grants.at(-1), { grant: "localNetwork", state: "denied" });
   assert.equal(typeof view.localNetworkName, "string");
-  // Asked for: the list up on the Mac once; again a moment later, not shown again.
+  // Asked for: the list up on the Mac; a person asking again a moment later has it up again.
   const first = await ask(s.grants, "localNetwork");
   assert.deepEqual([first.status, first.body.window], [200, "up"]);
   assert.deepEqual(s.opened, [LOCAL_NETWORK_SETTINGS]);
-  assert.equal((await ask(s.grants, "localNetwork")).status, 409);
-  assert.equal(s.opened.length, 1);
-  s.clock.now += AGAIN_MS;
-  await ask(s.grants, "localNetwork");
+  assert.deepEqual((await ask(s.grants, "localNetwork")).body.window, "up");
   assert.equal(s.opened.length, 2);
   // Switched on (the station started again): granted, nothing opened.
   s.lan.now = "granted";
@@ -219,7 +216,7 @@ test("the station's Local Network: listed once on a LAN, asked for it opens Syst
   await s.end();
 });
 
-test("a grant asked for: the window up for it once, not again while it is up nor a while after, whoever asks", { skip: WINDOWS }, async () => {
+test("a grant asked for: the window up for it once, not again while it is up; a person asking again a while after has it up again", { skip: WINDOWS }, async () => {
   const s = station();
   // Desktop asked for: the window up for that one only, in the asker's words; the screen can be driven (the client opens it).
   const first = await ask(s.grants, "desktop");
@@ -242,21 +239,26 @@ test("a grant asked for: the window up for it once, not again while it is up nor
   s.fake.up = null;
   s.fake.tell();
   await until(() => s.grants.view()?.asking.length === 0);
-  // Asked again within AGAIN_MS, refused saying so; not shown.
+  // The drive asking again within AGAIN_MS: not shown, said so.
   s.clock.now += 60_000;
-  assert.deepEqual(await ask(s.grants, "desktop", "en"), { status: 409, body: { error: "The window for Desktop was closed a moment ago; request it again in a few minutes" } });
+  assert.equal(await files.ask("desktop", "/Users/a/Desktop"), "closed");
   assert.equal(s.fake.shown.length, 1);
+  // 2026-10-20: a person closed it without granting, tapped Request again a moment later and was told to come back in a
+  // few minutes. A person's own ask puts it up again.
+  assert.deepEqual(await ask(s.grants, "desktop"), { status: 200, body: { window: "up", screen: true } });
+  assert.equal(s.fake.shown.length, 2);
+  s.fake.up = null;
   // Another grant is not held back by it; one granted already shows nothing.
   s.fake.files.downloads = "denied";
   assert.equal((await ask(s.grants, "downloads")).body.window, "up");
-  assert.equal(s.fake.shown.length, 2);
+  assert.equal(s.fake.shown.length, 3);
   s.fake.up = null;
   assert.equal((await ask(s.grants, "documents")).body.window, "granted");
-  assert.equal(s.fake.shown.length, 2);
-  // Once the while has gone by: shown again.
-  s.clock.now += AGAIN_MS;
-  assert.equal((await ask(s.grants, "desktop")).body.window, "up");
   assert.equal(s.fake.shown.length, 3);
+  // Once the while has gone by, the drive has it shown again too.
+  s.clock.now += AGAIN_MS;
+  assert.equal(await files.ask("desktop", "/Users/a/Desktop"), "up");
+  assert.equal(s.fake.shown.length, 4);
   // No such grant.
   assert.equal((await ask(s.grants, "camera")).status, 400);
   await s.end();

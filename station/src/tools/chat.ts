@@ -16,7 +16,7 @@ import { slackTools } from "./slack.ts";
 export const CHAT_POST = {
   name: "chat_post",
   description:
-    "Post a message to one of your conversations: in Slack's formatting (mrkdwn) for a Slack thread, Markdown for a still.fail chat. Users always have a chat input box and can reply freely. An optional card can make a real decision easier: concrete options to pick from, or a field to write in; do not add filler options or create unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
+    "Post a message to one of your conversations, in Markdown (a Slack thread and a Feishu chat draw it too; mentions and files differ: see Formatting in your instructions). Users always have a chat input box and can reply freely. An optional card can make a real decision easier: concrete options to pick from, or a field to write in; do not add filler options or create unnecessary questions. A post that ends your turn says how with kind: all_done (nothing in the chat is left unfinished: done says why, with the evidence) or need_human (a person has to give, do or decide something: need says what; after posting a card, this is how the turn ends).",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -65,7 +65,7 @@ export const CHAT_POST = {
       },
       "card": {
         "type": "object",
-        "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, a tap answers. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. {\"type\": \"login\", \"login\": \"<id>\"} for a login the login tool started: they finish it from the card in their own browser, and it closes as the login ends. An option with action=close ends the wait silently; other answers reach you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
+        "description": "Still.fail chats only: what people answer this message with, shown with it and on their list of things waiting for them (奏). {\"type\": \"options\", \"options\": [...]} when they choose between answers you can name (1 to 6, recommend one if you can): shown under the message, numbered in the order given with the recommended one moved last; a tap answers. Where the message itself lists or numbers the same choices, put them in that order too (the recommended one last), so its numbers and the card's agree. {\"type\": \"text\", \"placeholder\": \"…\"} when they must write something (a value, a name, a key): a field on their 奏 page. {\"type\": \"login\", \"login\": \"<id>\"} for a login the login tool started: they finish it from the card in their own browser, and it closes as the login ends. An option with action=close ends the wait silently; other answers reach you as their message quoting this one, and anything they write in the chat instead answers it too. A card waits until a person writes in the chat or you post a newer one. It says nothing of your turn: end the turn need_human (with need) after posting one.",
         "properties": {
           "type": {
             "type": "string",
@@ -99,7 +99,7 @@ export const CHAT_POST = {
                 },
                 "recommended": {
                   "type": "boolean",
-                  "description": "The one you recommend (at most one)."
+                  "description": "The one you recommend (at most one); the card shows it last."
                 },
                 "action": {
                   "type": "string",
@@ -146,7 +146,7 @@ export const CHAT_POST = {
             },
             "recommended": {
               "type": "boolean",
-              "description": "The one you recommend (at most one)."
+              "description": "The one you recommend (at most one); the card shows it last."
             },
             "action": {
               "type": "string",
@@ -316,7 +316,7 @@ export const SESSION_SEND = {
       },
       "text": {
         "type": "string",
-        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown; to a Slack thread, mrkdwn."
+        "description": "The message, standing on its own: what you need or found, with what the other agent needs to act on it. Markdown."
       },
       "files": {
         "type": "array",
@@ -363,9 +363,11 @@ export const CHAT_CREATE = {
           "claude",
           "codex",
           "dsh",
-          "grok"
+          "grok",
+          "cursor",
+          "devin"
         ],
-        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build). Default: that of its model."
+        "description": "Its agent's runtime (dsh: DeepSeek Harness, grok: Grok Build, cursor: Cursor, devin: Devin). Default: that of its model."
       },
       "model": {
         "type": "string",

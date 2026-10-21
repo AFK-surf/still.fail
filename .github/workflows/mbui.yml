@@ -1,0 +1,377 @@
+# still.fail mbui (apps/mbui: still.fail's app written in mbui, fail.still.mbui, a test app of its own beside
+# still.fail's): on main, each push that changes what it is built from is out in about two minutes from the push, on
+# GitHub's own runners (no machine of ours: 2026-10-21, a push to four packages in three minutes): its Android app
+# signed with every still.fail Android release's key (/releases/latest/android-mbui, its feed android/mbui/latest.json,
+# still.fail's AppRelease), its macOS app signed with still.fail's Developer ID (/releases/latest/mac-mbui), its
+# Windows app zipped (/releases/latest/win-mbui), side by side; its iOS app built for a device (signed and put once
+# the team's App Store Connect key is in production's secrets). A branch's push builds them (no key, nothing put).
+# A workflow of its own, not a job of pipeline.yml: nothing of the pipeline waits for it or fails with it. As asked
+# (2026-10-19), its tests do not hold it back: it is a test app (Windows' e2e runs after its zip is out). A feed moves
+# only once its file is fetched back from where it is served, the same bytes.
+# What stays between runs, by content, in the Actions cache: MoonBit (by its release's ETags), mbc's compiled units
+# (MBC_STORE) and ThinLTO's (MBC_LTO_CACHE), core.hbc by its inputs (HBC_CACHE), the core's Rust shell and engine for
+# Apple (out/core, by the shell's sources), Gradle's (gradle/actions/setup-gradle: main writes it, a branch reads it).
+name: mbui
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mbui/**"
+      - "client/**"
+      - "media/**"
+      - "vendor/**"
+      - "scripts/native.ts"
+      - "scripts/release-put.sh"
+      - "cloud/test/dev.ts"
+      - ".github/workflows/mbui.yml"
+      - ".github/actions/setup/**"
+  workflow_dispatch:
+# main: one at a time, a push meanwhile waits as one run of the newest; a branch: only its newest push matters.
+concurrency:
+  group: mbui-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  # Which packages main's push makes: those whose app changed since the build their feed names (beta.sh changed: its
+  # code, not its tests, docs, scripts or CI; a push of those alone is no new package, 2026-10-21); iOS as Android
+  # (no feed of its own yet). A run by hand builds them all; a branch's push only Android and Windows: its macOS and iOS
+  # builds put nothing and took two of the organization's 5 macOS jobs at once for each push, check-mbui's native
+  # waiting 1.5 to 15 minutes for one (2026-10-21).
+  what:
+    if: github.repository == 'AFK-surf/still.fail' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      android: ${{ steps.what.outputs.android }}
+      mac: ${{ steps.what.outputs.mac }}
+      win: ${{ steps.what.outputs.win }}
+      ios: ${{ steps.what.outputs.ios }}
+    steps:
+      # (the history's commits and trees, the files' contents only for beta.sh: what changed is told by the trees)
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none", sparse-checkout: apps/mbui/scripts }
+      - id: what
+        run: |
+          branch=; [ "$GITHUB_REF" = refs/heads/main ] || [ "$GITHUB_EVENT_NAME" != push ] || branch=1
+          for p in android mac win ios; do
+            if [ "$GITHUB_REF" = refs/heads/main ] && [ "$GITHUB_EVENT_NAME" = push ]; then v=$(bash apps/mbui/scripts/beta.sh changed ${p/ios/android}); else v=yes; fi
+            case "$branch$p" in 1mac|1ios) v=no ;; esac
+            echo "$p=$v" >> "$GITHUB_OUTPUT"
+            echo "$p: $v"
+          done
+
+  android:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.android == 'yes'
+    runs-on: ubuntu-24.04
+    # production's secrets (the key, the bucket's token) on main only: a branch's run builds, unsigned, and puts nothing
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+    timeout-minutes: 15
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 } # versionCode is the commits in the history
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { cache-read-only: "${{ github.ref != 'refs/heads/main' }}" }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/moonbit
+      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/lto
+            .ci/hbc
+          key: mbui-android-${{ github.sha }}
+          restore-keys: mbui-android-
+      - name: Tools (the Android engine and shell prebuilt, the core's packages)
+        run: |
+          sh apps/mbui/scripts/mbui.sh > /dev/null
+          node scripts/native.ts fetch engine android-arm64
+          node scripts/native.ts fetch shell android-arm64
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+      - name: Build (and sign, on main)
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+          # PostHog's key, the app's crash reports' (apps/mbui/android/app/build.gradle.kts)
+          POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+        run: bash apps/mbui/scripts/beta.sh build
+      - name: Put it, check it, then its feed
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash apps/mbui/scripts/beta.sh publish android
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/lto
+            .ci/hbc
+          key: mbui-android-${{ github.sha }}
+
+  mac:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
+    runs-on: macos-15
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+    timeout-minutes: 20
+    env:
+      MBUI_FRESH: 1
+      MBUI_CACHE: ${{ github.workspace }}/.ci/release
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/moonbit
+      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/lto
+            .ci/hbc
+          key: mbui-mac-${{ github.sha }}
+          restore-keys: mbui-mac-
+      # the core's parts for macOS (its Rust shell, the engine, Hermes): by what they are made of; _build/.macos-min is
+      # mac-app.sh's word that they are for this macOS (else it starts over)
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mbui/out/core
+            apps/mbui/_build/.macos-min
+            ~/Library/Caches/stillfail-build
+          key: mbui-core-mac-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/core_api.h') }}
+      - name: Tools (Rust's target, the core's packages)
+        run: |
+          sh apps/mbui/scripts/mbui.sh > /dev/null
+          rustup target add aarch64-apple-darwin > /dev/null
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+      - name: The macOS app, built (and signed with still.fail's identity, on main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
+          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
+          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: bash apps/mbui/scripts/beta.sh mac
+      - name: The macOS app, built (ad hoc signed)
+        if: github.ref != 'refs/heads/main'
+        run: EMBER=$PWD bash apps/mbui/scripts/mac-app.sh build
+      - name: Put it, check it, then its feed (mac)
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: bash apps/mbui/scripts/beta.sh publish mac
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/lto
+            .ci/hbc
+          key: mbui-mac-${{ github.sha }}
+
+  ios:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
+      HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/moonbit
+      # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-ios-${{ github.sha }}
+          restore-keys: mbui-ios-
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mbui/out/core
+            ~/Library/Caches/stillfail-build
+          key: mbui-core-ios-${{ hashFiles('client/shell/**', 'client/Cargo.lock', 'client/Cargo.toml', 'apps/mbui/scripts/core.sh', 'apps/mbui/src/host/apple_core.mm', 'apps/mbui/src/host/core_api.h') }}
+      - name: Tools (Rust's target, the core's packages)
+        run: |
+          rustup target add aarch64-apple-ios > /dev/null
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+      # (unsigned until the team's App Store Connect key is in production's secrets: then signed ad hoc and put)
+      - name: The iOS app for a device, as an .ipa
+        run: |
+          APP=stillfail MBUI_IOS_SDK=iphoneos MBUI_IOS_ID=fail.still.mbui EMBER=$PWD bash apps/mbui/scripts/ios.sh build
+          cd apps/mbui/out/ios-device && rm -rf Payload *.ipa && mkdir Payload && cp -R MBUI.app Payload/
+          zip -qry stillfail-mbui.ipa Payload && ls -la stillfail-mbui.ipa
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            .ci/mbc-store
+            .ci/hbc
+          key: mbui-ios-${{ github.sha }}
+
+  windows:
+    needs: what
+    if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.win == 'yes'
+    runs-on: windows-2025
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      MSYS: winsymlinks:nativestrict
+    steps:
+      # the natives' keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0, filter: "blob:none" } # (the build's number: the commits in the history)
+      # Node alone first (the natives' fetch, the build's scripts): the rest of the setup (pnpm, its store) is done while
+      # cl compiles the app
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      - uses: ilammy/msvc-dev-cmd@v1
+      # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
+      # core, a HEAD each, as beta.sh's moon_tools asks): installed (~20 s, most of it bundling the core) only when
+      # either changed. No answer: no key, installed as before.
+      - name: MoonBit's latest release
+        id: moon
+        run: |
+          tag=$( { curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/moonbit-windows-x86_64.zip || true
+                   curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.zip || true; } \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
+          if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c)" = 4 ]; then
+            echo "key=moon-windows-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.moon.outputs.key != ''
+        uses: actions/cache@v4
+        id: moon-cache
+        with:
+          path: ~/.moon
+          key: ${{ steps.moon.outputs.key }}
+      - name: Tools (MoonBit; MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
+        run: |
+          echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
+          if [ "${{ steps.moon-cache.outputs.cache-hit }}" != true ] || ! [ -x "$USERPROFILE/.moon/bin/moon.exe" ]; then
+            powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
+          fi
+          echo "$USERPROFILE\.moon\bin" >> "$GITHUB_PATH"
+      # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
+      # to break off, 39431384793)
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt (never built on CI)
+        run: |
+          node scripts/native.ts fetch shell win32-x64
+          node scripts/native.ts fetch engine win32-x64
+      # The app's build as the last run on main left it (mbui's in apps/mbui/mbui: moon's _build, the split C and its objects, the .exe): of main's pushes that run this job, three in four leave the app's C
+      # as it was (tests, docs, client/, media/; 96 of 129, 2026-10-18 to 20), and then moonc writes the same C again,
+      # scripts/mbc.py finds every unit's object made of the same inputs (by content) and the same link made already:
+      # nothing is compiled (with an mbui whose win.sh mirrors its copies and makes cl, link and lib reproducible, mbui#49:
+      # the build's step ~19 s and the job ~2 min, against ~3.2, 2026-10-20). A C that changed compiles as before; nothing
+      # here is taken for this commit's but by content.
+      - uses: actions/cache/restore@v4
+        id: build-cache
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: mbui-win-build-mono-${{ github.sha }}
+          restore-keys: mbui-win-build-mono-
+      # The app (APP=stillfail) built in the background from here on: cl /O2 of its C (some 46 MB) is ~55 s on the
+      # runner's four cores, and needs nothing of what the steps after it do (pnpm, the packages, the core's bytecode),
+      # which were ~60 s before it, one after another (2026-10-20). "Build (APP=stillfail)" waits for it.
+      - name: Build (APP=stillfail), started
+        run: |
+          moon version --all
+          B=$RUNNER_TEMP/build; mkdir -p "$B"
+          nohup bash -c 'MBUI_WIN_CORE=0 bash apps/mbui/scripts/win.sh build > "$0/log" 2>&1; echo $? > "$0/status"' "$B" > /dev/null 2>&1 &
+      - uses: ./.github/actions/setup
+      - name: Packages (the core's, the cloud's; the test station built)
+        run: |
+          # (the packages' scripts in bash, not cmd: the station's build is sh)
+          export npm_config_script_shell="$(cygpath -w "$(command -v bash)")"
+          pnpm install --frozen-lockfile --prefer-offline --ignore-scripts > /dev/null
+          (cd client/core-ts && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          (cd station && pnpm install --frozen-lockfile --prefer-offline > /dev/null && pnpm run build > /dev/null)
+      - name: The core's bytecode (Hermes)
+        run: bash apps/mbui/scripts/win.sh core
+      - name: Build (APP=stillfail)
+        run: |
+          B=$RUNNER_TEMP/build
+          t0=$SECONDS
+          while [ ! -s "$B/status" ]; do
+            [ $((SECONDS - t0)) -lt 420 ] || { echo "the build took over 7 minutes"; cat "$B/log"; exit 1; }
+            sleep 1
+          done
+          echo "(waited $((SECONDS - t0)) s for it)"
+          cat "$B/log"
+          [ "$(cat "$B/status")" = 0 ] || exit 1
+          bash apps/mbui/scripts/win.sh put
+          # the cache's key: the app's C by its content (a C as the restored one was is not saved again)
+          d=$(sh apps/mbui/scripts/mbui.sh)
+          c=$(sha256sum "$d/out/win/app/_build/native/release/build/stillfail/stillfail/stillfail.c" | cut -c1-16)
+          echo "BUILD_KEY=mbui-win-build-mono-$c" >> "$GITHUB_ENV"
+      # main's, saved when its C is new (a branch reads main's: its own would be its alone)
+      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/mbui/mbui/_build
+            apps/mbui/mbui/out
+          key: ${{ env.BUILD_KEY }}
+      # out before the e2e flow (its tests hold nothing back): zipped, put, checked, then its feed
+      - name: The Windows app zipped, put, checked, then its feed
+        if: github.ref == 'refs/heads/main'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MBUI_CACHE: ${{ runner.temp }}/mbui-release
+        run: |
+          # (beta.sh's python3: Windows' is `python`, UTF-8 for the feed's news; its shasum -a 256: Git Bash's sha256sum,
+          # without the backslash it puts before a line whose name has one, as MBUI_CACHE's D:\a\_temp: the sum taken
+          # by its first field was then never the one fetched back)
+          mkdir -p "$RUNNER_TEMP/bin" && printf '#!/bin/sh\nexec python "$@"\n' > "$RUNNER_TEMP/bin/python3" && chmod +x "$RUNNER_TEMP/bin/python3"
+          cat > "$RUNNER_TEMP/bin/shasum" <<'EOF'
+          #!/bin/sh
+          [ "$1" = -a ] && shift 2
+          sha256sum "$@" | sed 's/^\\//'
+          EOF
+          chmod +x "$RUNNER_TEMP/bin/shasum"
+          export PATH="$RUNNER_TEMP/bin:$PATH" PYTHONUTF8=1
+          bash apps/mbui/scripts/beta.sh win
+          bash apps/mbui/scripts/beta.sh publish win
+      - name: Signed in against a local still.fail, then Home (e2e/win.sh)
+        run: bash apps/mbui/e2e/win.sh
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mbui-windows-${{ github.sha }}
+          # (not the core's files: a sign-in, though the local cloud's)
+          path: |
+            apps/mbui/out/e2e/windows/
+            !apps/mbui/out/e2e/windows/core/
+          if-no-files-found: warn

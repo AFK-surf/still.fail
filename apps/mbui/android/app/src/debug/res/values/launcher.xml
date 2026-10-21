@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The debug build (dev.mbui.demo) apart from the beta app on a launcher: grey. -->
+<resources>
+    <color name="launcher_bg">#5F646B</color>
+    <color name="launcher_cheeks">#A9AEB5</color>
+</resources>

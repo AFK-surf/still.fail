@@ -2,7 +2,8 @@
 // Android). A crash in Kotlin is written down as it happens (its exception, which the system does not keep); at the next
 // start the system's record of how the app's processes ended (ApplicationExitInfo) is read from where the last start
 // left off, and each crash, native abort (Hermes, the core's JNI) or ANR goes out, with what the system kept of it: a
-// native crash's tombstone, an ANR's thread dump. A build without PostHog's key (a local or dev one) sends nothing.
+// native crash's tombstone, an ANR's thread dump. A build without PostHog's key (a local or dev one) sends nothing, nor
+// one whose person turned it off in settings (`reporting`): everything the app sends to PostHog goes by [send].
 package fail.still.android
 
 import android.app.ActivityManager
@@ -130,7 +131,7 @@ object Crashes {
                 }
             }, null, null, buildJsonObject { put("reason", reason); facts?.forEach { (k, v) -> put(k, v) } }, null)
             try {
-                send(listOf(event(r, account, "error")))
+                send(context, listOf(event(r, account, "error")))
             } catch (_: Exception) {
             }
         }.start()
@@ -139,6 +140,12 @@ object Crashes {
     /** A lazy list given the same key twice (ListKeys.kt keys it apart): no crash, but the data behind the list holds
      *  what should be one (an id given again), and this is what says so. */
     fun duplicateKey(context: Context, list: String, key: String) = handled(context, "DuplicateListKey", "$list: ${key.take(200)}", "duplicate_list_key")
+
+    /** Whether usage statistics and error reports go out from this device (settings, SettingsHome.kt): yes until turned
+     *  off; kept in the app's prefs, this device's only. */
+    private const val REPORTING = "telemetry"
+    fun reporting(context: Context): Boolean = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getBoolean(REPORTING, true)
+    fun setReporting(context: Context, on: Boolean) = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).edit().putBoolean(REPORTING, on).apply()
 
     /** The account the last report went as (the signed-in one's id): what the app's other events go as (BarTiming.kt). */
     fun account(context: Context): String? = context.getSharedPreferences("stillfail", Context.MODE_PRIVATE).getString(ACCOUNT, null)
@@ -166,7 +173,7 @@ object Crashes {
             val reports = gather(context, prefs.getLong(SINCE, System.currentTimeMillis() - LOOK_BACK))
             if (reports.isEmpty()) return@withContext
             try {
-                send(reports.map { event(it, account) })
+                send(context, reports.map { event(it, account) })
             } catch (_: Exception) {
                 return@withContext
             }
@@ -191,7 +198,10 @@ object Crashes {
         }
     }
 
-    fun send(batch: List<JsonObject>) {
+    /** Everything the app sends to PostHog. Turned off, nothing goes, and what was to go is not kept for later (report
+     *  moves on past the crashes as if they had gone). */
+    fun send(context: Context, batch: List<JsonObject>) {
+        if (BuildConfig.POSTHOG_KEY.isEmpty() || !reporting(context)) return
         val body = buildJsonObject { put("api_key", BuildConfig.POSTHOG_KEY); put("batch", JsonArray(batch)) }.toString().toByteArray()
         val c = URL("${BuildConfig.POSTHOG_HOST.trimEnd('/')}/batch/").openConnection() as HttpURLConnection
         try {

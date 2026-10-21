@@ -6,7 +6,7 @@
 //   once per version into ~\.stillfail\node\v<version> and checked, then copied to <app>\node (no links: they take a
 //   privilege on Windows); the machine's own node.exe when it is that very version;
 // - `stillfail` (a .cmd) in ~\.local\bin, which is put on the user's PATH when it is not;
-// - joins the workspace the token is for;
+// - joins the workspace the token is for (a station already in one stays in it and joins this one beside it, `enroll --stay`);
 // - runs the station at sign-in: a scheduled task of the user's (no administrator needed), started now, which runs the
 //   launcher with no window (stillfail-station-w.exe) and starts it again should it end;
 // - an update (no token, a station already in a workspace) hands the running station over to the new release as
@@ -338,7 +338,7 @@ if (-not $binApart -and -not (($userPath -split ';') -contains $bin)) {
 if ($Token) {
   Say (__SAY(cloud.install.join))
   $pin = if ($Lock) { @('--lock', $Lock) } else { @() }
-  & (Join-Path $app 'mesh\\target\\release\\stillfail-station.exe') enroll $origin $Token --data $data @pin
+  & (Join-Path $app 'mesh\\target\\release\\stillfail-station.exe') enroll $origin $Token --stay --data $data @pin
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 

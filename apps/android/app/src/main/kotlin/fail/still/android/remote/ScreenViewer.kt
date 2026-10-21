@@ -4,7 +4,7 @@
 // 只看/控制, sending a file, pasting, the keyboard); sideways, a rail beside it. While driving it, a copy made on the
 // screen (text or a picture) lands on the phone's clipboard, the phone's clipboard is pasted into it (ScreenClips.kt),
 // and files picked go onto its machine (how far they have got, then where they are, over the frame's foot). How the view is (connecting, reconnecting, ended…) is
-// the core's, said over the frame, which stays as it was last shown.
+// the core's: on its way, said over the frame as it was last shown; over (ended, gone…), said in the screen's place, gone dark.
 package fail.still.android.remote
 
 import android.content.ClipData
@@ -74,7 +74,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
@@ -360,6 +362,9 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         onDispose { if (full) { controller?.show(WindowInsetsCompat.Type.systemBars()); activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } }
     }
     BackHandler(full) { full = false }
+    // Over (ended, gone…): out of 全屏, the bar's × and what happened in sight.
+    val over = !open(session)
+    LaunchedEffect(over) { if (over) full = false }
     val tools = Tools(pasting, ::paste, ::send, ::choosePad, full) { full = it }
     val dropActs = DropActs(
         pastePath = { d -> act(t("android-misc.screen.pasteWhat")) { session.paste(d.path) } },
@@ -371,14 +376,14 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         AndroidView({ KeyCatcher(it, held) { input -> session.input(input) }.also { catcher = it } }, Modifier.size(1.dp).alpha(0f))
         val sideways = maxWidth > maxHeight
         if (full) Box(Modifier.fillMaxSize()) {
-            Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
+            Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize())
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
             if (session.driving && typing) KeysRow(session, held, Modifier.align(Alignment.BottomCenter).padding(8.dp).floatingStill(CircleShape).padding(4.dp))
             FullTools(session, typing, ::keyboard, tools, Modifier.align(Alignment.TopEnd).padding(12.dp))
         } else if (sideways) Row(Modifier.fillMaxSize()) {
             Rail(session, typing, ::keyboard, tools, onExit)
             Box(Modifier.weight(1f).fillMaxHeight()) {
-                Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize(), onExit)
+                Stage(session, zoom, pad, dropActs, Modifier.fillMaxSize())
                 // Sideways the frame takes the height: who drives it floats over its top, while it does.
                 if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
                 // The keys a phone's keyboard has not, over the frame's foot while it is up.
@@ -387,7 +392,7 @@ fun ScreenViewer(session: ScreenSession, title: String?, onExit: () -> Unit) {
         } else Column(Modifier.fillMaxSize()) {
             Bar(session, title, tools, onExit)
             if (session.canTakeOver) TakeOver(session, Modifier.align(Alignment.CenterHorizontally).padding(horizontal = 12.dp, vertical = 4.dp))
-            Stage(session, zoom, pad, dropActs, Modifier.weight(1f).fillMaxWidth(), onExit)
+            Stage(session, zoom, pad, dropActs, Modifier.weight(1f).fillMaxWidth())
             // Upright, under the frame: trackpad or direct, the keys a phone's keyboard has not, the keyboard.
             if (session.driving) Foot(session, held, typing, ::keyboard, tools)
         }
@@ -450,7 +455,7 @@ private fun Bar(session: ScreenSession, title: String?, tools: Tools, onExit: ()
             { session.control(it == 1) }, height = 32.dp, radius = 16.dp,
         )
         ClipButtons(session, tools)
-        FullButton(tools)
+        if (open(session)) FullButton(tools)
     }
 }
 
@@ -574,7 +579,7 @@ private fun Rail(session: ScreenSession, typing: Boolean, keyboard: () -> Unit, 
             if (session.driving) PadButton(session, tools)
             ClipButtons(session, tools)
             if (session.driving) RoundButton(Icons.Keyboard, t("android-misc.screen.keyboard"), pressed = typing, onClick = keyboard)
-            FullButton(tools)
+            if (open(session)) FullButton(tools)
         }
         if (saying && state != null) Text(
             state.line, fontSize = 13.sp, lineHeight = 18.sp, color = C.ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -622,14 +627,17 @@ private fun RoundButton(icon: ImageVector, label: String, pressed: Boolean = fal
 
 /** The frame, fitted and zoomed, its pointer; the gestures; how the view is, and the files sent, over it. */
 @Composable
-private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropActs: DropActs, modifier: Modifier, onExit: () -> Unit) {
+private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropActs: DropActs, modifier: Modifier) {
     val picture = session.picture
-    val size = session.size ?: picture?.let { IntSize(it.bitmap.width, it.bitmap.height) }
+    val phase = session.phase
+    val over = phase in OVER
+    // Over, the screen's place kept, gone dark (its last size, or a desktop's when none came).
+    val size = session.size ?: picture?.let { IntSize(it.bitmap.width, it.bitmap.height) } ?: if (over) IntSize(16, 10) else null
     var box by remember { mutableStateOf(Size.Zero) }
+    LaunchedEffect(over) { if (over) zoom.reset() }
     val fit = if (size == null) Rect.Zero else fitIn(box, Size(size.width.toFloat(), size.height.toFloat()))
     // Another size of frame: fitted again.
     LaunchedEffect(size) { zoom.reset() }
-    val phase = session.phase
     val density = LocalDensity.current
     val margin = with(density) { 40.dp.toPx() }
     val fitNow by rememberUpdatedState(fit)
@@ -660,7 +668,10 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                         transformOrigin = TransformOrigin(0f, 0f)
                         scaleX = zoom.scale; scaleY = zoom.scale
                         translationX = zoom.x; translationY = zoom.y
-                        alpha = if (still) 0.4f else 1f
+                        // On its way back, as it was, faded; over (ended, gone…), blurred under the dark it has gone to.
+                        alpha = if (!still || over) 1f else 0.4f
+                        clip = over
+                        renderEffect = if (over && android.os.Build.VERSION.SDK_INT >= 31) BlurEffect(28.dp.toPx(), 28.dp.toPx(), TileMode.Clamp) else null
                     },
             ) {
                 if (session.codec == "h264") Texture(session)
@@ -670,10 +681,17 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
                     session.drew(p)
                 }
             }
+            // Over: the screen gone dark in its place (its last frame showing through, blurred), what happened said there.
+            if (over) Box(
+                Modifier.offset { IntOffset(fit.left.roundToInt(), fit.top.roundToInt()) }
+                    .size(with(density) { fit.width.toDp() }, with(density) { fit.height.toDp() })
+                    .background(Color.Black.copy(alpha = if (session.shownAny) 0.62f else 0.92f)),
+                contentAlignment = Alignment.Center,
+            ) { Ended(session, phase) }
             // Drawn over the frame at its own size, however zoomed: where the trackpad has it, else where the station says.
-            Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
+            else Pointer({ if (padNow) pad.at else session.state?.cursor?.let { Offset(it.x.toFloat(), it.y.toFloat()) } }, { zoom.shown(fitNow) })
         }
-        Over(session, phase, Modifier.align(Alignment.Center), onExit)
+        Over(session, phase, Modifier.align(Alignment.Center))
         Column(
             Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 420.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -697,8 +715,8 @@ private fun Stage(session: ScreenSession, zoom: ViewZoom, pad: PadPointer, dropA
 private fun Drops(session: ScreenSession, acts: DropActs) {
     val list = session.drops.list
     if (list.isEmpty()) return
-    // Its corner as the panel the view's end is said in (Over).
-    Column(Modifier.fillMaxWidth().floatingStill(Smooth(24.dp)).padding(vertical = 6.dp)) {
+    // A row's round key (34) 8 from its top and end, the first's in its corner: concentric with it (8 and its half).
+    Column(Modifier.fillMaxWidth().floatingStill(Smooth(8.dp + 17.dp))) {
         list.forEach { d -> key(d) { DropRow(session, d, acts) } }
     }
 }
@@ -792,30 +810,35 @@ private fun Pointer(at: () -> Offset?, shown: () -> Rect) {
     }
 }
 
-/** How the view is, when it is not simply live: on its way, back on its way, or over (why, and what can be done). */
+/** The phases a view is over in (said in the screen's place, Ended). */
+private val OVER = setOf("ended", "outdated", "gone", "denied", "failed")
+
+/** How the view is on its way, or back on its way (over, Ended says it in the screen's place). */
 @Composable
-private fun Over(session: ScreenSession, phase: String, modifier: Modifier, onExit: () -> Unit) {
+private fun Over(session: ScreenSession, phase: String, modifier: Modifier) {
     val message = session.message
     when (phase) {
         "live" -> if (!session.shownAny) Waiting(t("android-misc.screen.starting"), modifier)
         "connecting" -> Waiting(message ?: t("common.connecting"), modifier)
         "reconnecting" -> Waiting(message ?: t("common.reconnecting"), modifier)
-        else -> Column(
-            modifier.padding(24.dp).widthIn(max = 360.dp).floatingStill(Smooth(24.dp)).padding(horizontal = 24.dp, vertical = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            IconIn(if (session.state?.kind == "browser") Icons.Web else Icons.Monitor, 28.dp, C.muted)
-            Text(t("android-misc.screen.$phase"), fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center)
-            if (message != null) Text(message, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center)
-            // What to turn on where (macOS's grants), when the station says and its message did not already.
-            session.state?.access?.message?.takeIf { it.isNotEmpty() && it != message }?.let {
-                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted, textAlign = TextAlign.Center)
-            }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (phase in setOf("ended", "denied", "failed")) Button(t("android-misc.screen.retry"), primary = true) { session.open() }
-                Button(t("android-misc.screen.exit"), primary = false, onClick = onExit)
-            }
+    }
+}
+
+/**
+ * What happened and why (each once, not the headline again), and 重新打开 where it may be had again, light on the
+ * screen's dark; the way out is the bar's ×, not a second one here.
+ */
+@Composable
+private fun Ended(session: ScreenSession, phase: String) {
+    Column(Modifier.padding(24.dp).widthIn(max = 320.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        val headline = t("android-misc.screen.$phase")
+        Text(headline, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.White, textAlign = TextAlign.Center)
+        // Why, as the core says it (and what to turn on where, macOS's grants).
+        listOfNotNull(session.message, session.state?.access?.message).filter { it.isNotEmpty() && it != headline }.distinct().forEach {
+            Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
         }
+        // A light capsule on the dark either way: the solid one in the dark theme, the soft one in the light.
+        if (phase in setOf("ended", "denied", "failed")) Button(t("web-pages.screen.again"), primary = C.dark, height = 34.dp, modifier = Modifier.padding(top = 16.dp)) { session.open() }
     }
 }
 

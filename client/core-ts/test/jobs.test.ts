@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import * as fp from "../src/footprint.ts";
 import { holdLanguage } from "../src/i18n.ts";
-import { ago, chatJobs, LONG, log, longJobs, nextChange, shown, span } from "../src/jobs.ts";
+import { ago, chatJobs, type From, LONG, log, longJobs, nextChange, remoteOwner, shown, span } from "../src/jobs.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -80,6 +80,20 @@ test("those_up_long_are_grouped_oldest_first_with_where_they_are", () => {
   const watch = job("w", { startedAt: NOW - 5 * LONG, watch: true });
   assert.deepEqual(longJobs([st(null, [watch])], c()), { groups: [] });
   assert.equal(shown(watch, c()).word, "监控中");
+});
+
+test("a_task_another_stations_chat_runs_is_in_that_chat", () => {
+  assert.deepEqual(remoteOwner("remote:w:ccvm:ember:c-1"), { station: "w/ccvm", session: "ember:c-1" });
+  assert.equal(remoteOwner("ember:c-1"), null);
+  const chat = { id: "ember:c-1", title: "编译器", archived: false, station: "w/ccvm" };
+  const from = (session: string): From | null =>
+    session === "remote:w:ccvm:ember:c-1" ? { name: "ccvm", chat } : session === "remote:w:ccvm:ember:c-2" ? { name: "ccvm", chat: null } : null;
+  const ran = (session: string) => job(session, { session, startedAt: NOW - 2 * LONG });
+  const v = longJobs([["w/studio", "studio", [ran("remote:w:ccvm:ember:c-1"), ran("remote:w:ccvm:ember:c-2"), ran("a")]]], c(), from);
+  const [known, unknown, own] = v.groups[0].jobs;
+  assert.deepEqual([known.whereText, known.chat, known.station], ["studio · 编译器 · 来自 ccvm", chat, "w/studio"]);
+  assert.deepEqual([unknown.whereText, unknown.chat], ["studio · 对话 · 来自 ccvm", undefined]);
+  assert.equal(own.whereText, "studio · 不属于任何对话");
 });
 
 test("a_logs_last_line_and_when", () => {

@@ -100,7 +100,8 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
             <>
               <Tip label={value.model || null}><span className={css2.tripleModel}><ModelLogo maker={valueOption?.maker} runtime={value.runtime} size={14} /><span className="triple-model-name">{value.model ? valueOption?.name ?? value.model : t("web-main.model.pick")}</span></span></Tip>
               {!modelOnly && !v.runtimeFixed && (valueOption?.runtimes.length ?? 0) > 1 && <span className={`${css2.triplePart} ${css2.tripleRuntime}`}><RuntimeLogo runtime={value.runtime} size={14} />{RUNTIME_LABEL[value.runtime]}</span>}
-              {!modelOnly && <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ? effortText(value.effort) : t("web-main.model.defaultEffort")}</span>}
+              {/* A runtime that sets no effort (Cursor) says none. */}
+              {!modelOnly && (value.effort || v.efforts.length > 0) && <span className={`${css2.triplePart} ${css2.tripleEffort}`} data-default={!value.effort || undefined}>{value.effort ? effortText(value.effort) : t("web-main.model.defaultEffort")}</span>}
               {!modelOnly && v.fastText && <span className={`${css2.triplePart} ${css2.tripleEffort}`}>{v.fastText}</span>}
               {!modelOnly && account && (
                 <span className={`${css2.triplePart} ${css2.tripleAccount}`} data-level={account.level}>
@@ -160,11 +161,14 @@ export function ModelTriple({ pick, onConfirm, side = "bottom", modelOnly = fals
                 ))}
               </div>
             )}
-            {!modelOnly && <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
-              <h4>{t("web-main.model.effort")}</h4>
-              {[null, ...v.efforts].map((e) => (
-                <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ? effortText(e) : t("web-main.model.default")}<Check size={14} className={css2.runCheck} /></button>
-              ))}
+            {/* No column of efforts where the runtime sets none (Cursor). */}
+            {!modelOnly && (v.efforts.length > 0 || v.fastAvailable) && <div className={`${css2.runPickerColumn} ${css2.runPickerEfforts}`}>
+              {v.efforts.length > 0 && <>
+                <h4>{t("web-main.model.effort")}</h4>
+                {[null, ...v.efforts].map((e) => (
+                  <button key={e ?? ""} type="button" className={css2.runPickerOption} aria-pressed={(draft.effort ?? null) === e} onClick={() => pick.set({ effort: e })}>{e ? effortText(e) : t("web-main.model.default")}<Check size={14} className={css2.runCheck} /></button>
+                ))}
+              </>}
               {v.fastAvailable && <>
                 <h4>{t("web-main.model.speed")}</h4>
                 {([null, false, true] as const).map((fast) => (

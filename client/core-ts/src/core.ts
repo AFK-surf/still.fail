@@ -5,6 +5,7 @@ import { Cause, Effect, type Clock, type Fiber } from "effect";
 import type { AccountView } from "./accounts.ts";
 import { type AccountProvider, type AccountProviderFactory, type AccountSessions, stillfailAccountProvider } from "./account-provider.ts";
 import * as brand from "./brand.ts";
+import * as fonts from "./fonts.ts";
 import { parseCall, cancellable, callStation, counts, type Call } from "./core/calls.ts";
 import { execute, handlers, hooks } from "./core/execute.ts";
 import { Router } from "./core/routing.ts";
@@ -38,6 +39,7 @@ import { ViewCalls } from "./views/calls.ts";
 import { Attend } from "./attend.ts";
 import { Attention } from "./attention.ts";
 import { Pills } from "./pill.ts";
+import { AdminRelays } from "./sync/admin-relays.ts";
 import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { install as installShareIn } from "./share-in.ts";
@@ -149,6 +151,7 @@ export class Core {
       // Everything the core asks of the host is given up or opened again when a UI comes back (wake.ts).
       inner.host = new WakingHost(host, inner.wakes);
       brand.setTestChannel(inner.host.testChannel());
+      fonts.setOrigin(inner.host.cloudOrigin());
       inner.tracer = new Tracer(inner.host, inner.runner, options.sample ?? SAMPLE);
       inner.status = new Status(inner.host, inner.runner);
       inner.provider = yield* (options.account ?? stillfailAccountProvider)({ host: inner.host, tracer: inner.tracer, status: inner.status });
@@ -236,6 +239,7 @@ export class Core {
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
+      inner.router.owners.push(new AdminRelays(inner));
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
       inner.moduleCalls = installModules(inner, options.modules ?? []);
       inner.moduleNames = (options.modules ?? []).map((m) => m.name);
@@ -438,9 +442,16 @@ export class Core {
     if (stoppable) inner.calls.set(key, fiber as Fiber.Fiber<unknown, unknown>);
   }
 
-  /// Lets the core go: its fibers stop.
-  close(): void {
-    this.inner.runner.shutdown();
+  #closing: Promise<void> | null = null;
+
+  /// Lets the core go: its fibers stop, then what the device's tables changed and were yet to write is written (a core
+  /// that follows on the same storage reads it). Fails with what could not be written; the core is gone all the same.
+  close(): Promise<void> {
+    if (this.#closing) return this.#closing;
+    const { runner, data } = this.inner;
+    runner.shutdown();
+    this.#closing = runner.run(data.device.close());
+    return this.#closing;
   }
 }
 

@@ -414,7 +414,7 @@ test("the station's updates read the packages with the rest, a line each after t
   const app = join(s.data, "app");
   mkdirSync(app);
   writeFileSync(join(app, "BUILD"), "150");
-  const updates = new Updates({ app, data: s.data, config: s.config, origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", env: { PATH: "/nowhere" }, trusted });
+  const updates = new Updates({ app, data: s.data, config: s.config, origin: () => "http://127.0.0.1:1", registry: "http://127.0.0.1:1", devinManifest: "http://127.0.0.1:1", env: { PATH: "/nowhere" }, trusted });
   t.after(() => updates.close());
   let told = 0;
   updates.changes(() => told++);

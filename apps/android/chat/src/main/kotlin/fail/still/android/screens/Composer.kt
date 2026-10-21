@@ -169,6 +169,7 @@ import fail.still.android.ui.chatInk
 import fail.still.android.ui.chatMuted
 import fail.still.android.ui.chatSubtle
 import fail.still.android.ui.quoteGround
+import fail.still.android.ui.TextFont
 // ── the draft ──────────────────────────────────────────────────────────
 
 /**
@@ -501,7 +502,7 @@ fun ChatRefMenu(draft: Draft, station: String, here: String?, haze: HazeState, m
                 modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp))
             else -> items.forEach { item ->
                 Row(
-                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(20.dp)).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(concentric(ComposerCorner, 12.dp))).clickable { pick(item) }.padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Box(Modifier.width(16.dp), contentAlignment = Alignment.Center) { item.agents.firstOrNull()?.let { MakerIcon(it.maker, it.runtime, 14.dp) } }
@@ -558,8 +559,8 @@ private fun askToShare(app: AppState, draft: Draft, station: String, chats: List
                 Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            buildAnnotatedString { withStyle(SpanStyle(color = C.accent.copy(alpha = C.accent.alpha * 0.7f))) { append("@") }; append(c.title) },
-                            fontSize = 15.sp, lineHeight = 22.sp, color = C.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                            buildAnnotatedString { withStyle(SpanStyle(color = C.link.copy(alpha = C.link.alpha * 0.7f))) { append("@") }; append(c.title) },
+                            fontSize = 15.sp, lineHeight = 22.sp, color = C.link, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                         )
                         StationTag(t("web-main.outside.from", "name" to c.workspaceName), null, null)
                     }
@@ -707,13 +708,14 @@ fun DraftExtras(draft: Draft, host: Host? = null, station: String? = host?.spec?
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 3.dp, bottom = 10.dp)) {
                         if (q.comment.isEmpty()) Text(t("android-chat.quote.comment"), color = chatSubtle(), fontSize = 15.sp, lineHeight = 22.sp)
                         BasicTextField(
-                            q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(color = C.ink, fontSize = 15.sp, lineHeight = 22.sp), cursorBrush = SolidColor(C.accent),
+                            q.comment, { q.comment = it }, singleLine = true, textStyle = TextStyle(fontFamily = TextFont, color = C.ink, fontSize = 15.sp, lineHeight = 22.sp), cursorBrush = SolidColor(C.accent),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), keyboardActions = KeyboardActions(onNext = { draft.focus++ }),
                             modifier = Modifier.fillMaxWidth().focusRequester(focus),
                         )
                     }
                 }
-                Box(Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 7.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
+                // In the quote's corner as far from both edges, round in its corner (its half and that: the quote's).
+                Box(Modifier.align(Alignment.TopEnd).padding(top = 6.dp, end = 6.dp).size(28.dp).clip(CircleShape).clickable { draft.quotes.remove(q) }, contentAlignment = Alignment.Center) {
                     IconIn(Icons.Close, 12.dp, chatSubtle())
                 }
             }
@@ -805,7 +807,7 @@ private fun PastedCard(f: Pending, pasted: PastedText, onRemove: () -> Unit, onR
                 fontSize = 11.sp, lineHeight = 16.sp, color = if (f.error != null) C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val action = if (onRetry != null) t("web-main.composer.retryPaste") to onRetry else onRestore?.let { t("web-main.composer.expandPaste") to it }
-            if (action != null) Text(action.first, fontSize = 13.sp, lineHeight = 18.sp, color = C.accent, modifier = Modifier.padding(top = 2.dp).clickable(onClick = action.second))
+            if (action != null) Text(action.first, fontSize = 13.sp, lineHeight = 18.sp, color = C.link, modifier = Modifier.padding(top = 2.dp).clickable(onClick = action.second))
         }
         Box(
             Modifier.size(22.dp).clip(CircleShape).background(C.ink.copy(alpha = 0.06f)).clickable(onClick = onRemove)
@@ -888,7 +890,7 @@ fun ComposerBar(
     val app = LocalApp.current
     val scope = rememberCoroutineScope()
     // One style for what is typed and the placeholder: the field is as tall empty as with a line in it.
-    val style = SendTextStyle.copy(color = C.ink)
+    val style = SendTextFaced.copy(color = C.ink)
     val locked = draft.locked || draft.starting
     val expanded = draft.composerExpanded
     // Keep the field in one composition slot while the buttons move below it, preserving focus and the IME.

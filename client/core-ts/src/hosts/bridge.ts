@@ -42,6 +42,7 @@ import { SOCKET_PING, SOCKET_PING_MS, type DbRange, type Host, type HttpRequest,
 import type { ClientId, CoreMessage } from "../protocol.ts";
 import { t } from "../i18n.ts";
 import { service } from "../trace.ts";
+import { laterSleep } from "../runtime.ts";
 
 /// What the shell gives the JS.
 export interface Native {
@@ -166,7 +167,7 @@ export class BridgeHost implements Host {
       const opened = yield* Effect.acquireRelease(bridge.call("ws.open", { url, protocols }), (a) => Effect.ignore(bridge.call("ws.close", { id: (a.json as J).id })));
       const id = (opened.json as J).id as number;
       // The host's ping (host.rs SOCKET_PING_MS).
-      yield* Effect.forkScoped(Effect.forever(Effect.sleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }))))));
+      yield* Effect.forkScoped(Effect.forever(laterSleep(SOCKET_PING_MS).pipe(Effect.andThen(Effect.ignore(bridge.call("ws.send", { id, text: SOCKET_PING }))))));
       return { take: Effect.map(bridge.call("ws.next", { id }), (a) => ((a.json as J)?.end === true ? null : String((a.json as J).text))) };
     });
   }

@@ -21,7 +21,7 @@ export function PermissionsCard({ station, permissions: p }: { station: string; 
       <ListCard>
         {p.grants.map((g) => <Row key={g.id} station={station} g={g} end={grantEnd(g, p)} onRequest={() => request(g, p)} onOpen={() => p.screen && app.push(p.screen)} />)}
       </ListCard>
-      {p.note && <p className={css.mNote}>{p.note}</p>}
+      {/* What is unavailable for want of a grant (p.note) is not said again under it: each such row says it, 申请 at its end. */}
     </>
   );
 }

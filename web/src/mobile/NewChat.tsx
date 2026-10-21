@@ -20,7 +20,7 @@ import { useHost } from "./ChatHost.tsx";
 import { Button, Illustration, MakerIcon, ModelMark, NavBar, PickRow } from "./parts.tsx";
 import { Waiting } from "@stillfail/ui/waiting.tsx";
 import { MachineLoginOffers } from "./Profiles.tsx";
-import { Buddy, FirstStation } from "./Stations.tsx";
+import { FirstStation } from "./Stations.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./NewChat.css.ts";
 import * as hostCss from "./ChatHost.css.ts";
@@ -144,7 +144,8 @@ function NewChatOn({ choice, view, stations, pick, create }: {
                 {/* The runtime only when the model runs on more than one. */}
                 {entry.runtimes.length > 1 && <Chooser leading={<MakerIcon runtime={runtime} size={14} />} label={RUNTIME_LABEL[runtime as RuntimeKind] ?? runtime}
                   onClick={() => pickRuntime(app, entry.runtimes, runtime, (rt) => pick({ runtime: rt as RuntimeKind }))} />}
-                <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />
+                {/* None where the runtime sets no effort (Cursor). */}
+                {choice.efforts.length > 0 && <Chooser label={effort || t("web-mobile.newChat.effortDefault")} onClick={() => pickEffort(app, choice.efforts, effort, (e) => pick({ effort: e || null }))} />}
                 {choice.pick?.fastAvailable && <Chooser label={choice.fast == null ? t("web-mobile.newChat.fastPlan") : choice.fast ? "Fast" : t("web-mobile.newChat.fastStandard")} onClick={() => app.sheet({ height: 0.36, content: () => <>
                   <SheetGrab /><SheetHead title={t("web-mobile.newChat.speed")} />
                   <div className={sheetsCss.mSheetScroll}>{([null, false, true] as const).map((fast) => <PickRow key={String(fast)} label={fast === null ? t("web-mobile.newChat.fastPlan") : fast ? "Fast" : t("web-mobile.newChat.fastStandard")} sub={fast ? t("web-mobile.newChat.fastNote") : undefined} checked={(choice.fast ?? null) === fast} onClick={() => { pick({ fast }); app.sheet(null); }} />)}</div>
@@ -167,7 +168,7 @@ function pickStation(app: MobileApp, stations: StationView[], current: string, o
   app.sheet({ height: 0.5, content: () => (
     <>
       <SheetGrab /><SheetHead title={t("web-mobile.newChat.pickStation")} />
-      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.emoji ? `${s.emoji} ${s.name}` : s.name} sub={s.summary} checked={s.station === current} leading={<Buddy s={s} size={36} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
+      <div className={sheetsCss.mSheetScroll}>{stations.map((s) => <PickRow key={s.station} label={s.name} sub={s.summary} checked={s.station === current} leading={<StationMark emoji={s.emoji} icon={s.icon} size={22} />} onClick={() => { onPick(s.id); app.sheet(null); }} />)}</div>
     </>
   ) });
 }

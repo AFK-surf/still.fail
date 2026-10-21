@@ -2,12 +2,14 @@
 // fifos); a station lets go (`leave`, a pipe having no one-way close) and the next reads on where it acknowledged; and
 // ending an agent takes what it started with it (its job).
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { AgentProcess, findRunner } from "../src/agents/process.ts";
-import { RunnerConnection, existingRunners, startRunner } from "../src/agents/runner.ts";
+import { RunnerConnection, existingRunners, runnerBinary, startRunner } from "../src/agents/runner.ts";
+import { keepRunnerIn } from "../src/platform/processes.ts";
 
 const skip = process.platform !== "win32" && "Windows only";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -16,6 +18,9 @@ const until = async (f: () => boolean) => {
   while (!f()) await sleep(20);
 };
 const node = (script: string) => [process.execPath, ["-e", script]] as const;
+const powershell = (command: string) => execFileSync("powershell.exe", ["-NoProfile", "-Command", command], { encoding: "utf8" }).trim();
+/// Where a process's executable is, as the installer reads it.
+const exeOf = (pid: number) => powershell(`(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=${pid}").ExecutablePath`);
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -90,4 +95,43 @@ test("killing an agent ends what it started too", { skip }, async () => {
   assert.equal(said, "SIGTERM");
   await until(() => !alive(grandchild));
   await until(() => existingRunners(data).length === 0);
+});
+
+test("runners run from a copy beside the data, which the desktop installer's sweep of its directory leaves be", { skip }, async () => {
+  const data = mkdtempSync(join(tmpdir(), "runner-test-"));
+  // A release's directory of its own, as the desktop app's is to its installer.
+  const release = join(data, "release");
+  mkdirSync(release);
+  const shipped = join(release, "stillfail-runner.exe");
+  copyFileSync(runnerBinary(), shipped);
+  const before = process.env.STILLFAIL_RUNNER;
+  process.env.STILLFAIL_RUNNER = shipped;
+  const bin = join(data, "bin");
+  try {
+    keepRunnerIn(bin);
+    const [program, args] = node("setInterval(() => {}, 1000)");
+    const info = await startRunner(data, "c1", program, [...args], process.env, data);
+    assert.ok(exeOf(info.runner).toLowerCase().startsWith(bin.toLowerCase()), "the runner runs from its copy");
+
+    // electron-builder's NSIS installer before it replaces the app (allowOnlyOneInstallerInstance.nsh, KILL_PROCESS).
+    powershell(`Get-CimInstance -ClassName Win32_Process | ? {$_.Path -and $_.Path.StartsWith('${release}', 'CurrentCultureIgnoreCase')} | % { Stop-Process -Id $_.ProcessId }`);
+    assert.ok(alive(info.runner) && alive(info.pid), "runner and agent outlive the sweep");
+    assert.equal(findRunner(data, "c1")?.runner, info.runner, "a station after the update finds it");
+
+    // Another release's copy no runner runs from goes; the one running stays.
+    const stale = join(bin, "stillfail-runner-0123456789abcdef.exe");
+    copyFileSync(shipped, stale);
+    keepRunnerIn(bin);
+    assert.ok(!existsSync(stale));
+    assert.ok(existsSync(exeOf(info.runner)));
+
+    const c = new RunnerConnection(info, () => {});
+    process.kill(info.pid);
+    await c.exited;
+    c.done();
+    await until(() => existingRunners(data).length === 0);
+  } finally {
+    if (before === undefined) delete process.env.STILLFAIL_RUNNER;
+    else process.env.STILLFAIL_RUNNER = before;
+  }
 });

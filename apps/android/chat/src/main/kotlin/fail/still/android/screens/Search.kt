@@ -101,6 +101,7 @@ import fail.still.android.ui.WaitLine
 import fail.still.android.data.t
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import fail.still.android.ui.UiFont
 
 /** The field's height, and the room over it in the search's bar (as the home bar's: 8dp under the status bar). */
 private val FIELD = 38.dp
@@ -195,14 +196,14 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
                     if (query.isEmpty()) Text(t("android-chat.search.field"), fontSize = 16.sp, color = C.muted, maxLines = 1)
                     BasicTextField(
                         query, { query = it }, singleLine = true, cursorBrush = SolidColor(C.accent),
-                        textStyle = TextStyle(fontSize = 16.sp, color = C.ink),
+                        textStyle = TextStyle(fontFamily = UiFont, fontSize = 16.sp, color = C.ink),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = t("android-chat.search.field") },
                     )
                 }
             }
             Text(
-                t("android-chat.search.cancel"), fontSize = 16.sp, color = C.accent,
+                t("android-chat.search.cancel"), fontSize = 16.sp, color = C.link,
                 modifier = Modifier.graphicsLayer { alpha = up.value; translationX = (size.width + 12.dp.toPx()) * (1f - up.value) }.clickable(enabled = !leaving) { close() },
             )
         }
@@ -245,7 +246,7 @@ internal fun SearchPage(scope: String, from: Float, wide: Float, onLeave: () -> 
 @Composable
 private fun MoreRow(onClick: () -> Unit) {
     Text(
-        t("android-chat.search.more"), fontSize = 14.sp, color = C.accent, maxLines = 1,
+        t("android-chat.search.more"), fontSize = 14.sp, color = C.link, maxLines = 1,
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
     )
 }
@@ -258,7 +259,7 @@ private fun BackRow(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         IconIn(Icons.ChevronLeft, 16.dp, C.accent)
-        Text(t("android-chat.search.all"), fontSize = 14.sp, color = C.accent, maxLines = 1)
+        Text(t("android-chat.search.all"), fontSize = 14.sp, color = C.link, maxLines = 1)
     }
 }
 

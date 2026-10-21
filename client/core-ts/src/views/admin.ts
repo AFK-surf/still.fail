@@ -7,6 +7,7 @@ import { t } from "../i18n.ts";
 import type { Topic } from "../protocol.ts";
 import type { Value } from "../store.ts";
 import { arr as arrU, compareKeys, get as getU, toJson } from "../util.ts";
+import { relays } from "./admin-relays.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -28,6 +29,8 @@ export function sources(view: Topic): Topic[] {
       return [of(view.account, "workspaces"), of(view.account, "users")];
     case "adminOverview":
       return [of(view.account, "users"), of(view.account, "workspaces"), of(view.account, "invite-codes"), of(view.account, "feedback")];
+    case "adminRelays":
+      return [of(view.account, "relays")];
   }
   return [];
 }
@@ -291,6 +294,7 @@ function row(list: string, v: J, now: number): J {
     const c = get(v, "created_by");
     const creator = isObj(c) ? strOf(c, "name") || strOf(c, "email") : t("core-views.admin.someone_gone");
     const marks: J[] = [];
+    if (strOf(v, "plan") === "enterprise") marks.push(mark(t("core-views.admin.enterprise"), "accent"));
     if (stations.length === 0) marks.push(mark(t("core-views.admin.no_station"), "amber"));
     const latest = latestStation(v);
     return {
@@ -509,15 +513,33 @@ export function workspace(id: string, workspaces: J, users: J, now: number): J {
       expires_at: orNull(get(i, "expires_at")),
     };
   });
+  // Emails added that have not signed in yet: a company's owners, before they first do.
+  const added = items(w, "added").map((a) => ({
+    id: strOf(a, "email"),
+    email: strOf(a, "email"),
+    line: t("core-views.admin.added.line", { role: roleLabel(strOf(a, "role")) }),
+    added_at: orNull(get(a, "added_at")),
+  }));
   const c = isObj(get(w, "created_by")) ? w.created_by : null;
+  const whole = (v: J): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
   const seats = get(w, "seats");
+  const stationSeats = get(w, "station_seats");
+  const enterprise = strOf(w, "plan") === "enterprise";
   return {
     id,
     title: strOf(w, "name"),
     creator: c !== null ? { id: strOf(c, "sub"), title: strOf(c, "name") || strOf(c, "email") } : null,
     created_at: orNull(get(w, "created_at")),
-    people: typeof seats === "number" && Number.isInteger(seats) && seats >= 0 ? `${members.length} / ${seats}` : String(members.length),
+    // Those added count as the cloud counts them: each holds a seat.
+    people: whole(seats) ? `${members.length + added.length} / ${seats}` : String(members.length),
+    stationCount: whole(stationSeats) ? `${stations.length} / ${stationSeats}` : String(stations.length),
+    plan: enterprise ? t("core-views.admin.enterprise") : null,
+    // What the limits form starts from: a cloud from before gives neither.
+    limits: whole(seats) && whole(stationSeats) ? { members: seats, stations: stationSeats } : null,
+    // The admin puts a station in only before the company's owners are in (directory.ts adminEnrollment).
+    enrollable: get(w, "enrollable") === true,
     members,
+    added,
     stations,
     invitations,
   };
@@ -691,6 +713,11 @@ export function admin(view: Topic, read: (account: string, list: string) => Valu
       if (w === undefined || "err" in w) return w;
       const users = okOr(read(account, "users"));
       return attempt(() => workspace(id, w.ok, users, now));
+    }
+    case "adminRelays": {
+      const v = read(account, "relays");
+      if (v === undefined || "err" in v) return v;
+      return attempt(() => relays(v.ok, (view.range as string) ?? null, now, offsetMin));
     }
     case "adminOverview": {
       const users = read(account, "users");

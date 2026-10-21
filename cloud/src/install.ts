@@ -1,7 +1,8 @@
 // The still.fail station's installer, served at /install.sh: `curl -fsSL <origin>/install.sh | sh -s -- <token>` on the
 // machine that is to be a station. It gets the release for the machine (scripts/release.sh put it in the releases
 // bucket, served at /releases/<file>), puts it in ~/.stillfail/app (the data around it stays), links `stillfail` (and
-// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for, and runs the station as
+// `ember`, its name before the rename) into ~/.local/bin, joins the workspace the token is for (a station already in one
+// stays in it and joins this one beside it, `enroll --stay`: docs/multi-workspace.md), and runs the station as
 // a service of the user (launchd), started at login and again if it stops. Claude Code and Codex are the machine's own:
 // it says how to get them when they are missing.
 // On Linux the service is a systemd user service (lingering, so it runs with no one logged in); with no user systemd
@@ -87,6 +88,27 @@ const APP_FILES: [RegExp, string][] = [
   [/^android\/latest\.json$/, "application/json"],
   // Builds from before the rename were android/ember-<n>.apk: the latest.json of then and the apps it updated name them.
   [/^android\/(stillfail|ember|stillfail-beta)-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // still.fail mbui (apps/mbui: the Android app in mbui, fail.still.mbui, a test app of its own; apps/mbui/scripts/beta.sh):
+  // its feed and the builds it names.
+  [/^android\/mbui\/latest\.json$/, "application/json"],
+  [/^android\/stillfail-mbui-[0-9]+\.apk$/, "application/vnd.android.package-archive"],
+  // and its macOS app (apps/mbui/scripts/mac-app.sh): the same kind of feed, the zips it names
+  [/^mac\/mbui\/latest\.json$/, "application/json"],
+  [/^mac\/stillfail-mbui-[0-9]+-arm64-mac\.zip$/, "application/zip"],
+  // and its Windows app (apps/mbui/scripts/beta.sh win: the .exe with its DLLs and core.hbc, zipped)
+  [/^win\/mbui\/latest\.json$/, "application/json"],
+  [/^win\/stillfail-mbui-[0-9]+-x64-win\.zip$/, "application/zip"],
+  // The faces the apps offer beside the system's (scripts/fonts.py, docs/fonts.md): a page's stylesheet and its woff2
+  // slices, the Android app's gzipped files; each version in a folder of its own, never changed.
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/font\.css$/, "text/css; charset=utf-8"],
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9-]+\.woff2$/, "font/woff2"],
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/[a-z0-9]+\.ttf\.gz$/, "application/gzip"],
+  // and its preview: the characters of the fonts page alone, for the face to be shown before it is fetched.
+  [/^fonts\/[a-z][a-z0-9-]{0,31}\/[0-9.]+\/preview-[0-9a-f]{8}\.ttf$/, "font/ttf"],
+  // The native parts prebuilt on a development machine (scripts/native.ts prebuild: the mbui app's Windows shell and
+  // engine), each named by the hash of what it is made of, for CI and the builds to fetch (native.ts never builds them
+  // there).
+  [/^natives\/[a-z][a-z0-9-]{0,31}-(darwin-arm64|linux-x64|linux-arm64|win32-x64|wasm32|android-arm64)-[0-9a-f]{24}\.tar\.gz$/, "application/gzip"],
 ];
 
 /** The content type a file of the releases bucket is served with; null for a name that is not one of its files. */
@@ -463,7 +485,7 @@ ln -sf "$app/bin/stillfail" "$HOME/.local/bin/ember"
 
 if [ -n "$token" ]; then
   echo "${say("cloud.install.join")}"
-  "$app/bin/stillfail" station enroll "$origin" "$token" \${lock:+--lock "$lock"}
+  "$app/bin/stillfail" station enroll "$origin" "$token" --stay \${lock:+--lock "$lock"}
 fi
 
 if [ -n "$handed" ]; then

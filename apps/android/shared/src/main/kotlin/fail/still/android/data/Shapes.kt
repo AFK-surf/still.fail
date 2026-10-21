@@ -154,7 +154,7 @@ data class AgentEnvDraft (
 	val pending: Boolean
 )
 
-/// A runtime: Claude Code, Codex, DeepSeek Harness or Grok Build.
+/// A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin.
 typealias RuntimeKind = String
 
 @Serializable
@@ -188,10 +188,10 @@ data class ApiProvider (
 	val mark: String? = null,
 	/// How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand).
 	val kind: String? = null,
-	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok).
+	/// It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok; Cursor, Devin: its account, a plan alone).
 	val hasKey: Boolean? = null,
 	val hasPlan: Boolean? = null,
-	/// Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok).
+	/// Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok | cursor | devin).
 	val runtime: String? = null,
 	/// Its address is the person's own: asked for with the key.
 	val endpointRequired: Boolean? = null,
@@ -201,7 +201,7 @@ data class ApiProvider (
 	val protocols: List<String>? = null,
 	/// Works without a key.
 	val keyOptional: Boolean? = null,
-	/// What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `decision`.
+	/// What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision`.
 	val uses: List<String>? = null,
 	/// What the core says of it: what it can do, in words.
 	val usesText: String? = null
@@ -219,15 +219,6 @@ data class AppRelease (
 	/// What it brings this app: the changelog's lines for it after the build asking, newest first (the core's; the feed
 	/// has none). The home screen offers the build only with some; the settings offer any.
 	val news: List<String>? = null
-)
-
-/// What the archive check made of a chat as it stands, under its agent's all-done post.
-@Serializable
-data class ArchiveCheck (
-	/// The option the check picked and what came of it, or that it failed, in a line.
-	val text: String,
-	val recommended: Boolean,
-	val failed: Boolean
 )
 
 /// An archived chat: its thread (or, an agent with no chat, only its session), its title and last line, when it was
@@ -819,7 +810,7 @@ data class Creator (
 	val id: String,
 	val name: String,
 	val email: String? = null,
-	/// local | cloud | slack
+	/// local | cloud | slack | feishu
 	val via: String,
 	/// As the core names them.
 	val shown: PersonShown? = null
@@ -888,7 +879,7 @@ data class Session (
 	val boundTo: List<String>? = null,
 	val creator: Creator? = null,
 	val participants: List<Creator>? = null,
-	/// claude | codex | dsh | grok
+	/// claude | codex | dsh | grok | cursor | devin
 	val runtime: RuntimeKind,
 	val profile: String? = null,
 	val profilePinned: Boolean? = null,
@@ -945,6 +936,18 @@ data class SlackTokens (
 	val botToken: String
 )
 
+/// A Feishu (or Lark) connect's app.
+@Serializable
+data class FeishuApp (
+	val appId: String,
+	/// Masked.
+	val appSecret: String,
+	/// feishu | lark
+	val domain: String,
+	/// The app's page in the developer console (core).
+	val console: String? = null
+)
+
 @Serializable
 data class SlackIdentity (
 	val team: String,
@@ -992,7 +995,10 @@ data class Connect (
 	val mode: ConnectMode,
 	val requireMention: Boolean,
 	val bind: Bind,
+	/// A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before).
 	val slack: SlackTokens,
+	/// A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind.
+	val feishu: FeishuApp? = null,
 	val connection: ConnectState,
 	val createdBy: Owner? = null,
 	val sessions: Long,
@@ -1047,6 +1053,8 @@ data class LoginJob (
 	/// starting | needs_code | needs_approval | verifying | done | failed | cancelled
 	val state: String,
 	val url: String? = null,
+	/// needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm
+	/// (Cursor).
 	val userCode: String? = null,
 	val error: String? = null,
 	val startedAt: Long,
@@ -1119,7 +1127,7 @@ data class Profile (
 	val checkTone: Tone,
 	/// The first problem to resolve, with its next step; absent when nothing needs attention.
 	val trouble: ProfileTrouble? = null,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). A station's
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). A station's
 	/// profiles come by kind, in that order.
 	val group: String? = null,
 	/// That kind in words: Claude 订阅.
@@ -1135,7 +1143,7 @@ data class Profile (
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
 	val available: List<String>? = null,
-	/// What it can do: `claude`, `codex`, `dsh`, `grok`, `decision` (the automatic decisions). The core works it out from where its
+	/// What it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision` (the automatic decisions). The core works it out from where its
 	/// provider speaks and what its check found.
 	val uses: List<String>? = null,
 	/// What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策).
@@ -1261,7 +1269,9 @@ data class JobPart (
 data class JobChat (
 	val id: String,
 	val title: String? = null,
-	val archived: Boolean? = null
+	val archived: Boolean? = null,
+	/// The station the chat is on, when not the job's: a task another station's chat runs there.
+	val station: String? = null
 )
 
 /// A background job an agent started (a web service when it has a port): shown by its name; the port is how the
@@ -1516,8 +1526,10 @@ data class ChatItem (
 	val stationIcon: String? = null,
 	/// block | run | failed
 	val state: Badge? = null,
-	/// Where it came from (Slack · workspace · #channel), for a Slack chat.
+	/// Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group).
 	val originText: String? = null,
+	/// slack | feishu: the kind of connect it came from (its mark).
+	val originKind: String? = null,
 	/// Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online.
 	val offline: String? = null,
 	/// Its station's link coming back, or failing and retried, in words ("正在重连 Studio…"): the row is marked with a
@@ -1608,11 +1620,11 @@ data class ChatJobsView (
 	val hiddenText: String
 )
 
-/// A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once
-/// installed, the station gives the chat's waiting messages to the agent.
+/// A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there
+/// (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
 @Serializable
 data class RuntimeInstall (
-	/// claude | codex | dsh | grok: what `software.update` installs ({station, id: runtime}).
+	/// claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime}).
 	val runtime: String,
 	/// missing | installing | failed | installed
 	val state: String,
@@ -1663,10 +1675,10 @@ data class MessageDecision (
 data class Place (
 	/// A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`).
 	val name: String,
-	/// ember | slack
+	/// ember | slack | feishu
 	val surface: String,
 	val session: String? = null,
-	/// A Slack thread's link in Slack, while a connect is signed in to its workspace.
+	/// A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu.
 	val url: String? = null
 )
 
@@ -1716,11 +1728,14 @@ data class ChatMessage (
 	val system: Boolean,
 	/// still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it.
 	val profile: String? = null,
-	/// still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok).
+	/// still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok | cursor | devin).
 	val runtime: String? = null,
 	/// With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
 	/// than it.
 	val install: RuntimeInstall? = null,
+	/// still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team
+	/// (`chat.report` {station, thread, seq}) is offered with it. Absent otherwise.
+	val reportable: Boolean? = null,
 	/// In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
 	/// folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
 	val blocked: RuntimeInstall? = null,
@@ -1747,11 +1762,6 @@ data class ChatMessage (
 	/// In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
 	/// or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	val asked: Boolean? = null,
-	/// In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
-	/// (`archiveOffered`): 归档 is offered under it. Absent otherwise.
-	val archive: Boolean? = null,
-	/// Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`).
-	val archiveCheck: ArchiveCheck? = null,
 	/// In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	/// when nothing.
 	val elsewhere: List<ChatSentElsewhere>? = null,
@@ -1930,13 +1940,19 @@ data class Outgoing (
 	val createdAt: Long,
 	val state: String,
 	val error: String? = null,
+	/// Failed for good: the station refused it as it is (a file it does not have), and sending it again would not
+	/// change that; it goes back to be written again. Absent otherwise.
+	val final: Boolean? = null,
 	val seq: Long? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null,
 	/// Another sent soon after it: as a message's `followed` (sending, it says so under the last only).
 	val followed: Boolean? = null,
 	/// Sent soon after the viewer's message or outgoing one before it: as a message's `joined`.
-	val joined: Boolean? = null
+	val joined: Boolean? = null,
+	/// Sending, why it has not reached the station yet (its station is updating), in words: under it in place of
+	/// 正在发送. Absent otherwise.
+	val waits: String? = null
 )
 
 /// A station's mesh link: connecting | online | offline | error.
@@ -1995,6 +2011,8 @@ data class ChatView (
 	/// Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in.
 	val place: String? = null,
 	val slackUrl: String? = null,
+	/// A Feishu (Lark) chat's link in Feishu.
+	val feishuUrl: String? = null,
 	val people: List<Person>,
 	val agents: List<ChatAgent>,
 	val messages: List<ChatMessage>,
@@ -2042,10 +2060,6 @@ data class ChatView (
 	/// Nothing is left in it (as its row's `settled`), and it is not archived: offer to archive it with one tap
 	/// (`chat.archive`). Absent otherwise.
 	val archivable: Boolean? = null,
-	/// Archivable, and the viewer's `archiveHint` offers it: 归档 under its last all-done post. Absent otherwise.
-	val archiveOffered: Boolean? = null,
-	/// What the archive check made of it as it stands (the option picked, or a failure). Absent when none did.
-	val archiveCheck: ArchiveCheck? = null,
 	/// Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
 	/// the viewer is in no other workspace.
 	val xshare: ChatShare? = null,
@@ -2163,6 +2177,75 @@ data class ConnectAppSettings (
 )
 
 @Serializable
+data class FeishuTenant (
+	val key: String? = null,
+	val name: String? = null
+)
+
+@Serializable
+data class FeishuIdentity (
+	val botName: String,
+	val botImage: String? = null,
+	val botOpenId: String? = null,
+	val tenant: FeishuTenant? = null
+)
+
+/// A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it.
+@Serializable
+data class FeishuRegistration (
+	val id: String,
+	/// The page that creates the app, opened on a phone signed in to Feishu (its QR code).
+	val url: String,
+	val expiresAt: Long,
+	/// waiting | done | denied | expired | failed
+	val state: String,
+	val error: String? = null,
+	val appId: String? = null,
+	/// feishu | lark: where the app was made (Lark once its tenant says so).
+	val domain: String? = null
+)
+
+/// A text as a QR code (qr.ts).
+@Serializable
+data class QrCode (
+	val size: UInt,
+	/// Each row's modules: 1 dark, 0 light; no quiet zone (drawn with four modules' margin).
+	val rows: List<String>
+)
+
+/// The Feishu path of the connect wizard.
+@Serializable
+data class ConnectFeishuFlow (
+	/// scan | app: how the bot is to be had, made by scanning or an app of one's own.
+	val way: String,
+	val appId: String,
+	val appSecret: String,
+	/// Lark, the international version: its own domain.
+	val lark: Boolean,
+	val canVerify: Boolean,
+	/// Verified as typed, with nothing wrong: the connect can be added.
+	val verified: Boolean,
+	/// The bot the App ID and Secret were verified as; absent until they are, or once they change.
+	val identity: FeishuIdentity? = null,
+	/// What the verification found wrong.
+	val errors: List<String>,
+	/// The bot being made by scanning (as the overview has it, else as it was started).
+	val registration: FeishuRegistration? = null,
+	/// Its link as a QR code, while it waits.
+	val qr: QrCode? = null,
+	/// Where the scanning stands, in words.
+	val stateText: String? = null,
+	/// It ended without an app (denied, expired, failed): started again with `register`.
+	val failed: Boolean,
+	/// The connect is being added (on its own once the app is made).
+	val creating: Boolean,
+	/// Why adding it failed: tried again with `create`.
+	val error: String? = null,
+	/// The connect added: its page is opened.
+	val connect: String? = null
+)
+
+@Serializable
 data class SlackTeam (
 	val teamId: String,
 	val name: String,
@@ -2223,7 +2306,12 @@ data class ConnectFlowView (
 	val teams: List<SlackTeam>,
 	val chosen: SlackTeam? = null,
 	val made: MadeSlackApp? = null,
-	val pick: PickView? = null
+	val pick: PickView? = null,
+	/// slack | feishu, once chosen.
+	val platform: String? = null,
+	/// What the station connects to (feishu only where it has the Feishu connect).
+	val platforms: List<String>,
+	val feishu: ConnectFeishuFlow? = null
 )
 
 @Serializable
@@ -2422,7 +2510,12 @@ data class DraftView (
 	val quotes: List<Quote>,
 	val files: List<Attachment>,
 	/// Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text.
-	val links: List<ComposerLink>? = null
+	val links: List<ComposerLink>? = null,
+	/// The draft's own name, the core's (`draft.get` gives it, `draft.put` answers it): what is written between two
+	/// sends is one draft; taken to send, or put back empty, the next is another. What goes up from it is named by it
+	/// (the station gives back an upload it finished within the hour by its id), so the same file in the next message,
+	/// or in another new chat, is another upload. Said by `draft.put`, it is not taken: the core keeps its own.
+	val id: String? = null
 )
 
 /// What opens an entry of the drive.
@@ -2521,8 +2614,62 @@ data class FlowSignIn (
 	val runtime: RuntimeKind,
 	/// opencode-go: the OpenCode Console instead (`login.new` access).
 	val access: String? = null,
-	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok.
+	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok, Cursor, Devin.
 	val provider: String
+)
+
+/// The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md).
+@Serializable
+data class FontChoices (
+	/// The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face.
+	val ui: String? = null,
+	/// What people and agents wrote (messages, the composer); none: as `ui`.
+	val text: String? = null,
+	/// Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page).
+	val code: String? = null
+)
+
+/// A face's file for the Android app.
+@Serializable
+data class FontFile (
+	/// The weight it is (400, 500, …); 0: one variable file for every weight.
+	val weight: Long,
+	/// Where it is, gzipped.
+	val url: String,
+	/// Its size gzipped.
+	val bytes: Long,
+	/// The hash of it unzipped.
+	val sha256: String
+)
+
+@Serializable
+data class FontFace (
+	/// Its id (`local:<family>` for one installed on the device); empty: the app's own face.
+	val id: String,
+	/// Its name as people know it, in their language (empty: the app's own).
+	val name: String,
+	/// Its characters are all one width: a face for code.
+	val mono: Boolean,
+	/// The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own.
+	val family: String,
+	/// A page's stylesheet for it: its slices, fetched as their characters are shown.
+	val css: String? = null,
+	/// What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own).
+	val files: List<FontFile>? = null,
+	/// Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched.
+	val preview: String? = null,
+	/// What `files` come to.
+	val bytes: Long
+)
+
+/// The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are.
+@Serializable
+data class FontsView (
+	val ui: FontFace,
+	val text: FontFace,
+	val code: FontFace,
+	/// The faces there are to choose, beside the app's own and those installed on the device.
+	val list: List<FontFace>
 )
 
 @Serializable
@@ -2959,15 +3106,33 @@ data class ImageNear (
 	val count: UInt
 )
 
-/// A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
-/// station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+/// Text of a command's output in one style (its SGR codes).
+@Serializable
+data class TermRun (
+	val text: String,
+	/// One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;
+	/// absent: the text's colour.
+	val fg: String? = null,
+	/// As `fg`; absent: none.
+	val bg: String? = null,
+	val bold: Boolean? = null,
+	val dim: Boolean? = null,
+	val italic: Boolean? = null,
+	val underline: Boolean? = null
+)
+
+/// A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done
+/// or dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,
+/// its last line and when in words (absent: nothing to say).
 @Serializable
 data class JobLogView (
 	val text: String,
 	val outputAt: Long? = null,
 	val state: String? = null,
 	val last: String? = null,
-	val said: String? = null
+	val said: String? = null,
+	/// `text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`).
+	val runs: List<TermRun>? = null
 )
 
 /// A station that could be added to a workspace.
@@ -3186,12 +3351,15 @@ data class LockMe (
 	val daysLeft: UInt? = null,
 	/// Not in the lock, it asked or a station refused it: it waits to be confirmed.
 	val waiting: Boolean,
+	/// In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
+	/// lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
+	val unsigned: Boolean? = null,
 	/// Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down.
 	val asked: Boolean? = null,
 	/// Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
 	/// said on its waiting page, asked again by hand (`lock.request`).
 	val failed: String? = null,
-	/// Its try to be approved face to face, once it began (`lock.pair`).
+	/// Its try to be approved face to face (or made one that signs), once it began (`lock.pair`).
 	val pair: LockPair? = null
 )
 
@@ -3561,10 +3729,10 @@ data class PendingLogin (
 )
 
 /// A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
-/// runtime (`claude`, `codex`, `dsh`, `grok`).
+/// runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
 @Serializable
 data class SoftwareVersion (
-	/// station | claude | codex | dsh | grok
+	/// station | claude | codex | dsh | grok | cursor | devin
 	val id: String,
 	val name: String,
 	/// On the machine (a runtime may not be: then `updatable` says it can be installed from here).
@@ -3660,6 +3828,9 @@ data class Overview (
 	val slackUsers: List<String>,
 	val slackTeams: List<SlackTeam>,
 	val slackApps: List<MadeSlackApp>? = null,
+	/// The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
+	/// connect, which is then not offered.
+	val feishuRegistrations: List<FeishuRegistration>? = null,
 	val disk: DiskRoom? = null,
 	val logins: List<PendingLogin>,
 	/// This machine's own logins (none from a station older than them).
@@ -3923,7 +4094,7 @@ data class PrefsView (
 	val driveViews: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,
-	/// When a done chat is offered to archive (drawn faded, 归档 under its last all-done post): `off`, never;
+	/// When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;
 	/// `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	/// (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
 	val archiveHint: String? = null,
@@ -3954,7 +4125,11 @@ data class PrefsView (
 	val bars: BarPrefs? = null,
 	/// A phone's bottom bars as each workspace has them, by workspace (each whole, as `bars`); one not there goes
 	/// by `bars` (one set for all, as devices kept it before).
-	val barsBy: Map<String, BarPrefs>? = null
+	val barsBy: Map<String, BarPrefs>? = null,
+	/// The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own).
+	val fonts: FontChoices? = null,
+	/// The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them).
+	val faces: FontsView? = null
 )
 
 /// Providers of one group, as the picker lists them.
@@ -4000,8 +4175,11 @@ data class ProfileFlowView (
 	val submitLabel: String,
 	/// What the profile will be usable for, in words (the line under the page).
 	val usesLine: String,
-	/// At a plan's connect step: the sign-in to start.
-	val signIn: FlowSignIn? = null
+	/// At a plan's connect step: the sign-in to start. Absent while its runtime is to be installed (`install`).
+	val signIn: FlowSignIn? = null,
+	/// At a plan's connect step on a station without the runtime it signs in with: installing it there; the sign-in
+	/// starts once it is installed. Absent otherwise.
+	val install: RuntimeInstall? = null
 )
 
 /// One station's copy of an account in the workspace's list.
@@ -4038,7 +4216,7 @@ data class ShareStation (
 data class WorkspaceProfile (
 	/// The share's id, or station/profile for one on a station only.
 	val key: String,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest).
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest).
 	val group: String,
 	/// That kind in words: Claude 订阅.
 	val groupTitle: String,

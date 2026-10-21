@@ -23,6 +23,8 @@ import "../pages/Connects.css.ts";
 import "../pages/Accounts.css.ts";
 import "../pages/AddProfile.css.ts";
 import "../pages/Connect.css.ts";
+import "../QrCode.css.ts";
+import "../pages/FeishuConnect.css.ts";
 import "@stillfail/ui/styles/controls.css.ts";
 import "./pageControls.css.ts";
 import "./chat.css.ts";

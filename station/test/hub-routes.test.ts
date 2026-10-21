@@ -328,6 +328,26 @@ test("open jobs name their chats: the session's own, listed or archived", async 
   }
 });
 
+test("where a session's transcript is: none before its runtime writes it, then the file in its profile's home", async () => {
+  const r = rig();
+  try {
+    const [, made] = await r.ask("POST", "/sessions", { runtime: "claude", title: "a" });
+    const url = `/sessions/${encodeURIComponent(made.key)}/transcript`;
+    assert.deepEqual(await r.ask("GET", url), [200, { path: null }]);
+    const id = "11111111-aaaa-bbbb-cccc-000000000002";
+    r.store.setRuntimeSessionId(made.key, id);
+    assert.deepEqual(await r.ask("GET", url), [200, { path: null }], "begun, but nothing written yet");
+    // Its profile's home as the reads find it: in the station's config.json.
+    writeFileSync(join(r.data, "config.json"), JSON.stringify({ profiles: [{ id: "cc", runtime: "claude", home: "homes/cc" }] }));
+    const dir = join(r.data, "homes", "cc", "projects", "-project");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${id}.jsonl`), "");
+    assert.deepEqual(await r.ask("GET", url), [200, { path: join(dir, `${id}.jsonl`) }]);
+  } finally {
+    await r.close();
+  }
+});
+
 test("going on with one of the machine's own sessions", async () => {
   const r = rig();
   const home = process.env.HOME;

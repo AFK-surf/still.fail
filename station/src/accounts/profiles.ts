@@ -2,7 +2,7 @@
 // runtime takes). How an access kind reaches its models (the environment, Codex's overrides) is agents/profiles.ts's.
 // The providers' addresses can be pointed elsewhere (`Urls`): tests give fake servers.
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Env } from "../agents/machine-logins.ts";
@@ -14,6 +14,8 @@ import type { Capability } from "../sessions/decision.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeToken as tokenOf } from "./oauth.ts";
 import { CONSOLE } from "./console.ts";
+import { CURSOR, type CursorUrls, cursorMe, cursorModels, readCursor } from "./cursor.ts";
+import { devinCatalog, devinData } from "../agents/devin.ts";
 import { platform } from "../platform/index.ts";
 import { profileFetch } from "../ops/agent-env.ts";
 
@@ -60,6 +62,8 @@ export type Urls = {
   claudeToken: string;
   /// The OpenCode Console (an OpenCode Go profile signed in to it: console.ts).
   console: string;
+  /// Cursor (a Cursor profile signed in to it: cursor.ts); its real one when not given.
+  cursor?: CursorUrls;
 };
 
 export const URLS: Urls = {
@@ -77,6 +81,10 @@ export function accessKinds(runtime: Runtime): AccessKind[] {
   if (runtime === "dsh") return ["opencode-go", "anthropic-api", "api-provider", "env"];
   // Grok Build: SuperGrok signed in to, an xAI key, or its own variables.
   if (runtime === "grok") return ["subscription", "api-provider", "env"];
+  // Cursor: a Cursor account signed in to (it takes no provider's key), or its own variables (CURSOR_API_KEY).
+  if (runtime === "cursor") return ["subscription", "env"];
+  // Devin: a Devin account signed in to, or its own variables (WINDSURF_API_KEY).
+  if (runtime === "devin") return ["subscription", "env"];
   return ["subscription", "opencode-go", "api-provider", "env"];
 }
 
@@ -106,6 +114,7 @@ export const loginCommand = (runtime: Runtime, home: string) =>
   runtime === "claude" ? `CLAUDE_CONFIG_DIR=${home} claude auth login`
   : runtime === "codex" ? `CODEX_HOME=${home} codex login`
   : runtime === "grok" ? `GROK_HOME=${join(home, "grok")} grok login --device-auth`
+  : runtime === "devin" ? `XDG_DATA_HOME=${devinData(home)} devin auth login --force-manual-token-flow`
   : "";
 
 /// What a check is given: the account and where it lives.
@@ -235,8 +244,62 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     const email = grokEmail(o.home);
     return check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models.length > 0 ? models : null);
   }
+  if (o.kind === "subscription" && o.runtime === "cursor") {
+    // The key the sign-in minted (cursor.ts), asked of Cursor's API: whose it is, and the models it may run.
+    const login = readCursor(o.home);
+    if (login === null) return check("login", t("station.profile.signedOut"), null);
+    const cursor = urls.cursor ?? CURSOR;
+    const me = await cursorMe(cursor, login.apiKey);
+    if (me === null) return check("login", t("station.profile.cursorKeyRevoked"), null);
+    const models = await cursorModels(cursor, login.apiKey);
+    return check("ok", [t("station.profile.signedIn"), me.email ?? login.email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), models);
+  }
+  if (o.kind === "subscription" && o.runtime === "devin") {
+    // `devin auth status` in the profile's data directory says whether it is signed in, and as whom; `devin models list`
+    // the account's models, a family at its thinking levels each (agents/devin.ts devinCatalog).
+    const env = { ...o.env, XDG_DATA_HOME: devinData(o.home) };
+    const status = await statusOf("devin", ["auth", "status"], env);
+    const text = `${status.stdout}${status.stderr}`;
+    if (/not logged in/i.test(text)) return check("login", t("station.profile.signedOut"), null);
+    if (status.code !== 0) throw new Error(`Command failed: devin auth status\n${text.trim()}`);
+    const listed = await statusOf("devin", ["models", "list", "--format", "json"], env);
+    let catalog: ReturnType<typeof devinCatalog> | null = null;
+    try {
+      catalog = devinCatalog(JSON.parse(listed.stdout));
+    } catch {}
+    const email = devinEmailIn(text);
+    // Noted for what names the account without asking Devin (devinEmail).
+    if (email !== null) {
+      try {
+        writeFileSync(join(o.home, "devin", "account.json"), `${JSON.stringify({ email })}\n`);
+      } catch {}
+    }
+    const done = check("ok", [t("station.profile.signedIn"), email ?? ""].filter((s) => s !== "").join(t("station.list.comma")), catalog !== null && catalog.models.length > 0 ? catalog.models : null);
+    if (catalog !== null) done.modelEfforts = { devin: catalog.efforts };
+    return done;
+  }
   return check("unknown", t("station.profile.envUnchecked"), null);
 }
+
+/// The account `devin auth status` says it is signed in as (its `Email:` line).
+export function devinEmailIn(text: string): string | null {
+  const m = /^\s*Email:\s*(\S+@\S+)\s*$/m.exec(text);
+  return m ? m[1]! : null;
+}
+
+/// Whose Devin account a profile signed in to: the email the station noted when it was last checked (account.json in
+/// its Devin home), none before.
+export function devinEmail(home: string): string | null {
+  try {
+    const email = JSON.parse(readFileSync(join(home, "devin", "account.json"), "utf8"))?.email;
+    return typeof email === "string" && email !== "" ? email : null;
+  } catch {
+    return null;
+  }
+}
+
+/// Whose Cursor account a profile signed in to, as its sign-in kept it (accounts/cursor.ts).
+export const cursorEmail = (home: string): string | null => readCursor(home)?.email ?? null;
 
 /// The models `grok models` lists: a line each, `* id (default)` or `- id`.
 export function grokModels(text: string): string[] {

@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.positionInParent
@@ -57,6 +58,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -105,15 +108,17 @@ private val MAKER_MARKS = mapOf(
     "nvidia" to R.drawable.maker_nvidia,
     "baseten" to R.drawable.maker_baseten,
     "dsh" to R.drawable.maker_dsh,
+    "cursor" to R.drawable.maker_cursor,
+    "devin" to R.drawable.maker_devin,
 )
 
 /** Marks of one colour, drawn in the page's ink. */
-private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten", "dsh")
+private val MONO = setOf("anthropic", "openai", "kimi", "xai", "mistral", "xiaomi", "ant-ling", "openrouter", "vercel", "cloudflare", "azure", "groq", "together", "fireworks", "cerebras", "huggingface", "nvidia", "baseten", "dsh", "cursor", "devin")
 
-/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build). */
+/** The mark of the company that made a model (the core says which); for one it does not know, its runtime's maker's (DeepSeek Harness's own; xAI's for Grok Build; Cursor's and Devin's own). */
 @Composable
 fun MakerIcon(maker: Maker?, runtime: String?, size: Dp, modifier: Modifier = Modifier) {
-    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: when (runtime) { "codex" -> "openai"; "dsh" -> "dsh"; "grok" -> "xai"; else -> "anthropic" }
+    val id = maker?.id?.takeIf { it in MAKER_MARKS } ?: when (runtime) { "codex" -> "openai"; "dsh" -> "dsh"; "grok" -> "xai"; "cursor" -> "cursor"; "devin" -> "devin"; else -> "anthropic" }
     Image(painterResource(MAKER_MARKS.getValue(id)), maker?.name, modifier.size(size), colorFilter = if (id in MONO) ColorFilter.tint(C.ink) else null)
 }
 
@@ -358,7 +363,7 @@ fun HostDetails(details: List<fail.still.android.data.HostDetail>, modifier: Mod
     }
 }
 
-/** Whose service a profile runs on: Anthropic, OpenAI or xAI for a subscription or a key, OpenCode for OpenCode Go. */
+/** Whose service a profile runs on: Anthropic, OpenAI, xAI, Cursor or Devin for a subscription or a key, OpenCode for OpenCode Go. */
 @Composable
 fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String? = null) {
     if (kind == "opencode-go" || mark == "opencode") {
@@ -374,7 +379,7 @@ fun ProviderMark(runtime: String, kind: String?, size: Dp = 16.dp, mark: String?
         if (mark != null && mark in MAKER_MARKS) MakerIcon(Maker(mark, mark), runtime, size) else IconIn(Icons.Plug, size, C.ink)
         return
     }
-    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else if (runtime == "grok") Maker("xai", "xAI") else Maker("openai", "OpenAI"), runtime, size)
+    MakerIcon(if (runtime == "claude" || kind == "anthropic-api") Maker("anthropic", "Anthropic") else if (runtime == "grok") Maker("xai", "xAI") else if (runtime == "cursor") Maker("cursor", "Cursor") else if (runtime == "devin") Maker("devin", "Devin") else Maker("openai", "OpenAI"), runtime, size)
 }
 
 // ── controls ───────────────────────────────────────────────────────────
@@ -400,7 +405,7 @@ fun Seg(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier:
         w.animateTo(tw, ease)
     }
     val density = LocalDensity.current
-    val thumbShape = Smooth((radius - inset).coerceAtLeast(0.dp))
+    val thumbShape = Smooth(concentric(radius, inset).coerceAtLeast(0.dp))
     Box(modifier.height(height).clip(Smooth(radius)).let { if (track) it.background(C.ink.copy(alpha = 0.06f)) else it }.padding(inset)) {
         if (w.value > 0f) Box(
             Modifier.offset { IntOffset(x.value.roundToInt(), 0) }.width(with(density) { w.value.toDp() }).fillMaxHeight().let {
@@ -485,7 +490,7 @@ fun NavBack(label: String, onClick: () -> Unit) {
     Layout(
         content = {
             IconIn(Icons.ChevronLeft, 22.dp, C.accent)
-            Text(label, fontSize = 17.sp, color = C.accent, maxLines = 1, softWrap = false)
+            Text(label, fontSize = 17.sp, color = C.link, maxLines = 1, softWrap = false)
         },
         modifier = Modifier.clip(Smooth(8.dp)).clickable(onClick = onClick).padding(end = 6.dp, top = 4.dp, bottom = 4.dp),
     ) { (chevron, word), constraints ->
@@ -563,34 +568,84 @@ fun LargeTitle(small: String, big: String, lead: (@Composable () -> Unit)? = nul
 
 // ── lists and cards ────────────────────────────────────────────────────
 
+/**
+ * Text moved so its characters' ink, not its line, is in the middle of its box: the marks centred beside it are then
+ * centred on its words. A Chinese font's line has more room above its characters than below (its ascent is the line's),
+ * so they sit low in it; a character's ink is centred 0.38em above the baseline.
+ */
+fun Modifier.inkCentred(size: androidx.compose.ui.unit.TextUnit) = layout { m, c ->
+    val p = m.measure(c)
+    val base = p[androidx.compose.ui.layout.FirstBaseline]
+    val dy = if (base == androidx.compose.ui.layout.AlignmentLine.Unspecified) 0 else (p.height / 2f - base + 0.38f * size.toPx()).roundToInt()
+    layout(p.width, p.height) { p.place(0, dy) }
+}
+
+/** A section's title; `mark`: what it holds at a glance (a vendor's mark), before it, centred on its words. */
 @Composable
-fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp) {
+fun SectionHeader(title: String, trailing: String? = null, start: Dp = 20.dp, mark: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(start = start, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.Bottom) {
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        if (mark == null) Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+        else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            mark()
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.inkCentred(15.sp))
+        }
         Spacer(Modifier.weight(1f))
         if (trailing != null) Text(trailing, fontSize = 13.sp, color = C.muted)
+        // What can be done to the whole section (取消登录), at its end.
+        action?.invoke()
     }
 }
 
+/**
+ * A card of words (web pages.css.ts card, docs/ui-panels.md 页面卡片): CARD_PAD on every side, its words and a solid
+ * button's ground on one line. `foot`: a button with a ground of its own (a capsule) sits in a corner, and the card's
+ * corner is taken from it, CARD_PAD and its half height, so they are concentric; else CARD_CORNER. `corner`: taken
+ * from something else with a ground in its corner (a Seg at its top). `margin`: its room from the page's sides, none in a
+ * page padded already.
+ */
 @Composable
-fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, foot: Boolean = false, corner: Dp? = null, margin: Dp = 12.dp, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface)
-            .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier.padding(horizontal = margin).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(corner ?: if (foot) CARD_PAD + BUTTON_HEIGHT / 2 else CARD_CORNER)).background(C.surface)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(CARD_PAD),
         content = content,
     )
 }
 
-/** Rows on one rounded card; the card groups them, no lines between. */
+/** A card of words' padding, on every side. */
+val CARD_PAD = 20.dp
+/** A card of words' corner, with nothing that has a ground of its own in it. */
+val CARD_CORNER = 22.dp
+
+/**
+ * Rows on one rounded card, to be pressed (web pages.css.ts listCard): each row's ground LIST_PAD from the card's edge,
+ * rounded LIST_ROW_CORNER, the card's corner concentric with theirs; their words CARD_PAD from the card's edge.
+ */
 @Composable
-fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface), content = content)
+fun ListCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    RowsCard(modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp), content = content)
+
+/** A list card where it is put (in a padded page, a sheet): its rows (ListRow, PickRow) know they are on one. */
+@Composable
+fun RowsCard(modifier: Modifier = Modifier, ground: Color = C.surface, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth().clip(Smooth(LIST_CARD_CORNER)).background(ground).padding(LIST_PAD)) {
+        CompositionLocalProvider(LocalOnCard provides true) { content() }
+    }
 }
 
+/** On a list card: a row's ground is the card's padding in from its edge already. */
+val LocalOnCard = staticCompositionLocalOf { false }
+
+/** How far a list card's rows' ground is from its edge, and their corner. */
+val LIST_PAD = 8.dp
+val LIST_ROW_CORNER = 18.dp
+val LIST_CARD_CORNER = concentricOut(LIST_ROW_CORNER, LIST_PAD)
+
 @Composable
-fun ListRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+fun ListRow(onClick: (() -> Unit)? = null, ground: Color = Color.Transparent, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 16.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).background(ground).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
     )
 }
@@ -614,8 +669,10 @@ fun Splash(label: String? = null, now: Boolean = false) {
 @Composable
 fun Mark(size: Dp = 14.dp) = Image(painterResource(if (C.dark) R.drawable.stillfail_mark_dark else R.drawable.stillfail_mark), null, Modifier.size(size))
 
+/** Where a thread elsewhere is, by `kind` (a connect's kind, a place's surface, a chat's origin): Feishu's mark for Feishu, else Slack's. */
 @Composable
-fun SlackMark(size: Dp = 13.dp) = Image(painterResource(R.drawable.slack), null, Modifier.size(size))
+fun SlackMark(size: Dp = 13.dp, kind: String? = null) =
+    Image(painterResource(if (kind == "feishu" || kind?.startsWith("feishu:") == true) R.drawable.feishu else R.drawable.slack), null, Modifier.size(size))
 
 @Composable
 fun Illustration(light: Int, dark: Int, width: Dp) = Image(painterResource(if (C.dark) dark else light), null, Modifier.width(width))

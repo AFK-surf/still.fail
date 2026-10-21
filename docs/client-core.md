@@ -412,7 +412,7 @@ collapsed); else its Slack channel (`#name`), `私信` for a direct message, or
   "link": { "state": "online", "message": null },
   "overview": { … } | null,                                      // null while offline or not yet read
   "host": { … } | null,
-  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh, grok if a profile has models enabled; those models, distinct and sorted
+  "runtimes": [{ "runtime": "claude", "models": ["…"] }]         // claude, codex, dsh, grok, cursor if a profile has models enabled; those models, distinct and sorted
 }]
 
 // chat
@@ -462,6 +462,7 @@ gives it (web: `-new Date(at).getTimezoneOffset()`).
 | `auth.password` | `email`, `password`, `device_name` | `{ account }`: signed in with an account still.fail cloud set up for a password (REVIEW_ACCOUNTS: App Store review's); a wrong one fails `login_wrong_password` |
 | `auth.complete` | `query` (the callback's query string) | `{ account, return_to }` |
 | `auth.signOut` | `account` | — |
+| `auth.deleteAccount` | `account` | — : the account deleted in still.fail cloud (`DELETE /v1/me`), then forgotten here as signing out does. Refused `sole_owner` while it is the only owner of a workspace with other members |
 | `slack.tokens.edit` | `station`, `form` (the generated `SlackTokenForm`), `input` (changed `appToken`, `botToken`, `connect`, `install`; `clear` invalidates verification) | the transient draft; also published as `{ topic: "slackTokens", station, form }` (`SlackTokensView`) |
 | `slack.tokens.verify` | `station`, `form` | `true` only for the current verified draft; errors and identity in the topic. Late results for edited or closed forms cannot advance it |
 | `slack.tokens.drop` | `station`, `form` | clears the in-memory draft; disconnecting its owning UI also clears it. Nothing is saved to device storage |
@@ -539,7 +540,8 @@ list for each: the asker's), `permissions.request` (`grant`: still.fail Helper's
 `workspace.enroll`, `workspace.renameStation`, `workspace.removeStation`,
 `invitation.preview`, `invitation.accept`, `invitation.decline`,
 `loginSession.revoke`, `admin.me`, `admin.createCode`, `admin.revokeCode`,
-`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`.
+`admin.setPending`, `admin.removePending`, `admin.feedbackStatus`,
+`admin.createWorkspace`, `admin.setLimits`, `admin.enroll`.
 
 An operation answers only after the live topics it touches are current, so
 the UI never invalidates caches itself and a page that navigates right after a
@@ -702,9 +704,15 @@ shapes every topic's value passes through on its way out): `node
 client/core-ts/scripts/shapes.ts` writes `web/src/core/shapes.ts` and Android's
 `data/Shapes.kt`, and `--check` keeps them from drifting.
 
-`connectFlow {station, form}` owns the complete Slack connection wizard: team,
+`connectFlow {station, form}` owns the complete connection wizard. It starts at the
+platform where the station has the Feishu connect (its overview lists
+`feishuRegistrations`; a station without it starts at Slack's steps). Slack: team,
 configuration token, app settings, installation, token verification, model binding
-and submission. Calls are `connect.flow.open/edit/go/config/make/verify/create/drop`.
+and submission. Feishu (docs/feishu.md): model binding, then the bot made by scanning
+(`register`; the registration followed through the overview, its link as a QR code
+from `qr.ts`, the connect added by the core itself once the bot is made, the
+registration cancelled when the form closes) or an app of one's own verified. Calls
+are `connect.flow.open/edit/go/config/make/verify/register/create/drop`.
 The core chooses desktop inline versus mobile separate token steps. Each form has
 its own `connect-new:<form>` pick and token state, belongs to its client, and is
 removed on close/disconnect. Secrets are transient; no draft is written to Data.

@@ -72,10 +72,12 @@ export const PARAMS: Record<string, string> = {
   "chat.pin": "pinned?:boolean session:string",
   "decision.dismiss": "thread:number seq:number",
   "decision.close": "thread:number seq:number option:string",
+  "chat.report": "thread:number seq:number",
   "session.new": "runtime?:string profile?:string model?:string effort?:string fast?:boolean",
   "chats.archived": "",
   "chat.forSession": "session?:string",
   "widget.state": "key:string path:string",
+  "session.transcript": "key:string",
   "file.peek": "key:string path:string line?:number",
   "link.preview": "url:string",
   "widget.setState": "key:string path?:string state?:json",
@@ -93,6 +95,11 @@ export const PARAMS: Record<string, string> = {
   "connect.reconnect": "id:string",
   "connect.bindSession": "connect:string session?:string title?:string",
   "connect.putSlackApp": "connect:string input?:json",
+  "feishu.register": "domain?:string name?:string",
+  "feishu.cancelRegistration": "id:string",
+  "feishu.verify": "appId:string appSecret:string domain?:string",
+  "feishu.createConnect": "feishu:json bind?:json mode?:string requireMention?:boolean owner?:json",
+  "feishu.putSecret": "id:string appSecret:string",
   "slack.verify": "connect?:string install?:string appToken?:string botToken?:string",
   "slack.makeApp": "team?:string settings?:json icon?:string",
   "slack.dropApp": "appId:string",
@@ -169,6 +176,9 @@ export const PARAMS: Record<string, string> = {
   "admin.setPending": "email:string beta?:boolean may_create?:boolean",
   "admin.removePending": "email:string",
   "admin.deleteWorkspace": "workspace:string",
+  "admin.createWorkspace": "name:string owners:strings members:number stations:number",
+  "admin.setLimits": "workspace:string members:number stations:number",
+  "admin.enroll": "workspace:string name:string",
   "admin.feedbackStatus": "id:string status?:string",
 };
 
@@ -318,6 +328,11 @@ function stationOp(name: string, params: unknown): Request | null {
       const body = { n: p.u64("seq"), option: p.str("option") };
       return op("PUT", () => `/threads/${thread}/closed-card`, body, { kind: "session", key: null });
     }
+    // A failure notice (its entry `seq`) sent to the still.fail team as a bug report: answered `{number, duplicate?}`.
+    case "chat.report": {
+      const thread = p.u64("thread");
+      return op("POST", () => `/threads/${thread}/report`, { n: p.u64("seq") }, NONE);
+    }
     case "session.new":
       return op("POST", () => "/sessions", p.pick(["runtime", "profile", "model", "effort", "fast"]), { kind: "session", key: null });
     case "chats.archived":
@@ -330,6 +345,9 @@ function stationOp(name: string, params: unknown): Request | null {
     // A web link in a message: what the station finds it is (its title, a pull request's state).
     case "link.preview":
       return op("GET", () => `/link-preview?url=${p.at("url")}`, null, NONE);
+    // Where its runtime keeps the session's transcript on the station's machine (null before it is written).
+    case "session.transcript":
+      return op("GET", () => `/sessions/${p.at("key")}/transcript`, null, NONE);
     case "widget.state":
       return op("GET", () => `/sessions/${p.at("key")}/widget-state?path=${p.at("path")}`, null, NONE);
     case "widget.setState":
@@ -363,6 +381,19 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/connects/${p.at("connect")}/session`, p.pick(["session", "title"]), connect("connect"));
     case "connect.putSlackApp":
       return op("PUT", () => `/connects/${p.at("connect")}/slack-app`, p.has("input") ? p.v.input : {}, connect("connect"));
+    // Feishu (and Lark) bots (docs/feishu.md): made by scanning (the station follows it, the overview's
+    // `feishuRegistrations` says how it goes), an app of one's own checked, a connect added with either.
+    case "feishu.register":
+      return op("POST", () => "/feishu/registrations", p.pick(["domain", "name"]), OVERVIEW);
+    case "feishu.cancelRegistration":
+      return op("DELETE", () => `/feishu/registrations/${p.at("id")}`, null, OVERVIEW);
+    case "feishu.verify":
+      return op("POST", () => "/feishu/verify", p.pick(["appId", "appSecret", "domain"]), NONE);
+    case "feishu.createConnect":
+      return op("POST", () => "/feishu/connects", p.pick(["feishu", "bind", "mode", "requireMention", "owner"]), { kind: "connect", id: null });
+    // A Feishu connect's App Secret replaced (verified there first).
+    case "feishu.putSecret":
+      return op("PUT", () => `/feishu/connects/${p.at("id")}/secret`, p.pick(["appSecret"]), connect("id"));
     case "slack.verify":
       return op("POST", () => "/slack/verify", p.pick(["connect", "install", "appToken", "botToken"]), NONE);
     case "slack.makeApp":
@@ -539,6 +570,12 @@ function cloudOp(name: string, params: unknown): Request | null {
       return op("POST", () => "/v1/admin/pending/remove", p.pick(["email"]));
     case "admin.deleteWorkspace":
       return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/delete`, null);
+    case "admin.createWorkspace":
+      return op("POST", () => "/v1/admin/workspaces", p.pick(["name", "owners", "members", "stations"]));
+    case "admin.setLimits":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/limits`, p.pick(["members", "stations"]));
+    case "admin.enroll":
+      return op("POST", () => `/v1/admin/workspaces/${p.at("workspace")}/enrollments`, p.pick(["name"]));
     case "admin.feedbackStatus":
       return op("POST", () => `/v1/admin/feedback/${p.at("id")}/status`, p.pick(["status"]));
     default:

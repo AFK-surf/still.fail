@@ -29,7 +29,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, fold, held, nameOf, pairs, read, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -125,9 +125,14 @@ function placesFor(inner: Inner, hello: J, peer: string, me: string): { places: 
       continue;
     }
     const mine = lock.devices.get(me);
-    if (lock.disabled || mine?.sign_key !== signer || lock.devices.has(peer)) continue;
+    // One in the lock already: only an app that does not sign with the key it brings (let in before it kept one) is
+    // approved again, as one that signs, and as its own person's.
+    const had = lock.devices.get(peer);
+    const key = str(get(hello, "sign_key"));
+    const upgrade = had !== undefined && had.kind === "app" && get(hello, "kind") === "app" && key !== null && had.sign_key !== key;
+    if (lock.disabled || mine?.sign_key !== signer || (had !== undefined && !upgrade)) continue;
     const c = credentialOf(str(get(w, "credential")) ?? "", lock.cloudKeys, ws, peer, now);
-    if (c === null || !lock.members.has(c.sub)) continue;
+    if (c === null || !lock.members.has(c.sub) || (had !== undefined && c.sub !== had.sub)) continue;
     const role = lock.members.get(mine.sub);
     if (role !== "owner" && role !== "admin" && c.sub !== mine.sub) continue;
     who ??= c;
@@ -256,16 +261,19 @@ function drop(y: Trying): void {
   y.met.clear();
 }
 
-/// The workspaces this device waits in (a lock without it), and the devices that may approve it in them: its person's
-/// own that sign, and the owners' and admins'.
+/// The workspaces this device waits in (a lock without it, or, an app, one where it does not sign with its key), and
+/// the devices that may approve it in them: its person's own that sign, and the owners' and admins'.
 function waitingIn(inner: Inner, base: string): { workspaces: string[]; trusted: string[] } {
   const workspaces: string[] = [];
   const trusted = new Set<string>();
+  const signer = signerOf(inner);
   for (const [ws, sub] of inner.workspaces.owned()) {
     const h = held(inner, ws);
     if (!h?.head) continue;
     const f = fold(h.entries);
-    if (f.disabled || f.devices.has(base)) continue;
+    const had = f.devices.get(base);
+    const unsigned = had !== undefined && had.kind === "app" && inner.host.appKeys === true && (signer === null || had.sign_key !== signer);
+    if (f.disabled || (had !== undefined && !unsigned)) continue;
     workspaces.push(ws);
     for (const d of f.devices.values()) {
       const role = f.members.get(d.sub)?.role;
@@ -294,6 +302,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
       if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
     }
     const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => new CoreError("lock_key", t("core-misc.lock.keyNotKept", { error: e.message }))) : null;
+    if (signer) signerKnown(inner, signer.id);
     const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(

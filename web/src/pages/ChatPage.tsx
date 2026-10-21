@@ -36,10 +36,10 @@ import { ComposerSlot } from "../dock.tsx";
 import { chatOpening, track } from "../telemetry.ts";
 import { useReady, useTopicSelect } from "../core/react.ts";
 import { chatPage, useChatPageActions } from "../chatPage.ts";
-import { useAct, useToast } from "@stillfail/ui/toast.tsx";
+import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, Empty, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
 import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -82,7 +82,7 @@ function useChatOpened(chat: ChatView | undefined): void {
   useEffect(() => {
     if (!chat || reported.current) return;
     reported.current = true;
-    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : "slack";
+    const surface = !chat.thread || (chat.thread.surface === "ember" || chat.thread.surface === "stillfail") ? "ember" : chat.thread.surface.startsWith("feishu:") ? "feishu" : "slack";
     // The frame after the commit: when the messages are on screen.
     requestAnimationFrame(() => track("chat_opened", { surface, open: opening.cold ? "cold" : "warm", ms: Math.round(performance.now() - opening.at) }));
   }, [chat, opening]);
@@ -154,12 +154,21 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     }
     commit(open.includes(key) ? open : [...open, key], key);
   };
-  const closeTab = (key: string) => {
+  // A web service's or a visualization's tab closed ends it: not left small in the corner (Previews.tsx).
+  const endPreview = (key: string) => {
     const file = fileOf(key);
     const service = file ? fileService(file) : serviceOf(key);
     if (service) closePreview(previewKey(station.address, service));
+  };
+  const closeTab = (key: string) => {
+    endPreview(key);
     const next = open.filter((tab) => tab !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
+  };
+  // The panel closed closes all its tabs.
+  const closePanel = () => {
+    for (const key of open) endPreview(key);
+    saveTabs([]);
   };
   const openJobs = (job?: string) => {
     if (job) pickJob(job);
@@ -256,7 +265,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   } : null);
   // A history tab in front closes the panel; else the first one open comes to the front, the chat's own agent's if none is.
   useShortcut("chat.history", agents[0] ? () => {
-    if (shown && isAgent(shown)) saveTabs([]); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
+    if (shown && isAgent(shown)) closePanel(); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
   // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
@@ -264,7 +273,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Files dragged anywhere over the chat go into its message (useChatDrop).
   const drop = useChatDrop(chatKey, station.address);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
-  useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
+  useShortcut("panel.close", open.length ? closePanel : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
   const archive = async () => {
@@ -336,6 +345,11 @@ function ChatScreen({ session: chatSession }: { session: string }) {
               <a className={pageCss.iconBtn} href={slackUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInSlack")}><SlackLogo /></a>
             </Tip>
           )}
+          {chat.feishuUrl && (
+            <Tip label={t("web-pages.chat.openInFeishu")}>
+              <a className={pageCss.iconBtn} href={chat.feishuUrl} target="_blank" rel="noopener" aria-label={t("web-pages.chat.openInFeishu")}><FeishuLogo /></a>
+            </Tip>
+          )}
           {!panel && agents[0] && <IconButton label={t("web-pages.chat.openPanel")} icon={PanelOpen} shortcut="chat.history" onMouseDown={keepFocus} onClick={() => openTab(agents[0]!.session.key)} />}
         </div>
       </header>
@@ -348,7 +362,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
             <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")}
-              press={{ label: t("web-pages.chat.closePanel"), run: () => saveTabs([]) }} />
+              press={{ label: t("web-pages.chat.closePanel"), run: closePanel }} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {
@@ -400,7 +414,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={() => saveTabs([])} />
+              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={closePanel} />
             </div>
             {side.tabs.map((key) => {
               if (key === JOBS) {
@@ -567,9 +581,11 @@ function JobsPanel({ station, session, chat }: { station: string; session: strin
   );
 }
 
-/** The connect a Slack chat's agents reach Slack through: links into Slack start at its workspace. */
+/** The connect a Slack chat's agents reach Slack through (links into Slack start at its workspace); a Feishu chat's, by
+ * its surface. */
 function slackConnect(chat: ChatView) {
-  return chat.agents.find((a) => a.connect?.kind === "slack")?.connect ?? null;
+  const feishu = chat.thread?.surface.startsWith("feishu:") ? chat.thread.surface.slice("feishu:".length) : null;
+  return chat.agents.find((a) => (feishu !== null ? a.connect?.id === feishu : a.connect?.kind === "slack"))?.connect ?? null;
 }
 
 /** The chat itself: where it came from, who started it and takes part, its agents. Opens from the title bar. */
@@ -613,6 +629,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
   const link = useLink();
   if (!chat?.thread) return null;
   const thread = chat.thread;
+  const feishu = thread.surface.startsWith("feishu:");
   const connect = slackConnect(chat);
   const row = (label: string, value: ReactNode) => <div className={css.detailRow}><dt>{label}</dt><dd>{value}</dd></div>;
   const where = chat.place;
@@ -623,7 +640,7 @@ function ChatInfoBody({ station, session, onShare, onPublish, onRevoke }: { stat
     <>
       <dl className={css.details}>
         {row(t("web-pages.chat.info.from"), where
-          ? <span className={css.detailInline}><SlackLogo size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : "Slack"} · {where}</span>
+          ? <span className={css.detailInline}><ElsewhereLogo kind={feishu ? "feishu" : "slack"} size={13} />{connect ? <Link to={link(`/connects/${connect.id}`)} className={css.detailLink}>{connect.name}</Link> : feishu ? t("web-pages.connect.feishu.name") : "Slack"} · {where}</span>
           : t("web-pages.chat.info.native", { name: NAME }))}
         {row(t("web-pages.chat.info.started"), thread.creator ? <CreatorText creator={thread.creator} verb="started" /> : <span className={shellCss.muted}>{t("web-pages.chat.info.unknown")}</span>)}
         {row(t("web-pages.chat.info.people"), <span className={css.detailInline}><PeopleStack people={chat.people} max={8} />{t("web-pages.workspace.people", { n: chat.people.length })}</span>)}
@@ -797,6 +814,37 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
           </span>
         )}
       </div>
+      <TranscriptLine session={session.key} />
+    </div>
+  );
+}
+
+/**
+ * Where its runtime keeps the session's transcript on the station's machine: its file's name (the whole path on
+ * hover), and its path to copy. Nothing before it is written, nor from a station from before it (404).
+ */
+function TranscriptLine({ session }: { session: string }) {
+  const api = useApi();
+  const toast = useToast();
+  const [path, setPath] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setPath(null);
+    api.transcriptPath(session).then((p) => { if (current) setPath(p); }, () => {});
+    return () => { current = false; };
+  }, [api, session]);
+  if (path === null) return null;
+  const copy = () => navigator.clipboard.writeText(path).then(
+    () => toast(t("web-main.chat.transcriptCopied")),
+    (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
+  );
+  return (
+    <div className={css.sessionLine}>
+      <span className={css.sessionLineMark}><File size={16} /></span>
+      <Tip label={path}>
+        <span className={css.sessionLineText}>{t("web-pages.chat.transcript")} · <span className={css.sessionFile}>{path.split(/[\\/]/).pop()}</span></span>
+      </Tip>
+      <button type="button" className={`${css.detailLink} ${css.detailButton}`} onClick={() => void copy()}>{t("web-pages.chat.copyPath")}</button>
     </div>
   );
 }
@@ -812,7 +860,7 @@ function Evict({ session }: { session: string }) {
   const evicting = useDoing("session.evict", { station, key: session });
   const failed = useDoingFailed("session.evict", { station, key: session });
   return (
-    <button type="button" className={`${css.detailLink} ${css.evict}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
+    <button type="button" className={`${css.detailLink} ${css.detailButton}`} disabled={evicting} onClick={() => act(api.evict(session), t("web-pages.chat.evict"), t("web-pages.chat.evicted"))}>
       {t("web-pages.chat.evict")}<DoingShown state={{ running: evicting, error: failed }} inline />
     </button>
   );

@@ -1,0 +1,28 @@
+# The app keeping itself current (Updates.kt): a newer build in the local cloud's releases (release-seed: this APK as
+# version 0.1.1), found by the core's app.update at the start; settings' version row says 更新到 0.1.1; tapped, it is
+# downloaded, checked against its sha256 and handed to the system's installer, which asks the person to confirm.
+#only android
+#env MBUI_UPDATE_FEED=android
+#before release-seed
+timeout 60000
+until 端到端测试
+tap icon:settings
+# settings' home pushed in, then scrolled to its version row (under the fold): dragged from 此设备 where the frame
+# has it, as a person may while the page slides in (Android's list takes that drag: AnimatedContent holds no input
+# back)
+until 此设备
+dragon 0 -500 400 此设备
+until 更新到 0.1.1
+shot 1-settings
+# the runner asked first to wait for the system's installer in front (the activity manager's top activity), keep its
+# page and decline it: once the update is handed over, the installer's page covers the app, which draws no frame till
+# it is back in front, so no step of the app's waits through that time
+log do: android-installer
+tap 更新到 0.1.1
+# downloaded and checked (正在安装, before the build is handed over); then the runner's word that the installer came in
+# front and was declined; the update's own end (handed to the installer: the host works at it no more), and the
+# host's word that the app is shown again
+until 正在安装
+done 1-android-installer
+outside_done an update downloading
+shown

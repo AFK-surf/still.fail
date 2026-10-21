@@ -113,6 +113,7 @@ export const sessionLine = style({ display: "flex", alignItems: "center", gap: "
 export const sessionLineMark = style({ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "16px", flex: "none" });
 export const sessionLineText = style({ flex: "1 1 auto", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 export const sessionLineName = style({ color: vars.text });
+export const sessionFile = style({ fontFamily: vars.fontMono, fontSize: vars.textMeta });
 export const resourceRings = style({ display: "flex", alignItems: "center", gap: "10px", flex: "none" });
 export const sidePanel = style({
   minWidth: "0", minHeight: "0", display: "flex", flexDirection: "column",
@@ -226,7 +227,8 @@ export const sideBar = style({
     },
   },
 });
-globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex])`, { WebkitAppRegion: "no-drag" });
+// The tab list itself takes a tabindex (Radix's roving focus) and fills the bar: it stays a handle, only its tabs don't.
+globalStyle(`[data-desktop] ${sideBar} :is(a, button, input, select, textarea, [role="button"], [role="tab"], [tabindex]):not([role="tablist"])`, { WebkitAppRegion: "no-drag" });
 // While the panel narrows, its remaining width only covers part of the window controls. The chat's bar reserves
 // the rest, including the final animation frame before the panel unmounts. At rest the panel covers them all.
 globalStyle(`:is([data-desktop="overlay"], [data-desktop="custom"]) ${sessionPage}[data-panel="true"] > ${sessionMain} > ${pageBar}`, {
@@ -248,8 +250,9 @@ globalStyle(`${sidePanel} ${resizeHandle}`, {
   },
 });
 globalStyle(`${sideBar} ${sideTabList}`, { flex: "1", minWidth: "0", height: "auto", padding: "0", borderBottom: "0" });
-/** Ending its warm process, in its details' line: a link's look, as the profile's beside it. */
-export const evict = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
+/** A button in its details' lines (ending its warm process, copying its transcript's path): a link's look, as the
+ * profile's beside it. */
+export const detailButton = style({ padding: "0", border: "0", background: "none", color: "inherit", font: "inherit", cursor: "pointer" });
 
 /** The chat takes files dropped anywhere on it (ChatPage.tsx useChatDrop): while they are over it, it frosts over (as the
  * composer's glass) and shows them in its middle, with where they go; nothing ringed, nothing in a box. */

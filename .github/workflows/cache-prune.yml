@@ -1,0 +1,32 @@
+# The Actions caches a newer one of the same kind replaced, deleted (.github/cache_prune.py): the build caches saved
+# each commit or run otherwise fill the repository's 10 GB, and GitHub then evicts what is read seldom and needed
+# (WARP, the emulator's images, MoonBit), which the jobs that need them fail without. After the workflows that save
+# them, and each half hour.
+name: cache-prune
+on:
+  workflow_run:
+    workflows: [mbui, mbui-ios, mbui-windows, pipeline]
+    types: [completed]
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: cache-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: .github/cache_prune.py, sparse-checkout-cone-mode: false }
+      - run: python3 .github/cache_prune.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}

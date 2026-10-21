@@ -15,6 +15,7 @@ import { changelog, serveChangelog, serveFixed } from "./changelog";
 import { receiveFeedback } from "./feedback";
 import { pushKey, registration, stationNotify } from "./push";
 import { relays, relayUrls } from "./relays";
+import { receiveLoad, relaysLoad } from "./relay-load";
 import { receiveTraces } from "./tracing";
 
 /** Directory errors travel over RPC as their code; this gives each its status. */
@@ -22,15 +23,28 @@ const STATUS: Record<string, number> = {
   workspace_not_found: 404, member_not_found: 404, user_not_found: 404, station_not_found: 404, invitation_not_found: 404, enrollment_not_found: 404,
   forbidden: 403, invitation_for_other_email: 403,
   already_member: 409, invalid_name: 400, invalid_emoji: 400, invalid_icon: 400, invalid_role: 400, invalid_email: 400, invalid_relay: 400, invalid_relays: 400,
-  last_owner: 409, locked_workspace: 409,
+  last_owner: 409, sole_owner: 409, locked_workspace: 409, not_before_owner: 409,
   too_many_workspaces: 429, too_many_invitations: 429, too_many_members: 429, too_many_stations: 429,
   invite_code_required: 403, invite_code_invalid: 404, invite_code_used: 409, invite_code_expired: 410,
-  invalid_note: 400, invalid_expiry: 400,
+  invalid_note: 400, invalid_expiry: 400, invalid_limits: 400,
   feedback_not_found: 404,
   invalid_lock_entries: 400, lock_exists: 409, lock_fork: 409, lock_does_not_follow: 409, invalid_device: 400, invalid_kind: 400,
 };
 
 const FEEDBACK_STATUSES: readonly FeedbackStatus[] = ["new", "triaged", "fixed", "wontfix"];
+
+/**
+ * An enrollment with what to run for it. A machine without still.fail installs it and joins at once; one with it joins.
+ * On the test channel the installer is the test channel's, which gets its release (index.ts): from its host, or, with
+ * no such host, ?channel=beta. The station joins PUBLIC_ORIGIN either way.
+ */
+function withCommands<T extends { token: string }>(env: Env, made: T, ofBeta: boolean): T & { install: string; installWindows: string; command: string } {
+  const beta = betaOrigin(env);
+  const installer = (file: string) => (!ofBeta ? `${env.PUBLIC_ORIGIN}/${file}` : beta ? `${beta}/${file}` : `${env.PUBLIC_ORIGIN}/${file}?channel=beta`);
+  // Quoted when it asks: zsh (macOS's shell) takes an unquoted ? for a file name to match, and stops.
+  const sh = installer("install.sh").includes("?") ? `'${installer("install.sh")}'` : installer("install.sh");
+  return { ...made, install: `curl -fsSL ${sh} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${installer("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+}
 
 async function directory<T>(run: () => Promise<T> | T): Promise<Response> {
   try {
@@ -82,6 +96,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   const path = url.pathname;
   const method = request.method;
   if ((path === "/.well-known/stillfail-grant-keys" || path === "/.well-known/ember-grant-keys") && method === "GET") return reply(grantKeys(env), 200, { "cache-control": "public, max-age=300" });
+
+  // ── the relays on machines of their own: their counters, a minute apart (relay-load.ts) ──
+  if (path === "/v1/relays/load" && method === "POST") return receiveLoad(request, env);
 
   // ── stations, authenticated by their own key ────────────────────────────
   // Enrolling moves the station to the token's workspace, out of any other; joining (docs/multi-workspace.md) adds that
@@ -182,6 +199,14 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (path === "/v1/me" && method === "GET") {
     return directory(async () => ({ ...(await dir.me(sub)), invitations: await dir.invitationsFor(claims.email), ...relays(env, true) }));
   }
+  // Deleting the account: the Directory first (it may refuse: 409 sole_owner), then its sessions and all of it.
+  if (path === "/v1/me" && method === "DELETE") {
+    return directory(async () => {
+      await dir.deleteAccount(sub);
+      await env.ACCOUNTS.getByName(sub).erase();
+      return { deleted: true };
+    });
+  }
   const byId = /^\/v1\/invitations\/([0-9A-HJKMNP-TV-Z]{26})\/(accept|decline)$/.exec(path);
   if (byId && method === "POST") {
     if (byId[2] === "accept") return directory(() => dir.acceptById(sub, claims.email, byId[1]!));
@@ -215,15 +240,9 @@ export async function api(request: Request, env: Env, url: URL): Promise<Respons
   if (kind === "enrollments" && !target && method === "POST") {
     return directory(async () => {
       const made = await dir.createEnrollment(sub, ws, text("name"));
-      // A machine without still.fail installs it and joins at once; one with it joins. Asked on the test channel (its
-      // host, or a beta app's x-stillfail-channel), the installer is the test channel's, which gets its release
-      // (index.ts): from its host, or, with no such host, ?channel=beta. The station joins PUBLIC_ORIGIN either way.
+      // Asked on the test channel (its host, or a beta app's x-stillfail-channel), the installer is the test channel's.
       const beta = betaOrigin(env);
-      const ofBeta = (beta !== null && url.origin === beta) || header(request, "channel") === "beta";
-      const installer = (file: string) => (!ofBeta ? `${env.PUBLIC_ORIGIN}/${file}` : beta ? `${beta}/${file}` : `${env.PUBLIC_ORIGIN}/${file}?channel=beta`);
-      // Quoted when it asks: zsh (macOS's shell) takes an unquoted ? for a file name to match, and stops.
-      const sh = installer("install.sh").includes("?") ? `'${installer("install.sh")}'` : installer("install.sh");
-      return { ...made, install: `curl -fsSL ${sh} | sh -s -- ${made.token}`, installWindows: `& ([scriptblock]::Create((irm ${installer("install.ps1")}))) ${made.token}`, command: `stillfail station enroll ${env.PUBLIC_ORIGIN} ${made.token}` };
+      return withCommands(env, made, (beta !== null && url.origin === beta) || header(request, "channel") === "beta");
     });
   }
   // A mstill.fail's credential for this device: what its stations take, offline, for the next 30 days (grants.ts).
@@ -313,6 +332,15 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     return blockAccount(env, block[1]!, input.on as boolean);
   }
   if (path === "/v1/admin/workspaces" && method === "GET") return directory(async () => ({ workspaces: await dir.adminWorkspaces() }));
+  // A workspace made for a company (docs/cloud.md「企业 workspace」): { name, owners: [email], members, stations }.
+  if (path === "/v1/admin/workspaces" && method === "POST") return directory(() => dir.adminCreateWorkspace(claims.sub, input));
+  // Its limits: { members, stations }.
+  const limits = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/limits$/.exec(path);
+  if (limits && method === "POST") return directory(() => dir.adminSetLimits(limits[1]!, input));
+  // A station's enrollment for a company's workspace before any owner is in it, the admin not in it: { name }. The
+  // stable channel's installer.
+  const enroll = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/enrollments$/.exec(path);
+  if (enroll && method === "POST") return directory(async () => withCommands(env, await dir.adminEnrollment(claims.sub, enroll[1]!, input.name), false));
   // Deletes a workspace as its owner would: its stations are let go, its people told.
   const remove = /^\/v1\/admin\/workspaces\/([A-Za-z0-9_-]{1,64})\/delete$/.exec(path);
   if (remove && method === "POST") return directory(() => dir.adminDeleteWorkspace(remove[1]!));
@@ -340,6 +368,8 @@ export async function adminApi(request: Request, env: Env, path: string): Promis
     if (!FEEDBACK_STATUSES.includes(input.status as FeedbackStatus)) return reply({ error: "invalid_request" }, 400);
     return directory(() => dir.setFeedbackStatus(status[1]!, input.status as FeedbackStatus));
   }
+  // How loaded the relays are (relay-load.ts).
+  if (path === "/v1/admin/relays" && method === "GET") return reply(await relaysLoad(env));
   const revoke = /^\/v1\/admin\/invite-codes\/([A-Za-z0-9-]{1,32})\/revoke$/.exec(path);
   if (revoke && method === "POST") return directory(() => dir.revokeInviteCode(revoke[1]!));
   return notFound();

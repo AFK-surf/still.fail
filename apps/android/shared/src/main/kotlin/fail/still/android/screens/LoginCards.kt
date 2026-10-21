@@ -17,7 +17,14 @@ import android.content.Context
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +47,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.runtime.mutableStateOf
@@ -72,12 +83,13 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.data.t
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
-import fail.still.android.ui.Field
+import fail.still.android.ui.IconIn
+import fail.still.android.ui.Icons
 import fail.still.android.ui.ListCard
 import fail.still.android.ui.ListRow
-import fail.still.android.ui.SMOOTH_SCALE
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.android.ui.Spinner
 import fail.still.android.ui.chatSubtle
 import fail.still.core.CoreException
@@ -91,10 +103,14 @@ import kotlinx.serialization.json.put
 private val CARD_PAD = 8.dp
 /** Its words in by a button's own padding more, in line with the buttons' words. */
 private val TEXT_IN = 10.dp
-/** Its buttons: pills this high. */
+/** Its × and what its corner is taken from: pills this high. */
 private val PILL = 28.dp
-/** The card's corner as Smooth takes it: a pill's half and the padding, drawn (a quarter larger) round the pills. */
-private val CARD_CORNER: Dp = (CARD_PAD + PILL / 2) / SMOOTH_SCALE
+/**
+ * The card's corner: a pill's half and the padding, as the web's pillInner (align.ts) and a decision's number in its row
+ * (SettingParts.kt NUMBER_IN). Smooth draws it a quarter larger and squarer, so it clears the pill's round end; taken a
+ * quarter smaller it cut into it, a crescent beside the pill.
+ */
+private val CARD_CORNER: Dp = CARD_PAD + PILL / 2
 
 /** How long a marked card follows the page moving it, once shown (ns). */
 private const val MARKED_FOLLOW_NS = 2_000_000_000L
@@ -163,10 +179,37 @@ fun LoginCard(station: String, id: String, modifier: Modifier = Modifier, marked
             .bringIntoViewRequester(into).then(follow).testTag("login-card"),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(login.title, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink, modifier = Modifier.padding(start = TEXT_IN, end = TEXT_IN, top = TEXT_IN))
-        if (view?.canLogin == true) ActiveCard(app, station, login, view.canRelay)
-        else Said(login.statusText, Modifier.padding(bottom = TEXT_IN))
+        if (view?.canLogin == true) {
+            // Its title, with 取消 as its × in the card's top corner (on its padding, concentric with its corner).
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Title(login.title, Modifier.weight(1f))
+                CancelLogin(app, station, login.id)
+            }
+            ActiveCard(app, station, login, view.canRelay)
+        } else {
+            Title(login.title)
+            Said(login.statusText, Modifier.padding(bottom = TEXT_IN))
+        }
     }
+}
+
+@Composable
+private fun Title(title: String, modifier: Modifier = Modifier) =
+    Text(title, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = C.ink, modifier = modifier.padding(start = TEXT_IN, end = TEXT_IN, top = TEXT_IN))
+
+/** 取消, as the card's ×: a pill's size, round, in its top corner. */
+@Composable
+private fun CancelLogin(app: AppState, station: String, id: String) {
+    val cancelling = app.isDoing("machineLogin.cancel", "station" to station, "id" to id)
+    val label = t("web-main.logins.cancelWhat")
+    Box(
+        Modifier.size(PILL).clip(CircleShape)
+            .clickable(enabled = !cancelling, interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = C.ink)) {
+                app.act(label) { app.api(station).cancelMachineLogin(id) }
+            }
+            .semantics { contentDescription = label; role = Role.Button }.testTag("login-cancel"),
+        contentAlignment = Alignment.Center,
+    ) { if (cancelling) Spinner(inline = true) else IconIn(Icons.Close, 14.dp, C.muted) }
 }
 
 /** A line of how it stands or what to do, grey (red: what is off), in by the card's words' room. */
@@ -180,16 +223,19 @@ private fun Said(words: String, modifier: Modifier = Modifier, red: Boolean = fa
 
 /**
  * A login under way, for one who may finish it: what the person does now, by its step (or, while its agent answers the
- * command or it is starting, how it stands), then one row of buttons: the step's own first (filled), 取消 beside it
- * (plain: a ground only while pressed).
+ * command or it is starting, how it stands), then the step's own button (filled). 取消 is the card's ×. One whose page
+ * gives a code to paste back is its own (PasteSteps).
  */
 @Composable
 private fun ActiveCard(app: AppState, station: String, login: MachineLoginShown, canRelay: Boolean) {
     val context = LocalContext.current
-    val step = if (login.waiting) null else login.step
+    if (login.paste == true && login.url != null) return PasteSteps(app, station, login)
+    // Checking what came back (the browser's callback): nothing left for the person but to wait.
+    val step = if (login.waiting || login.state == "verifying") null else login.step
     val opening = app.isDoing("machineLogin.open", "station" to station, "id" to login.id)
-    val cancelling = app.isDoing("machineLogin.cancel", "station" to station, "id" to login.id)
     val domain = login.domain?.let { t("web-main.logins.domain", "domain" to it) }
+    // Its one button solid while it is the thing to do, a plain grey one once pressed here (as a pasted code's steps).
+    var pressed by remember(login.id) { mutableStateOf(false) }
     var main: (@Composable () -> Unit)? = null
     when {
         step == "device" && login.code != null -> {
@@ -197,7 +243,7 @@ private fun ActiveCard(app: AppState, station: String, login: MachineLoginShown,
             CardCode(app, login.code)
             // One press (用户定: not two buttons): the code copied first, then its page; the code stays on show for a
             // clipboard that refused it.
-            main = { Pill(t("web-main.logins.copyOpen"), filled = true) { copy(context, login.code); (login.codeUrl ?: login.url)?.let { LoginPages.open(context, it) } } }
+            main = { StepButton(t("web-main.logins.copyOpen"), solid = !pressed) { pressed = true; copy(context, login.code); (login.codeUrl ?: login.url)?.let { LoginPages.open(context, it) } } }
         }
         step == "loopback" && !canRelay -> {
             Said(t("web-main.logins.needsDesktop"))
@@ -209,23 +255,15 @@ private fun ActiveCard(app: AppState, station: String, login: MachineLoginShown,
                 login.relayText != null -> { Said(login.relayText, red = true); domain?.let { Said(it) } }
                 else -> domain?.let { Said(it) }
             }
-            main = { Pill(if (login.listening) t("web-main.logins.openAgain") else t("web-main.logins.signIn"), filled = true, busy = opening) { relay(app, context, station, login) } }
+            main = { StepButton(if (login.listening) t("web-main.logins.openAgain") else t("web-main.logins.signIn"), solid = !login.listening, busy = opening) { relay(app, context, station, login) } }
         }
         step == "open" && login.url != null -> {
-            if (login.paste == true) Said(login.statusText)
             domain?.let { Said(it) }
-            main = { Pill(t("web-main.logins.signIn"), filled = true) { LoginPages.open(context, login.url) } }
+            main = { StepButton(t("web-main.logins.signIn"), solid = !pressed) { pressed = true; LoginPages.open(context, login.url) } }
         }
         else -> Said(login.statusText, busy = true)
     }
-    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        main?.invoke()
-        Pill(t("common.cancel"), filled = false, busy = cancelling) {
-            app.act(t("web-main.logins.cancelWhat")) { app.api(station).cancelMachineLogin(login.id) }
-        }
-    }
-    // Its page first, then what the page gave: under the buttons, in the order they are done.
-    if (step == "open" && login.url != null && login.paste == true) PasteCode(app, station, login.id)
+    main?.invoke()
 }
 
 /**
@@ -264,34 +302,88 @@ private fun CardCode(app: AppState, code: String) {
 }
 
 /**
- * What the login's page gave (gcloud --no-launch-browser's verification code), pasted here and sent to the command, as a
- * profile's sign-in takes Claude's code (Profiles.kt LoginSteps).
+ * A login whose page gives a code to paste back (Devin's, gcloud --no-launch-browser's), as the web's PasteSteps: one
+ * line saying where to sign in and what to bring back, then its two steps in the order they are done, each a row of its
+ * own (用户定: B, the page's button not in the field), the eye led by which is next: 打开登录页 filled until it has been
+ * pressed here (or a code is in), then quiet; the field under it, 完成 in its end once a code is in (the keyboard's Done
+ * too). Sent, the code stays and 完成 turns while it is checked (正在确认登录), nothing moving, until the login ends.
  */
 @Composable
-private fun PasteCode(app: AppState, station: String, id: String) {
-    var code by remember { mutableStateOf("") }
-    val sending = app.isDoing("machineLogin.answer", "station" to station, "id" to id)
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Field(code, { code = it }, t("web-main.logins.pasteCode"), mono = true, modifier = Modifier.weight(1f).testTag("login-paste"), max = 2_000)
-        Pill(t("web-main.logins.finish"), filled = true, busy = sending) {
-            val text = code.trim()
-            if (text.isNotEmpty()) app.act(t("web-main.logins.answerWhat")) { app.api(station).answerMachineLogin(id, text); code = "" }
-        }
+private fun PasteSteps(app: AppState, station: String, login: MachineLoginShown) {
+    val context = LocalContext.current
+    var opened by remember(login.id) { mutableStateOf(false) }
+    val sending = app.isDoing("machineLogin.answer", "station" to station, "id" to login.id)
+    val checking = login.state == "verifying"
+    // Checked: said here, its spinner where 完成 was pressed.
+    Said(if (checking) login.statusText else login.domain?.let { t("web-main.logins.pasteLead", "domain" to it) } ?: login.statusText)
+    var typed by remember(login.id) { mutableStateOf(false) }
+    StepButton(t("web-main.logins.openPage"), solid = !opened && !typed && !sending && !checking, external = true, modifier = Modifier.testTag("login-paste-open")) {
+        opened = true; LoginPages.open(context, login.url!!)
+    }
+    CodeField(t("web-main.logins.pasteCode"), busy = sending || checking, onTyped = { typed = it }) { text ->
+        app.act(t("web-main.logins.answerWhat")) { app.api(station).answerMachineLogin(login.id, text) }
     }
 }
 
-/** One of the card's buttons, a pill: the step's own filled (the accent's tint), 取消 plain. */
+/** A step's row: a thumb's height, its corners a card's (CARD_PAD in, at its foot concentric with it). */
+val STEP_HEIGHT = 44.dp
+val STEP_CORNER = concentric(CARD_CORNER, CARD_PAD)
+
+/**
+ * A sign-in's step to press (its page, a code copied and its page): the card's width, solid (as the app's primary
+ * buttons, Controls.kt Button) while it is the next thing to do, a plain grey one once it has been (the eye on to what
+ * follows). The login cards' and a profile's sign-in's (Profiles.kt LoginSteps) alike.
+ */
 @Composable
-private fun Pill(label: String, filled: Boolean, busy: Boolean = false, onClick: () -> Unit) {
-    val ink = if (filled) C.accentInk else C.ink
+fun StepButton(label: String, solid: Boolean, busy: Boolean = false, external: Boolean = false, corner: Dp = STEP_CORNER, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val ink = if (solid) C.bg else C.ink
     Row(
-        Modifier.height(PILL).clip(Smooth(PILL / 2)).background(if (filled) C.accentBg else Color.Transparent)
-            .clickable(enabled = !busy, interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = ink), onClick = onClick)
-            .alpha(if (busy) 0.6f else 1f).padding(horizontal = TEXT_IN),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier.fillMaxWidth().padding(top = 8.dp).height(STEP_HEIGHT).clip(Smooth(corner)).background(if (solid) C.ink else C.ink.copy(alpha = 0.06f))
+            .clickable(enabled = !busy, interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = ink), onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
     ) {
         if (busy) Spinner(inline = true, color = ink)
-        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = ink, maxLines = 1)
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = ink, maxLines = 1)
+        if (external) IconIn(Icons.ArrowUpRight, 16.dp, ink)
+    }
+}
+
+/**
+ * What a sign-in's page gave (a code), pasted back: a field the card's width, 完成 in its end once a code is in (solid:
+ * the next thing to do then; the keyboard's Done too). `busy`: sent and being checked, the code kept (read-only) and 完成
+ * turning in place, nothing moving. `onTyped`: whether a code is in, for the step above it to step back. `ground`: its own,
+ * apart from what it sits on (paper on a grey card, grey on a white one); `corner`: concentric with that card's.
+ */
+@Composable
+fun CodeField(placeholder: String, busy: Boolean, finish: String = t("web-main.logins.finish"), ground: Color = C.surface, corner: Dp = STEP_CORNER,
+              onTyped: (Boolean) -> Unit = {}, send: (String) -> Unit) {
+    var code by remember { mutableStateOf("") }
+    val typed = code.isNotBlank()
+    fun go() { if (typed && !busy) send(code.trim()) }
+    Row(
+        Modifier.fillMaxWidth().padding(top = 6.dp).height(STEP_HEIGHT).clip(Smooth(corner)).background(ground).padding(start = 14.dp, end = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (code.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicTextField(
+                code, { if (!busy) { code = it.take(2_000); onTyped(code.isNotBlank()) } }, singleLine = true, readOnly = busy, cursorBrush = SolidColor(C.accent),
+                textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = CodeFont),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { go() }),
+                modifier = Modifier.fillMaxWidth().testTag("login-paste"),
+            )
+        }
+        // In the field's end, concentric with it (6 in); turning while it is checked, as wide as before.
+        if (typed || busy) Box(
+            Modifier.height(STEP_HEIGHT - 12.dp).clip(Smooth(corner - 6.dp)).background(C.ink)
+                .clickable(enabled = !busy, interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = C.bg)) { go() }
+                .padding(horizontal = 14.dp).testTag("login-paste-go"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(finish, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.bg, maxLines = 1, modifier = Modifier.alpha(if (busy) 0f else 1f))
+            if (busy) Spinner(inline = true, color = C.bg)
+        }
     }
 }
 
@@ -318,8 +410,8 @@ fun StationLogins(station: String, marked: String? = null) {
     if (past.isNotEmpty()) ListCard {
         past.forEach { l ->
             val said = listOfNotNull(l.chatTitle?.let { t("web-main.logins.startedIn", "chat" to it) }, l.doneByText, l.whenText.takeIf { it.isNotEmpty() }, if (l.doneByText != null) null else l.statusText).joinToString(" · ")
-            ListRow {
-                Column(Modifier.weight(1f).let { if (l.id == marked) it.background(C.accent.copy(alpha = 0.12f)) else it }) {
+            ListRow(ground = if (l.id == marked) C.accent.copy(alpha = 0.12f) else Color.Transparent) {
+                Column(Modifier.weight(1f)) {
                     Text(l.command, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(said, fontSize = 13.sp, color = if (l.state == "failed") C.red else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }

@@ -1,0 +1,2 @@
+check "the gallery was read for the strip (its photos ranked)" 'grep -q "recent photos: [1-9]" $OUT/$name.log'
+check "the photo went up with the message, byte for byte at the station" 'entry_attachments "最近的照片 $TAG" | grep -q "\.jpg" && station_file_same $FILES/e2e-photo.jpg'

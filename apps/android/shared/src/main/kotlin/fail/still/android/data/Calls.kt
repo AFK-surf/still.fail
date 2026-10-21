@@ -17,6 +17,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 
@@ -116,6 +118,8 @@ class StationApi(private val core: StillFailCore, val station: String) {
     suspend fun putConnect(id: String, body: JsonObject) { ops.connectPut(id = id) { this.input = body } }
     suspend fun deleteConnect(id: String) { ops.connectDelete(id = id) }
     suspend fun reconnect(id: String) { ops.connectReconnect(id = id) }
+    /** A Feishu connect's App Secret replaced: its station verifies it first (failing, it says why), then reconnects. */
+    suspend fun putFeishuSecret(id: String, appSecret: String) { ops.feishuPutSecret(id = id, appSecret = appSecret) }
     /** A single-session connect's session: `session` null makes a new one (named `title`). */
     suspend fun bindSession(connect: String, session: String?, title: String) {
         ops.connectBindSession(connect = connect) { this.session = session; if (title.isNotBlank()) this.title = title }
@@ -374,6 +378,11 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Dismisses a decision for the viewer, on every device of theirs: off their list, still pending for others. */
     suspend fun keepChat(thread: Long) { ops.chatKeep(thread) }
     suspend fun dismissDecision(thread: Long, seq: Long) { ops.decisionDismiss(thread, seq) }
+    /** A failure notice (its entry) sent to the still.fail team as a bug report: its number (FB-n), and whether it was sent before. */
+    suspend fun reportNotice(thread: Long, seq: Long): Pair<Long?, Boolean> {
+        val r = ops.chatReport(thread, seq) as? JsonObject
+        return (r?.get("number") as? JsonPrimitive)?.longOrNull to ((r?.get("duplicate") as? JsonPrimitive)?.booleanOrNull == true)
+    }
 
     // ── the archive (web/src/pages/Archive.tsx) ──
 
@@ -454,7 +463,7 @@ class StationApi(private val core: StillFailCore, val station: String) {
 
     // ── the station's software, its memory, Slack apps (web/src/api.ts → stationApi) ──
 
-    /** Updates the station or a runtime (`id`: station | claude | codex | dsh | grok), or installs a runtime not there; the overview says how it goes. */
+    /** Updates the station or a runtime (`id`: station | claude | codex | dsh | grok | cursor | devin), or installs a runtime not there; the overview says how it goes. */
     suspend fun updateSoftware(id: String) { ops.softwareUpdate() { this.id = id } }
     /** Reads again what versions are out. */
     suspend fun checkSoftware() { ops.softwareCheck() }
@@ -694,6 +703,12 @@ object Auth {
 
     suspend fun signOut(core: StillFailCore, account: String) {
         core.call("auth.signOut", buildJsonObject { put("account", account) })
+    }
+
+    /** Deletes the account in still.fail cloud, then forgets it here as signing out does; refused (`sole_owner`, said) while
+     *  it is a workspace's only owner beside other members. */
+    suspend fun deleteAccount(core: StillFailCore, account: String) {
+        core.call("auth.deleteAccount", buildJsonObject { put("account", account) })
     }
 }
 

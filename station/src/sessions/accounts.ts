@@ -7,11 +7,16 @@ import { log } from "../ops/log.ts";
 import { tr, type Lang, stationLang } from "../ops/i18n.ts";
 import type { Store } from "../store/store.ts";
 import { type HubConfig, type Profile, runs, runtimeNamed, runtimeTitle, sameModel, spelling } from "./config.ts";
-import { availableEfforts, commonEfforts, type ProfileHealth, pickProfile, serves, usable } from "./pool.ts";
+import { availableEfforts, COMPACTED_FROM, cheapToLeave, commonEfforts, type ProfileHealth, pickProfile, serves, urgency, usable, windowsOf } from "./pool.ts";
 import type { RuntimeKind } from "../agents/runtime.ts";
 
 /// How long a profile a turn ran into the allowance of is passed over when its allowance is not read again.
 const SPENT_FOR_MS = 60 * 60 * 1000;
+/// Where models are compacted is learnt from the calls of this long, and learnt again this often.
+const COMPACTIONS_OVER_MS = 7 * 24 * 60 * 60 * 1000;
+const COMPACTIONS_EVERY_MS = 60 * 60 * 1000;
+/// How many of a session's last calls say whether it compacted lately.
+const CALLS_LOOKED_AT = 200;
 
 /// How a session runs from its next turn on. A field left out: unchanged; null: back to the default.
 export type SessionChange = { profile?: string | null; model?: string | null; effort?: string | null; fast?: boolean | null };
@@ -37,6 +42,8 @@ export class Accounts {
   /// Profiles a turn ran into the allowance of, and when: passed over until their allowance is read again, or for
   /// SPENT_FOR_MS when it is not.
   private spent = new Map<string, number>();
+  /// Where each model's context is compacted on this station, and when that was learnt.
+  private compactions: [number, Map<string, number>] | null = null;
 
   constructor(deps: AccountsDeps) {
     this.deps = deps;
@@ -72,10 +79,12 @@ export class Accounts {
     return this.deps.allows?.(key, profile) ?? true;
   }
 
-  /// The profile a session's runtime starts on: its own while usable (the account's cache is warm there), else the one
-  /// the pool picks among those of its runtime allowed in its workspace (transcripts are shared, so it resumes with all
-  /// it had there).
-  runOn(key: string): RunOn {
+  /// The profile a session's runtime starts on, asked again before each turn: its own while usable (on another it goes
+  /// on afresh, afresh.ts), else the one the pool picks among those of its runtime allowed in its workspace. One whose
+  /// short window is nearly full it leaves for one that is not, when that loses little (pool.ts `cheapToLeave`): its
+  /// context was just compacted, or is about to be, and not while its process has work going in the background
+  /// (`holding`: commands and subagents, which end with it).
+  runOn(key: string, holding = false): RunOn {
     const { store } = this.deps;
     const row = store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
@@ -89,14 +98,30 @@ export class Accounts {
     // Kept to it by hand: that one, whatever it says. Otherwise its own while it can run it: usable, and with its model
     // enabled.
     const current = candidates.find((p) => p.id === row.profile);
-    if (current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)))) return withSpelling(current);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const crowded = (p: Profile) => urgency(this.healthOf(p.id).quota, now).crowded;
+    const keeps = current && (row.profilePinned || (usable(this.healthOf(current.id)) && serves(current, row.model)));
+    if (current && keeps) {
+      if (row.profilePinned || !crowded(current)) return withSpelling(current);
+      // Nearly full: it moves only to one that is not (the pool puts those last), and only when that loses little.
+      const room = candidates.some((p) => p.id !== current.id && serves(p, row.model) && usable(this.healthOf(p.id)) && !crowded(p));
+      if (!room || holding || !this.cheapToLeave(key)) return withSpelling(current);
+    }
     if (candidates.length === 0) throw new Error(`session ${key}: no profile runs ${row.runtime}`);
-    const next = this.pick(candidates, row.model, false);
+    const next = this.pick(keeps ? candidates.filter((p) => p.id !== current!.id) : candidates, row.model, false);
     if (next.id !== row.profile) {
       store.setSessionProfile(key, next.id, false);
       log.info("hub", "session taken on by another profile", { session: key, from: row.profile, to: next.id });
     }
     return withSpelling(next);
+  }
+
+  /// Whether session `key` loses little by going on afresh on another account (pool.ts `cheapToLeave`).
+  private cheapToLeave(key: string): boolean {
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    const { store } = this.deps;
+    if (this.compactions === null || now - this.compactions[0] > COMPACTIONS_EVERY_MS) this.compactions = [now, store.compactionPoints(now - COMPACTIONS_OVER_MS, COMPACTED_FROM)];
+    return cheapToLeave(store.lastContexts(key, CALLS_LOOKED_AT), this.compactions[1]);
   }
 
   /// A turn of the session ran into its profile's allowance: that profile is passed over for now, and a session left to
@@ -122,6 +147,17 @@ export class Accounts {
     log.info("hub", "allowance ran out; session taken on by another profile", { session: key, from: row.profile, to: next.id });
     const from = config.profiles.find((p) => p.id === row.profile)?.name ?? row.profile;
     return [from, next.name];
+  }
+
+  /// When the profile of session `key`, which ran into its allowance, is expected to run again: the last refill of its
+  /// used-up windows, or, none known, when it stops being passed over.
+  refillsAt(key: string): number {
+    const row = this.deps.store.getSession(key);
+    const now = this.deps.clock.currentTimeMillisUnsafe();
+    if (!row) return now + SPENT_FOR_MS;
+    const full = windowsOf(this.health(row.profile).quota).filter((w) => Number(w.usedPercent) >= 100 && typeof w.resetsAt === "number" && w.resetsAt > now);
+    if (full.length > 0) return Math.max(...full.map((w) => w.resetsAt as number));
+    return (this.spent.get(row.profile) ?? now) + SPENT_FOR_MS;
   }
 
   /// The reasoning levels every eligible account offers for a model (a pinned account may offer more): automatic

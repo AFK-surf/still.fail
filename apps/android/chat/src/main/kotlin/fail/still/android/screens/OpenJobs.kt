@@ -73,7 +73,10 @@ private fun OpenGroup(group: LongJobsGroup, all: MutableMap<String, Boolean>) {
     }
 }
 
-/** A job: the row leads to its chat (a service opens over it); stop at its end (no hover here: it always shows). */
+/**
+ * A job: the row leads to its chat (a service opens over it; a task another station's chat runs here leads there);
+ * stop at its end (no hover here: it always shows).
+ */
 @Composable
 private fun OpenRow(job: Job) {
     val app = LocalApp.current
@@ -82,7 +85,7 @@ private fun OpenRow(job: Job) {
     Row(
         Modifier.fillMaxWidth().clip(Smooth(10.dp))
             .then(if (chat != null) Modifier.clickable {
-                app.push(Screen.Chat(station, ChatOf.Session(chat.id)))
+                app.push(Screen.Chat(chat.station ?: station, ChatOf.Session(chat.id)))
                 if (job.service == true) app.push(Screen.Preview(station, job.id))
             } else Modifier)
             .padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),

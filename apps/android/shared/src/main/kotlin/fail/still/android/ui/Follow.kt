@@ -26,8 +26,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -67,6 +70,25 @@ class Follow(val list: LazyListState, private val margin: Int) {
     private suspend fun <T> mine(block: suspend () -> T): T {
         own++
         try { return block() } finally { own-- }
+    }
+
+    /** How tall the list was last laid out (keepsBottom). */
+    private var height = -1
+
+    /**
+     * The list about to be laid out `h` tall: grown shorter or taller (the keyboard coming up, or going), what was at its
+     * bottom stays at its bottom, as the web keeps the distance from the bottom through a resize. Put there before it
+     * lays out, in the same frame: nothing in it is drawn a frame late where it was, nor seen to move (the list takes a
+     * move it is asked for as a scroll, not glided). Not while something scrolls it: the reader's finger (or its
+     * fling), what it holds stays under it; its own glide, which goes on to its goal from where the list is (asking
+     * would cancel either).
+     */
+    internal fun resized(h: Int) = Snapshot.withoutReadObservation {
+        val last = height
+        height = h
+        if (last <= 0 || h <= 0 || h == last || !placed || topHeld) return@withoutReadObservation
+        if (list.isScrollInProgress) return@withoutReadObservation
+        list.requestScrollToItem(list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset + (last - h))
     }
 
     /** The reader opened something in the list to read it: what it grows by is not new, so not followed. */
@@ -178,15 +200,6 @@ fun rememberFollow(list: LazyListState): Follow {
                 else if (follow.placed && !follow.on && !list.isScrollInProgress) follow.on = !list.canScrollForward
             }
         }
-        // The list itself grew shorter or taller (the keyboard coming up, or going): what was at its bottom stays at
-        // its bottom, as the web keeps the distance from the bottom through a resize.
-        launch {
-            var last = -1
-            snapshotFlow { list.layoutInfo.viewportSize.height }.collect { h ->
-                if (last > 0 && h > 0 && h != last && follow.placed && !follow.topHeld) { follow.own++; try { list.scrollBy((last - h).toFloat()) } finally { follow.own-- } }
-                if (h > 0) last = h
-            }
-        }
         // The content changed while following: hold the anchor, or the end.
         snapshotFlow {
             val info = list.layoutInfo
@@ -201,6 +214,13 @@ fun rememberFollow(list: LazyListState): Follow {
         }
     }
     return follow
+}
+
+/** On the list this follows (its LazyColumn, sized as it shows): it keeps its bottom as it changes height (Follow.resized). */
+fun Modifier.keepsBottom(follow: Follow): Modifier = layout { measurable, constraints ->
+    if (constraints.hasBoundedHeight) follow.resized(constraints.maxHeight)
+    val p = measurable.measure(constraints)
+    layout(p.width, p.height) { p.place(0, 0) }
 }
 
 /** Whether the reader is away from the end, by more than a corner of the screen. */

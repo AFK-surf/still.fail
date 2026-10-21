@@ -1,7 +1,7 @@
 // Settings, one page from the gear on Home, as the narrow web has it (web/src/mobile/Settings.tsx): who is signed in, then
 // the workspace's (its people, stations, connects, profiles, memory), then this device's (how it looks, whether it
-// notifies, this build). Each row says how things stand at its end, what is wrong in red, so the page is worth a look
-// before anything is opened. And how this device shows still.fail (外观).
+// notifies, whether it reports, this build, the terms). Each row says how things stand at its end, what is wrong in
+// red, so the page is worth a look before anything is opened. And how this device shows still.fail (外观).
 package fail.still.android.screens
 
 import fail.still.android.ui.Spinner
@@ -35,11 +35,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.browser.customtabs.CustomTabsIntent
+import androidx.core.net.toUri
 import fail.still.android.BuildConfig
+import fail.still.android.Crashes
 import fail.still.android.LocalApp
 import fail.still.android.Push
 import fail.still.android.Screen
 import fail.still.android.data.ConnectsView
+import fail.still.android.data.I18n
 import fail.still.android.data.ROLE_LABEL
 import fail.still.android.data.StationView
 import fail.still.android.data.Topics
@@ -128,8 +132,10 @@ fun SettingsScreen(current: WorkspaceEntry) {
             if (!LocalWide.current) GoRow(t("android-misc.bar.title"), barsValue(app)) { app.push(Screen.BarSettings) }
             KeptFilesRow()
             Notify()
+            Reporting()
             Version()
             GoRow(t("android-settings.changelog.title")) { app.push(Screen.Changelog) }
+            Legal()
         }
         Spacer(Modifier.height(30.dp))
     }
@@ -168,6 +174,36 @@ private fun Notify() {
 }
 
 /**
+ * Whether usage statistics and error reports go to still.fail (docs/telemetry.md → 安卓), on this device (Crashes.kt
+ * keeps it and sends by it): not shown in a build without PostHog's key, which sends nothing anyway.
+ */
+@Composable
+private fun Reporting() {
+    if (BuildConfig.POSTHOG_KEY.isEmpty()) return
+    val context = LocalContext.current
+    var on by remember { mutableStateOf(Crashes.reporting(context)) }
+    ListRow(onClick = { on = !on; Crashes.setReporting(context, on) }) {
+        Column(Modifier.weight(1f)) {
+            Text(t("android-settings.telemetry.title"), fontSize = 15.sp, color = C.ink)
+            Text(t("android-settings.telemetry.note", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted)
+        }
+        Switch(on)
+    }
+}
+
+/** still.fail's terms and privacy policy, on the web in a Custom Tab, in English when the app speaks it (data/I18n.kt). */
+@Composable
+private fun Legal() {
+    val context = LocalContext.current
+    val open = { page: String ->
+        val url = "https://still.fail${if (I18n.lang == "en") "/en" else ""}/$page"
+        CustomTabsIntent.Builder().setShowTitle(true).build().launchUrl(context, url.toUri())
+    }
+    GoRow(t("android-settings.legal.terms")) { open("terms") }
+    GoRow(t("android-settings.legal.privacy")) { open("privacy") }
+}
+
+/**
  * This build, and a newer one when still.fail cloud has it: tapped, it is downloaded and installed; with none known yet,
  * tapping asks still.fail cloud again right away.
  */
@@ -182,11 +218,11 @@ private fun Version() {
     ListRow(onClick = if (busy) null else ({ scope.launch { (if (newer == null) updates.checkNow() else updates.install())?.let { app.toast = it } } })) {
         // The beta app goes by its own name (app/build.gradle.kts).
         Text("${BuildConfig.APP_NAME} ${BuildConfig.VERSION_NAME}", fontSize = 15.sp, color = C.ink, modifier = Modifier.weight(1f))
-        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.accent else C.muted)
+        Text(updates.progress ?: (if (updates.checking) t("android-settings.version.checking") else null) ?: newer?.let { t("android-settings.version.update", "version" to it.versionName) } ?: t("android-settings.version.check"), fontSize = 15.sp, color = if (newer != null && !busy) C.link else C.muted)
     }
 }
 
-/** How this device shows still.fail: its theme, its motion, and the language it speaks (the web's 外观 the same). */
+/** How this device shows still.fail: its theme, its fonts, its motion, and the language it speaks (the web's 外观 the same). */
 @Composable
 fun AppearanceScreen() {
     val app = LocalApp.current
@@ -197,6 +233,8 @@ fun AppearanceScreen() {
         val themes = themes()
         Seg(themes.map { it.second }, themes.indexOfFirst { it.first == app.theme }.coerceAtLeast(0), { app.useTheme(themes[it].first) },
             Modifier.padding(horizontal = 12.dp).fillMaxWidth(), height = 34.dp, fill = true)
+        Spacer(Modifier.height(12.dp))
+        ListCard { FontRow() }
         Motions()
         Language()
         ArchiveHints()

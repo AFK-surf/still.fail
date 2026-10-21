@@ -39,12 +39,14 @@ class ShareTarget(val core: StillFailCore, val workspace: String?)
 class ShareActivity : ComponentActivity() {
     private var target by mutableStateOf<ShareTarget?>(null)
     private var appearance by mutableStateOf("system")
+    private var faces by mutableStateOf<fail.still.android.data.FontsView?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(SystemBarStyle.auto(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
         fail.still.android.ui.Motion.install(applicationContext)
         I18n.load(applicationContext)
+        fail.still.android.ui.FaceFiles.init(applicationContext)
         val shared = sharedOf(intent)
         if (shared == null) { finish(); return }
         lifecycleScope.launch {
@@ -53,6 +55,7 @@ class ShareActivity : ComponentActivity() {
             val prefs = Prefs.first(core)
             I18n.follow(prefs.lang)
             appearance = prefs.appearance ?: "system"
+            faces = prefs.faces
             fail.still.android.ui.Motion.chosen = prefs.motion
             // The workspace last open, else the first one the accounts have (none signed in: none).
             val workspace = prefs.workspace ?: run {
@@ -66,7 +69,7 @@ class ShareActivity : ComponentActivity() {
         }
         setContent {
             val dark = when (appearance) { "light" -> false; "dark" -> true; else -> isSystemInDarkTheme() }
-            StillFailTheme(dark) {
+            StillFailTheme(dark, fail.still.android.ui.rememberFonts(faces)) {
                 ShareScreen(shared, target, onOpen = { openApp(it) }, onOpenApp = { openApp(null) }, onClose = ::finish)
             }
         }

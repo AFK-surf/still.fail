@@ -285,11 +285,23 @@ pub struct PathState {
     pub lost_packets: f64,
 }
 
-/// What went over a connection since it opened, both ways.
+/// What went over a connection since it opened, both ways: bytes, packets, and of the frames in them those that
+/// carry nothing (pings, ACK requests, ACKs) and those that carry something (stream data, datagrams, the handshake's).
+/// A connection that only trades the first kind, thousands of packets a second, is a storm (mesh/storms.ts).
 #[napi(object)]
 pub struct Stats {
     pub rx_bytes: f64,
     pub tx_bytes: f64,
+    pub rx_packets: f64,
+    pub tx_packets: f64,
+    pub rx_pings: f64,
+    pub tx_pings: f64,
+    pub rx_ack_requests: f64,
+    pub tx_ack_requests: f64,
+    pub rx_acks: f64,
+    pub tx_acks: f64,
+    pub rx_data: f64,
+    pub tx_data: f64,
 }
 
 /// Why a connection went: `application` (the other end closed it, saying `reason`), `local`, `timeout`, or `other`
@@ -435,7 +447,21 @@ impl Connection {
     #[napi]
     pub fn stats(&self) -> Stats {
         let stats = self.inner.stats();
-        Stats { rx_bytes: stats.udp_rx.bytes as f64, tx_bytes: stats.udp_tx.bytes as f64 }
+        let data = |f: &iroh::endpoint::FrameStats| (f.stream + f.datagram + f.crypto) as f64;
+        Stats {
+            rx_bytes: stats.udp_rx.bytes as f64,
+            tx_bytes: stats.udp_tx.bytes as f64,
+            rx_packets: stats.udp_rx.datagrams as f64,
+            tx_packets: stats.udp_tx.datagrams as f64,
+            rx_pings: stats.frame_rx.ping as f64,
+            tx_pings: stats.frame_tx.ping as f64,
+            rx_ack_requests: stats.frame_rx.immediate_ack as f64,
+            tx_ack_requests: stats.frame_tx.immediate_ack as f64,
+            rx_acks: (stats.frame_rx.acks + stats.frame_rx.path_acks) as f64,
+            tx_acks: (stats.frame_tx.acks + stats.frame_tx.path_acks) as f64,
+            rx_data: data(&stats.frame_rx),
+            tx_data: data(&stats.frame_tx),
+        }
     }
 
     /// A stream one way: what measures a round trip sends a byte on it (mesh.rs `sample_relay_rtt`).

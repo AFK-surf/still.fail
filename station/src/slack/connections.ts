@@ -27,9 +27,9 @@ export const connectName = (c: SlackConnect) => c.botName ?? c.id;
 
 const nonEmpty = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
 
-/// config.json's connects, as their connections read them.
+/// config.json's Slack connects (those of no other kind), as their connections read them.
 export function slackConnects(raw: Json): SlackConnect[] {
-  return (Array.isArray(raw?.connects) ? raw.connects : []).map((c: Json): SlackConnect => {
+  return (Array.isArray(raw?.connects) ? raw.connects : []).filter((c: Json) => c?.kind === undefined || c?.kind === null || c?.kind === "slack").map((c: Json): SlackConnect => {
     const slack = c?.slack ?? {};
     const team = slack.team;
     return {
@@ -66,26 +66,31 @@ export interface Connection extends ChatSurface {
   refreshIdentity(): Promise<void>;
 }
 
-export type Create = (connect: SlackConnect) => Connection;
+export type Create<C = SlackConnect> = (connect: C) => Connection;
 export type OnEvent = (connect: string, event: ChatEvent) => Promise<void>;
 
-const tokenKey = (c: SlackConnect) => `${c.appToken}\n${c.botToken}`;
+/// What a connect connects with, as one string (null: it has nothing to connect with yet): a change connects it again.
+export type Credentials<C> = (connect: C) => string | null;
+const slackCredentials: Credentials<SlackConnect> = (c) => (c.appToken === "" || c.botToken === "" ? null : `${c.appToken}\n${c.botToken}`);
 
-export class Connections {
+/// Slack's connects by default; Feishu's (src/feishu) keep theirs the same way, with their own credentials.
+export class Connections<C extends { id: string; enabled: boolean } = SlackConnect> {
   /// Live connections by connect id; the hub reads it on every use.
   private chats = new Map<string, Connection>();
   private unlisten = new Map<string, () => void>();
   private tokens = new Map<string, string>();
   private errors = new Map<string, string>();
-  private create: Create;
+  private create: Create<C>;
+  private credentials: Credentials<C>;
   private onEvent: OnEvent;
   /// Rapid edits apply in order.
   private chain: Promise<void> = Promise.resolve();
   private listeners = new Set<() => void>();
 
-  constructor(create: Create, onEvent: OnEvent) {
+  constructor(create: Create<C>, onEvent: OnEvent, credentials: Credentials<C> = slackCredentials as unknown as Credentials<C>) {
     this.create = create;
     this.onEvent = onEvent;
+    this.credentials = credentials;
   }
 
   chat(id: string): Connection | undefined {
@@ -117,9 +122,9 @@ export class Connections {
     await this.chat(id)?.refreshIdentity();
   }
 
-  state(connect: SlackConnect): ConnectState {
+  state(connect: C): ConnectState {
     if (!connect.enabled) return { state: "disabled" };
-    if (connect.appToken === "" || connect.botToken === "") return { state: "no_tokens" };
+    if (this.credentials(connect) === null) return { state: "no_tokens" };
     const error = this.errors.get(connect.id);
     if (error !== undefined) return { state: "error", error };
     const chat = this.chat(connect.id);
@@ -132,7 +137,7 @@ export class Connections {
   }
 
   /// Brings connections in line with `connects`. Serialized, so rapid edits apply in order.
-  reconcile(connects: SlackConnect[]): Promise<void> {
+  reconcile(connects: C[]): Promise<void> {
     return this.serially(async () => {
       await this.apply(connects);
       this.changed();
@@ -161,11 +166,11 @@ export class Connections {
     this.unlisten.delete(id);
   }
 
-  private async apply(connects: SlackConnect[]) {
-    const wanted = new Map(connects.filter((c) => c.enabled && c.appToken !== "" && c.botToken !== "").map((c) => [c.id, c]));
+  private async apply(connects: C[]) {
+    const wanted = new Map(connects.filter((c) => c.enabled && this.credentials(c) !== null).map((c) => [c.id, c]));
     for (const [id, chat] of [...this.chats]) {
       const want = wanted.get(id);
-      if (want && this.tokens.get(id) === tokenKey(want)) continue;
+      if (want && this.tokens.get(id) === this.credentials(want)) continue;
       log.info("slack", "disconnecting", { connect: id });
       this.chats.delete(id);
       this.tokens.delete(id);
@@ -185,7 +190,7 @@ export class Connections {
         await chat.start((event) => this.onEvent(id, event));
         log.info("slack", "connected", { connect: connect.id, botUserId: chat.botUserId() });
         this.chats.set(connect.id, chat);
-        this.tokens.set(connect.id, tokenKey(connect));
+        this.tokens.set(connect.id, this.credentials(connect)!);
       } catch (e) {
         const error = (e as Error).message;
         log.error("slack", "failed to connect", { connect: connect.id, error });

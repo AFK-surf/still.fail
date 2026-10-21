@@ -168,7 +168,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   ended_at INTEGER,
   restarts INTEGER NOT NULL DEFAULT 0,
   log TEXT NOT NULL,
-  watch INTEGER NOT NULL DEFAULT 0
+  watch INTEGER NOT NULL DEFAULT 0,
+  queued INTEGER,
+  screen INTEGER
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
 CREATE TABLE IF NOT EXISTS job_notices (
@@ -405,6 +407,13 @@ export function addAutoTitleColumns(db: DatabaseSync): void {
 /// add_watch_column: the column watching jobs came with (jobs.watch).
 export function addWatchColumn(db: DatabaseSync): void {
   if (!has(db, "jobs", "watch")) db.exec("ALTER TABLE jobs ADD COLUMN watch INTEGER NOT NULL DEFAULT 0");
+}
+
+/// The columns the station's queue came with (jobs/admit.ts): a job waiting for room (jobs.queued), one that uses the
+/// screen (jobs.screen).
+export function addQueueColumns(db: DatabaseSync): void {
+  if (!has(db, "jobs", "queued")) db.exec("ALTER TABLE jobs ADD COLUMN queued INTEGER");
+  if (!has(db, "jobs", "screen")) db.exec("ALTER TABLE jobs ADD COLUMN screen INTEGER");
 }
 
 /// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat

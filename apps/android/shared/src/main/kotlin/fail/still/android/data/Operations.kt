@@ -6,7 +6,7 @@ import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /** A field is absent until assigned; assigning null sends JSON null (reset to default). */
-val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
+val UNTRACKED_OPERATIONS = setOf("admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state")
 
 open class OperationFields {
     internal val fields = mutableMapOf<String, JsonElement>()
@@ -130,6 +130,12 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["option"] = JsonPrimitive(option)
         return call("decision.close", JsonObject(values))
     }
+    suspend fun chatReport(thread: Long, seq: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["thread"] = JsonPrimitive(thread)
+        values["seq"] = JsonPrimitive(seq)
+        return call("chat.report", JsonObject(values))
+    }
     class SessionNewFields : OperationFields() {
         var runtime: String? by field<String>("runtime") { JsonPrimitive(it) }
         var profile: String? by field<String>("profile") { JsonPrimitive(it) }
@@ -157,6 +163,11 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["key"] = JsonPrimitive(key)
         values["path"] = JsonPrimitive(path)
         return call("widget.state", JsonObject(values))
+    }
+    suspend fun sessionTranscript(key: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["key"] = JsonPrimitive(key)
+        return call("session.transcript", JsonObject(values))
     }
     class FilePeekFields : OperationFields() {
         var line: Long? by field<Long>("line") { JsonPrimitive(it) }
@@ -269,6 +280,45 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         val values = ConnectPutSlackAppFields().apply(fill).fields
         values["connect"] = JsonPrimitive(connect)
         return call("connect.putSlackApp", JsonObject(values))
+    }
+    class FeishuRegisterFields : OperationFields() {
+        var domain: String? by field<String>("domain") { JsonPrimitive(it) }
+        var name: String? by field<String>("name") { JsonPrimitive(it) }
+    }
+    suspend fun feishuRegister(fill: FeishuRegisterFields.() -> Unit = {}): JsonElement {
+        val values = FeishuRegisterFields().apply(fill).fields
+        return call("feishu.register", JsonObject(values))
+    }
+    suspend fun feishuCancelRegistration(id: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        return call("feishu.cancelRegistration", JsonObject(values))
+    }
+    class FeishuVerifyFields : OperationFields() {
+        var domain: String? by field<String>("domain") { JsonPrimitive(it) }
+    }
+    suspend fun feishuVerify(appId: String, appSecret: String, fill: FeishuVerifyFields.() -> Unit = {}): JsonElement {
+        val values = FeishuVerifyFields().apply(fill).fields
+        values["appId"] = JsonPrimitive(appId)
+        values["appSecret"] = JsonPrimitive(appSecret)
+        return call("feishu.verify", JsonObject(values))
+    }
+    class FeishuCreateConnectFields : OperationFields() {
+        var bind: JsonElement? by field<JsonElement>("bind") { it }
+        var mode: String? by field<String>("mode") { JsonPrimitive(it) }
+        var requireMention: Boolean? by field<Boolean>("requireMention") { JsonPrimitive(it) }
+        var owner: JsonElement? by field<JsonElement>("owner") { it }
+    }
+    suspend fun feishuCreateConnect(feishu: JsonElement, fill: FeishuCreateConnectFields.() -> Unit = {}): JsonElement {
+        val values = FeishuCreateConnectFields().apply(fill).fields
+        values["feishu"] = feishu
+        return call("feishu.createConnect", JsonObject(values))
+    }
+    suspend fun feishuPutSecret(id: String, appSecret: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["id"] = JsonPrimitive(id)
+        values["appSecret"] = JsonPrimitive(appSecret)
+        return call("feishu.putSecret", JsonObject(values))
     }
     class SlackVerifyFields : OperationFields() {
         var connect: String? by field<String>("connect") { JsonPrimitive(it) }
@@ -776,6 +826,27 @@ class CloudOperations(private val call: suspend (String, JsonObject) -> JsonElem
         val values = mutableMapOf<String, JsonElement>()
         values["workspace"] = JsonPrimitive(workspace)
         return call("admin.deleteWorkspace", JsonObject(values))
+    }
+    suspend fun adminCreateWorkspace(name: String, owners: List<String>, members: Long, stations: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["name"] = JsonPrimitive(name)
+        values["owners"] = JsonArray(owners.map(::JsonPrimitive))
+        values["members"] = JsonPrimitive(members)
+        values["stations"] = JsonPrimitive(stations)
+        return call("admin.createWorkspace", JsonObject(values))
+    }
+    suspend fun adminSetLimits(workspace: String, members: Long, stations: Long): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["workspace"] = JsonPrimitive(workspace)
+        values["members"] = JsonPrimitive(members)
+        values["stations"] = JsonPrimitive(stations)
+        return call("admin.setLimits", JsonObject(values))
+    }
+    suspend fun adminEnroll(workspace: String, name: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["workspace"] = JsonPrimitive(workspace)
+        values["name"] = JsonPrimitive(name)
+        return call("admin.enroll", JsonObject(values))
     }
     class AdminFeedbackStatusFields : OperationFields() {
         var status: String? by field<String>("status") { JsonPrimitive(it) }

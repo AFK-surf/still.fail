@@ -144,6 +144,8 @@ export function op(name: string): unknown {
   // An inline visualization keeps nothing here.
   if (name === "widget.state") return { state: null };
   if (name === "widget.setState") return { ok: true };
+  // Where an agent's transcript would be on the demo's machine.
+  if (name === "session.transcript") return { path: "/Users/linxiao/.claude/projects/-Users-linxiao-code-shop/7c1e5b2a-4f0d-4c8e-9a61-2b3d5e8f1a90.jsonl" };
   if (OWN.has(name)) return overview();
   throw new NeedsReal();
 }

@@ -108,6 +108,32 @@ export function usageTurns(db: DatabaseSync, session: string): UsageTurn[] {
   return out;
 }
 
+/// What a model call sent, all of it (cached or not): on the main thread, the context its session carries on with.
+const CONTEXT = "input + cache_read + cache_write + cache_write_long";
+
+/// A main-thread call as the pool weighs moving its session (sessions/pool.ts `cheapToLeave`).
+export type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number };
+
+/// A session's last `limit` main-thread calls, oldest first.
+export function lastContexts(db: DatabaseSync, session: string, limit: number): ContextCall[] {
+  const rows = db.prepare(`SELECT turn, profile, model, ${CONTEXT} AS context FROM usage WHERE session = ?1 AND subagent = 0 ORDER BY at DESC LIMIT ?2`).all(session, limit) as Json[];
+  return rows.reverse().map((r) => ({ turn: r.turn, profile: r.profile, model: r.model, context: r.context }));
+}
+
+/// Where each model's context was compacted on this station since `since`: the most a main-thread call sent before
+/// the next, on the same account and model, sent under half of it (at least `least` before).
+export function compactionPoints(db: DatabaseSync, since: number, least: number): Map<string, number> {
+  const rows = db
+    .prepare(
+      `SELECT model, MAX(before) AS point FROM (
+         SELECT model, profile, ${CONTEXT} AS context, LAG(${CONTEXT}) OVER w AS before, LAG(profile) OVER w AS was, LAG(model) OVER w AS of
+         FROM usage WHERE at >= ?1 AND subagent = 0 WINDOW w AS (PARTITION BY session ORDER BY at))
+       WHERE before >= ?2 AND context * 2 < before AND profile IS was AND model IS of AND model IS NOT NULL GROUP BY model`,
+    )
+    .all(since, least) as Json[];
+  return new Map(rows.map((r) => [r.model, r.point]));
+}
+
 /// usage_groups: the calls from `from` until `to` (ms), added up by day in the asker's time zone (`utcOffsetMin`) and
 /// by thread, person, profile and model.
 export function usageGroups(db: DatabaseSync, from: number, to: number, utcOffsetMin: number): UsageGroup[] {

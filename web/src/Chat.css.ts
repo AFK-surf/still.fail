@@ -107,6 +107,11 @@ globalStyle(`${msgSystemBox} ${blockedAction}`, { color: "inherit", textDecorati
 /** What went wrong in a notice about a profile: a link to that profile's page, in the pill's own colour, underlined. */
 export const msgSystemLink = style({ textDecoration: "underline", textUnderlineOffset: "3px" });
 globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit" });
+/** A notice's words and what is done at their end (reporting it): the words cut short before it, not it. */
+export const msgSystemLine = style({ display: "flex", alignItems: "baseline", minWidth: "0" });
+export const msgSystemEnd = style({ flex: "none", whiteSpace: "nowrap" });
+/** What reporting a notice sends, in its dialog's body: the dialog's own words. */
+export const reportSends = style({ margin: "0", fontSize: vars.textUi, color: vars.muted, textWrap: "pretty" });
 /**
  * A draft past its viewport-aware height scrolls: its cut edges fade over a narrow strip.
  * It wraps plainly, not `pretty` as the page does: that weighs the whole draft again at every letter typed, and the
@@ -114,7 +119,7 @@ globalStyle(`${msgSystemBox} ${markdown} a.${msgSystemLink}`, { color: "inherit"
  */
 export const composerText = style({
   flex: "1", minHeight: "20px", maxHeight: "min(480px, 40dvh)", padding: "6px 8px 4px", border: "0", outline: "none",
-  resize: "none", background: "transparent", font: "inherit", fontSize: vars.textInput, lineHeight: "1.5",
+  resize: "none", background: "transparent", font: "inherit", fontFamily: vars.fontText, fontSize: vars.textInput, lineHeight: "1.5",
   color: vars.text, textWrap: "wrap",
   vars: { "--more-above": "0px", "--more-below": "0px" },
   selectors: {
@@ -681,12 +686,6 @@ export const chatToAsk = style({
     "&[data-above]": { bottom: "54px" },
     [`${chat}[data-under-composer] &[data-above]`]: { bottom: "calc(52px + var(--composer-room) + var(--asks-height, 0px))" },
   },
-});
-
-/** What the archive check made of the chat, under its agent's all-done post: a quiet line; red when the check failed. */
-export const archiveCheck = style({
-  margin: "6px 0 0", fontSize: vars.textMeta, color: vars.muted, lineHeight: "18px",
-  selectors: { "&[data-failed]": { color: vars.red } },
 });
 
 /** What is said right on top of the composer's box (ComposerProps `above`): as wide as it, a little inset. */

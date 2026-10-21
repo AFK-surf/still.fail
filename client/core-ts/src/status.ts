@@ -7,7 +7,7 @@ import * as brand from "./brand.ts";
 import { said } from "./format.ts";
 import type { Host } from "./host.ts";
 import { t } from "./i18n.ts";
-import type { Runner } from "./runtime.ts";
+import { laterSleep, type Runner } from "./runtime.ts";
 
 export const SLOW_MS = 2_000;
 const RATE_WINDOW_MS = 3_000;
@@ -150,16 +150,29 @@ export class Status {
   #tick(): void {
     if (this.#ticking || (this.#waits.size === 0 && this.#sockets.size === 0)) return;
     this.#ticking = true;
-    // A measurement shown on screen (seconds waited, the rate): computed again each second while anything waits.
-    const step = Effect.sync(() => {
+    // What is shown of the waits (seconds waited, the rate) computed again each second while any is shown; until one
+    // is, nothing: the next look is when the first wait to be shown has waited SLOW_MS.
+    const after = (): { wait: number; shown: boolean } | null => {
       const now = this.now();
-      const busy = this.#waits.size > 0 || this.#sockets.size > 0;
-      const shown = this.#sockets.size > 0 || [...this.#waits.values()].some((w) => now - w.since >= SLOW_MS);
-      if (shown) this.changed();
-      if (!busy) this.#ticking = false;
-      return busy;
+      if (this.#sockets.size > 0) return { wait: TICK_MS, shown: true };
+      let first: number | null = null;
+      for (const w of this.#waits.values()) {
+        const left = w.since + SLOW_MS - now;
+        if (left <= 0) return { wait: TICK_MS, shown: true };
+        if (first === null || left < first) first = left;
+      }
+      return first === null ? null : { wait: first, shown: false };
+    };
+    const step = Effect.sync(() => {
+      const next = after();
+      if (next === null) this.#ticking = false;
+      else if (next.shown) this.changed();
+      return next;
     });
-    this.#runner.fork(Effect.repeat(Effect.sleep(TICK_MS).pipe(Effect.andThen(step)), { while: (busy) => busy }));
+    // (a shown clock's next second is nothing shown waits for; the first wait shown is)
+    const loop = (next: { wait: number; shown: boolean } | null): Effect.Effect<void> =>
+      next === null ? Effect.void : (next.shown ? laterSleep(next.wait) : Effect.sleep(next.wait)).pipe(Effect.andThen(step), Effect.flatMap(loop));
+    this.#runner.fork(Effect.suspend(() => loop(after())));
   }
 
   /// `label`: the workspace a station is said with, when waits of several workspaces are said together (a station may

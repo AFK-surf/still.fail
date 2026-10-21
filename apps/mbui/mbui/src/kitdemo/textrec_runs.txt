@@ -1,0 +1,11 @@
+# The runs kept in src/kitdemo (textrec_NAME.mbt), a name a line: scripts/textrec_test.py --keep adds one.
+android_controls
+drive_controls
+ios_controls
+mini1_controls
+mini1_disclosure
+mini1_foundation
+mini1_menus
+mini1_overlays
+web_controls
+windows_controls

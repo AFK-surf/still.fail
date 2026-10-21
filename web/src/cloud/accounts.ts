@@ -1,6 +1,7 @@
 // The Google accounts signed in on this browser. The core keeps them, with
 // their still.fail cloud sessions (docs/client-core.md): the page sees who is
-// signed in, starts and finishes a sign-in, and signs out; tokens never reach it.
+// signed in, starts and finishes a sign-in, signs out, and deletes an account;
+// tokens never reach it.
 import { useCallback } from "react";
 import { core, useTopic } from "../core/react.ts";
 import { doingMatches, failed, useDoing, useDoingList } from "../doing.ts";
@@ -54,6 +55,15 @@ export async function signOut(sub: string): Promise<void> {
 }
 
 /**
+ * Deletes the account in still.fail cloud, then forgets it here as signing out does (`auth.deleteAccount`). Refused,
+ * with words to show, while it is the only owner of a workspace others are in.
+ */
+export async function deleteAccount(sub: string): Promise<void> {
+  await core().call("auth.deleteAccount", { account: sub });
+  signedOut(sub);
+}
+
+/**
  * Signing in from a button: `busy` while still.fail cloud is asked where to go (`auth.begin`), what went wrong said in a
  * toast. `signIn` answers whether the browser is on its way.
  */
@@ -72,4 +82,13 @@ export function useSignOut(): { signOut(sub: string): Promise<boolean>; busy(sub
   const go = useCallback((sub: string) => signOut(sub)
     .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.signOutFailed", { error: failure(e) })); return false; }), [toast]);
   return { signOut: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.signOut", { account: sub })) };
+}
+
+/** Deleting an account from a button: `busy(sub)` while that account is deleted (`auth.deleteAccount`), what went wrong said in a toast. */
+export function useDeleteAccount(): { deleteAccount(sub: string): Promise<boolean>; busy(sub?: string): boolean } {
+  const toast = useToast();
+  const doing = useDoingList();
+  const go = useCallback((sub: string) => deleteAccount(sub)
+    .then(() => true, (e: unknown) => { toast(t("web-pages.accounts.deleteFailed", { error: failure(e) })); return false; }), [toast]);
+  return { deleteAccount: go, busy: (sub) => doing.some((item) => !failed(item) && doingMatches(item, "auth.deleteAccount", { account: sub })) };
 }

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
 import { feedback, list, overview, user, workspace } from "../src/views/admin.ts";
+import { relays } from "../src/views/admin-relays.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -147,4 +148,45 @@ test("a_bug_reports_page_has_all_of_it_in_text_too", () => {
   assert.ok(!page.text.includes("## 日志"));
   assert.throws(() => feedback("F9", reports()));
   assert.deepEqual(list("feedback", {}, "", null, null, null, NOW).rows, []);
+});
+
+test("the_relays_page_says_each_relays_load_now_and_over_the_range", () => {
+  // A whole hour in UTC, so the day's buckets fall on local hours (UTC+8).
+  const now = NOW - (NOW % 3600);
+  const day = (f: (i: number) => number | null) => ({ start: now - 287 * 300, step: 300, sent: Array.from({ length: 288 }, (_, i) => f(i)), recv: Array.from({ length: 288 }, () => 1000), open: Array.from({ length: 288 }, (_, i) => (i === 10 ? 71 : 3)), dropped: [] });
+  const week = { start: now - 167 * 3600, step: 3600, sent: Array.from({ length: 168 }, () => 10), recv: [], open: [], dropped: [] };
+  const answer = {
+    relays: [
+      { url: "https://app.still.fail", name: "Cloudflare", at: now - 30, now: { sent: 14_336, recv: 2048, dropped: 0.021, rx: null, tx: null }, open: 71, load1: null, today: { bytes: 4.5 * 1024 ** 3, frames: 1000 }, limits: { bytes: 5 * 1024 ** 3, frames: 20_000_000 }, day: day((i) => (i < 5 ? null : 2048)), week },
+      { url: "https://47.76.247.168", name: "香港", at: now - 3600, now: null, open: null, load1: null, today: { bytes: 0, frames: 0 }, day: day(() => null), week },
+      { url: "https://39.105.157.122", name: "北京", at: now - 10, now: { sent: 0, recv: 0, dropped: 0.3, rx: 50_000, tx: 64_000 }, open: 2, load1: 0.04, today: { bytes: 0, frames: 0 }, day: day(() => 0), week },
+      { url: "https://relay.example", name: "深圳", at: null, now: null, open: null, load1: null, today: { bytes: 0, frames: 0 }, day: day(() => null), week },
+    ],
+  };
+  const v = relays(answer, null, now, 480);
+  assert.equal(v.range, "day");
+  assert.deepEqual(v.ranges.map((r: J) => r.label), ["24 小时", "7 天"]);
+  const [cf, hk, bj, sz] = v.relays;
+  assert.deepEqual([cf.state, hk.state, bj.state, sz.state], ["online", "offline", "online", "error"]);
+  assert.deepEqual([cf.seen, hk.seen, sz.seen], ["刚刚更新", "1 小时前更新", "暂无数据"]);
+  // Never heard from: nothing but that.
+  assert.deepEqual([sz.numbers, sz.charts, sz.ticks], [[], [], []]);
+  assert.deepEqual(cf.numbers, [
+    { label: "发送", value: "14 KB/s" },
+    { label: "接收", value: "2.0 KB/s" },
+    { label: "在线连接", value: "71" },
+    { label: "丢包率", value: "2.1%" },
+    { label: "今日用量", value: "4.5 GB / 5.0 GB · 90%", tone: "amber" },
+  ]);
+  assert.deepEqual(hk.numbers.map((n: J) => n.value), ["–", "–", "–", "–"]);
+  assert.deepEqual(bj.numbers.slice(3), [{ label: "丢包率", value: "30.0%", tone: "red" }, { label: "网卡", value: "出 63 KB/s · 入 49 KB/s" }, { label: "负载", value: "0.04" }]);
+  assert.deepEqual(cf.charts.map((c: J) => [c.id, c.peak, c.series.map((s: J) => s.id)]), [["rate", "峰值 2.0 KB/s", ["sent", "recv"]], ["open", "峰值 71", ["open"]]]);
+  assert.equal(cf.charts[0].series[0].values[0], null);
+  // Every six hours, local: four marks a day.
+  assert.equal(cf.ticks.length, 4);
+  assert.ok(cf.ticks.every((tick: J) => ["00:00", "06:00", "12:00", "18:00"].includes(tick.label)));
+  const w = relays(answer, "week", now, 480);
+  assert.equal(w.range, "week");
+  assert.equal(w.relays[0].charts[0].series[0].values.length, 168);
+  assert.ok(w.relays[0].ticks.every((tick: J) => /^\d+\/\d+$/.test(tick.label)));
 });

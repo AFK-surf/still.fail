@@ -73,7 +73,6 @@ const CHANGING = "changing";
 export class Local {
   readonly #data: Data;
   readonly #now: () => number;
-  #sent = 0;
   #changes = 0;
   readonly #outbox = new Map<string, J[]>();
   readonly #pending = new Map<string, Pending>();
@@ -134,7 +133,9 @@ export class Local {
 
   pendingNew(station: string, ask: J): string {
     const now = this.#now();
-    const key = `${PENDING_PREFIX}${Math.round(now)}-${++this.#sent}`;
+    // named as the core names what it makes here (localId), not by the clock: a recorded new chat's key comes again
+    // in its replay
+    const key = `${PENDING_PREFIX}${localId("chat")}`;
     this.#pending.set(key, { station, ask, createdAt: now, queue: [], failed: null, made: null, listed: false, making: false });
     const db = this.#data.of(station);
     if (db) this.#pendingDb.set(key, db);
@@ -469,9 +470,10 @@ export class Local {
     return this.outbox(station, thread).find((m) => m.id === id);
   }
 
-  /// Marks an outgoing message `sending` again, or `failed` with the error's message.
-  outboxState(station: string, thread: number, id: string, failed: string | null): void {
-    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed } : m));
+  /// Marks an outgoing message `sending` again, or `failed` with the error's message (`final`: refused as it is, not to
+  /// be sent again).
+  outboxState(station: string, thread: number, id: string, failed: string | null, final = false): void {
+    const list = this.outbox(station, thread).map((m) => (m.id === id ? { ...m, state: failed !== null ? "failed" : "sending", error: failed, final: failed !== null && final ? true : undefined } : m));
     this.#outboxPut(station, thread, list);
     this.onChange({ kind: "outbox", station, thread });
   }

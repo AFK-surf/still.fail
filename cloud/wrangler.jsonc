@@ -83,11 +83,18 @@
       { "name": "LOGINS", "class_name": "LoginAttempt" },
       { "name": "LOGIN_LIMITS", "class_name": "LoginLimiter" },
       { "name": "TELEMETRY_LIMITS", "class_name": "TelemetryLimiter" },
+      // How loaded the relays are, for the console (src/relay-load.ts).
+      { "name": "RELAY_LOAD", "class_name": "RelayLoad" },
+      // still.fail's relay process, in the relay's Worker: the cron reads its counters (src/relay-load.ts).
+      { "name": "RELAY", "class_name": "Relay", "script_name": "stillfail-relay" },
     ],
   },
+  // The relay's counters, every minute (src/index.ts scheduled).
+  "triggers": { "crons": ["* * * * *"] },
   // Fresh installs create these. Existing production namespaces were transferred with the same
   // stillfail-v1 tag by migrate-workers.py before route cutover; never replay the old Worker's migrations here.
   "migrations": [
     { "tag": "stillfail-v1", "new_sqlite_classes": ["Account", "Directory", "LoginAttempt", "LoginLimiter", "TelemetryLimiter"] },
+    { "tag": "stillfail-v2", "new_sqlite_classes": ["RelayLoad"] },
   ],
 }

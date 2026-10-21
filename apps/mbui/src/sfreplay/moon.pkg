@@ -1,0 +1,13 @@
+import {
+  "stillfail/core",
+  "stillfail/sfapp",
+  "stillfail/sfcore",
+  "mbui/ui",
+  "mbui/kit",
+  "mbui/motion",
+  "moonbitlang/core/json",
+}
+
+options(
+  targets: { "emit_js.mbt": [ "js" ], "emit_native.mbt": [ "native" ] },
+)

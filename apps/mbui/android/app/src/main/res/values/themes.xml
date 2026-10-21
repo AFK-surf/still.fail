@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="paper">#F5F3EF</color>
+    <!-- The window before the first frame draws: the app's paper (as still.fail's apps/android themes.xml), so opening
+         does not flash white or black. -->
+    <style name="Theme.StillFail" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
+    <!-- Over the app something is shared from (mbui's OverActivity, as still.fail's ShareActivity): nothing of its own
+         until its sheet comes up, which draws its own scrim and motion. -->
+    <style name="Theme.StillFail.Share" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

@@ -1,0 +1,96 @@
+// A login's card (login_card.mbt; LoginCards.kt) over the fixture's chat, its login as each case has it, the calls kept.
+
+///|
+/// The fixture's chat, its login `login` and the station's logins letting the viewer finish it.
+fn login_core(calls : Array[Made], login : Json, answer? : (String) -> Json = fn(_) { Json::object({}) }) -> @ui.Tester {
+  reset()
+  let base = fixture("chat")
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      match name {
+        "machineLogin" => { value: Some(login), error: None, version: 1 }
+        "machineLogins" => { value: Some({ "canLogin": true, "canRelay": true }), error: None, version: 1 }
+        _ => (base.topic)(name, params)
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      done(Ok(answer(name)))
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+fn login_of(more : Array[(String, Json)]) -> Json {
+  with_fields(
+    {
+      "id": "login-1",
+      "title": "在 Studio 上登录 gh",
+      "state": "browser",
+      "active": true,
+      "statusText": "等你在浏览器里登录",
+      "domain": "github.com",
+    },
+    more,
+  )
+}
+
+///|
+/// The fixture's chat (its login card at its foot) with the station's logins answering `machineLogins`.
+fn with_logins(t : @ui.Tester) -> @ui.Tester {
+  for _ in 0..<6 {
+    if t.find("在 Studio 上登录 gh") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t
+}
+
+///|
+test "a login card: its title with its × (取消: machineLogin.cancel), a page to open, its button solid until pressed" {
+  let calls : Array[Made] = []
+  let t = with_logins(login_core(calls, login_of([("step", "open"), ("url", "https://github.com/login")])))
+  assert_true(t.find("登录页在 github.com") is Some(_))
+  t.tap_text("在浏览器里登录")
+  assert_true(t.opened().contains("https://github.com/login"))
+}
+
+///|
+test "a login whose page gives a code to paste back: 打开登录页, then the code typed, 完成 sends it (machineLogin.answer)" {
+  let calls : Array[Made] = []
+  let t = with_logins(
+    login_core(calls, login_of([("step", "open"), ("paste", true), ("url", "https://app.devin.ai/login")])),
+  )
+  assert_true(t.find("在 github.com 登录，把页面给的码贴到下面") is Some(_))
+  t.tap_text("打开登录页")
+  assert_true(t.opened().contains("https://app.devin.ai/login"))
+  assert_true(words_node(t, "完成") is None, msg="完成 once a code is in")
+  t.tap_text("粘贴登录码")
+  t.type_text("ABC-123")
+  t.frame()
+  let (x, y) = words_node(t, "完成").unwrap()
+  t.tap(x, y)
+  let sent = named(calls, "machineLogin.answer")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "text"), "ABC-123")
+  assert_eq(text(Some(sent[0].params), "id"), "login-1")
+}
+
+///|
+test "a device login: its code large, 复制并打开 copies it and opens its page" {
+  let calls : Array[Made] = []
+  let t = with_logins(
+    login_core(calls, login_of([("step", "device"), ("code", "WXYZ-1234"), ("url", "https://github.com/login/device")])),
+  )
+  assert_true(t.find("WXYZ-1234") is Some(_))
+  t.tap_text("复制并打开")
+  assert_eq(t.clipboard(), "WXYZ-1234")
+  assert_true(t.opened().contains("https://github.com/login/device"))
+}
+

@@ -337,5 +337,5 @@ export const prompt = style({ color: ORANGE, userSelect: "none" });
 // ---- Footer ----
 
 export const footer = style({ padding: "32px 0 48px", color: DIM, fontSize: vars.textBody, borderTop: `1px solid ${LINE}` });
-export const footerRow = style({ display: "flex", alignItems: "center", gap: "24px" });
+export const footerRow = style({ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px 24px" });
 export const footerFirst = style({ marginRight: "auto" });

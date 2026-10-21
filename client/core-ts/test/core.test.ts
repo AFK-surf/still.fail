@@ -18,6 +18,9 @@ import { fromBase64, base64, parseJson, toJsonBytes } from "../src/util.ts";
 import { account, apply, call, cloudCore, count, nowS, signIn, stationAnswers, subscribe, v, answers } from "./helpers.ts";
 import { current, tr } from "../src/i18n.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 const code = (f: () => unknown) => {
   try {
     f();
@@ -68,6 +71,7 @@ test("parses_each_call", () => {
   assert.deepEqual(parseCall("auth.begin", { redirect_uri: "r", return_to: "/", device_name: "Mac" }), { kind: "authBegin", redirectUri: "r", returnTo: "/", deviceName: "Mac" });
   assert.deepEqual(parseCall("auth.complete", { query: "?code=c&state=s" }), { kind: "authComplete", query: "?code=c&state=s" });
   assert.deepEqual(parseCall("auth.signOut", { account: "sub1" }), { kind: "signOut", account: "sub1" });
+  assert.deepEqual(parseCall("auth.deleteAccount", { account: "sub1" }), { kind: "deleteAccount", account: "sub1" });
   assert.deepEqual(parseCall("client.error", { source: "android.decode", message: "chat: 读不懂" }), { kind: "clientError", source: "android.decode", message: "chat: 读不懂" });
   assert.deepEqual(parseCall("workspace.rename", { account: "a", workspace: "w", name: "n" }), {
     kind: "op",
@@ -125,6 +129,7 @@ test("checks_params", () => {
     assert.ok((e as CoreError).message.includes("return_to"), (e as CoreError).message);
   }
   assert.equal(code(() => parseCall("auth.signOut", null)), "invalid_params");
+  assert.equal(code(() => parseCall("auth.deleteAccount", {})), "invalid_params");
   assert.equal(code(() => parseCall("workspace.rename", { account: "a", name: "n" })), "invalid_params");
   // A file going up carries its bytes beside the call; base64 in it is not taken.
   assert.equal(code(() => parseCall("station.upload", { station: "w/s", name: "n", bytes: "aGVsbG8=" })), "invalid_params");
@@ -500,12 +505,15 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   await host.settle();
   const values = new Map();
   apply(host, values);
-  assert.deepEqual(values.get(1), { text: "", quotes: [], files: [], links: [] });
+  assert.deepEqual(noId(values.get(1)), { text: "", quotes: [], files: [], links: [] });
   call(core, ui, 2, "draft.put", { station: "ws/st", chat: "new", text: "修一下登录", quotes: [{ author: "a", text: "b", comment: "" }], files: [{ name: "x.png", path: "up/x.png", size: 3 }] });
   await host.settle();
   apply(host, values);
   assert.equal(v(values, 1).text, "修一下登录");
   assert.equal(v(values, 1).files[0].path, "up/x.png");
+  // its name, the core's, kept with it
+  const named = v(values, 1).id;
+  assert.match(named, /^[A-Za-z0-9_-]{8,64}$/);
   await host.time.pass(350);
   await run(core.inner.data.written);
   core.close();
@@ -518,10 +526,13 @@ test("a_draft_is_kept_on_the_device_until_emptied", async () => {
   apply(host, values2);
   assert.equal(v(values2, 1).text, "修一下登录");
   assert.equal(v(values2, 1).quotes[0].author, "a");
+  assert.equal(v(values2, 1).id, named);
   call(again, ui2, 2, "draft.put", { station: "ws/st", chat: "new", text: " ", quotes: [], files: [] });
   await host.settle();
   apply(host, values2);
-  assert.deepEqual(values2.get(1), { text: "", quotes: [], files: [], links: [] });
+  assert.deepEqual(noId(values2.get(1)), { text: "", quotes: [], files: [], links: [] });
+  // emptied: what is written next is another draft
+  assert.notEqual(v(values2, 1).id, named);
   await run(again.inner.data.written);
   again.close();
   again = await Core.create(host, { clock: host.time.clock, sample: 0 });

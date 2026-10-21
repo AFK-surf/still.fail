@@ -63,6 +63,7 @@ import fail.still.android.ui.Smooth
 import fail.still.android.ui.StationMark
 import fail.still.android.ui.hasStationMark
 import kotlinx.coroutines.delay
+import fail.still.android.ui.UiFont
 
 private val ChatAgent.working get() = status == "running" || status == "queued"
 
@@ -121,10 +122,10 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
 
 /** Stopping its turn, while it works: under way, a spinner in it, not pressed again. */
 @Composable
-private fun StopButton(app: AppState, station: String, key: String) {
+private fun StopButton(app: AppState, station: String, key: String, modifier: Modifier = Modifier) {
     val busy = app.isDoing("session.stop", "station" to station, "key" to key)
     Row(
-        Modifier.height(32.dp).clip(Smooth(16.dp)).background(C.red.copy(alpha = 0.14f))
+        modifier.height(32.dp).clip(Smooth(16.dp)).background(C.red.copy(alpha = 0.14f))
             .clickable(enabled = !busy) { app.act(t("android-chat.agent.stop"), done = t("android-chat.history.stopped")) { app.api(station).stop(key) } }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -212,7 +213,7 @@ internal fun AgentTiles(card: AgentCardView?, modifier: Modifier = Modifier.padd
                     .semantics(mergeDescendants = true) { contentDescription = "$name $figure" },
             ) {
                 Box(Modifier.height(26.dp), contentAlignment = Alignment.CenterStart) {
-                    Text(figure, fontSize = if (figure.length > LONG) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"))
+                    Text(figure, fontSize = if (figure.length > LONG) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"))
                 }
                 Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -233,6 +234,6 @@ internal fun AgentNotes(card: AgentCardView?, modifier: Modifier = Modifier.padd
     val notes = card?.attention.orEmpty()
     if (notes.isEmpty()) return
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        notes.forEach { a -> Text(a.text, fontSize = 13.sp, lineHeight = 18.sp, color = if (a.level == "amber") C.warn else C.red) }
+        notes.forEach { a -> Text(a.text, fontSize = 13.sp, lineHeight = 18.sp, color = if (a.level == "amber") C.warnInk else C.red) }
     }
 }

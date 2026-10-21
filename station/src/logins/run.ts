@@ -14,7 +14,7 @@ import { type Lang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, urlsIn } from "./parse.ts";
+import { type Loopback, asksEnter, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, secretAsked, storesSecret, unwrapped, urlsIn } from "./parse.ts";
 
 export const COLS = 200;
 export const ROWS = 40;
@@ -67,8 +67,9 @@ export class LoginRun {
   code: string | null = null;
   codeUrl: string | null = null;
   waiting = false;
-  /// It waits on a prompt after giving a page to open (gcloud --no-launch-browser's "enter the verification code"): what
-  /// the page gives is the person's to enter, from their card, not its agent's.
+  /// Its agent saw it wait for what its page gives (gcloud --no-launch-browser's "enter the verification code", Devin's
+  /// "copy the code and paste it below"): the person's to enter, from their card, not its agent's. Not told from its
+  /// words here (用户定: 不自动判断); kept while what they entered is checked (verifying), over once it ends.
   paste = false;
   echo = true;
   error: string | null = null;
@@ -85,6 +86,7 @@ export class LoginRun {
   #child: ChildProcess | null = null;
   #term: InstanceType<typeof xterm.Terminal>;
   #said = "";
+  #cr = "";
   #opened: string[] = [];
   #rows: string[] = Array.from({ length: ROWS }, () => "");
   #cursor = { x: 0, y: 0 };
@@ -213,7 +215,10 @@ export class LoginRun {
 
   #output(text: string): void {
     if (text === "" || !this.active) return;
-    const plain = plainText(text);
+    // A line's "\r" at a chunk's end is read with what follows it ("\r\n" split in two is one line's end).
+    const whole = this.#cr + text;
+    this.#cr = /\r+$/.exec(whole)?.[0] ?? "";
+    const plain = plainText(whole.slice(0, whole.length - this.#cr.length));
     const said = this.#said + plain;
     this.#said = said.length > SAID_KEPT ? said.slice(said.length - SAID_KEPT) : said;
     if (this.hadBrowserStep && !this.#saidDone) {
@@ -226,7 +231,6 @@ export class LoginRun {
       // Saying more, it no longer waits on what it asked (whether it waits now is asked once it is quiet again).
       if (this.waiting) {
         this.waiting = false;
-        this.paste = false;
         this.#o.changed();
       }
       this.#read();
@@ -255,13 +259,15 @@ export class LoginRun {
       this.#opened = urlsIn(text);
     } catch {}
     const before = JSON.stringify([this.state, this.step, this.url, this.loopback, this.code, this.codeUrl, this.waiting]);
-    const printed = urlsIn(this.#said);
+    // As it said them, a link broken at the terminal's width put together again.
+    const said = unwrapped(this.#said, COLS);
+    const printed = urlsIn(said);
     // The page it opens, over what it prints: they may differ (Claude Code prints its paste-a-code page and opens its
     // loopback one; codex prints localhost and comes back to 127.0.0.1).
     const page = this.#opened.at(-1) ?? null;
     const back = page !== null ? loopbackOf(page) : null;
     const printedBack = page === null ? printed.find((u) => loopbackOf(u) !== null) ?? null : null;
-    const code = deviceCodeIn(this.#said);
+    const code = deviceCodeIn(said);
     if (this.state === "verifying") {
       // The browser came back: nothing more to do but wait for it to finish.
     } else if (back !== null || printedBack !== null) {
@@ -316,12 +322,8 @@ export class LoginRun {
       echo = told ?? !secretAsked(line);
       if (!this.active) return;
     }
-    // A page given and opened by nobody yet, then a prompt typed with echo: what it asks for is what the page gives (a
-    // code to paste back), the person's, whatever the prompt's words.
-    const paste = waiting && echo && this.step === "open" && this.url !== null;
-    const changed = waiting !== this.waiting || paste !== this.paste || (waiting && this.step === null);
+    const changed = waiting !== this.waiting || (waiting && this.step === null);
     this.waiting = waiting;
-    this.paste = paste;
     if (waiting && this.step === null) {
       this.step = "terminal";
       this.state = "input";
@@ -357,12 +359,36 @@ export class LoginRun {
     this.#fail(`${tr(this.#o.lang, "station.machineLogin.stalled", { minutes: String(STALL_MS / 60_000) })}${screen !== "" ? `\n${screen}` : ""}`, "timeout");
   }
 
+  /// Whether the person enters what its page gives on their card (its agent says so): only once it has given a page to
+  /// open, and never at a prompt that reads a secret.
+  askPaste(on: boolean): boolean {
+    if (!this.active || (on && (this.step !== "open" || this.url === null || this.secret))) return false;
+    // Asked again (what was entered was refused): it waits on the person once more, no longer finishing.
+    const again = on && this.state === "verifying";
+    if (again) this.state = "browser";
+    if (on !== this.paste || again) {
+      this.paste = on;
+      this.#o.changed();
+    }
+    return true;
+  }
+
+  /// The person entered what its page gave, and Enter: it finishes by itself now (or asks again, its agent says so). Its
+  /// card keeps the field, what was entered checked in place.
+  answeredNow(): void {
+    if (!this.active) return;
+    this.state = "verifying";
+    this.waiting = false;
+    this.#o.changed();
+  }
+
   /// Its browser came back and the callback went to it: it finishes by itself now.
   relayedNow(): void {
     this.relayed = true;
     if (this.active && this.state !== "verifying") {
       this.state = "verifying";
       this.waiting = false;
+      this.paste = false;
       this.#o.changed();
     }
   }
@@ -386,6 +412,7 @@ export class LoginRun {
     this.state = state;
     this.error = error;
     this.waiting = false;
+    this.paste = false;
     this.endedAt = this.#o.fibers.now();
     this.#timeout();
     this.#stall();

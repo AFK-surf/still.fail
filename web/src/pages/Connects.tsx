@@ -8,7 +8,7 @@ import { Link } from "react-router";
 import { useAction, useApi, useConnects, useStations, type MadeSlackApp } from "../api.ts";
 import { MineFilter, OwnerLabel } from "../components.tsx";
 import { profilesPage, StationContext, stationBase, useOnlyMine, type Station } from "../station.tsx";
-import { About, Button, Confirm, ConnectAvatar, FirstOne, Menu, MobileBack, SlackLogo, StatusDot, Waiting, WaitMore } from "../ui.tsx";
+import { About, Button, Confirm, ConnectAvatar, ConnectKindIcon, FirstOne, Menu, MobileBack, SlackLogo, StatusDot, Waiting, WaitMore } from "../ui.tsx";
 import { NewConnectDialog } from "./Connect.tsx";
 import { DoingMark } from "../DoingMark.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -100,7 +100,7 @@ export function ConnectList({ scope, settings }: { scope: string; settings: stri
               <Link className={pagesCss.listRow} to={`${stationBase(station)}/connects/${c.id}`}>
                 <ConnectAvatar connect={c} />
                 <span className={pagesCss.listRowText}>
-                  <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><SlackLogo size={11} />{c.team}</span>}</span>
+                  <span className={pagesCss.listRowTitle}>{c.name}{c.team && <span className={css.connectTeam}><ConnectKindIcon kind={c.kind} size={11} />{c.team}</span>}</span>
                   <span className={shellCss.muted}>{c.modeText} · {c.runtimeText}{c.bind.model ? ` · ${c.modelName ?? c.bind.model}` : ""}</span>
                 </span>
                 <span className={css.connectFacts}>

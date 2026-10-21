@@ -118,7 +118,7 @@ private fun Boxed(max: Dp = 360.dp, ground: Color = codeGround, vertical: Dp = 8
     Box(Modifier.fillMaxWidth().clip(Smooth(10.dp)).background(ground).heightIn(max = max).verticalScroll(rememberScrollState()).padding(horizontal = horizontal, vertical = vertical)) { content() }
 }
 
-private val mono = CodeFont
+private val mono: androidx.compose.ui.text.font.FontFamily @Composable @androidx.compose.runtime.ReadOnlyComposable get() = CodeFont
 
 /** Highlighted code (a command, a file written, a file read), as markdown shows it but wrapping and capped in height. */
 @Composable

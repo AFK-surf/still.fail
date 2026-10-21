@@ -11,6 +11,9 @@
 // - background_tasks (a control_request) moves the Bash commands and subagents a turn waits on to the background: each
 //   call returns at once and the turn goes on; a task_notification tells when one ends. Input written after it is
 //   read in the turn then, not when they end.
+// - each background command and subagent is told as it starts (system/task_started, is_backgrounded; or task_updated
+//   with it later) and as it ends (task_notification, or task_updated with a final status); a subagent's own commands
+//   say owned_by_subagent. They all end with the process.
 import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../ops/log.ts";
@@ -19,7 +22,7 @@ import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
-import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
+import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
 
@@ -114,7 +117,15 @@ export function classifyResult(text: string): FailureReason {
 
 /// `renews`: its token is handed over and renewed while it runs (RENEWED): a first 401 is left to that.
 /// `renewed`: a new token was given it in this turn, so another 401 is not the old token's.
-export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean };
+/// `tasks`: the commands and subagents it runs that have not ended, by id (`background` once moved there).
+export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean; tasks?: Record<string, Task> };
+export type Task = BackgroundTask & { background: boolean };
+
+/// A task's statuses once it has ended.
+const ENDED = new Set(["completed", "failed", "killed", "stopped"]);
+
+/// What its tasks as the turn leaves them run in the background.
+export const backgroundOf = (turn: Turn): BackgroundTask[] => Object.values(turn.tasks ?? {}).filter((t) => t.background).map(({ id, kind, description }) => ({ id, kind, description }));
 
 /// A token handed to the process (a machine login's, a lent one) is renewed while it runs: started with these, Claude
 /// Code asks its host for a new one on a 401 (an `oauth_token_refresh` control request) and retries with it, so the
@@ -129,7 +140,7 @@ export type ClaudeSnapshot = {
   runtime: "claude";
   id: string;
   runner: string;
-  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean };
+  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean; tasks?: Record<string, Task> };
   machineExpires: number | null;
   live: ClaudeLiveState;
 };
@@ -172,6 +183,14 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
       interrupt();
       turn.aborting = true;
     }
+  } else if (kind === "system" && subtype === "task_started" && typeof frame.task_id === "string" && frame.owned_by_subagent !== true) {
+    const description = typeof frame.description === "string" ? frame.description : "";
+    turn.tasks = { ...turn.tasks, [frame.task_id]: { id: frame.task_id, kind: frame.task_type === "local_agent" ? "agent" : "command", description, background: frame.is_backgrounded === true } };
+  } else if (kind === "system" && (subtype === "task_notification" || subtype === "task_updated") && typeof frame.task_id === "string" && turn.tasks?.[frame.task_id]) {
+    const status = subtype === "task_notification" ? frame.status : frame.patch?.status;
+    const { [frame.task_id]: task, ...rest } = turn.tasks;
+    if (subtype === "task_notification" || ENDED.has(status)) turn.tasks = rest;
+    else if (frame.patch?.is_backgrounded === true) turn.tasks = { ...rest, [frame.task_id]: { ...task!, background: true } };
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;
@@ -183,6 +202,8 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
     turn.aborting = false;
     turn.authFailure = null;
     turn.renewed = false;
+    // What it waited on in the turn has ended with it; what goes on is in the background.
+    if (turn.tasks) turn.tasks = Object.fromEntries(Object.entries(turn.tasks).filter(([, t]) => t.background));
     emit({ type: "turnEnded", outcome });
   }
 }
@@ -429,6 +450,10 @@ export class ClaudeSession implements AgentSession {
     return this.turn.busy;
   }
 
+  background() {
+    return backgroundOf(this.turn);
+  }
+
   async prompt(text: string) {
     if (this.turn.closed) throw new Error("claude session is closed");
     if (this.turn.busy) throw new Error("a turn is already running");
@@ -481,7 +506,7 @@ export class ClaudeSession implements AgentSession {
       runtime: "claude",
       id: this.sessionId,
       runner: this.proc.info.id,
-      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews },
+      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews, tasks: this.turn.tasks },
       machineExpires: this.machineExpires,
       live: this.live.state(),
     };

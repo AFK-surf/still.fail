@@ -52,7 +52,7 @@ const DAY_MS = 86_400_000;
 export const HEAD = 80;
 export const HEAD_FROM = 500;
 
-const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview"]);
+const VIEW_TOPICS = new Set(["chats", "chatSearch", "search", "stations", "profiles", "connects", "chat", "history", "agentCard", "stationNet", "archive", "workspaceMarks", "decisions", "chatJobs", "imageNear", "longJobs", "usage", "adminList", "adminItem", "adminOverview", "adminRelays"]);
 
 /// What a chat row's columns say that the views find rows by (db/account.ts): how urgent it is for its person
 /// (workspace marks), whether it asks something of them, whether the 奏 page lists it.
@@ -130,8 +130,9 @@ export function chatTitle(thread: J): string {
     if (first !== undefined) return first;
   }
   const channel = text("channelName");
-  if (channel !== null) return `#${channel}`;
   const surface = get(thread, "surface");
+  // A Feishu chat is named as it is there (no #).
+  if (channel !== null) return typeof surface === "string" && surface.startsWith("feishu:") ? channel : `#${channel}`;
   if (!(surface === "ember" || surface === "stillfail") && text("channel")?.startsWith("D")) return t("core-views.direct_message");
   return t("core-views.new_chat");
 }
@@ -166,30 +167,6 @@ export function sentFrom(text: string): [string, string, string] | null {
   } else return null;
   if (title === "" || !link.startsWith("http") || /\s/.test(link)) return null;
   return [title, link, rest];
-}
-
-/// A notice that the station does not have a chat's runtime installed: installing it there, as the station's updates
-/// (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the workspace's owner or an admin),
-/// in a line (`title`: not installed, installing, could not, installed). Nothing offered by a station older than its
-/// updates.
-export function installView(runtime: string, updates: J[], manages: boolean): J | null {
-  const v = updates.find((u) => get(u, "id") === runtime);
-  if (v === undefined) return null;
-  const name = str(v.name) ?? runtime;
-  if (v.state === "updating") {
-    const percent = u64(v.percent);
-    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== null ? { percent } : {}) };
-  }
-  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
-  const can = manages && v.updatable === true;
-  if (v.state === "failed") {
-    const why = str(v.message);
-    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
-  }
-  const title = t("core-views.install.missing", { name });
-  if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
-  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
-  return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
 }
 
 /// The notices that a runtime is not installed, said where they matter: under the viewer's message that waits for it
@@ -256,6 +233,11 @@ const brandName = () => brand.name();
 function slackWorkspaces(overview: J): Map<string, format.SlackWorkspace> {
   const workspaces = new Map<string, format.SlackWorkspace>();
   for (const c of arr(get(overview, "connects"))) {
+    if (get(c, "kind") === "feishu") {
+      const id = str(get(c, "id"));
+      if (id !== null) workspaces.set(`feishu:${id}`, { name: str(get(c, "team")) ?? "", url: format.feishuApplink(str(get(get(c, "feishu"), "domain"))) });
+      continue;
+    }
     const conn = get(c, "connection");
     const s = get(conn, "state");
     const seen = s === "connected" || s === "reconnecting" ? get(conn, "workspace") : undefined;
@@ -564,7 +546,14 @@ export class Views implements Owner {
         break;
       case "longJobs":
         scope = view.scope as string;
-        perStation = (s) => [{ topic: "jobs", station: s }];
+        // With the sidebar rows of the stations whose chats run tasks there (`#ranFrom`).
+        perStation = (s) => [
+          { topic: "jobs", station: s },
+          ...arr(this.ok({ topic: "jobs", station: s })).flatMap((j) => {
+            const owner = jobs.remoteOwner(str(get(j, "session")) ?? "");
+            return owner === null ? [] : [{ topic: "chatRows", station: owner.station }];
+          }),
+        ];
         break;
       case "usage":
         scope = view.scope as string;
@@ -790,6 +779,7 @@ export class Views implements Owner {
     const manager = role === "owner" || role === "admin";
     const dismissed = get(get(prefs, "stationUpdatesDismissed"), station);
     v.stationUpdate = looks.stationUpdate(overview, v, typeof dismissed === "string" ? dismissed : null, this.#updateNoticesOpen.has(station), manager, this.stationName(station));
+    if (Array.isArray(v.outbox)) v.outbox = looks.outboxWaits(v.outbox, v.stationUpdate);
     // Its sharing with the viewer's other workspaces, as asked here meanwhile.
     const shared = xshare.shown({ places: this.#core.places?.() ?? [], asked: (session) => this.#core.xshareAsked?.(station, session), me: str(get(v.me, "email")) }, station, v.thread);
     if (shared !== null) v.xshare = shared;
@@ -898,7 +888,8 @@ export class Views implements Owner {
       }
       case "adminList":
       case "adminItem":
-      case "adminOverview": {
+      case "adminOverview":
+      case "adminRelays": {
         const now = this.#core.host.nowMs();
         return admin(view, (account, list) => this.value({ topic: "admin", account, list }), now, this.#core.host.utcOffsetMin(now));
       }
@@ -916,10 +907,23 @@ export class Views implements Owner {
         if (stations === undefined || !Array.isArray(stations)) return stations as Value | undefined;
         const several = stations.length > 1;
         const open = stations.filter((s) => s.online).map((s) => [s.address, several ? s.name : null, arr(this.ok({ topic: "jobs", station: s.address }))] as [string, string | null, J[]]);
-        return { ok: jobs.longJobs(open, this.#clock()) };
+        return { ok: jobs.longJobs(open, this.#clock(), (session) => this.#ranFrom(stations, session)) };
       }
     }
     return undefined;
+  }
+
+  /// The chat on another of the scope's stations a task here runs for (`jobs.remoteOwner`), as that station's sidebar
+  /// has it: the session's own chat over one it only takes part in (as the station names its own jobs' chats).
+  #ranFrom(stations: StationInfo[], session: string): jobs.From | null {
+    const owner = jobs.remoteOwner(session);
+    const station = owner && stations.find((s) => s.address === owner.station);
+    if (!owner || !station) return null;
+    const rows = arr(this.ok({ topic: "chatRows", station: station.address }));
+    const row = rows.find((r) => get(r, "session") === owner.session) ??
+      rows.find((r) => arr(get(r, "agents")).some((a) => get(a, "key") === owner.session));
+    const id = str(get(row, "id"));
+    return { name: station.name, chat: id === null ? null : { id, title: str(get(row, "title")), archived: false, station: station.address } };
   }
 
   /// Has a view computed again in `ms` (the timer set last is the one that counts).
@@ -1126,8 +1130,11 @@ export class Views implements Owner {
       const o = row.origin ?? null;
       const text = (k: string) => (typeof get(o, k) === "string" && o[k] !== "" ? (o[k] as string) : null);
       const channelName = text("channelName");
-      const place = channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
-      row.originText = ["Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
+      // A Feishu chat's: its group by name, no #.
+      const feishu = text("surface")?.startsWith("feishu:") === true || format.isFeishuChat(text("channel") ?? "");
+      const place = feishu ? channelName : channelName !== null ? `#${channelName}` : text("channel")?.startsWith("D") ? t("core-views.direct_message") : null;
+      row.originKind = feishu ? "feishu" : "slack";
+      row.originText = [feishu ? t("core-views.feishu") : "Slack", text("teamName"), place].filter((x) => x !== null).join(" · ");
     }
     if (isObject(row.last)) {
       const text = format.cleanText(format.plainText(str(row.last.text) ?? ""));
@@ -1308,11 +1315,14 @@ export class Views implements Owner {
     const updates = arr(get(this.ok({ topic: "overview", station }), "updates"));
     const role = get(this.ok({ topic: "workspace", workspace: scope }), "role");
     const manages = role === "owner" || role === "admin";
+    // A failure notice may be sent to the still.fail team where the station takes bug reports.
+    const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
     for (let i = 0; i < messages.length; i++) {
       const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
-      const install = m.system === true && typeof m.runtime === "string" ? installView(m.runtime, updates, manages) : null;
+      const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
       if (install !== null) messages[i].install = install;
+      else if (reports && m.system === true && u64(m.seq) !== null && (str(m.text) ?? "").startsWith("⚠️")) messages[i].reportable = true;
     }
     messages = blockedUnder(messages);
     // A sent message leaves the outbox as its own entry (or anything later) arrives; before the station answered
@@ -1355,9 +1365,13 @@ export class Views implements Owner {
     if (thread.creator !== undefined) thread.creator = present.person(thread.creator, viewer, members_);
     const strOf = (v: J, k: string) => str(get(v, k)) ?? "";
     const surface = strOf(thread, "surface");
-    const slack = !(surface === "ember" || surface === "stillfail");
     const channel = strOf(thread, "channel");
-    const place = slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    const feishu = surface.startsWith("feishu:") || format.isFeishuChat(channel);
+    const slack = !(surface === "ember" || surface === "stillfail") && !feishu;
+    const place = feishu ? strOf(thread, "channelName") || t("core-logic.format.thread.feishu") : slack ? (channel.startsWith("D") ? t("core-views.direct_message") : `#${strOf(thread, "channelName") || channel}`) : null;
+    // A Feishu chat opens in Feishu (Lark's own app for its connect's).
+    const feishuConnect = arr(get(this.ok({ topic: "overview", station }), "connects")).find((c) => `feishu:${strOf(c, "id")}` === surface);
+    const feishuUrl = feishu ? format.feishuChatUrl(format.feishuApplink(str(get(get(feishuConnect, "feishu"), "domain"))), channel) : null;
     let workspaceUrl: string | null = null;
     for (const a of agents) {
       const c = a.connect;
@@ -1385,6 +1399,7 @@ export class Views implements Owner {
       me: this.me(scope),
       place,
       slackUrl,
+      ...(feishuUrl !== null ? { feishuUrl } : {}),
       title,
       people,
       agents,
@@ -1418,12 +1433,7 @@ export class Views implements Owner {
       const m = messages.find((x) => u64(get(x, "seq")) === ask.seq);
       if (isObject(m)) (m as J).asked = true;
     }
-    if (row !== undefined && present.archivable(row) && view.archived !== true) {
-      view.archivable = true;
-      if (present.offered(row, archiveHintOf(this.ok({ topic: "prefs" }) ?? null))) view.archiveOffered = true;
-    }
-    const check = row !== undefined && view.archived !== true ? present.archiveCheck(row.archiveCheck) : null;
-    if (check !== null) view.archiveCheck = check;
+    if (row !== undefined && present.archivable(row) && view.archived !== true) view.archivable = true;
     return { ok: view };
   }
 
@@ -1462,7 +1472,10 @@ export class Views implements Owner {
         if (place === null && s.to !== "") {
           // A message of its own in a channel, before its ts is known.
           const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
-          place = { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
+          const channel = s.to.split("/")[0]!;
+          place = format.isFeishuChat(channel)
+            ? { name: named?.channelName ?? t("core-logic.format.thread.feishu"), surface: "feishu" }
+            : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
         const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack" };
         const text = s.out ? s.text : present.mentions(s.text, people.bots, people.members);
@@ -1756,7 +1769,7 @@ const pinnedAt = new WeakMap<object, number>();
 
 /// What a chat's page draws by each message, decided here so the page only draws it (docs/client-core.md): whether the
 /// agent who said it is one of the chat's (its name opens its history), whose workspace keeps each of its files (and the
-/// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), the 归档 offer and what the archive check made of the chat under its last all-done post, and what its
+/// outbox's) and which of them went up from here after it was sent (`uploadOf`: their pictures are still here), which of an agent's files its text places (placed.ts), and what its
 /// agents sent to Slack or were given there after it (`elsewhere`; the chat's own `elsewhere` keeps what came before
 /// its first message), and which of the viewer's go close together with their next one, its time under that one (`followed`, `joined`).
 function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) => string | undefined): V {
@@ -1797,19 +1810,6 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
   });
   view.messages = messages;
   if (Array.isArray(view.outbox)) view.outbox = view.outbox.map((o: J) => (isObject(o) ? { ...o, attachments: own(o.attachments) } : o));
-  // Under the agent's last post, at the chat's end (not a window short of it), once it said it is all done.
-  let lastAt = -1;
-  for (let i = messages.length - 1; i >= 0 && view.newer !== true; i--) {
-    if (messages[i].authorKind === "agent" && messages[i].system !== true) { lastAt = i; break; }
-  }
-  if (lastAt >= 0 && messages[lastAt].ending === "all_done") {
-    const last: J = { ...messages[lastAt] };
-    if (view.archiveOffered === true && view.offline !== true && isObject(view.thread)) last.archive = true;
-    if (isObject(view.archiveCheck)) last.archiveCheck = view.archiveCheck;
-    // Offered with no review behind it: why, all the same.
-    else if (last.archive === true) last.archiveCheck = { text: t("core-views.policy.allDone"), recommended: true, failed: false };
-    messages[lastAt] = last;
-  }
   const elsewhere = arr(view.elsewhere);
   if (elsewhere.length > 0) {
     const bySeq = new Map(messages.map((m) => [u64(m.seq), m]));

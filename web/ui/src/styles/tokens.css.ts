@@ -8,7 +8,8 @@
 import { createGlobalThemeContract } from "@vanilla-extract/css";
 
 const names = [
-  "font-body", "font-mono",
+  // The faces: the app's own words, what people and agents wrote, code (web/src/fonts.ts sets them as chosen).
+  "font-body", "font-text", "font-mono",
   "canvas", "raised", "sidebar", "list", "text", "muted", "subtle", "line", "line-strong", "hover", "selected", "paper",
   "accent", "accent-text", "accent-bg", "blue", "blue-bg", "code-inline", "green", "green-bg", "amber", "amber-bg",
   "red", "red-bg", "neutral-bg", "overlay", "shadow", "primary", "primary-hover", "on-primary", "field-hover",

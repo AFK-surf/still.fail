@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { conform } from "../src/conform.ts";
 import { CoreError } from "../src/error.ts";
 import { DecisionForms, PolicyForms, ProfileFlows, Tokens } from "../src/forms.ts";
-import { archiveCheck } from "../src/present.ts";
 import { holdLanguage } from "../src/i18n.ts";
 import type { Topic } from "../src/protocol.ts";
 import { Runner } from "../src/runtime.ts";
@@ -104,14 +103,6 @@ test("the archive policy draft follows the station until edited, moves an option
   assert.equal(forms.value(form).dirty, false);
   forms.change(form, 1, "drop", {});
   assert.equal(forms.value(form), null);
-});
-
-test("the archive check under a done post says the option and what came of it", () => {
-  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: true }), { text: "已落地 · 推荐归档", recommended: true, failed: false });
-  assert.deepEqual(archiveCheck({ option: "landed", name: "已落地", archive: true, recommended: false }), { text: "已落地 · 把握不足，不推荐归档", recommended: false, failed: false });
-  assert.deepEqual(archiveCheck({ option: "awaiting_review", name: "等人看结果", archive: false, recommended: false }), { text: "等人看结果 · 不推荐归档", recommended: false, failed: false });
-  assert.deepEqual(archiveCheck({ error: "timeout" }), { text: "归档检查失败", recommended: false, failed: true });
-  assert.equal(archiveCheck(undefined), null);
 });
 
 const tokensTopic = (station: string): Topic => ({ topic: "slackTokens", station, form: "form" });
@@ -274,7 +265,18 @@ test("supergrok_is_xais_plan_and_an_xai_key_runs_grok_build_where_the_station_ru
   flows.change(topic, 1, "edit", { method: "plan" });
   view = flows.value(topic);
   assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
-  assert.deepEqual([view.step, view.signIn, view.usesLine], ["connect", { runtime: "grok", provider: "Grok" }, "添加后可用于：Grok Build"]);
+  // Signed in with Grok Build's own command: a station without it installs it first (a manager can, here), then signs in.
+  assert.deepEqual([view.step, view.signIn, view.install, view.usesLine], ["connect", null, { runtime: "grok", state: "missing", title: "此 station 尚未安装 Grok Build", note: "需由 workspace 的 owner 或管理员安装" }, "添加后可用于：Grok Build"]);
+  s.set({ topic: "workspace", workspace: "ws" }, { ok: { role: "owner" } });
+  const updates = (grok: J) => s.set(overview, { ok: { apiProviders: [{ id: "xai" }], updates: [{ id: "station" }, { id: "grok", name: "Grok Build", updatable: true, ...grok }] } });
+  updates({});
+  assert.deepEqual(flows.value(topic).install, { runtime: "grok", state: "missing", title: "此 station 尚未安装 Grok Build", action: "安装" });
+  updates({ state: "updating", percent: 40 });
+  assert.deepEqual(flows.value(topic).install, { runtime: "grok", state: "installing", title: "正在安装 Grok Build", percent: 40 });
+  updates({ installed: true });
+  view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.signIn, view.install, view.usesLine], ["connect", { runtime: "grok", provider: "Grok" }, undefined, "添加后可用于：Grok Build"]);
   flows.change(topic, 1, "edit", { method: "key" });
   flows.change(topic, 1, "edit", { key: "xai-1" });
   view = flows.value(topic);
@@ -291,6 +293,79 @@ test("supergrok_is_xais_plan_and_an_xai_key_runs_grok_build_where_the_station_ru
   flows.change(topic, 1, "edit", { provider: "xai" });
   view = flows.value(topic);
   assert.deepEqual([view.step, view.tile.hasPlan, view.tile.runtime, view.showKey, view.usesLine], ["connect", false, null, true, "添加后可用于：Codex"]);
+});
+
+test("cursor_is_a_plan_alone_last_of_the_makers_and_runs_on_variables_by_hand_where_the_station_runs_it", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "openai" }], updates: [{ id: "station" }, { id: "cursor", name: "Cursor", installed: true }] } });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  const labs = view.groups.find((g: J) => g.id === "labs").providers;
+  assert.deepEqual(labs.map((p: J) => p.id), ["openai", "anthropic", "cursor"]);
+  const cursor = labs.at(-1);
+  // Its account is its plan: no key to add (Cursor takes no provider's).
+  assert.deepEqual([cursor.name, cursor.mark, cursor.hasKey, cursor.hasPlan, cursor.runtime, cursor.usesText], ["Cursor", "cursor", false, true, "cursor", "Cursor"]);
+  assert.deepEqual(view.groups.find((g: J) => g.id === "local").providers.map((p: J) => p.id), ["env-claude", "env-codex", "env-cursor"]);
+  // Straight to signing in, with no choice of plan or key.
+  flows.change(topic, 1, "edit", { provider: "cursor" });
+  view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.method, view.choices, view.showKey, view.signIn, view.install, view.usesLine], ["connect", "plan", [], false, { runtime: "cursor", provider: "Cursor" }, undefined, "添加后可用于：Cursor"]);
+  assert.throws(() => flows.begin(topic, 1));
+  // Back from it is back to the picker.
+  flows.change(topic, 1, "edit", { back: true });
+  assert.equal(flows.value(topic).step, "pick");
+  // A station without it installs it first.
+  s.set(overview, { ok: { apiProviders: [], updates: [{ id: "station" }, { id: "cursor", name: "Cursor" }] } });
+  flows.change(topic, 1, "edit", { provider: "cursor" });
+  view = flows.value(topic);
+  assert.deepEqual([view.signIn, view.install?.state, view.install?.title], [null, "missing", "此 station 尚未安装 Cursor"]);
+  flows.change(topic, 1, "edit", { provider: "env-cursor" });
+  assert.equal(flows.value(topic).usesLine, "添加后可用于：Cursor");
+  assert.deepEqual(flows.begin(topic, 1), { runtime: "cursor", access: { kind: "env" } });
+  flows.finish(topic, 1, null);
+  // A station from before it: neither.
+  s.set(overview, { ok: { apiProviders: [], updates: [{ id: "station" }] } });
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "cursor" }));
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "env-cursor" }));
+  assert.ok(!flows.value(topic).groups.flatMap((g: J) => g.providers).some((p: J) => p.runtime === "cursor"));
+});
+
+test("devin_is_a_plan_alone_after_cursor_signed_in_with_a_code_and_runs_on_variables_by_hand_where_the_station_runs_it", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "openai" }], updates: [{ id: "station" }, { id: "cursor", name: "Cursor", installed: true }, { id: "devin", name: "Devin", installed: true }] } });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  const labs = view.groups.find((g: J) => g.id === "labs").providers;
+  assert.deepEqual(labs.map((p: J) => p.id), ["openai", "anthropic", "cursor", "devin"]);
+  const devin = labs.at(-1);
+  // Its account is its plan: no key to add (Devin takes no provider's).
+  assert.deepEqual([devin.name, devin.mark, devin.hasKey, devin.hasPlan, devin.runtime, devin.usesText], ["Devin", "devin", false, true, "devin", "Devin"]);
+  assert.deepEqual(view.groups.find((g: J) => g.id === "local").providers.map((p: J) => p.id), ["env-claude", "env-codex", "env-cursor", "env-devin"]);
+  // Straight to signing in, with no choice of plan or key.
+  flows.change(topic, 1, "edit", { provider: "devin" });
+  view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.method, view.choices, view.showKey, view.signIn, view.install, view.usesLine], ["connect", "plan", [], false, { runtime: "devin", provider: "Devin" }, undefined, "添加后可用于：Devin"]);
+  assert.throws(() => flows.begin(topic, 1));
+  flows.change(topic, 1, "edit", { back: true });
+  assert.equal(flows.value(topic).step, "pick");
+  // A station without it installs it first.
+  s.set(overview, { ok: { apiProviders: [], updates: [{ id: "station" }, { id: "devin", name: "Devin" }] } });
+  flows.change(topic, 1, "edit", { provider: "devin" });
+  view = flows.value(topic);
+  assert.deepEqual([view.signIn, view.install?.state, view.install?.title], [null, "missing", "此 station 尚未安装 Devin"]);
+  flows.change(topic, 1, "edit", { provider: "env-devin" });
+  assert.equal(flows.value(topic).usesLine, "添加后可用于：Devin");
+  assert.deepEqual(flows.begin(topic, 1), { runtime: "devin", access: { kind: "env" } });
+  flows.finish(topic, 1, null);
+  // A station from before it: neither.
+  s.set(overview, { ok: { apiProviders: [], updates: [{ id: "station" }, { id: "cursor", name: "Cursor", installed: true }] } });
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "devin" }));
+  assert.throws(() => flows.change(topic, 1, "edit", { provider: "env-devin" }));
+  assert.ok(!flows.value(topic).groups.flatMap((g: J) => g.providers).some((p: J) => p.runtime === "devin"));
 });
 
 test("jev_is_added_for_the_decisions_alone_and_its_key_is_not_tried_on_adding", () => {

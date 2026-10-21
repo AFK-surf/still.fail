@@ -30,7 +30,7 @@ import { allLeft, existingRunners } from "../agents/runner.ts";
 import { log } from "../ops/log.ts";
 import { tr, stationLang } from "../ops/i18n.ts";
 import { iso, transcriptPaths } from "../read/transcript.ts";
-import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, slackSurface, type ThreadRow } from "../store/store.ts";
+import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE, feishuSurface, slackSurface, type ThreadRow } from "../store/store.ts";
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
@@ -42,7 +42,7 @@ import { INTERNAL_CONNECT, type InternalChat, nextTsAt } from "./internal.ts";
 import { LiveHub } from "./live.ts";
 import type { Jobs } from "./neighbours.ts";
 import { agentHomePaths, workspaceAgentHome } from "./agent-home.ts";
-import { startsAfresh } from "./afresh.ts";
+import { carrySubagents, startsAfresh } from "./afresh.ts";
 import { serves } from "./pool.ts";
 import { settled } from "./opened.ts";
 import { imageSize } from "./image-size.ts";
@@ -467,8 +467,9 @@ export class Hub {
       // As the broker did: a new session says first where it can be followed. Once, as it starts; not waited for. In
       // Slack's own link form: what the station posts is sent as written.
       const link = single ? undefined : this.link(key);
-      if (link !== undefined) {
-        chat.post(here, `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
+      const said = link === undefined ? null : chat.sessionLink ? chat.sessionLink(link, tr(stationLang(), "station.slack.viewSession")) : `<${link}|${tr(stationLang(), "station.slack.viewSession")}>`;
+      if (said !== null) {
+        chat.post(here, said, []).catch((error) => log.warn("hub", "session link not posted", { session: key, error: (error as Error).message }));
       }
     }
     const thread = existing ?? (await this.openSlackThread(chat, surface, message, createdBy, key));
@@ -648,9 +649,9 @@ export class Hub {
   }
 
   /// What every runtime process starts with changed (the station's variables for its agents, ops/agent-env.ts): each
-  /// session's process takes it now if idle, else before its next turn.
+  /// session's process ends now if idle, else before its next turn, and the next starts with it (none retuned in place).
   everyChanged() {
-    for (const actor of [...this.actors.values()]) void actor.changed().catch(() => {});
+    for (const actor of [...this.actors.values()]) void actor.changed(true).catch(() => {});
   }
 
   /// A profile was deleted: the sessions on it are taken on by another of their runtime's (their process ends now if
@@ -799,9 +800,11 @@ export class Hub {
     return this.options.chats(connect);
   }
 
-  /// Where a connect's threads live; the rule the v10 migration follows too.
+  /// Where a connect's threads live; the rule the v10 migration follows too. A Feishu connect's are its own (its people's
+  /// ids are the app's own, so another bot's in the same chat are other people: docs/feishu.md).
   surface(connect: string): string {
     if (connect === INTERNAL_CONNECT) return STILLFAIL_SURFACE;
+    if (this.config().connects.find((c) => c.id === connect)?.kind === "feishu") return feishuSurface(connect);
     return slackSurface(connect, this.chatOf(connect)?.workspace() ?? null);
   }
 
@@ -908,8 +911,9 @@ export class Hub {
       store: this.store,
       chat: (connect) => this.chatOf(connect),
       driver: (runtime) => this.sessionDriver(runtime),
-      runOn: (key) => this.accounts.runOn(key),
+      runOn: (key, holding) => this.accounts.runOn(key, holding),
       spend: (key) => this.accounts.spend(key),
+      refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
@@ -921,6 +925,7 @@ export class Hub {
       },
       live: this.live,
       startsAfresh: (key, id, to, was) => startsAfresh(this, key, id, to, was),
+      carrySubagents: (from, to, on, ids) => carrySubagents(this, from, to, on, ids),
       ranIn: (key, id, profile) => this.store.ranIn(key, id, profile),
       idle: (key) => this.idleNow(key),
       archiveIsCold: (key) => this.cold.isCold(key),
@@ -954,6 +959,7 @@ export class Hub {
       },
       settled: (key, state, words) => settled(this, key, state, words),
       toolStatus,
+      pageOf: (key) => this.link(key),
       places: this.places,
       runtimeMissing: (runtime) => this.runtimeMissing(runtime),
       nextTs: () => this.nextTs(),

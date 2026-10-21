@@ -1,10 +1,13 @@
 // The account pool (the Rust station's pool.rs): which of a station's profiles a session runs on. Only profiles with the
 // chosen model enabled qualify; of those, one whose check says it cannot sign in or was rejected, or whose allowance is
-// used up, is passed over. Of the rest: one whose short window (5 hours) is nearly full goes last; one whose long
-// window (a week) refills within a day, with some left, goes first, as what is left then is lost; then the one that has
-// to spend fastest not to lose any (left × window length ÷ time to refill); then the one running fewer sessions; then
-// the one picked least recently. A session keeps its profile while it is usable (its runtime's cache is that
-// account's); its transcripts are shared by all, so when it is not, another takes it on.
+// used up, is passed over. Of the rest: one whose short window (5 hours) is nearly full goes last. The others share the
+// sessions by weight, each new one going where (sessions + 1) ÷ weight is least: the weight is how fast a profile has
+// to spend not to lose any of its long window (a week; left × window length ÷ time to refill), times what is left of
+// its short one. So what would be lost is spent first without all sessions crowding onto one account and running its
+// five hours out together (2026-10-19: a dozen sessions moved from one account to the next, emptying each in turn).
+// Even, the one picked least recently. A session keeps its profile while it is usable (on another it starts afresh and
+// reads back what it needs: afresh.ts); on one nearly full it moves before a turn only when that loses little: its
+// runtime has just compacted its context, or is about to (`cheapToLeave`).
 // Also the reasoning levels a model offers (shapes reasoning.rs), which the pool's accounts decide.
 import { type Profile, runs, sameModel } from "./config.ts";
 
@@ -25,10 +28,13 @@ export type PoolSignals = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-/// A short window this full puts its profile last: a session sent there would soon run into it.
+/// A short window this full puts its profile last, and its sessions move off it before their next turn when another
+/// has room: a session sent or kept there would soon run into it.
 const CROWDED_PERCENT = 80;
+/// The least weight: a profile with nothing to lose still takes a session when every other is busier.
+const MIN_WEIGHT = 0.01;
 
-const windowsOf = (quota: Json | null | undefined): Json[] => (quota && quota.state === "ok" && Array.isArray(quota.windows) ? quota.windows : []);
+export const windowsOf = (quota: Json | null | undefined): Json[] => (quota && quota.state === "ok" && Array.isArray(quota.windows) ? quota.windows : []);
 
 /// How much of its tightest window a profile has used, 0–100; unknown counts as half.
 function used(quota: Json | null | undefined): number {
@@ -37,30 +43,57 @@ function used(quota: Json | null | undefined): number {
   return 50;
 }
 
-/// How a profile's allowance ranks: whether its short windows are nearly full; whether a long window refills within a
-/// day with some left; how fast it has to be spent not to lose any (1: evenly over the window; a window of unknown
-/// length or refill counts as what it has left, evenly).
-export type Urgency = { crowded: boolean; soon: boolean; pace: number };
+/// How a profile's allowance ranks: whether its short windows are nearly full; how fast it has to be spent not to lose
+/// any (1: evenly over the window; a window of unknown length or refill counts as what it has left, evenly); and its
+/// share of the sessions (`weight`: the pace, times what its short windows have left when it has a long one).
+export type Urgency = { crowded: boolean; pace: number; weight: number };
 
 /// The long windows (over a day) are what can be lost: the short ones refill again and again inside them, and only
 /// keep a profile from taking more now. A profile with no long window is weighed by the ones it has. Of several, the
-/// slowest counts: the others cannot be spent faster than it lets.
+/// slowest counts: the others cannot be spent faster than it lets. A long window refilling within a day counts as a
+/// day away: what is left of it can only be spent five hours at a time, so a few minutes to go does not make it take
+/// every session.
 export function urgency(quota: Json | null | undefined, now: number): Urgency {
   const windows = windowsOf(quota).filter((w) => typeof w.minutes === "number" && w.minutes > 0);
   const long = windows.filter((w) => w.minutes * 60_000 > DAY_MS);
   const short = windows.filter((w) => w.minutes * 60_000 <= DAY_MS);
   const crowded = long.length > 0 && short.some((w) => Number(w.usedPercent) >= CROWDED_PERCENT);
+  // What the short windows leave of it now (with no long window they are what the pace is of).
+  const room = long.length > 0 ? short.reduce((min, w) => Math.min(min, Math.max(0, 100 - Number(w.usedPercent)) / 100), 1) : 1;
+  const weighted = (u: Omit<Urgency, "weight">): Urgency => ({ ...u, weight: Math.max(u.pace * room, MIN_WEIGHT) });
   const weighed = (long.length > 0 ? long : short).filter((w) => typeof w.resetsAt === "number");
-  if (weighed.length === 0) return { crowded, soon: false, pace: (100 - used(quota)) / 100 };
+  if (weighed.length === 0) return weighted({ crowded, pace: (100 - used(quota)) / 100 });
   const paces = weighed.map((w) => {
     const left = Math.max(0, 100 - Number(w.usedPercent)) / 100;
     const length = w.minutes * 60_000;
     // A refill already due (an allowance read before it): the whole window is ahead.
     const remaining = Math.min(length, Math.max(w.resetsAt - now, 0) || length);
-    return { pace: (left * length) / remaining, soon: long.length > 0 && left > 0 && w.resetsAt > now && w.resetsAt - now <= DAY_MS };
+    return (left * length) / (length > DAY_MS ? Math.max(remaining, DAY_MS) : remaining);
   });
-  const slowest = paces.reduce((a, b) => (b.pace < a.pace ? b : a));
-  return { crowded, soon: slowest.soon, pace: slowest.pace };
+  return weighted({ crowded, pace: Math.min(...paces) });
+}
+
+/// A context falling under half of what the call before sent (at least this much), on the same account and model, was
+/// compacted.
+export const COMPACTED_FROM = 50_000;
+/// How near a session's context is to where its model is compacted (compactionPoints) to be about to be.
+const NEAR_COMPACTION = 0.75;
+
+type ContextCall = { turn: string | null; profile: string | null; model: string | null; context: number };
+
+/// Whether a session loses little by going on afresh on another account, by its last main-thread calls (oldest first)
+/// and where each model is compacted on this station: its runtime compacted its context in its last two turns (what
+/// it carries on with is a summary already), or its context is three quarters of the way to that (it is about to be).
+export function cheapToLeave(calls: ContextCall[], points: Map<string, number>): boolean {
+  const last = calls.at(-1);
+  if (!last) return false;
+  const point = last.model === null ? undefined : points.get(last.model);
+  if (point !== undefined && last.context >= point * NEAR_COMPACTION) return true;
+  const turns = [...new Set(calls.map((c) => c.turn))].slice(-2);
+  return calls.some((c, i) => {
+    const before = calls[i - 1];
+    return before !== undefined && turns.includes(c.turn) && before.context >= COMPACTED_FROM && c.context * 2 < before.context && c.profile === before.profile && c.model === before.model;
+  });
 }
 
 /// Whether a profile can run now: it signs in, its key was not rejected, none of its windows is used up, and no turn
@@ -88,17 +121,12 @@ export function pickProfile(candidates: Profile[], model: string | null | undefi
   const pool = fit.length === 0 ? serving : fit;
   const now = signals.now();
   const urgencies = new Map(pool.map((i) => [i, urgency(rank[i]![1].quota, now)]));
+  // Each profile's sessions over its weight, with the new one: the least is where it adds the least crowding.
+  const share = (i: number) => (signals.load(rank[i]![0].id) + 1) / urgencies.get(i)!.weight;
   // A stable sort, as Rust's sort_by.
   pool.sort((a, b) => {
-    const [pa, pb] = [rank[a]!, rank[b]!];
     const [ua, ub] = [urgencies.get(a)!, urgencies.get(b)!];
-    return (
-      Number(ua.crowded) - Number(ub.crowded) ||
-      Number(ub.soon) - Number(ua.soon) ||
-      ub.pace - ua.pace ||
-      signals.load(pa[0].id) - signals.load(pb[0].id) ||
-      signals.lastPicked(pa[0].id) - signals.lastPicked(pb[0].id)
-    );
+    return Number(ua.crowded) - Number(ub.crowded) || share(a) - share(b) || signals.lastPicked(rank[a]![0].id) - signals.lastPicked(rank[b]![0].id);
   });
   return rank[pool[0]!]![0];
 }
@@ -114,6 +142,10 @@ export function fallbackEfforts(runtime: string): string[] {
   if (runtime === "dsh") return ["low", "medium", "high", "max"];
   // Grok Build's models offer these (grok.ts); a model's own list comes with it.
   if (runtime === "grok") return ["low", "medium", "high", "xhigh"];
+  // Cursor's models say their effort in the model's own name (id[reasoning=…], agents/cursor.ts): none apart.
+  if (runtime === "cursor") return [];
+  // Devin's are its models' thinking levels (agents/devin.ts); a model's own list comes with it.
+  if (runtime === "devin") return ["low", "medium", "high", "xhigh", "max"];
   return ["low", "medium", "high", "xhigh", "max"];
 }
 

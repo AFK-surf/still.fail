@@ -1,0 +1,14 @@
+{
+ "host": "web",
+ "known": [
+  "arabic",
+  "arabic-lam-alef",
+  "arabic-punct",
+  "bengali",
+  "deva",
+  "deva-i-matra",
+  "deva-reph",
+  "digits-fractions",
+  "marks-vietnamese-nfd"
+ ]
+}

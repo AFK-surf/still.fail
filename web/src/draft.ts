@@ -118,6 +118,12 @@ export const NO_KEY = "new:";
 /** What the page has of each file besides what the core says: its picture, the file itself (sent again, shown whole). */
 const local = new Map<string, Pick<Pending, "preview" | "image" | "pastedFile">>();
 
+/** The station each file picked or pasted here went up to, and the file itself: one that went to another station than
+ * the message goes to (its path there means nothing to this one) goes up again before it is sent. */
+const wentTo = new Map<string, { station: string; file: File }>();
+// Also remember the origin of restored attachments whose local File is no longer available.
+const fileStations = new Map<string, string>();
+
 let nextId = 1;
 
 /** What the composer shows of the core's (`ComposerView`), as the page has it now. */
@@ -163,6 +169,10 @@ export function useDraft({ key: given, station, carry }: {
     const before = was.current;
     if (before === key) return;
     was.current = key;
+    // Each key counts its own versions: what was answered for the one before says nothing of this one's (counted on from
+    // it, this one's were all older until it had been written to as much, and the one before's files stayed shown).
+    seenRev.current = -1;
+    acked.current = 0;
     if (carry && carry.current === key) {
       carry.current = null;
       void act("carry", { key: before, to: key });
@@ -173,13 +183,22 @@ export function useDraft({ key: given, station, carry }: {
       const { text: written, shown: s } = now.current;
       if (written || s.files.length || s.quotes.length) { void act("carry", { key: before, to: key }); return; }
     } else if (before.startsWith("new:") && key.startsWith("new:")) {
-      // A new chat moved to another station: what is written goes with it; files stay with the station they went up to.
-      void act("move", { key: before, to: key });
+      // The selector changes where this message will run, not which message is being written. Carry its files too;
+      // adopting the destination's files made the pasted picture disappear or turn into an older draft's picture.
+      const moving = now.current.shown.files;
+      for (const f of moving) if (!named(f) && !fileStations.has(f.id)) fileStations.set(f.id, before.slice(4));
+      void act("carry", { key: before, to: key });
+      // Start fresh uploads from the local bytes, with fresh ids: a late answer from the old station cannot replace
+      // the new attachment. These calls are queued behind carry, before the core's destination draft is adopted.
+      for (const f of moving) {
+        const source = wentTo.get(f.id);
+        if (named(f) || !source || source.station === (station ?? contextStation)) continue;
+        remove(f.id);
+        add([source.file], f.pasted as PastedInfo | undefined);
+      }
       return;
     }
     // Shown as the core has it (at once when it has it already), else empty until it says.
-    seenRev.current = -1;
-    acked.current = 0;
     adopt(now.current.view, true);
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -205,10 +224,12 @@ export function useDraft({ key: given, station, carry }: {
   const act = (what: string, params: Record<string, unknown>, show?: (s: Shown) => Shown) => {
     if (show) setShown((s) => show(s));
     pending.current++;
-    return core().call(`composer.${what}`, { key: now.current.key, ...params }).then(
+    const at = now.current.key;
+    return core().call(`composer.${what}`, { key: at, ...params }).then(
       (answer) => {
         const version = (answer as { version?: number } | null)?.version;
-        if (typeof version === "number") acked.current = Math.max(acked.current, version);
+        // An answer for the key before (another chat shows by now) counts nothing here.
+        if (typeof version === "number" && now.current.key === at) acked.current = Math.max(acked.current, version);
         return answer;
       },
       () => undefined,
@@ -232,6 +253,10 @@ export function useDraft({ key: given, station, carry }: {
       return { id, name: file.name, size: file.size, blob: file, ...(pasted ? { pasted } : {}) };
     });
     const ids = new Set(files.map((f) => f.id));
+    for (const f of files) {
+      wentTo.set(f.id, { station: station ?? contextStation, file: f.blob });
+      fileStations.set(f.id, station ?? contextStation);
+    }
     void act("add", { station: station ?? contextStation, files }, (s) => ({
       ...s,
       files: [...s.files, ...files.map((f): ComposerFile => ({ id: f.id, name: f.name, size: f.size, ...(f.size > MAX_FILE ? { error: t("web-main.draft.tooBig") } : {}), ...(pasted ? { pasted } : {}) }))],
@@ -258,6 +283,8 @@ export function useDraft({ key: given, station, carry }: {
     const l = local.get(id);
     if (l?.preview) URL.revokeObjectURL(l.preview);
     local.delete(id);
+    wentTo.delete(id);
+    fileStations.delete(id);
     void act("remove", { id }, (s) => ({ ...s, files: s.files.filter((f) => f.id !== id) }));
   };
   const addQuotes = (quotes: DraftQuote[]) => {
@@ -296,6 +323,24 @@ export function useDraft({ key: given, station, carry }: {
   };
   const send: Draft["send"] = async (open, { first = false, onSending } = {}) => {
     const from = key;
+    // A file that went up to another station than this one (picked before the chat's station was changed): not sent
+    // from there, which this one would refuse; it goes up here again and the message waits to be sent once more.
+    const here = station ?? contextStation;
+    const unavailable = files.filter((f) => !named(f) && fileStations.has(f.id) && fileStations.get(f.id) !== here && !wentTo.has(f.id));
+    if (unavailable.length) {
+      setError(t("web-main.draft.selectAgain", { names: unavailable.map((f) => f.name).join(", ") }));
+      return null;
+    }
+    const astray = files.filter((f) => !named(f) && !f.error && wentTo.has(f.id) && wentTo.get(f.id)!.station !== here);
+    if (astray.length) {
+      for (const f of astray) {
+        const { file } = wentTo.get(f.id)!;
+        remove(f.id);
+        add([file], f.pasted);
+      }
+      setError(t("web-main.draft.otherStation", { names: astray.map((f) => f.name).join(", ") }));
+      return null;
+    }
     // Its images' pictures stay here until the station's are read: one still going up by its upload's id, as its outbox
     // row and then its message draw it.
     for (const f of files) {
@@ -330,6 +375,8 @@ export function useDraft({ key: given, station, carry }: {
         const l = local.get(f.id);
         if (l?.preview) URL.revokeObjectURL(l.preview);
         local.delete(f.id);
+        wentTo.delete(f.id);
+        fileStations.delete(f.id);
       }
     };
     const at = performance.now();

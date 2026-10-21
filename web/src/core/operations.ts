@@ -17,10 +17,12 @@ export interface OperationParams {
   "chat.pin": { pinned?: boolean | null | undefined; session: string };
   "decision.dismiss": { thread: number; seq: number };
   "decision.close": { thread: number; seq: number; option: string };
+  "chat.report": { thread: number; seq: number };
   "session.new": { runtime?: string | null | undefined; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chats.archived": {  };
   "chat.forSession": { session?: string | null | undefined };
   "widget.state": { key: string; path: string };
+  "session.transcript": { key: string };
   "file.peek": { key: string; path: string; line?: number | null | undefined };
   "link.preview": { url: string };
   "widget.setState": { key: string; path?: string | null | undefined; state?: unknown };
@@ -38,6 +40,11 @@ export interface OperationParams {
   "connect.reconnect": { id: string };
   "connect.bindSession": { connect: string; session?: string | null | undefined; title?: string | null | undefined };
   "connect.putSlackApp": { connect: string; input?: unknown };
+  "feishu.register": { domain?: string | null | undefined; name?: string | null | undefined };
+  "feishu.cancelRegistration": { id: string };
+  "feishu.verify": { appId: string; appSecret: string; domain?: string | null | undefined };
+  "feishu.createConnect": { feishu: unknown; bind?: unknown; mode?: string | null | undefined; requireMention?: boolean | null | undefined; owner?: unknown };
+  "feishu.putSecret": { id: string; appSecret: string };
   "slack.verify": { connect?: string | null | undefined; install?: string | null | undefined; appToken?: string | null | undefined; botToken?: string | null | undefined };
   "slack.makeApp": { team?: string | null | undefined; settings?: unknown; icon?: string | null | undefined };
   "slack.dropApp": { appId: string };
@@ -114,10 +121,13 @@ export interface OperationParams {
   "admin.setPending": { email: string; beta?: boolean | null | undefined; may_create?: boolean | null | undefined };
   "admin.removePending": { email: string };
   "admin.deleteWorkspace": { workspace: string };
+  "admin.createWorkspace": { name: string; owners: string[]; members: number; stations: number };
+  "admin.setLimits": { workspace: string; members: number; stations: number };
+  "admin.enroll": { workspace: string; name: string };
   "admin.feedbackStatus": { id: string; status?: string | null | undefined };
 }
 
-export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
+export const UNTRACKED_OPERATIONS = new Set(["admin.me", "chats.archived", "drive.folders", "file.peek", "job.get", "job.log", "link.preview", "login.drop", "machineSessions.list", "machineSessions.read", "memory.get", "session.transcript", "session.warm", "slack.createAppUrl", "slack.people", "station.modules", "tools.access", "widget.setState", "widget.state"]);
 
 type Call = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
@@ -140,10 +150,12 @@ export function bindStationOperations(call: Call) {
     chatPin: <T = unknown>(params: OperationParams["chat.pin"]) => call("chat.pin", params) as Promise<T>,
     decisionDismiss: <T = unknown>(params: OperationParams["decision.dismiss"]) => call("decision.dismiss", params) as Promise<T>,
     decisionClose: <T = unknown>(params: OperationParams["decision.close"]) => call("decision.close", params) as Promise<T>,
+    chatReport: <T = unknown>(params: OperationParams["chat.report"]) => call("chat.report", params) as Promise<T>,
     sessionNew: <T = unknown>(params: OperationParams["session.new"] = {}) => call("session.new", params) as Promise<T>,
     chatsArchived: <T = unknown>(params: OperationParams["chats.archived"] = {}) => call("chats.archived", params) as Promise<T>,
     chatForSession: <T = unknown>(params: OperationParams["chat.forSession"] = {}) => call("chat.forSession", params) as Promise<T>,
     widgetState: <T = unknown>(params: OperationParams["widget.state"]) => call("widget.state", params) as Promise<T>,
+    sessionTranscript: <T = unknown>(params: OperationParams["session.transcript"]) => call("session.transcript", params) as Promise<T>,
     filePeek: <T = unknown>(params: OperationParams["file.peek"]) => call("file.peek", params) as Promise<T>,
     linkPreview: <T = unknown>(params: OperationParams["link.preview"]) => call("link.preview", params) as Promise<T>,
     widgetSetState: <T = unknown>(params: OperationParams["widget.setState"]) => call("widget.setState", params) as Promise<T>,
@@ -161,6 +173,11 @@ export function bindStationOperations(call: Call) {
     connectReconnect: <T = unknown>(params: OperationParams["connect.reconnect"]) => call("connect.reconnect", params) as Promise<T>,
     connectBindSession: <T = unknown>(params: OperationParams["connect.bindSession"]) => call("connect.bindSession", params) as Promise<T>,
     connectPutSlackApp: <T = unknown>(params: OperationParams["connect.putSlackApp"]) => call("connect.putSlackApp", params) as Promise<T>,
+    feishuRegister: <T = unknown>(params: OperationParams["feishu.register"] = {}) => call("feishu.register", params) as Promise<T>,
+    feishuCancelRegistration: <T = unknown>(params: OperationParams["feishu.cancelRegistration"]) => call("feishu.cancelRegistration", params) as Promise<T>,
+    feishuVerify: <T = unknown>(params: OperationParams["feishu.verify"]) => call("feishu.verify", params) as Promise<T>,
+    feishuCreateConnect: <T = unknown>(params: OperationParams["feishu.createConnect"]) => call("feishu.createConnect", params) as Promise<T>,
+    feishuPutSecret: <T = unknown>(params: OperationParams["feishu.putSecret"]) => call("feishu.putSecret", params) as Promise<T>,
     slackVerify: <T = unknown>(params: OperationParams["slack.verify"] = {}) => call("slack.verify", params) as Promise<T>,
     slackMakeApp: <T = unknown>(params: OperationParams["slack.makeApp"] = {}) => call("slack.makeApp", params) as Promise<T>,
     slackDropApp: <T = unknown>(params: OperationParams["slack.dropApp"]) => call("slack.dropApp", params) as Promise<T>,
@@ -242,6 +259,9 @@ export function bindCloudOperations(call: Call) {
     adminSetPending: <T = unknown>(params: OperationParams["admin.setPending"]) => call("admin.setPending", params) as Promise<T>,
     adminRemovePending: <T = unknown>(params: OperationParams["admin.removePending"]) => call("admin.removePending", params) as Promise<T>,
     adminDeleteWorkspace: <T = unknown>(params: OperationParams["admin.deleteWorkspace"]) => call("admin.deleteWorkspace", params) as Promise<T>,
+    adminCreateWorkspace: <T = unknown>(params: OperationParams["admin.createWorkspace"]) => call("admin.createWorkspace", params) as Promise<T>,
+    adminSetLimits: <T = unknown>(params: OperationParams["admin.setLimits"]) => call("admin.setLimits", params) as Promise<T>,
+    adminEnroll: <T = unknown>(params: OperationParams["admin.enroll"]) => call("admin.enroll", params) as Promise<T>,
     adminFeedbackStatus: <T = unknown>(params: OperationParams["admin.feedbackStatus"]) => call("admin.feedbackStatus", params) as Promise<T>,
   };
 }

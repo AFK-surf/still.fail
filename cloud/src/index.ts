@@ -19,6 +19,8 @@ export { TelemetryLimiter } from "./tracing";
 export { Account } from "./account";
 export { Directory } from "./directory";
 export { LoginAttempt, LoginLimiter } from "./login";
+export { RelayLoad } from "./relay-load";
+import { sampleOwnRelay } from "./relay-load";
 
 // The admin's console has a host of its own, ADMIN_ORIGIN: its /v1/ calls come here too — the calls its client core
 // makes to sign in and stay signed in (the core talks to the page's origin), and the console's API; nothing else. A
@@ -58,6 +60,10 @@ export default {
     if (parent?.sampled) ctx.waitUntil(recordCall(env, parent, request, response, started, Date.now(), notes));
     return response;
   },
+  // Every minute (wrangler.jsonc triggers): still.fail's own relay's counters, for the console (relay-load.ts).
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(sampleOwnRelay(env));
+  },
 } satisfies ExportedHandler<Env>;
 
 async function handle(request: Request, env: Env): Promise<Response> {
@@ -82,7 +88,7 @@ async function handle(request: Request, env: Env): Promise<Response> {
       return serveRelease(request, env.RELEASES, release, type);
     }
     // The apps' latest builds at links that stay (the site's download buttons; under /releases/, which cloud's routes send here).
-    const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta)$/.exec(path)?.[1];
+    const app = /^\/releases\/latest\/(mac|android|win|mac-beta|android-beta|win-beta|android-mbui|mac-mbui|win-mbui)$/.exec(path)?.[1];
     if (app) {
       const file = await latestDownload(env.RELEASES, app);
       if (!file || !releaseType(file)) return notFound();

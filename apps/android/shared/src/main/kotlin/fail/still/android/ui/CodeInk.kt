@@ -36,6 +36,11 @@ private data class CodeLayout(val key: CodeKey, val layout: TextLayoutResult, va
 private val codeLayouts = object : LruCache<CodeKey, TextLayoutResult>(128 * 1024) {
     override fun sizeOf(key: CodeKey, value: TextLayoutResult) = key.code.length.coerceAtLeast(1)
 }
+/** Code's colours, by what it is (not how it is set): a face or size changed shapes it coloured at once. */
+private data class InkKey(val code: String, val language: String?, val dark: Boolean)
+private val codeColours = object : LruCache<InkKey, AnnotatedString>(128 * 1024) {
+    override fun sizeOf(key: InkKey, value: AnnotatedString) = key.code.length.coerceAtLeast(1)
+}
 private val codeWork = Dispatchers.Default.limitedParallelism(2)
 /** Code up to this long (characters) is shaped plain on the UI thread as it is first drawn; longer, never. */
 private const val SHAPED_AT_ONCE = 4_000
@@ -54,9 +59,15 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
     }
     val cached = remember(key) {
         codeLayouts.get(key)?.let { CodeLayout(key, it, true) }
-            // A little code is shaped plain here at once (well under a millisecond), so its message has its height as
-            // it is first drawn, not "laying out" and then taller; its colours come after, off the UI thread.
-            ?: if (code.length <= SHAPED_AT_ONCE) CodeLayout(key, TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0).measure(AnnotatedString(code), style, softWrap = false), false) else null
+            // A little code is shaped here at once (well under a millisecond), so its message has its height as it is
+            // first drawn, not "laying out" and then taller: coloured when its colours are known (the same code set
+            // in another face or size), else plain, its colours coming after, off the UI thread.
+            ?: if (code.length <= SHAPED_AT_ONCE) {
+                val colours = codeColours.get(InkKey(code, key.language, dark))
+                val laid = TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0).measure(colours ?: AnnotatedString(code), style, softWrap = false)
+                if (colours != null) codeLayouts.put(key, laid)
+                CodeLayout(key, laid, colours != null)
+            } else null
     }
     val prepared by produceState(cached, key) {
         value = cached
@@ -67,11 +78,16 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
             val plain = withContext(codeWork) { measurer.measure(AnnotatedString(code), style, softWrap = false) }
             value = CodeLayout(key, plain, false)
         }
-        val colored = withContext(codeWork) { measurer.measure(highlight(code, key.language, dark), style, softWrap = false) }
+        val colored = withContext(codeWork) {
+            val colours = codeColours.get(InkKey(code, key.language, dark)) ?: highlight(code, key.language, dark).also { codeColours.put(InkKey(code, key.language, dark), it) }
+            measurer.measure(colours, style, softWrap = false)
+        }
         codeLayouts.put(key, colored)
         value = CodeLayout(key, colored, true)
     }
-    val result = prepared?.takeIf { it.key == key }?.layout
+    // The key changed (a face chosen, the size): what was produced is the last key's until its producer starts again,
+    // a frame or two; this key's own (shaped above) meanwhile, not "laying out" (the block flashed shorter).
+    val result = prepared?.takeIf { it.key == key }?.layout ?: cached?.layout
     if (result == null) {
         // No synchronous fallback: even a plain 20 MB string is not safe to shape on Main.
         Text(t("android-misc.markdown.laying"), fontSize = 12.5.sp, color = webSubtle, modifier = Modifier.height(with(density) { 20.sp.toDp() }))

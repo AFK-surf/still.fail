@@ -1,0 +1,449 @@
+// The workspace itself, from settings (settings/Settings.kt WorkspaceScreen, still.fail cloud's `workspace` topic): its
+// name as the title (its owners and admins rename it with a tap), its people in one list (those in it, those added who
+// have not signed in, the invitations out), its own relays, leaving or deleting it at the bottom. A person's row opens
+// what can be done about them (their role, moving them out).
+
+///|
+fn workspace_page(c : @ui.Ctx, core : Core, here : Here) -> Unit {
+  let t = @sf.theme()
+  let topic = workspace_view(core, here)
+  let v = topic.value
+  let role = text(v, "role")
+  let manager = role == "owner" || role == "admin"
+  let members = items(v, "members")
+  let added = items(v, "added")
+  let invitations = items(v, "invitations")
+  let relays = strings(v, "relays")
+  let ws = text(v, "id")
+  let blocks : Array[() -> Unit] = [
+    fn() {
+      // adding people by email or from Slack: its owners' and admins'
+      if manager {
+        top_back(c, core, tr("android-settings.title"), trailing=fn() {
+          if nav_button(c, "ws-add-people", "user-plus", size=20.0) {
+            open_add_people(core, here, v)
+          }
+        })
+      } else {
+        top_back(c, core, tr("android-settings.title"))
+      }
+    },
+  ]
+  if v is None {
+    blocks.push(fn() {
+      waiting_cards(
+        c,
+        error=match topic.error {
+          Some(e) => error_text(e)
+          None => ""
+        },
+      )
+    })
+    scroll_page(c, "workspace", blocks)
+    return
+  }
+  let waiting = if manager { added.length() + invitations.length() } else { 0 }
+  let n = members.length().to_string()
+  blocks.append([
+    fn() {
+      let id = c.id("ws-name")
+      if manager && hit(c, id) {
+        ask(
+          tr("android-settings.workspace.name"),
+          text(v, "name"),
+          tr("android-settings.workspace.namePlaceholder"),
+          tr("common.save"),
+          fn(line) {
+            act(
+              core,
+              tr("android-settings.workspace.renameWhat"),
+              "workspace.rename",
+              obj([("workspace", str(ws)), ("name", str(line)), ("account", str(here.sub))]),
+              done=tr("android-settings.renamed"),
+            )
+          },
+        )
+      }
+      c.box(style=@sf.full_width, id=if manager { id } else { 0 }, fn() {
+        let emoji = text(v, "emoji")
+        let icon = text(v, "icon")
+        if @sf.has_station_mark(emoji, icon) {
+          large_title(c, text(v, "name"), lead=fn() { @sf.station_mark(c, emoji, icon, 30.0, t.p.text) })
+        } else {
+          large_title(c, text(v, "name"))
+        }
+      })
+      |> ignore
+    },
+    fn() {
+      // Settings.kt:163 (13sp, muted)
+      c.box(style=@sf.page_words, fn() {
+        c.text(
+          fill(
+            if manager {
+              "android-settings.workspace.aboutRename"
+            } else {
+              "android-settings.workspace.about"
+            },
+            [
+              ("role", role_label(role)),
+              ("people", fill("android-settings.members.count", [("n", n)])),
+              ("stations", fill("android-settings.workspace.stations", [("n", items(v, "stations").length().to_string())])),
+            ],
+          ),
+          style=@sf.secondary.then(@sf.full_words),
+        )
+        |> ignore
+      })
+      |> ignore
+    },
+  ])
+  if manager {
+    blocks.push(fn() {
+      gap(c, 10.0)
+      list_card(c, fn() {
+        // its mark, picked in the sheet a station's is (an icon, an emoji, a picture, or none)
+        if list_row(c, key="ws-mark", fn() {
+          row_title(c, tr("android-settings.workspace.icon"))
+          let busy = is_doing(core, ["workspace.rename"], [("workspace", ws)])
+          doing_mark(c, busy, failed_of(core, ["workspace.rename"], [("workspace", ws)]))
+          let emoji = text(v, "emoji")
+          let icon = text(v, "icon")
+          if @sf.has_station_mark(emoji, icon) {
+            @sf.station_mark(c, emoji, icon, 20.0, t.p.text)
+          } else {
+            // Settings.kt:176 (14sp, muted)
+            c.text(tr("android-settings.workspace.iconNone"), style=@sf.value) |> ignore
+          }
+          chevron(c)
+        }) {
+          open_mark_pick(core, text(v, "name"), text(v, "emoji"), text(v, "icon"), tr("android-settings.workspace.iconWhat"), fn(
+            emoji,
+            icon,
+            done,
+          ) {
+            (core.call)(
+              "workspace.rename",
+              obj([("workspace", str(ws)), ("emoji", str(emoji)), ("icon", str(icon)), ("account", str(here.sub))]),
+              done,
+            )
+          })
+        }
+      })
+    })
+  }
+  blocks.append([
+    fn() {
+      section_header(
+        c,
+        tr("android-settings.members.title"),
+        trailing=if waiting > 0 {
+          fill("android-settings.members.waiting", [("n", n), ("waiting", waiting.to_string())])
+        } else {
+          fill("android-settings.members.count", [("n", n)])
+        },
+        start=S6,
+      )
+    },
+    fn() {
+      list_card(c, fn() {
+        for m in members {
+          member_row(c, core, here, v, m)
+        }
+        if manager {
+          for a in added {
+            let email = text(Some(a), "email")
+            list_row(c, fn() {
+              avatar(c, core, email, email, 28.0)
+              row_lines(
+                c,
+                email,
+                fill("android-settings.members.added", [("role", role_label(text(Some(a), "role")))]),
+                wrap_title=false,
+              )
+              let on = [("workspace", ws), ("email", email)]
+              if row_action(
+                  c,
+                  "remove-added/" + email,
+                  tr("android-settings.members.remove"),
+                  is_doing(core, ["workspace.removeAdded"], on),
+                  failed_of(core, ["workspace.removeAdded"], on),
+                ) {
+                act(
+                  core,
+                  tr("android-settings.members.removeWhat"),
+                  "workspace.removeAdded",
+                  obj([("workspace", str(ws)), ("email", str(email)), ("account", str(here.sub))]),
+                  done=tr("android-settings.members.removed"),
+                )
+              }
+            })
+            |> ignore
+          }
+          for i in invitations {
+            let iv = Some(i)
+            let id = text(iv, "id")
+            let email = text(iv, "email")
+            list_row(c, fn() {
+              avatar(c, core, if email != "" { email } else { id }, if email != "" { email } else { "?" }, 28.0)
+              row_lines(
+                c,
+                if email != "" {
+                  email
+                } else {
+                  tr("android-settings.members.anyone")
+                },
+                fill("android-settings.members.invitation", [
+                  ("role", role_label(text(iv, "role"))),
+                  ("until", stamp(iv, "expires_at", "until")),
+                ]),
+              )
+              let on = [("workspace", ws), ("invitation", id)]
+              if row_action(
+                  c,
+                  "revoke/" + id,
+                  tr("android-settings.members.revoke"),
+                  is_doing(core, ["workspace.revokeInvitation"], on),
+                  failed_of(core, ["workspace.revokeInvitation"], on),
+                ) {
+                act(
+                  core,
+                  tr("android-settings.members.revokeWhat"),
+                  "workspace.revokeInvitation",
+                  obj([("workspace", str(ws)), ("invitation", str(id)), ("account", str(here.sub))]),
+                  done=tr("android-settings.members.revoked"),
+                )
+              }
+            })
+            |> ignore
+          }
+        }
+      })
+    },
+  ])
+  // the workspace's own relays (Settings.kt Relays): a row each, the way to add one
+  if manager || relays.length() > 0 {
+    blocks.append([
+      fn() { section_header(c, tr("android-settings.relays.title"), start=S6) },
+      fn() {
+        list_card(c, fn() {
+          let busy = is_doing(core, ["workspace.setRelays"], [("workspace", ws)])
+          for url in relays {
+            list_row(c, fn() {
+              row_title(c, url.replace(old="https://", new="").replace(old="http://", new=""))
+              if manager &&
+                row_action(c, "relay/" + url, tr("android-settings.members.remove"), busy, None) {
+                act(
+                  core,
+                  tr("android-settings.relays.removeWhat"),
+                  "workspace.setRelays",
+                  obj([
+                    ("workspace", str(ws)),
+                    ("relays", Json::array(relays.filter(fn(r) { r != url }).map(str))),
+                    ("account", str(here.sub)),
+                  ]),
+                  done=tr("android-settings.relays.removed"),
+                )
+              }
+            })
+            |> ignore
+          }
+          if manager &&
+            list_row(c, key="relay-add", fn() {
+              c.text(
+                tr(if busy { "common.saving" } else { "android-settings.relays.add" }),
+                // Settings.kt:256 (15sp)
+                style=@sf.body.then(@sf.accent).then(@sf.one_line),
+              )
+              |> ignore
+            }) &&
+            !busy {
+            ask(
+              tr("android-settings.relays.add"),
+              "",
+              "https://relay.example.com",
+              tr("android-settings.relays.addAction"),
+              hint=tr("android-settings.relays.hint"),
+              fn(line) {
+                let next = relays.copy()
+                next.push(line)
+                act(
+                  core,
+                  tr("android-settings.relays.add"),
+                  "workspace.setRelays",
+                  obj([("workspace", str(ws)), ("relays", Json::array(next.map(str))), ("account", str(here.sub))]),
+                  done=tr("android-settings.relays.added"),
+                )
+              },
+            )
+          }
+        })
+        // Settings.kt:258 (13sp, muted)
+        c.box(style=@sf.under_card_words, fn() {
+          c.text(fill("android-settings.relays.lead", [("app", "still.fail")]), style=@sf.secondary.then(@sf.full_words))
+          |> ignore
+        })
+        |> ignore
+      },
+    ])
+  }
+  blocks.append([
+    fn() { gap(c, 18.0) },
+    fn() {
+      list_card(c, fn() {
+        if list_row(c, key="ws-leave", fn() {
+            c.text(tr("android-settings.workspace.leaveRow"), style=@sf.body.then(@sf.bad).then(@sf.one_line))
+            |> ignore
+          }) {
+          confirm(
+            fill("android-settings.workspace.leaveTitle", [("name", text(v, "name"))]),
+            tr("android-settings.workspace.leaveText"),
+            tr("android-settings.workspace.leave"),
+            danger=true,
+            fn() {
+              (core.home)()
+              act(
+                core,
+                tr("android-settings.workspace.leaveWhat"),
+                "workspace.removeMember",
+                obj([("workspace", str(ws)), ("member", str(here.sub)), ("account", str(here.sub))]),
+                done=tr("android-settings.workspace.left"),
+              )
+            },
+          )
+        }
+        if role == "owner" &&
+          list_row(c, key="ws-delete", fn() {
+            c.text(tr("android-settings.workspace.delete"), style=@sf.body.then(@sf.bad).then(@sf.one_line))
+            |> ignore
+          }) {
+          confirm(
+            fill("android-settings.workspace.deleteTitle", [("name", text(v, "name"))]),
+            fill("android-settings.workspace.deleteText", [
+              ("n", items(v, "stations").length().to_string()),
+              ("app", "still.fail"),
+            ]),
+            tr("android-settings.workspace.delete"),
+            danger=true,
+            fn() {
+              (core.home)()
+              act(
+                core,
+                tr("android-settings.workspace.deleteWhat"),
+                "workspace.delete",
+                obj([("workspace", str(ws)), ("account", str(here.sub))]),
+                done=tr("android-settings.workspace.deleted"),
+              )
+            },
+          )
+        }
+      })
+    },
+    fn() { gap(c, 30.0) },
+  ])
+  scroll_page(c, "workspace", blocks)
+}
+
+///|
+/// A person of the workspace (Settings.kt MemberRow): their picture, name (你 for the viewer) and email, their role;
+/// the owner changes their role, a manager moves them out (an owner only by an owner).
+fn member_row(c : @ui.Ctx, core : Core, here : Here, v : Json?, m : Json) -> Unit {
+  let t = @sf.theme()
+  let mv = Some(m)
+  let sub = text(mv, "sub")
+  let email = text(mv, "email")
+  let name = match text(mv, "name") {
+    "" => email
+    x => x
+  }
+  let role = text(v, "role")
+  let manager = role == "owner" || role == "admin"
+  let ws = text(v, "id")
+  let can = sub != here.sub && manager && (text(mv, "role") != "owner" || role == "owner")
+  if list_row(c, key=if can { "member/" + sub } else { "" }, fn() {
+      avatar(c, core, email, name, 28.0, picture=text(mv, "picture"))
+      // Settings.kt:269-278 (15sp, its email and role 13sp muted)
+      c.box(style=@sf.full_width, fn() {
+        c.box(style=member_name_row, fn() {
+          c.text(name, style=@sf.body.then(@sf.one_line)) |> ignore
+          if sub == here.sub {
+            you(c, tr("android-settings.members.you"))
+          }
+        })
+        |> ignore
+        c.text(email, style=@sf.secondary.then(@sf.one_line).then(@sf.full_words)) |> ignore
+      })
+      |> ignore
+      let on = [("workspace", ws), ("member", sub)]
+      let calls = ["workspace.setRole", "workspace.removeMember"]
+      doing_mark(c, is_doing(core, calls, on), failed_of(core, calls, on))
+      c.text(role_label(text(mv, "role")), style=@sf.secondary.then(@sf.one_line)) |> ignore
+    }) {
+    member_sheet(core, here, v, m)
+  }
+}
+
+///|
+/// What can be done about a person (Settings.kt MemberSheet): their role (by the owner), moving them out.
+fn member_sheet(core : Core, here : Here, v : Json?, m : Json) -> Unit {
+  let mv = Some(m)
+  let sub = text(mv, "sub")
+  let email = text(mv, "email")
+  let ws = text(v, "id")
+  open_sheet(0.5, fn(c, _) {
+    let t = @sf.theme()
+    sheet_head(
+      c,
+      match text(mv, "name") {
+        "" => email
+        x => x
+      },
+    )
+    if text(v, "role") == "owner" {
+      let setting = is_doing(core, ["workspace.setRole"], [("workspace", ws), ("member", sub)])
+      for r in ["owner", "admin", "member"] {
+        if pick_row(
+            c,
+            "role/" + r,
+            role_label(r),
+            sub=tr("android-misc.role." + r + ".hint"),
+            checked=text(mv, "role") == r,
+            enabled=!setting,
+          ) {
+          close_sheet()
+          if r != text(mv, "role") {
+            act(
+              core,
+              tr("android-settings.members.roleWhat"),
+              "workspace.setRole",
+              obj([("workspace", str(ws)), ("member", str(sub)), ("role", str(r)), ("account", str(here.sub))]),
+              done=tr("android-settings.members.roleSet"),
+            )
+          }
+        }
+      }
+    }
+    if pick_row(c, "move-out", tr("android-settings.members.moveOutRow"), color=t.p.red) {
+      confirm(
+        fill("android-settings.members.moveOutTitle", [("email", email), ("name", text(v, "name"))]),
+        tr("android-settings.members.moveOutText"),
+        tr("android-settings.members.moveOut"),
+        danger=true,
+        fn() {
+          act(
+            core,
+            tr("android-settings.members.moveOutWhat"),
+            "workspace.removeMember",
+            obj([("workspace", str(ws)), ("member", str(sub)), ("account", str(here.sub))]),
+            done=tr("android-settings.members.movedOut"),
+          )
+        },
+      )
+    }
+  })
+}
+
+///|
+/// A person's name and what marks them (你), in a line (Settings.kt:270: 6 apart).
+// kept across runs: a value (no field of it changes)
+let member_name_row : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)

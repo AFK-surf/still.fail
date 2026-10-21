@@ -198,23 +198,28 @@ export function applySettings(manifest: Json, edit: SlackAppEdit): Json {
   const events = unique([...strings(at(next, ["settings", "event_subscriptions", "bot_events"])).filter((e) => !eventsKnown.includes(e) || keepEvents.includes(e)), ...keepEvents]);
   object(object(next, "oauth_config"), "scopes").bot = scopes;
   object(object(next, "settings"), "event_subscriptions").bot_events = events;
+  // Cards' buttons come over Socket Mode (an app made before them gets them on its next save).
+  if (next.settings.socket_mode_enabled === true) object(next.settings, "interactivity").is_enabled = true;
   return next;
 }
 
 /// The events of the groups on (base always).
 const eventsOn = (groups: Record<string, boolean>) => SLACK_GROUPS.filter((g) => g.id === "base" || groups[g.id] === true).flatMap((g) => g.events);
 
-/// A manifest with Socket Mode off or on. Off, it has no events either (Slack asks events of an app without Socket Mode
-/// to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack makes the app-level
-/// token with its scope already picked. On, its events are those of the groups it has on.
+/// A manifest with Socket Mode off or on. Off, it has no events or interactivity either (Slack asks those of an app
+/// without Socket Mode to go to a URL): an app made so lets its maker turn Socket Mode on in Slack, which is where Slack
+/// makes the app-level token with its scope already picked. On, its events are those of the groups it has on, and its
+/// cards' buttons come over the socket.
 export function withSocketMode(manifest: Json, on: boolean): Json {
   const next = isObject(manifest) ? structuredClone(manifest) : {};
   const settings = object(next, "settings");
   settings.socket_mode_enabled = on;
   if (!on) {
     delete settings.event_subscriptions;
+    settings.interactivity = { is_enabled: false };
     return next;
   }
+  object(settings, "interactivity").is_enabled = true;
   const events = eventsOn(settingsOf(manifest).groups);
   const known = knownEvents();
   const others = strings(at(settings, ["event_subscriptions", "bot_events"])).filter((e) => !known.includes(e));
@@ -242,7 +247,7 @@ export function slackManifest(name: string, description: string | null = null, r
     oauth_config: oauth,
     settings: {
       event_subscriptions: { bot_events: unique(knownEvents()) },
-      interactivity: { is_enabled: false },
+      interactivity: { is_enabled: true },
       org_deploy_enabled: false,
       socket_mode_enabled: true,
       token_rotation_enabled: false,

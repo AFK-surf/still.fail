@@ -1,0 +1,539 @@
+// One view of a station's screen (ember apps/android app/remote/ScreenSession.kt; docs/remote-screens.md, docs/client-core.md
+// `screen.view`): the core's call kept open while the viewer is in sight, its values taken apart (the state, a config,
+// frames with their bytes), frames handed to the decoder (@ui.Stream: H.264 or JPEG, drawn as the picture the viewer
+// shows), each acknowledged once shown (the stream says so) or dropped; input, 只看/控制 and key frames told back to
+// the core. While it drives the screen, the screen's clipboard goes both ways (a copy made on it comes as a `{clipboard}`
+// value, `screen.clipboard` pastes) and files picked go onto its machine (screen_drops.mbt). The connection, the
+// credentials and the reconnecting are the core's; this only draws what it says.
+
+///|
+/// Where a file dropped into the view goes on the screen's machine (ScreenDrop): the folder, and whether the view can
+/// show it there in the machine's file manager.
+priv struct DropTo {
+  folder : String
+  reveal : Bool
+} derive(Eq)
+
+///|
+/// A copy made on the screen, for the device's clipboard (ScreenClips.kt Copied): its text, or its PNG.
+priv enum Copied {
+  CopiedText(String)
+  CopiedPng(Bytes)
+}
+
+///|
+/// A view of `screen` on `station` (its address, `<workspace>/<station>`), kept while its page is in the stack.
+priv struct ScreenSess {
+  /// where it reads and writes
+  src : Source
+  station : String
+  screen : String
+  /// the name the core knows this view by (unique among this app's views)
+  view : String
+  /// the core's latest state of the view (ScreenViewState, whole each time); None before the first
+  mut state : Json?
+  /// the call failed (the core said why), rather than the view ending
+  mut failure : String?
+  /// the call answered: the view ended (the last state says why)
+  mut finished : Bool
+  /// the frames' codec and size, from the latest config
+  mut codec : String?
+  mut size : (Int, Int)?
+  /// something was shown since it opened: a frame kept on screen through a reconnect or an end
+  mut shown_any : Bool
+  /// 控制 (true) or 只看 as the person chose; None until they do: the core opens it in 只看 while someone else (an
+  /// agent at work) drives it, else in 控制, so opening a screen never takes it from whoever is on it
+  mut wants_control : Bool?
+  /// a finger drives it as a trackpad (true) or directly, as chosen here before the prefs say
+  mut pad_set : Bool?
+  /// the open call (the core's id of it); 0 while it is not open
+  mut call : Int
+  /// the last frame acknowledged
+  mut acked : Double
+  /// the decoder the frames go to, and the picture it shows (made as the view first opens: own_stream)
+  mut stream : @ui.Stream?
+  /// the copies made on the screen not yet put on the device's clipboard (the viewer takes them)
+  copied : Array[Copied]
+  /// the files picked for its machine (screen_drops.mbt)
+  drops : Array[ScreenDropItem]
+  mut drops_serial : Int
+  mut pumping : Bool
+  /// a paste under way
+  mut pasting : Bool
+}
+
+///|
+/// The views open, by their page's key (screen_key).
+let screens_open : Map[String, ScreenSess] = Map([])
+
+///|
+/// How many views this app has opened: each one's name (`mbui-<n>`) its own, the same in every run of the same steps.
+let screens_made : Ref[Int] = Ref(0)
+
+///|
+/// The largest frame worth asking for, its longer side first (ScreenActivity.kt limit: this device's screen, at most
+/// 1920×1080).
+let screen_max_w : Int = 1920
+
+///|
+let screen_max_h : Int = 1080
+
+///|
+fn screen_key(station : String, screen : String) -> String {
+  station + "\u{1}" + screen
+}
+
+///|
+/// The view of `screen` on `station`, made the first time its page asks.
+fn screen_sess(src : Source, station : String, screen : String) -> ScreenSess {
+  let key = screen_key(station, screen)
+  match screens_open.get(key) {
+    Some(s) => s
+    None => {
+      screens_made.val += 1
+      let s : ScreenSess = {
+        src,
+        station,
+        screen,
+        view: "mbui-\{screens_made.val}",
+        state: None,
+        failure: None,
+        finished: false,
+        codec: None,
+        size: None,
+        shown_any: false,
+        wants_control: None,
+        pad_set: None,
+        call: 0,
+        acked: -1.0,
+        stream: None,
+        copied: [],
+        drops: [],
+        drops_serial: 0,
+        pumping: false,
+        pasting: false,
+      }
+      screens_open[key] = s
+      s
+    }
+  }
+}
+
+///|
+/// Its picture's stream, made as the view is first opened (screen_page's after_build: what it says once shown, the
+/// station's frame taken, a key frame asked for, tells the core, which no build does).
+fn ScreenSess::own_stream(self : ScreenSess) -> Unit {
+  if self.stream is Some(_) {
+    return
+  }
+  self.stream = Some(
+    @ui.Stream::new(
+      shown=fn(ts) {
+        self.shown_any = true
+        screen_ack(self.src, self, ts)
+      },
+      broken=fn() { screen_tell(self.src, "screen.keyframe", { "view": Json::string(self.view) }) },
+    ),
+  )
+}
+
+///|
+/// A call nobody waits for (`screen.ack`, `screen.input`: StillFailCore.kt tell): sent in order with the rest, its
+/// answer (or error) let go.
+fn screen_tell(src : Source, name : String, params : Map[String, Json]) -> Unit {
+  (src.call)(name, Json::object(params), fn(_) {  })
+}
+
+///|
+fn screen_ack(src : Source, s : ScreenSess, ts : Double) -> Unit {
+  if ts <= s.acked {
+    return
+  }
+  s.acked = ts
+  screen_tell(src, "screen.ack", { "view": Json::string(s.view), "ts": Json::number(ts) })
+}
+
+///|
+/// What the phase is as the viewer shows it: the call's own failure and end over what the state last said.
+fn ScreenSess::phase(self : ScreenSess) -> String {
+  if self.failure is Some(_) {
+    return "failed"
+  }
+  let p = match opt_text(self.state, "phase") {
+    Some(p) => p
+    None => "connecting"
+  }
+  if self.finished && (p == "connecting" || p == "live" || p == "reconnecting") {
+    "ended"
+  } else {
+    p
+  }
+}
+
+///|
+/// Why, in the viewer's words, for a phase that needs saying.
+fn ScreenSess::message(self : ScreenSess) -> String? {
+  match self.failure {
+    Some(f) => Some(f)
+    None => opt_text(self.state, "message")
+  }
+}
+
+///|
+/// The view is open (on its way, live, or back on its way), not over.
+fn ScreenSess::open_now(self : ScreenSess) -> Bool {
+  let p = self.phase()
+  p == "connecting" || p == "live" || p == "reconnecting"
+}
+
+///|
+/// Input goes to the station now: it is live and driven by this viewer.
+fn ScreenSess::driving(self : ScreenSess) -> Bool {
+  self.phase() == "live" && flag(self.state, "control")
+}
+
+///|
+/// 控制 or 只看 as the view is meant to be now: as chosen, else as the core opened it (只看 while another drives).
+fn ScreenSess::controlling(self : ScreenSess) -> Bool {
+  match self.wants_control {
+    Some(on) => on
+    None => !flag(self.state, "takeOver")
+  }
+}
+
+///|
+/// Someone else (an agent) drives it and this view only looks, but may take it over (接管).
+fn ScreenSess::can_take_over(self : ScreenSess) -> Bool {
+  self.phase() == "live" && flag(self.state, "takeOver")
+}
+
+///|
+/// 只看 / 控制, while it may be driven and the view is open.
+fn ScreenSess::choosable(self : ScreenSess) -> Bool {
+  flag(self.state, "may") && self.open_now()
+}
+
+///|
+/// What the screen's clipboard carries both ways (`text`, `png`), while this viewer drives it: none while only
+/// looking, nor from a station (or helper) from before them.
+fn ScreenSess::clip_types(self : ScreenSess) -> Array[String] {
+  if !self.driving() {
+    return []
+  }
+  items(self.state, "clipboard").filter_map(fn(j) {
+    match j {
+      String(t) => Some(t)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The device's clipboard is pasted into the screen (`screen.clipboard`): driving it, and the station carries some.
+fn ScreenSess::pastes(self : ScreenSess) -> Bool {
+  self.clip_types().iter().any(fn(t) { t == "text" || t == "png" })
+}
+
+///|
+/// Where a file picked goes on the screen's machine, while driving it (none from a station before files).
+fn ScreenSess::drops_to(self : ScreenSess) -> DropTo? {
+  if !self.driving() {
+    return None
+  }
+  match field(self.state, "drop") {
+    Some(Object(_) as d) => {
+      let folder = text(Some(d), "folder")
+      if folder == "" {
+        None
+      } else {
+        Some({ folder, reveal: flag(Some(d), "reveal") })
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Why it is not driven though 控制 was chosen, live (the station lacks a grant: macOS's Accessibility), in the
+/// station's words; None when it is driven, or only looked at.
+fn ScreenSess::undriven(self : ScreenSess) -> String? {
+  guard self.state is Some(_) else { return None }
+  if self.phase() != "live" ||
+    !self.controlling() ||
+    flag(self.state, "control") ||
+    !flag(self.state, "may") ||
+    flag(self.state, "takeOver") {
+    return None
+  }
+  let why = text(field(self.state, "access"), "message")
+  if why == "" {
+    None
+  } else {
+    Some(why)
+  }
+}
+
+///|
+/// Where the station says its pointer is (0..1 of the frame), when it says.
+fn ScreenSess::cursor(self : ScreenSess) -> (Double, Double)? {
+  match field(self.state, "cursor") {
+    Some(Object(_) as c) =>
+      match (field(Some(c), "x"), field(Some(c), "y")) {
+        (Some(Number(x, ..)), Some(Number(y, ..))) => Some((x, y))
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// The frame's size in pixels: the config's, else the picture's as the stream last showed it.
+fn ScreenSess::frame_size(self : ScreenSess) -> (Int, Int)? {
+  match self.size {
+    Some(s) => Some(s)
+    None =>
+      match self.stream {
+        Some(st) => st.size()
+        None => None
+      }
+  }
+}
+
+///|
+/// A finger drives it as a trackpad (it moves the pointer, a tap clicks where that points), or directly (a tap clicks
+/// where it is): as chosen here, else as this device keeps it (`prefs.screenTouch`).
+fn ScreenSess::pad(self : ScreenSess, src : Source) -> Bool {
+  match self.pad_set {
+    Some(on) => on
+    None => text((src.topic)("prefs", {}).value, "screenTouch") != "direct"
+  }
+}
+
+///|
+/// Opens the view (again: after a pause, or 重新打开): `screen.view`, the frames it can decode said (H.264 where the
+/// host decodes it), as large as this device's screen at most.
+fn ScreenSess::open(self : ScreenSess, src : Source) -> Unit {
+  if self.call != 0 {
+    return
+  }
+  // again after it ended (重新打开): on its way, not still saying how the last one ended
+  if self.finished || self.failure is Some(_) {
+    self.state = None
+  }
+  self.failure = None
+  self.finished = false
+  let codecs = if @ui.h264_here() {
+    [Json::string("h264"), Json::string("jpeg")]
+  } else {
+    [Json::string("jpeg")]
+  }
+  let params : Map[String, Json] = {
+    "station": Json::string(self.station),
+    "screen": Json::string(self.screen),
+    "view": Json::string(self.view),
+    "codecs": Json::array(codecs),
+    "maxWidth": Json::number(screen_max_w.to_double()),
+    "maxHeight": Json::number(screen_max_h.to_double()),
+  }
+  // not said until the person chooses: the core decides (only looking while another drives)
+  match self.wants_control {
+    Some(on) => params["control"] = Json::boolean(on)
+    None => ()
+  }
+  let me = self
+  self.call = (src.stream)(
+    "screen.view",
+    Json::object(params),
+    None,
+    fn(value, bytes) { me.take(value, bytes) },
+    fn(r) {
+      me.call = 0
+      match r {
+        Ok(_) => me.finished = true
+        Err(e) => me.failure = Some(text(Some(e), "message"))
+      }
+    },
+  )
+}
+
+///|
+/// Stops viewing (the app went out of sight); the last frame stays, `open` goes on from it.
+fn ScreenSess::pause(self : ScreenSess, src : Source) -> Unit {
+  if self.call != 0 {
+    (src.cancel)(self.call)
+    self.call = 0
+  }
+}
+
+///|
+/// Ends it for good: the view, the decoder, the files still going up.
+fn ScreenSess::close(self : ScreenSess, src : Source) -> Unit {
+  self.pause(src)
+  self.drops.clear()
+  match self.stream {
+    Some(st) => st.close()
+    None => ()
+  }
+}
+
+///|
+/// 只看 or 控制: the core opens the view again with it, the frame on screen kept meanwhile.
+fn ScreenSess::control(self : ScreenSess, src : Source, on : Bool) -> Unit {
+  self.wants_control = Some(on)
+  screen_tell(src, "screen.control", { "view": Json::string(self.view), "control": Json::boolean(on) })
+}
+
+///|
+/// Input for the station (`screen.input`): only while this viewer drives it.
+fn ScreenSess::input(self : ScreenSess, src : Source, input : Json) -> Unit {
+  if !self.driving() {
+    return
+  }
+  screen_tell(src, "screen.input", { "view": Json::string(self.view), "input": input })
+}
+
+///|
+/// Trackpad or direct, chosen: kept on this device for every screen (`prefs.set screenTouch`, null for the
+/// trackpad); `done` gets the core's answer.
+fn ScreenSess::choose_pad(
+  self : ScreenSess,
+  src : Source,
+  on : Bool,
+  done : (Result[Json, Json]) -> Unit,
+) -> Unit {
+  self.pad_set = Some(on)
+  let v = if on { Json::null() } else { Json::string("direct") }
+  (src.call)("prefs.set", Json::object({ "screenTouch": v }), done)
+}
+
+///|
+/// `text` onto the screen's clipboard and pasted where its focus is (`screen.clipboard`).
+fn ScreenSess::paste(
+  self : ScreenSess,
+  src : Source,
+  words : String,
+  done : (Result[Json, Json]) -> Unit,
+) -> Unit {
+  let p : Map[String, Json] = {
+    "view": Json::string(self.view),
+    "text": Json::string(words),
+    "paste": Json::boolean(true),
+  }
+  (src.call)("screen.clipboard", Json::object(p), done)
+}
+
+///|
+/// A PNG onto the screen's clipboard and pasted where its focus is (`screen.clipboard`, the picture beside the call).
+fn ScreenSess::paste_png(
+  self : ScreenSess,
+  src : Source,
+  png : Bytes,
+  done : (Result[Json, Json]) -> Unit,
+) -> Unit {
+  let p : Map[String, Json] = {
+    "view": Json::string(self.view),
+    "png": Json::boolean(true),
+    "paste": Json::boolean(true),
+  }
+  (src.call_bytes)("screen.clipboard", Json::object(p), png, done)
+}
+
+///|
+/// A file dropped onto the machine, shown in its file manager (`screen.input` reveal).
+fn ScreenSess::reveal(
+  self : ScreenSess,
+  src : Source,
+  path : String,
+  done : (Result[Json, Json]) -> Unit,
+) -> Unit {
+  let input = Json::object({ "t": Json::string("reveal"), "path": Json::string(path) })
+  (src.call)("screen.input", Json::object({ "view": Json::string(self.view), "input": input }), done)
+}
+
+///|
+/// A value of the call: taken apart, the heavy parts handed on (ScreenSession.kt take).
+fn ScreenSess::take(self : ScreenSess, value : Json, bytes : Bytes?) -> Unit {
+  guard value is Object(o) else { return }
+  match o.get("state") {
+    Some(Object(_) as s) => self.state = Some(s)
+    _ => ()
+  }
+  match o.get("config") {
+    Some(Object(_) as c) => {
+      let kind = text(Some(c), "codec")
+      if kind != "" {
+        let w = number(Some(c), "width").to_int()
+        let h = number(Some(c), "height").to_int()
+        match bytes {
+          Some(b) if kind == "h264" =>
+            match self.stream {
+              Some(st) => st.h264(b, w, h)
+              None => ()
+            }
+          _ => ()
+        }
+        self.codec = Some(kind)
+        if w > 0 && h > 0 {
+          self.size = Some((w, h))
+        }
+      }
+    }
+    _ => ()
+  }
+  match o.get("clipboard") {
+    Some(Object(_) as c) =>
+      // for the device's clipboard: text, or a picture (its PNG beside, within the bound)
+      match text(Some(c), "type") {
+        "text" => {
+          let t = text(Some(c), "text")
+          if t != "" {
+            self.copied.push(CopiedText(t))
+          }
+        }
+        "png" =>
+          match bytes {
+            Some(b) if b.length() > 0 && b.length() <= clip_png_max && is_png(b) =>
+              self.copied.push(CopiedPng(b))
+            _ => ()
+          }
+        _ => ()
+      }
+    _ => ()
+  }
+  match o.get("frame") {
+    Some(Object(_) as f) => {
+      guard field(Some(f), "ts") is Some(Number(ts, ..)) else { return }
+      let key = flag(Some(f), "key")
+      // a frame that brings nothing to show (no bytes, no codec yet): taken, as far as the station is concerned
+      match bytes {
+        None => screen_ack(self.src, self, ts)
+        Some(b) =>
+          match (self.codec, self.stream) {
+            (Some("h264"), Some(st)) => st.frame(b, key, ts)
+            (Some("jpeg"), Some(st)) => st.jpeg(b, ts)
+            _ => screen_ack(self.src, self, ts)
+          }
+      }
+    }
+    _ => ()
+  }
+}
+
+///|
+/// The most a clipboard carries of a picture, each way (client/core-ts/src/screen-frames.ts; ScreenClips.kt).
+let clip_png_max : Int = 8 * 1024 * 1024
+
+///|
+/// `b` starts as a PNG does.
+fn is_png(b : Bytes) -> Bool {
+  let sig = [137, 80, 78, 71, 13, 10, 26, 10]
+  if b.length() < sig.length() {
+    return false
+  }
+  for i, v in sig {
+    if b[i].to_int() != v {
+      return false
+    }
+  }
+  true
+}

@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import fail.still.android.ui.keyboard
 import fail.still.android.ui.Waiting
+import fail.still.android.ui.concentric
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -132,9 +133,12 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
     ) {
         val chats by rememberTopic<ChatsView>(app.core, Topics.chats(current.workspace.id, false))
         val view = chats.value
-        val shape = Smooth(22.dp)
+        // Its new-chat button, round, in its corner PANEL_PAD from both edges: the panel's corner its half and that; the
+        // rows' grounds and the foot's PANEL_PAD in too, concentric with it.
+        val shape = Smooth(PANEL_PAD + 16.dp)
+        val rowShape = Smooth(concentric(PANEL_PAD + 16.dp, PANEL_PAD))
         Column(Modifier.width(340.dp).heightIn(max = 560.dp).shadow(14.dp, shape, ambientColor = Color.Black.copy(alpha = 0.2f), spotColor = Color.Black.copy(alpha = 0.2f)).floatingStill(shape)) {
-            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = PANEL_PAD, top = PANEL_PAD, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(t("android-misc.wide.recent"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, modifier = Modifier.weight(1f))
                 Box(
                     Modifier.size(32.dp).clip(CircleShape).background(C.accent).clickable { open = false; app.open(Screen.NewChat) }
@@ -150,19 +154,19 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
                 if (note != null && (note.reading || note.failing.isNotEmpty())) Waiting(count = 4, text = t("android-misc.wide.loading"), note = note, modifier = Modifier.padding(bottom = 8.dp))
                 else Text(t("android-misc.wide.empty"), fontSize = 14.sp, color = C.muted, modifier = Modifier.padding(18.dp))
             }
-            else LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = 6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            else LazyColumn(Modifier.weight(1f, fill = false).padding(horizontal = PANEL_PAD), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 items(view.days.flatMap { it.items }.take(6), key = { "${it.station}/${it.id}" }) { item ->
                     val here = top is Screen.Chat && top.station == item.station && top.of == item.page
                     ChatRowBody(
                         item, view.leading ?: "agents", false,
-                        modifier = Modifier.clip(Smooth(14.dp)).background(if (here) C.accentBg else Color.Transparent)
+                        modifier = Modifier.clip(rowShape).background(if (here) C.accentBg else Color.Transparent)
                             .clickable { open = false; if (!here) app.open(Screen.Chat(item.station, item.page)) },
                     )
                 }
             }
             Box(Modifier.fillMaxWidth().height(0.5.dp).background(C.line))
             Row(
-                Modifier.fillMaxWidth().clickable { open = false; app.home() }.padding(start = 18.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                Modifier.padding(PANEL_PAD).fillMaxWidth().clip(rowShape).clickable { open = false; app.home() }.padding(start = 18.dp - PANEL_PAD, end = 16.dp - PANEL_PAD, top = 12.dp - PANEL_PAD, bottom = 12.dp - PANEL_PAD),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(t("android-misc.wide.all"), fontSize = 14.sp, color = C.accentInk, modifier = Modifier.weight(1f))
@@ -177,3 +181,6 @@ private fun BoxScope.Recent(current: WorkspaceEntry, top: Screen, foot: Modifier
         contentAlignment = Alignment.Center,
     ) { IconIn(Icons.Chats, 22.dp, if (open) C.bg else C.ink) }
 }
+
+/** How far the recent panel's new-chat button, its rows' grounds and its foot's are from its edges. */
+private val PANEL_PAD = 6.dp

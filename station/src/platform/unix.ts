@@ -3,14 +3,18 @@
 import { type ChildProcess, execFile, execFileSync, spawn } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { cpus as cpuList, release, type as osType } from "node:os";
-import { delimiter, join } from "node:path";
+import { basename, delimiter, join } from "node:path";
+import { readdir } from "node:fs/promises";
 import { promisify } from "node:util";
 import { wall } from "../ops/fibers.ts";
 import type { Env, Found, Host, Platform } from "./index.ts";
 import { holder } from "./processes.ts";
-import { field, firstWord, output, parseF64, parseLsof, parseU64, procStatTicks, trim } from "./text.ts";
+import { field, firstWord, output, parseF64, parseLsof, parsePs, parseTopMem, parseU64, pressureOfAvailable, pressureOfLevel, procStatTicks, trim } from "./text.ts";
 
 const MACOS = process.platform === "darwin";
+/// Names in the order people read them (numbers by value, case aside), as the drive sorts them.
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
 const run = promisify(execFile);
 
 const executable = (p: string) => {
@@ -340,6 +344,15 @@ export const unix: Platform = {
     isDrivePath: () => false,
   },
 
+  async disks(home) {
+    const found: { name: string; path: string }[] = [];
+    for (const mounts of ["/Volumes", join("/media", basename(home)), "/mnt"]) {
+      for (const name of (await readdir(mounts).catch(() => [] as string[])).sort((a, b) => collator.compare(a, b))) {
+        if (!name.startsWith(".")) found.push({ name, path: join(mounts, name) });
+      }
+    }
+    return found;
+  },
   linkRefused: () => false,
   syncsDirectories: true,
   shareFile(target, link) {
@@ -370,6 +383,12 @@ export const unix: Platform = {
     process.kill(pid, ({ handover: "SIGUSR2", drain: "SIGUSR1", hup: "SIGHUP" } as const)[op]);
   },
   claudeInstall: { program: "/bin/sh", args: ["-c", "curl -fsSL https://claude.ai/install.sh | bash"] },
+  /// The Devin CLI's own installer, without the `devin setup` it ends with (a sign-in of the machine's own, which wants
+  /// a terminal: here it ends "Login canceled" and the install with it; a profile signs in itself).
+  devinInstall: {
+    program: "/bin/sh",
+    args: ["-c", `set -e; s=$(curl -fsSL https://cli.devin.ai/install.sh); printf '%s\\n' "$s" | sed -E '/^"[^"]*" setup[[:space:]]*$/d' | bash`],
+  },
   /// In the background of a shell that ends at once: the installer is nobody's child here, and outlives both a handover
   /// (this process is let go) and a restart (the service's processes are stopped).
   installerExt: "sh",
@@ -390,6 +409,19 @@ export const unix: Platform = {
     });
   },
   shimUpdate: () => null,
+  linkCommand(command, dir) {
+    const link = join(dir, basename(command));
+    try {
+      lstatSync(link);
+      return false;
+    } catch {}
+    try {
+      symlinkSync(command, link);
+      return true;
+    } catch {
+      return false;
+    }
+  },
   codexStandalone: true,
 
   /// macOS: caffeinate against idle sleep, for as long as the station's process is there (-w). Linux: systemd-inhibit
@@ -428,6 +460,57 @@ export const unix: Platform = {
     return script === undefined ? null : [script, ["-qfec", inner.map(quoted).join(" "), "/dev/null"]];
   },
   descendants,
+  async memoryPressure() {
+    try {
+      if (MACOS) return pressureOfLevel((await run("sysctl", ["-n", "kern.memorystatus_vm_pressure_level"])).stdout);
+      const info = readFileSync("/proc/meminfo", "utf8");
+      return pressureOfAvailable(field(info, "MemAvailable"), field(info, "MemTotal"));
+    } catch {
+      return null;
+    }
+  },
+  async processTable(exact) {
+    let table;
+    try {
+      table = parsePs((await run("ps", ["-axo", "pid=,ppid=,pgid=,rss=,comm="], { maxBuffer: 16 << 20 })).stdout);
+    } catch {
+      return null;
+    }
+    // macOS: resident memory leaves out what is compressed or swapped out, which is most of a process that grew past
+    // the memory there is; top's MEM is its footprint, as Activity Monitor says it.
+    if (exact && MACOS) {
+      try {
+        const mem = parseTopMem((await run("top", ["-l", "1", "-stats", "pid,mem", "-n", "100000"], { maxBuffer: 16 << 20 })).stdout);
+        for (const p of table) p.bytes = mem.get(p.pid) ?? p.bytes;
+      } catch {}
+    }
+    return table;
+  },
+  async cwds(pids) {
+    const out = new Map<number, string>();
+    if (pids.length === 0) return out;
+    if (!MACOS) {
+      for (const pid of pids) {
+        try {
+          out.set(pid, readlinkSync(`/proc/${pid}/cwd`));
+        } catch {}
+      }
+      return out;
+    }
+    let text = "";
+    try {
+      text = (await run("lsof", ["-a", "-d", "cwd", "-p", pids.join(","), "-Fpn"])).stdout;
+    } catch (e) {
+      // lsof exits 1 when one of them is gone; what it found is still said.
+      text = (e as { stdout?: string }).stdout ?? "";
+    }
+    let pid: number | null = null;
+    for (const line of text.split("\n")) {
+      if (line.startsWith("p")) pid = Number(line.slice(1));
+      else if (line.startsWith("n") && pid !== null) out.set(pid, line.slice(1));
+    }
+    return out;
+  },
   async listening(pids, port) {
     if (pids.length === 0) return [];
     try {

@@ -21,7 +21,8 @@ runs:
         echo "CARGO_TARGET_DIR=$RUNNER_TEMP/target" >> "$GITHUB_ENV"
         echo "RUSTC_WRAPPER=/opt/homebrew/bin/sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_DIR=$HOME/stillfail-ci/sccache" >> "$GITHUB_ENV"
-        echo "SCCACHE_CACHE_SIZE=25G" >> "$GITHUB_ENV"
+        # 10G: what five days of jobs read was under 5G (2026-10-20), and at 25G it filled mini1's disk with the rest.
+        echo "SCCACHE_CACHE_SIZE=10G" >> "$GITHUB_ENV"
         echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
         # The targets kept before (target-*, check-*, linux-*): no job reads them now.
         find "$HOME/stillfail-ci" -mindepth 1 -maxdepth 1 -type d \( -name 'target*' -o -name 'check-*' -o -name 'linux*' \) -mmin +240 -exec rm -rf {} + 2>/dev/null || true

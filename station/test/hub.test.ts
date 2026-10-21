@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
@@ -1337,6 +1337,130 @@ test("a session changes profile, model and effort by hand, and is taken on by an
   await r.close();
 });
 
+test("a session leaves an account whose five hours are nearly full for one with room, when its context was just compacted or is about to be", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  const HOUR = 60 * 60 * 1000;
+  const used: Record<string, number> = { cc: 10, cc2: 10 };
+  const quota = (five: number) => ({
+    state: "ok",
+    windows: [
+      { label: "5 小时", usedPercent: five, resetsAt: now + 2 * HOUR, minutes: 300 },
+      { label: "每周", usedPercent: 20, resetsAt: now + 100 * HOUR, minutes: 7 * 24 * 60 },
+    ],
+    detail: null,
+    checkedAt: now,
+  });
+  r.hub.accounts.setHealth((id) => ({ quota: quota(used[id] ?? 0) }));
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const turn = async (text: string) => {
+    await r.accept({ ...say(`<@UBOT> ${text}`), threadTs: m.threadTs });
+    await settle();
+  };
+  const done = async () => {
+    await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+    r.claude.last().complete();
+    await settle();
+  };
+  // Its calls as the usage counter records them: [turn, context] each, on its profile.
+  let call = 0;
+  const calls = (session: string, profile: string, each: [string, number][]) =>
+    r.store.recordUsage(`/t/${session}`, { session, offset: call, model: "m" }, "claude", each.map(([turn, context]) => [
+      { id: `c${call++}`, at: now + call, model: "m", subagent: false, fast: false, input: 0, cacheRead: context, cacheWrite: 0, cacheWriteLong: 0, output: 1 },
+      { turn, person: null, thread: null, profile },
+    ]));
+  await done();
+  // Both run its model.
+  r.edit((raw) => (raw.profiles[0].models = ["opus"]));
+  r.edit(withProfile("cc2", "another", ["opus"]));
+  const own = r.session(key).profile;
+  const other = own === "cc" ? "cc2" : "cc";
+  // Where its model is compacted here: another session's went from 200k to 15k.
+  calls("ember:elsewhere", own, [["x", 200_000], ["x", 15_000]]);
+  // Nearly full, its context neither just compacted nor about to be: it stays, in the same process.
+  used[own] = 85;
+  calls(key, own, [["t1", 60_000], ["t1", 90_000]]);
+  const first = r.claude.last();
+  await turn("once more");
+  assert.equal(r.claude.last(), first);
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // Its runtime compacted it, but its process has work going in the background, which would end with it: it stays.
+  calls(key, own, [["t2", 120_000], ["t2", 20_000]]);
+  first.tasks = [{ id: "a1", kind: "agent", description: "profile the build" }];
+  await r.hub.evict(key);
+  assert.ok(!first.disposed);
+  await turn("meanwhile");
+  assert.equal(r.claude.last(), first);
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // That work over: the next turn starts afresh on the other, its process ended first.
+  first.tasks = [];
+  await turn("and again");
+  assert.ok(first.disposed);
+  assert.equal(r.session(key).profile, other);
+  assert.equal(r.claude.last().options.profile.id, other);
+  await done();
+  // Both nearly full: it stays where it is, compacted or not.
+  used[other] = 90;
+  const second = r.claude.last();
+  calls(key, other, [["t3", 120_000], ["t3", 20_000]]);
+  await turn("on and on");
+  assert.equal(r.claude.last(), second);
+  assert.equal(r.session(key).profile, other);
+  await done();
+  // About to be compacted: three quarters of where its model is compacted here.
+  used[own] = 10;
+  calls(key, other, [["t4", 100_000], ["t5", 140_000], ["t6", 151_000]]);
+  await turn("nearly full");
+  assert.equal(r.session(key).profile, own);
+  await done();
+  // Kept to it by hand: it stays however full.
+  used[own] = 90;
+  used[other] = 10;
+  await configure(r.hub, key, { profile: own });
+  calls(key, own, [["t7", 120_000], ["t7", 20_000]]);
+  await turn("pinned");
+  assert.equal(r.session(key).profile, own);
+  await done();
+  await r.close();
+});
+
+test("the station's variables for its agents changed: a process that could take a model in place still ends, the next starts with them", async () => {
+  const r = new Rig();
+  const m = say("<@UBOT> fix the build");
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const running = r.claude.last();
+  // Changed while a turn runs: that turn goes on; its process ends before the next.
+  r.hub.everyChanged();
+  await settle();
+  assert.ok(!running.disposed, "the running turn is not cut off");
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  running.complete();
+  await settle();
+  await r.accept({ ...say("<@UBOT> once more"), threadTs: m.threadTs });
+  await settle();
+  assert.ok(running.disposed, "its process ended before the next turn");
+  assert.deepEqual(running.retuned, [], "not retuned in place");
+  const next = r.claude.last();
+  assert.notEqual(next, running);
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  next.complete();
+  await settle();
+  // Idle: it ends at once.
+  r.hub.everyChanged();
+  await settle();
+  assert.ok(next.disposed);
+  assert.deepEqual(next.retuned, []);
+  await r.close();
+});
+
 test("a deleted profile's sessions go on on another, and stop when no other can run them", async () => {
   const r = new Rig();
   const m = say("<@UBOT> fix the build");
@@ -1522,6 +1646,59 @@ test("a turn that runs out of allowance goes on on another account, or once the 
   await r.close();
 });
 
+test("an account spent with none to move to is said once; what wakes it waits for the refill, a person is tried at once", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const HOUR = 60 * 60 * 1000;
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.hub.accounts.setHealth(() => ({ quota: { state: "ok", windows: [{ label: "5h", usedPercent: 100, resetsAt: now + 2 * HOUR, minutes: 300 }], detail: null, checkedAt: now } }));
+  const spent = { kind: "failed" as const, reason: classifyResult("usage limit reached"), message: "You've hit your limit · resets 5pm" };
+  const said = () => r.chat.texts().filter((t) => t.includes("已达到额度或速率限制"));
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const agent = r.claude.last();
+  const key = agent.options.route;
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 1);
+  assert.ok(matches(said()[0]!, ["没有其他可用账号", "You've hit your limit"]), said()[0]);
+  // Jobs' notices meanwhile: no turn for them (it would run into the allowance again), nothing said again.
+  r.hub.notify(key, "a job ended");
+  r.hub.notify(key, "another job ended");
+  await settle();
+  assert.equal(agent.prompts.length, 1, "no turn while its account is spent");
+  assert.equal(said().length, 1);
+  // At the refill: it goes on by itself; the notices follow that turn.
+  await time.adjust(2 * HOUR);
+  await settle();
+  assert.equal(agent.prompts.length, 2);
+  assert.equal(agent.prompts[1], GO_ON_AFTER_REFILL);
+  // Spent again (the refill read wrong): still said only once, and it waits again (an hour, none known now).
+  r.hub.accounts.setHealth(() => ({}));
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 1, "the thread ends with it already");
+  assert.equal(agent.prompts.length, 2);
+  // A person's message is tried at once, and its failure told them.
+  await r.accept(reply(m, "9999.3", "<@UBOT> 还在吗", { addressed: true }));
+  await settle();
+  assert.equal(agent.prompts.length, 3);
+  assert.ok(agent.prompts[2]!.includes("还在吗"));
+  agent.end(spent);
+  await settle();
+  assert.equal(said().length, 2, "told the person who asked");
+  await time.adjust(HOUR);
+  await settle();
+  assert.equal(agent.prompts[3], GO_ON_AFTER_REFILL);
+  // A turn that ends well: what waited is given.
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  agent.complete();
+  await settle();
+  assert.ok(matches(agent.prompts[4]!, ["a job ended", "another job ended"]), agent.prompts[4]);
+  await r.close();
+});
+
 test("on another account a conversation goes on in a new runtime session, its history read on; on its own it is taken up", async () => {
   const r = new Rig();
   r.edit((raw) => {
@@ -1576,6 +1753,54 @@ test("on another account a conversation goes on in a new runtime session, its hi
   assert.equal(fourth.options.resume, undefined);
   assert.ok(matches(fourth.prompts[0]!, ["This is a new conversation", GO_ON_AFTER_SPENT]), fourth.prompts[0]);
   assert.deepEqual(r.store.runtimeSessions(key), [first.id(), second.id(), fourth.id()]);
+  await r.close();
+});
+
+test("a process ended with work going in the background: its next turn is told what stopped, its subagents taken to the new runtime session", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  const now = time.clock.currentTimeMillisUnsafe();
+  r.edit((raw) => {
+    raw.profiles[0].models = ["opus"];
+    raw.profiles.push({ ...raw.profiles[0], id: "cc2", name: "second" });
+  });
+  const used: Record<string, number> = {};
+  r.hub.accounts.setHealth((id) => ({ quota: { state: "ok", windows: [{ label: "每周", usedPercent: used[id] ?? 10, resetsAt: now + 100 * 3600_000, minutes: 7 * 24 * 60 }], detail: null, checkedAt: now } }));
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const key = first.options.route;
+  const on = r.session(key).profile;
+  // Its transcript and its subagent's, where Claude Code keeps them (the profiles share a home here).
+  const project = join(r.config.profiles[0]!.home, "projects", "-w");
+  mkdirSync(join(project, first.id(), "subagents"), { recursive: true });
+  writeFileSync(join(project, `${first.id()}.jsonl`), `${JSON.stringify({ type: "user", message: { role: "user", content: "hi" } })}\n`);
+  writeFileSync(join(project, first.id(), "subagents", "agent-a1.jsonl"), "{}\n");
+  writeFileSync(join(project, first.id(), "subagents", "agent-a1.meta.json"), "{}");
+  first.tasks = [{ id: "a1", kind: "agent", description: "profile the build" }, { id: "b1", kind: "command", description: "watch CI" }];
+  await r.call(key, "chat_state", { kind: "waiting", seconds: 600, for: "the build" });
+  first.complete();
+  await settle();
+  // Its account used up: the next turn is on the other, in a new runtime session.
+  used[on] = 100;
+  await r.accept({ ...message(), threadTs: m.threadTs });
+  await settle();
+  assert.ok(first.disposed);
+  const second = r.claude.last();
+  assert.notEqual(second.options.profile.id, on);
+  assert.notEqual(second.id(), first.id());
+  assert.ok(matches(second.prompts[0]!, ["This is a new conversation", "background was stopped", "- subagent a1 (profile the build): SendMessage to it goes on from where it stopped", "- background command b1 (watch CI)\n"]), second.prompts[0]);
+  assert.ok(existsSync(join(project, second.id(), "subagents", "agent-a1.jsonl")));
+  assert.ok(existsSync(join(project, second.id(), "subagents", "agent-a1.meta.json")));
+  // Told once.
+  await r.call(key, "chat_post", { to: `C1/${m.threadTs}`, text: "done", kind: "final" });
+  second.complete();
+  await settle();
+  await r.accept({ ...message(), threadTs: m.threadTs });
+  await settle();
+  assert.equal(r.claude.last(), second);
+  assert.ok(!second.prompts[1]!.includes("background was stopped"), second.prompts[1]);
   await r.close();
 });
 

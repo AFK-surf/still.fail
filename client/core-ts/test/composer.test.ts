@@ -12,6 +12,9 @@ import { CoreError } from "../src/error.ts";
 import { stationReplies, started } from "./station-fixture.ts";
 import { HostWire } from "../src/station/wire.ts";
 
+/// A draft as written, without the name the core gives it (its own test: draft-id.test.ts).
+const noId = ({ id: _, ...d }: any) => d;
+
 type J = any;
 
 test("desktop_upload_retry_keeps_its_source_after_a_station_failure", async () => {
@@ -276,19 +279,19 @@ test("draft_subscriptions_follow_both_chat_keys_when_joined_edited_and_taken", a
     await t.settle();
     call(t.core, t.ui, 901, "draft.put", { key: `ws/st:${pending}`, ...draft });
     await t.settle();
-    assert.deepEqual(v(t.values, 1), draft);
-    assert.deepEqual(v(t.values, 2), { text: "", quotes: [], files: [], links: [] });
+    assert.deepEqual(noId(v(t.values, 1)), draft);
+    assert.deepEqual(noId(v(t.values, 2)), { text: "", quotes: [], files: [], links: [] });
 
     t.core.inner.views.local.pendingMade(pending, "ember:made", 9);
     await t.settle();
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), draft);
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), draft);
     const edited = { ...draft, text: "继续写" };
     call(t.core, t.ui, 902, "draft.put", { key: "ws/st:ember:made", ...edited });
     await t.settle();
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), edited);
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), edited);
 
     await t.ask("take", { key: "ws/st:ember:made" });
-    for (const sub of [1, 2]) assert.deepEqual(v(t.values, sub), { text: "", quotes: [], files: [], links: [] });
+    for (const sub of [1, 2]) assert.deepEqual(noId(v(t.values, sub)), { text: "", quotes: [], files: [], links: [] });
   } finally { t.core.close(); }
 });
 
@@ -530,6 +533,30 @@ test("failed_upload_keeps_the_message_and_retry_uploads_before_delivery", async 
   await t.settle();
   assert.equal(t.posted.length, 1);
   assert.deepEqual(t.posted[0].attachments, [t.saved]);
+  t.core.close();
+});
+
+test("a_message_the_station_refuses_as_it_is_fails_for_good_and_is_not_sent_again", async () => {
+  const t = await setup();
+  let posts = 0;
+  // A file this station does not have (one that went up to another): refused as it is, again and again.
+  (t.core.inner.stations as J).post = () => { posts++; return Effect.fail(new CoreError("http_400", "Attachment isn't in uploads", 400)); };
+  call(t.core, t.ui, 501, "chat.send", { station: "ws/st", thread: 7, text: "look", attachments: [{ name: "shot.png", path: "/mini/uploads/shot.png", size: 3 }] });
+  await t.settle();
+  const failed = t.core.inner.views.local.outbox("ws/st", 7)[0];
+  assert.deepEqual([failed.state, failed.final, posts], ["failed", true, 1]);
+  call(t.core, t.ui, 502, "chat.retry", { station: "ws/st", thread: 7, id: failed.id });
+  await t.settle();
+  assert.equal(posts, 1);
+  // Another failure (the station not reached) stays one to send again.
+  (t.core.inner.stations as J).post = () => { posts++; return Effect.fail(new CoreError("unreachable", "offline")); };
+  call(t.core, t.ui, 503, "chat.send", { station: "ws/st", thread: 8, text: "later" });
+  await t.settle();
+  const unsent = t.core.inner.views.local.outbox("ws/st", 8)[0];
+  assert.deepEqual([unsent.state, unsent.final], ["failed", undefined]);
+  call(t.core, t.ui, 504, "chat.retry", { station: "ws/st", thread: 8, id: unsent.id });
+  await t.settle();
+  assert.equal(posts, 3);
   t.core.close();
 });
 

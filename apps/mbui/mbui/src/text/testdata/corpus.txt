@@ -1,0 +1,114 @@
+# Tricky strings for the differential text test (scripts/textdiff.sh): each drawn by mbui (shaped by the host, each
+# cluster rasterized on its own into the atlas, laid out by src/ui) and by the platform's own text drawing at the same
+# font, size and place, then compared (advance, ink box, pixels).
+#
+# In the spirit of HarfBuzz's and Chromium's text test corpora (ligatures, kerning, clusters, marks, scripts), written
+# for this file: no text is taken from elsewhere.
+#
+#   id | variants | text
+# variants (default S): S sizes 11, 15, 20 and 28; r 15 alone; b bold 15; B bold 28; i italic 15; m the code face 15.
+# Escapes in text: \t a tab, \u{XXXX} a code point, \\ a backslash.
+
+# ---- ligatures: one glyph for several letters (the "f ɭex" of a701b26)
+liga-flex | Sbi | flex
+liga-fi | Sbi | fi fl ff ffi ffl fj ft
+liga-words | Sbim | office flexible affluent shuffle waffle fjord
+liga-caps | S | Flexbox Fifth Office FFI
+liga-precomposed | S | \u{FB00} \u{FB01} \u{FB02} \u{FB03} \u{FB04} (precomposed)
+liga-after-space | r | a fl b fi c ffl d
+liga-th | ri | the theatre Th tt
+
+# ---- kerning: pairs moved closer than their advances say
+kern-pairs | SB | AV To Wa LT Ty Yo P. F, VA
+kern-words | Sb | AVATAR WAVE Today LTV Typo
+kern-quotes | S | “Wo” ‘Ta’ T. Y, L’ r.
+kern-digits | r | 11 71 17 1.1 7,7
+
+# ---- figures: proportional and tabular
+digits | Sbm | 0123456789
+digits-runs | S | 1111 8888 0000 1010
+digits-money | S | ¥1,234.56 $7,890 €0.99 12:30 50% −3
+digits-fractions | r | ½ ¼ ¾ 1⁄2 x² H₂O
+
+# ---- Han, kana, Hangul with Latin and CJK punctuation
+cjk-mixed | Sb | 你好，世界。Hello「mbui」、测试
+cjk-fullwidth-space | S | 全角　空格　在这里
+cjk-brackets | S | （括号）【方括号】《书名号》〈单〉
+cjk-dots | S | 等一下……好的——走吧！？
+cjk-numbers | S | 共3条消息，第12页，100%完成
+cjk-latin-words | r | 用mbui写UI，在Android上跑
+cjk-italic | i | 斜体的汉字和Latin混排
+cjk-ja | S | 日本語のテキスト、カタカナ。ｶﾀｶﾅ
+cjk-fullwidth-latin | r | ＡＢＣ１２３！？
+hangul | S | 안녕하세요 한국어 텍스트
+hangul-jamo | r | \u{1100}\u{1161}\u{11A8} \u{1112}\u{1161}\u{11AB} (conjoining jamo)
+
+# ---- emoji: sequences that are one cluster
+emoji-basic | S | 😀 👍 🎉 🙏 🔥
+emoji-zwj-family | S | 👨‍👩‍👧‍👦 👩‍👩‍👦 👨‍👨‍👧
+emoji-zwj-other | r | 🧑‍💻 👩‍🚀 🏳️‍🌈 🐻‍❄️ ❤️‍🔥
+emoji-skin | S | 👍🏻 👍🏽 👍🏿 🧑🏾‍💻 👋🏼
+emoji-flags | S | 🇨🇳 🇯🇵 🇺🇸 🇬🇧 🇫🇷
+emoji-keycaps | S | 1️⃣ #️⃣ *️⃣ 0️⃣
+emoji-vs16 | S | ☺️ ☺ ✈️ ✈ ♥️ ♥ ©️ ©
+emoji-in-text | Sb | ok 👌 done ✅ 好的 🙏 next →
+
+# ---- combining marks: one cluster, a base and what sits on it
+marks-e | S | e\u{301} é e\u{300} è (decomposed, precomposed)
+marks-stack | S | n\u{303}\u{303} a\u{300}\u{301}\u{302} o\u{308}\u{304}
+marks-vietnamese | Sbi | Tiếng Việt: ễ ặ ở ữ ợ ầ
+marks-vietnamese-nfd | S | e\u{302}\u{303} a\u{306}\u{323} u\u{31B}\u{303}
+marks-below | r | ḍ ṇ ṭ ẹ ọ ụ
+marks-enclosing | r | a\u{20DD} 1\u{20E3} x\u{20E0}
+marks-alone | r | \u{301} \u{308} (marks without a base)
+
+# ---- Thai: marks above and below, no spaces between words
+thai | S | ภาษาไทย สวัสดีครับ
+thai-marks | S | กี่ ปั้น น้ำ ฤๅ ญี่ปุ่น
+thai-sara-am | r | น้ำ ทำ กำลัง
+
+# ---- right to left
+arabic | Sb | مرحبا بالعالم
+arabic-joining | S | سلام كتاب مدرسة
+arabic-lam-alef | S | لا السلام الآن
+arabic-marks | r | مَرْحَبًا
+arabic-mixed | S | abc مرحبا 123 def
+arabic-digits | r | ٠١٢٣٤٥٦٧٨٩ ۱۲۳
+arabic-punct | r | نعم، لا؟ (مرحبا)
+hebrew | S | שלום עולם
+hebrew-points | S | שָׁלוֹם
+hebrew-mixed | S | Hello שלום 42 world
+
+# ---- Indic: conjuncts, reordered vowel signs, reph
+deva | S | नमस्ते दुनिया
+deva-conjuncts | S | क्ष त्र ज्ञ श्र द्ध
+deva-reph | S | धर्म कर्म पूर्व
+deva-i-matra | S | कि सि हिन्दी
+bengali | r | বাংলা ভাষা
+tamil | r | தமிழ் மொழி
+
+# ---- other scripts
+greek-cyrillic | Sb | Ελληνικά Русский текст
+latin-extended | S | Ąę Łódź Ærøskøbing ß ẞ Ŋ ĳ
+math-symbols | S | ≤ ≥ ≠ ± × ÷ → ⇒ ∞ √ ∑
+quotes-dashes | S | “quotes” ‘single’ — en–dash … «guillemets»
+
+# ---- spaces and tabs
+tabs | Sm | a\tb\tc
+tab-lead | rm | \tindented
+tab-mid | rm | name:\tvalue\tend
+spaces-runs | S | a  b   c    d
+spaces-special | r | a\u{A0}b a\u{2009}b a\u{200B}b a\u{AD}b a\u{3000}b
+zero-width | r | a\u{200D}b a\u{200C}b a\u{2060}b
+
+# ---- long and unbreakable
+long-word | S | Pneumonoultramicroscopicsilicovolcanoconiosis
+long-url | r | https://example.com/a/very/long/path/without/any/spaces?query=string&x=1
+long-cjk | r | 这是一段很长的没有空格的中文文字用来测试一行放不下的时候会怎么样
+
+# ---- styles
+code | Sm | fn main() { let x = 0x1F; } // ok
+code-ops | m | -> => != <= >= :: ++ && ||
+caps | Sb | ALL CAPS TEXT WAVY
+italic-mix | i | Italic with fi, ffl and AV
+bold-mix | bB | Bold with fi, ffl and AV

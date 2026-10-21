@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="324" viewBox="0 0 920 324" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#A1A1AA" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="arrowo" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#E5704A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker>
+</defs>
+<text x="24" y="26" font-size="11.5" fill="#71717A" font-weight="600" text-anchor="start">团队</text>
+<rect x="24" y="40" width="250" height="72" rx="14" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+<text x="44" y="70" font-size="15" fill="#18181B" font-weight="600" text-anchor="start">Slack · 飞书</text>
+<text x="44" y="94" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">在 thread 里 @ 机器人</text>
+<rect x="24" y="128" width="250" height="72" rx="14" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+<text x="44" y="158" font-size="15" fill="#18181B" font-weight="600" text-anchor="start">still.fail app</text>
+<text x="44" y="182" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">网页版 · macOS · Windows · 安卓</text>
+<rect x="364" y="8" width="532" height="196" rx="20" fill="none" stroke="#D4D4D8" stroke-dasharray="5 5"/>
+<text x="388" y="34" font-size="11.5" fill="#71717A" font-weight="600" text-anchor="start">你的机器</text>
+<rect x="388" y="52" width="232" height="128" rx="14" fill="#FFF7F3" stroke="#E5704A" stroke-width="1.5"/>
+<circle cx="410" cy="79" r="4.5" fill="#E5704A"/>
+<text x="424" y="84" font-size="15" fill="#18181B" font-weight="600" text-anchor="start">Station A</text>
+<text x="408" y="108" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">Claude Code · Codex</text>
+<text x="408" y="129" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">DeepSeek Harness · Grok Build</text>
+<text x="408" y="150" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">会话 · 任务 · 文件</text>
+<rect x="728" y="52" width="144" height="128" rx="14" fill="#FFF7F3" stroke="#E5704A" stroke-width="1.5"/>
+<circle cx="750" cy="79" r="4.5" fill="#E5704A"/>
+<text x="764" y="84" font-size="15" fill="#18181B" font-weight="600" text-anchor="start">Station B</text>
+<text x="748" y="108" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">另一台机器</text>
+<text x="748" y="129" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">自己的 runtime</text>
+<line x1="624" y1="128" x2="724" y2="128" stroke="#E5704A" stroke-width="1.5" marker-start="url(#arrowo)" marker-end="url(#arrowo)"/>
+<text x="674" y="100" font-size="11" fill="#71717A" font-weight="500" text-anchor="middle">任务</text>
+<text x="674" y="115" font-size="11" fill="#71717A" font-weight="500" text-anchor="middle">Profile · skill</text>
+<line x1="278" y1="76" x2="384" y2="76" stroke="#A1A1AA" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="303.0" y="66" width="56" height="20" rx="10" fill="#FFFFFF"/>
+<text x="331" y="80" font-size="11.5" fill="#71717A" font-weight="500" text-anchor="middle">机器人</text>
+<line x1="278" y1="164" x2="384" y2="164" stroke="#A1A1AA" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<rect x="305.0" y="154" width="52" height="20" rx="10" fill="#FFFFFF"/>
+<text x="331" y="168" font-size="11.5" fill="#71717A" font-weight="500" text-anchor="middle">点对点</text>
+<rect x="24" y="252" width="872" height="56" rx="16" fill="#F4F4F5" stroke="#E4E4E7"/>
+<text x="48" y="285" font-size="15" fill="#18181B" font-weight="600" text-anchor="start">still.fail cloud</text>
+<text x="190" y="285" font-size="12.5" fill="#71717A" font-weight="400" text-anchor="start">账号 · workspace · 中继，对话内容只在 station 上</text>
+<line x1="149" y1="202" x2="149" y2="248" stroke="#A1A1AA" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<rect x="127.0" y="215" width="44" height="20" rx="10" fill="#FFFFFF"/>
+<text x="149" y="229" font-size="11.5" fill="#71717A" font-weight="500" text-anchor="middle">登录</text>
+<line x1="630" y1="206" x2="630" y2="248" stroke="#A1A1AA" stroke-width="1.3" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<rect x="594.0" y="217" width="72" height="20" rx="10" fill="#FFFFFF"/>
+<text x="630" y="231" font-size="11.5" fill="#71717A" font-weight="500" text-anchor="middle">成员关系</text>
+</svg>

@@ -72,6 +72,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import kotlin.math.roundToInt
 import fail.still.android.ui.PickRow
 
@@ -113,11 +114,11 @@ fun BarSettingsScreen() {
             Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(t("android-misc.bar.set", "n" to i + 1), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 if (made && i == cur) Text(
-                    t("android-misc.bar.current"), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = C.accent,
+                    t("android-misc.bar.current"), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = C.link,
                     modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(50)).background(C.accentBg).padding(horizontal = 7.dp, vertical = 1.dp),
                 )
                 Spacer(Modifier.weight(1f))
-                if (made && i != cur) Text(t("android-misc.bar.use"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { save(app, bars.sets, i) }.padding(4.dp))
+                if (made && i != cur) Text(t("android-misc.bar.use"), fontSize = 13.sp, color = C.link, modifier = Modifier.clip(Smooth(6.dp)).clickable { save(app, bars.sets, i) }.padding(4.dp))
                 if (sets.size > 1) Text(
                     t("android-misc.bar.delete"), fontSize = 13.sp, color = C.red,
                     modifier = Modifier.padding(start = 10.dp).clip(Smooth(6.dp)).clickable {
@@ -136,7 +137,7 @@ fun BarSettingsScreen() {
         ListCard(Modifier.padding(top = 14.dp)) {
             ListRow(onClick = { adding = true; pickFor(bars.sets.size) }) {
                 IconIn(Icons.Plus, 20.dp, C.accent)
-                Text(t("android-misc.bar.new"), fontSize = 15.sp, color = C.accent, modifier = Modifier.weight(1f))
+                Text(t("android-misc.bar.new"), fontSize = 15.sp, color = C.link, modifier = Modifier.weight(1f))
             }
         }
         PageNote(if (bars.sets.size > 1) t("android-misc.bar.foot.many") else t("android-misc.bar.foot.one"))
@@ -156,7 +157,7 @@ private fun ViewConfiguration.exact(): ViewConfiguration = object : ViewConfigur
  */
 @Composable
 private fun BarCard(app: AppState, i: Int, set: List<String>, only: Boolean, onAdd: () -> Unit, onMove: (Int, Int) -> Unit) {
-    BoxWithConstraints(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface).padding(horizontal = 4.dp, vertical = 8.dp)) {
+    BoxWithConstraints(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(20.dp)).background(C.surface).padding(6.dp)) {
         val slot = maxWidth / BAR_SIZE
         val move by androidx.compose.runtime.rememberUpdatedState(onMove)
         Row(Modifier.fillMaxWidth()) {
@@ -167,7 +168,7 @@ private fun BarCard(app: AppState, i: Int, set: List<String>, only: Boolean, onA
                 Box(
                     Modifier.width(slot).zIndex(if (lifted) 2f else 0f)
                         .graphicsLayer { translationX = dx; val s = if (lifted) 1.08f else 1f; scaleX = s; scaleY = s }
-                        .then(if (lifted) Modifier.shadow(6.dp, Smooth(16.dp), ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f)).clip(Smooth(16.dp)).background(C.surface) else Modifier)
+                        .then(if (lifted) Modifier.shadow(6.dp, Smooth(concentric(20.dp, 6.dp)), ambientColor = Color.Black.copy(alpha = 0.14f), spotColor = Color.Black.copy(alpha = 0.14f)).clip(Smooth(concentric(20.dp, 6.dp))).background(C.surface) else Modifier)
                         .pointerInput(key, j, set.size) {
                             detectHorizontalDragGestures(
                                 onDragStart = { lifted = true; dx = 0f },

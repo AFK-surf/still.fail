@@ -75,6 +75,7 @@ step() {
     set +e
     for k in $before; do until [ -e "$tmp/step.$k.done" ]; do sleep 0.1; done; done
     start=$(date +%s)
+    echo "$start" > "$tmp/step.$n.start"
     {
       ok=1
       for w in $waits; do ready "$w" || { echo "preparing $w failed:"; cat "$tmp/prep.$w.log"; ok=0; break; }; done
@@ -95,13 +96,32 @@ ready() {
   until [ -e "$tmp/prep.$1.done" ]; do sleep 0.1; done
   [ "$(cat "$tmp/prep.$1.done")" = 0 ]
 }
-# Says each step, in order, as it is done.
+# The steps started and not done, with how long each has run (and with `tail`, the end of each one's output so far).
+running() {
+  now=$(date +%s)
+  k=0
+  while [ $k -lt $n ]; do
+    k=$((k + 1))
+    [ -e "$tmp/step.$k.start" ] && [ ! -e "$tmp/step.$k.done" ] || continue
+    echo "  … $(cat "$tmp/step.$k.name"): running, $((now - $(cat "$tmp/step.$k.start"))) s"
+    [ -z "${1:-}" ] || tail -20 "$tmp/step.$k.log" | sed 's/^/      /'
+  done
+}
+# Stopped (CI's time up, ^C): which steps were still running, and where each had got to, said before it ends (a
+# check stopped after 10 minutes said only the last step done, not the one it waited for: 39468530573).
+trap 'echo "stopped; still running:"; running tail; exit 1' INT TERM
+# Says each step, in order, as it is done; every minute spent waiting, the ones still running.
 report() {
   i=0
   while [ $i -lt $n ]; do
     i=$((i + 1))
     name=$(cat "$tmp/step.$i.name")
-    until [ -e "$tmp/step.$i.done" ]; do sleep 0.1; done
+    w=0
+    until [ -e "$tmp/step.$i.done" ]; do
+      sleep 0.1
+      w=$((w + 1))
+      [ $((w % 600)) != 0 ] || running
+    done
     read -r rc took < "$tmp/step.$i.done"
     if [ "$rc" = 0 ]; then echo "· $name … ok (${took} s)"; else
       echo "· $name … FAILED (${took} s)"
@@ -221,6 +241,12 @@ if part ts; then
     k=apps/android/app/src/main/kotlin/fail/still/android
     step "phone packages one way" sh -c "! git grep -n 'fail\\.still\\.android\\.drive\\.' -- $k/remote $k/share && ! git grep -n 'fail\\.still\\.android\\.screens\\.' -- $k/remote"
   fi
+  # The mbui app's determinism (mbui's docs/detlint.md): nothing waits on a guessed time or on settling, the app asks
+  # for no frame and reads no clock of its own; each file's count of each rule only goes down (apps/mbui/detlint.json).
+  if touches '^apps/mbui/'; then
+    # (the lint is mbui's, apps/mbui/mbui's)
+    step "mbui app determinism (detlint)" sh -c 'd=$(sh apps/mbui/scripts/mbui.sh) && python3 "$d/scripts/detlint.py" apps/mbui'
+  fi
   if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then
     step "no requests from the UIs" sh -c '! git grep -nE "(station|cloud)\.request" -- web/src web/ui apps/desktop/src apps/android'
   fi
@@ -291,6 +317,9 @@ if part ts; then
     prep core deps client/core-ts
     step "desktop: its shell's files" after root after desktop after core node scripts/desktop-web.ts check
     step "desktop: what it keeps sealed" node --test apps/desktop/test/secure.test.ts
+    step "desktop: local diagnostic records" node --test apps/desktop/test/diagnostic-log.test.ts
+    step "desktop: its station's PATH" node --test apps/desktop/test/station-path.test.ts
+    step "desktop: where its station stands, joining it" node --test apps/desktop/test/station-place.test.ts
     step "desktop: its executables' own UUIDs" node --test apps/desktop/test/after-pack.test.ts; fi
   # The TypeScript core (docs/core-ts.md): its own tsconfig.
   if touches "$ts_core"; then prep core deps client/core-ts; step "typecheck: core-ts" after core sh -c 'cd client/core-ts && pnpm exec tsgo --noEmit'; fi
@@ -309,10 +338,11 @@ fi
 if [ $full = 1 ]; then
   # Every story (web/stories) opened and every corner and small panel in it measured (test/browser/stories.mjs,
   # docs/ui-panels.md), then what moves in a chat's message list watched frame by frame (test/browser/list-settle.mjs,
-  # docs/list-motion.md), and a viewer's bar dragging the window only while pointed at (test/browser/viewer-bar.mjs, the motion's last share):
+  # docs/list-motion.md), a viewer's bar dragging the window only while pointed at (test/browser/viewer-bar.mjs, the motion's last share)
+  # and nothing dragging it under a folded sidebar shown a while (test/browser/peek-drag.mjs, there too):
   # on a Chrome the machine has (CI's Linux runners have one). On CI shared out between jobs side by
   # side (STILLFAIL_BROWSER): on one of GitHub's four cores it all took ~3 minutes (2026-10-15).
-  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar)\.mjs$'; }; then
+  if part browser && { touches '^web/' || touches '^test/browser/(stories|measure|list-settle|viewer-bar|peek-drag)\.mjs$'; }; then
     if command -v google-chrome >/dev/null 2>&1; then
       prep root deps .
       wasm_pkg
@@ -322,8 +352,8 @@ if [ $full = 1 ]; then
       share=${STILLFAIL_BROWSER#* }; [ "$share" = "${STILLFAIL_BROWSER:-}" ] && share=1/1
       case "${STILLFAIL_BROWSER:-}" in
         stories*) step "web: stories measured (${STILLFAIL_BROWSER#stories })" after root after core sh -c "$chrome SHARD='${STILLFAIL_BROWSER#stories }'; node test/browser/stories.mjs" ;;
-        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || node test/browser/viewer-bar.mjs; }" ;;
-        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs" ;;
+        motion*) step "web: the message list's motion watched ($share), a viewer's bar kept" after root after core sh -c "$chrome SHARD='$share'; node test/browser/list-settle.mjs && { [ '${share%/*}' != '${share#*/}' ] || { node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs; }; }" ;;
+        *) step "web: stories measured, the message list's motion watched, a viewer's bar kept" after root after core sh -c "$chrome; node test/browser/stories.mjs && node test/browser/list-settle.mjs && node test/browser/viewer-bar.mjs && node test/browser/peek-drag.mjs" ;;
       esac
     else
       later "web: stories measured, the message list's motion watched (no Chrome here)"
@@ -344,8 +374,9 @@ if [ $full = 1 ]; then
   if part station && touches '^station/|^vendor/|^client/i18n/|^scripts/native\.ts$'; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
-    # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall.
-    step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts"'
+    # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall. Cursor's
+    # driver (agents/cursor-bridge.mjs) runs in the agent's own process, not the station's.
+    step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs"'
     remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
   fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module

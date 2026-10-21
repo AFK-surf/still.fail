@@ -9,6 +9,9 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { Effect } from "effect";
 import { apply as applyOps } from "../src/delta.ts";
 import type { HttpRequest } from "../src/host.ts";
+import type { StationAddr } from "../src/station/addr.ts";
+import { HostWire, type RequestHead, type StationWire } from "../src/station/wire.ts";
+import type { FakeHost } from "../src/testing.ts";
 import { type Entry, Signer, entryHash, next } from "../src/lock.ts";
 import { hex, utf8 } from "../src/util.ts";
 import {
@@ -150,7 +153,10 @@ function fakeStation() {
         return { vaults: [...vaults.values()] };
       case "PUT /vault/vaults": {
         const prev = vaults.get(body.id);
-        if (body.seq !== (prev ? prev.seq + 1 : 0)) return status(409, { error: "seq", code: "vault_conflict", vault: prev ?? null });
+        // A copy from another station: any later version; one no later answered with the one held.
+        const copy = query === "copy=1";
+        if (copy && prev && body.seq <= prev.seq) return { vault: prev };
+        if (!copy && body.seq !== (prev ? prev.seq + 1 : 0)) return status(409, { error: "seq", code: "vault_conflict", vault: prev ?? null });
         if (!signedOk(body, TAG.vault)) return status(400, { error: "signature", code: "vault_invalid" });
         vaults.set(body.id, body);
         return { vault: body };
@@ -159,7 +165,10 @@ function fakeStation() {
         return { items: [...items.values()].filter((i) => !query || query === `vault=${i.vault}`) };
       case "PUT /vault/items": {
         const prev = items.get(body.id);
-        if (body.version !== (prev ? prev.version + 1 : 0)) return status(409, { error: "version", code: "vault_conflict", item: prev ?? null });
+        const copy = query === "copy=1";
+        if (!vaults.has(body.vault)) return status(404, { error: "no vault", code: "vault_unknown" });
+        if (copy && prev && body.version <= prev.version) return { item: prev };
+        if (!copy && body.version !== (prev ? prev.version + 1 : 0)) return status(409, { error: "version", code: "vault_conflict", item: prev ?? null });
         if (!signedOk(body, TAG.item)) return status(400, { error: "signature", code: "vault_invalid" });
         items.set(body.id, body);
         return { item: body };
@@ -187,16 +196,24 @@ function fakeStation() {
 }
 
 /// A core on an app's host (keys kept, secure storage), reaching `ws/st` (the fake station); its lock put in place.
-/// `web`: a web page's host (no secure storage).
-async function rig(web = false) {
+/// `web`: a web page's host (no secure storage). `two`: a second station, `ws/st2` (`st2`), in the workspace too.
+async function rig(web = false, two = false) {
   const st = fakeStation();
+  const st2 = fakeStation();
   const me = { signer: null as Signer | null };
   const phone = key(fill(2)), other = key(fill(3));
-  const s = await started(undefined, 0, undefined, (x) => {
+  // Which station a request is for, as the wire says it (both answer at the same origin here).
+  const AT = "x-test-station";
+  const wire = two ? (host: FakeHost) => {
+    const inner = new HostWire(host);
+    return { request: (station: StationAddr, head: RequestHead, body: Uint8Array) => inner.request(station, { ...head, headers: [...head.headers, [AT, station.station]] }, body) } as StationWire;
+  } : undefined;
+  const s = await started(undefined, 0, wire, (x) => {
     x.host.appKeys = true;
     me.signer = Effect.runSync(Signer.make(x.host));
     if (web) x.host.secureGet = undefined;
-    stationReplies(x.host, st.reply);
+    if (two) x.cloud.also = { stations: [{ id: "st", name: "studio", online: true, last_seen: null }, { id: "st2", name: "mini", online: true, last_seen: null }] };
+    stationReplies(x.host, (req) => (req.headers.some(([k, v]) => k === AT && v === "st2") ? st2.reply(req) : st.reply(req)));
   });
   const genesis = lockOf({ id: me.signer!.id, signBytes: (b) => me.signer!.signBytes(b) }, phone, other);
   const lock = { head: { seq: 0, hash: entryHash(genesis), genesis: entryHash(genesis) }, entries: [genesis], requests: [] };
@@ -241,7 +258,7 @@ async function rig(web = false) {
       return values.get(n) as any;
     };
   };
-  return { ...s, st, phone, other, lock, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
+  return { ...s, st, st2, phone, other, lock, ask, watch, take, putLock: () => s.core.inner.data.put("lock", "ws", lock) };
 }
 
 const fails = async (p: Promise<unknown>, code: string) => {
@@ -391,6 +408,46 @@ test("vault calls: an agent's request approved (sealed to its keeper, signed) or
   assert.equal(deny.request, "r_2");
   assert.deepEqual(vaults().requests, []);
   await fails(r.ask("vault.deny", { request: "r_2" }), "vault_no_request");
+  r.core.close();
+});
+
+test("a vault made on one station is copied to the workspace's others, so an agent on any of them may ask for its secrets", async () => {
+  const r = await rig(false, true);
+  r.putLock();
+  await r.ask("vault.setup", {});
+  const vaults = await r.watch(1, { topic: "vaults", workspace: "ws" });
+  const { id } = await r.ask("vault.create", { name: "Personal", station: "st" });
+  const put = await r.ask("vault.putItem", { vault: id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-1" } }, listing: { name: "slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] } });
+  await r.host.time.pass(1000);
+  r.take();
+  // Written on its host; the same versions on the other, brought as copies.
+  assert.equal(r.st.vaults.get(id)!.seq, 0);
+  assert.deepEqual(r.st2.vaults.get(id), r.st.vaults.get(id));
+  assert.deepEqual(r.st2.items.get(put.id), r.st.items.get(put.id));
+  assert.equal(vaults().vaults[0].stationName, "studio", "its host is still the station it was made on");
+  // Changed: the next version written on the host only, then brought to the other.
+  await r.ask("vault.putItem", { vault: id, id: put.id, plain: { kind: "token", name: "Slack", fields: { value: "xoxp-2" } }, listing: { name: "slack", kind: "token", modes: ["proxy"], hosts: ["slack.com"] } });
+  await r.host.time.pass(1000);
+  assert.equal(r.st.items.get(put.id)!.version, 1);
+  assert.equal(r.st2.items.get(put.id)!.version, 1);
+  // A copy behind (the station was away when it changed): read, it is brought the latest; an older copy changes nothing.
+  r.st2.items.set(put.id, { ...r.st2.items.get(put.id)!, version: 0 });
+  // (A page shown has the stations read again.)
+  await r.watch(2, { topic: "vaultItems", workspace: "ws", vault: id });
+  await r.host.time.pass(1000);
+  assert.equal(r.st2.items.get(put.id)!.version, 1);
+  assert.equal(r.st.items.get(put.id)!.version, 1);
+  // An agent on the other station asks: approved here, sealed to that station's keeper, the grant sent there.
+  const keeper = fill(6);
+  r.st2.requests.push({ id: "r_9", ws: "ws", vault: id, item: put.id, session: "k1", chat: "7", mode: "proxy", reason: "sync slack", hosts: ["slack.com"], box: boxPublic(keeper), at: 1, status: "pending" });
+  await r.watch(3, { topic: "vaultUses", workspace: "ws", vault: id, item: put.id });
+  await r.host.time.pass(1000);
+  r.take();
+  assert.deepEqual(vaults().requests.map((q: any) => q.id), ["r_9"]);
+  await r.ask("vault.approve", { request: "r_9", scope: "once" });
+  assert.deepEqual([r.st.grants.length, r.st2.grants.length], [0, 1]);
+  const grant = r.st2.grants[0] as any;
+  assert.equal(JSON.parse(new TextDecoder().decode(openSeal(keeper, grant.secret, grantContext("ws", "r_9")))).fields.value, "xoxp-2");
   r.core.close();
 });
 

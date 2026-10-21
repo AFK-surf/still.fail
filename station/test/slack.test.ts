@@ -10,6 +10,7 @@ import { Clock, Effect, Exit, FiberSet, Option, Result, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import type { ChatEvent } from "../src/sessions/chat.ts";
 import { toolStatus } from "../src/sessions/chat.ts";
+import { answerOf, answeredBlocks, questionBlocks } from "../src/slack/cards.ts";
 import { NameBook } from "../src/slack/names.ts";
 import { ThreadStatus } from "../src/slack/status.ts";
 import { SlackSurface, toEvent, verifySlackTokens } from "../src/slack/surface.ts";
@@ -251,16 +252,17 @@ describe("slack", { concurrency: true }, () => {
     }
   });
 
-  test("posts go out as written, a long one in parts; files are uploaded first and shared below the text", async () => {
+  test("posts go out as written in markdown blocks, a long one in parts; files are uploaded first and shared below the text", async () => {
     const fake = await FakeSlack.start();
     bot(fake);
     const dir = mkdtempSync(join(tmpdir(), "sl-"));
     const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base) });
     try {
       const thread = { channel: "C1", threadTs: "1.1" };
-      const ts = await surface.post(thread, "*hello* <https://x|x>", []);
+      const ts = await surface.post(thread, "**hello** [x](https://x)", []);
       const first = fake.calls("chat.postMessage")[0]!;
-      assert.deepEqual(first.params, { channel: "C1", thread_ts: "1.1", text: "*hello* <https://x|x>", unfurl_links: "false" });
+      // In a markdown block: Slack draws the agent's Markdown (tables too); the text is what notifications show.
+      assert.deepEqual(first.params, { channel: "C1", thread_ts: "1.1", text: "**hello** [x](https://x)", blocks: '[{"type":"markdown","text":"**hello** [x](https://x)"}]', unfurl_links: "false" });
       assert.equal(first.auth, "xoxb-1");
       assert.equal(ts, "8000001.000100");
       const para = "y".repeat(2000);
@@ -289,6 +291,86 @@ describe("slack", { concurrency: true }, () => {
     } finally {
       await fake.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a question's card: radio buttons with the recommended one last and chosen, details under them; long ones listed whole; a field", () => {
+    const q = questionBlocks("选一个", { type: "options", options: [{ label: "合并", detail: "squash 合进 main", recommended: true }, { label: "先不", detail: "留着分支" }] }, "zh");
+    assert.deepEqual(q[0], { type: "markdown", text: "选一个" });
+    const [pick, send] = q[1].elements;
+    assert.deepEqual(
+      pick.options.map((o: any) => [o.text.text, o.value, o.description?.text]),
+      [
+        ["先不", "0", "留着分支"],
+        ["合并", "1", "squash 合进 main"],
+      ],
+    );
+    assert.deepEqual([pick.type, pick.initial_option.value, send.text.text, send.style, JSON.parse(send.value)], ["radio_buttons", "1", "确定", "primary", { l: ["先不", "合并"] }]);
+    // A detail longer than an option takes: every option listed whole above, the options their labels only.
+    const long = questionBlocks("选", { type: "options", options: [{ label: "A", detail: "说".repeat(80) }, { label: "B" }] }, "zh");
+    assert.equal(long[0].text, `选\n\n**A**\n${"说".repeat(80)}\n\n**B**`);
+    assert.ok(long[1].elements[0].options.every((o: any) => o.description === undefined));
+    assert.equal(long[1].elements[0].initial_option, undefined, "nothing recommended: nothing chosen");
+    const t = questionBlocks("写个名字", { type: "text", placeholder: "名字" }, "zh");
+    assert.deepEqual([t[1].type, t[1].element.type, t[1].element.placeholder.text, t[2].elements[0].text.text], ["input", "plain_text_input", "名字", "发送"]);
+    assert.deepEqual(answeredBlocks("选一个", "Ada", "<合并>", "zh")[1].elements[0].text, "✓ Ada 回答：&lt;合并&gt;");
+  });
+
+  test("what a card's send button answers: the option chosen by its whole label, or the field's words; other actions none", () => {
+    const pressed = (state: any, value = '{"l":["先不","合并"]}') => ({ actions: [{ action_id: "sf_answer", value }], state: { values: { b1: state } } });
+    assert.deepEqual(answerOf(pressed({ sf_pick: { selected_option: { value: "1", text: { text: "合…" } } } })), { said: "合并", field: false });
+    assert.deepEqual(answerOf(pressed({ sf_pick: { selected_option: { value: "1", text: { text: "合…" } } } }, "{}")), { said: "合…", field: false }, "labels too long to carry: as shown");
+    assert.deepEqual(answerOf(pressed({ sf_pick: { selected_option: null } })), { said: "", field: false });
+    assert.deepEqual(answerOf(pressed({ sf_text: { value: "  ada  " } }, "{}")), { said: "ada", field: true });
+    assert.equal(answerOf({ actions: [{ action_id: "sf_pick" }] }), null);
+  });
+
+  test("a question posts as one message with its card; its button answers as the person, once, and the card shows the answer", async () => {
+    const fake = await FakeSlack.start();
+    bot(fake);
+    const surface = new SlackSurface({ appToken: "xapp-1", botToken: "xoxb-1", client: new SlackClient(fake.base), pingMs: PING, staleMs: STALE * 5 });
+    const heard: ChatEvent[] = [];
+    try {
+      await surface.start(async (event) => void heard.push(event));
+      await fake.until("a socket", () => fake.sockets.length === 1 && surface.socket().connected);
+      assert.equal(surface.cards, true);
+      const asked = await surface.post({ channel: "C1", threadTs: "1.1" }, "选一个", [], { type: "options", options: [{ label: "合并", recommended: true }, { label: "先不" }] });
+      const post = fake.calls("chat.postMessage")[0]!.params;
+      assert.deepEqual([fake.calls("chat.postMessage").length, post.text, JSON.parse(post.blocks!).map((b: any) => b.type)], [1, "选一个", ["markdown", "actions"]]);
+      const press = (id: string, state: any, actionId = "sf_answer") =>
+        fake.send({
+          type: "interactive",
+          envelope_id: id,
+          payload: {
+            type: "block_actions",
+            user: { id: "U1" },
+            channel: { id: "C1" },
+            message: { ts: asked, thread_ts: "1.1", text: "选一个" },
+            actions: [{ action_id: actionId, value: '{"l":["先不","合并"]}', action_ts: "9.5" }],
+            state: { values: { b1: state } },
+          },
+        });
+      // Choosing an option says nothing; sending none chosen tells only the one who pressed.
+      press("i1", { sf_pick: { selected_option: { value: "0" } } }, "sf_pick");
+      press("i2", { sf_pick: { selected_option: null } });
+      await fake.until("told to choose", () => fake.calls("chat.postEphemeral").length === 1);
+      assert.deepEqual(fake.calls("chat.postEphemeral")[0]!.params, { channel: "C1", user: "U1", thread_ts: "1.1", text: "请先选一个选项" });
+      press("i3", { sf_pick: { selected_option: { value: "1" } } });
+      await fake.until("the card changed", () => fake.calls("chat.update").length === 1);
+      assert.deepEqual(heard, [{ type: "message", message: { channel: "C1", threadTs: "1.1", ts: "9.5", user: "U1", text: "合并", addressed: true } }]);
+      const update = fake.calls("chat.update")[0]!.params;
+      assert.deepEqual([update.channel, update.ts, update.text], ["C1", asked, "选一个"]);
+      assert.deepEqual(JSON.parse(update.blocks!).map((b: any) => b.type), ["markdown", "context"], "nothing to press any more");
+      assert.match(update.blocks!, /Ada 回答：合并/);
+      // Pressed again before the card changed: not said twice.
+      press("i4", { sf_pick: { selected_option: { value: "0" } } });
+      await fake.until("told it was answered", () => fake.calls("chat.postEphemeral").length === 2);
+      assert.equal(fake.calls("chat.postEphemeral")[1]!.params.text, "这个问题已经回答过了");
+      assert.equal(heard.length, 1);
+      assert.deepEqual(fake.acks.map((a) => a.envelope_id).sort(), ["i1", "i2", "i3", "i4"], "each acknowledged at once");
+    } finally {
+      await surface.stop();
+      await fake.close();
     }
   });
 
@@ -480,8 +562,8 @@ describe("slack", { concurrency: true }, () => {
   });
 
   test("tool calls in words, by either runtime's names", () => {
-    const words = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "something"].map(toolStatus);
-    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取 Slack…", "正在处理…"]);
+    const words = ["Read", "Bash", "exec_command", "apply_patch", "WebSearch", "mcp__ember__chat_post", "mcp__stillfail__slack_api", "something"].map(toolStatus);
+    assert.deepEqual(words, ["正在查看文件…", "正在运行命令…", "正在运行命令…", "正在修改文件…", "正在搜索网页…", "正在读取对话…", "正在读取 Slack…", "正在处理…"]);
   });
 
   test("a surface's status line goes to Slack as the bot", async () => {

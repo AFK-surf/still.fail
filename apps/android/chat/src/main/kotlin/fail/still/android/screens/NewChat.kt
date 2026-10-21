@@ -3,6 +3,9 @@
 // (or file) makes the session on that station; then the page becomes the chat.
 package fail.still.android.screens
 
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.SHEET_ROW_TOP
+import fail.still.android.ui.sheetCorner
 import fail.still.android.data.t
 import fail.still.android.shared.BuildConfig
 import fail.still.android.ui.BusyIcon
@@ -94,6 +97,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
@@ -312,7 +316,8 @@ private fun tripleLabel(p: PickView): String {
     return listOfNotNull(
         p.valueOption?.name ?: v.model ?: t("android-chat.pick.model"),
         if (!p.runtimeFixed && (p.valueOption?.runtimes?.size ?: 0) > 1) RUNTIME_LABEL[v.runtime] ?: v.runtime else null,
-        v.effort ?: t("android-chat.pick.effort.default"),
+        // None where the runtime sets no effort (Cursor).
+        v.effort ?: if (p.efforts.isNotEmpty()) t("android-chat.pick.effort.default") else null,
         p.fastText,
         p.account?.text,
     ).joinToString(" · ")
@@ -336,7 +341,8 @@ private fun openRunPicker(app: AppState, station: String) {
         SheetGrab()
         if (accounts) {
             Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(36.dp).clip(Smooth(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
+                // In the sheet's corner, concentric with it.
+                Box(Modifier.sheetCorner(side = 8.dp, top = SHEET_ROW_TOP, end = false).size(36.dp).clip(Smooth(18.dp)).clickable { accounts = false }, contentAlignment = Alignment.Center) { IconIn(Icons.ChevronLeft, 20.dp, C.ink) }
                 Text(t("android-chat.new.account"), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink)
             }
         } else SheetHead(t("android-chat.new.model"))
@@ -344,7 +350,7 @@ private fun openRunPicker(app: AppState, station: String) {
         val draft = v.draft
         if (accounts) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).windowInsetsPadding(WindowInsets.navigationBars)) {
-                v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warn, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
+                v.dropped?.let { Text(it, fontSize = 12.sp, color = C.warnInk, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) }
                 CascadeOption(t("android-chat.new.auto"), v.autoNote, draft.profile == null) { set { put("profile", null as String?) }; accounts = false }
                 v.accounts.forEach { a ->
                     CascadeOption(a.name, a.quotaLine?.text, draft.profile == a.id, subColor = if (a.quotaLine?.level != null) C.warn else C.muted,
@@ -369,13 +375,16 @@ private fun openRunPicker(app: AppState, station: String) {
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            Column(Modifier.weight(1f).fillMaxHeight().clip(Smooth(14.dp)).background(C.surface).verticalScroll(rememberScrollState()).padding(4.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight().clip(Smooth(CASCADE_CORNER)).background(C.surface).verticalScroll(rememberScrollState()).padding(CASCADE_PAD)) {
                 if (v.runtimes.isNotEmpty()) {
                     CascadeLabel(t("android-chat.new.runtime"))
                     v.runtimes.forEach { r -> CascadeOption(RUNTIME_LABEL[r] ?: r, null, draft.runtime == r, leading = { MakerIcon(null, r, 16.dp) }) { set { put("runtime", r) } } }
                 }
-                CascadeLabel(t("android-chat.new.effort"))
-                (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: t("android-chat.pick.default"), null, draft.effort == e) { set { put("effort", e) } } }
+                // No efforts where the runtime sets none (Cursor).
+                if (v.efforts.isNotEmpty()) {
+                    CascadeLabel(t("android-chat.new.effort"))
+                    (listOf<String?>(null) + v.efforts).forEach { e -> CascadeOption(e ?: t("android-chat.pick.default"), null, draft.effort == e) { set { put("effort", e) } } }
+                }
                 if (v.fastAvailable == true) {
                     CascadeLabel(t("android-chat.new.speed"))
                     listOf<Boolean?>(null, false, true).forEach { fast ->
@@ -397,7 +406,7 @@ private fun openRunPicker(app: AppState, station: String) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(t("android-chat.new.account"), fontSize = 14.sp, color = C.muted)
-                Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warn else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(v.who, fontSize = 14.sp, color = if (v.whoLevel != null) C.warnInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 IconIn(Icons.ChevronRight, 14.dp, C.muted)
             }
             if (borrow != null) {
@@ -437,10 +446,14 @@ private fun openRunPicker(app: AppState, station: String) {
 private fun CascadeLabel(text: String) = Text(text, fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(start = 10.dp, top = 10.dp, bottom = 2.dp))
 
 /** A choice in a column of the picker: the chosen one on the accent's pale ground, its words in the accent and bold. */
+/** The column of what goes with the model picked: its options' grounds CASCADE_PAD in, concentric with its corner. */
+private val CASCADE_CORNER = 14.dp
+private val CASCADE_PAD = 4.dp
+
 @Composable
 private fun CascadeOption(label: String, sub: String?, checked: Boolean, subColor: androidx.compose.ui.graphics.Color = C.muted, leading: (@Composable () -> Unit)? = null, tag: (@Composable () -> Unit)? = null, faint: Boolean = false, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(Smooth(10.dp)).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(Smooth(concentric(CASCADE_CORNER, CASCADE_PAD))).background(if (checked) C.accentBg else androidx.compose.ui.graphics.Color.Transparent).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         leading?.invoke()
@@ -490,7 +503,7 @@ private fun openMachineSessions(app: AppState, view: StationView, sessions: List
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             sessions.forEach { s ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { lookAtMachineSession(app, view, sessions, s) }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable { lookAtMachineSession(app, view, sessions, s) }.padding(horizontal = 8.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     MakerIcon(null, s.runtime, 18.dp)

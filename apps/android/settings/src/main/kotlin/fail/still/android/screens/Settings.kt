@@ -4,6 +4,8 @@
 // to go on with what cannot be undone, a name, a command to copy.
 package fail.still.android.screens
 
+import fail.still.android.ui.pressText
+import fail.still.android.ui.bleed
 import fail.still.android.ui.Spinner
 import fail.still.android.shared.BuildConfig
 import android.content.ClipData
@@ -99,6 +101,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.StationIcons
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentricOut
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
@@ -109,13 +112,17 @@ import fail.still.android.ui.Field
 
 // ── asking ─────────────────────────────────────────────────────────────
 
+/** A command box's corner: its copy button's (8), 10 in from its edges, concentric. */
+val COMMAND_BOX_CORNER = concentricOut(8.dp, 10.dp)
+
 /** A command to run elsewhere, with a button that copies it. */
 @Composable
 fun CommandBox(text: String) {
     val app = LocalApp.current
     val context = LocalContext.current
     Row(
-        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface2).border(1.dp, C.line, Smooth(12.dp)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        // Its copy button in its corner, 10 from both edges: the box's corner taken from the button's, concentric.
+        Modifier.fillMaxWidth().clip(Smooth(COMMAND_BOX_CORNER)).background(C.surface2).border(1.dp, C.line, Smooth(COMMAND_BOX_CORNER)).padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text, fontSize = 12.sp, lineHeight = 18.sp, fontFamily = CodeFont, color = C.ink, modifier = Modifier.weight(1f))
@@ -246,7 +253,7 @@ private fun Relays(view: WorkspaceView, cloud: Cloud) {
             ask(app, t("android-settings.relays.add"), "", "https://relay.example.com", t("android-settings.relays.addAction"), hint = t("android-settings.relays.hint")) {
                 cloud.setRelays(view.id, view.relays + it); app.toast = t("android-settings.relays.added")
             }
-        })) { Text(t(if (busy) "common.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.accent) }
+        })) { Text(t(if (busy) "common.saving" else "android-settings.relays.add"), fontSize = 15.sp, color = C.link) }
     }
     Text(t("android-settings.relays.lead", "app" to BuildConfig.APP_NAME), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp))
 }
@@ -278,7 +285,7 @@ private fun RowAction(label: String, color: androidx.compose.ui.graphics.Color, 
     if (busy) Spinner()
     else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         DoingMark(false, failed)
-        Text(label, fontSize = 14.sp, color = color, modifier = Modifier.clickable(onClick = onClick))
+        Text(label, fontSize = 14.sp, color = color, modifier = Modifier.pressText(onClick = onClick))
     }
 }
 
@@ -374,10 +381,11 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
             else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(t("android-settings.add.picked", "n" to list.size, "picked" to picked.count { it !in inside }), fontSize = 13.sp, color = C.muted, modifier = Modifier.weight(1f))
-                    Text(t("android-settings.all"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = list.map { it.email }.filter { it !in inside }.toSet() })
-                    Text(t("android-settings.none"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { picked = emptySet() })
+                    Text(t("android-settings.all"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { picked = list.map { it.email }.filter { it !in inside }.toSet() })
+                    Text(t("android-settings.none"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { picked = emptySet() })
                 }
-                Column {
+                // The rows out to the sheet's sides, their words in line with the fields'.
+                Column(Modifier.bleed(20.dp)) {
                     list.forEach { p ->
                         val there = p.email in inside
                         PickRow(p.name.ifEmpty { p.email }, listOfNotNull(p.email, if (there) t("android-settings.add.in") else if (p.guest) t("android-settings.add.guest") else null).joinToString(" · "),
@@ -390,7 +398,7 @@ private fun ColumnScope.AddSheet(current: WorkspaceEntry, view: WorkspaceView, c
             }
         }
         Text(t("android-settings.add.role"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-        Column {
+        Column(Modifier.bleed(20.dp)) {
             roles.forEach { r -> PickRow(ROLE_LABEL[r] ?: r, ROLE_HINT[r], checked = role == r) { role = r } }
         }
         error?.let { Text(it, fontSize = 13.sp, color = C.red) }
@@ -436,7 +444,7 @@ fun Devices(current: WorkspaceEntry) {
                     if (app.isDoing("loginSession.revoke", "id" to s.id)) Spinner()
                     else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         DoingMark(false, app.failedOf("loginSession.revoke", "id" to s.id))
-                        Text(t("android-settings.devices.signOut"), fontSize = 15.sp, color = C.red, modifier = Modifier.clickable {
+                        Text(t("android-settings.devices.signOut"), fontSize = 15.sp, color = C.red, modifier = Modifier.pressText {
                             app.act(t("android-settings.devices.signOutWhat"), t("android-settings.devices.signedOut")) { cloud.revokeLoginSession(s.id) }
                         })
                     }
@@ -502,7 +510,7 @@ private fun Joined(text: String, onDone: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.green.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         IconIn(Icons.Check, 16.dp, C.green)
-        Text(text, fontSize = 14.sp, color = C.green)
+        Text(text, fontSize = 14.sp, color = C.greenInk)
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("common.done"), primary = true) { onDone() } }
 }
@@ -627,7 +635,7 @@ fun FirstStation(current: WorkspaceEntry) {
                     // A station the viewer manages in another workspace, added here as it is instead (docs/multi-workspace.md).
                     val joinable by rememberTopic<JoinableView>(app.core, Topics.joinable(current.workspace.id))
                     if (joinable.value?.let { it.offered && it.items.isNotEmpty() } == true) {
-                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.accent,
+                        Text(t("web-pages.settings.stations.firstExisting"), fontSize = 14.sp, color = C.link,
                             modifier = Modifier.clickable { openAddStation(app, current, emptyList(), existingFirst = true) })
                     }
                 }

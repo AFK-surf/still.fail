@@ -1,0 +1,25 @@
+# ＋'s recent photos (Attach.kt RecentPhotos): the gallery read (a photo put in it before, the permission granted as a
+# person who said yes has it), its latest across the top after the camera; one tapped goes into the draft and up at
+# once; sent with words. Android only: the other hosts have no gallery.
+#only android
+#before android-gallery e2e-photo.jpg
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+tap icon:plus
+until =文件
+# the gallery's latest across the top, drawn: its picture decoded (by its source, the gallery's content://)
+decoded content://media/
+shot 1-strip
+tapxy 150 -180
+timeout 120000
+gone 正在上传
+shot 2-picked
+tap 发消息
+type 最近的照片 {T}
+tap icon:arrow-up
+empty
+until 最近的照片 {T}
+gone 正在发送
+shot 3-sent

@@ -21,6 +21,50 @@ export function output(command: string, args: string[]): string | null {
   return out.status === 0 && typeof out.stdout === "string" ? trim(out.stdout) : null;
 }
 
+/// What a system's memory left says of its pressure (where it has no level of its own): under a tenth available is high,
+/// under 4% critical.
+export function pressureOfAvailable(available: number, total: number): "normal" | "high" | "critical" | null {
+  if (!(total > 0) || !(available >= 0)) return null;
+  const share = available / total;
+  return share < 0.04 ? "critical" : share < 0.1 ? "high" : "normal";
+}
+
+/// macOS's kern.memorystatus_vm_pressure_level: 1 normal, 2 warn, 4 critical.
+export function pressureOfLevel(level: string): "normal" | "high" | "critical" | null {
+  switch (trim(level)) {
+    case "1":
+      return "normal";
+    case "2":
+      return "high";
+    case "4":
+      return "critical";
+    default:
+      return null;
+  }
+}
+
+/// `ps -axo pid=,ppid=,pgid=,rss=,comm=`: each process with its resident memory (bytes).
+export function parsePs(text: string): { pid: number; ppid: number; pgid: number; bytes: number; command: string }[] {
+  const out: { pid: number; ppid: number; pgid: number; bytes: number; command: string }[] = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s?(.*)$/);
+    if (!m) continue;
+    out.push({ pid: Number(m[1]), ppid: Number(m[2]), pgid: Number(m[3]), bytes: Number(m[4]) * 1024, command: trim(m[5] ?? "") });
+  }
+  return out;
+}
+
+/// `top -l 1 -stats pid,mem`: each process's footprint (bytes) as top says it (27M, 3056K, 1.2G, a + or - after it).
+export function parseTopMem(text: string): Map<number, number> {
+  const out = new Map<number, number>();
+  const unit: Record<string, number> = { B: 1, K: 1024, M: 1024 ** 2, G: 1024 ** 3, T: 1024 ** 4 };
+  for (const line of text.split("\n")) {
+    const m = line.match(/^\s*(\d+)\s+([\d.]+)([BKMGT])[+-]?\s*$/);
+    if (m) out.set(Number(m[1]), Math.round(Number(m[2]) * unit[m[3]!]!));
+  }
+  return out;
+}
+
 /// field: the number after `label:` in `text`, e.g. vm_stat's and /proc/meminfo's lines (0 when it does not read).
 export function field(text: string, label: string): number {
   for (const line of text.split("\n")) {

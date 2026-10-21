@@ -16,6 +16,7 @@ import fail.still.android.Screen
 import fail.still.android.data.*
 import fail.still.android.ui.*
 import kotlinx.serialization.json.*
+import fail.still.android.ui.pressText
 import fail.still.android.ui.DoingMark
 import fail.still.android.ui.Button
 import fail.still.android.ui.Field
@@ -241,7 +242,7 @@ private fun ArchivePolicySection(station: String, policy: ArchivePolicyView) {
                     Text("${o.count}", fontSize = 13.sp, color = C.muted)
                 }
             } }
-            ListRow(onClick = if (busy) null else ({ add(archive) })) { Text(t("web-pages.archivePolicy.add"), fontSize = 15.sp, color = C.accent) }
+            ListRow(onClick = if (busy) null else ({ add(archive) })) { Text(t("web-pages.archivePolicy.add"), fontSize = 15.sp, color = C.link) }
         }
     }
     val line = listOfNotNull(policy.changeText, policy.summaryText?.ifEmpty { null }).joinToString(" · ")
@@ -261,4 +262,4 @@ private fun SheetTools(dirty: Boolean, remove: (() -> Unit)?, cancel: () -> Unit
 /** A word that does something (no frame), as the web's LinkButton. */
 @Composable
 private fun TextAction(label: String, color: androidx.compose.ui.graphics.Color, enabled: Boolean, onClick: () -> Unit) =
-    Text(label, fontSize = 14.sp, color = if (enabled) color else C.subtle, modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(vertical = 4.dp))
+    Text(label, fontSize = 14.sp, color = if (enabled) color else C.subtle, modifier = Modifier.pressText(enabled = enabled, onClick = onClick).padding(vertical = 4.dp))

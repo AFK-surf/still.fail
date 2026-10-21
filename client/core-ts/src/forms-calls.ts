@@ -41,8 +41,24 @@ export class Forms implements Owner {
           // A form not known: nothing to clear.
         }
       },
+      {
+        // A Feishu bot no longer waited for: the station stops following it (nobody waits on this; a failure leaves it
+        // to expire there).
+        cancel: (station, id) => {
+          const op = ops.request("feishu.cancelRegistration", { station, id });
+          if (op !== null) inner.runner.fork(Effect.ignore(inner.stations.perform(op, null)));
+        },
+        // Its bot made: the connect is added, as `create` would.
+        ready: (topic) => {
+          if (this.connects.ready(topic)) inner.runner.fork(Effect.ignore(Effect.suspend(() => this.operate(topic, this.connects.ownerOf(topic), "create", null))));
+        },
+      },
     );
   }
+
+  /// One of the wizard's steps that asks its station (`config`, `make`, `verify`, `register`, `create`): its answer
+  /// advances only the form it was asked for. Set by installForms.
+  operate: (topic: Topic, owner: ClientId, action: string, ctx: J) => Effect.Effect<unknown, CoreError> = () => Effect.fail(CoreError.invalid("connect.flow"));
 
   owns(topic: Topic): boolean {
     return FORMS.has(topic.topic);
@@ -134,6 +150,41 @@ export function installForms(inner: Inner): Forms {
       return answer.success;
     });
   };
+  forms.operate = (topic, owner, action, ctx) =>
+    Effect.gen(function* () {
+      const station = topic.station as string;
+      const tokenTopic = tokensOf(station, topic.form as string);
+      const view = yield* attempt(() => forms.connects.value(topic));
+      // Slack's tokens are the token form's; the Feishu path has none.
+      const slack = !String(view?.step ?? "").startsWith("feishu");
+      let input: J = {};
+      let verified = false;
+      if (slack) {
+        yield* attempt(() => forms.tokens.edit(tokenTopic, owner, { install: view?.made?.state ?? null }));
+        [input, verified] = yield* attempt(() => forms.tokens.input(tokenTopic, owner));
+      }
+      const [generation, name, params] = yield* attempt(() => forms.connects.begin(topic, owner, action, input, verified));
+      let revision: number | null = null;
+      if (slack && action === "verify") {
+        const begun = yield* Effect.result(attempt(() => forms.tokens.begin(tokenTopic, owner)));
+        if (begun._tag === "Failure") {
+          forms.connects.finish(topic, generation, action, { err: begun.failure });
+          return yield* Effect.fail(begun.failure);
+        }
+        revision = begun.success[0];
+      }
+      const answer = yield* Effect.result(Effect.flatMap(request(name, params), (op) => perform(op, ctx)));
+      const result = answer._tag === "Success" ? { ok: answer.success } : { err: answer.failure };
+      let current = true;
+      if (revision !== null) {
+        current = forms.tokens.finish(tokenTopic, revision, result);
+        inner.store.invalidate(tokenTopic);
+      }
+      const transition = current ? result : { err: CoreError.invalid(t("core-misc.connect.token_changed")) };
+      if (!forms.connects.finish(topic, generation, action, transition)) return yield* Effect.fail(CoreError.invalid(t("core-misc.connect.closed")));
+      if (answer._tag === "Failure") return yield* Effect.fail(answer.failure);
+      return answer.success;
+    });
   handlers.connectFlow = (_i, call, _p, at, ctx) => {
     const c = call as Extract<Call, { kind: "connectFlow" }>;
     const station = c.topic.station as string;
@@ -155,32 +206,8 @@ export function installForms(inner: Inner): Forms {
           break;
         case "go":
           return yield* attempt(() => forms.connects.go(c.topic, at[0], typeof patch?.to === "string" ? patch.to : ""));
-        default: {
-          const view = yield* attempt(() => forms.connects.value(c.topic));
-          yield* attempt(() => forms.tokens.edit(tokenTopic, at[0], { install: view?.made?.state ?? null }));
-          const [input, verified] = yield* attempt(() => forms.tokens.input(tokenTopic, at[0]));
-          const [generation, name, params] = yield* attempt(() => forms.connects.begin(c.topic, at[0], c.action, input, verified));
-          let revision: number | null = null;
-          if (c.action === "verify") {
-            const begun = yield* Effect.result(attempt(() => forms.tokens.begin(tokenTopic, at[0])));
-            if (begun._tag === "Failure") {
-              forms.connects.finish(c.topic, generation, c.action, { err: begun.failure });
-              return yield* Effect.fail(begun.failure);
-            }
-            revision = begun.success[0];
-          }
-          const answer = yield* Effect.result(Effect.flatMap(request(name, params), (op) => perform(op, ctx)));
-          const result = answer._tag === "Success" ? { ok: answer.success } : { err: answer.failure };
-          let current = true;
-          if (revision !== null) {
-            current = forms.tokens.finish(tokenTopic, revision, result);
-            inner.store.invalidate(tokenTopic);
-          }
-          const transition = current ? result : { err: CoreError.invalid(t("core-misc.connect.token_changed")) };
-          if (!forms.connects.finish(c.topic, generation, c.action, transition)) return yield* Effect.fail(CoreError.invalid(t("core-misc.connect.closed")));
-          if (answer._tag === "Failure") return yield* Effect.fail(answer.failure);
-          return answer.success;
-        }
+        default:
+          return yield* forms.operate(c.topic, at[0], c.action, ctx);
       }
       inner.store.invalidate(c.topic);
       return yield* attempt(() => forms.connects.value(c.topic));

@@ -1,7 +1,7 @@
 // The hub's parts that compute (ported with their Rust tests): splitting for Slack, commands, image sizes, local file
 // links, the live view, the agent home, the account pool, the decision protocol, references to other chats.
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -16,7 +16,7 @@ import { nextTsAt } from "../src/sessions/internal.ts";
 import { type Counted, type LiveMessage, LiveHub, TranscriptTail, briefInput, inBrief } from "../src/sessions/live.ts";
 import { prepare } from "../src/sessions/local-links.ts";
 import { formatSteps, linkedSession } from "../src/sessions/others.ts";
-import { availableEfforts, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
+import { availableEfforts, cheapToLeave, commonEfforts, pickProfile, serves, urgency } from "../src/sessions/pool.ts";
 import { spelling } from "../src/sessions/config.ts";
 import { settle, testClock } from "./hub-fakes.ts";
 
@@ -406,6 +406,37 @@ test("profile homes link to the shared memory and skills under their runtimes' n
   writeFileSync(join(own, "CLAUDE.md"), "mine");
   linkAgentHome(join(root, "agent2"), [{ id: "own", runtimes: ["claude"], home: own }]);
   assert.equal(readFileSync(join(own, "CLAUDE.md"), "utf8"), "mine");
+  // What a runtime made before the link (Claude Code's empty skills/synced/) gives way to it; a skill of its own does not.
+  const [made, kept] = [join(root, "made"), join(root, "kept")];
+  mkdirSync(join(made, "skills", "synced"), { recursive: true });
+  mkdirSync(join(kept, "skills", "mine"), { recursive: true });
+  writeFileSync(join(kept, "skills", "mine", "SKILL.md"), "mine");
+  linkAgentHome(agent, [{ id: "made", runtimes: ["claude"], home: made }, { id: "kept", runtimes: ["claude"], home: kept }]);
+  assert.equal(readlinkSync(join(made, "skills")), join(agent, "skills"));
+  assert.equal(readFileSync(join(kept, "skills", "mine", "SKILL.md"), "utf8"), "mine");
+  // A home whose runtime keeps skills of its own there (Claude Code's synced ones, Codex's .system) takes the shared
+  // ones one by one, and lets go of one gone from the shared.
+  const synced = join(root, "synced");
+  mkdirSync(join(synced, "skills", "synced", "bucket", "pdf"), { recursive: true });
+  writeFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "account's");
+  mkdirSync(join(agent, "skills", "team"), { recursive: true });
+  mkdirSync(join(agent, "skills", "gone"), { recursive: true });
+  const syncedProfile = [{ id: "synced", runtimes: ["claude" as const], home: synced }];
+  linkAgentHome(agent, syncedProfile);
+  assert.equal(readlinkSync(join(synced, "skills", "team")), join(agent, "skills", "team"));
+  assert.equal(readFileSync(join(synced, "skills", "synced", "bucket", "pdf", "SKILL.md"), "utf8"), "account's");
+  rmSync(join(agent, "skills", "gone"), { recursive: true });
+  linkAgentHome(agent, syncedProfile);
+  assert.ok(!lstatSync(join(synced, "skills")).isSymbolicLink());
+  assert.deepEqual(readdirSync(join(synced, "skills")).sort(), ["synced", "team"]);
+  // The same place under another name (~/.ember is ~/.stillfail) is the link it should be: left, and said nothing of.
+  const alias = join(root, "alias");
+  symlinkSync(agent, alias);
+  const named = join(root, "named");
+  mkdirSync(named);
+  symlinkSync(join(alias, "skills"), join(named, "skills"));
+  linkAgentHome(agent, [{ id: "named", runtimes: ["claude"], home: named }]);
+  assert.equal(readlinkSync(join(named, "skills")), join(alias, "skills"));
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -477,7 +508,7 @@ test("the pool skips broken, spent and unfit profiles, then prefers headroom, th
   assert.equal(pickProfile([a, c], "m9", signals(), false).id, "c", "a connect's binding still runs on its healthy profiles");
 });
 
-test("the pool spends first what would be lost: a week refilling within a day, then the fastest to spend", () => {
+test("the pool shares sessions by what each account would lose, and keeps them off nearly full five hours", () => {
   const now = 1_791_270_331_000;
   const hours = (h: number) => now + h * 3_600_000;
   const windows = (five: [number, number], week: [number, number]) => ({
@@ -489,46 +520,66 @@ test("the pool spends first what would be lost: a week refilling within a day, t
     detail: null,
     checkedAt: 0,
   });
-  // As the station's accounts were on 2026-10-06: cuesurf3 and cuesurf4 tied on their tightest window (2%), so they
-  // took turns, though cuesurf4's week, nearly all left, refilled within a day.
+  // As the station's accounts were on 2026-10-19 before the evening: cuesurf3 and cuesurf4 had the most of their week
+  // to lose; every session went to one of them in turn, and ran its five hours out.
   const health: Record<string, any> = {
-    machine: { check: ok("ok"), quota: windows([48, 1.1], [38, 100.9]) },
-    s2: { check: ok("ok"), quota: windows([17, 1.1], [41, 127.9]) },
-    s3: { check: ok("ok"), quota: windows([2, 1.7], [0, 39.6]) },
-    s4: { check: ok("ok"), quota: windows([2, 2.4], [1, 22.9]) },
+    s1: { check: ok("ok"), quota: windows([0, 5], [4, 119]) },
+    s2: { check: ok("ok"), quota: windows([0, 5], [1, 146]) },
+    s3: { check: ok("ok"), quota: windows([10, 3], [30, 58]) },
+    s4: { check: ok("ok"), quota: windows([10, 3], [45, 41]) },
+    s5: { check: ok("ok"), quota: windows([0, 5], [0, 167]) },
   };
-  const all = ["machine", "s2", "s3", "s4"].map((id) => profile(id, ["m"]));
+  const all = ["s1", "s2", "s3", "s4", "s5"].map((id) => profile(id, ["m"]));
   const signals = (load: Record<string, number> = {}, picked: Record<string, number> = {}) => ({ health: (id: string) => health[id], load: (id: string) => load[id] ?? 0, lastPicked: (id: string) => picked[id] ?? 0, now: () => now });
-  const order = (s = signals()) => {
-    const left = [...all];
-    const out: string[] = [];
-    while (left.length > 0) {
-      const p = pickProfile(left, "m", s, true);
-      out.push(p.id);
-      left.splice(left.indexOf(p), 1);
+  /// Where `n` sessions go, picked one after another as the station does (each counted where it went).
+  const spread = (n: number) => {
+    const load: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const p = pickProfile(all, "m", signals(load), true);
+      load[p.id] = (load[p.id] ?? 0) + 1;
     }
-    return out;
+    return load;
   };
-  assert.deepEqual(order(), ["s4", "s3", "machine", "s2"], "s4's week refills within a day; then left × length ÷ time to refill");
-  assert.equal(pickProfile(all, "m", signals({ s4: 3 }, { s4: now }), true).id, "s4", "more sessions or picked last does not take it off");
-  const s4 = urgency(health.s4.quota, now);
-  assert.deepEqual([s4.crowded, s4.soon], [false, true]);
-  assert.ok(Math.abs(s4.pace - (0.99 * 168) / 22.9) < 1e-9, "left × length ÷ time to refill");
-  // The soon one is preferred even over a faster pace: what is left of it is lost tomorrow.
-  health.s3 = { check: ok("ok"), quota: windows([2, 1.7], [0, 25]) };
-  health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [90, 20]) };
-  assert.ok(urgency(health.s3.quota, now).pace > urgency(health.s4.quota, now).pace);
+  const u = (id: string) => urgency(health[id].quota, now);
+  assert.ok(Math.abs(u("s4").pace - (0.55 * 168) / 41) < 1e-9, "left × length ÷ time to refill");
+  assert.ok(Math.abs(u("s4").weight - u("s4").pace * 0.9) < 1e-9, "times what its five hours have left");
+  // The first goes where the most would be lost; twenty are shared by weight, every account taking some.
   assert.equal(pickProfile(all, "m", signals(), true).id, "s4");
-  // Nearly full five hours: last, whatever its week.
+  const twenty = spread(20);
+  assert.deepEqual(Object.keys(twenty).sort(), ["s1", "s2", "s3", "s4", "s5"]);
+  const weights = Object.fromEntries(all.map((p) => [p.id, u(p.id).weight]));
+  const total = Object.values(weights).reduce((a, b) => a + b, 0);
+  for (const id of Object.keys(weights)) assert.ok(Math.abs(twenty[id]! - (20 * weights[id]!) / total) <= 1, `${id}: ${twenty[id]} of 20`);
+  assert.ok(twenty.s4! > twenty.s5!, "the week that would be lost takes more");
+  // A week refilling within an hour counts as a day away: it takes more, not all.
+  health.s4 = { check: ok("ok"), quota: windows([10, 3], [45, 0.5]) };
+  assert.ok(Math.abs(u("s4").pace - 0.55 * 7) < 1e-9);
+  assert.ok(spread(20).s4! < 12);
+  // Nearly full five hours: last, whatever its week; it takes none while another has room.
   health.s4 = { check: ok("ok"), quota: windows([85, 2.4], [1, 22.9]) };
-  assert.deepEqual(order(), ["s3", "machine", "s2", "s4"]);
-  // Used up this week, refilling soon: nothing left to lose, so not soon.
+  assert.equal(u("s4").crowded, true);
+  assert.equal(spread(20).s4, undefined);
+  // Used up this week: passed over.
   health.s4 = { check: ok("ok"), quota: windows([2, 2.4], [100, 22.9]) };
-  assert.equal(urgency(health.s4.quota, now).soon, false);
+  assert.equal(spread(20).s4, undefined);
   // Equal allowances: fewer sessions, then the one picked least recently.
   for (const id of ["s3", "s4"]) health[id] = { check: ok("ok"), quota: windows([2, 2], [0, 30]) };
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({ s3: 1 }), true).id, "s4");
   assert.equal(pickProfile([all[2]!, all[3]!], "m", signals({}, { s3: 1, s4: 2 }), true).id, "s3");
+});
+
+test("a session loses little by moving when its context was just compacted, or is about to be", () => {
+  const at = (turn: string, context: number, profile = "p", model: string | null = "m") => ({ turn, profile, model, context });
+  const points = new Map([["m", 200_000]]);
+  assert.equal(cheapToLeave([], points), false, "nothing known");
+  assert.equal(cheapToLeave([at("1", 30_000), at("1", 90_000)], points), false, "growing, far from it");
+  assert.equal(cheapToLeave([at("1", 90_000), at("2", 150_000)], points), true, "three quarters of where m is compacted");
+  assert.equal(cheapToLeave([at("1", 90_000, "p", "other"), at("2", 190_000, "p", "other")], points), false, "where other is compacted is not known");
+  assert.equal(cheapToLeave([at("1", 180_000), at("2", 20_000), at("2", 30_000)], points), true, "compacted in its last turn");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000)], points), true, "or the one before");
+  assert.equal(cheapToLeave([at("1", 180_000), at("1", 20_000), at("2", 30_000), at("3", 40_000)], points), false, "longer ago");
+  assert.equal(cheapToLeave([at("1", 180_000, "q"), at("2", 20_000)], points), false, "started over on another account, not compacted");
+  assert.equal(cheapToLeave([at("1", 40_000), at("2", 10_000)], points), false, "too little to say");
 });
 
 test("a model is served however a profile spells it", () => {

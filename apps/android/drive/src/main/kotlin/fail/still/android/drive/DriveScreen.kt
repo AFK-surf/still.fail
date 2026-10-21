@@ -10,6 +10,11 @@
 // as the phone web's (web/src/mobile/Drive.tsx), the reference for the phone (docs/mobile-parity.md).
 package fail.still.android.drive
 
+import androidx.compose.ui.graphics.Color
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LIST_ROW_CORNER
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.LIST_CARD_CORNER
 import android.content.ActivityNotFoundException
 import android.content.ContentResolver
 import android.content.Context
@@ -40,6 +45,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import fail.still.android.ui.pressText
 import fail.still.android.ui.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -137,6 +143,7 @@ import fail.still.android.data.arranged
 import fail.still.android.data.freeName
 import fail.still.android.data.picked
 import fail.still.android.screens.Elsewhere
+import fail.still.android.ui.UiFont
 
 // ── what an entry is ────────────────────────────────────────────────────
 
@@ -386,15 +393,15 @@ private fun RootRow(app: AppState, station: String, r: DriveRoot, roots: List<Dr
     val c = C
     val trouble = rootTrouble(r.state)
     Row(
-        Modifier.cardRow(first, last).background(c.surface)
+        Modifier.cardRow(first, last, c.surface)
             .combinedClickable(onClick = { app.push(Screen.Drive(station, r.path, "")) }, onLongClick = if (manage) ({
                 app.sheet = SheetSpec(0.3f, fit = fit(1)) {
                     SheetGrab()
                     SheetHead(r.name)
-                    PickRow(t("android-misc.drive.roots.stop"), color = C.accent, leading = { IconIn(Icons.Close, 20.dp, C.accent) }) { unshare(app, station, roots, r) }
+                    PickRow(t("android-misc.drive.roots.stop"), color = C.link, leading = { IconIn(Icons.Close, 20.dp, C.accent) }) { unshare(app, station, roots, r) }
                 }
             }) else null)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = CARD_PAD - LIST_PAD, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         IconIn(Icons.Folder, 22.dp, c.muted)
@@ -457,7 +464,7 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
         if (choosing) NavBar(t("common.cancel"), { chosen.clear() }, t("android-misc.drive.chosen", "n" to chosen.size), trailing = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    t(if (chosen.size == shownEntries.size) "android-misc.drive.chooseNone" else "android-misc.drive.chooseAll"), fontSize = 15.sp, color = c.accent,
+                    t(if (chosen.size == shownEntries.size) "android-misc.drive.chooseNone" else "android-misc.drive.chooseAll"), fontSize = 15.sp, color = c.link,
                     modifier = Modifier.clip(Smooth(6.dp)).clickable { if (chosen.size == shownEntries.size) chosen.clear() else { chosen.clear(); chosen.addAll(shownEntries.map { it.name }) } }.padding(horizontal = 8.dp, vertical = 6.dp),
                 )
                 Box(Modifier.semantics { contentDescription = t("android-misc.drive.chosenActions") }) {
@@ -495,14 +502,14 @@ private fun FolderPage(app: AppState, station: String, s: StationView, roots: Li
             if (error != null && value != null) item(key = "stale") {
                 Row(Modifier.padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(t("android-misc.drive.stale", "error" to (error.message ?: "")), fontSize = 13.sp, color = c.muted, modifier = Modifier.weight(1f, fill = false), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(t("android-misc.drive.retry"), fontSize = 13.sp, color = c.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
+                    Text(t("android-misc.drive.retry"), fontSize = 13.sp, color = c.link, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
                 }
             }
             when {
                 error != null && value == null -> item(key = "error") {
                     Row(Modifier.padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(error.message, fontSize = 14.sp, color = c.red, modifier = Modifier.weight(1f, fill = false))
-                        Text(t("android-misc.drive.retry"), fontSize = 14.sp, color = c.accent, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
+                        Text(t("android-misc.drive.retry"), fontSize = 14.sp, color = c.link, modifier = Modifier.clip(Smooth(6.dp)).clickable { reload() }.padding(4.dp))
                     }
                 }
                 value == null -> item(key = "reading") { Waiting(text = t("common.reading")) }
@@ -553,14 +560,19 @@ private fun Empty(text: String, action: @Composable () -> Unit = {}) {
     }
 }
 
-/** Card rows in a lazy list: each row its part of one rounded card (the first and last carry its corners). */
+/**
+ * Card rows in a lazy list: each row its part of one rounded card (the first and last carry its corners), a list card's
+ * (ui/Parts.kt RowsCard): each row's own ground (pressed, chosen) LIST_PAD in from the card's edge and rounded
+ * LIST_ROW_CORNER, concentric with it; its words CARD_PAD in.
+ */
 private fun cardShape(first: Boolean, last: Boolean) = Smooth(
-    topStart = if (first) 16.dp else 0.dp, topEnd = if (first) 16.dp else 0.dp,
-    bottomEnd = if (last) 16.dp else 0.dp, bottomStart = if (last) 16.dp else 0.dp,
+    topStart = if (first) LIST_CARD_CORNER else 0.dp, topEnd = if (first) LIST_CARD_CORNER else 0.dp,
+    bottomEnd = if (last) LIST_CARD_CORNER else 0.dp, bottomStart = if (last) LIST_CARD_CORNER else 0.dp,
 )
 
-private fun Modifier.cardRow(first: Boolean, last: Boolean) =
-    padding(horizontal = 12.dp).padding(bottom = if (last) 10.dp else 0.dp).fillMaxWidth().clip(cardShape(first, last))
+private fun Modifier.cardRow(first: Boolean, last: Boolean, ground: Color) =
+    padding(horizontal = 12.dp).padding(bottom = if (last) 10.dp else 0.dp).fillMaxWidth().clip(cardShape(first, last)).background(ground)
+        .padding(start = LIST_PAD, end = LIST_PAD, top = if (first) LIST_PAD else 0.dp, bottom = if (last) LIST_PAD else 0.dp).clip(Smooth(LIST_ROW_CORNER))
 
 /** Where the folder is under its root: the root, then each folder down to this one, each but the last a way back to it. */
 @Composable
@@ -608,7 +620,7 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
     val failed = app.failedOf("drive.remove", "root" to root, "path" to path) ?: app.failedOf("drive.rename", "root" to root, "from" to path)
     val fetching = DriveFetches.progress[DriveFetches.id(station, root, path)]
     Row(
-        Modifier.cardRow(first, last).background(if (chosen == true) c.accent.copy(alpha = 0.12f) else c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = 16.dp, vertical = 11.dp),
+        Modifier.cardRow(first, last, c.surface).background(if (chosen == true) c.accent.copy(alpha = 0.12f) else c.surface).combinedClickable(enabled = !busy, onClick = onOpen, onLongClick = onHold).padding(horizontal = CARD_PAD - LIST_PAD, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Choosing: each row's mark says whether it is chosen.
@@ -635,7 +647,7 @@ private fun EntryRow(station: String, root: String, path: String, e: DriveEntry,
 private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Boolean, last: Boolean, held: () -> List<DriveEntry>) {
     val c = C
     Row(
-        Modifier.cardRow(first, last).background(c.surface).padding(start = 16.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
+        Modifier.cardRow(first, last, c.surface).padding(start = CARD_PAD - LIST_PAD, end = 0.dp, top = 11.dp, bottom = 11.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         IconIn(Icons.Upload, 22.dp, c.muted)
@@ -644,8 +656,8 @@ private fun UploadRow(app: AppState, context: Context, u: DriveUpload, first: Bo
             when (u.state) {
                 "taken" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(t("android-misc.drive.exists.title"), fontSize = 12.sp, lineHeight = 16.sp, color = c.muted)
-                    Text(t("android-misc.drive.exists.replace"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, true) })
-                    Text(t("android-misc.drive.exists.both"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.accent, modifier = Modifier.clickable { DriveUploads.settle(u, false) })
+                    Text(t("android-misc.drive.exists.replace"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.link, modifier = Modifier.pressText { DriveUploads.settle(u, true) })
+                    Text(t("android-misc.drive.exists.both"), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold, color = c.link, modifier = Modifier.pressText { DriveUploads.settle(u, false) })
                 }
                 "failed" -> Text(t("android-misc.drive.upload.failed", "error" to (u.error ?: "")), fontSize = 12.sp, lineHeight = 16.sp, color = c.red, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 else -> {
@@ -712,7 +724,7 @@ private fun openChosenSheet(app: AppState, context: Context, station: String, ro
             app.sheet = null; done()
             copyPaths(app, context, items.map { absoluteIn(root, join(dir, it.name)) })
         }
-        if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrashMany" else "web-pages.drive.deleteMany", "n" to items.size), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
+        if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrashMany" else "web-pages.drive.deleteMany", "n" to items.size), color = C.link, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
             app.sheet = null; done()
             removeAll(app, station, root, dir, items, can.trash)
         }
@@ -749,7 +761,7 @@ private fun openEntrySheet(app: AppState, context: Context, station: String, roo
                 saveZip(app, context, station, root, path)
             }
             PickRow(t("web-pages.drive.copyPath"), leading = { IconIn(Icons.Copy, 20.dp, C.ink) }) { app.sheet = null; done(); copyPaths(app, context, listOf(absoluteIn(root, path))) }
-            if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrash" else "android-misc.drive.remove"), color = C.accent, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
+            if (can.write) PickRow(t(if (can.trash) "web-pages.drive.toTrash" else "android-misc.drive.remove"), color = C.link, leading = { IconIn(Icons.Trash, 20.dp, C.accent) }) {
                 done()
                 removeAll(app, station, root, dir, listOf(e), can.trash)
             }
@@ -822,7 +834,7 @@ private fun openRoots(app: AppState, station: String) {
                 PickRow(r.name, sub = r.path, leading = { IconIn(Icons.Folder, 20.dp, C.ink) },
                     mark = if (trouble != null) ({ Text(trouble.first, fontSize = 12.sp, color = C.red) }) else null) { unshare(app, station, roots, r) }
             }
-            PickRow(t("android-misc.drive.roots.add"), color = C.accent, leading = { IconIn(Icons.Plus, 20.dp, C.accent) }) { openFolderPicker(app, station, roots.map { it.path }) }
+            PickRow(t("android-misc.drive.roots.add"), color = C.link, leading = { IconIn(Icons.Plus, 20.dp, C.accent) }) { openFolderPicker(app, station, roots.map { it.path }) }
         }
     }
 }
@@ -938,7 +950,7 @@ private fun PickFilter(text: String, onChange: (String) -> Unit) {
             if (text.isEmpty()) Text(t("android-misc.drive.pick.filter"), fontSize = 15.sp, color = C.muted, maxLines = 1)
             BasicTextField(
                 text, onChange, singleLine = true, cursorBrush = SolidColor(C.accent),
-                textStyle = TextStyle(fontSize = 15.sp, color = C.ink),
+                textStyle = TextStyle(fontFamily = UiFont, fontSize = 15.sp, color = C.ink),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().semantics { contentDescription = t("android-misc.drive.pick.filter") },
             )

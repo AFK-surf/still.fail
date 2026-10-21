@@ -12,7 +12,7 @@ import { Archive, ArrowLeft, Bell, Brain, Key, Chart, Check, ChevronRight, Edit,
 import { SecurityNotice } from "./Security.tsx";
 import { VaultWaiting } from "./Vault.tsx";
 import { useCommands } from "../commands.ts";
-import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { Link, Navigate, NavLink, useNavigate, useParams, useSearchParams } from "react-router";
 import { useJoinable, useProfiles, useStations, type Profile, type StationView } from "../api.ts";
 import { same, type Mark } from "../stationPick.ts";
@@ -36,7 +36,7 @@ import { profilePath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { useCall, useTopic } from "../core/react.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { About, BackLink, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, FirstOne, ICON, IconButton, Menu, MobileBack, Pill, ProviderLogo, RuntimeTags, Section, Segmented, Select, StatusDot, Time, Spinner, Waiting, WaitLine, WaitMore } from "../ui.tsx";
-import { useSignOut, type Account } from "./accounts.ts";
+import { useDeleteAccount, useSignOut, type Account } from "./accounts.ts";
 import { useLastChat } from "../lastChat.ts";
 import { parseEmails, useSlackPeople } from "./adding.ts";
 import { cloud, errorText, useAction, useWorkspace as useWorkspaceTopic, type LoginSession, type Role, type WorkspaceView } from "./api.ts";
@@ -45,7 +45,7 @@ import { DoingMark, DoingShown, useDoingState } from "../DoingMark.tsx";
 import { useDoing } from "../doing.ts";
 import { track } from "../telemetry.ts";
 import type { WorkspaceEntry } from "./workspace.tsx";
-import type { CarriedStation } from "../core/client.ts";
+import { JoinThisMac, PC, useJoinThisMac } from "./thisMac.tsx";
 import * as nav from "../Sidebar.css.ts";
 import { useRailItems, type RailItem } from "../Rail.tsx";
 import * as railCss from "../Rail.css.ts";
@@ -89,6 +89,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("client", "version", t("web-pages.settings.nav.version"), Info, "version update", HAS_VERSION),
     ...page("client", "local-station", t("web-pages.localStation.title"), Monitor, "local station this mac", HAS_LOCAL_STATION),
     ...page("client", "changelog", t("web-pages.settings.nav.changelog"), Sparks, "changelog"),
+    ...page("client", "about", t("web-pages.settings.nav.about"), Info, "about privacy telemetry statistics terms"),
     ...page("station", "stations", "Station", Server, "station"),
     ...page("station", "connects", t("web-pages.settings.nav.connects"), Im, "connects slack", some),
     ...page("station", "profiles", "Profile", Quota, "profile", some),
@@ -99,7 +100,7 @@ function settingsPages(entry: WorkspaceEntry, some: boolean): SettingsPage[] {
     ...page("cloud", "workspace", `Workspace · ${entry.name}`, Users, "workspace members"),
     ...page("cloud", "security", t("web-pages.security.title"), ShieldCheck, "security lock devices"),
     ...page("cloud", "vault", t("web-pages.vault.title"), Key, "vault secrets keys tokens"),
-    ...page("cloud", "account", entry.account.email, User, "account sign out"),
+    ...page("cloud", "account", entry.account.email, User, "account sign out delete"),
   ];
 }
 
@@ -172,6 +173,8 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
   const signOut = useSignOut();
+  const [deleting, setDeleting] = useState(false);
+  const remove = useDeleteAccount();
   return (
     <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
       <MobileBack to={`/w/${entry.id}/settings`} label={t("web-pages.settings.title")} />
@@ -208,6 +211,23 @@ export function AccountSettings({ entry }: { entry: WorkspaceEntry }) {
       <Confirm open={signingOut} onClose={() => setSigningOut(false)}
         onConfirm={() => { setSigningOut(false); navigate("/", { state: { signingOut: account.sub } }); void signOut.signOut(account.sub).then((out) => { if (out) toast(t("web-pages.settings.account.signedOut", { email: account.email })); }); }}
         title={t("web-pages.settings.account.signOutConfirm", { email: account.email })} action={t("web-pages.settings.account.signOutAction")} description={t("web-pages.settings.account.signOutConfirmBody")} />
+      <Section title={t("web-pages.settings.account.delete")}>
+        <div className={`${pagesCss.card} ${pagesCss.cardRow}`}>
+          <div className={pagesCss.cardRowText}><strong>{t("web-pages.settings.account.deleteHere", { email: account.email })}</strong><span className={shellCss.muted}>{t("web-pages.settings.account.deleteHereBody", { name: NAME })}</span></div>
+          <Button variant="danger" icon={Trash} onClick={() => setDeleting(true)}>{t("web-pages.settings.account.deleteAction")}</Button>
+        </div>
+      </Section>
+      {/* Asked again, the dialog turning until still.fail cloud has it (it may refuse: the only owner of a workspace others
+          are in, said by toast); then away as after signing out, the account gone from here. */}
+      <Confirm open={deleting} busy={remove.busy(account.sub)} onClose={() => setDeleting(false)}
+        onConfirm={() => void remove.deleteAccount(account.sub).then((gone) => {
+          setDeleting(false);
+          if (!gone) return;
+          navigate("/", { state: { signingOut: account.sub } });
+          toast(t("web-pages.settings.account.deleted", { email: account.email }));
+        })}
+        title={t("web-pages.settings.account.delete")} action={t("web-pages.settings.account.deleteAction")}
+        description={t("web-pages.settings.account.deleteConfirmBody", { email: account.email })} />
     </div>
   );
 }
@@ -601,14 +621,14 @@ function Stations({ view, account, manager, stations }: { view: WorkspaceView; a
   const [adding, setAdding] = useState(false);
   const edits = useStationEdits(view, account, stations);
   return (
-    <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <><JoinThisMac account={account} workspace={view.id} /><Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button></>}>
+    <Section title={t("web-pages.settings.stations.count", { n: stations.length })} actions={manager && <Button icon={Plus} onClick={() => setAdding(true)}>{t("web-pages.settings.stations.add")}</Button>}>
       <StationList stations={stations.map(edits.shown)} manager={manager} page={(s) => `/w/${view.id}/settings/stations/${s.id}`}
         onMark={manager ? edits.setMark : undefined} markBusy={edits.picking} menu={(s) => (manager || s.overview?.drive) && <>
         {manager && edits.busy(s)}
         <Menu items={edits.menu(s, manager)} />
       </>} />
       {edits.dialogs}
-      {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} />}
+      {adding && <AddStationDialog view={view} account={account} stations={stations} onClose={() => setAdding(false)} thisMac />}
     </Section>
   );
 }
@@ -627,15 +647,25 @@ function RenameStationDialog({ station, onClose, onRename }: { station: StationV
   );
 }
 
-/** Which way a station is added: a new machine (its command), or one of the viewer's other workspaces' as it is. */
-type AddKind = "new" | "existing";
+/** Which way a station is added: this machine (the desktop app's own station), a new machine (its command), or one of the
+ * viewer's other workspaces' as it is. */
+type AddKind = "this" | "new" | "existing";
 
-/** `thisMac`: 添加这台 Mac in it too, where the app offers it (the sidebar's 添加 station; the list has it beside). */
+/**
+ * `thisMac`: this machine offered too, where the app offers it, first and chosen at the start: the machine the app
+ * runs on is the one most often added.
+ */
 export function AddStationDialog({ view, account, stations, onClose, thisMac = false }: { view: WorkspaceView; account: Account; stations: StationView[]; onClose(): void; thisMac?: boolean }) {
   const [name, setName] = useState("");
   // A station the viewer manages in another workspace, offered beside a new machine (docs/multi-workspace.md).
   const joinable = useJoinable(view.id).value;
-  const [kind, setKind] = useState<AddKind>("new");
+  // Its joining said in the dialog, not in a toast as well.
+  const mac = useJoinThisMac(account, view.id, { announce: false });
+  const macJoined = mac.join.result !== undefined;
+  const offersMac = thisMac && (mac.offered || macJoined);
+  const offersExisting = !!joinable?.offered && joinable.items.length > 0;
+  const [picked, setKind] = useState<AddKind | null>(null);
+  const kind: AddKind = picked ?? (offersMac ? "this" : "new");
   // The stations there before: the one that joins is the one not among them.
   const [known] = useState(() => new Set(stations.map((s) => s.id)));
   const enroll = useAction(() => cloud.enroll(account.sub, view.id, name));
@@ -644,7 +674,22 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
   const shown = useRef(0);
   useEffect(() => { if (enroll.result) shown.current = performance.now(); }, [enroll.result]);
   useEffect(() => { if (joined) track("station_added", { ms: Math.round(performance.now() - shown.current) }); }, [Boolean(joined)]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (kind === "existing" && joinable?.offered) return <JoinStationDialog view={view} joinable={joinable} onKind={setKind} onClose={onClose} />;
+  const kinds = <AddKinds kind={kind} onKind={setKind} thisMac={offersMac} existing={offersExisting} />;
+  if (kind === "existing" && joinable?.offered) return <JoinStationDialog view={view} joinable={joinable} kinds={kinds} onClose={onClose} />;
+  if (kind === "this" && offersMac) {
+    return (
+      <Dialog open onClose={onClose} wide title={t("web-pages.settings.stations.add")}
+        description={t(PC ? "web-pages.settings.stations.thisPcLead" : "web-pages.settings.stations.thisMacLead")}
+        footer={macJoined ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button> : <>
+          <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+          <Button variant="primary" busy={mac.busy} onClick={() => mac.join.run()}>{t(PC ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>
+        </>}>
+        {!macJoined && kinds}
+        {macJoined && <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t(PC ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")}</span></div>}
+        {mac.join.error && <p className={controlsCss.fieldError} role="alert">{mac.join.error.message}</p>}
+      </Dialog>
+    );
+  }
   return (
     <Dialog open onClose={onClose} wide title={t("web-pages.settings.stations.add")}
       description={t("web-pages.settings.stations.addLead")}
@@ -652,7 +697,7 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
         <Button variant="ghost" onClick={onClose}>{enroll.result ? t("common.close") : t("common.cancel")}</Button>
         {!enroll.result && <Button variant="primary" disabled={!name.trim()} busy={enroll.busy} onClick={() => enroll.run()}>{t("web-pages.settings.stations.generate")}</Button>}
       </>}>
-      {joinable?.offered && joinable.items.length > 0 && !enroll.result && <AddKinds kind={kind} onKind={setKind} />}
+      {!enroll.result && kinds}
       {!enroll.result ? (
         <Field label={t("web-pages.settings.stations.nameLabel")} htmlFor="station-name">
           <input id="station-name" className={controlsCss.input} value={name} autoFocus placeholder={t("web-pages.settings.stations.namePlaceholder")} onChange={(e) => setName(e.target.value)} maxLength={80}
@@ -662,17 +707,19 @@ export function AddStationDialog({ view, account, stations, onClose, thisMac = f
         <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.stations.joined", { name: joined.name })}</span></div>
       ) : <EnrollSteps enrollment={enroll.result} />}
       {enroll.error && <p className={controlsCss.fieldError} role="alert">{enroll.error.message}</p>}
-      {thisMac && !enroll.result && <JoinThisMac account={account} workspace={view.id} className={css.firstThisMac} />}
     </Dialog>
   );
 }
 
-/** A new machine, or a station the viewer has elsewhere: at the top of 添加 station, where both are offered. */
-function AddKinds({ kind, onKind }: { kind: AddKind; onKind(kind: AddKind): void }) {
-  return (
-    <Segmented<AddKind> className={css.addKinds} label={t("web-pages.settings.stations.kind")} value={kind} onChange={onKind}
-      options={[{ value: "new", label: t("web-pages.settings.stations.kindNew") }, { value: "existing", label: t("web-pages.settings.stations.kindExisting") }]} />
-  );
+/** This machine, a new one, or a station the viewer has elsewhere: at the top of 添加 station, where more than one is offered. */
+function AddKinds({ kind, onKind, thisMac, existing }: { kind: AddKind; onKind(kind: AddKind): void; thisMac: boolean; existing: boolean }) {
+  if (!thisMac && !existing) return null;
+  const options: { value: AddKind; label: string }[] = [
+    ...(thisMac ? [{ value: "this" as const, label: t(PC ? "web-pages.settings.stations.kindThisPc" : "web-pages.settings.stations.kindThisMac") }] : []),
+    { value: "new", label: t("web-pages.settings.stations.kindNew") },
+    ...(existing ? [{ value: "existing" as const, label: t("web-pages.settings.stations.kindExisting") }] : []),
+  ];
+  return <Segmented<AddKind> className={css.addKinds} label={t("web-pages.settings.stations.kind")} value={kind} onChange={onKind} options={options} />;
 }
 
 /**
@@ -680,7 +727,7 @@ function AddKinds({ kind, onKind }: { kind: AddKind; onKind(kind: AddKind): void
  * (the core's `joinable`), then added as it is (`station.join`: the core makes the enrollment here and has the station
  * join with it). What that shares of the machine is said under the list: one system user, kept apart, not a sandbox.
  */
-export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: WorkspaceView; joinable: JoinableView; onKind(kind: AddKind): void; onClose(): void }) {
+export function JoinStationDialog({ view, joinable, kinds, onClose }: { view: WorkspaceView; joinable: JoinableView; kinds: ReactNode; onClose(): void }) {
   // One whose home's security mode keeps it out is shown, not picked.
   const open = joinable.items.filter((s) => !s.needsLock);
   const [picked, setPicked] = useState<string>(open[0]?.station ?? "");
@@ -695,7 +742,7 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
         <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
         <Button variant="primary" disabled={!chosen} busy={busy} onClick={() => { if (chosen) join.run(chosen.station); }}>{t("web-pages.settings.stations.joinAction")}</Button>
       </>}>
-      {!done && <AddKinds kind="existing" onKind={onKind} />}
+      {!done && kinds}
       {done ? (
         <div className={additionsCss.callout} data-tone="green"><Check {...ICON} /><span>{t("web-pages.settings.stations.joinedHere", { name: done.name })}</span></div>
       ) : joinable.items.length > 0 ? (
@@ -711,36 +758,6 @@ export function JoinStationDialog({ view, joinable, onKind, onClose }: { view: W
       {join.error && <p className={controlsCss.fieldError} role="alert">{join.error.message}</p>}
     </Dialog>
   );
-}
-
-/**
- * 「添加这台 Mac」, in the desktop app: the station it carries joined to this workspace at a click, while it is in none
- * (never joined, or removed from its workspace: the app joins a removed one again only when asked). Nothing in a
- * browser, or in an app from before it. Once joined, the station shows in the list by itself, as one added by command.
- */
-export function JoinThisMac({ account, workspace, className }: { account: Account; workspace: string; className?: string }) {
-  const desktop = typeof window !== "undefined" ? window.stillfailDesktop?.station : undefined;
-  // The desktop app on Windows: a PC, not a Mac.
-  const pc = typeof navigator !== "undefined" && /Windows/.test(navigator.userAgent);
-  const toast = useToast();
-  const [here, setHere] = useState<CarriedStation | null>(null);
-  // Read again every few seconds: a station removed from its workspace marks itself so only once the cloud has told it.
-  useEffect(() => {
-    if (!desktop) return;
-    let live = true;
-    const read = () => void desktop.state().then((s) => { if (live) setHere(s); }, () => undefined);
-    read();
-    const timer = setInterval(read, 3000);
-    return () => { live = false; clearInterval(timer); };
-  }, [desktop]);
-  const join = useAction(async () => {
-    const done = await desktop!.join(account.sub, workspace);
-    if (!done) throw new Error(t("web-pages.settings.thisMac.noAnswer"));
-    if ("error" in done) throw new Error(done.error);
-    return done.station;
-  }, (s) => { setHere(s); toast(t(pc ? "web-pages.settings.thisPc.joined" : "web-pages.settings.thisMac.joined")); });
-  if (!desktop || !here?.carried || here.state === "running") return null;
-  return <Button icon={Monitor} className={className} busy={join.busy} onClick={() => join.run()}>{t(pc ? "web-pages.settings.thisPc.add" : "web-pages.settings.thisMac.add")}</Button>;
 }
 
 type EnrollSystem = "unix" | "windows";
@@ -814,7 +831,8 @@ export function JoinExistingLink({ entry, className }: { entry: WorkspaceEntry; 
     <>
       <span aria-hidden="true"> · </span>
       <button type="button" className={className} onClick={() => setOpen(true)}>{t("web-pages.settings.stations.firstExisting")}</button>
-      {open && <JoinStationDialog view={view} joinable={joinable} onKind={(kind) => { if (kind === "new") setOpen(false); }} onClose={() => setOpen(false)} />}
+      {open && <JoinStationDialog view={view} joinable={joinable} onClose={() => setOpen(false)}
+        kinds={<AddKinds kind="existing" onKind={(kind) => { if (kind === "new") setOpen(false); }} thisMac={false} existing />} />}
     </>
   );
 }

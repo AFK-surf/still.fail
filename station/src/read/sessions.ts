@@ -296,6 +296,19 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   return { start, entries: briefParam === "1" ? page.map(brief) : page };
 }
 
+/// GET /sessions/:key/transcript: where its runtime keeps the session's transcript on this machine (the current runtime
+/// session's, found as `timeline` finds it), for a person to open or hand to another tool; null before it is written.
+export function transcriptFile(s: Store, key: string, lang: Lang): Json {
+  setLang(lang);
+  const row = sessionRow(s, key);
+  const profile = configOf(s).profiles.find((p) => p.id === row.profile);
+  const runtime = runtimeKind(row.runtime) ?? null;
+  if (!profile || runtime === null || row.runtimeSessionId === null) return { path: null };
+  const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
+  const { paths, current } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));
+  return { path: current ? paths.at(-1)! : null };
+}
+
 /// GET /sessions/:key/widget-state?path: what a widget in one of the session's messages holds, null when nothing or
 /// what is kept does not read as JSON.
 export function widgetState(s: Store, key: string, path: string | undefined, lang: Lang): Json {

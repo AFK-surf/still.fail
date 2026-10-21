@@ -2,6 +2,7 @@
 // channels, what is offered, and the words the pages show while something updates.
 import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { plainText } from "../logins/parse.ts";
 import { type Lang, tr } from "../ops/i18n.ts";
 import { platform as machine } from "../platform/index.ts";
 
@@ -102,9 +103,12 @@ export function stationDownloadPercent(log: string): number | null {
   }
 }
 
-/// The last lines of what a command said, for the pages (at most four, at most 600 characters).
+/// The last lines of what a command said, for the pages (at most four, at most 600 characters), without what it told
+/// a terminal (colours, a progress bar's carriage returns).
 export function tail(said: string, lang: Lang): string {
-  const lines = said.trim().split("\n").filter((l) => l.trim() !== "");
+  // A line written over (a progress bar's) is what it was last.
+  const shown = said.split("\n").map((l) => l.replace(/\r+$/, "").split("\r").at(-1)!).join("\n");
+  const lines = plainText(shown).trim().split("\n").filter((l) => l.trim() !== "");
   const last = lines.slice(Math.max(0, lines.length - 4)).join("\n");
   if (last === "") return tr(lang, "station.updates.noOutput");
   const chars = [...last];

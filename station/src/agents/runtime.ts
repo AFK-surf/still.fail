@@ -1,4 +1,4 @@
-// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness, Grok Build), as the Rust station's
+// The seam between the station and a coding-agent runtime (Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor, Devin), as the Rust station's
 // runtime/mod.rs has it: everything above is runtime-agnostic. A driver opens sessions; what a session's runtime does
 // comes back as events, in order, to the one listener it was opened with. Processes run under runners (./runner.ts): a
 // station that starts again takes its sessions up from the runners (`adopt`), from what the previous one left
@@ -6,12 +6,12 @@
 import { startEnv } from "../ops/agent-env.ts";
 
 /// The runtimes a station runs, in the order they are offered.
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok";
-export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok"];
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin";
+export const RUNTIME_KINDS: RuntimeKind[] = ["claude", "codex", "dsh", "grok", "cursor", "devin"];
 /// A runtime as stored or sent (a name of one of them), none for anything else.
 export const runtimeKind = (v: unknown): RuntimeKind | undefined => (RUNTIME_KINDS as unknown[]).includes(v) ? (v as RuntimeKind) : undefined;
 /// How a runtime is named to people.
-export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : "Grok Build");
+export const runtimeLabel = (r: RuntimeKind) => (r === "claude" ? "Claude Code" : r === "codex" ? "Codex" : r === "dsh" ? "DeepSeek Harness" : r === "grok" ? "Grok Build" : r === "cursor" ? "Cursor" : "Devin");
 
 export type FailureReason = "auth" | "refused" | "rate_limit" | "model" | "exited" | "other";
 
@@ -39,7 +39,7 @@ export type RuntimeEvent =
 export type Profile = {
   id: string;
   runtime: RuntimeKind;
-  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME / DSH_HOME; Grok Build's GROK_HOME is its grok/).
+  /// The profile's home (CLAUDE_CONFIG_DIR / CODEX_HOME / DSH_HOME; Grok Build's GROK_HOME is its grok/, Cursor's keeps cursor/, Devin's devin/).
   home: string;
   /// Whatever else the profile's config says (env, access kind, machine…): read by the drivers as runtime/*.rs do.
   [key: string]: unknown;
@@ -65,7 +65,7 @@ export type OpenOptions = {
 };
 
 export interface AgentSession {
-  /// Runtime-native id: claude session id, codex thread id, dsh or grok session id. Persist it to resume.
+  /// Runtime-native id: claude session id, codex thread id, dsh, grok or Devin session id, Cursor's agent id. Persist it to resume.
   id(): string;
   busy(): boolean;
   /// Starts a turn. Fails when a turn is already running (or the runtime cannot take one as it is).
@@ -89,7 +89,13 @@ export interface AgentSession {
   /// The address of the station's tools the runtime was given (one taken up from another station: as it was given
   /// then); null when not known.
   mcpUrl?(): string | null;
+  /// What it has going in the background past its turns (Claude's background commands and subagents): it ends with
+  /// the process, and nothing of it reports back. Empty for a runtime that does not say.
+  background?(): BackgroundTask[];
 }
+
+/// A background task of a runtime process: a subagent (resumed by its id) or a command.
+export type BackgroundTask = { id: string; kind: "agent" | "command"; description: string };
 
 /// The station's tools by their server's name (before the rename: ember).
 export const TOOL_SERVERS = ["stillfail", "ember"];

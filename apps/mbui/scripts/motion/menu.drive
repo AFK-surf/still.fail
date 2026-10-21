@@ -1,0 +1,9 @@
+# The home's filter menu in and out: its button, then 我参与的 chosen.
+timeout 20000
+until 今天
+wait 300
+tapxy -33 25
+until 我参与的
+wait 700
+tap 我参与的
+wait 900

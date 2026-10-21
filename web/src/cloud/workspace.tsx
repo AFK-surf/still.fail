@@ -42,6 +42,7 @@ import { PermissionsPage } from "../pages/Permissions.tsx";
 import { AppVersionPage, HAS_VERSION } from "../pages/AppVersion.tsx";
 import { HAS_LOCAL_STATION, LocalStationPage } from "../pages/LocalStation.tsx";
 import { ChangelogNews, ChangelogPage } from "../pages/Changelog.tsx";
+import { AboutPage } from "../pages/About.tsx";
 import { AddProfile } from "../pages/AddProfile.tsx";
 import { ProfilesNav } from "../ProfilesNav.tsx";
 import { NavAction, NavList, NavItem, NavSection, NavTop } from "../SidebarList.tsx";
@@ -160,12 +161,15 @@ export const WorkspaceShell = memo(function WorkspaceShell({ entry }: { entry: W
             <Route index element={<WorkspaceHome id={entry.id} stations={known && stations} />} />
             <Route path="settings" element={<Navigate to="appearance" replace />} />
             <Route path="settings/appearance" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
+            {/* A phone's page of the fonts (mobile/Fonts.tsx): the wide screen has them on 外观. */}
+            <Route path="settings/appearance/fonts" element={<AppearancePage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/notifications" element={<NotificationsPage back={`/w/${entry.id}/settings`} workspace={entry.id} />} />
             <Route path="settings/permissions" element={<PermissionsPage back={`/w/${entry.id}/settings`} />} />
             {CHANGEABLE && <Route path="settings/shortcuts" element={<ShortcutsPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_VERSION && <Route path="settings/version" element={<AppVersionPage back={`/w/${entry.id}/settings`} />} />}
             {HAS_LOCAL_STATION && <Route path="settings/local-station" element={<LocalStationPage back={`/w/${entry.id}/settings`} />} />}
             <Route path="settings/changelog" element={<ChangelogPage back={`/w/${entry.id}/settings`} />} />
+            <Route path="settings/about" element={<AboutPage back={`/w/${entry.id}/settings`} />} />
             <Route path="settings/account" element={<AccountSettings entry={entry} />} />
             <Route path="settings/workspace" element={<WorkspaceSettings entry={entry} />} />
             <Route path="settings/security" element={<SecuritySettings entry={entry} />} />

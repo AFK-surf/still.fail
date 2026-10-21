@@ -152,6 +152,7 @@ function message(code: string): string | null {
     invalid_relays: "core-misc.cloud.invalid_relays",
     already_member: "core-misc.cloud.already_member",
     last_owner: "core-misc.cloud.last_owner",
+    sole_owner: "core-misc.cloud.sole_owner",
     too_many_workspaces: "core-misc.cloud.too_many_workspaces",
     too_many_invitations: "core-misc.cloud.too_many_invitations",
     too_many_members: "core-misc.cloud.too_many_members",

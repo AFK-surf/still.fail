@@ -8,3 +8,5 @@ export const mSignOut = style({
   cursor: "pointer",
   selectors: { "&:disabled": { cursor: "default" } },
 });
+/** Room before deleting the account, apart from the rest (as leaving a workspace is: WorkspacePage.css.ts). */
+export const mGap = style({ height: "18px" });

@@ -146,6 +146,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import androidx.media3.common.C as Media
 import fail.still.android.data.DriveCache
+import fail.still.android.ui.UiFont
 
 private const val TAG = "drive-player"
 
@@ -358,7 +359,7 @@ fun PlayerScreen(station: String, root: String, path: String) {
         )
         if (subtitlesOn && cues.isNotEmpty()) Text(
             cues, fontSize = if (sideways) 20.sp else 16.sp, lineHeight = if (sideways) 26.sp else 22.sp, color = Color.White, textAlign = TextAlign.Center,
-            style = TextStyle(shadow = Shadow(Color.Black, Offset(0f, 1f), 6f)),
+            style = TextStyle(fontFamily = UiFont, shadow = Shadow(Color.Black, Offset(0f, 1f), 6f)),
             modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 24.dp)
                 .padding(bottom = if (shown > 0.5f) 132.dp else 28.dp).background(Color.Black.copy(alpha = 0.35f), Smooth(6.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
         )
@@ -386,28 +387,28 @@ fun PlayerScreen(station: String, root: String, path: String) {
         val index = list.indexOf(name)
         Row(
             Modifier.align(Alignment.TopCenter).windowInsetsPadding(insets).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth().alpha(shown)
-                .glass(haze, Smooth(16.dp)).height(48.dp).padding(start = 4.dp, end = 14.dp),
+                .glass(haze, Smooth(24.dp)).height(48.dp).padding(start = 4.dp, end = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Key(Icons.ChevronLeft, t("common.back"), enabled = shown > 0f) { if (sideways) sideways = false else app.pop() }
             Text(name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false).padding(horizontal = 4.dp))
-            if (list.size > 1 && index >= 0) Text("${index + 1} / ${list.size}", fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 4.dp))
+            if (list.size > 1 && index >= 0) Text("${index + 1} / ${list.size}", fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 4.dp))
         }
         // The controls at the foot: the time over where it is (and what is buffered beyond it); the one before, 15 s back,
         // play, 15 s on, the one after; the speed, the subtitle, sideways.
         val prev = if (index > 0) list[index - 1] else null
         Column(
             Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout)).padding(horizontal = 8.dp, vertical = 8.dp)
-                .widthIn(max = 720.dp).fillMaxWidth().alpha(shown).glass(haze, Smooth(20.dp))
+                .widthIn(max = 720.dp).fillMaxWidth().alpha(shown).glass(haze, Smooth(26.dp))
                 .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); wake() } }
-                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 4.dp),
+                .padding(start = 6.dp, end = 6.dp, top = 8.dp, bottom = 6.dp),
         ) {
             Text(
                 buildAnnotatedString {
                     withStyle(SpanStyle(color = Ink, fontWeight = FontWeight.SemiBold)) { append(clock(position)) }
                     append(" / ${if (duration > 0) clock(duration) else "--:--"}")
                 },
-                fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 10.dp),
+                fontSize = 12.sp, color = Muted, maxLines = 1, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.padding(start = 10.dp),
             )
             Timeline(position, duration, buffered, enabled = shown > 0f) { player.seekTo(it); wake() }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(0.dp)) {

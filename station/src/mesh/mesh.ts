@@ -16,6 +16,8 @@ import { ALPN, FORMER_ALPN, serve } from "./serve.ts";
 import { bindStation } from "./native.ts";
 import { lanAddrs } from "./lan.ts";
 import { Superseded } from "./superseded.ts";
+import { Storms } from "./storms.ts";
+import { Fibers } from "../ops/fibers.ts";
 
 export const MeshLive = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -115,9 +117,20 @@ export const MeshLive = Layer.effectDiscard(
       yield* Effect.addFinalizer(() => Effect.sync(() => (cloud.state.toolCalls = null)));
       // A member's device connecting again: its connections left by a process that died are found and closed.
       const superseded = new Superseded();
+      // Connections trading only packets that carry nothing, thousands a second: said, and closed (storms.ts).
+      const { storms } = yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const fibers = new Fibers("mesh");
+          const storms = new Storms(fibers);
+          storms.start();
+          return { storms, fibers };
+        }),
+        ({ fibers }) => Effect.promise(() => fibers.close()),
+      );
       for (;;) {
         const conn = yield* Effect.promise(() => endpoint.accept());
         if (!conn) return;
+        storms.watch(conn);
         if (conn.alpn().equals(ALPN) || conn.alpn().equals(FORMER_ALPN)) void superseded.arrived(conn);
         yield* FiberSet.run(
           connections,

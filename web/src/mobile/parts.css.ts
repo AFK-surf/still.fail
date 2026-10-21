@@ -123,6 +123,8 @@ export const mPlaceNote = style({ margin: "0", padding: "8px 22px", fontSize: va
 export const mFilterMenu = style({});
 globalStyle(`${m} button${mFilterMenu}[data-on]`, { color: "var(--m-accent)" });
 export const mSection = style({ display: "flex", alignItems: "flex-end", padding: "14px 20px 6px" });
+/** A section title's mark: centred on its line, 8 from its words. */
+export const mSectionMark = style({ display: "flex", alignSelf: "center", marginRight: "8px" });
 export const mListCard = style({
   margin: "0 12px 10px", borderRadius: `calc(16px * ${vars.cornerScale})`, cornerShape: vars.cornerShape,
   background: "var(--m-surface)", overflow: "hidden",
@@ -173,7 +175,8 @@ export const mButton = style({
   fontSize: `${vars.textUi} !important`, fontWeight: "600", whiteSpace: "nowrap", cursor: "pointer",
   selectors: {
     "&[data-primary]": { background: "var(--m-ink)", color: "var(--m-bg) !important" },
-    [`&[data-primary]:disabled:not(:has(${spinner}))`]: { background: "var(--m-line)" },
+    // Not to be pressed yet: a quiet ground, its words grey (white on it is hardly read).
+    [`&[data-primary]:disabled:not(:has(${spinner}))`]: { background: "var(--m-line)", color: "var(--m-muted) !important" },
     [`${mSteps} > &`]: { alignSelf: "flex-end" },
   },
 });
@@ -192,7 +195,7 @@ globalStyle(`${mLargeTitle} h1`, {
   margin: "0", fontSize: vars.textDisplay, fontWeight: "600", letterSpacing: "-0.6px", lineHeight: "1.25",
 });
 globalStyle(`${mSection} b`, { fontSize: vars.textBody, fontWeight: "600" });
-globalStyle(`${mSection} span`, { marginLeft: "auto", fontSize: vars.textMeta, color: "var(--m-muted)" });
+globalStyle(`${mSection} span:not(${mSectionMark})`, { marginLeft: "auto", fontSize: vars.textMeta, color: "var(--m-muted)" });
 globalStyle(`${mPickText} > span`, { fontSize: vars.textBody });
 globalStyle(`${mPickText} small`, { fontSize: vars.textCaption, color: "var(--m-muted)" });
 /** Here rather than with its class: it comes after .m-navbar-title b, and wins over it. */

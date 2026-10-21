@@ -67,6 +67,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.WaitLine
+import fail.still.android.ui.termText
 import fail.still.android.ui.Waiting
 import fail.still.android.ui.DoingMark
 import fail.still.android.ui.GroupLabel
@@ -193,18 +194,18 @@ fun openJobs(app: AppState, station: String, of: ChatOf) {
                 Text(t("android-misc.jobs.none"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text(t("android-misc.jobs.none.text"), fontSize = 13.sp, color = C.muted)
             }
-            if (jobs.isNotEmpty() && shown.isEmpty()) Text(t("android-misc.jobs.noneNow"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+            if (jobs.isNotEmpty() && shown.isEmpty()) Text(t("android-misc.jobs.noneNow"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp))
             JobGroups(app, station, of, view, shown, notes = true)
             if (jobs.size > view.current) SheetLink({ all = !all }) {
-                if (all) Text(t("android-misc.jobs.onlyNow"), fontSize = 14.sp, color = C.accent)
+                if (all) Text(t("android-misc.jobs.onlyNow"), fontSize = 14.sp, color = C.link)
                 else {
-                    Text(view.allText, fontSize = 14.sp, color = C.accent)
+                    Text(view.allText, fontSize = 14.sp, color = C.link)
                     Text(view.hiddenText, fontSize = 12.sp, color = C.muted)
                 }
             }
             if (view.ended > 0) SheetLink({ app.clearEnded(station, view.clear) }) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(view.clearText, fontSize = 14.sp, color = C.accent)
+                    Text(view.clearText, fontSize = 14.sp, color = C.link)
                     DoingMark(app.clearing(station), app.clearFailed(station), inline = true)
                 }
             }
@@ -257,7 +258,7 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
         if (tab == 0) {
             val notices = job.notices ?: emptyList()
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (notices.isEmpty()) Text(t("android-misc.jobs.noNotices"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                if (notices.isEmpty()) Text(t("android-misc.jobs.noNotices"), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 2.dp, vertical = 8.dp))
                 notices.forEach { n ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(n.clock ?: "", fontSize = 14.sp, color = C.subtle, modifier = Modifier.width(48.dp))
@@ -285,7 +286,14 @@ private fun ColumnScope.JobBody(app: AppState, station: String, job: Job, tab: I
                     .verticalScroll(scroll).padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
                 if (log == null) WaitLine()
-                else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                else {
+                    val runs = log.runs
+                    val ink = C.ink
+                    val dark = C.dark
+                    val shown = remember(runs, ink, dark) { runs?.let { termText(it, ink, dark) } }
+                    if (shown != null) Text(shown, style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                    else Text(text?.ifEmpty { t("android-misc.jobs.noOutput") } ?: "", style = Mono, fontSize = 11.5.sp, color = C.ink, fontFamily = CodeFont)
+                }
             }
         }
         if (running) Row(

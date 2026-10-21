@@ -2,6 +2,8 @@ import type { Account } from "./account";
 import type { Directory } from "./directory";
 import type { LoginAttempt, LoginLimiter } from "./login";
 import type { Mailer } from "./mail";
+import type { RelayLoad } from "./relay-load";
+import type { Relay } from "./relay-worker";
 import type { TelemetryLimiter } from "./tracing";
 
 export interface Env {
@@ -34,6 +36,10 @@ export interface Env {
   RELAY_ENTRIES?: string;
   /** What the relays are called (by their URL) where people see which one a connection goes through (relays.ts). */
   RELAY_NAMES?: Record<string, string>;
+  /** How loaded the relays are, for the console (relay-load.ts). */
+  RELAY_LOAD: DurableObjectNamespace<RelayLoad>;
+  /** still.fail's own relay process, in the relay's Worker (relay-worker.ts): its counters, read by the cron. Unset: not read. */
+  RELAY?: DurableObjectNamespace<Relay>;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   AUTH_SIGNING_KEY: string;

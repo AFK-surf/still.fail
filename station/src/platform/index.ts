@@ -14,6 +14,9 @@ export type Found = { onPath: string; real: string };
 /// A program and its arguments, as runtimes are installed and updated.
 export type How = { program: string; args: string[] };
 
+/// A process as the memory watch sees it (jobs/memory.ts).
+export type ProcessInfo = { pid: number; ppid: number; pgid: number; bytes: number; command: string };
+
 /// How the host page says the machine (GET /host): memory, CPU, uptime, the OS.
 export type Host = {
   /// CPU time since boot, all CPUs together: (busy, total); none when it cannot be read.
@@ -99,6 +102,10 @@ export type Platform = {
   };
 
   // Files.
+  /// The disks mounted, as places to start a folder from (the drive's picker): macOS's in /Volumes, Linux's in
+  /// /media/<user> and /mnt (each folder there, names in order); Windows' drives, `C:\` to `Z:\`, by their letter.
+  /// Each as it is there, not yet looked into: a link to `/` (macOS's own disk) is the caller's to leave out.
+  disks(home: string): Promise<{ name: string; path: string }[]>;
   /// Whether making a symbolic link was refused for want of the privilege (Windows without Developer Mode).
   linkRefused(error: unknown): boolean;
   /// Whether a directory's entries can be made durable by syncing it (not on Windows: NTFS journals them).
@@ -125,6 +132,8 @@ export type Platform = {
   // Updates.
   /// How Claude Code is installed where it is not.
   claudeInstall: How;
+  /// How the Devin CLI is installed where it is not (its own installer, into ~/.local/bin).
+  devinInstall: How;
   /// The kind of the installer a release carries for this machine: bin/install.<lang>.<this> (scripts/installers.ts).
   installerExt: "sh" | "ps1";
   /// Starts `script` (the installer the running release carries, docs/release-signing.md) apart from the station, run
@@ -133,6 +142,9 @@ export type Platform = {
   /// How a runtime found as a package manager's shim of this machine's kind is updated (Windows: Vite+'s beside
   /// vp.exe, npm's .cmd in its prefix), none for the shared rules.
   shimUpdate(found: Found, pkg: string, env: Env): How | "no-npm" | null;
+  /// `command` (a command npm installed in its global prefix) linked into `dir` under its name, where nothing of that
+  /// name is: whether it now is (not on Windows: npm's .cmd finds its package beside itself, and its prefix is on PATH).
+  linkCommand(command: string, dir: string): boolean;
   /// Whether Codex's standalone install updates by its installer here (a shell script: not on Windows).
   codexStandalone: boolean;
 
@@ -156,6 +168,15 @@ export type Platform = {
   terminal(program: string, args: string[], cols: number, rows: number): [string, string[]] | null;
   /// The processes `pid` started, and theirs (not itself).
   descendants(pid: number): Promise<number[]>;
+  // Memory, as the station's queue and its watch over the agents' processes read it (jobs/admit.ts, jobs/memory.ts).
+  /// What the system says of its memory: macOS's own pressure level; elsewhere how much is still available
+  /// (pressureOfAvailable). None when it cannot be read.
+  memoryPressure(): Promise<"normal" | "high" | "critical" | null>;
+  /// Every process: its parent, group, program and memory in bytes (resident; its footprint on macOS when `exact`,
+  /// which takes longer to read but counts what is compressed or swapped out). None where it is not read (Windows).
+  processTable(exact: boolean): Promise<ProcessInfo[] | null>;
+  /// The working directory of each of `pids` that says one.
+  cwds(pids: number[]): Promise<Map<number, string>>;
   /// The addresses those processes listen on at TCP `port` (127.0.0.1, ::1, * for all); null when this machine cannot
   /// tell.
   listening(pids: number[], port: number): Promise<string[] | null>;

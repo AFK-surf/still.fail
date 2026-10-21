@@ -61,6 +61,16 @@ function cookieOf(request: Request, origin: string, id: string): string {
       ?.split("=")[1] ?? ""
   );
 }
+/** What a page's form-action lists for a login's return (auth.ts validRedirect): an app's scheme, else the origin. */
+export function returnSource(redirect: string): string | undefined {
+  try {
+    const url = new URL(redirect);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.origin : url.protocol;
+  } catch {
+    return undefined;
+  }
+}
+
 function redirect(location: string, cookies: string): Response {
   return new Response(null, {
     status: 302,
@@ -71,6 +81,10 @@ function redirect(location: string, cookies: string): Response {
       "referrer-policy": "no-referrer",
     },
   });
+}
+/** A link to one of the legal pages on still.fail's site (web/public/terms.html, privacy.html; en/ the English), opened beside the sign-in. */
+function legalLink(lang: Lang, page: "terms" | "privacy"): string {
+  return `<a href="https://still.fail/${lang === "zh" ? "" : "en/"}${page}" target="_blank" rel="noopener">${tr(lang, `cloud.login.choose.${page}`)}</a>`;
 }
 
 /** One login attempt, single-use callback and PKCE code, removed on its alarm. */
@@ -279,7 +293,8 @@ export class LoginAttempt extends DurableObject<Env> {
       `${device}<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="google"><button class="secondary">${tr(lang, "cloud.login.device.continue")}</button></form>` +
         `<p class="or">${tr(lang, "cloud.login.choose.or")}</p>` +
         `<form class="wide" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="email"><input type="email" name="email" value="${escape(email)}" placeholder="${tr(lang, "cloud.login.email.placeholder")}" autocomplete="email" required maxlength="254"><button>${tr(lang, "cloud.login.email.send")}</button></form>` +
-        (error ? `<p class="error">${escape(error)}</p>` : ""),
+        (error ? `<p class="error">${escape(error)}</p>` : "") +
+        `<p class="legal">${tr(lang, "cloud.login.choose.agree", { terms: legalLink(lang, "terms"), privacy: legalLink(lang, "privacy") })}</p>`,
       cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
     );
   }
@@ -297,6 +312,8 @@ export class LoginAttempt extends DurableObject<Env> {
         `<p class="links"><button form="resend" class="link">${tr(lang, "cloud.login.code.resend")}</button><button form="back" class="link">${tr(lang, "cloud.login.code.other")}</button></p>` +
         `<form id="resend" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="resend"></form><form id="back" method="post" action="${action}">${csrf}<input type="hidden" name="via" value="back"></form>`,
       cookie(this.env.PUBLIC_ORIGIN, id, browser, LOGIN_TTL_SEC),
+      // The right code sends the browser back where the attempt returns (choose's redirect): a device's ends here.
+      attempt.device ? undefined : returnSource(attempt.redirect),
     );
   }
 

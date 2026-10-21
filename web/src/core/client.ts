@@ -47,6 +47,8 @@ export type Topic =
   | { topic: "adminList"; account: string; list: "users" | "workspaces" | "invite-codes" | "feedback"; query: string; filter?: string; sort?: string; limit?: number; messages?: number }
   | { topic: "adminItem"; account: string; list: "users" | "workspaces" | "feedback"; id: string }
   | { topic: "adminOverview"; account: string }
+  // still.fail's relays and the load on each over the last day or week (a cloud from before has none: a 404).
+  | { topic: "adminRelays"; account: string; range?: "day" | "week" }
   // Views: put together by the core from the topics above.
   | { topic: "chats"; scope: string; mine: boolean; watching?: boolean }
   | { topic: "stations"; scope: string }
@@ -695,6 +697,8 @@ export interface CarriedStation {
   workspace?: string;
   /** Its key in that workspace (an app from before it says none). */
   station?: string;
+  /** The workspaces it joined beside that one: said by an app that joins a station in one to another (none before). */
+  joined?: string[];
 }
 
 export type LocalStationAction = "start" | "stop" | "restart" | "update" | "log" | "folder";

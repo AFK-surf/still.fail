@@ -148,11 +148,13 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
   const run = useVaultCall();
   const navigate = useNavigate();
   const creating = useDoing("vault.create", { workspace: entry.id });
+  const locking = useDoing("vault.lock", { workspace: entry.id });
   const plain = view.plain === true;
   const mine = view.vaults.find((v) => v.mine);
   const [editing, setEditing] = useState<Kind | null>(null);
   const stations = useStations(entry.id).value ?? [];
   const online = stations.filter((s) => s.online);
+  const profiles = useProfiles(entry.id).value;
   return (
     <>
       {view.requests.length > 0 && (
@@ -164,6 +166,13 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
         <div className={css.state}><ShieldCheck size={16} strokeWidth={1.6} /><span className={plain ? css.riskTitle : undefined}>{plain ? t("web-pages.vault.lib.plain") : t("web-pages.vault.lib.sealed")}</span></div>
         <p className={css.sub}>{plain ? t("web-pages.vault.lib.plainLong") : t("web-pages.vault.lib.sealedWhy")}</p>
         {plain && <div className={css.actions}><Link to={`/w/${entry.id}/settings/security`}><Button variant="primary">{t("web-pages.vault.lib.turnOn")}</Button></Link></div>}
+        {/* Unlocked here a while: said with the library's state, and locked again at once from there. */}
+        {!plain && view.vaults.some((v) => v.open) && (
+          <div className={css.actions}>
+            <span className={css.rowMeta}>{t("web-pages.vault.opened")}</span>
+            <Button variant="ghost" busy={locking} onClick={() => void run("vault.lock", { workspace: entry.id }, t("web-pages.vault.lockNow"))}>{t("web-pages.vault.lockNow")}</Button>
+          </div>
+        )}
       </div>
       {!plain && (view.plainLeft ?? 0) > 0 && <Migrate entry={entry} n={view.plainLeft!} />}
       <ProfileAccounts entry={entry} />
@@ -174,7 +183,8 @@ function Library({ entry, view, adding, onAdded }: { entry: WorkspaceEntry; view
             onClick={() => void run("vault.create", { workspace: entry.id, name: t("web-pages.vault.personal") }, t("web-pages.vault.createWhat"))}>{t("web-pages.vault.setUp")}</Button></div>
         </div>
       )}
-      {view.vaults.map((v) => <LibraryVault key={v.id} entry={entry} v={v} plain={plain} many={view.vaults.length > 1} />)}
+      {/* Nothing of its own yet says so only where the page lists nothing else (the profiles' accounts above). */}
+      {view.vaults.map((v) => <LibraryVault key={v.id} entry={entry} v={v} plain={plain} many={view.vaults.length > 1} quiet={(profiles?.items.length ?? 0) > 0} />)}
       {!plain && view.vaults.length > 0 && (
         <Section title={t("web-pages.vault.devices")}>
           <div className={pagesCss.card}><div className={css.rows}>{view.vaults.map((v) => <DevicesRow key={v.id} entry={entry} v={v} many={view.vaults.length > 1} />)}</div></div>
@@ -240,7 +250,7 @@ function ProfileAccounts({ entry }: { entry: WorkspaceEntry }) {
 
 /** A vault's secrets, a section a kind: each one's name and when an agent last used it (in a library not locked, that
  * it is not encrypted, first); locked, those it does not name, and unlocking. */
-function LibraryVault({ entry, v, plain, many }: { entry: WorkspaceEntry; v: VaultRow; plain: boolean; many: boolean }) {
+function LibraryVault({ entry, v, plain, many, quiet }: { entry: WorkspaceEntry; v: VaultRow; plain: boolean; many: boolean; quiet: boolean }) {
   const items = useVaultItems(entry.id, v.id);
   const run = useVaultCall();
   const [recovering, setRecovering] = useState(false);
@@ -282,19 +292,16 @@ function LibraryVault({ entry, v, plain, many }: { entry: WorkspaceEntry; v: Vau
           </Section>
         );
       })}
+      {/* A row of the page's list (its words on the sections' line), not a loose button. */}
       {hidden.length > 0 && (
-        <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={unlock}>
-          <span className={css.rowIcon} /><span className={`${pagesCss.listRowText} ${css.rowMeta}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
-          <span className={css.link}>{t("web-pages.vault.unlock")}</span>
-        </button>
+        <ul className={pagesCss.list}>
+          <li><button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={unlock}>
+            <span className={`${pagesCss.listRowText} ${css.rowMeta}`}>{t("web-pages.vault.hidden", { n: hidden.length })}</span>
+            <span className={css.link}>{t("web-pages.vault.unlock")}</span>
+          </button></li>
+        </ul>
       )}
-      {!plain && v.open && (
-        <button type="button" className={`${pagesCss.listRow} ${css.rowButton}`} onClick={() => void run("vault.lock", { workspace: entry.id }, t("web-pages.vault.lockNow"))}>
-          <span className={css.rowIcon} /><span className={`${pagesCss.listRowText} ${css.rowMeta}`}>{t("web-pages.vault.opened")}</span>
-          <span className={css.link}>{t("web-pages.vault.lockNow")}</span>
-        </button>
-      )}
-      {items.items.length === 0 && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
+      {items.items.length === 0 && !quiet && <p className={css.note}>{t("web-pages.vault.empty")}</p>}
     </>
   );
 }
@@ -420,10 +427,10 @@ function ItemDialog({ opened, row, onClose, onEdit }: { opened: Opened; row: Vau
   );
 }
 
-/** A field of an item: masked until shown (a while), copied as it is. */
-export function Secret({ label, value, secret, mono }: { label: string; value: string; secret: boolean; mono: boolean }) {
+/** A field of an item: masked until shown (a while), copied as it is. `revealed`: opened to be seen, shown at once. */
+export function Secret({ label, value, secret, mono, revealed = false }: { label: string; value: string; secret: boolean; mono: boolean; revealed?: boolean }) {
   const toast = useToast();
-  const [shown, setShown] = useState(!secret);
+  const [shown, setShown] = useState(!secret || revealed);
   return (
     <div className={css.secret}>
       <span className={css.fieldLabel}>{label}</span>
