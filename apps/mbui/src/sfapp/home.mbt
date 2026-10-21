@@ -10,6 +10,8 @@ priv enum Item {
   /// room for the top bar over the list
   Top
   Search
+  /// what the last update brought, until it is seen (home_news.mbt)
+  News
   Wait(Int, ListNote?, String?)
   Empty
   /// the jobs left up a long while (OpenJobs.kt: sheets.mbt open_jobs)
@@ -158,7 +160,13 @@ fn home_page(
   }
   let list : Array[Item] = [Top]
   match view {
-    None => list.push(Wait(7, None, error))
+    None => {
+      // (even while the list is read)
+      if news_of(src) is Some(_) {
+        list.push(News)
+      }
+      list.push(Wait(7, None, error))
+    }
     Some(v) => {
       let empty = match v.note {
         Some(n) => n.empty
@@ -166,6 +174,9 @@ fn home_page(
       }
       if !empty {
         list.push(Search)
+      }
+      if news_of(src) is Some(_) {
+        list.push(News)
       }
       match v.note {
         Some(n) if n.reading || n.failing.length() > 0 =>
@@ -216,6 +227,7 @@ fn home_page(
       match list[i] {
         Top => c.box(h=Px(bar_h + 8.0), fn() {  }) |> ignore
         Search => search_field(c)
+        News => changelog_news(c, src)
         Wait(n, note, error) => waiting(c, n, note, error)
         Empty =>
           match view {
@@ -427,6 +439,7 @@ fn item_key(it : Item) -> String {
   match it {
     Top => "top"
     Search => "search"
+    News => "changelog-news"
     Wait(_, _, _) => "wait"
     Empty => "empty"
     OpenJobs => "open-jobs"

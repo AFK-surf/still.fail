@@ -31,6 +31,8 @@ test "83-profile" {
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.tap("=重命名")
     f.run_to(@kit.sheet_rest("settings-sheet"))
+    // (its field there and taking the typing: a scripted run's clear waits for it so)
+    f.see("Profile 名称")
     f.clear()
     f.type_text("cc")
     f.tap("=保存")

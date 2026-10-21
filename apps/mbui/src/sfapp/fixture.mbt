@@ -344,6 +344,19 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "others": if f.workspace == "ws1" { "done" } else { "alert" },
       })
     "status" => Some({ "items": [] })
+    // what the last update brought (home_news.mbt): said on MBUI_FIXTURE=home-news only
+    "changelog" if f.mode == "home-news" =>
+      Some({
+        "build": 1310,
+        "tabs": [],
+        "news": {
+          "build": "0.1.1310",
+          "entries": [
+            { "text": ["设置里可以注销账号", "聊天顶栏会提示 station 更新"] },
+            { "text": ["执行历史里可以认领 Slack 用户", "后台任务的面板可以拖高"] },
+          ],
+        },
+      })
     "screenCard" | "adbCard" => fixture_link_card(name, params)
     // (a chat's agent's run settings, a settings page: the settings' own)
     "pick" if f.mode == "settings-run" || f.mode == "settings-run-models" => @settings.fixture_topic(f.mode, name, params)

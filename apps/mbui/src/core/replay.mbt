@@ -59,6 +59,8 @@ pub struct Replay {
   priv asked : Array[String]
   /// the calls set aside (Replay::skip)
   priv skipped : Array[String]
+  /// reports the app made that the run did not (Replay::sent: its frames had them, the run's not)
+  priv unasked_reports : Array[String]
   /// what the run's app was started with (its trace's `{"env":…}`: src/stillfail's CORETRACE env)
   priv run_env : Array[(String, String)]
   /// what the run's host answered that its text recording kept (`{"textrec":…}`: TEXTREC lines, mbui's hostrec.mbt):
@@ -82,8 +84,9 @@ pub(all) enum Pace {
 ///|
 /// Asks that only tell the core what the app sees or keeps (where its chat's list is, a draft, where it was read to,
 /// where a player was left): how many and when depends on the run's timing, and what they say with it (a player's
-/// place is how far it played). Not strict (Replay::pace), they wait nothing and none is required; one made again with
-/// other params is the run's next of its name, not said to differ.
+/// place is how far it played: the frames had them, the run's or the app's). Strict or not (Replay::pace), they wait
+/// nothing, none is required and one the run did not make is not where the two went apart; one made again with other
+/// params is the run's next of its name, not said to differ.
 let reports : Array[String] = ["client.focus", "chat.place", "draft.put", "drive.place"]
 
 ///|
@@ -222,6 +225,7 @@ pub fn Replay::parse(log : String) -> Replay {
     asked: [],
     host_said: None,
     skipped: [],
+    unasked_reports: [],
     run_env,
     run_text,
   }
@@ -580,7 +584,7 @@ fn Replay::due_at(self : Replay, i : Int) -> Double {
     }
     // (a step of the script's is the run's own: timed from what happened again before it, the app's asks it has not
     // made again aside, as they may be made in that time: a draft kept while the run waited to tap)
-    if e.out && !e.done && (self.strict || !is_report(e.msg)) && !is_step(self.evs[i].msg) {
+    if e.out && !e.done && !is_report(e.msg) && !is_step(self.evs[i].msg) {
       return @double.infinity
     }
     j = j - 1
@@ -632,7 +636,7 @@ fn is_report(m : Json) -> Bool {
 
 ///|
 /// The messages in that may come whenever their time (what they came after asked again), the first of each ask's: in
-/// the run's order. Strict: up to the first ask not made again; else past those that are reports, an ask's own coming
+/// the run's order: up to the first ask not made again, past those that are reports (strict or not); an ask's own coming
 /// once it was made (an answer to an ask not made again does not).
 fn Replay::ready(self : Replay) -> Array[Int] {
   let firsts : Array[Int] = []
@@ -641,7 +645,8 @@ fn Replay::ready(self : Replay) -> Array[Int] {
   for i in from..<self.evs.length() {
     let e = self.evs[i]
     if e.out && !e.done {
-      if self.strict || !is_report(e.msg) {
+      // (a report waits nothing, strict or not: the run's frames made it, the app's own frames may not, Replay::sent)
+      if !is_report(e.msg) {
         break
       }
       continue
@@ -718,12 +723,36 @@ pub fn Replay::unanswered(self : Replay) -> Int {
 }
 
 ///|
-/// How many messages in are not handed on yet.
+/// How many messages in are not handed on yet (the answers to reports the app did not make aside: nothing is to take
+/// them).
 pub fn Replay::left(self : Replay) -> Int {
+  let unmade_reports : Array[Int] = []
+  for e in self.evs {
+    if e.out && !e.done && is_report(e.msg) {
+      match e.msg {
+        Object(m) =>
+          match id_of(m) {
+            Some(id) => unmade_reports.push(id)
+            None => ()
+          }
+        _ => ()
+      }
+    }
+  }
   let mut n = 0
   for e in self.evs {
     if !e.out && !e.done {
-      n += 1
+      let answers_unmade = match e.msg {
+        Object(m) =>
+          match id_of(m) {
+            Some(id) => unmade_reports.contains(id)
+            None => false
+          }
+        _ => false
+      }
+      if !answers_unmade {
+        n += 1
+      }
     }
   }
   n
@@ -747,12 +776,12 @@ pub fn Replay::diverged(self : Replay) -> Array[String] {
 }
 
 ///|
-/// The run's asks the app has not made again (yet), in their order, the skipped ones aside: at a test's end, what the
-/// run did that this one did not.
+/// The run's asks the app has not made again (yet), in their order, the skipped ones and the reports aside: at a test's
+/// end, what the run did that this one did not.
 pub fn Replay::unmade(self : Replay) -> Array[String] {
   let out : Array[String] = []
   for e in self.evs {
-    if e.out && !e.done {
+    if e.out && !e.done && !is_report(e.msg) {
       out.push(e.msg.stringify())
     }
   }
@@ -807,10 +836,16 @@ fn Replay::out(self : Replay, text : String) -> Unit {
     }
   }
   if found < 0 {
+    // a report the run did not make (where the list is, whether its end shows): the app makes those as its own
+    // frames have it, the run's frames otherwise (a list gliding to rows that came: its end out of view for a frame
+    // here, never in the run's), so not where the two went apart; nothing waits on its answer
+    if kind == "call" && reports.contains(name_of(m)) {
+      self.unasked_reports.push(text)
+      return
+    }
     self.diverged.push(text)
-    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too; not
-    // a report (where the list is, a draft): the run's app makes those as its own frames have it, maybe not at all)
-    if kind == "call" && !reports.contains(name_of(m)) {
+    // (a call the run did not make is answered all the same by a live backend: a scripted run waits for it too)
+    if kind == "call" {
       self.asked.push(name_of(m))
     }
     return

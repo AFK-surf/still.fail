@@ -199,6 +199,7 @@ fn reset() -> Unit {
   update_anchor_reset()
   landing_reset()
   new_ws_reset()
+  news_reset()
   app.toast = ""
   read_views.clear()
   read_chats.clear()

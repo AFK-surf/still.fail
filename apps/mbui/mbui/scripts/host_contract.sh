@@ -59,6 +59,10 @@ REC="MBUI_DRAW_LOG=1 MBUI_TEXT_RECORD=1 MBUI_DRAW_DUMP=1 MBUI_SCREEN=$PAGE MBUI_
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 SERIAL=${SERIAL:-emulator-5554}
 ADB="$SDK/platform-tools/adb -s $SERIAL"
+# (Android) the system's own error dialogs off: an app's "isn't responding" on the emulator (input timed out
+# with no focused window) took the focus, and the app was never the window shown (the round page's picture missing,
+# 2026-10-21); what the app itself does is told by its log (android_end.py), not by a dialog
+if [ "$H" = android ]; then $ADB shell settings put global hide_error_dialogs 1 2>/dev/null || true; fi
 
 # (iOS) the simulator's id and state (Booted, Shutdown), "" when there is none of that name
 ios_device() {
