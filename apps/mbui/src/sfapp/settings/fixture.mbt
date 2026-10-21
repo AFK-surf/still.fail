@@ -730,6 +730,44 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
   }
   let me : Json = obj([("sub", str("u1")), ("email", str("lin@example.com")), ("name", str("林")), ("role", str("owner"))])
   match name {
+    // Studio's logins (station_logins.mbt): codex's under way, gh's done yesterday
+    // (the settings' own pages only: a chat's login cards are the chats' fixture's)
+    "machineLogins" if mode.has_prefix("settings") && text(Some(Json::object(params)), "station") == "ws1/st1" =>
+      Some(
+        obj([
+          ("supported", Json::boolean(true)),
+          ("canLogin", Json::boolean(true)),
+          ("canRelay", Json::boolean(true)),
+          (
+            "logins",
+            [
+              obj([("id", str("login-2")), ("active", Json::boolean(true)), ("command", str("codex login"))]),
+              obj([
+                ("id", str("login-0")),
+                ("active", Json::boolean(false)),
+                ("command", str("gh auth login")),
+                ("chatTitle", str("整理发布清单")),
+                ("whenText", str("昨天")),
+                ("statusText", str("已登录")),
+                ("state", str("done")),
+              ]),
+            ],
+          ),
+        ]),
+      )
+    "machineLogin" if mode.has_prefix("settings") && text(Some(Json::object(params)), "id") == "login-2" =>
+      Some(
+        obj([
+          ("id", str("login-2")),
+          ("title", str("在 Studio 上登录 codex")),
+          ("state", str("browser")),
+          ("step", str("open")),
+          ("url", str("https://auth.openai.com/log-in")),
+          ("domain", str("auth.openai.com")),
+          ("active", Json::boolean(true)),
+          ("statusText", str("等你在浏览器里登录")),
+        ]),
+      )
     "workspace" =>
       Some(
         obj([

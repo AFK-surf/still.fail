@@ -799,6 +799,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
         None => ()
       }
     },
+    login_card: fn(c, station, id) { login_card(c, src, station, id, fill=true) },
   }
 }
 
