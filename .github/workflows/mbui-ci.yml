@@ -22,7 +22,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/mbui/mbui
-        shell: bash ${{ github.workspace }}/apps/mbui/mbui/scripts/offline.sh {0}
+        shell: bash scripts/offline.sh {0}
     steps:
       - uses: actions/checkout@v4
       - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
@@ -79,7 +79,7 @@ jobs:
       - uses: ./.github/actions/mbui-moonbit
       - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
         # (with no network: scripts/offline.sh)
-        shell: bash ${{ github.workspace }}/apps/mbui/mbui/scripts/offline.sh {0}
+        shell: bash scripts/offline.sh {0}
         run: scripts/test_native.sh
 
   macos:

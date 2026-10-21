@@ -21,6 +21,8 @@ jobs:
   put:
     runs-on: windows-2025
     timeout-minutes: 15
+    defaults:
+      run:
         shell: bash
     steps:
       - uses: actions/cache/restore@v4

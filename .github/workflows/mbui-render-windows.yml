@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
-        with: { pattern: render-windows-*, path: apps/mbui/mbui/runs }
+        with: { pattern: render-windows-*, path: runs }
       - run: |
           md5sum runs/*/controls.png
           grep -h '^cpu ' runs/*/machine.txt
