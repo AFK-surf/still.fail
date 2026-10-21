@@ -263,6 +263,21 @@ test "home" {
 }
 
 ///|
+test "landing" {
+  check("landing", @ui.nav_push_ms)
+}
+
+///|
+test "landing-invited" {
+  check("landing-invited", @ui.nav_push_ms)
+}
+
+///|
+test "blocked" {
+  check("blocked", @ui.nav_push_ms)
+}
+
+///|
 test "home-sheet" {
   check("home-sheet", nothing_opens)
 }

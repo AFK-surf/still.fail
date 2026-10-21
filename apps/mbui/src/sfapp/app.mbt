@@ -196,6 +196,7 @@ fn reset() -> Unit {
   app.held_long = false
   reset_row_menu()
   update_anchor_reset()
+  landing_reset()
   app.toast = ""
   read_views.clear()
   read_chats.clear()
@@ -544,7 +545,7 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
     }
     None =>
       if ws.value is Some(_) && answered {
-        no_workspace(c, ws.value)
+        no_workspace(c, src, ws.value)
       } else {
         let failed = match ws.error {
           Some(e) => Some(text(Some(e), "message"))
@@ -1036,59 +1037,6 @@ fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
         size=12.0,
         color=t.p.muted,
         wrap=false,
-      )
-      |> ignore
-    },
-  )
-  |> ignore
-}
-
-///|
-/// Signed in, with no workspace yet (Workspaces.kt Landing): said so. (Making one, or joining by an invitation, is
-/// a later slice's.)
-fn no_workspace(c : @ui.Ctx, ws : Json?) -> Unit {
-  let t = @sf.theme()
-  let email = match ws {
-    Some(Array(a)) if a.length() > 0 => text(field(Some(a[0]), "account"), "email")
-    _ => ""
-  }
-  c.box(
-    w=Fill(1.0),
-    h=Fill(1.0),
-    padx=24.0,
-    pady=40.0,
-    gap=12.0,
-    align=ACenter,
-    fn() {
-      @sf.drawable(
-        c,
-        if t.dark {
-          "illus_sign_in_dark"
-        } else {
-          "illus_sign_in"
-        },
-        dmin(260.0, c.width - 48.0),
-      )
-      |> ignore
-      c.text(
-        tr("android-misc.workspace.none"),
-        size=22.0,
-        weight=700,
-        color=t.p.text,
-        center=true,
-        w=Fill(1.0),
-      )
-      |> ignore
-      c.text(
-        fill("android-misc.workspace.none.lead", [
-          ("app", "still.fail"),
-          ("email", email),
-        ]),
-        size=14.0,
-        color=t.p.muted,
-        center=true,
-        w=Fill(1.0),
-        line=20.0,
       )
       |> ignore
     },
