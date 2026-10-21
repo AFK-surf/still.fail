@@ -379,7 +379,10 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
     lines.length(),
     40.0,
     fn(i) {
-      c.box(w=Fill(1.0), pl=18.0, pr=18.0, pt=if i <= 1 { 0.0 } else { 10.0 }, fn() {
+      // (10 between each line and the one before, the edge's and the first item's too: History.kt's spacedBy(10); the
+      // foot the list's own room under it, contentPadding's 24, with none over it)
+      let over = if i == 0 || lines[i] is HFoot { 0.0 } else { 10.0 }
+      c.box(w=Fill(1.0), pl=18.0, pr=18.0, pt=over, fn() {
         match lines[i] {
           HEdge =>
             if older {
