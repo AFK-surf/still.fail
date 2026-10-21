@@ -57,8 +57,6 @@ globalStyle(`${mAgentNotes} > span[data-level=red]`, { color: "var(--m-red)" });
 /** Where its rows lead: its account, its history, its jobs. */
 export const mAgentRows = style({ marginTop: "12px" });
 export const mAgentRowLabel = style({ flex: "none", color: "var(--m-muted)" });
-/** A row that does something (its context compacted, cleared): its words alone, as the rows' values read. */
-export const mAgentAction = style({ flex: "1", minWidth: "0" });
 export const mAgentRowValue = style({ flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 /** The station it runs on: its mark before its name, the name cut short as a value is. */
 export const mAgentStation = style({ display: "flex", alignItems: "center", gap: "6px" });

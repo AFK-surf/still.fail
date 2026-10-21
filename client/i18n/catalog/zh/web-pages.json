@@ -1842,5 +1842,7 @@
   "web-pages.chat.compact": "压缩上下文",
   "web-pages.chat.clear": "清空上下文",
   "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",
-  "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的对话。agent 不再看到此前的内容，执行历史仍保留。"
+  "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的会话。agent 会重新读取对话消息，执行历史只在需要时读取。",
+  "web-pages.chat.contextActions": "上下文操作",
+  "web-pages.chat.contextManage": "管理"
 }

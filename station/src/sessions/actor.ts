@@ -106,6 +106,8 @@ export type SessionDeps = {
   /// What it is told when it goes on on `to` in a new runtime session rather than take up `id` (last run on `was`, when
   /// the store does not know); null: it takes it up (sessions/afresh.ts).
   startsAfresh?(key: string, id: string, to: Profile, was: string | null): string | null;
+  /// What a session whose context was cleared is told with its next prompt (sessions/afresh.ts `toldCleared`).
+  cleared?(key: string): string;
   /// Its subagents `ids` of runtime session `from`, stopped with its process, taken to runtime session `to` begun on
   /// `on`, so that they are taken up there (sessions/afresh.ts): the ids taken.
   carrySubagents?(from: string, to: string, on: Profile, ids: string[]): string[];
@@ -998,7 +1000,7 @@ export class SessionActor {
       }
     } else {
       agent = await driver.open(base, this.listener(generation));
-      if (wasCleared) this.afresh = cleared(this.key);
+      if (wasCleared) this.afresh = this.deps.cleared?.(this.key) ?? cleared(this.key, []);
     }
     if (row.runtimeSessionId !== agent.id()) {
       store.setRuntimeSessionId(this.key, agent.id());

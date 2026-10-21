@@ -140,13 +140,20 @@ class AgentSheetTest {
         val h = open(running = false, byHand = true)
         rule.onAllNodesWithText(name)[0].performClick()
         h.settle()
-        rule.onNodeWithText("压缩上下文").assertIsDisplayed()
-        rule.onNodeWithText("清空上下文").assertIsDisplayed()
+        // One row, how full it is; what can be done behind it.
+        rule.onNodeWithText("压缩上下文").assertDoesNotExist()
+        rule.onNodeWithText("122K / 200K").assertIsDisplayed()
         picture(h, "agent-card-context")
+        rule.onNodeWithText("122K / 200K").performClick()
+        h.settle()
+        rule.onNodeWithText("清空上下文").assertIsDisplayed()
+        picture(h, "context-sheet")
         rule.onNodeWithText("压缩上下文").performClick()
         h.settle()
         rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "session.compact" && it.second["key"]?.jsonPrimitive?.content == key }) }
         // Cleared only once asked.
+        rule.onNodeWithText("122K / 200K").performClick()
+        h.settle()
         rule.onNodeWithText("清空上下文").performClick()
         h.settle()
         rule.onNodeWithText("清空此 agent 的上下文？").assertIsDisplayed()

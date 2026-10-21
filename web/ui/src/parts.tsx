@@ -331,11 +331,11 @@ export function PanelIconButton({ label, children, className, ...rest }: ButtonH
   return <Tip label={label}><button type="button" aria-label={label} className={className ? `${partsCss.panelIcon} ${className}` : partsCss.panelIcon} {...rest}>{children}</button></Tip>;
 }
 
-/** "…" menu: a list of actions on the thing it sits beside. */
-export function Menu({ label = t("web-main.menu.more"), items }: { label?: string; items: (MenuItem | "separator")[] }) {
+/** "…" menu: a list of actions on the thing it sits beside. `trigger`: what opens it in place of "…" (words in a line of words). */
+export function Menu({ label = t("web-main.menu.more"), items, trigger }: { label?: string; items: (MenuItem | "separator")[]; trigger?: ReactNode }) {
   return (
     <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild><IconButton label={label} icon={More} /></DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild>{trigger ?? <IconButton label={label} icon={More} />}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content className={`${controlsCss.popover} ${controlsCss.menuList}`} align="end" sideOffset={4} collisionPadding={8}>
           {items.map((item, i) => item === "separator" ? <DropdownMenu.Separator key={i} className={controlsCss.menuSep} /> : (

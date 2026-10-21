@@ -98,6 +98,8 @@ test("-clear ends its process; its next turn starts a new runtime session, told 
   assert.notEqual(fresh, session);
   assert.equal(fresh.options.resume, undefined);
   assert.ok(fresh.prompts[0]!.startsWith("People cleared your context"), fresh.prompts[0]);
+  // Its chat read back, its execution history only when needed.
+  assert.ok(fresh.prompts[0]!.includes(`chat_history for C1/${m.threadTs}`), fresh.prompts[0]);
   assert.ok(fresh.prompts[0]!.includes("start over"));
   assert.deepEqual(r.store.runtimeSessions(key), [session.sessionId, fresh.sessionId]);
   // Told once.

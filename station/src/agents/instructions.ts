@@ -107,8 +107,9 @@ export const RESUME_LOST = `Your earlier conversation could not be restored. Rea
 /// It goes on in a new runtime session: the earlier one is not taken up; it reads back what it needs from it.
 export const afresh = (key: string, threads: string[]) => `This is a new conversation: your earlier one in this session is no longer used. Before you act on what comes below, read back from it what you need: session_history with chat ${key} (the latest entries first; older ones with before)${threads.length === 0 ? "" : `, and chat_history for ${threads.join(", ")}`}.`;
 
-/// Its context was cleared by hand (session.clear, `-clear`): a new conversation that should not read the old one back.
-export const cleared = (key: string) => `People cleared your context: this is a new conversation in the same chat, and your earlier one in this session is no longer used. Start from what comes below; read the earlier one (session_history with chat ${key}) only when someone refers to it.`;
+/// Its context was cleared by hand (session.clear, `-clear`): a new conversation that reads its chats back, and what it did
+/// before (its execution history) only when it needs it.
+export const cleared = (key: string, threads: string[]) => `People cleared your context: this is a new conversation in the same chat, and your earlier one in this session is no longer loaded. Read the chat back before you act on what comes below${threads.length === 0 ? "" : `: chat_history for ${threads.join(", ")}`}. Your earlier work (session_history with chat ${key}) is not to be read back by default: only when you need something from it.`;
 
 /// Its process was ended with work going in the background (agents/runtime.ts `background`), which ended with it:
 /// `resumable` are the subagents SendMessage takes up where they stopped.

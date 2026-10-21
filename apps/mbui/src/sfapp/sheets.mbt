@@ -867,7 +867,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           dui.jobs_all = false
           open_sheet(c, JobsOf(r))
         }
-        context_rows(c, src, r, key, s)
+        context_row(c, r, key, s, text(field(card, "context"), "text"))
       })
     })
     |> ignore
