@@ -67,10 +67,16 @@ let link_src : Ref[Source?] = Ref(None)
 let link_later : Array[String] = []
 
 ///|
-/// Each frame signed in, the workspace `w` in view: a link the system opened the app with, opened as from outside.
+/// Each frame signed in, the workspace `w` in view: the core and the workspace a link is opened against.
 fn links_frame(src : Source, w : Workspace) -> Unit {
   link_workspace.val = w.id
   link_src.val = Some(src)
+}
+
+///|
+/// The links the system opened the app with, opened as from outside (signed in: told once the frame that took them
+/// has been built, links_frame's workspace in view).
+fn links_given(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
   for url in given {

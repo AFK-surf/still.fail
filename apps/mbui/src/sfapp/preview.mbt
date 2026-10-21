@@ -2164,7 +2164,7 @@ fn Viewer::gestures(
   }
   let dy = @ui.wheel(c, stage)
   if dy != 0.0 && z.nw > 0.0 {
-    z.zoom_to(z.scale * @math.pow(1.0015, -dy), px, py, false)
+    z.zoom_to(z.scale * @dmath.pow(1.0015, -dy), px, py, false)
   }
 }
 

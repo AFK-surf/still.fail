@@ -4,4 +4,5 @@ import {
   "mbui/md",
   "mbui/motion",
   "moonbitlang/core/math",
+  "mbui/dmath",
 }

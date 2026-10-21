@@ -155,8 +155,8 @@ fn arc_points(
     return
   }
   let pi = 3.141592653589793
-  let cp = @math.cos(phi * pi / 180.0)
-  let sp = @math.sin(phi * pi / 180.0)
+  let cp = @dmath.cos(phi * pi / 180.0)
+  let sp = @dmath.sin(phi * pi / 180.0)
   let dx = (x1 - x2) / 2.0
   let dy = (y1 - y2) / 2.0
   let x1p = cp * dx + sp * dy
@@ -188,7 +188,7 @@ fn arc_points(
   let cx = cp * cxp - sp * cyp + (x1 + x2) / 2.0
   let cy = sp * cxp + cp * cyp + (y1 + y2) / 2.0
   let ang = fn(ux : Double, uy : Double, vx : Double, vy : Double) -> Double {
-    @math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+    @dmath.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
   }
   let t1 = ang(1.0, 0.0, (x1p - cxp) / rx, (y1p - cyp) / ry)
   let mut dt = ang(
@@ -205,8 +205,8 @@ fn arc_points(
   let n = pieces(dt.abs() * (if rx > ry { rx } else { ry }), scale)
   for k in 1..=n {
     let t = t1 + dt * k.to_double() / n.to_double()
-    let x = rx * @math.cos(t)
-    let y = ry * @math.sin(t)
+    let x = rx * @dmath.cos(t)
+    let y = ry * @dmath.sin(t)
     out.push(cp * x - sp * y + cx)
     out.push(sp * x + cp * y + cy)
   }

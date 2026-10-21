@@ -130,6 +130,8 @@ fn run_to_sheet_rest(t : @ui.Tester) -> Unit raise {
 test "a new chat: its station picked in the sheet, its model in the run picker" {
   let t = tester("newchat")
   open_mode("newchat")
+  // (the page opened drawn at its moment, its rise from there)
+  t.draw()
   t.run_for(@ui.nav_rise_ms)
   assert_true(t.find("它会在 Studio 上") is Some(_))
   // the station's chooser, beside the model's

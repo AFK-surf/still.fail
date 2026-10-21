@@ -21,6 +21,8 @@ test "96-viewer" {
     f.see("=studio")
     f.see("img:e2e-photo.jpg")
     f.tap("img:e2e-photo.jpg")
+    // flown open from its thumbnail, its bars on once it is in
+    f.run_to(@sfapp.preview_rest())
     // grown from its thumbnail, how large it is said
     f.see("%")
     f.see("icon:chevron-right")

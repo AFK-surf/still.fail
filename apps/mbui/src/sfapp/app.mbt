@@ -420,7 +420,9 @@ fn view_in(c : @ui.Ctx, src : Source, t : @sf.Theme) -> Unit {
       (Some(Array(list)), _) if list.length() == 0 => {
         sign_in_page(c, src)
         // an invitation's link opened signed out: its sheet over the page, saying to sign in first (links.mbt)
-        c.after_build("links", fn() { signed_out_links(src) })
+        if !link_later.is_empty() {
+          c.tell("links", fn() { signed_out_links(src) })
+        }
         sheet_layer(c, fn(kind) { if kind == InviteLink { invite_sheet(c, src) } })
       }
       (Some(Array(_)), _) => signed_in(c, src)
@@ -468,8 +470,12 @@ fn signed_in(c : @ui.Ctx, src : Source) -> Unit {
       // notifications: shown while the app is, a tapped one's chat opened, the one of a chat on top taken off (once the
       // frame's builds are over: a build let go of follows no workspace)
       c.after_build("notices", fn() { notices_frame(src, w) })
-      // a link the system opened the app with (links.mbt)
+      // the core and the workspace links are opened against, as the frame ends (links.mbt)
       c.after_build("links", fn() { links_frame(src, w) })
+      // a link the system opened the app with, told once: what the core says of it shown by the frame after (Ctx::tell)
+      if !link_later.is_empty() {
+        c.tell("links-given", fn() { links_given(src) })
+      }
       // a newer build of the app asked for once (updates.mbt)
       // (asked once, with the app's version: nothing a build changes)
       update_first(src)

@@ -99,6 +99,7 @@ pub fn Flow::start(
   // (the last of the run's frames given to the Tester's display)
   let frames_to = Ref::new(-@double.infinity)
   let said : Array[String] = []
+  // (and when the next is due, a frame drawn then however the clock is run on: what came at a time came at it)
   // (what the run's host said comes before the frame it was said for: given as a frame ends, it is the next one's, by
   // that frame's time, as a host's events before a vsync are that frame's)
   t.between_frames(fn() {
@@ -108,7 +109,7 @@ pub fn Flow::start(
       }
     }
     if !one_by_one.val {
-      r.deliver(now=t.time(), host_by=t.next_frame_time(), taken_at=t.next_frame_time(), to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore
+      r.deliver(now=t.time(), host_by=t.taken_at(), taken_at=t.taken_at(), to=fn(json, bytes) { t.post("core", json, bytes?) }) |> ignore
     }
     // (the run's pace: while its host's lines come, a frame each, the display's frames where the run's were, Tester::
     // set_frame_times: each run of them mapped onto this clock by its first line given here; between them, the
@@ -140,13 +141,12 @@ pub fn Flow::start(
         _ => ()
       }
     }
-  })
-  // (the run's own pace: its display's frames as far apart as its host's lines say they were, not a Tester's 60 Hz)
+  }, due=fn() { r.next_due().unwrap_or(@double.infinity) })
+  // (the run's own pace: its display's frames as far apart as its host's lines say they were; a trace whose host said
+  // none, a display's 60 Hz: what came between two of its frames taken by the later together, as the run's display took
+  // it, not each at its own moment)
   if seed == 0 && emit_path() == "" {
-    match r.frame_period() {
-      Some(p) => t.set_frame_period(p)
-      None => ()
-    }
+    t.set_frame_period(r.frame_period().unwrap_or(run_frame_ms))
   }
   // what the system lets the app show as the run's host said it (its app's notify.permission): a Tester's own lets it
   match notice_permission_of(trace) {
@@ -173,7 +173,7 @@ pub fn Flow::start(
 ///|
 fn Flow::settle_start(self : Flow) -> Unit {
   while true {
-    self.r.deliver(now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
+    self.r.deliver(now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) }) |> ignore
     if self.t.posted() > 0 {
       self.t.draw()
       continue
@@ -246,7 +246,7 @@ pub fn Flow::core(self : Flow) -> Unit {
   // what is due now, each lot taken by a frame; the clock stands: it goes on only as the test lets it (run_for, run_to,
   // a step taken when the run took it, a waiting step until what it waits for has come: Flow::until)
   while true {
-    self.r.deliver(now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
+    self.r.deliver(now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     |> ignore
     if self.t.posted() > 0 {
       self.t.draw()
@@ -283,7 +283,8 @@ fn Flow::fail(self : Flow, why : String) -> Unit {
   // (and where the conversation stood: what the app asked that the run did not, what the next message waits for)
   let r = self.r
   let talk = "replay: \{r.left()} messages in not given, waiting for \{r.waiting().unwrap_or("-")}; diverged: \{r.diverged().join(", ")}; fuzzy: \{r.fuzzy().join(", ")}"
-  let s = "flow: " + why + "\n" + talk + "\n" + self.t.dump()
+  let pass = if self.strict { "as the run had it" } else { "in another timing" }
+  let s = "flow: " + why + " (at \{self.t.time()} ms, \{pass})\n" + talk + "\n" + self.t.dump()
   println(s)
   // (writing the steps as a scripted run, FLOW_EMIT, over a trace the app has outgrown: said, and the steps after it
   // written all the same, for the run to record the trace they need)
@@ -306,7 +307,7 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
       self.fail("not so after \{until_most_ms.to_int()} ms; moving: \{self.t.moving().join("; ")}")
       break
     }
-    let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
+    let n = self.r.deliver(at_most=1, now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) { self.t.post("core", json, bytes?) })
     if n > 0 || self.t.posted() > 0 {
       self.t.draw()
       continue
@@ -318,6 +319,10 @@ pub fn Flow::until(self : Flow, so : () -> Bool) -> Unit {
   }
   self.one_by_one.val = false
 }
+
+///|
+/// The display's frame period of a run whose trace does not say it (Flow::start): a phone's 60 Hz.
+let run_frame_ms : Double = 1000.0 / 60.0
 
 ///|
 /// The most a step waits on the run's clock (Flow::until) for what it waits for.
@@ -402,8 +407,9 @@ pub fn Flow::hold(self : Flow, what : String, ms : Double) -> Unit {
     return
   }
   let (x, y) = at[0]
+  // (held as the run's host held it, past the threshold: not released on its very moment)
   self.t.press_at(x, y)
-  self.t.run_for(ms)
+  self.t.run_for(ms * 2.0)
   self.t.release(x, y)
   self.t.draw()
   self.core()
@@ -519,7 +525,7 @@ pub fn Flow::end(self : Flow, unmade? : Array[String] = []) -> String {
       break
     }
     while self.r.next_due() is Some(_) || self.t.posted() > 0 {
-      self.r.deliver(now=self.t.time(), host_by=self.t.next_frame_time(), taken_at=self.t.next_frame_time(), to=fn(json, bytes) {
+      self.r.deliver(now=self.t.time(), host_by=self.t.taken_at(), taken_at=self.t.taken_at(), to=fn(json, bytes) {
         self.t.post("core", json, bytes?)
       })
       |> ignore
@@ -835,9 +841,9 @@ pub fn Flow::drag_at(self : Flow, x : Double, y : Double, dx : Double, dy : Doub
 
 ///|
 /// The lowest `what` (`top`: the highest) tapped and the frames that tap draws, nothing more: what the core says to
-/// it comes as the clock goes on (until_moving, Tester::run_for), a motion it sets off seen on its way. The display's
-/// frame after the one that took the tap: where what the tap sets off from the next frame starts (a card let go:
-/// decide.mbt ask_dismiss, marked as the tap is taken, going from the frame after).
+/// it comes as the clock goes on (until_moving, Tester::run_for), a motion it sets off seen on its way. The frame after
+/// the one that took the tap: where what the tap sets off from the next frame starts (a card let go: decide.mbt
+/// ask_dismiss, marked as the tap is taken, going from the frame after).
 pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false) -> Double {
   emit((if top { "tap1 " } else { "tap " }) + what)
   // (as a scripted run's tap waits for what it taps to show: what came for it given first, Flow::until)
@@ -848,13 +854,12 @@ pub fn Flow::tap_now(self : Flow, what : String, top? : Bool = false) -> Double 
     return -1.0
   }
   let (x, y) = if top { at[at.length() - 1] } else { at[0] }
-  // (down and up, taken by the display's next frame; then the frames that one left owed)
+  // (down and up, taken by a frame; then the frame that one left owed, where what the tap sets off starts: at the
+  // tap's moment, or a host's run's next two frames)
   self.t.touch(0, x, y)
   self.t.touch(2, x, y)
-  self.t.frame()
-  let after = self.t.next_frame_time()
   self.t.draw()
-  after
+  self.t.time()
 }
 
 ///|
