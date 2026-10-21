@@ -8,9 +8,8 @@
 // day went, where the next may come from, what was answered today.
 //
 // It is reached from the bottom bar's 奏 (slice 7's): `open_decisions()`, or `decisions_capsule` drawn where the bar
-// puts it. Not here yet, against the Android app: the card's tilt as it moves (boxes do not turn yet),
-// attachments and quotes in the reply (words only), the reply's draft kept by the core, a vault item's approval, a
-// login card's buttons on this page (its card as in the chat).
+// puts it. The reply is the chat's composer whole (its files, its quotes, its draft the core keeps). Not here yet,
+// against the Android app: the card's tilt as it moves (boxes do not turn yet).
 
 ///|
 /// The 奏 page over what is open.
@@ -739,113 +738,83 @@ fn decision_face(
 }
 
 ///|
-/// The reply's field at the foot (Decisions.kt DecisionComposer, in the chat composer's capsule): its words go as the
-/// viewer's message quoting the post (`decision.reply`), at once; refused by the core, the decision and the words come
-/// back and why is said.
+/// The reply at the foot (Decisions.kt DecisionComposer: the chat's composer whole, its files, its quotes, its draft
+/// the core keeps as `decision:<station>:<thread>:<seq>`): what is written goes as the viewer's message quoting the
+/// post (`decision.reply`), at once; refused by the core, the decision comes back, and what was written too where
+/// nothing was written since, and why is said.
 fn decision_composer(c : @ui.Ctx, src : Source, item : Json, key : String, placeholder : String) -> Unit {
-  let t = @sf.theme()
-  let fkey = "decision-reply/" + key
   let v = Some(item)
-  let mut words = ""
-  let send = c.id("deck/send")
-  c.box(w=Fill(1.0), pl=10.0, pr=10.0, pt=8.0, pb=10.0, id=c.id("deck/composer"), fn() {
-    c.box(
-      dir=Row,
-      w=Fill(1.0),
-      pad=composer_inset,
-      gap=2.0,
-      radius=composer_corner,
-      align=AEnd,
-      glass=@sf.glass_floating(),
-      shadow=2.0,
-      shadow_color=0x0000004DL,
-      shadow_y=0.5,
-      fn() {
-        c.box(w=Fill(1.0), min_h=36.0, pl=plus_ink, pr=14.0, pt=7.0, pb=7.0, justify=JCenter, fn() {
-          let res = c.editor(
-            fkey,
-            placeholder=if placeholder != "" { placeholder } else { tr("android-misc.decisions.placeholder") },
-            font_size=send_size,
-            line=send_line,
-            max_lines=6,
-            plain=true,
-            color=t.p.text,
-            placeholder_color=t.p.subtle,
-            caret_color=t.p.accent,
-            enter_sends=false,
-            // its words the decision's own: put back by a failed reply's answer, which comes when no frame is built
-            field=decision_field(key),
-          )
-          words = res.text
-        })
-        |> ignore
-        let ready = words.trim(chars=" \n\t").to_string() != "" && dui.going == 0
-        c.box(
-          w=Px(36.0),
-          h=Px(36.0),
-          radius=18.0,
-          align=ACenter,
-          justify=JCenter,
-          bg=if ready { t.p.text } else { @sf.over(t.p.raised, @sf.alpha(t.p.text, 0.18)) },
-          id=send,
-          fn() {
-            @sf.icon(c, "arrow-up", size=18.0, color=if ready { t.p.bg } else { t.p.raised }) |> ignore
-          },
-        )
-        |> ignore
-        if c.clicked(send) && ready {
-          if src.read_only {
-            say(c, read_only_words)
-          } else {
-            let taken = decision_field(key).take()
-            c.blur()
-            go_decision(c, 2, item, fn() { dui.dgone.push(key) })
-            (src.call)(
-              "decision.reply",
-              {
-                "station": Json::string(text(v, "station")),
-                "thread": Json::number(number(v, "thread")),
-                "seq": Json::number(number(v, "seq")),
-                "text": Json::string(taken.trim(chars=" \n\t").to_string()),
-                "attachments": Json::array([]),
-                "quotes": Json::array([]),
-              },
-              fn(res) {
-                match res {
-                  Err(e) => {
-                    dui.dgone.retain(fn(k) { k != key })
-                    if text(Some(e), "code") == "invalid_params" {
-                      decision_field(key).set(taken)
-                    }
-                    toast_later(fill("android-misc.decisions.replyFailed", [("error", error_words(e))]))
-                  }
-                  Ok(_) => ()
-                }
-              },
-            )
-          }
-        }
-      },
-    )
-    |> ignore
-  })
-  |> ignore
+  let station = text(v, "station")
+  let draft = "decision:" + station + ":" + number(v, "thread").to_int().to_string() + ":" +
+    number(v, "seq").to_int().to_string()
+  composer(c, src, chat_ref(station, text(v, "session")), None, fresh=Some({
+    key: draft,
+    placeholder: if placeholder != "" { placeholder } else { tr("android-misc.decisions.placeholder") },
+    send: fn(d) { decision_reply(c, src, item, key, d) },
+  }))
 }
 
 ///|
-/// Each decision's reply, by its key, while the app runs (mbui's Field: its field shows it, an answer writes it).
-let decision_fields : Map[String, @ui.Field] = {}
-
-///|
-fn decision_field(key : String) -> @ui.Field {
-  match decision_fields.get(key) {
-    Some(f) => f
-    None => {
-      let f = @ui.Field::new()
-      decision_fields[key] = f
-      f
-    }
+/// The reply sent (Decisions.kt `reply`): the draft taken, the decision gone at once.
+fn decision_reply(c : @ui.Ctx, src : Source, item : Json, key : String, d : Draft) -> Unit {
+  if src.read_only {
+    say(c, read_only_words)
+    return
   }
+  if dui.going != 0 {
+    return
+  }
+  let v = Some(item)
+  let words = with_link_words(d.text.trim(chars=" \n\t").to_owned(), d)
+  let files = up_files(d)
+  let quotes = d.quotes.map(fn(q) { quote_json(d, q, true) })
+  let taken_text = d.text
+  let taken_files = d.files.copy()
+  let taken_quotes = d.quotes.copy()
+  let taken_comments = d.comments.copy()
+  ref_field_put(d, "")
+  d.files.clear()
+  d.quotes.clear()
+  d.comments.clear()
+  d.error = None
+  sent_draft(d, taken_files.length())
+  save_draft(src, d)
+  c.blur()
+  go_decision(c, 2, item, fn() { dui.dgone.push(key) })
+  (src.call)(
+    "decision.reply",
+    Json::object({
+      "station": Json::string(text(v, "station")),
+      "thread": Json::number(number(v, "thread")),
+      "seq": Json::number(number(v, "seq")),
+      "text": Json::string(words),
+      "attachments": Json::array(files),
+      "quotes": Json::array(quotes),
+    }),
+    fn(res) {
+      match res {
+        Err(e) => {
+          dui.dgone.retain(fn(k) { k != key })
+          if text(Some(e), "code") == "invalid_params" && draft_empty(d) {
+            d.text = taken_text
+            d.put_text = Some(taken_text)
+            for f in taken_files {
+              d.files.push(f)
+            }
+            for q in taken_quotes {
+              d.quotes.push(q)
+            }
+            for k, w in taken_comments {
+              d.comments[k] = w
+            }
+            save_draft(src, d)
+          }
+          toast_later(fill("android-misc.decisions.replyFailed", [("error", error_words(e))]))
+        }
+        Ok(_) => ()
+      }
+    },
+  )
 }
 
 ///|
