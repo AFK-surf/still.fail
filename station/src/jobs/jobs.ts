@@ -21,7 +21,7 @@ import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
-import { inSandbox, keyPart, sandboxed } from "../agents/sandbox.ts";
+import { inSandbox, keyPart, sandboxed, stopSandbox } from "../agents/sandbox.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
@@ -601,6 +601,9 @@ export class Jobs {
       }
       this.store.jobEnded(id, "exited", code);
       this.tell(job, `${named(job)} ended with ${said}.${last}`);
+      // A sandbox of its own size: stopped now that it ended (refused while another of the session's jobs of that
+      // size still runs there).
+      if (job.size !== undefined) void stopSandbox(this.data, keyPart(job.sessionKey), job.size);
       return;
     }
     // A service is kept up: at once after a steady run, else after a pause that grows with each quick end.
