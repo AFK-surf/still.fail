@@ -400,6 +400,7 @@ describe("Codex", () => {
     cleanups.push(() => (process.env.PATH = path));
     cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
     writeFileSync(join(dir, "cert.pem"), "");
+    // A bundle here (the driver names it SSL_CERT_FILE) that the stand-in sandbox does not have at that path.
     const driver = new CodexDriver({ data: dir, hostSkills: join(dir, "skills"), caBundle: join(dir, "cert.pem") });
     cleanups.push(() => driver.shutdown());
     const dump = join(dir, "dump");
@@ -413,6 +414,11 @@ describe("Codex", () => {
     await open("EMBER/2.2", b);
     const started = () => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(started().length, 2, "an app-server each");
+    // The station's certificate file is not the sandbox's: not named to it.
+    assert.equal(started()[0].env.SSL_CERT_FILE, undefined);
+    // Its state database on the sandbox's own disk, not in its home (on NFS there).
+    const sqlite = started()[0].env.CODEX_SQLITE_HOME;
+    assert.ok(typeof sqlite === "string" && sqlite.includes("/.cache/stillfail/codex-sqlite/") && !sqlite.startsWith(profile.home), sqlite);
     assert.deepEqual(new Set(destinations(dir)), new Set(["EMBER/1.1", "EMBER/2.2"].map((k) => `${sandboxName(keyOfRunner(runnerId("codex", k)))}.ws@host`)));
     await one.prompt("say:hi");
     await until("its turn ends", () => a.some((e) => e.type === "turnEnded"));
