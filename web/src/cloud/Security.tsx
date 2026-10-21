@@ -95,12 +95,13 @@ function On({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
         <div className={css.state}>{t("web-pages.security.on")}
           <span className={css.stateMeta}>· {t("web-pages.security.onMeta", { signers: lock.signers, stations: lock.protected })}</span></div>
         <p className={css.sub}>{t("web-pages.security.onLead")}</p>
-        {!lock.signs && !lock.me?.waiting && <p className={css.note}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</p>}
+        {!lock.signs && !lock.me?.waiting && !lock.me?.unsigned && <p className={css.note}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</p>}
       </div>
       {/* Not confirmed yet: asked for here too, not only on the workspace's waiting page (settings skip it). */}
-      {lock.me?.waiting && (
+      {/* In the lock without signing (let in before it kept a key): made a trusted device the same way. */}
+      {(lock.me?.waiting || lock.me?.unsigned) && (
         <div className={`${pagesCss.card} ${css.lead}`}>
-          <div className={css.state}>{t("web-pages.security.waitingTitle")}</div>
+          <div className={css.state}>{t(lock.me.unsigned ? "web-pages.security.upgradeTitle" : "web-pages.security.waitingTitle")}</div>
           <PairSteps entry={entry} lock={lock} />
         </div>
       )}
@@ -405,7 +406,7 @@ function PairSteps({ entry, lock }: { entry: WorkspaceEntry; lock: LockView }) {
   </> : pair?.state === "finding" || asking ? <div className={css.waitingNote}><Spinner inline />{t("web-pages.security.pairFinding")}</div>
     : <>
       <div className={pair?.state === "failed" || lock.me?.failed ? css.waitingFailed : css.waitingNote}>
-        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
+        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
       </div>
       <div className={css.actions}><Button variant="primary" onClick={ask}>{t("web-pages.security.request")}</Button></div>
     </>;

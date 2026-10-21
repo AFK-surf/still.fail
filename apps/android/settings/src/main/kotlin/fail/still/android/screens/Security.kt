@@ -181,8 +181,13 @@ private fun On(current: WorkspaceEntry, lock: LockView) {
     ListCard { Body {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Dot(true); Text(t("web-pages.security.on"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink) }
         Note(t("web-pages.security.onMeta", "signers" to lock.signers.toInt(), "stations" to lock.protected.toInt()))
-        if (!lock.signs) Note(if (lock.canSign) t("web-pages.security.notSignerApp") else t("web-pages.security.notSignerWeb"))
+        if (!lock.signs && lock.me?.waiting != true && lock.me?.unsigned != true) Note(if (lock.canSign) t("web-pages.security.notSignerApp") else t("web-pages.security.notSignerWeb"))
     } }
+    // Not confirmed yet, or in the lock without signing (let in before it kept a key): asked for here, the code typed here.
+    if (lock.me?.waiting == true || lock.me?.unsigned == true) {
+        SectionHeader(t(if (lock.me?.unsigned == true) "web-pages.security.upgradeTitle" else "web-pages.security.waitingTitle"), start = 24.dp)
+        ListCard { Body { PairSteps(current, lock) } }
+    }
     if (lock.requests.isNotEmpty()) {
         SectionHeader("${t("web-pages.security.waiting")} · ${lock.requests.size}", start = 24.dp)
         ListCard {
@@ -459,13 +464,6 @@ fun SecurityOpenScreen(current: WorkspaceEntry) {
  */
 @Composable
 fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
-    val app = LocalApp.current
-    val ws = current.workspace.id
-    val asking = app.isDoing("lock.pair", "workspace" to ws)
-    val checking = app.isDoing("lock.pairCode", "workspace" to ws)
-    var code by remember { mutableStateOf("") }
-    val pair = lock.me?.pair
-    val typing = pair != null && pair.state in setOf("code", "wrong", "checking")
     Column(
         Modifier.fillMaxSize().padding(horizontal = 28.dp).windowInsetsPadding(WindowInsets.navigationBars).imePadding(),
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically), horizontalAlignment = Alignment.CenterHorizontally,
@@ -473,28 +471,41 @@ fun SecurityWaitingScreen(current: WorkspaceEntry, lock: LockView) {
         IconIn(Icons.ShieldCheck, 44.dp, C.ink)
         Text(t("web-pages.security.waitingTitle"), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = C.ink, textAlign = TextAlign.Center)
         Text(t("web-pages.security.waitingLead", "name" to current.workspace.name), fontSize = 15.sp, lineHeight = 22.sp, color = C.subtle, textAlign = TextAlign.Center)
-        val failed = lock.me?.failed
-        when {
-            typing -> {
-                Note(t("web-pages.security.pairEnter"))
-                val busy = checking || pair?.state == "checking"
-                // Typed wrong: the boxes empty again for the next try, the page says how many are left.
-                CodeField(code, wrong = pair?.state == "wrong" && code.isEmpty(), enabled = !busy, onChange = { code = it }) { typed ->
-                    app.scope.launch { runCatching { app.core.call("lock.pairCode", buildJsonObject { put("workspace", ws); put("code", typed) }) }.onFailure { code = "" } }
-                }
-                if (busy) WaitLine(t("web-pages.security.pairChecking"))
-                else if (pair?.state == "wrong") Text(t("web-pages.security.pairWrong", "n" to (pair.left ?: 0u).toInt()), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+        PairSteps(current, lock)
+    }
+}
+
+/** Asking to be confirmed (or made a trusted device), and the code typed: on the waiting screen, and on 设置 › 安全. */
+@Composable
+private fun PairSteps(current: WorkspaceEntry, lock: LockView) {
+    val app = LocalApp.current
+    val ws = current.workspace.id
+    val asking = app.isDoing("lock.pair", "workspace" to ws)
+    val checking = app.isDoing("lock.pairCode", "workspace" to ws)
+    var code by remember { mutableStateOf("") }
+    val pair = lock.me?.pair
+    val typing = pair != null && pair.state in setOf("code", "wrong", "checking")
+    val failed = lock.me?.failed
+    when {
+        typing -> {
+            Note(t("web-pages.security.pairEnter"))
+            val busy = checking || pair?.state == "checking"
+            // Typed wrong: the boxes empty again for the next try, the page says how many are left.
+            CodeField(code, wrong = pair?.state == "wrong" && code.isEmpty(), enabled = !busy, onChange = { code = it }) { typed ->
+                app.scope.launch { runCatching { app.core.call("lock.pairCode", buildJsonObject { put("workspace", ws); put("code", typed) }) }.onFailure { code = "" } }
             }
-            pair?.state == "finding" || asking -> WaitLine(t("web-pages.security.pairFinding"))
-            else -> {
-                when {
-                    pair?.state == "none" -> Note(t("web-pages.security.pairNone"))
-                    pair?.state == "failed" -> Text(pair.error ?: "", fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
-                    failed != null -> Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
-                    else -> Note(t("web-pages.security.notAsked"))
-                }
-                WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "pair", t("web-pages.security.request")) }
+            if (busy) WaitLine(t("web-pages.security.pairChecking"))
+            else if (pair?.state == "wrong") Text(t("web-pages.security.pairWrong", "n" to (pair.left ?: 0u).toInt()), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+        }
+        pair?.state == "finding" || asking -> WaitLine(t("web-pages.security.pairFinding"))
+        else -> {
+            when {
+                pair?.state == "none" -> Note(t("web-pages.security.pairNone"))
+                pair?.state == "failed" -> Text(pair.error ?: "", fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+                failed != null -> Text(t("web-pages.security.requestFailed", "error" to failed), fontSize = 12.sp, lineHeight = 18.sp, color = C.red, textAlign = TextAlign.Center)
+                else -> Note(t(if (lock.me?.unsigned == true) "web-pages.security.upgradeNotAsked" else "web-pages.security.notAsked"))
             }
+            WideButton(t("web-pages.security.request"), primary = true) { app.lockCall(ws, "pair", t("web-pages.security.request")) }
         }
     }
 }

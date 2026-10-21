@@ -76,11 +76,12 @@ function On({ lock }: { lock: LockView }) {
       <ListCard><div className={css.mBody}>
         <div className={css.mState}><span className={css.mDot} data-on="true" />{t("web-pages.security.on")}</div>
         <span className={partsCss.mSubtle}>{t("web-pages.security.onMeta", { signers: lock.signers, stations: lock.protected })}</span>
-        {!lock.signs && !lock.me?.waiting && <span className={css.mNote}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</span>}
+        {!lock.signs && !lock.me?.waiting && !lock.me?.unsigned && <span className={css.mNote}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</span>}
       </div></ListCard>
-      {/* Not confirmed yet: asked for here too, not only on the waiting screen (settings skip it). */}
-      {lock.me?.waiting && <>
-        <SectionHeader title={t("web-pages.security.waitingTitle")} start={24} />
+      {/* Not confirmed yet: asked for here too, not only on the waiting screen (settings skip it); in the lock without
+          signing, made a trusted device the same way. */}
+      {(lock.me?.waiting || lock.me?.unsigned) && <>
+        <SectionHeader title={t(lock.me.unsigned ? "web-pages.security.upgradeTitle" : "web-pages.security.waitingTitle")} start={24} />
         <ListCard><div className={css.mBody}><PairSteps lock={lock} /></div></ListCard>
       </>}
       {lock.requests.length > 0 && <>
@@ -314,7 +315,7 @@ function PairSteps({ lock }: { lock: LockView }) {
   </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
     : <>
       <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>
-        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
+        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t(lock.me?.unsigned ? "web-pages.security.upgradeNotAsked" : "web-pages.security.notAsked")}
       </span>
       <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.request"))} />
     </>;

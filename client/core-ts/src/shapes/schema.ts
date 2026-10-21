@@ -1202,9 +1202,10 @@ export const SHAPES: Record<string, Shape> = {
     ["confirmed", "bool"],
     ["daysLeft", opt("u32")],
     ["waiting", "bool", { doc: "Not in the lock, it asked or a station refused it: it waits to be confirmed." }],
+    ["unsigned", opt("bool"), { doc: "In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since\nlost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`)." }],
     ["asked", opt("bool"), { doc: "Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down." }],
     ["failed", opt("String"), { doc: "Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):\nsaid on its waiting page, asked again by hand (`lock.request`)." }],
-    ["pair", opt("LockPair"), { doc: "Its try to be approved face to face, once it began (`lock.pair`)." }],
+    ["pair", opt("LockPair"), { doc: "Its try to be approved face to face (or made one that signs), once it began (`lock.pair`)." }],
   ], { doc: "This device in the workspace's lock." }),
   LockView: struct([
     ["available", "bool", { doc: "Whether the control plane keeps locks (still.fail cloud's does; Comma's not)." }],

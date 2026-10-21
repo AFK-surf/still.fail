@@ -3349,6 +3349,11 @@ export interface LockMe {
 	daysLeft?: number;
 	/** Not in the lock, it asked or a station refused it: it waits to be confirmed. */
 	waiting: boolean;
+	/**
+	 * In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
+	 * lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
+	 */
+	unsigned?: boolean;
 	/** Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down. */
 	asked?: boolean;
 	/**
@@ -3356,7 +3361,7 @@ export interface LockMe {
 	 * said on its waiting page, asked again by hand (`lock.request`).
 	 */
 	failed?: string;
-	/** Its try to be approved face to face, once it began (`lock.pair`). */
+	/** Its try to be approved face to face (or made one that signs), once it began (`lock.pair`). */
 	pair?: LockPair;
 }
 

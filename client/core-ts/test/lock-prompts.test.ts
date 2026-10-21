@@ -73,6 +73,17 @@ test("a device that made its signing key after it started, then was confirmed: i
   assert.deepEqual([v.locked, v.canSign], [true, true], "the vault page offers to set up, not 'not confirmed'");
 });
 
+test("an app in the lock without its signing key (the genesis put it in before it kept one) is not waiting, but may be made one that signs", async () => {
+  const owner = elsewhere();
+  const r = await rig((_me) => ({ ws: genesis("ws", owner, true, [], {}, "ef".repeat(32), [{ id: ME, sub: "s1", kind: "app", label: "Windows" }]) }));
+  const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  assert.deepEqual([v.me.confirmed, v.me.waiting, v.signs, v.me.unsigned], [true, false, false, true]);
+  // One that signs with its key is neither.
+  const s = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  const w = await (await s.watch({ topic: "lock", workspace: "ws" }))();
+  assert.deepEqual([w.signs, w.me.unsigned ?? false], [true, false]);
+});
+
 test("a station's refusal names the workspace and the code to approve, where the device is not in that workspace's lock", async () => {
   const r = await rig((me) => ({ ws: genesis("ws", me, true), w2: genesis("w2", elsewhere(), false) }));
   await r.watch({ topic: "lock", workspace: "w2" });

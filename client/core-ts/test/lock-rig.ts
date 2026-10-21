@@ -16,12 +16,12 @@ export const ME = "ab".repeat(32);
 /// A phone of the member s2's, waiting.
 export const PHONE = "cd".repeat(32);
 
-/// A workspace's lock: s1 the owner, `signer` (this device's key, when it is in) their app; s2 a member.
-export function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean, stations: { key: string; name: string }[] = [], cloudKeys: unknown = {}, me = ME): Entry {
+/// A workspace's lock: s1 the owner, `signer` (this device's key, when it is in) their app; s2 a member; `more` devices.
+export function genesis(ws: string, signer: { id: string; signBytes(b: Uint8Array): string }, withMe: boolean, stations: { key: string; name: string }[] = [], cloudKeys: unknown = {}, me = ME, more: Record<string, unknown>[] = []): Entry {
   const e = next(ws, null, 1000, "genesis", {
     owner: "s1", origins: ["https://stillfail.test"], rp_id: "stillfail.test", cloud_keys: cloudKeys,
     members: [{ sub: "s1", email: "a@x.com", role: "owner" }, { sub: "s2", email: "b@x.com", role: "member" }],
-    devices: withMe ? [{ id: me, sub: "s1", kind: "app", label: "this", sign_key: signer.id }] : [],
+    devices: [...(withMe ? [{ id: me, sub: "s1", kind: "app", label: "this", sign_key: signer.id }] : []), ...more],
     passkeys: [], stations, gateways: [],
   });
   return { ...e, sig: { key: signer.id, alg: "Ed25519", sig: signer.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } };

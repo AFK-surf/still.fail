@@ -3351,12 +3351,15 @@ data class LockMe (
 	val daysLeft: UInt? = null,
 	/// Not in the lock, it asked or a station refused it: it waits to be confirmed.
 	val waiting: Boolean,
+	/// In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
+	/// lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
+	val unsigned: Boolean? = null,
 	/// Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down.
 	val asked: Boolean? = null,
 	/// Why its request to be confirmed did not reach the cloud (its key could not be kept, the cloud refused it):
 	/// said on its waiting page, asked again by hand (`lock.request`).
 	val failed: String? = null,
-	/// Its try to be approved face to face, once it began (`lock.pair`).
+	/// Its try to be approved face to face (or made one that signs), once it began (`lock.pair`).
 	val pair: LockPair? = null
 )
 
