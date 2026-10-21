@@ -41,6 +41,7 @@ import { cursorPickDemo, installDemo, installFlowDemo, kimiMethodDemo } from "./
 import { ADD, pickModelsDemo } from "./pickModels.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
+import { softwareDemo } from "./software.ts";
 import { lockDemo } from "./lock.ts";
 import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
 import { relaysDemo } from "./relays.ts";
@@ -1040,6 +1041,8 @@ export const stories: Story[] = [
   { id: "app-station-full", group: "应用", title: "station · 什么都有的 Mac", app: true, demo: fullStation(), steps: [{ click: '[aria-label^="Station"]' }] },
   { id: "app-station-full-settings", group: "应用", title: "station · 什么都有的 Mac · 设置", app: true, demo: fullStation(), steps: toStation("设置") },
   { id: "app-station-full-machine", group: "应用", title: "station · 什么都有的 Mac · 软件与设备", app: true, demo: fullStation(), steps: toStation("软件与设备") },
+  { id: "app-station-software", group: "设置", title: "station · 软件与更新 · 都能安装", app: true, demo: softwareDemo("installable"), steps: toStation("软件与设备") },
+  { id: "app-station-software-no-npm", group: "设置", title: "station · 软件与更新 · 没有 npm（Windows）", app: true, demo: softwareDemo("noNpm"), steps: toStation("软件与设备") },
   { id: "app-station-agent-env", group: "设置", title: "station · Agent 环境变量", app: true, demo: agentEnvDemo("set"), steps: toStation("设置") },
   { id: "app-station-agent-env-empty", group: "设置", title: "station · Agent 环境变量 · 暂无", app: true, demo: agentEnvDemo("empty"), steps: toStation("设置") },
   { id: "app-station-agent-env-wrong", group: "设置", title: "station · Agent 环境变量 · 有错的行", app: true, demo: agentEnvDemo("wrong"), steps: toStation("设置") },

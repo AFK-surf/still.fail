@@ -21,7 +21,7 @@ A Cursor account is a `subscription` profile with `runtime: "cursor"`; custom va
 
 ## Installed
 
-The SDK is an npm package (`@cursor/sdk`, about 50 MB with its platform's binaries), installed and updated by the station's npm into a prefix of its own, `<data>/runtimes/cursor` (`npm install -g --prefix …`: apart from the machine's global packages, and found by a look at the disk, `lib/node_modules/@cursor/sdk`). Not there, a start ends as a runtime not on PATH does (agents/runner.ts `CommandMissing("cursor")`), and the pages offer to install it.
+The SDK is an npm package (`@cursor/sdk`, about 50 MB with its platform's binaries), installed and updated by the station's npm (where the machine has none, by a Node of nodejs.org's the station puts in `<data>/node` first and links into `~/.local/bin`: updates/runtimes.ts `ownNode`) into a prefix of its own, `<data>/runtimes/cursor` (`npm install -g --prefix …`: apart from the machine's global packages, and found by a look at the disk, `lib/node_modules/@cursor/sdk`). Not there, a start ends as a runtime not on PATH does (agents/runner.ts `CommandMissing("cursor")`), and the pages offer to install it.
 
 ## History and usage
 

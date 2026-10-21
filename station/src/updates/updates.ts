@@ -36,7 +36,8 @@
 // - `stillfail-station channel` reaches this process as the launcher's `{"op":"hup"}` (it holds SIGHUP for it):
 //   `answerChannelAsk`.
 
-import { type FSWatcher, createWriteStream, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Clock, Effect, Fiber } from "effect";
@@ -49,8 +50,8 @@ import { platform as machine } from "../platform/index.ts";
 import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import {
-  DEVIN_MANIFEST, type Env, type How, type Kind, KINDS, NotFinished, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall, kindCommand,
-  kindName, kindPackage, linkBesideNpm, pinNpmVersion, run, runLines,
+  DEVIN_MANIFEST, type Env, type How, type Kind, KINDS, NotFinished, type OwnNode, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall,
+  kindCommand, kindName, kindPackage, linkBesideNpm, npmInstall, ownNode, pinNpmVersion, run, runLines,
 } from "./runtimes.ts";
 import {
   type Channel, type Words, INSTALLING, channelOf, downloading, newer, offer, platform, releaseChannel, sameWords, say, stationDownloadPercent,
@@ -130,6 +131,8 @@ export type UpdatesOptions = {
   devinManifest?: string;
   /// Where Claude Code's builds are said (its installer's downloads, for how much of one is in).
   claudeReleases?: string;
+  /// Where Node's builds are (nodejs.org's), for npm where the machine has none (runtimes.ts OwnNode).
+  nodeDist?: string;
   /// How many turns run now (the hub's), for what a drain waits on and an automatic update waits for.
   running?: () => number;
   /// Told when a runtime was installed or updated here (the machine's logins read again), and whether it is there now.
@@ -183,10 +186,30 @@ async function fetchJson(url: string, ms = 15_000): Promise<any> {
   return response.json();
 }
 
+/// A file's SHA-256, as SHASUMS256.txt says it (hex).
+function sha256(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    createReadStream(file)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")))
+      .on("error", reject);
+  });
+}
+
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url, { headers: UA, signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`${url}: ${response.status}`);
   return response.text();
+}
+
+/// A runtime's install that failed, its words said in each reader's language.
+class Failed extends Error {
+  readonly words: Words;
+  constructor(words: Words) {
+    super(say(words, "en"));
+    this.words = words;
+  }
 }
 
 /// An error whose words are said in the asker's language.
@@ -209,6 +232,9 @@ export class Updates {
   private registry: string;
   private devinManifest: string;
   private claudeReleases: string;
+  private nodeDist: string;
+  /// Node being put in place for npm (installNode), while it is.
+  private nodeInstalling: Promise<void> | null = null;
   private timing: Timing;
   private trusted: Map<string, string> | undefined;
   /// The channel the running release came from: as it says (CHANNEL), else the channel it started on.
@@ -243,6 +269,7 @@ export class Updates {
     this.registry = o.registry ?? "https://registry.npmjs.org";
     this.devinManifest = o.devinManifest ?? DEVIN_MANIFEST;
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
+    this.nodeDist = o.nodeDist ?? "https://nodejs.org/dist";
     this.timing = { ...TIMING, ...o.timing };
     this.trusted = o.trusted;
     this.running = o.running ?? (() => 0);
@@ -495,7 +522,7 @@ export class Updates {
     } catch (e) {
       log.warn("updates", "the runtime's latest version not read", { runtime: kind, error: (e as Error).message });
     }
-    const how = found ? howToUpdate(kind, found, this.env) : howToInstall(kind, this.env);
+    const how = found ? howToUpdate(kind, found, this.env) : howToInstall(kind, this.env, this.ownNode());
     return {
       ...empty(),
       installed: found !== null,
@@ -504,6 +531,16 @@ export class Updates {
       how: how instanceof Unable ? null : how,
       note: how instanceof Unable ? { key: how.key, args: how.args } : null,
     };
+  }
+
+  /// The Node npm is installed with where the machine has none: the version the station runs on (its release's
+  /// NODE_VERSION; the desktop app's, Electron's Node's).
+  private ownNode(): OwnNode | null {
+    let version = process.versions.node;
+    try {
+      version = readFileSync(join(this.app, "NODE_VERSION"), "utf8").trim() || version;
+    } catch {}
+    return ownNode(this.env, this.data, version);
   }
 
   /// Cursor's SDK, a package npm keeps in the station's own prefix (agents/cursor.ts): installed and updated by the same
@@ -517,8 +554,7 @@ export class Updates {
     } catch (e) {
       log.warn("updates", "the runtime's latest version not read", { runtime: "cursor", error: (e as Error).message });
     }
-    const npm = findCommand("npm", this.env);
-    const how: How | Unable = npm ? { program: npm.onPath, args: ["install", "-g", "--prefix", sdkPrefix(this.data), `${SDK_PACKAGE}@latest`] } : new Unable("station.updates.noNpm", { name: kindName("cursor") });
+    const how = npmInstall(this.env, this.ownNode(), ["install", "-g", "--prefix", sdkPrefix(this.data), `${SDK_PACKAGE}@latest`], kindName("cursor"));
     return { ...empty(), installed: version !== null, version, latest, how: how instanceof Unable ? null : how, note: how instanceof Unable ? { key: how.key, args: how.args } : null };
   }
 
@@ -636,7 +672,7 @@ export class Updates {
       const [ok, said] = await this.install(kind, how);
       if (!ok) failed = { text: tail(said, stationLang()) };
     } catch (e) {
-      failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : { text: (e as Error).message };
+      failed = e instanceof NotFinished ? { key: "station.updates.timedOut" } : e instanceof Failed ? e.words : { text: (e as Error).message };
     }
     if (failed) log.warn("updates", "the runtime not updated", { runtime: kind, failed: say(failed, "en") });
     let read = await this.readRuntime(kind);
@@ -663,6 +699,7 @@ export class Updates {
   /// build for this machine, fetched here first; Claude Code's, as its installer writes it), else the step the command
   /// says it is at (Homebrew's, Claude Code's installer's).
   private async install(kind: Kind, how: How): Promise<[boolean, string]> {
+    if (how.node) await this.installNode(kind, how.node);
     const npm = isNpmInstall(how);
     if (kind === "codex" && npm) {
       const version = await this.fetchCodex(how.program);
@@ -682,6 +719,57 @@ export class Updates {
       });
     } finally {
       stop();
+    }
+  }
+
+  /// The Node an npm install runs on where the machine had none (runtimes.ts OwnNode): nodejs.org's build for this
+  /// machine, its download measured and checked against the release's SHASUMS256, unpacked in <data>/node once (kept
+  /// for the next install, and for npm to update what it installed), its node, npm and npx linked into ~/.local/bin
+  /// where nothing of that name is (a link that leads nowhere is replaced).
+  private async installNode(kind: Kind, node: OwnNode) {
+    // Two runtimes installed at once: one Node, put there by the first.
+    while (this.nodeInstalling) await this.nodeInstalling.catch(() => {});
+    const done = this.placeNode(kind, node);
+    this.nodeInstalling = done;
+    try {
+      await done;
+    } finally {
+      this.nodeInstalling = null;
+    }
+  }
+
+  private async placeNode(kind: Kind, node: OwnNode) {
+    const at = join(node.home, node.dist);
+    if (!existsSync(join(at, "bin", "npm"))) {
+      mkdirSync(node.home, { recursive: true });
+      const file = join(node.home, `${node.dist}.tar.gz`);
+      const unpacked = join(node.home, `.unpacking-${node.dist}`);
+      try {
+        const base = `${this.nodeDist}/v${node.version}`;
+        const sums = await fetchText(`${base}/SHASUMS256.txt`);
+        const want = sums.split("\n").map((l) => l.trim().split(/\s+/)).find(([, f]) => f === `${node.dist}.tar.gz`)?.[0];
+        if (want === undefined) throw new Failed({ key: "station.updates.nodeUnverified" });
+        await this.download(kind, `Node ${node.version}`, `${base}/${node.dist}.tar.gz`, file);
+        if ((await sha256(file)) !== want) throw new Failed({ key: "station.updates.nodeUnverified" });
+        this.say(kind, INSTALLING, null);
+        rmSync(unpacked, { recursive: true, force: true });
+        mkdirSync(unpacked);
+        const [ok, said] = await run("tar", ["-xzf", file, "-C", unpacked], this.env, 120_000);
+        if (!ok) throw new Error(tail(said, stationLang()));
+        rmSync(at, { recursive: true, force: true });
+        renameSync(join(unpacked, node.dist), at);
+        log.info("updates", "Node installed for npm", { runtime: kind, at });
+      } finally {
+        rmSync(file, { force: true });
+        rmSync(unpacked, { recursive: true, force: true });
+      }
+    }
+    mkdirSync(node.bin, { recursive: true });
+    for (const name of ["node", "npm", "npx"]) {
+      const link = join(node.bin, name);
+      if (existsSync(link)) continue;
+      rmSync(link, { force: true });
+      symlinkSync(join(at, "bin", name), link);
     }
   }
 

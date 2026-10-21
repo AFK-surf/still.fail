@@ -484,6 +484,7 @@ export const windows: Platform = {
   linkCommand: () => false,
   // Its installer is a shell script (install.sh).
   codexStandalone: false,
+  linksNode: false,
 
   /// A PowerShell that asks SetThreadExecutionState for the system (ES_CONTINUOUS | ES_SYSTEM_REQUIRED: the screen may
   /// still go off) and holds it while it reads its stdin, which ends with the station. Windows names no reason here

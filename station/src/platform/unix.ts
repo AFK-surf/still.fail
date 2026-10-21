@@ -423,6 +423,7 @@ export const unix: Platform = {
     }
   },
   codexStandalone: true,
+  linksNode: true,
 
   /// macOS: caffeinate against idle sleep, for as long as the station's process is there (-w). Linux: systemd-inhibit
   /// around a `cat` of the station's pipe (none without systemd).

@@ -9,6 +9,7 @@ import { wall } from "../ops/fibers.ts";
 import { endCommand, startCommand } from "../ops/processes.ts";
 import { type Found as PlatformFound, platform } from "../platform/index.ts";
 import { RUNTIME_KINDS, runtimeLabel, type RuntimeKind } from "../agents/runtime.ts";
+import { platform as buildOf } from "./versions.ts";
 
 /// The environment commands run in: the station's own (its PATH says where the runtimes are).
 export type Env = Record<string, string | undefined>;
@@ -26,8 +27,23 @@ export const kindPackage = (k: Kind) => (k === "claude" ? "@anthropic-ai/claude-
 /// Where the Devin CLI's installer reads the latest build ({version, platforms}).
 export const DEVIN_MANIFEST = "https://static.devin.ai/cli/current/manifest.json";
 
-/// How an update is done: a program and its arguments.
-export type How = { program: string; args: string[] };
+/// How an update is done: a program and its arguments; for an npm install on a machine that has no npm, the Node it is
+/// done with, installed first.
+export type How = { program: string; args: string[]; node?: OwnNode };
+
+/// A Node as nodejs.org builds it, for what npm installs where the machine has none (`dist`, as the station runs on:
+/// node-v<version>-<platform>), unpacked in `home` and its commands (node, npm, npx) linked into `bin` (~/.local/bin,
+/// on the station's PATH): npm installs a runtime in its prefix and the runtime, a Node script, runs on that node.
+export type OwnNode = { version: string; dist: string; home: string; bin: string };
+
+/// The Node the station installs for npm where the machine has none: `version` for this machine, kept in <data>/node and
+/// linked into ~/.local/bin; none where the platform links nothing (Windows) or its build is not named.
+export function ownNode(env: Env, data: string, version: string): OwnNode | null {
+  const home = platform.home(env);
+  const p = buildOf();
+  if (!platform.linksNode || !home || p === null) return null;
+  return { version, dist: `node-v${version}-${p}`, home: join(data, "node"), bin: join(home, ".local", "bin") };
+}
 
 /// The prefetched build's version in place of `@latest`, keeping the destination and other options; npm's package
 /// index revalidated (the prefetched tarball does not refresh it, and a cached index from before this release could
@@ -145,19 +161,38 @@ CODEX_HOME="$1" CODEX_INSTALL_DIR="$2" CODEX_NON_INTERACTIVE=1 sh -c "$installer
 }
 
 /// How a runtime the machine has not is installed, or why it cannot be from here: Claude Code by its own installer
-/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else Homebrew, DeepSeek Harness and
-/// Grok Build by npm, Devin by its own installer (into ~/.local/bin too).
-export function howToInstall(kind: Kind, env: Env): How | Unable {
+/// (into ~/.local/bin, on the station's PATH as install.ts sets it), Codex by npm, else its own installer (into
+/// ~/.local/bin too; Homebrew where that is not run), DeepSeek Harness and Grok Build by npm (where the machine has none,
+/// `node`'s: installed first), Devin by its own installer (into ~/.local/bin too).
+export function howToInstall(kind: Kind, env: Env, node: OwnNode | null = null): How | Unable {
   if (kind === "station") return new Unable("");
   if (kind === "claude") return platform.claudeInstall;
   if (kind === "devin") return platform.devinInstall;
-  const npm = findCommand("npm", env);
   // DeepSeek Harness is an npm package (it runs on the Node npm is of: 22.19 or newer).
-  if (kind === "dsh" || kind === "grok") return npm ? { program: npm.onPath, args: ["install", "-g", `${kindPackage(kind)}@latest`] } : new Unable("station.updates.noNpm", { name: kindName(kind) });
+  if (kind === "dsh" || kind === "grok") return npmInstall(env, node, ["install", "-g", `${kindPackage(kind)}@latest`], kindName(kind));
+  const npm = findCommand("npm", env);
   if (npm) return { program: npm.onPath, args: ["install", "-g", "@openai/codex@latest"] };
+  if (platform.codexStandalone) return standaloneCodexInstall();
   const brew = findCommand("brew", env);
   if (brew) return { program: brew.onPath, args: ["install", "--cask", "codex"] };
-  return new Unable("station.updates.noNpmNoBrew");
+  return new Unable("station.updates.noNpmInstall", { name: kindName(kind) });
+}
+
+/// npm running `args`: the machine's, else `node`'s (installed first), else why it cannot be from here.
+export function npmInstall(env: Env, node: OwnNode | null, args: string[], name: string): How | Unable {
+  const npm = findCommand("npm", env);
+  if (npm) return { program: npm.onPath, args };
+  if (node) return { program: join(node.bin, "npm"), args, node };
+  return new Unable("station.updates.noNpmInstall", { name });
+}
+
+/// Codex by its own installer where the machine has no npm: into ~/.local/bin, its package in ~/.codex (as a person
+/// running it gets it; standaloneCodexUpdate updates it there).
+function standaloneCodexInstall(): How {
+  const script = `set -eu
+installer=$(curl -fsSL https://chatgpt.com/codex/install.sh)
+CODEX_NON_INTERACTIVE=1 sh -c "$installer" -- --release latest`;
+  return { program: "/bin/sh", args: ["-c", script, "stillfail-codex-install"] };
 }
 
 /// Whether `how` is npm installing a package.
