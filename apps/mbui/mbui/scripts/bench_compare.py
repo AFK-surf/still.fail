@@ -29,6 +29,8 @@ METRICS = [
     ("GPU", "gpu_ms", "ms"),
     ("process CPU / frame", "cpu_ms", "ms"),
     ("draw items", "ops", ""),
+    ("frames", "frames", ""),
+    ("run (ms)", "run_ms", ""),
 ]
 ORDER = ["mbui", "nanoui", "mygo", "flutter", "flutter-b2b", "flutter-cold"]
 
@@ -72,7 +74,8 @@ def has(entry, fw):
 def fmt(v, unit):
     if v is None:
         return "—"
-    return f"{v:.3f}" if unit else f"{int(v)}"
+    # times (kept in ms) as whole µs: 1 to 999 for most of them, easy to scan
+    return f"{v * 1000:.0f}" if unit else f"{int(v)}"
 
 
 def main():
@@ -107,13 +110,16 @@ def main():
             vals = {fw: (o.get(key) if o and o.get(key) else None) for fw, o in others.items()}
             ratio = [(f"{v / vals[fw]:.2f}×" if fw == "nanoui" else f"{vals[fw] / v:.2f}×")
                      if v and vals[fw] and min(v, vals[fw]) >= 0.001 else "" for fw in ratios]
-            dl = ""
+            dl = db = ""
             p = find(prev, "mbui", scene)
+            if key in ("frames", "run_ms"):  # how long it ran, not how fast
+                p = None
             if p and p.get(key) and v is not None:
                 dl = f"{(v - p[key]) / p[key] * 100:+.1f}%"
             best = [find(e, "mbui", scene) for e in mine[:-1]]
             best = [b[key] for b in best if b and b.get(key)]
-            db = f"{(v - min(best)) / min(best) * 100:+.1f}%" if best and v is not None else ""
+            if best and v is not None and p is not None:
+                db = f"{(v - min(best)) / min(best) * 100:+.1f}%"
             cells = [fmt(v, unit)] + [fmt(vals[fw], unit) for fw in fws] + ratio + [dl, db]
             label = scene if i == 0 else ""
             if md:
@@ -123,7 +129,7 @@ def main():
         if not md:
             print()
     if not md:
-        print("times in ms; Δ against mbui's previous run" + (f" ({prev['label']})" if prev and prev.get("label") else "") +
+        print("times in µs a frame; Δ against mbui's previous run" + (f" ({prev['label']})" if prev and prev.get("label") else "") +
               f" and its best of {len(mine) - 1}; changes within ±5% are noise")
         for fw in ["mbui"] + fws:
             e = last if fw == "mbui" else latest[fw]

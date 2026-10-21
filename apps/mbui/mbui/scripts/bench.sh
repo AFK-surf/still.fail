@@ -7,7 +7,9 @@
 #                                 ZIG: a Zig 0.17 binary), then compare
 #   scripts/bench.sh compare      compare the last runs (bench/history.jsonl and
 #                                 $NANOUI/hillclimb/history.jsonl)
-# LABEL="what changed" names the run; SCENES=text,list FRAMES=600 REPEAT=5.
+# LABEL="what changed" names the run; SCENES=text,list FRAMES=600 MS=500 REPEAT=5.
+# A scene runs frames filling about MS ms (300), at least 300; FRAMES fixes the
+# count (nanoui's 300 when run beside nanoui).
 # Each run first waits for the machine to be quiet (scripts/bench_quiet.sh;
 # QUIET=0 skips that) and prints its load.
 set -e
@@ -26,7 +28,7 @@ quiet() {
 }
 run() {
   mkdir -p bench
-  BENCH_LABEL="${LABEL:-}" BENCH_SCENES="${SCENES:-}" BENCH_FRAMES="${FRAMES:-}" BENCH_REPEAT="${REPEAT:-}" \
+  BENCH_LABEL="${LABEL:-}" BENCH_SCENES="${SCENES:-}" BENCH_FRAMES="${FRAMES:-}" BENCH_MS="${MS:-}" BENCH_REPEAT="${REPEAT:-}" \
     BENCH_HISTORY=bench/history.jsonl ./$EXE
 }
 nanoui() {
@@ -39,6 +41,6 @@ compare() {
 case "${1:-run}" in
   build) build ;;
   run) build && quiet && run && compare ;;
-  nanoui) build && (cd "$NANOUI/hillclimb" && ${ZIG:-zig} build) && quiet && run && nanoui && compare ;;
+  nanoui) FRAMES="${FRAMES:-300}"; build && (cd "$NANOUI/hillclimb" && ${ZIG:-zig} build) && quiet && run && nanoui && compare ;;
   compare) compare ;;
 esac
