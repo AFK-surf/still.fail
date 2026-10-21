@@ -142,8 +142,8 @@ export interface AgentEnvDraft {
 	pending: boolean;
 }
 
-/** A runtime: Claude Code, Codex, DeepSeek Harness or Grok Build. */
-export type RuntimeKind = "claude" | "codex" | "dsh" | "grok";
+/** A runtime: Claude Code, Codex, DeepSeek Harness, Grok Build, Cursor or Devin. */
+export type RuntimeKind = "claude" | "codex" | "dsh" | "grok" | "cursor" | "devin";
 
 export interface AgentProcess {
 	pgid: number;
@@ -177,10 +177,10 @@ export interface ApiProvider {
 	mark?: string;
 	/** How a profile on it is made: api-provider | opencode-go | anthropic-api | env (variables by hand). */
 	kind?: string;
-	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok). */
+	/** It has a key to add, and/or a subscription to sign in (OpenAI: ChatGPT; Anthropic: Claude; xAI: SuperGrok; Cursor, Devin: its account, a plan alone). */
 	hasKey?: boolean;
 	hasPlan?: boolean;
-	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok). */
+	/** Of its subscription, or of the variables: the runtime (claude | codex | dsh | grok | cursor | devin). */
 	runtime?: string;
 	/** Its address is the person's own: asked for with the key. */
 	endpointRequired?: boolean;
@@ -190,7 +190,7 @@ export interface ApiProvider {
 	protocols?: string[];
 	/** Works without a key. */
 	keyOptional?: boolean;
-	/** What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `decision`. */
+	/** What a profile on it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision`. */
 	uses?: string[];
 	/** What the core says of it: what it can do, in words. */
 	usesText?: string;
@@ -211,14 +211,6 @@ export interface AppRelease {
 	 * has none). The home screen offers the build only with some; the settings offer any.
 	 */
 	news?: string[];
-}
-
-/** What the archive check made of a chat as it stands, under its agent's all-done post. */
-export interface ArchiveCheck {
-	/** The option the check picked and what came of it, or that it failed, in a line. */
-	text: string;
-	recommended: boolean;
-	failed: boolean;
 }
 
 /**
@@ -800,7 +792,7 @@ export interface Creator {
 	id: string;
 	name: string;
 	email?: string;
-	/** local | cloud | slack */
+	/** local | cloud | slack | feishu */
 	via: string;
 	/** As the core names them. */
 	shown?: PersonShown;
@@ -877,7 +869,7 @@ export interface Session {
 	boundTo?: string[];
 	creator?: Creator;
 	participants?: Creator[];
-	/** claude | codex | dsh | grok */
+	/** claude | codex | dsh | grok | cursor | devin */
 	runtime: RuntimeKind;
 	profile?: string;
 	profilePinned?: boolean;
@@ -935,6 +927,17 @@ export interface SlackTokens {
 	botToken: string;
 }
 
+/** A Feishu (or Lark) connect's app. */
+export interface FeishuApp {
+	appId: string;
+	/** Masked. */
+	appSecret: string;
+	/** feishu | lark */
+	domain: string;
+	/** The app's page in the developer console (core). */
+	console?: string;
+}
+
 export interface SlackIdentity {
 	team: string;
 	teamId: string;
@@ -980,7 +983,10 @@ export interface Connect {
 	mode: ConnectMode;
 	requireMention: boolean;
 	bind: Bind;
+	/** A Slack connect's tokens, masked (empty for another kind: a station sends them for clients from before). */
 	slack: SlackTokens;
+	/** A Feishu (Lark) connect's app (docs/feishu.md); absent for another kind. */
+	feishu?: FeishuApp;
 	connection: ConnectState;
 	createdBy?: Owner;
 	sessions: number;
@@ -1031,6 +1037,10 @@ export interface LoginJob {
 	/** starting | needs_code | needs_approval | verifying | done | failed | cancelled */
 	state: string;
 	url?: string;
+	/**
+	 * needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm
+	 * (Cursor).
+	 */
 	userCode?: string;
 	error?: string;
 	startedAt: number;
@@ -1102,7 +1112,7 @@ export interface Profile {
 	/** The first problem to resolve, with its next step; absent when nothing needs attention. */
 	trouble?: ProfileTrouble;
 	/**
-	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). A station's
+	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). A station's
 	 * profiles come by kind, in that order.
 	 */
 	group?: string;
@@ -1122,7 +1132,7 @@ export interface Profile {
 	/** What can be enabled on it: what its provider lists, then whatever is enabled already, each once. */
 	available?: string[];
 	/**
-	 * What it can do: `claude`, `codex`, `dsh`, `grok`, `decision` (the automatic decisions). The core works it out from where its
+	 * What it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision` (the automatic decisions). The core works it out from where its
 	 * provider speaks and what its check found.
 	 */
 	uses?: string[];
@@ -1246,6 +1256,8 @@ export interface JobChat {
 	id: string;
 	title?: string;
 	archived?: boolean;
+	/** The station the chat is on, when not the job's: a task another station's chat runs there. */
+	station?: string;
 }
 
 /**
@@ -1499,8 +1511,10 @@ export interface ChatItem {
 	stationIcon?: string;
 	/** block | run | failed */
 	state?: Badge;
-	/** Where it came from (Slack · workspace · #channel), for a Slack chat. */
+	/** Where it came from (Slack · workspace · #channel), for a Slack chat; a Feishu one's (飞书 · tenant · group). */
 	originText?: string;
+	/** slack | feishu: the kind of connect it came from (its mark). */
+	originKind?: string;
 	/** Its station is offline, in words ("Studio 离线"): the row is shown greyed and marked. Absent while online. */
 	offline?: string;
 	/**
@@ -1614,11 +1628,11 @@ export interface ChatJobsView {
 }
 
 /**
- * A runtime a chat's notice says is not installed, and installing it there (core views.ts `installView`): once
- * installed, the station gives the chat's waiting messages to the agent.
+ * A runtime the station does not have (a chat's notice says so, or a plan's sign-in needs it), and installing it there
+ * (core present.ts `installView`): once installed, the station gives the chat's waiting messages to the agent.
  */
 export interface RuntimeInstall {
-	/** claude | codex | dsh | grok: what `software.update` installs ({station, id: runtime}). */
+	/** claude | codex | dsh | grok | cursor | devin: what `software.update` installs ({station, id: runtime}). */
 	runtime: string;
 	/** missing | installing | failed | installed */
 	state: string;
@@ -1670,10 +1684,10 @@ export interface MessageDecision {
 export interface Place {
 	/** A still.fail chat's title, or a Slack thread's workspace and channel (`Cue#ops`). */
 	name: string;
-	/** ember | slack */
+	/** ember | slack | feishu */
 	surface: string;
 	session?: string;
-	/** A Slack thread's link in Slack, while a connect is signed in to its workspace. */
+	/** A Slack thread's link in Slack, while a connect is signed in to its workspace; a Feishu chat's in Feishu. */
 	url?: string;
 }
 
@@ -1725,13 +1739,18 @@ export interface ChatMessage {
 	system: boolean;
 	/** still.fail's notice about one of the station's profiles (its sign-in failed): that profile's id, for a link to it. */
 	profile?: string;
-	/** still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok). */
+	/** still.fail's notice that the station does not have a chat's runtime installed: its id (claude | codex | dsh | grok | cursor | devin). */
 	runtime?: string;
 	/**
 	 * With `runtime`: installing it from the chat, as it stands now (the station's updates). Absent from a station older
 	 * than it.
 	 */
 	install?: RuntimeInstall;
+	/**
+	 * still.fail's notice of a failure, on a station that takes bug reports: sending it to the still.fail team
+	 * (`chat.report` {station, thread, seq}) is offered with it. Absent otherwise.
+	 */
+	reportable?: boolean;
 	/**
 	 * In a chat's page: the viewer's message waiting for a runtime the station does not have (the notices saying so,
 	 * folded into it): said under it in place of its waiting, with installing it. Absent otherwise.
@@ -1768,13 +1787,6 @@ export interface ChatMessage {
 	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	 */
 	asked?: boolean;
-	/**
-	 * In a chat's page: the agent's last post, at the chat's end, saying it is all done, with nothing left in the chat
-	 * (`archiveOffered`): 归档 is offered under it. Absent otherwise.
-	 */
-	archive?: boolean;
-	/** Under the same last all-done post: what the archive check made of the chat (the chat's `archiveCheck`). */
-	archiveCheck?: ArchiveCheck;
 	/**
 	 * In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	 * when nothing.
@@ -1954,6 +1966,11 @@ export interface Outgoing {
 	createdAt: number;
 	state: string;
 	error?: string;
+	/**
+	 * Failed for good: the station refused it as it is (a file it does not have), and sending it again would not
+	 * change that; it goes back to be written again. Absent otherwise.
+	 */
+	final?: boolean;
 	seq?: number;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
@@ -1961,6 +1978,11 @@ export interface Outgoing {
 	followed?: boolean;
 	/** Sent soon after the viewer's message or outgoing one before it: as a message's `joined`. */
 	joined?: boolean;
+	/**
+	 * Sending, why it has not reached the station yet (its station is updating), in words: under it in place of
+	 * 正在发送. Absent otherwise.
+	 */
+	waits?: string;
 }
 
 /** A station's mesh link: connecting | online | offline | error. */
@@ -2021,6 +2043,8 @@ export interface ChatView {
 	/** Where a Slack chat is (#channel, 私信), and its link in Slack while its connect is signed in. */
 	place?: string;
 	slackUrl?: string;
+	/** A Feishu (Lark) chat's link in Feishu. */
+	feishuUrl?: string;
 	people: Person[];
 	agents: ChatAgent[];
 	messages: ChatMessage[];
@@ -2084,10 +2108,6 @@ export interface ChatView {
 	 * (`chat.archive`). Absent otherwise.
 	 */
 	archivable?: boolean;
-	/** Archivable, and the viewer's `archiveHint` offers it: 归档 under its last all-done post. Absent otherwise. */
-	archiveOffered?: boolean;
-	/** What the archive check made of it as it stands (the option picked, or a failure). Absent when none did. */
-	archiveCheck?: ArchiveCheck;
 	/**
 	 * Its sharing with the viewer's other workspaces (docs/chat-share.md); absent while it has no chat or agent, or
 	 * the viewer is in no other workspace.
@@ -2206,6 +2226,70 @@ export interface ConnectAppSettings {
 	groups: Record<string, boolean>;
 }
 
+export interface FeishuTenant {
+	key?: string;
+	name?: string;
+}
+
+export interface FeishuIdentity {
+	botName: string;
+	botImage?: string;
+	botOpenId?: string;
+	tenant?: FeishuTenant;
+}
+
+/** A Feishu bot being made by scanning (docs/feishu.md), as its station follows it: only its starter sees it. */
+export interface FeishuRegistration {
+	id: string;
+	/** The page that creates the app, opened on a phone signed in to Feishu (its QR code). */
+	url: string;
+	expiresAt: number;
+	/** waiting | done | denied | expired | failed */
+	state: string;
+	error?: string;
+	appId?: string;
+	/** feishu | lark: where the app was made (Lark once its tenant says so). */
+	domain?: string;
+}
+
+/** A text as a QR code (qr.ts). */
+export interface QrCode {
+	size: number;
+	/** Each row's modules: 1 dark, 0 light; no quiet zone (drawn with four modules' margin). */
+	rows: string[];
+}
+
+/** The Feishu path of the connect wizard. */
+export interface ConnectFeishuFlow {
+	/** scan | app: how the bot is to be had, made by scanning or an app of one's own. */
+	way: string;
+	appId: string;
+	appSecret: string;
+	/** Lark, the international version: its own domain. */
+	lark: boolean;
+	canVerify: boolean;
+	/** Verified as typed, with nothing wrong: the connect can be added. */
+	verified: boolean;
+	/** The bot the App ID and Secret were verified as; absent until they are, or once they change. */
+	identity?: FeishuIdentity;
+	/** What the verification found wrong. */
+	errors: string[];
+	/** The bot being made by scanning (as the overview has it, else as it was started). */
+	registration?: FeishuRegistration;
+	/** Its link as a QR code, while it waits. */
+	qr?: QrCode;
+	/** Where the scanning stands, in words. */
+	stateText?: string;
+	/** It ended without an app (denied, expired, failed): started again with `register`. */
+	failed: boolean;
+	/** The connect is being added (on its own once the app is made). */
+	creating: boolean;
+	/** Why adding it failed: tried again with `create`. */
+	error?: string;
+	/** The connect added: its page is opened. */
+	connect?: string;
+}
+
 export interface SlackTeam {
 	teamId: string;
 	name: string;
@@ -2264,6 +2348,11 @@ export interface ConnectFlowView {
 	chosen?: SlackTeam;
 	made?: MadeSlackApp;
 	pick?: PickView;
+	/** slack | feishu, once chosen. */
+	platform?: string;
+	/** What the station connects to (feishu only where it has the Feishu connect). */
+	platforms: string[];
+	feishu?: ConnectFeishuFlow;
 }
 
 export interface ConnectItem {
@@ -2467,6 +2556,13 @@ export interface DraftView {
 	files: Attachment[];
 	/** Links shared into it (docs/share-in.md): drawn as files are, sent as words after the text. */
 	links?: ComposerLink[];
+	/**
+	 * The draft's own name, the core's (`draft.get` gives it, `draft.put` answers it): what is written between two
+	 * sends is one draft; taken to send, or put back empty, the next is another. What goes up from it is named by it
+	 * (the station gives back an upload it finished within the hour by its id), so the same file in the next message,
+	 * or in another new chat, is another upload. Said by `draft.put`, it is not taken: the core keeps its own.
+	 */
+	id?: string;
 }
 
 /** What opens an entry of the drive. */
@@ -2563,8 +2659,58 @@ export interface FlowSignIn {
 	runtime: RuntimeKind;
 	/** opencode-go: the OpenCode Console instead (`login.new` access). */
 	access?: string;
-	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok. */
+	/** Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok, Cursor, Devin. */
 	provider: string;
+}
+
+/** The faces chosen on this device, by place (client/core-ts/src/fonts.ts, docs/fonts.md). */
+export interface FontChoices {
+	/** The app's own words: a face's id, or `local:<family>` for one installed on the device; none: the app's own face. */
+	ui?: string;
+	/** What people and agents wrote (messages, the composer); none: as `ui`. */
+	text?: string;
+	/** Code; none: the app's own (the Android app's JetBrains Mono, the system's monospace on a page). */
+	code?: string;
+}
+
+/** A face's file for the Android app. */
+export interface FontFile {
+	/** The weight it is (400, 500, …); 0: one variable file for every weight. */
+	weight: number;
+	/** Where it is, gzipped. */
+	url: string;
+	/** Its size gzipped. */
+	bytes: number;
+	/** The hash of it unzipped. */
+	sha256: string;
+}
+
+export interface FontFace {
+	/** Its id (`local:<family>` for one installed on the device); empty: the app's own face. */
+	id: string;
+	/** Its name as people know it, in their language (empty: the app's own). */
+	name: string;
+	/** Its characters are all one width: a face for code. */
+	mono: boolean;
+	/** The family a page sets it by (its stylesheet's, or the one installed); empty: the app's own. */
+	family: string;
+	/** A page's stylesheet for it: its slices, fetched as their characters are shown. */
+	css?: string;
+	/** What the Android app fetches and keeps for it, a file for each weight (none: one installed, or the app's own). */
+	files?: FontFile[];
+	/** Its preview for the Android app: the fonts page's characters alone (tens of KB), to show it in itself before it is fetched. */
+	preview?: string;
+	/** What `files` come to. */
+	bytes: number;
+}
+
+/** The faces a device's pages are set in, each place's whole (text, none chosen: as ui's), and those there are. */
+export interface FontsView {
+	ui: FontFace;
+	text: FontFace;
+	code: FontFace;
+	/** The faces there are to choose, beside the app's own and those installed on the device. */
+	list: FontFace[];
 }
 
 export interface FootprintConfirm {
@@ -2962,9 +3108,26 @@ export interface ImageNear {
 	count: number;
 }
 
+/** Text of a command's output in one style (its SGR codes). */
+export interface TermRun {
+	text: string;
+	/**
+	 * One of the 16 colours of the client's terminal palette for its theme by number (`0`…`15`), or `#rrggbb`;
+	 * absent: the text's colour.
+	 */
+	fg?: string;
+	/** As `fg`; absent: none. */
+	bg?: string;
+	bold?: boolean;
+	dim?: boolean;
+	italic?: boolean;
+	underline?: boolean;
+}
+
 /**
- * A job's output as it grows (the `jobLog` topic): its last lines, when it last grew, its state (absent from a
- * station yet to say), and, put in by the core, its last line and when in words (absent: nothing to say).
+ * A job's output as it grows (the `jobLog` topic): its last lines as a terminal shows them (control sequences done
+ * or dropped, src/terminal.ts), when it last grew, its state (absent from a station yet to say), and, put in by the core,
+ * its last line and when in words (absent: nothing to say).
  */
 export interface JobLogView {
 	text: string;
@@ -2972,6 +3135,8 @@ export interface JobLogView {
 	state?: string;
 	last?: string;
 	said?: string;
+	/** `text` in runs of one style, as a terminal colours it; absent when none of it is styled (show `text`). */
+	runs?: TermRun[];
 }
 
 /** A station that could be added to a workspace. */
@@ -3184,6 +3349,11 @@ export interface LockMe {
 	daysLeft?: number;
 	/** Not in the lock, it asked or a station refused it: it waits to be confirmed. */
 	waiting: boolean;
+	/**
+	 * In the lock, an app, but not signing with this device's key (let in before it kept one, or its key since
+	 * lost): it may be made one that signs (a trusted device), approved as a new one is (`lock.pair`).
+	 */
+	unsigned?: boolean;
 	/** Its request to be confirmed waits at the cloud (or is on its way); not when it was turned down. */
 	asked?: boolean;
 	/**
@@ -3191,7 +3361,7 @@ export interface LockMe {
 	 * said on its waiting page, asked again by hand (`lock.request`).
 	 */
 	failed?: string;
-	/** Its try to be approved face to face, once it began (`lock.pair`). */
+	/** Its try to be approved face to face (or made one that signs), once it began (`lock.pair`). */
 	pair?: LockPair;
 }
 
@@ -3553,10 +3723,10 @@ export interface PendingLogin {
 
 /**
  * A piece of software on a station and whether a newer one is out (the station's updates): the station itself (`station`) or a
- * runtime (`claude`, `codex`, `dsh`, `grok`).
+ * runtime (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`).
  */
 export interface SoftwareVersion {
-	/** station | claude | codex | dsh | grok */
+	/** station | claude | codex | dsh | grok | cursor | devin */
 	id: string;
 	name: string;
 	/** On the machine (a runtime may not be: then `updatable` says it can be installed from here). */
@@ -3666,6 +3836,11 @@ export interface Overview {
 	slackUsers: string[];
 	slackTeams: SlackTeam[];
 	slackApps?: MadeSlackApp[];
+	/**
+	 * The Feishu bots the viewer is making by scanning (docs/feishu.md). Absent from a station without the Feishu
+	 * connect, which is then not offered.
+	 */
+	feishuRegistrations?: FeishuRegistration[];
 	disk?: DiskRoom;
 	logins: PendingLogin[];
 	/** This machine's own logins (none from a station older than them). */
@@ -3968,7 +4143,7 @@ export interface PrefsView {
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**
-	 * When a done chat is offered to archive (drawn faded, 归档 under its last all-done post): `off`, never;
+	 * When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;
 	 * `reviewed`, only once its station's archive review recommended it; (none) `done`, whenever nothing is left in it
 	 * (where its station's review is on, once it recommended it). Archiving with one tap is there whatever this says.
 	 */
@@ -4011,6 +4186,10 @@ export interface PrefsView {
 	 * by `bars` (one set for all, as devices kept it before).
 	 */
 	barsBy?: Record<string, BarPrefs>;
+	/** The face chosen for each place on this device (`prefs.set {fonts: {…}}`, one place or several; null: the app's own). */
+	fonts?: FontChoices;
+	/** The faces each place is set in and those there are to choose (the core's, from `fonts`; none from a core before them). */
+	faces?: FontsView;
 }
 
 /** Providers of one group, as the picker lists them. */
@@ -4056,8 +4235,13 @@ export interface ProfileFlowView {
 	submitLabel: string;
 	/** What the profile will be usable for, in words (the line under the page). */
 	usesLine: string;
-	/** At a plan's connect step: the sign-in to start. */
+	/** At a plan's connect step: the sign-in to start. Absent while its runtime is to be installed (`install`). */
 	signIn?: FlowSignIn;
+	/**
+	 * At a plan's connect step on a station without the runtime it signs in with: installing it there; the sign-in
+	 * starts once it is installed. Absent otherwise.
+	 */
+	install?: RuntimeInstall;
 }
 
 /** One station's copy of an account in the workspace's list. */
@@ -4091,7 +4275,7 @@ export interface ShareStation {
 export interface WorkspaceProfile {
 	/** The share's id, or station/profile for one on a station only. */
 	key: string;
-	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), key (the rest). */
+	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). */
 	group: string;
 	/** That kind in words: Claude 订阅. */
 	groupTitle: string;

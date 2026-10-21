@@ -26,7 +26,7 @@ import {
   byBytes, cardOf, jsonList, mergeEntries, optionsCard, parsed, quote, takeChars, toEntry, toJob, toMembership,
   liveShare, shareLive, toChatShare, toMessage, toOpened, toPublished, toSession, toSessionThread, toThread, toTurnSummary,
 } from "./rows.ts";
-import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
+import { SCHEMA, SCHEMA_VERSION, addArchiveColumns, addAutoTitleColumns, addClientColumn, addQueueColumns, addWatchColumn, addWorkspaceColumns } from "./schema.ts";
 import * as usage from "./usage.ts";
 
 export * from "./rows.ts";
@@ -92,6 +92,7 @@ export class Store {
       addClientColumn(db);
       addAutoTitleColumns(db);
       addWatchColumn(db);
+      addQueueColumns(db);
       addWorkspaceColumns(db);
       db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     } catch (e) {
@@ -1397,9 +1398,9 @@ export class Store {
   insertJob(job: JobRow): void {
     this.#with((changes) => {
       this.#run(
-        "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log, watch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO jobs (id, session_key, name, command, cwd, port, token, state, pgid, exit_code, started_at, ended_at, restarts, log, watch, queued, screen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         job.id, job.sessionKey, job.name, job.command, job.cwd, job.port, job.token, job.state, job.pgid, job.exitCode, job.startedAt,
-        job.endedAt, job.restarts, job.log, flag(job.watch),
+        job.endedAt, job.restarts, job.log, flag(job.watch), flag(job.queued === true), flag(job.screen === true),
       );
       changes.push({ type: "session", key: job.sessionKey });
       changes.push({ type: "job", id: job.id });
@@ -1408,12 +1409,12 @@ export class Store {
 
   /// A job started (again): running, in this process group.
   jobStarted(id: string, pgid: number, restarted: boolean): void {
-    this.#jobUpdate(id, "UPDATE jobs SET state = 'running', pgid = ?1, exit_code = NULL, ended_at = NULL, restarts = restarts + ?2 WHERE id = ?3", pgid, flag(restarted), id);
+    this.#jobUpdate(id, "UPDATE jobs SET state = 'running', pgid = ?1, exit_code = NULL, ended_at = NULL, restarts = restarts + ?2, queued = 0 WHERE id = ?3", pgid, flag(restarted), id);
   }
 
   /// A job ended: `state` exited, stopped or failed.
   jobEnded(id: string, state: string, exitCode: number | null): void {
-    this.#jobUpdate(id, "UPDATE jobs SET state = ?1, exit_code = ?2, ended_at = ?3, pgid = NULL WHERE id = ?4", state, exitCode, this.now(), id);
+    this.#jobUpdate(id, "UPDATE jobs SET state = ?1, exit_code = ?2, ended_at = ?3, pgid = NULL, queued = 0 WHERE id = ?4", state, exitCode, this.now(), id);
   }
 
   #jobUpdate(id: string, sql: string, ...args: Arg[]): void {
@@ -1557,6 +1558,16 @@ export class Store {
   /// row (its output grown, when the transcript wrote it again whole). How many were new.
   recordUsage(path: string, file: usage.UsageFile, runtime: string, calls: [usage.UsageCall, usage.UsageFor][]): number {
     return this.#tx(() => usage.recordUsage(this.db, path, file, runtime, calls));
+  }
+
+  /// A session's last `limit` main-thread calls, oldest first: the context each sent, on what (store/usage.ts).
+  lastContexts(session: string, limit: number): usage.ContextCall[] {
+    return usage.lastContexts(this.db, session, limit);
+  }
+
+  /// Where each model's context was compacted on this station since `since` (store/usage.ts).
+  compactionPoints(since: number, least: number): Map<string, number> {
+    return usage.compactionPoints(this.db, since, least);
   }
 
   /// Tells whoever follows the store that calls were recorded.

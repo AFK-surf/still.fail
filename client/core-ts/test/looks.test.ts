@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { holdLanguage } from "../src/i18n.ts";
-import { answer, face, glyph, linkShown, listNote, memorySections, stationLine, stationUpdate, waitNote } from "../src/looks.ts";
+import { answer, face, glyph, linkShown, listNote, memorySections, outboxWaits, stationLine, stationUpdate, waitNote } from "../src/looks.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -114,6 +114,18 @@ test("update_progress_and_pending_messages_survive_disconnect_and_clear_on_new_o
   overview.updates[0] = { id: "station", state: "idle", newer: false };
   assert.equal(stationUpdate(overview, chat, null, false, true), null);
   assert.equal(stationUpdate(undefined, chat, null, false, true), null);
+});
+
+test("messages_not_at_the_station_say_they_wait_for_its_update", () => {
+  const overview: J = { updates: [{ id: "station", state: "updating" }] };
+  const outbox: J[] = [{ id: "new", state: "sending" }, { id: "had", state: "sending", seq: 7 }, { id: "bad", state: "failed" }];
+  const chat: J = { link: { state: "offline" }, outbox };
+  const waits = outboxWaits(outbox, stationUpdate(overview, chat, null, false, true));
+  assert.deepEqual(waits.map((e) => e.waits), ["station 正在更新，完成后发送", undefined, undefined]);
+  assert.equal(outbox[0].waits, undefined);
+  overview.updates[0] = { id: "station", state: "failed" };
+  assert.equal(outboxWaits(outbox, stationUpdate(overview, chat, null, false, true))[0].waits, undefined);
+  assert.equal(outboxWaits(outbox, null)[0].waits, undefined);
 });
 
 test("dismissal_is_version_and_channel_scoped_and_never_hides_progress", () => {

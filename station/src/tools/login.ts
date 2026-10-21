@@ -21,7 +21,7 @@ const KEYS: Record<string, "Enter" | "Backspace" | "Up" | "Down" | "Left" | "Rig
 export const LOGIN = {
   name: "login",
   description:
-    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one (skill stillfail-login says which, for common CLIs). You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"}, a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
+    "Log this station in to a command-line tool, when a command fails because it is not logged in (not logged in, 401, an expired token) or a person asks for it. command: the tool's own login command (gh auth login, gcloud auth login, npm login, az login --use-device-code, gh auth refresh -s workflow…), with its browser or device-code option where it has one (skill stillfail-login says which, for common CLIs). You drive the command: the answer shows its screen (the page and code hidden) and what it waits for; answer its prompts yourself with id and input (text) or key (enter, up, down, tab, ctrl-c…), taking the tool's defaults or what the task needs; if you truly cannot decide, ask the person in the chat as a normal question. Never type a password or token: a prompt that asks for one is refused; use the tool's browser or device-code login instead, or tell the person it cannot be done this way. Where it asks whether to also set up git credentials or keep the token in a keychain (or has a flag for it), take the answer that leaves the OS keychain alone (gh: --insecure-storage keeps its token in its own file): nobody here can answer a keychain dialog. Where its screen says the page gives a code to paste back here and it waits for it (copy the code and paste it below, enter the verification code), you never type it: login {id, paste: true} gives the card a field where the person enters it. Once the answer says the person's browser step is ready (a code or a page), chat_post with card {\"type\": \"login\", \"login\": \"<id>\"} (with \"station\": the key the answer gives, for another station's), a sentence saying who should log in to what on this station and why, and the link; end need_human. Nobody is ever asked to run a command. The login is machine-wide: every chat's agent on this station uses it. When it ends you get a station notice and the card closes. id alone: how it stands now; id with cancel: true: end it.",
   inputSchema: {
     "type": "object",
     "properties": {
@@ -46,9 +46,13 @@ export const LOGIN = {
         "type": "boolean",
         "description": "With id: end that login."
       },
+      "paste": {
+        "type": "boolean",
+        "description": "With id: true when its screen says the page it gave hands out a code to paste back here (copy the code and paste it below, enter the verification code): the login card gets a field for the person to enter it, typed at its prompt with Enter. false takes the field away. Only after a page to open (step open); never for a password or token."
+      },
       "station": {
         "type": "string",
-        "description": "Another station of the workspace to log in (not yet: log in on this station)."
+        "description": "Another station of the workspace to log in, by its name or id (station_list lists them): the command runs there, and id, input, key, paste and cancel act on that station's login (give station with them too). Left out: this station."
       }
     },
     "additionalProperties": false
@@ -57,6 +61,9 @@ export const LOGIN = {
 
 export type LoginToolDeps = {
   logins: () => Logins | undefined;
+  /// A login on another station of the workspace (`station`, by its name or id): what that station answers its agent's
+  /// call with (logins/module.ts asks it over the station transport).
+  remote?: (station: string, session: string, args: Record<string, unknown>) => Promise<string>;
   /// Who a session's login is for: its chat's starter and workspace, its chat and title.
   starter: (session: string) => Starter;
   /// The link that opens a login in a person's client (null outside a workspace with pages).
@@ -81,8 +88,14 @@ export function screenFor(screen: Screen | null, login: Login): string {
   return shown.slice(-30).join("\n");
 }
 
+/// Where a login runs, as its agent is told: this station, or another of the workspace (its key, for the card, and its
+/// name).
+export type Where = { station: string; name: string } | null;
+const placeOf = (where: Where) => (where ? `on ${where.name}` : "on this station");
+const cardOf = (login: Login, where: Where) => JSON.stringify({ type: "login", login: login.id, ...(where ? { station: where.station } : {}) }).replaceAll(",", ", ").replaceAll(":", ": ");
+
 /// What the agent is told of a login: how it stands, its screen, and what to do next.
-function told(logins: Logins, login: Login, link: string | null): string {
+export function told(logins: Logins, login: Login, link: string | null, where: Where = null): string {
   const state = {
     id: login.id,
     command: login.command.join(" "),
@@ -98,14 +111,46 @@ function told(logins: Logins, login: Login, link: string | null): string {
     ? login.state === "done" ? "It finished (its command exited 0)." : login.state === "cancelled" ? "It was cancelled." : `It failed${login.timedOut ? " (out of time)" : ""}${login.error ? `: ${hidden(login, login.error)}` : "."}`
     : logins.screen(login.id)?.echo === false && login.waiting
       ? "It asks for a secret (read without echo): do not type it, nothing is sent to such a prompt. Cancel it, and use the tool's browser or device-code login, or tell the person it cannot be logged in this way."
+      : login.state === "verifying"
+        ? "What came back (the code the person entered, or the browser's callback) is being checked: you get a station notice when it ends."
       : login.paste
-        ? `The person's browser step is ready: they open the page and enter what it gives (a code) in the login card, which types it here; do not answer this prompt yourself. chat_post with card {"type": "login", "login": "${login.id}"} (card.assignee: who should log in), a sentence saying who should log in to what on this station and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone and have the person send the code in the thread, then type it with login {id, input, key: "enter"}. You get a station notice when it ends.`
+        ? `The person's browser step is ready: they open the page and enter what it gives (a code) in the login card's field, which types it here; do not answer its prompt yourself. chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone and have the person send the code in the thread, then type it with login {id${where ? ", station" : ""}, input, key: "enter"}. You get a station notice when it ends.`
       : login.waiting
-        ? "It waits on the prompt above: answer it with login {id, input and/or key} (the tool's default, usually key enter, or what the task needs). If you truly cannot decide, ask the person in the chat."
+        ? `It waits on the prompt above: answer it with login {id${where ? ", station" : ""}, input and/or key} (the tool's default, usually key enter, or what the task needs)${login.step === "open" ? `, unless it asks for what the page it gave hands out (a code to paste back): then do not answer it; login {id${where ? ", station" : ""}, paste: true} gives the login card a field for the person, and post the card as below` : ""}. If you truly cannot decide, ask the person in the chat.`
         : login.step === "device" || login.step === "loopback" || login.step === "open"
-          ? `The person's browser step is ready: chat_post with card {"type": "login", "login": "${login.id}"} (card.assignee: who should log in), a sentence saying who should log in to what on this station and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone. You get a station notice when it ends.`
-          : "It is still working: look again with login {id}.";
-  return `${JSON.stringify(state, null, 2)}\n\nScreen:\n${screen === "" ? "(nothing yet)" : screen}\n\n${next}`;
+          ? `The person's browser step is ready${login.step === "open" ? ` (if the screen says the page gives a code to paste back here, first login {id${where ? ", station" : ""}, paste: true}: the card gets a field for it; never type it yourself)` : ""}: chat_post with card ${cardOf(login, where)} (card.assignee: who should log in), a sentence saying who should log in to what ${placeOf(where)} and why${link ? `, and the link ${link}` : ""}; end need_human. In Slack, post the link alone. You get a station notice when it ends.`
+          : `It is still working: look again with login {id${where ? ", station" : ""}}.`;
+  const shown = where ? { ...state, station: where.station, stationName: where.name } : state;
+  return `${JSON.stringify(shown, null, 2)}\n\nScreen:\n${screen === "" ? "(nothing yet)" : screen}\n\n${next}`;
+}
+
+/// A call of the tool acted on this station's logins: started, looked at, answered or cancelled; what its agent is told.
+/// `starter`: who a new one is for; `link`: a login's link in a person's client; `where`: told the agent when it is on
+/// another station than its own; `mine`: whether the caller may act on a login (one of another station's agents may only
+/// on those it started).
+export async function act(logins: Logins, args: Record<string, unknown>, o: { starter: () => Starter; link: (id: string) => string | null; where?: Where; mine?: (id: string) => boolean }): Promise<string> {
+  const where = o.where ?? null;
+  if (typeof args.id === "string" && args.id !== "") {
+    const id = args.id;
+    if (logins.get(id) === null || (o.mine && !o.mine(id))) throw new Error(`no login ${id}`);
+    if (args.cancel === true) logins.cancel(id);
+    else if (typeof args.paste === "boolean") logins.paste(id, args.paste);
+    else if (typeof args.input === "string" || typeof args.key === "string") {
+      const key = typeof args.key === "string" ? KEYS[args.key.toLowerCase()] : undefined;
+      if (typeof args.key === "string" && key === undefined) throw new Error(`key: one of ${Object.keys(KEYS).join(", ")}`);
+      const waits = logins.settle(id, INPUT_WAIT_MS);
+      if (typeof args.input === "string" && args.input !== "") logins.input(id, { text: args.input });
+      if (key !== undefined) logins.input(id, { key });
+      await waits;
+    }
+    const login = logins.get(id)!;
+    return told(logins, login, o.link(id), where);
+  }
+  const command = typeof args.command === "string" || Array.isArray(args.command) ? (args.command as string | string[]) : null;
+  if (command === null) throw new Error("command: the tool's own login command (e.g. gh auth login); or id to see or act on one");
+  const started = await logins.start(command, o.starter());
+  const login = (await logins.settle(started.id, START_WAIT_MS)) ?? started;
+  return told(logins, login, o.link(login.id), where);
 }
 
 export function loginTools(deps: LoginToolDeps): Tool[] {
@@ -113,46 +158,30 @@ export function loginTools(deps: LoginToolDeps): Tool[] {
     {
       ...LOGIN,
       run: async (session: string, args: Record<string, unknown>) => {
+        if (typeof args.station === "string" && args.station.trim() !== "") {
+          if (!deps.remote) throw new Error("logging in another station is not there yet: log in on this station");
+          return deps.remote(args.station.trim(), session, args);
+        }
         const logins = deps.logins();
         if (logins === undefined) throw new Error("the station is starting: try again in a moment");
-        if (typeof args.station === "string" && args.station.trim() !== "") throw new Error("logging in another station is not there yet: log in on this station");
-        if (typeof args.id === "string" && args.id !== "") {
-          const id = args.id;
-          if (logins.get(id) === null) throw new Error(`no login ${id}`);
-          if (args.cancel === true) logins.cancel(id);
-          else if (typeof args.input === "string" || typeof args.key === "string") {
-            const key = typeof args.key === "string" ? KEYS[args.key.toLowerCase()] : undefined;
-            if (typeof args.key === "string" && key === undefined) throw new Error(`key: one of ${Object.keys(KEYS).join(", ")}`);
-            const waits = logins.settle(id, INPUT_WAIT_MS);
-            if (typeof args.input === "string" && args.input !== "") logins.input(id, { text: args.input });
-            if (key !== undefined) logins.input(id, { key });
-            await waits;
-          }
-          const login = logins.get(id)!;
-          return told(logins, login, deps.link(session, id));
-        }
-        const command = typeof args.command === "string" || Array.isArray(args.command) ? (args.command as string | string[]) : null;
-        if (command === null) throw new Error("command: the tool's own login command (e.g. gh auth login); or id to see or act on one");
-        const started = await logins.start(command, deps.starter(session));
-        const login = (await logins.settle(started.id, START_WAIT_MS)) ?? started;
-        return told(logins, login, deps.link(session, login.id));
+        return act(logins, args, { starter: () => deps.starter(session), link: (id) => deps.link(session, id) });
       },
     },
   ];
 }
 
 /// What a session that started a login, or posted its card, is told when it ends.
-export function endedNotice(login: Login, link: string | null): string {
+export function endedNotice(login: Login, link: string | null, where: Where = null): string {
   const which = `${login.command.join(" ")} (login ${login.id})`;
   const how =
     login.state === "done" ? "finished (its command exited 0). Carry on with what needed it, and check it works"
     : login.state === "cancelled" ? "was cancelled. Ask whether it is still wanted before starting another"
     : `failed${login.error ? `: ${hidden(login, login.error.split("\n").slice(-9).join(" / "))}` : ""}. Start it again if it is still needed`;
-  return `The login on this station you started or posted a card for, ${which}, ${how}.${login.state === "done" ? "" : link ? ` (Its link was ${link}.)` : ""} Its card was closed.`;
+  return `The login ${placeOf(where)} you started or posted a card for, ${which}, ${how}.${login.state === "done" ? "" : link ? ` (Its link was ${link}.)` : ""} Its card was closed.`;
 }
 
 /// What its agent is told when, after its person's browser step, the command asks something again.
-export function promptNotice(logins: Logins, login: Login, link: string | null): string {
-  return `The login on this station you started, ${login.command.join(" ")} (login ${login.id}), asks something again:\n\n${told(logins, login, link)}`;
+export function promptNotice(logins: Logins, login: Login, link: string | null, where: Where = null): string {
+  return `The login ${placeOf(where)} you started, ${login.command.join(" ")} (login ${login.id}), asks something again:\n\n${told(logins, login, link, where)}`;
 }
 

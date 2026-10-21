@@ -320,8 +320,8 @@ export function archivable(row: J): boolean {
   return get(row, "archiveReviewed") !== true || get(row, "archiveRecommended") === true;
 }
 
-/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day, 归档
-/// under its last all-done post. off: never; reviewed: only once its station's archive review recommended it; done: as
+/// Offered to archive as the viewer's `archiveHint` says (prefs.ts archiveHintOf): faded, below the rest of its day.
+/// off: never; reviewed: only once its station's archive review recommended it; done: as
 /// it is archivable.
 export function offered(row: J, hint: prefsMod.ArchiveHint): boolean {
   if (hint === "off" || !archivable(row)) return false;
@@ -582,7 +582,7 @@ export function maker(m: string | null | undefined): J {
 export function connect(c: J): J {
   if (!isObject(c)) return c;
   const o = c as J;
-  const [text, presence] = format.connection(o.connection ?? null);
+  const [text, presence] = format.connection(o.connection ?? null, str(o.kind) ?? null);
   const mode = str(o.mode) ?? "multi-session";
   const [modeText, modeShort] = format.modeText(mode, typeof o.requireMention === "boolean" ? o.requireMention : true);
   const bind = o.bind ?? null;
@@ -598,7 +598,16 @@ export function connect(c: J): J {
     runtimeText: format.runtimeLabel(runtime),
     runText: `${format.runtimeLabel(runtime)} · ${label}`,
     modelName: bm ? model.name(bm) : null,
+    ...(isObject(o.feishu) ? { feishu: feishuApp(o.feishu) } : {}),
   };
+}
+
+/// A Feishu connect's app, with its page in the developer console (Lark's on its own domain).
+function feishuApp(f: J): J {
+  const id = str(get(f, "appId")) ?? "";
+  const domain = str(get(f, "domain")) === "lark" ? "lark" : "feishu";
+  const open = domain === "lark" ? "https://open.larksuite.com" : "https://open.feishu.cn";
+  return { appSecret: "", ...f, appId: id, domain, console: id !== "" ? `${open}/app/${encodeURIComponent(id)}` : null };
 }
 
 /// A profile with its last check in words, its models' makers and series, what it can do, and its trouble.
@@ -680,7 +689,7 @@ function uses(p: J): [string[], [string, string | null] | null] {
   return [list, provider];
 }
 
-/// What a profile can do (`claude`, `codex`, `dsh`, `grok`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
+/// What a profile can do (`claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision`), in words: Claude Code · DeepSeek Harness · 自动决策.
 export function usesText(list: string[]): string {
   return list.map((u) => (u === "decision" ? t("core-views.present.uses.decision") : format.runtimeLabel(u))).join(" · ");
 }
@@ -1032,14 +1041,26 @@ function archivePolicy(policy: J, c: Clock): J {
 /// The station's reasons for what a profile can decide with (station/src/sessions/decision.ts), each said in words.
 const DECISION_REASONS = ["no_probabilities", "signed_out", "address", "found", "none_verified", "changed"];
 
-/// What the archive check made of a chat (its row's `archiveCheck`), in a line under the agent's all-done post.
-export function archiveCheck(v: J): J | null {
-  if (!isObject(v)) return null;
-  if (typeof v.error === "string") return { text: t("core-views.policy.checkFailed"), recommended: false, failed: true };
-  const name = str(v.name);
-  if (name === "") return null;
-  const recommended = v.recommended === true;
-  // Counted as archive yet not recommended: the model was not sure enough.
-  const what = recommended ? t("core-views.policy.archive") : v.archive === true ? t("core-views.policy.unsure") : t("core-views.policy.keep");
-  return { text: `${name} · ${what}`, recommended, failed: false };
+/// A runtime the station does not have (a chat's notice says so, or a plan's sign-in runs its command): installing it
+/// there, as the station's updates (`updates`, its overview's) say it stands, and whether the viewer may (`manages`: the
+/// workspace's owner or an admin), in a line (`title`: not installed, installing, could not, installed). Nothing offered
+/// by a station older than its updates.
+export function installView(runtime: string, updates: J[], manages: boolean): J | null {
+  const v = updates.find((u) => get(u, "id") === runtime);
+  if (v === undefined) return null;
+  const name = str(v.name) ?? format.runtimeLabel(runtime);
+  if (v.state === "updating") {
+    const percent = u64(v.percent);
+    return { runtime, state: "installing", title: t("core-views.install.installing", { name }), ...(percent !== undefined ? { percent } : {}) };
+  }
+  if (v.installed === true) return { runtime, state: "installed", title: t("core-views.install.installed", { name }) };
+  const can = manages && v.updatable === true;
+  if (v.state === "failed") {
+    const why = str(v.message);
+    return { runtime, state: "failed", title: t("core-views.install.failed", { name }), ...(why ? { detail: why } : {}), ...(can ? { action: t("core-views.install.retry") } : {}) };
+  }
+  const title = t("core-views.install.missing", { name });
+  if (can) return { runtime, state: "missing", title, action: t("core-views.install.action") };
+  const why = str(v.note) ?? (manages ? null : t("core-views.install.managers_only"));
+  return { runtime, state: "missing", title, ...(why !== null ? { note: why } : {}) };
 }

@@ -8,6 +8,8 @@ package fail.still.android
 
 import android.content.Context
 import android.os.Debug
+import android.os.FileObserver
+import android.os.SystemClock
 import fail.still.core.CoreProfile
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +22,8 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 object MemoryWatch {
     /** The native heap past which the app reports (it is some 70–200 MB as the app is used). */
@@ -27,6 +31,8 @@ object MemoryWatch {
     private const val EVERY_MS = 30_000L
     /** How long the calls are counted and the JS sampled. */
     private const val WINDOW_S = 15
+    /** The longest the sampling is waited for: a trace not written by then (no engine) is a failed one. */
+    private const val UNTIL_S = WINDOW_S + 60L
 
     @Volatile private var started = false
 
@@ -37,7 +43,8 @@ object MemoryWatch {
         Thread({
             try {
                 while (Debug.getNativeHeapAllocatedSize() < LIMIT) Thread.sleep(EVERY_MS)
-                Crashes.memoryRunaway(app, look(app))
+                // Not looked at (the JS sampled for nothing) when reports are turned off (Crashes.reporting).
+                if (Crashes.reporting(app)) Crashes.memoryRunaway(app, look(app))
             } catch (_: Throwable) {
             }
         }, "stillfail-memory").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
@@ -49,14 +56,29 @@ object MemoryWatch {
         val callsBefore = calls()
         val ticksBefore = threadTicks()
         val trace = File(context.cacheDir, "memory-runaway.cpuprofile").also { it.delete() }
-        CoreProfile.sample(WINDOW_S, trace.path)
-        Thread.sleep(WINDOW_S * 1000L + 2_000)
+        val began = SystemClock.elapsedRealtime()
+        // The window is the sampling's: over when its trace is written and closed (the engine writes it once, after
+        // WINDOW_S: engine.cpp profile); waited at most UNTIL_S, a sampling that never ends counted so.
+        val written = CountDownLatch(1)
+        val closed = object : FileObserver(trace.parentFile!!, CLOSE_WRITE) {
+            override fun onEvent(event: Int, path: String?) {
+                if (path == trace.name) written.countDown()
+            }
+        }
+        closed.startWatching()
+        try {
+            CoreProfile.sample(WINDOW_S, trace.path)
+            written.await(UNTIL_S, TimeUnit.SECONDS)
+        } finally {
+            closed.stopWatching()
+        }
+        val ms = maxOf(1L, SystemClock.elapsedRealtime() - began)
         val heapAfter = Debug.getNativeHeapAllocatedSize()
         val stats = stats()
         val callsAfter = calls(stats)
         val ticksAfter = threadTicks()
         val mb = { b: Long -> b / (1024 * 1024) }
-        val grew = (heapAfter - heapBefore) * 60 / (WINDOW_S + 2)
+        val grew = (heapAfter - heapBefore) * 60_000 / ms
         val busiest = callsAfter.map { (op, n) -> op to n - (callsBefore[op] ?: 0) }.filter { it.second > 0 }.sortedByDescending { it.second }.take(15)
         val hot = try { hottest(trace.readText()) } catch (_: Exception) { null }
         trace.delete()
@@ -77,7 +99,7 @@ object MemoryWatch {
             // Each thread's share of one core over the window, in percent (its ticks are 10 ms).
             put("threads", buildJsonObject {
                 ticksAfter.map { (tid, v) -> v.first to v.second - (ticksBefore[tid]?.second ?: 0) }.sortedByDescending { it.second }.take(8)
-                    .forEach { (name, ticks) -> put(name, ticks / (WINDOW_S + 2)) }
+                    .forEach { (name, ticks) -> put(name, ticks * 1000 / ms) }
             })
             hot?.let { put("js", it) }
         }

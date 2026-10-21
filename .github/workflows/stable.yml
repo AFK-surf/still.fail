@@ -61,6 +61,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}

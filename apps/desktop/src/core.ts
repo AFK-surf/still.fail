@@ -119,6 +119,7 @@ process.parentPort.on("message", ({ data, ports }) => {
 
 // An error in this process's own code, handed to one page for error tracking as the worker does.
 process.on("uncaughtException", (error) => {
+  process.parentPort.postMessage({ diagnostic: { name: error.name, message: error.message, stack: error.stack } });
   console.error("still.fail core:", error);
   const port = current.clients.values().next().value;
   port?.postMessage(JSON.stringify({ fault: { name: error.name, message: error.message, ...(error.stack ? { stack: error.stack } : {}) } }));

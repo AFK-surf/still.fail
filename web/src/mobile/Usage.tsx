@@ -43,7 +43,7 @@ export function UsageScreen() {
               )}
             </>
           )}
-          <Notes view={view} />
+          <Notes view={view} basis={!view.empty} />
         </div>
       )}
       <div style={{ height: 30 }} />

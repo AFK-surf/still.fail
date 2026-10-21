@@ -155,9 +155,12 @@ test("library: folders set by an owner, films and shows by names and .nfo, poste
   assert.equal((await s.call("GET", `/videos/${ids.matrix}/hls/master.m3u8`, MEMBER)).status, 415, "no HLS without ffmpeg");
 
   // A file added is found by the station's watch; one removed is gone.
+  await until(() => ["films", "shows"].every((p) => s.station.seen.asked.some((a) => a.route === "/drive/watch" && a.path === p)), "watching");
   write(join(s.dir, "films", "Alien.1979.mkv"), "alien");
+  s.station.changed(join(s.dir, "films"));
   await until(async () => (await s.call("GET", "/videos/library", MEMBER)).json.movies.some((m: any) => m.title === "Alien" && m.year === 1979), "the new film");
   execFileSync("rm", [join(s.dir, "shows", "The.Office.US.S01E01.mkv")]);
+  s.station.changed(join(s.dir, "shows"));
   await until(async () => !(await s.call("GET", "/videos/library", MEMBER)).json.shows.some((x: any) => x.title === "The Office US"), "the show gone with its episode");
 });
 

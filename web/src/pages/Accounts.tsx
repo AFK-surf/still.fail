@@ -1,4 +1,4 @@
-import type { MachineLogin } from "../core/shapes.ts";
+import type { MachineLogin, RuntimeInstall } from "../core/shapes.ts";
 import { profilesPage, stationBase, useStation, useLink } from "../station.tsx";
 import { Chart, ChevronRight, Edit, External, LogIn, Plus, Refresh, Trash } from "@stillfail/ui/icons.tsx";
 import { useEffect, useRef, useState } from "react";
@@ -15,7 +15,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { QuotaBars } from "../components.tsx";
 import * as modelCss from "../ModelTriple.css.ts";
 import { MachineLoginCard } from "../ProfileCard.tsx";
-import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Spinner, Waiting, WaitLine } from "../ui.tsx";
+import { About, Button, Choices, Confirm, ConnectAvatar, CopyCommand, Dialog, Empty, Field, ICON, IconButton, Menu, BackLink, ModelLogo, Pill, ProviderLogo, RuntimeTags, Section, Select, StatusDot, SwitchRow, Time, Tip, Progress, Spinner, Waiting, WaitLine } from "../ui.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as baseCss from "../styles/base.css.ts";
 import * as css from "./Accounts.css.ts";
@@ -516,65 +516,65 @@ function SignIn({ profile, needed }: { profile: Profile; needed: boolean }) {
   if (!active) {
     return (
       <div className={pagesCss.card}>
-        <div className={pagesCss.cardRow}>
-          <div className={pagesCss.cardRowText}>
-            <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
-            <span className={shellCss.muted}>
-              {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
-            </span>
-          </div>
-          <Button variant={needed ? "primary" : "secondary"} icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
-            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
-          </Button>
+        <div className={pagesCss.cardRowText}>
+          <strong>{needed ? t("web-pages.profiles.notSignedIn", { provider }) : t("web-pages.profiles.subscriptionSignIn", { provider })}</strong>
+          <span className={shellCss.muted}>
+            {job?.state === "failed" ? t("web-pages.profiles.lastFailed", { error: job.error ?? "" }) : job?.state === "done" ? t("web-pages.profiles.signedInSwitch") : t("web-pages.profiles.signInNote", { name: NAME })}
+          </span>
         </div>
         {start.error && <p className={controlsCss.fieldError} role="alert">{start.error.message}</p>}
-        {/* OpenCode's has no command to run by hand. */}
-        {profile.loginCommand && <button type="button" className={controlsCss.textToggle} onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</button>}
         {manual && profile.loginCommand && <CopyCommand text={profile.loginCommand} />}
+        {/* Its one button solid, signed in or not: the card's others are words (pageControls.css.ts). */}
+        <div className={pagesCss.cardFoot}>
+          <Button variant="primary" icon={LogIn} busy={start.busy} onClick={() => void start.run()}>
+            {job?.state === "done" || !needed ? t("web-pages.signIn.again") : t("web-pages.profiles.signIn")}
+          </Button>
+          {/* OpenCode's has no command to run by hand. */}
+          {profile.loginCommand && <Button variant="ghost" onClick={() => setManual(!manual)}>{manual ? t("web-pages.profiles.collapse") : t("web-pages.profiles.manual")}</Button>}
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`${pagesCss.card} ${css.signIn}`} aria-live="polite">
-      <div className={pagesCss.cardRow}>
-        <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
-        <Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button>
-      </div>
-      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      <div className={pagesCss.cardRowText}><strong>{t("web-pages.profiles.signingIn", { provider })}</strong><span className={shellCss.muted}>{t("web-pages.profiles.signingInNote")}</span></div>
       <LoginSteps job={job} provider={provider} code={code} setCode={setCode} send={() => void send.run()} sending={send.busy} sendError={send.error?.message ?? null} />
+      {cancel.error && <p className={controlsCss.fieldError} role="alert">{t("web-pages.profiles.cancelFailed", { error: cancel.error.message })}</p>}
+      {/* Under the steps, words: the steps' own buttons are what to press. */}
+      <div className={pagesCss.cardFoot}><Button variant="ghost" busy={cancel.busy} onClick={() => void cancel.run()}>{t("common.cancel")}</Button></div>
     </div>
   );
 }
 
 /** Who a profile signs in to: OpenCode for OpenCode Go, else its runtime's vendor. */
-const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : "ChatGPT");
+const signInProvider = (profile: Profile) => (profile.access.kind === "opencode-go" ? "OpenCode" : profile.runtime === "claude" ? "Claude" : profile.runtime === "grok" ? "Grok" : profile.runtime === "cursor" ? "Cursor" : profile.runtime === "devin" ? "Devin" : "ChatGPT");
 
 /**
  * A device sign-in (Codex's, Grok's, OpenCode's): the code comes first and is copied as the login page opens, so it is pasted
  * there with no trip back; the rest finishes by itself. OpenCode's page has the code in its address: it is only
- * compared there, not copied.
+ * compared there, not copied. Cursor's has none: its page is only opened, and confirmed there.
  */
-function DeviceCode({ url, code, provider }: { url: string; code: string; provider: string }) {
+function DeviceCode({ url, code, provider }: { url: string; code: string | null; provider: string }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
-  const filled = provider === "OpenCode";
+  const filled = provider === "OpenCode" || code === null;
   const go = () => {
-    if (filled) return void window.open(url, "_blank", "noopener");
+    if (filled || code === null) return void window.open(url, "_blank", "noopener");
     // Not copied: the page opens all the same, the code to type in by hand.
     void navigator.clipboard.writeText(code).then(() => setCopied(true), () => toast(t("web-pages.profiles.copyFailed"))).finally(() => window.open(url, "_blank", "noopener"));
   };
   return (
     <div className={css.deviceCode}>
-      <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>
+      {code !== null && <span className={`${css.deviceCodeValue} ${shellCss.mono}`}>{code}</span>}
       <Button variant="primary" icon={External} onClick={go}>{filled ? t("web-pages.profiles.openAuth") : copied ? t("web-pages.profiles.copiedReopen") : t("web-pages.profiles.copyOpen")}</Button>
-      <p className={shellCss.muted}>{provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
+      <p className={shellCss.muted}>{code === null ? t("web-pages.profiles.deviceCodeNoteCursor") : provider === "OpenCode" ? t("web-pages.profiles.deviceCodeNoteOpencode") : provider === "Grok" ? t("web-pages.profiles.deviceCodeNoteGrok") : t("web-pages.profiles.deviceCodeNote", { name: NAME })}</p>
     </div>
   );
 }
 
-/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude), or the link
- * and the one-time code to enter (Codex). */
+/** What the person does in the browser for a sign-in under way: the link and the code to paste (Claude, Devin), the link
+ * and the one-time code to enter (Codex), or the link alone, to confirm there (Cursor). */
 export function LoginSteps({ job, provider, code, setCode, send, sending, sendError }: {
   job: LoginJob | null; provider: string; code: string; setCode(code: string): void; send(): void; sending: boolean; sendError: string | null;
 }) {
@@ -584,11 +584,11 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
       {job.state === "needs_code" && job.url && (
         <ol className={controlsCss.steps}>
           <li>
-            <span>{t("web-pages.profiles.step1", { name: NAME })}</span>
+            <span>{provider === "Devin" ? t("web-pages.profiles.step1Devin", { name: NAME }) : t("web-pages.profiles.step1", { name: NAME })}</span>
             <a className={`${controlsCss.btn} ${controlsCss.btnPrimary}`} href={job.url} target="_blank" rel="noopener"><External {...ICON} />{t("web-pages.profiles.openAuth")}</a>
           </li>
           <li>
-            <span>{t("web-pages.profiles.step2")}</span>
+            <span>{provider === "Devin" ? t("web-pages.profiles.step2Devin") : t("web-pages.profiles.step2")}</span>
             <div className={additionsCss.inputRow}>
               <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("web-pages.profiles.pasteCode")} aria-label={t("web-pages.profiles.code")}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && code.trim() && !sending) send(); }} />
@@ -598,10 +598,33 @@ export function LoginSteps({ job, provider, code, setCode, send, sending, sendEr
           </li>
         </ol>
       )}
-      {job.state === "needs_approval" && job.url && job.userCode && <DeviceCode url={job.url} code={job.userCode} provider={provider} />}
+      {/* No code where the page only asks to confirm (Cursor's). */}
+      {job.state === "needs_approval" && job.url && <DeviceCode url={job.url} code={job.userCode || null} provider={provider} />}
       {job.state === "verifying" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.finishing")}</p>}
       {job.state === "done" && <p className={shellCss.muted}><span className={`${conversationCss.activityPulse} ${additionsCss.inline}`} aria-hidden="true" />{t("web-pages.profiles.adding")}</p>}
     </>
+  );
+}
+
+/**
+ * A plan's sign-in on a station without the runtime it signs in with (core `install`): installing it first, how that
+ * stands, and its button when the viewer may (`software.update`). The sign-in starts once it is installed.
+ */
+export function InstallStep({ install }: { install: RuntimeInstall }) {
+  const station = useStation().address;
+  const busy = useDoing("software.update", { station, id: install.runtime });
+  const api = useApi();
+  const act = useAct();
+  const installing = install.state === "installing";
+  return (
+    <div className={pagesCss.card}>
+      <div className={pagesCss.cardRowText}>
+        <strong>{install.title}</strong>
+        {install.detail ? <span className={controlsCss.fieldError} role="alert">{install.detail}</span> : <span className={shellCss.muted}>{install.note ?? t("web-pages.profiles.installThenSignIn")}</span>}
+      </div>
+      {installing && <Progress part={install.percent != null ? install.percent / 100 : null} label={install.title} />}
+      {install.action && <div className={pagesCss.cardFoot}><Button variant="primary" busy={busy} onClick={() => act(api.updateSoftware(install.runtime), install.action!)}>{install.action}</Button></div>}
+    </div>
   );
 }
 

@@ -7,8 +7,13 @@
 //   the command finishes by itself.
 // - Grok Build: `grok login --device-auth` the same, its link at accounts.x.ai with the code in it; its home is the
 //   profile's grok/ (agents/grok.ts).
+// - Devin: `devin auth login --force-manual-token-flow` prints a link at app.devin.ai; after signing in, the page shows a
+//   code the person pastes back, as Claude's. It reads the code only from a terminal: it runs in one (platform.terminal).
+//   Its sign-in lands in the profile's devin/data/ (XDG_DATA_HOME, agents/devin.ts).
 // - OpenCode Go (`startConsole`): no command; the station asks the OpenCode Console for a code itself (console.ts) and
 //   keeps asking until it is approved, then leaves the tokens in the profile's home. The page shows it as Codex's.
+// - Cursor (`startCursor`): no command either; the station makes the login's page itself (accounts/cursor.ts), with no
+//   code to enter: the person confirms it there, the station mints the profile's key and keeps it in its home.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
 // job (`changes`): pushed, not asked again.
 import type { Clock } from "effect";
@@ -17,7 +22,9 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
 import { CONSOLE, type ConsoleLogin, deviceToken, startDevice, whoIs, writeConsole } from "./console.ts";
+import { CURSOR, type CursorUrls, cursorHandshake, mintCursorKey, pollCursor, writeCursor } from "./cursor.ts";
 import { cleanEnv } from "../agents/runtime.ts";
+import { devinData } from "../agents/devin.ts";
 import type { Runtime } from "../agents/profiles.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
@@ -41,16 +48,19 @@ export type LoginJob = {
 
 const TIMEOUT_MS = 15 * 60_000;
 /// Variables that would make the login command talk to something other than the subscription.
-const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY", "GROK_HOME", "GROK_AUTH", "GROK_AUTH_PATH", "XAI_API_KEY"];
+const SCRUBBED = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CODEX_HOME", "OPENAI_API_KEY", "GROK_HOME", "GROK_AUTH", "GROK_AUTH_PATH", "XAI_API_KEY", "WINDSURF_API_KEY", "XDG_DATA_HOME"];
+/// The terminal Devin's login runs in: wide, so that its link is printed on one line.
+const DEVIN_COLS = 1000;
+const DEVIN_ROWS = 40;
 
 /// The login commands, by runtime.
-export type LoginCommands = { claude: string; codex: string; grok?: string };
+export type LoginCommands = { claude: string; codex: string; grok?: string; devin?: string };
 
 /// What a sign-in is for: a profile's id, the runtime it signs in to, and its home.
 export type LoginProfile = { id: string; runtime: Runtime; home: string };
 
 /// A sign-in under way: its command (none for OpenCode's, which `stop` ends).
-type Running = { run: number; job: LoginJob; child: ChildProcess | null; output: string; cancelTimer: () => void; exited: boolean; lang: Lang; stop?: () => void };
+type Running = { run: number; job: LoginJob; child: ChildProcess | null; raw: string; output: string; cancelTimer: () => void; exited: boolean; lang: Lang; stop?: () => void };
 
 export class LoginManager {
   private jobs = new Map<string, Running>();
@@ -65,9 +75,14 @@ export class LoginManager {
 
   /// The OpenCode Console signed in to (console.ts CONSOLE; a test's stand-in).
   private console: string;
+  /// Cursor signed in to (cursor.ts CURSOR; a test's stand-in), and the name its key is given (the station's).
+  private cursor: CursorUrls;
+  private keyName: () => string;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE) {
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail") {
     this.console = console;
+    this.cursor = cursor;
+    this.keyName = keyName;
     this.background = new Fibers("login", clock);
     this.noBrowserDir = join(data, "run", "no-browser");
     this.commands = commands;
@@ -106,6 +121,12 @@ export class LoginManager {
       env.GROK_DISABLE_AUTOUPDATER = "1";
       mkdirSync(env.GROK_HOME, { recursive: true });
       [command, args] = [this.commands.grok ?? "grok", ["login", "--device-auth"]];
+    } else if (profile.runtime === "devin") {
+      env.XDG_DATA_HOME = devinData(profile.home);
+      mkdirSync(env.XDG_DATA_HOME, { recursive: true });
+      const wrapped = platform.terminal(this.commands.devin ?? "devin", ["auth", "login", "--force-manual-token-flow"], DEVIN_COLS, DEVIN_ROWS);
+      if (wrapped === null) return this.refused(profile.id, profile.runtime, tr(lang, "station.login.devinNoTerminal"));
+      [command, args] = wrapped;
     } else {
       env.CODEX_HOME = profile.home;
       [command, args] = [this.commands.codex, ["login", "--device-auth"]];
@@ -133,6 +154,7 @@ export class LoginManager {
       run,
       job,
       child,
+      raw: "",
       output: "",
       exited: false,
       lang,
@@ -165,7 +187,7 @@ export class LoginManager {
     const now = this.background.now();
     const job: LoginJob = { profile: id, runtime: "claude", provider: "opencode", state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
-    const running: Running = { run, job, child: null, output: "", exited: true, lang, cancelTimer: () => {} };
+    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, cancelTimer: () => {} };
     this.jobs.set(id, running);
     this.emit(id);
     const current = () => this.jobs.get(id)?.run === run;
@@ -219,7 +241,72 @@ export class LoginManager {
     return { ...job };
   }
 
-  /// Claude only: the code the browser showed after approving.
+  /// Starts signing a Cursor profile in to the person's Cursor account, replacing any running sign-in: a page to confirm
+  /// the login on (no code), asked about until it is confirmed or runs out; then the key minted for the station.
+  async startCursor(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+    this.cancel(profile.id);
+    this.finished.delete(profile.id);
+    mkdirSync(profile.home, { recursive: true });
+    const id = profile.id;
+    const now = this.background.now();
+    const handshake = cursorHandshake(this.cursor);
+    const job: LoginJob = { profile: id, runtime: "cursor", state: "needs_approval", url: handshake.url, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
+    const run = ++this.runs;
+    const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, cancelTimer: () => {} };
+    this.jobs.set(id, running);
+    running.cancelTimer = this.background.after(TIMEOUT_MS, () => this.failRun(id, run, tr(lang, "station.login.timedOut")));
+    const current = () => this.jobs.get(id)?.run === run;
+    // Asked often at first (the person is on the page), less as it goes on.
+    let interval = 1_000;
+    const ask = async () => {
+      if (!current()) return;
+      let answer;
+      try {
+        answer = await pollCursor(this.cursor, handshake);
+      } catch (e) {
+        // The network, for once: asked again at the next interval.
+        log.warn("login", "could not ask Cursor about a sign-in", { profile: id, error: (e as Error).message });
+        answer = { pending: true as const };
+      }
+      if (!current()) return;
+      if ("pending" in answer) {
+        interval = Math.min(Math.round(interval * 1.2), 5_000);
+        running.stop = this.background.after(interval, ask);
+        return;
+      }
+      job.state = "verifying";
+      this.emit(id);
+      let minted;
+      try {
+        minted = await mintCursorKey(this.cursor, answer.accessToken, this.keyName());
+      } catch (e) {
+        if (current()) this.finish(id, "failed", tr(lang, "station.login.cursorKeyFailed", { error: (e as Error).message }));
+        return;
+      }
+      if (!current()) return;
+      try {
+        writeCursor(profile.home, { apiKey: minted.apiKey, email: minted.email, keyName: this.keyName(), createdAt: wall.now() });
+      } catch (e) {
+        return this.finish(id, "failed", tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
+      }
+      this.finish(id, "done", null);
+    };
+    running.stop = this.background.after(interval, ask);
+    log.info("login", "Cursor sign-in started", { profile: id });
+    this.emit(id);
+    return { ...job };
+  }
+
+  /// A sign-in that cannot be started here, recorded like any other failure, so the page shows why.
+  private refused(id: string, runtime: Runtime, error: string): LoginJob {
+    const now = this.background.now();
+    const failed: LoginJob = { profile: id, runtime, state: "failed", url: null, userCode: null, error, startedAt: now, expiresAt: now };
+    this.finished.set(id, failed);
+    this.emit(id);
+    return { ...failed };
+  }
+
+  /// Claude and Devin: the code the browser showed after approving.
   async submitCode(profile: string, code: string, lang: Lang = stationLang()): Promise<LoginJob> {
     const running = this.jobs.get(profile);
     if (!running || running.job.state !== "needs_code") throw new Error(tr(lang, "station.login.notWaitingForCode"));
@@ -230,7 +317,8 @@ export class LoginManager {
     await new Promise<void>((resolve, reject) => {
       const stdin = running.child?.stdin;
       if (!stdin || stdin.destroyed) return resolve();
-      stdin.write(`${clean}\n`, (error) => (error ? reject(error) : resolve()));
+      // Devin reads it in a terminal of its own, where Enter is a carriage return.
+      stdin.write(`${clean}${running.job.runtime === "devin" ? "\r" : "\n"}`, (error) => (error ? reject(error) : resolve()));
     });
     this.emit(profile);
     return job;
@@ -253,9 +341,11 @@ export class LoginManager {
   private output(profile: string, run: number, chunk: string) {
     const running = this.jobs.get(profile);
     if (!running || running.run !== run) return;
-    running.output += stripAnsi(chunk);
-    const chars = [...running.output];
-    if (chars.length > 8000) running.output = chars.slice(chars.length - 8000).join("");
+    // Read whole: an escape can be cut between two pieces.
+    running.raw += chunk;
+    const raw = [...running.raw];
+    if (raw.length > 16000) running.raw = raw.slice(raw.length - 16000).join("");
+    running.output = stripAnsi(running.raw);
     if (parse(running.job, running.output)) this.emit(profile);
   }
 
@@ -312,6 +402,13 @@ export function parse(job: LoginJob, output: string): boolean {
       job.state = "needs_code";
       return true;
     }
+  } else if (job.runtime === "devin") {
+    const url = urls.find((u) => u.startsWith("https://app.devin.ai/auth/cli/") && u.includes("code_challenge="));
+    if (url !== undefined && output.toLowerCase().includes("paste it")) {
+      job.url = url;
+      job.state = "needs_code";
+      return true;
+    }
   } else {
     const site = job.runtime === "grok" ? "https://accounts.x.ai/" : "https://auth.openai.com/";
     const url = urls.find((u) => u.startsWith(site) && u.includes("device"));
@@ -338,12 +435,19 @@ export function deviceCode(output: string): string | null {
   return null;
 }
 
-/// Drops terminal escapes (colours, cursor moves): ESC [ parameters letter.
+/// Drops terminal escapes (colours, cursor moves): ESC [ parameters letter; and ESC ] … ended by BEL or ESC \ (a
+/// link's target, as Devin writes its sign-in page: the page's address is in the text too).
 export function stripAnsi(text: string): string {
   let out = "";
   const chars = [...text];
   for (let i = 0; i < chars.length; i++) {
     const c = chars[i]!;
+    if (c === "\u001b" && chars[i + 1] === "]") {
+      i += 1;
+      while (i + 1 < chars.length && chars[i + 1] !== "\u0007" && !(chars[i + 1] === "\u001b" && chars[i + 2] === "\\")) i += 1;
+      i += chars[i + 1] === "\u0007" ? 1 : 2;
+      continue;
+    }
     if (c === "\u001b" && chars[i + 1] === "[") {
       i += 1;
       while (i + 1 < chars.length) {

@@ -1,0 +1,229 @@
+// Slice 8 over a fake core: the fixture's topics (decide_fixture.mbt's modes), its calls kept for the test to look at.
+
+///|
+/// The app over the fixture in `mode` (its pages opened as sffix opens them), its calls kept in `calls` and answered.
+fn decide_core(calls : Array[Made], mode : String) -> @ui.Tester {
+  reset()
+  let base = fixture(mode)
+  let src : Source = {
+    ..base,
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      done(Ok(Json::object({})))
+    },
+  }
+  if mode.has_prefix("chat") {
+    open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  }
+  open_fixture(mode)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  // the pages opened slid in
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "an option tapped in the chat answers its card (decision.answer)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat")
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    if t.find("把首页和聊天页的截图都更新") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("把首页和聊天页的截图都更新")
+  let made = named(calls, "decision.answer")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "option"), "一起换")
+  assert_eq(number(Some(made[0].params), "seq"), 8.0)
+  assert_eq(number(Some(made[0].params), "thread"), 7.0)
+  t.assert_idle()
+}
+
+///|
+test "忽略 lets the ask go (decision.dismiss), gone at once" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat")
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    if t.find("忽略") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("忽略")
+  assert_eq(named(calls, "decision.dismiss").length(), 1)
+  // let go at once (what it showed only drawn as it closes up)
+  assert_eq(dui.gone.length(), 1)
+  // (not idle yet: its room closes on the rows' spring, close_gap, till mbui#25 declares its end)
+}
+
+///|
+test "the chat's own sheet: its agents, pinning it, and on to the agent's card and its history" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  assert_true(t.find("复制会话链接") is Some(_))
+  assert_true(t.find("Claude · Opus 5.5") is Some(_))
+  t.tap_text("固定到列表顶部")
+  let pinned = named(calls, "chat.pin")
+  assert_eq(pinned.length(), 1)
+  assert_true(flag(Some(pinned[0].params), "pinned"))
+  t.tap_text("Claude · Opus 5.5")
+  assert_true(t.find("费用估算") is Some(_))
+  assert_true(t.find("8 轮 · 共干了 1 小时 12 分") is Some(_))
+  t.tap_text("8 轮 · 共干了 1 小时 12 分")
+  t.run_for(@ui.nav_push_ms)
+  match app.nav.top() {
+    History(r, key, _) => {
+      assert_eq(r.session, "s-c1")
+      assert_eq(key, "s-c1")
+    }
+    _ => fail("not the history")
+  }
+  assert_true(t.find("执行历史") is Some(_))
+  // (not idle yet: the chat's sheet is still sinking on its spring (kit/sheet.mbt), till mbui#25 declares its end)
+}
+
+///|
+test "the history: a group opens to its steps, a step to its call and what came back" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "history")
+  // opened by the fixture: the command and its output, the edit as a diff
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is Some(_))
+  assert_true(t.find("Total tests: 9, passed: 9, failed: 0.") is Some(_))
+  // a step closed again
+  t.tap_text("跑一遍列表的测试")
+  assert_true(t.find("moon test -p ui -f list_test.mbt") is None)
+  t.tap_text("详情")
+  assert_true(t.find("Claude Code 2.1.3") is Some(_))
+  assert_true(t.find("Mac Studio · macOS 26 · M2 Max") is Some(_))
+  t.assert_idle()
+}
+
+///|
+test "the 奏 page: an option answers the card in front, the next comes in" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "decisions")
+  assert_true(t.find("1 / 2") is Some(_))
+  assert_true(t.find("整理发布清单") is Some(_))
+  t.tap_text("把首页和聊天页的截图都更新")
+  // answered at once, out of the deck: the text card in front now (the answered one only drawn going up)
+  let made = named(calls, "decision.answer")
+  assert_eq(made.length(), 1)
+  assert_eq(text(Some(made[0].params), "option"), "一起换")
+  assert_true(t.find("1 / 1") is Some(_))
+  assert_true(t.find("第 4 个：支付的测试") is Some(_))
+  t.run_for(card_up_ms)
+  t.assert_idle()
+}
+
+///|
+test "the 奏 page: swiped right, a decision is dismissed; none left, the day so far" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "decisions-idle")
+  assert_true(t.find("奏折已全部批完") is Some(_))
+  assert_true(t.find("选择了「一起换」") is Some(_) || t.find("整理发布清单 · 选择了「一起换」") is Some(_))
+  let calls2 : Array[Made] = []
+  let t2 = decide_core(calls2, "decisions")
+  t2.drag(100.0, 400.0, 360.0, 400.0)
+  // let go: dismissed at once, the next in front
+  t2.draw()
+  assert_eq(named(calls2, "decision.dismiss").length(), 1)
+  assert_eq(named(calls2, "decision.answer").length(), 0)
+  assert_true(t2.find("1 / 1") is Some(_))
+  t2.run_for(card_off_ms)
+  t2.assert_idle()
+}
+
+///|
+test "a call is drawn by what it is" {
+  assert_eq(command_of({ "command": ["bash", "-lc", "ls -la"] }), Some("ls -la"))
+  assert_eq(command_of({ "cmd": "git status" }), Some("git status"))
+  match parse_call("{\"a\": \"abc") {
+    Some(_) => fail("cut short without its marker")
+    None => ()
+  }
+  match parse_call("{\"a\": \"abc\n… (12 more characters)") {
+    Some(Object(m)) => assert_eq(m.get("a"), Some(Json::string("abc…")))
+    _ => fail("not closed")
+  }
+  assert_eq(read_lines("    12→one\n    13→two\nmore", false), Some("one\ntwo"))
+  assert_eq(plain_brief("## 标题\n- 一项 **重点**\n```sh\nls\n```"), "标题 一项 重点 ls")
+  match command_output("Wall time: 1.2s\nProcess exited with code 0\nOutput:\nok") {
+    Some((said, out)) => {
+      assert_eq(said.length(), 2)
+      assert_eq(out, "ok")
+    }
+    None => fail("no output read")
+  }
+  assert_eq(chat_link("ws1/st1", "ember:c-1"), "https://app.still.fail/o/ws1/st1/ember%3Ac-1")
+}
+
+///|
+/// What is left under a fitted sheet's last row (`last` its words): the sheet's bottom less the rest of the row (44
+/// high at least, its words centred: Android InfoRow) and the card's INFO_PAD (6) under it: the sheet's own padding.
+fn fitted_foot(t : @ui.Tester, last : String) -> Double raise {
+  sheet_rested(t, "decide-sheet")
+  let (_, sy, _, sh) = t.get(@ui.Dialog).rect
+  let (_, ty, _, th) = t.rect_of(last).unwrap()
+  sy + sh - (ty + th) - (dmax(44.0, th + 8.0) - th) / 2.0 - 6.0
+}
+
+///|
+test "a fitted sheet is as tall as what it shows: under its last card its padding as Android's (30 the chat's, 24 the agent's)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat-info")
+  // (its last card the public links': the last of them, Publish.kt PublishList)
+  let foot = fitted_foot(t, "2 天前 · Bob")
+  assert_true((foot - chat_info_foot).abs() < 0.5, msg="under the chat's sheet: \{foot}")
+  let t = decide_core(calls, "chat-agent")
+  let foot = fitted_foot(t, "服务在线：web · 在盯着：CI")
+  assert_true((foot - agent_sheet_foot).abs() < 0.5, msg="under the agent's sheet: \{foot}")
+}
+
+///|
+test "an options card: nothing drawn between two options (SettingParts.kt DecisionOptions)" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "chat")
+  t.move(195.0, 400.0)
+  for _ in 0..<6 {
+    if t.find("把首页和聊天页的截图都更新") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  let (_, above, _, above_h) = t.rect_of("这次只改列表，截图下次再说").unwrap()
+  let (_, below, _, _) = t.rect_of("一起换").unwrap()
+  // no hairline across the card between the first option's words and the second's
+  assert_true(
+    t
+    .drawn_rects()
+    .iter()
+    .all(fn(r) { !(r.3 <= 1.5 && r.2 > 100.0 && r.1 > above + above_h && r.1 < below) }),
+  )
+}
+
+///|
+test "the history's post: where it went with its platform's mark, in the accent's ink, a chat here back to it" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "history-link")
+  let r : ChatRef = { station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" }
+  app.nav.push(Chat(r))
+  app.nav.push(History(r, "s-c1", None))
+  t.run_for(@ui.nav_push_ms)
+  t.run_for(@ui.nav_push_ms)
+  let (x, y, _, h) = t.rect_of("整理发布清单").unwrap()
+  // still.fail's mark (12) just before the name, on its line
+  assert_true(
+    t
+    .drawn_images()
+    .iter()
+    .any(fn(i) { i[2] >= 11.0 && i[2] <= 13.0 && i[0] + i[2] <= x && i[0] + i[2] >= x - 6.0 && i[1] < y + h && i[1] + i[3] > y }),
+  )
+  // the chat it went to is the one under the history: back to it
+  t.tap_text("整理发布清单")
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() is Chat(_))
+}

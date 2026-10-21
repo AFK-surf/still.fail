@@ -70,6 +70,9 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
       }
       case "signOut":
         return Effect.as(inner.accounts.signOut(call.account), null);
+      // The account deleted in the cloud (DELETE /v1/me), then forgotten here as signing out does.
+      case "deleteAccount":
+        return Effect.as(Effect.andThen(inner.provider.request(call.account, "DELETE", "/v1/me", null), inner.accounts.signOut(call.account)), null);
       case "pushKey":
         return inner.provider.pushKey();
       case "op":
@@ -114,8 +117,7 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);
       case "draftPut": {
-        inner.composers.putDraft(call.station, call.chat, call.draft);
-        return Effect.succeed(null);
+        return Effect.succeed(inner.composers.putDraft(call.station, call.chat, call.draft));
       }
       case "draftGet": {
         return Effect.succeed(inner.composers.readDraft(call.station, call.chat));

@@ -631,14 +631,14 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
         val top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding().coerceAtLeast(8.dp)
         BoxWithConstraints(Modifier.fillMaxWidth().padding(top = top).graphicsLayer { alpha = flight.chrome }, contentAlignment = Alignment.TopCenter) {
             var widest by remember { mutableIntStateOf(0) }
-            val shape = Smooth(14.dp)
+            val shape = PictureBar
             val tint = if (dark) DarkMuted else C.muted
             Row(
                 Modifier.widthIn(min = with(LocalDensity.current) { widest.toDp() }, max = maxWidth - 16.dp).width(IntrinsicSize.Max)
                     .onSizeChanged { if (it.width > widest) widest = it.width }
                     .graphicsLayer { alpha = bars }
                     .then(if (dark) darkGlass(haze, shape) else pageGlass(haze, shape))
-                    .height(44.dp).padding(start = 12.dp, end = 2.dp),
+                    .height(44.dp).padding(start = 12.dp, end = PICTURE_BAR_PAD),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(file.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (dark) DarkText else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -657,7 +657,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
                     coming -> {}
                     known.kind == PreviewKind.Image -> {
                         PictureButton(Icons.Minus, t("android-chat.file.zoomOut"), enabled = zoom.scale > zoom.minScale + 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale / 1.25f, scope = scope) }
-                        Box(Modifier.height(32.dp).widthIn(min = 52.dp).clip(Smooth(12.dp)).clickable { zoom.reset(scope) }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.height(32.dp).widthIn(min = 52.dp).clip(Smooth(PICTURE_KEY)).clickable { zoom.reset(scope) }, contentAlignment = Alignment.Center) {
                             Text("${(zoom.scale * 100).roundToInt()}%", fontSize = 13.sp, color = tint)
                         }
                         PictureButton(Icons.Plus, t("android-chat.file.zoomIn"), enabled = zoom.scale < fail.still.android.ui.MAX_SCALE - 1e-4f, tint = tint) { zoom.zoomTo(zoom.scale * 1.25f, scope = scope) }
@@ -675,7 +675,7 @@ private fun Viewer(station: String, opened: Shown, gallery: Gallery?, onClose: (
             }
         }
         if (marks.on) Box(Modifier.align(Alignment.BottomCenter).padding(WindowInsets.navigationBars.asPaddingValues()).padding(bottom = 8.dp)) {
-            MarksFoot(marks, haze, darkGlass(haze, Smooth(14.dp)))
+            MarksFoot(marks, haze, darkGlass(haze, PictureBar))
         }
     }
 }
@@ -1059,7 +1059,7 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
 
 @Composable
 private fun Cut(words: String, top: Dp) {
-    Text(words, fontSize = 13.sp, color = C.warn, modifier = Modifier.fillMaxWidth().background(C.warn.copy(alpha = 0.14f)).padding(start = 20.dp, end = 20.dp, top = 8.dp + top, bottom = 8.dp))
+    Text(words, fontSize = 13.sp, color = C.warnInk, modifier = Modifier.fillMaxWidth().background(C.warn.copy(alpha = 0.14f)).padding(start = 20.dp, end = 20.dp, top = 8.dp + top, bottom = 8.dp))
 }
 
 /** A page of its own in a WebView: scripts on, nothing of the phone's files or the app's reachable; links stay out. */

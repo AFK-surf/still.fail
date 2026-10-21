@@ -13,15 +13,22 @@
 // Development-only routes (never in the Worker), on either port:
 //   /__dev/login?user=alice  signs that account into the browser (on that origin) and goes to /
 //   /__dev/account?user=alice  that account as JSON, for the core's `migrate` (native apps)
+//   /__dev/google?…&user=alice  Google's sign-in page as a browser that picks that account leaves it: the query the
+//                                cloud sent to accounts.google.com, back to its callback with a code its mocked Google
+//                                takes (a browser stand-in signing a native app in through its loopback redirect)
 //   /__dev/credential?device=hex  a mstill.fail's credential for alice's first workspace
 //   /__dev/move?station=hex&token=t  what a compromised cloud can do: the station moved into the token's workspace,
 //                                    without its signature (the workspace lock's tests, docs/workspace-lock.md)
 // PERSIST=<dir> keeps what the cloud holds there, and AUTH_KEY=<k> (43 characters or more) keeps sign-ins good, across restarts: a restart is a
-// cloud with a new grant key (what the workspace lock's tests swap).
+// cloud with a new grant key (what the workspace lock's tests swap). With RESUME=1 as well, a restart is the same cloud
+// again (apps/mbui's e2e: a run's starting point restored, scripts/e2e-local.sh restore): its grant key and its "Dev"
+// workspace kept in PERSIST/dev.json at the first start, nothing made anew (no workspace, no enrollments).
+// RELAY_URLS (comma-separated) and RELAY_NAMES (JSON) add relays beside RELAY, as on Cloudflare (the console's 中继 page:
+// what they send to /v1/relays/load is believed with a cf-connecting-ip of their address, as Cloudflare would set it).
 // With MAIL=1, signing in offers an email too (login.ts): the codes are printed here instead of being sent.
 // With PUSH_LOG=<file>, pushes work with a VAPID key made at start, and what the cloud pushes (to browsers, to FCM)
 // is written there, a JSON line each (its body base64), instead of reaching a push service.
-import { appendFileSync } from "node:fs";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { connect } from "node:net";
@@ -75,12 +82,16 @@ const pushes = pushLog ? {
 } : {};
 
 // With AXIOM_TOKEN (and AXIOM_DATASET) in the environment, traces go to Axiom as they would from Cloudflare.
-const h = await harness({ clock: "real", ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, shareOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
+const persisted = process.env.PERSIST ? join(process.env.PERSIST, "dev.json") : "";
+const resumed: { grantJwk: JsonWebKey; workspace: string } | null =
+  process.env.RESUME && persisted ? JSON.parse(await readFile(persisted, "utf8").catch(() => "null")) : null;
+const h = await harness({ clock: "real", ...(resumed ? { grantJwk: resumed.grantJwk } : {}), ...pushes, origin, adminOrigin, previewOrigin, betaOrigin, shareOrigin, assets, port: port + 1, relayUrl: process.env.RELAY ?? "http://127.0.0.1:3340", ...(process.env.RELAY_URLS ? { relayUrls: process.env.RELAY_URLS } : {}), ...(process.env.RELAY_NAMES ? { relayNames: JSON.parse(process.env.RELAY_NAMES) } : {}), adminEmail: process.env.ADMIN_EMAIL ?? "alice@example.test", ...(process.env.AXIOM_TOKEN ? { axiom: "real" as const } : {}), ...(process.env.REVIEW_ACCOUNTS ? { reviewAccounts: process.env.REVIEW_ACCOUNTS } : {}), ...(process.env.MAIL ? { mail: (m: { to: string; subject: string }) => (console.log(`mail to ${m.to}: ${m.subject}`), true) } : {}), ...(process.env.PERSIST ? { persist: process.env.PERSIST } : {}), ...(process.env.AUTH_KEY ? { signingKey: process.env.AUTH_KEY } : {}) });
 const aliceTokens = await h.login("alice");
 const alice = h.as(aliceTokens);
 // alice may use the test channel (the console's switch does the same).
 await h.as(aliceTokens, "admin")("POST", `/v1/admin/users/${aliceTokens.subject}/beta`, { on: true });
-const workspace = await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
+const workspace = resumed ? { id: resumed.workspace } : await (await alice("POST", "/v1/workspaces", { name: "Dev" })).json() as { id: string };
+if (persisted && !resumed) writeFileSync(persisted, JSON.stringify({ grantJwk: h.grantJwk, workspace: workspace.id }));
 // SEED=600: that many made-up people, workspaces and stations, to see the admin's console as it is with many.
 if (Number(process.env.SEED) > 0) {
   const directories: any = await h.mf.getDurableObjectNamespace("DIRECTORY", "api");
@@ -97,7 +108,7 @@ try {
 } catch {
   // No dist/releases: nothing to put.
 }
-for (const name of ["studio", "mac-mini"]) {
+for (const name of resumed ? [] : ["studio", "mac-mini"]) {
   const enrollment = await (await alice("POST", `/v1/workspaces/${workspace.id}/enrollments`, { name })).json() as { command: string };
   console.log(`ENROLL ${enrollment.command}`);
 }
@@ -116,6 +127,15 @@ async function serve(base: string, req: IncomingMessage, res: ServerResponse) {
   if (url.pathname === "/__dev/account") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");
     return void res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(account));
+  }
+  if (url.pathname === "/__dev/google") {
+    const code = crypto.randomUUID();
+    const q = url.searchParams;
+    h.codes.set(code, { nonce: q.get("nonce") ?? "", challenge: q.get("code_challenge") ?? "", sub: q.get("user") ?? "alice" });
+    const back = new URL(q.get("redirect_uri") ?? `${origin}/v1/auth/google/callback`);
+    back.searchParams.set("state", q.get("state") ?? "");
+    back.searchParams.set("code", code);
+    return void res.writeHead(302, { location: back.toString() }).end();
   }
   if (url.pathname === "/__dev/login") {
     const account = await signIn(url.searchParams.get("user") ?? "alice");

@@ -94,6 +94,9 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.CARD_PAD
+import fail.still.android.ui.LocalOnCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
@@ -230,9 +233,12 @@ fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) 
     }
 }
 
+/** Words on a card: on a list card (its padding in already) its words CARD_PAD from the card's edge, as its rows'. */
 @Composable
-fun Body(content: @Composable () -> Unit) =
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+fun Body(content: @Composable () -> Unit) {
+    val onCard = LocalOnCard.current
+    Column(Modifier.fillMaxWidth().padding(horizontal = if (onCard) CARD_PAD - LIST_PAD else 16.dp, vertical = if (onCard) 12.dp else 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
+}
 
 /** A check's tone as a colour (the core's: accent | green | blue | red | neutral). */
 @Composable
@@ -503,7 +509,8 @@ fun ChangelogNews() {
     val news = topic.value?.news ?: return
     if (gone == news) return
     val lines = news.entries.flatMap { it.text }
-    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+    // Its close button, round, in its corner 6 from both edges: the card's corner taken from it (6 + its half).
+    Box(Modifier.padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 10.dp).fillMaxWidth().clip(Smooth(6.dp + 16.dp)).background(C.surface)) {
         Column(Modifier.fillMaxWidth().clickable { app.push(Screen.Changelog) }.padding(start = 16.dp, end = 44.dp, top = 12.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(Modifier.padding(bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 IconIn(Icons.Sparks, 16.dp, C.ink)

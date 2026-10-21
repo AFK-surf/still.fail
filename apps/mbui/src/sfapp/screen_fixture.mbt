@@ -1,0 +1,309 @@
+// A station's screen over the fixture (APP=sffix MBUI_FIXTURE=screen-…; ember apps/android ScreenViewerTest's shots,
+// the same states said the same way): the screen's view opened over the chats, its states and frames (a JPEG of a
+// browser's tab: screen_fixture_frame.mbt) as the core would say them, each mode one of the Android test's pictures.
+//
+//   screen-connecting                   nothing said yet
+//   screen-live, -live-dark             live, driven, 李雷 also on it (the landscape one: the same, its window sideways)
+//   screen-trackpad, -trackpad-command  driven as a trackpad, the pointer moved right; ⌘ held on the keys row
+//   screen-full, -full-tools            全屏; its tools opened
+//   screen-agent-driving, -dark         an agent drives it, this view only looks (接管)
+//   screen-agent-paused                 taken over: the agent waits
+//   screen-read-only                    a member who may only look
+//   screen-not-drivable                 控制 chosen, the station lacking the grant to take input
+//   screen-reconnecting                 the frame kept, its why said over it
+//   screen-ended, -dark                 ended by the station, after a frame
+//   screen-outdated, -gone, -denied     over, said in the screen's place (denied: the grant it lacks too)
+//   screen-gone-said-once, -gone-dark   gone, the core saying the headline's words
+//   screen-failed                       the call itself failed
+//   screen-clipboard-driving            driving a station that carries the clipboard both ways and takes files
+//   screen-clipboard-old-station        driving a station from before the clipboard and files
+//   screen-files-going, -done (-dark)   two files sent to its machine: going (the first under a free name), then there
+
+///|
+/// The fixture's screen mode ("" none), its dark taken off.
+let screen_fix_mode : Ref[String] = Ref("")
+
+///|
+/// The fixture's screen, as Android's test has it.
+// kept across runs: a value (no field of it changes)
+let screen_fix_at : ScreenAt = { station: "ws-1/st-1", screen: "browser:tab-1", title: "Chrome" }
+
+///|
+/// MBUI_FIXTURE=screen-…: the screen's viewer over the chats.
+fn open_screen_fixture(mode : String) -> Unit {
+  if !mode.has_prefix("screen-") {
+    return
+  }
+  let m = if mode.has_suffix("-dark") {
+    mode.view(end_offset=mode.length() - 5).to_owned()
+  } else {
+    mode
+  }
+  screen_fix_mode.val = m
+  app.nav.push(Screen(screen_fix_at))
+  // what the person did there before the picture (ScreenViewerTest's taps)
+  let u = screen_ui(screen_key(screen_fix_at.station, screen_fix_at.screen))
+  match m {
+    "screen-trackpad" | "screen-trackpad-command" => {
+      // a finger moved right, slowly (ScreenViewerTest: the pointer near 0.66 of the frame)
+      u.pad.x = 0.66
+      if m == "screen-trackpad-command" {
+        u.held.mods = mod_meta
+      }
+    }
+    "screen-full" => u.full = true
+    "screen-full-tools" => {
+      u.full = true
+      u.tools_open = true
+    }
+    _ => ()
+  }
+}
+
+///|
+/// What the fixture's core says of `screen.view` for the mode: its state, its config and a frame; for an ended mode its
+/// answer after.
+fn screen_fixture_stream(
+  params : Json,
+  on_value : (Json, Bytes?) -> Unit,
+  done : (Result[Json, Json]) -> Unit,
+) -> Int {
+  ignore(params)
+  let m = screen_fix_mode.val
+  let agent = "Agent「修登录」"
+  let drop : Json = { "folder": "/Users/alice/Downloads", "reveal": true }
+  let live = fn(
+    control : Bool,
+    may : Bool,
+    others : Array[String],
+    controllers : Array[String]?,
+    take_over : Bool?,
+    line : String?,
+    access : Json?,
+    clipboard : Array[String]?,
+    drop : Json?,
+  ) {
+    on_value(
+      {
+        "state": screen_fix_state(
+          "live", control, may, others, "", controllers, take_over, line, access, clipboard, drop,
+        ),
+      },
+      None,
+    )
+    on_value({ "config": { "codec": "jpeg", "width": 1280.0, "height": 720.0 } }, None)
+    on_value({ "frame": { "key": true, "ts": 1000.0 } }, Some(screen_fix_jpeg()))
+  }
+  let over = fn(phase : String, message : String, access : Json?) {
+    on_value(
+      {
+        "state": screen_fix_state(
+          phase, true, true, [], message, None, None, None, access, None, None,
+        ),
+      },
+      None,
+    )
+    done(Ok(Json::null()))
+  }
+  match m {
+    "screen-connecting" => ()
+    "screen-live" | "screen-full" | "screen-full-tools" =>
+      live(true, true, if m == "screen-live" { ["李雷"] } else { [] }, None, None, None, None, None, None)
+    "screen-trackpad" | "screen-trackpad-command" =>
+      live(true, true, [], None, None, None, None, None, None)
+    "screen-agent-driving" =>
+      live(
+        false,
+        true,
+        [agent, "Bob"],
+        Some([agent]),
+        Some(true),
+        Some("只看 · \{agent} 正在控制 · Bob 也在查看"),
+        None,
+        None,
+        None,
+      )
+    "screen-agent-paused" =>
+      live(
+        true,
+        true,
+        [agent, "Bob"],
+        Some([]),
+        Some(false),
+        Some("控制 · \{agent} 已暂停 · Bob 也在查看"),
+        None,
+        None,
+        None,
+      )
+    "screen-read-only" => live(false, false, ["李雷"], None, None, None, None, None, None)
+    "screen-not-drivable" =>
+      live(
+        false,
+        true,
+        [],
+        None,
+        None,
+        None,
+        Some({
+          "capture": true,
+          "control": false,
+          "message": "在 辅助功能 里打开 stillfail-station",
+          "app": "stillfail-station",
+        }),
+        None,
+        None,
+      )
+    "screen-reconnecting" => {
+      live(true, true, ["李雷"], None, None, None, None, None, None)
+      on_value(
+        {
+          "state": screen_fix_state(
+            "reconnecting",
+            true,
+            true,
+            ["李雷"],
+            "和 station 的连接断了，正在重新连接…",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+          ),
+        },
+        None,
+      )
+    }
+    "screen-ended" => {
+      live(true, true, ["李雷"], None, None, None, None, None, None)
+      over("ended", "agent 关掉了这个标签页", None)
+    }
+    "screen-outdated" => over("outdated", "这台 station 的版本还不能共享屏幕，更新后再试", None)
+    "screen-gone" => over("gone", "这个标签页已经关了", None)
+    "screen-denied" =>
+      over(
+        "denied",
+        "station 现在录不了屏",
+        Some({
+          "capture": false,
+          "control": false,
+          "message": "在 系统设置 › 隐私与安全性 › 屏幕录制 里打开 stillfail-station",
+          "app": "stillfail-station",
+        }),
+      )
+    "screen-gone-said-once" => over("gone", "此屏幕已不存在", None)
+    "screen-failed" => done(Err({ "code": "offline", "message": "station 不在线" }))
+    "screen-clipboard-driving" =>
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+    "screen-clipboard-old-station" => live(true, true, [], None, None, None, None, None, None)
+    "screen-files-going" | "screen-files-done" => {
+      live(true, true, [], None, None, None, None, Some(["text", "png"]), Some(drop))
+      screen_fix_drops(m == "screen-files-done")
+    }
+    _ => ()
+  }
+  1
+}
+
+///|
+/// A ScreenViewState as the fixture says it (ScreenViewerTest's `state`).
+fn screen_fix_state(
+  phase : String,
+  control : Bool,
+  may : Bool,
+  others : Array[String],
+  message : String,
+  controllers : Array[String]?,
+  take_over : Bool?,
+  line : String?,
+  access : Json?,
+  clipboard : Array[String]?,
+  drop : Json?,
+) -> Json {
+  let m : Map[String, Json] = {
+    "phase": Json::string(phase),
+    "title": Json::string("still.fail — Chrome"),
+    "kind": Json::string("browser"),
+    "control": Json::boolean(control),
+    "may": Json::boolean(may),
+    "others": Json::array(others.map(Json::string)),
+    "line": Json::string(
+      match line {
+        Some(l) => l
+        None =>
+          (if control { "控制" } else { "只看" }) +
+          (if others.is_empty() { "" } else { " · " + others.join("、") + "也在看" })
+      },
+    ),
+    "codec": Json::string("jpeg"),
+    "width": Json::number(1280.0),
+    "height": Json::number(720.0),
+  }
+  if message != "" {
+    m["message"] = Json::string(message)
+  }
+  match controllers {
+    Some(cs) => m["controllers"] = Json::array(cs.map(Json::string))
+    None => ()
+  }
+  match take_over {
+    Some(b) => m["takeOver"] = Json::boolean(b)
+    None => ()
+  }
+  match access {
+    Some(a) => m["access"] = a
+    None => ()
+  }
+  match clipboard {
+    Some(cs) => m["clipboard"] = Json::array(cs.map(Json::string))
+    None => ()
+  }
+  match drop {
+    Some(d) => m["drop"] = d
+    None => ()
+  }
+  Json::object(m)
+}
+
+///|
+/// The two files ScreenViewerTest sends: 季度报告.pdf (1.2 MB, its name taken there: up as 季度报告 (1).pdf, a part of it
+/// in) and notes.txt (waiting); or both there.
+fn screen_fix_drops(done : Bool) -> Unit {
+  let s = screen_sess_of(screen_fix_at.station, screen_fix_at.screen)
+  guard s is Some(s) else { return }
+  let report = Bytes::make(1_200_000, b'\x01')
+  let notes = Bytes::make(4400, b'\x02')
+  s.drops.push({
+    serial: 1,
+    folder: "/Users/alice/Downloads",
+    reveal: true,
+    bytes: report,
+    name: "季度报告 (1).pdf",
+    tried: ["季度报告.pdf"],
+    sent: if done { report.length() } else { 256 * 1024 },
+    state: if done { "done" } else { "going" },
+    error: "",
+    id: "",
+  })
+  s.drops.push({
+    serial: 2,
+    folder: "/Users/alice/Downloads",
+    reveal: true,
+    bytes: notes,
+    name: "notes.txt",
+    tried: [],
+    sent: if done { notes.length() } else { 0 },
+    state: if done { "done" } else { "waiting" },
+    error: "",
+    id: "",
+  })
+  s.drops_serial = 2
+  // (going: the parts go no further, as the test holds its second part)
+  s.pumping = !done
+}
+
+///|
+/// The view of `screen` on `station`, if its page made it.
+fn screen_sess_of(station : String, screen : String) -> ScreenSess? {
+  screens_open.get(screen_key(station, screen))
+}

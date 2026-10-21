@@ -17,7 +17,7 @@ import type { Host, Pull } from "./host.ts";
 import { t } from "./i18n.ts";
 import type { CloseReason, Iroh, IrohConnection, IrohEndpoint, IrohStream } from "./iroh.ts";
 import * as format from "./format.ts";
-import type { Runner } from "./runtime.ts";
+import { laterSleep, type Runner } from "./runtime.ts";
 import { RECHECKING } from "./station/words.ts";
 import { StationAddr, stationId } from "./station/addr.ts";
 import { IDEMPOTENCY_KEY, IDEMPOTENT, READS } from "./station/requests.ts";
@@ -1387,7 +1387,7 @@ export class Mesh {
   #steer(addr: string): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       for (;;) {
-        yield* Effect.sleep(TICK_MS);
+        yield* laterSleep(TICK_MS);
         if (this.#closed || !this.#links.has(addr)) break;
         const cur = this.current(addr);
         if (this.#live(addr).length === 0 && (cur === null || !cur.usable())) break;
@@ -1559,7 +1559,7 @@ export class Mesh {
   #tally(): Effect.Effect<void> {
     return Effect.forever(
       Effect.andThen(
-        Effect.sleep(TALLY_EVERY_MS),
+        laterSleep(TALLY_EVERY_MS),
         Effect.sync(() => {
           for (const [addr, o] of this.#links) if (o.result && "ok" in o.result) this.#count(addr, o.result.ok);
           this.#keepDays();
@@ -1713,7 +1713,7 @@ function open(
 function renew(link: Link, credentials: CredentialSource, device: string): Effect.Effect<void> {
   return Effect.gen(function* () {
     for (;;) {
-      const closed = yield* Effect.raceFirst(Effect.as(Effect.sleep(RENEW_MS), false), Effect.as(link.conn.closed(), true));
+      const closed = yield* Effect.raceFirst(Effect.as(laterSleep(RENEW_MS), false), Effect.as(link.conn.closed(), true));
       if (closed) return;
       const renewed = yield* Effect.result(
         Effect.flatMap(credentials(device, false), (c) =>

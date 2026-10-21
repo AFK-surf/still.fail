@@ -131,7 +131,7 @@ function hostSignature(profile: Profile): string {
   return JSON.stringify([
     profile.home,
     sorted(Object.entries(profileEnv(profile, "codex"))),
-    // The station's variables for its agents: changed, the app-server starts again with them once idle.
+    // The station's variables for its agents: changed, the app-server starts again with them once no turn runs on it.
     sorted(Object.entries(agentEnv())),
     sorted(codexOverrides(accessKind(profile), profileModel(profile), profileVia(profile))),
   ]);
@@ -529,13 +529,15 @@ export class CodexDriver implements AgentDriver {
       const current = this.hosts.get(profile.id);
       if (current && current.alive()) await this.renewLent(current, profile);
       if (current && current.alive() && current.signature !== hostSignature(profile)) {
-        // The profile changed. Replace the process once no session uses it; until then keep serving.
-        if (current.threads.size === 0) {
+        // The profile (or the station's variables for its agents) changed. Replace the process once no turn runs on it,
+        // as when Codex was updated under it: its other threads are closed, to be opened again on the new one with their
+        // next turn. Waiting for no thread at all would wait for ever: a session opened meanwhile joins the old one.
+        if (current.turns.size === 0) {
           log.info("agents::codex", "profile changed; restarting its codex app-server", { profile: profile.id });
           this.hosts.delete(profile.id);
           await current.proc.kill(5000);
         } else {
-          log.info("agents::codex", "profile changed; its codex app-server restarts once idle", { profile: profile.id });
+          log.info("agents::codex", "profile changed; its codex app-server restarts once no turn runs on it", { profile: profile.id });
         }
       }
       const alive = this.hosts.get(profile.id);
@@ -701,7 +703,10 @@ export class CodexDriver implements AgentDriver {
     }
   }
 
-  async outdated(host: Host): Promise<boolean> {
+  /// Whether a host is not to start another turn: Codex was updated under it, or it runs with what the profile (or the
+  /// station's variables for its agents) said before.
+  async outdated(host: Host, profile: Profile | undefined): Promise<boolean> {
+    if (profile !== undefined && host.signature !== hostSignature(profile)) return true;
     if (host.version === null) return false;
     await this.installedVersion();
     return this.stale(host);
@@ -819,18 +824,18 @@ export class CodexSession implements AgentSession {
 
   async prompt(text: string) {
     const fast = this.driver.options.fast?.(this.threadId);
-    // Codex was updated under its app-server, whose tools would all fail: opened again on a new one, unless another turn
-    // runs on it yet.
-    const outdated = this.host.turns.size === 0 && (await this.driver.outdated(this.host));
+    const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
+    // Codex was updated under its app-server, whose tools would all fail, or it runs with what its profile said before:
+    // opened again on a new one, unless another turn runs on it yet.
+    const outdated = this.host.turns.size === 0 && (await this.driver.outdated(this.host, p));
     await this.driver.renewLent(this.host, this.profile);
     if (this.state.closed) throw new Error("codex session is closed");
     if (this.state.busy) throw new Error("a turn is already running");
-    if (outdated) throw new Error("codex was updated under its app-server");
+    if (outdated) throw new Error("codex was updated, or its profile changed, under its app-server");
     this.state.busy = true;
     this.host.turns.add(this.threadId);
     const params: Json = { threadId: this.threadId, input: input(text) };
     if (this.tuned) Object.assign(params, this.tuned);
-    const p = this.driver.options.currentProfile ? this.driver.options.currentProfile(this.host.profile) : this.profile;
     if (p && accessKind(p) === "subscription") {
       // An explicit null clears a previously selected tier; omitting it would keep Fast on.
       params.serviceTier = (fast ?? profileFast(p)) ? "fast" : null;

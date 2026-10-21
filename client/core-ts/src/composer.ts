@@ -71,7 +71,12 @@ type State = {
   /// Every change, counted: a page waits for the one it made before taking the topic's value again.
   version: number;
   /// What was taken to send, until it is sent or put back.
-  taken: { text: string; quotes: ComposerQuote[]; files: ComposerFile[] } | null;
+  taken: { text: string; quotes: ComposerQuote[]; files: ComposerFile[]; id: string } | null;
+  /// The draft's own name ("" until asked for: `#id`), kept with it on the device: what is written to a chat between
+  /// two sends is one draft, and the next is another (taken to send, or put back empty). What goes up from it is named
+  /// by it (the station gives back an upload it finished within the hour by its id), so the same file in the next
+  /// message, or in another new chat, is another upload.
+  id: string;
 };
 
 /// Bigger files are not sent: the station would refuse them.
@@ -82,7 +87,7 @@ const PART = 4 * 1024 * 1024;
 const SENT_STEP = 64 * 1024;
 
 const topicOf = (key: string): Topic => ({ topic: "composer", key });
-const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null });
+const empty = (db?: AccountDb): State => ({ db, edited: 0, joined: null, text: "", rev: 0, quotes: [], focus: null, files: [], starting: false, error: null, version: 0, taken: null, id: "" });
 const draftKey = (station: string, chat: string) => chat === "new" ? `new:${station}` : `${station}:${chat}`;
 
 export class Composers {
@@ -194,6 +199,7 @@ export class Composers {
     if (s.text) s.rev = 1;
     s.quotes = (Array.isArray(kept.quotes) ? kept.quotes : []).filter(isObject).map((q: J) => ({ ...q, id: localId("kept") }) as ComposerQuote);
     s.files = (Array.isArray(kept.files) ? kept.files : []).filter(isObject).map((f: J) => ({ id: localId("kept"), name: String(f.name ?? ""), size: Number(f.size ?? 0), done: f, error: null }));
+    if (typeof kept.id === "string") s.id = kept.id;
     for (const l of Array.isArray(kept.links) ? kept.links : []) {
       if (isObject(l) && typeof l.url === "string") s.files.push(linkFile(localId("kept"), l as ComposerLink));
     }
@@ -202,7 +208,14 @@ export class Composers {
 
   #draft(s: State) {
     const links = s.files.flatMap((f) => (f.link ? [f.link] : []));
-    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []), ...(links.length ? { links } : {}) };
+    return { text: s.text, quotes: s.quotes.map(({ id: _, ...q }) => q), files: s.files.flatMap((f) => f.done ? [f.done] : []), ...(links.length ? { links } : {}), ...(s.id ? { id: s.id } : {}) };
+  }
+
+  /// The draft's name, given the first time it is asked for (`State.id`): the core's, as its other names are (random:
+  /// a count would name another draft the same after a restart), and said with the draft, so a replay has it as it was.
+  #id(s: State): string {
+    if (s.id === "") s.id = localId("draft");
+    return s.id;
   }
 
   #forget(key: string): void {
@@ -227,22 +240,30 @@ export class Composers {
 
   /// The draft API (including native clients) reads and replaces the same state as the web composer.
   readDraft(station: string, chat: string) {
-    const draft = this.#draft(this.#state(draftKey(station, chat)));
+    const s = this.#state(draftKey(station, chat));
+    this.#id(s);
+    const draft = this.#draft(s);
     if (!draft.text.trim() && draft.quotes.length === 0 && draft.files.length === 0) draft.text = "";
     return draft;
   }
 
-  putDraft(station: string, chat: string, value: unknown): void {
+  /// The draft as the page has it now; its name kept (whatever the page says of it), or, put back empty (sent, or all of
+  /// it taken out), a new one for what is written next. Answers the name.
+  putDraft(station: string, chat: string, value: unknown): { id: string } {
     const key = this.#keys(draftKey(station, chat))[0]!;
     const was = this.#state(key);
     const s = this.#from(value, was.db);
-    if (!s.text.trim() && s.quotes.length === 0 && s.files.length === 0) s.text = "";
+    const blank = !s.text.trim() && s.quotes.length === 0 && s.files.length === 0 && !s.files.some((f) => f.link);
+    if (blank) s.text = "";
+    s.id = blank ? "" : this.#id(was);
+    this.#id(s);
     s.rev = was.rev + 1;
     s.version = was.version;
     s.joined = was.joined;
     this.release(was.files);
     this.#all.set(key, s);
     this.#changed(key, s);
+    return { id: s.id };
   }
 
   /// A change made: the topic told, the chat's draft kept (written a moment after its last change).
@@ -525,8 +546,10 @@ export class Composers {
   /// What is written, taken to be sent (the words trimmed), the composer left empty; `restore` puts it back.
   take(key: string): { text: string; attachments: J[]; quotes: J[]; files: string[]; version: number } {
     const s = this.#state(key);
-    const taken = { text: s.text, quotes: s.quotes, files: s.files };
+    const taken = { text: s.text, quotes: s.quotes, files: s.files, id: this.#id(s) };
     s.taken = taken;
+    // what is written next is another draft
+    s.id = "";
     this.#say(s, "");
     s.quotes = [];
     s.files = [];
@@ -557,6 +580,7 @@ export class Composers {
     this.#say(s, back.text);
     s.quotes = back.quotes;
     s.files = back.files;
+    s.id = back.id;
     s.error = error;
     return this.#changed(key, s);
   }
@@ -569,7 +593,7 @@ export class Composers {
     if (from === to) return s.version;
     // Counted on from where `to` was: what was shown of it before is older than this.
     const was = this.#state(to);
-    const next = { ...empty(was.db), joined: was.joined, text: s.text, rev: was.rev + 1, quotes: s.quotes, files: s.files, version: was.version };
+    const next = { ...empty(was.db), joined: was.joined, text: s.text, rev: was.rev + 1, quotes: s.quotes, files: s.files, version: was.version, id: s.id };
     this.#all.set(to, next);
     this.#all.set(from, { ...empty(s.db), joined: s.joined, rev: s.rev + 1, version: s.version });
     this.#changed(from, this.#all.get(from)!);

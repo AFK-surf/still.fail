@@ -66,6 +66,7 @@ import fail.still.android.data.Buddy
 import fail.still.android.data.StillFailJson
 import fail.still.android.data.Topics
 import fail.still.android.data.rememberTopic
+import fail.still.android.ui.pressText
 import fail.still.android.ui.C
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
@@ -76,6 +77,7 @@ import fail.still.android.ui.Waiting
 import fail.still.android.ui.NavBar
 import fail.still.android.ui.SectionHeader
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.BUTTON_HEIGHT
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import java.io.ByteArrayOutputStream
@@ -327,7 +329,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(t("android-settings.slack.iconNote"), fontSize = 13.sp, color = C.muted)
-                Text(t("android-settings.slack.uploadImage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openPicker() })
+                Text(t("android-settings.slack.uploadImage"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { openPicker() })
             }
         }
         AvatarGrid(buddyList + MAKER_AVATARS, picked?.id) { pick(it) }
@@ -336,7 +338,7 @@ internal fun AppLook(draft: AppDraft, icon: IconPick?, onIcon: (IconPick?, Strin
             Box(Modifier.size(44.dp).clip(Smooth(12.dp)).background(Color(parseColor(draft.color))))
             Field(draft.color, { colour(it.trim().uppercase(), true) }, "#RRGGBB", mono = true, modifier = Modifier.weight(1f))
             if (recommended != null && colourSet && !recommended.equals(draft.color, ignoreCase = true)) {
-                Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { colour(recommended, false) })
+                Text(t("android-settings.slack.recommended"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { colour(recommended, false) })
             }
         }
     }
@@ -424,7 +426,7 @@ fun SlackAppScreen(station: String, connect: String) {
                 }
             }
             view.links?.settings?.takeIf { it.isNotEmpty() }?.let { url ->
-                Text(t("android-settings.slack.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(url) }.padding(vertical = 4.dp))
+                Text(t("android-settings.slack.open"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open(url) }.padding(vertical = 4.dp))
             }
         }
     }
@@ -444,7 +446,8 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     val changes = draft.changes()
     val dirty = changes.isNotEmpty() || icon != null
     if (approve && links != null) Column(
-        Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.blue.copy(alpha = 0.10f)).padding(horizontal = 12.dp, vertical = 10.dp),
+        // Its button in its corner, 12 from both edges: its corner that and the button's half, concentric.
+        Modifier.fillMaxWidth().clip(Smooth(12.dp + BUTTON_HEIGHT / 2)).background(C.blue.copy(alpha = 0.10f)).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -464,7 +467,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
     Row(Modifier.fillMaxWidth().clickable { perms = !perms }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         IconIn(if (perms) Icons.ChevronDown else Icons.ChevronRight, 14.dp, C.muted)
         Text(t("android-settings.slack.perms", "on" to on, "n" to SLACK_GROUP_WORDS.size), fontSize = 14.sp, color = C.muted, modifier = Modifier.weight(1f))
-        if (on < SLACK_GROUP_WORDS.size) Text(t("android-settings.slack.allOn"), fontSize = 14.sp, color = C.accent,
+        if (on < SLACK_GROUP_WORDS.size) Text(t("android-settings.slack.allOn"), fontSize = 14.sp, color = C.link,
             modifier = Modifier.clickable { draft.groups = SLACK_GROUP_WORDS.associate { (g, _) -> g to true } })
     }
     val words = SLACK_GROUP_WORDS.toMap()
@@ -473,7 +476,7 @@ private fun AppForm(station: String, connect: String, settings: SlackAppSettings
         val all = groups.all { draft.groups[it] == true }
         Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, fontSize = 13.sp, color = C.muted)
-            Text(if (all) t("android-settings.none") else t("android-settings.all"), fontSize = 13.sp, color = C.accent,
+            Text(if (all) t("android-settings.none") else t("android-settings.all"), fontSize = 13.sp, color = C.link,
                 modifier = Modifier.clickable { draft.groups = draft.groups + groups.associateWith { it == "base" || !all } })
         }
         groups.forEach { g ->

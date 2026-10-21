@@ -12,10 +12,10 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Logins, type Login, Refused } from "../src/logins/index.ts";
 import type { Callback } from "../src/logins/relay.ts";
-import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, prompts, saysDone, storesSecret, urlsIn } from "../src/logins/parse.ts";
-import { QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
+import { asksEnter, commandWords, deviceCodeIn, deviceUrls, loopbackOf, plainText, programOf, prompts, saysDone, storesSecret, unwrapped, urlsIn } from "../src/logins/parse.ts";
+import { COLS, QUIET_MS, STALL_MS, TIMEOUT_MS } from "../src/logins/run.ts";
 import { routes } from "../src/api/routes/logins.ts";
-import { endedNotice, loginTools, screenFor } from "../src/tools/login.ts";
+import { act, endedNotice, loginTools, promptNotice, screenFor } from "../src/tools/login.ts";
 import { WINDOWS, platform } from "../src/platform/index.ts";
 import { approval, script, temp, upon } from "./accounts-fakes.ts";
 import { settle, testClock } from "./hub-fakes.ts";
@@ -26,6 +26,7 @@ type Json = any;
 
 test("pages, loopback callbacks and device codes are read as the CLIs say them", () => {
   assert.equal(plainText("\u001b]11;?\u001b\\\u001b[0;1;92m? \u001b[0mAuthenticate\r\nok\rnext"), "? Authenticate\nok\nnext");
+  assert.equal(plainText("a\r\r\nb\r\r\rc"), "a\nb\nc");
   assert.deepEqual(urlsIn("Login at:\nhttps://www.npmjs.com/login?next=/login/cli/abc.\nPress ENTER (see https://x.io/a))"), ["https://www.npmjs.com/login?next=/login/cli/abc", "https://x.io/a"]);
   // gcloud: localhost, a port, the root path; its state.
   const g = loopbackOf("https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=x&redirect_uri=http%3A%2F%2Flocalhost%3A8085%2F&scope=openid&state=Ab1&code_challenge=c");
@@ -64,6 +65,36 @@ test("pages, loopback callbacks and device codes are read as the CLIs say them",
   assert.deepEqual(commandWords(`vercel login --scope "my team" 'a b' c\\ d`), ["vercel", "login", "--scope", "my team", "a b", "c d"]);
   assert.equal(commandWords(`gh "open`), null);
   assert.deepEqual(commandWords("  "), []);
+});
+
+/// Devin's sign-in page (Devin CLI 3000.11.92, `devin auth login --force-manual-token-flow`): longer than the terminal is
+/// wide, its PKCE challenge with a run of capitals and digits in it that reads like a code.
+const DEVIN_PAGE = "https://app.devin.ai/auth/cli/continue?state=Zr8wq1VbN0cT5yHk2LmP9sXa4Jd7Ue0RtWo6Gi3Ny5Bf1Mh8Kl2Sp9Qc&prompt=select_account&code_challenge=xQ2-K9ZTRW4P_vb7Hq0nLm3cYt8sWe1aD5fGj6kU4rI&code_challenge_method=S256&cli_pkce_marker=1";
+
+test("a login's program by its name, past env, its variables and what only runs it; a link broken at the terminal's width put together; no device code read from a page's parameters", () => {
+  assert.equal(programOf(["env", "HOME=/x/home", "XDG_DATA_HOME=/x/home/.local/share", "XDG_CONFIG_HOME=/x/home/.config", "/x/bin/devin", "auth", "login", "--force-manual-token-flow"]), "devin");
+  assert.equal(programOf(["GH_HOST=github.com", "gh", "auth", "login"]), "gh");
+  assert.equal(programOf(["env", "-i", "-u", "TOKEN", "A=b", "gcloud", "auth", "login"]), "gcloud");
+  assert.equal(programOf(["sudo", "-u", "bob", "-E", "/usr/local/bin/az", "login"]), "az");
+  assert.equal(programOf(["npx", "-y", "vercel@latest", "login"]), "vercel");
+  assert.equal(programOf(["pnpm", "dlx", "@azure/static-web-apps-cli@2", "login"]), "static-web-apps-cli");
+  assert.equal(programOf(["uvx", "--from", "azure-cli", "az", "login"]), "az");
+  assert.equal(programOf(["pnpm", "login"]), "pnpm");
+  assert.equal(programOf(["env"]), "env");
+  // Broken at 200 columns by the program itself (no box, so the line is as wide as the terminal): put together again.
+  const line = `Visit ${DEVIN_PAGE} to sign in, then copy the code and paste it below.`;
+  assert.ok(DEVIN_PAGE.length > COLS);
+  const broken = `${line.slice(0, COLS)}\n${line.slice(COLS)}\n\n Code:\n ❭ ••••`;
+  assert.deepEqual(urlsIn(broken), [DEVIN_PAGE.slice(0, COLS - "Visit ".length)], "as it is said, the link ends where the line does");
+  assert.deepEqual(urlsIn(unwrapped(broken, COLS)), [DEVIN_PAGE]);
+  assert.ok(unwrapped(broken, COLS).endsWith(`${DEVIN_PAGE} to sign in, then copy the code and paste it below.\n\n Code:\n ❭ ••••`));
+  // Over three lines; a short line ending in a link is left as it is.
+  const long = `https://x.example/${"a".repeat(2 * COLS)}`;
+  assert.deepEqual(urlsIn(unwrapped(`${long.slice(0, COLS)}\n${long.slice(COLS, 2 * COLS)}\n${long.slice(2 * COLS)}\nnext`, COLS)), [long]);
+  assert.equal(unwrapped("open https://github.com/login/device\nand enter the code", COLS), "open https://github.com/login/device\nand enter the code");
+  // A PKCE challenge's capitals are no device code.
+  assert.equal(deviceCodeIn(`${line}\n\n Code:`), null);
+  assert.equal(deviceCodeIn("open https://login.microsoft.com/device?x=ABCD-1234 and enter the code GQGFJ2QXM"), "GQGFJ2QXM");
 });
 
 // ── logins run for real ──
@@ -153,7 +184,7 @@ echo "Logged in as octocat"
   }
 });
 
-test("a login whose page gives a code to paste back (gcloud --no-launch-browser): the person's to enter from the card, not its agent's, typed with Enter", { skip: skipped }, async () => {
+test("a login whose page gives a code to paste back (gcloud --no-launch-browser): its agent says so, not the station; the person's to enter from the card, typed with Enter", { skip: skipped }, async () => {
   const m = machine();
   const page = "https://accounts.google.com/o/oauth2/auth?response_type=code&client_id=1.apps.googleusercontent.com&redirect_uri=https%3A%2F%2Fsdk.cloud.google.com%2Fauthcode.html&state=s1";
   script(join(m.bin, "fakegcloud"), `#!/bin/sh
@@ -168,22 +199,84 @@ echo "You are now logged in as [a@x.com]."
 `);
   const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
   try {
-    const started = await m.logins.start("fakegcloud auth login --no-launch-browser", m.by);
-    // Not before it asks: nothing is to be entered yet.
-    assert.throws(() => m.logins.answer(started.id, "4/abc"), /does not wait for a code/);
-    await m.quietAt(started.id, "enter the verification code");
-    const asks = await m.until(started.id, (l) => l.paste === true, "paste");
-    assert.deepEqual([asks.step, asks.url, asks.waiting], ["open", page, true]);
-    // Its agent is told the card takes it, not to answer the prompt.
-    const told = await tool!.run("ember:c-1", { id: started.id });
-    assert.match(told, /enter what it gives \(a code\) in the login card/);
-    assert.match(told, /do not answer this prompt yourself/);
-    assert.throws(() => m.logins.answer(started.id, "  "), /text/);
-    assert.throws(() => m.logins.answer(started.id, "a\nb"), /one line/);
-    const answered = m.logins.answer(started.id, " 4/0AXlq-code ", { email: "b@x.com", name: "李四" });
-    assert.equal(answered.doneBy?.name, "李四");
-    await m.until(started.id, (l) => l.state === "done", "done");
-    assert.ok(m.screen(started.id).includes("got [4/0AXlq-code]"), m.screen(started.id));
+    // Waiting on its prompt is told in the answer of its agent's call, the call waiting on it then (no notice besides).
+    const heard: boolean[] = [];
+    const stop = m.logins.changes(({ login }) => {
+      if (m.logins.get(login)?.waiting) heard.push(m.logins.heard(login));
+    });
+    const starting = tool!.run("ember:c-1", { command: "fakegcloud auth login --no-launch-browser" });
+    const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
+    await m.quietAt(id, "enter the verification code");
+    const first = await starting;
+    stop();
+    assert.deepEqual(heard, [true]);
+    assert.ok(!m.logins.heard(id));
+    // The station does not decide it waits for the page's code: its agent, from the screen.
+    const asks = m.logins.get(id)!;
+    assert.deepEqual([asks.step, asks.url, asks.waiting, asks.paste], ["open", page, true, undefined]);
+    assert.match(first, /unless it asks for what the page it gave hands out \(a code to paste back\): then do not answer it; login \{id, paste: true\}/);
+    // Not before its agent says so: nothing is to be entered on the card yet.
+    assert.throws(() => m.logins.answer(id, "4/abc"), /does not wait for a code/);
+    const told = await tool!.run("ember:c-1", { id, paste: true });
+    assert.equal(m.logins.get(id)!.paste, true);
+    assert.match(told, /enter what it gives \(a code\) in the login card's field/);
+    assert.match(told, /do not answer its prompt yourself/);
+    assert.throws(() => m.logins.answer(id, "  "), /text/);
+    assert.throws(() => m.logins.answer(id, "a\nb"), /one line/);
+    const answered = m.logins.answer(id, " 4/0AXlq-code ", { email: "b@x.com", name: "李四" });
+    assert.deepEqual([answered.doneBy?.name, answered.paste, answered.state], ["李四", true, "verifying"], "entered: the field stays, what was entered checked in place");
+    assert.throws(() => m.logins.answer(id, "4/again"), /being checked/);
+    await m.until(id, (l) => l.state === "done", "done");
+    assert.ok(m.screen(id).includes("got [4/0AXlq-code]"), m.screen(id));
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("Devin's sign-in (env and its variables before it, a page longer than the terminal is wide, then a masked field read key by key): named devin, the whole page given, and a field on the card once its agent says so", { skip: skipped }, async () => {
+  const m = machine();
+  // As Devin draws it: the line broken at the terminal's width by the program, the code read in raw mode with no echo,
+  // a dot drawn for each key.
+  script(join(m.bin, "fakedevin"), `#!/usr/bin/env node
+const out = (s) => process.stdout.write(s);
+const line = ${JSON.stringify(`Visit ${DEVIN_PAGE} to sign in, then copy the code and paste it below.`)};
+const cols = Number(process.env.COLUMNS) || 80;
+out(line.slice(0, cols) + "\\r\\n" + line.slice(cols) + "\\r\\n\\r\\n Code:\\r\\n ❭ " + "•".repeat(42) + "\\r\\n ↵ submit · esc cancel\\u001b[1A\\r\\u001b[3C");
+process.stdin.setRawMode(true);
+let code = "";
+process.stdin.on("data", (d) => {
+  for (const c of d.toString()) {
+    if (c === "\\r") {
+      out("\\r\\n\\r\\n\\r\\ngot [" + code + "] for " + process.env.XDG_CONFIG_HOME + "\\r\\n");
+      process.exit(0);
+    }
+    code += c;
+    out("•");
+  }
+});
+`);
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: (_s, id) => `https://still.fail/w/w1/s/st/login/${id}` });
+  const home = join(m.home, "devin");
+  try {
+    const command = `env HOME=${home} XDG_DATA_HOME=${home}/.local/share XDG_CONFIG_HOME=${home}/.config ${join(m.bin, "fakedevin")} auth login --force-manual-token-flow`;
+    const starting = tool!.run("ember:c-1", { command });
+    const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
+    await m.quietAt(id, "❭");
+    const first = await starting;
+    const login = m.logins.get(id)!;
+    assert.equal(login.name, "fakedevin");
+    // The whole page, past the line's end; no code read from its challenge; nothing the station decides it waits for.
+    assert.deepEqual([login.step, login.state, login.url, login.code, login.paste], ["open", "browser", DEVIN_PAGE, undefined, undefined]);
+    assert.match(first, /if the screen says the page gives a code to paste back here, first login \{id, paste: true\}/);
+    assert.ok(first.includes("copy the code and paste it below") && !first.includes("app.devin.ai"), first);
+    assert.throws(() => m.logins.answer(id, "abc"), /does not wait for a code/);
+    // Its agent says so: the card's field, and what the person enters typed at its masked field with Enter.
+    assert.match(await tool!.run("ember:c-1", { id, paste: true }), /in the login card's field/);
+    assert.equal(m.logins.get(id)!.paste, true);
+    const answered = m.logins.answer(id, "dvn_code-123", { email: "b@x.com", name: "李四" });
+    assert.deepEqual([answered.paste, answered.state], [true, "verifying"]);
+    await m.until(id, (l) => l.state === "done", "done");
+    assert.ok(m.screen(id).includes(`got [dvn_code-123] for ${home}/.config`), m.screen(id));
   } finally {
     await m.logins.close();
   }
@@ -229,6 +322,47 @@ read ok < '${approved.path}'
     await m.until(id, (l) => l.state === "done", "done");
     assert.match(await tool!.run("ember:c-1", { id }), /It finished/);
     await assert.rejects(tool!.run("ember:c-1", { id, key: "f13" }), /key: one of/);
+  } finally {
+    await m.logins.close();
+  }
+});
+
+test("a login another station's agent started (its tool's station): told where it runs and the card's station, its own logins only, told as it ends", { skip: skipped }, async () => {
+  const m = machine();
+  const approved = approval(m.home);
+  script(join(m.bin, "fakegh"), `#!/bin/sh
+echo "! First copy your one-time code: 1A2B-C3D4"
+"$BROWSER" https://github.com/login/device
+echo "Waiting for the browser"
+read ok < '${approved.path}'
+`);
+  const here = { station: "b".repeat(64), name: "Mini1" };
+  const peer = (station: string) => ({ starter: () => ({ ...m.by, chat: null, chatTitle: "部署", peer: { station, session: "ember:c-a" } }), link: (id: string) => `https://still.fail/w/w1/s/${here.station}/login/${id}`, where: here, mine: (id: string) => m.logins.starterOf(id)?.peer?.station === station });
+  // The agent's tool hands a call naming a station to the station transport (logins/module.ts), as it was given.
+  const asked: unknown[] = [];
+  const [tool] = loginTools({ logins: () => m.logins, starter: () => ({ ...m.by, chat: "ember:c-1" }), link: () => null, remote: async (station, session, args) => (asked.push({ station, session, args }), "told there") });
+  try {
+    assert.equal(await tool!.run("ember:c-1", { station: "Mini1", command: "gh auth login" }), "told there");
+    assert.deepEqual(asked, [{ station: "Mini1", session: "ember:c-1", args: { station: "Mini1", command: "gh auth login" } }]);
+    // On the station it runs on: started for the other station's agent, its chat none here.
+    const starting = act(m.logins, { command: "fakegh auth login" }, peer("a".repeat(64)));
+    const id = await upon((w) => m.logins.changes(w), () => m.logins.logins()[0]?.id, "started");
+    await upon((w) => m.logins.follow(id, w), () => m.screen(id).includes("Waiting for the browser"), "opened");
+    await settle(5);
+    await m.time.adjust(QUIET_MS);
+    const ready = await starting;
+    assert.ok(ready.includes(`card {"type": "login", "login": "${id}", "station": "${here.station}"}`), ready);
+    assert.match(ready, /who should log in to what on Mini1 and why/);
+    assert.match(ready, /"stationName": "Mini1"/);
+    assert.equal(m.logins.get(id)!.chat, undefined, "no chat of this station's");
+    assert.deepEqual(m.logins.starterOf(id)!.peer, { station: "a".repeat(64), session: "ember:c-a" });
+    // Another station acts only on the logins it started.
+    await assert.rejects(act(m.logins, { id }, peer("c".repeat(64))), /no login/);
+    assert.match(await act(m.logins, { id }, peer("a".repeat(64))), /The person's browser step is ready/);
+    assert.match(promptNotice(m.logins, m.logins.get(id)!, null, here), /^The login on Mini1 you started/);
+    await approved.approve();
+    const done = await m.until(id, (l) => l.state === "done", "done");
+    assert.match(endedNotice(done, null, here), /^The login on Mini1 you started or posted a card for, fakegh auth login/);
   } finally {
     await m.logins.close();
   }
@@ -569,6 +703,8 @@ test("the routes: a read-only member's list has no pages or codes; no route star
     assert.equal((await read(ask(answer!, "viewer", { text: "x" }, [started.id]))).status, 403);
     const typed = await read(ask(answer!, "member", { text: "x" }, [started.id]));
     assert.deepEqual([typed.status, typed.body.error], [409, "this login does not wait for a code from its page"]);
+    // Nor may its agent say it does, with a device code and no page to sign in on and come back from.
+    assert.throws(() => m.logins.paste(started.id, true), /only once it has given a page to open/);
     const cancelled = (await read(ask(cancel!, "member", {}, [started.id]))).body;
     assert.deepEqual([cancelled.state, cancelled.doneBy], ["cancelled", { email: "a@x.com", name: "张三" }], "who finished it: who cancelled it");
   } finally {

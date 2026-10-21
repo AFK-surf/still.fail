@@ -3,8 +3,12 @@
 // would have the whole of it read again at full price; instead the agent reads back what it needs (session_history,
 // chat_history). The runtime sessions a session ran in are kept in order (store `runtime_sessions`), and its history
 // reads them as one (live.ts ChainTail).
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { afresh, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
+import { log } from "../ops/log.ts";
+import { transcriptPath } from "../read/transcript.ts";
 import type { Hub } from "./hub.ts";
 
 /// What a session going on on `to` is told when it starts afresh rather than take up runtime session `id`, last run on
@@ -13,4 +17,29 @@ export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was
   const from = hub.store.ranOn(key, id) ?? was;
   if (from === null || from === to.id) return null;
   return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+}
+
+/// Claude's subagents `ids` of runtime session `from`, stopped with its process, copied to session `to` (just started on
+/// `on`) so that SendMessage takes them up there where they stopped: a subagent's transcript is in its session's
+/// (<project>/<session>/subagents/agent-<id>.jsonl, with its .meta.json). The ids copied.
+export function carrySubagents(hub: Hub, from: string, to: string, on: Profile, ids: string[]): string[] {
+  if (ids.length === 0 || on.runtime !== "claude") return [];
+  const homes = [on.home, ...hub.config().profiles.map((p) => p.home).filter((h) => h !== on.home)];
+  const main = homes.map((home) => transcriptPath("claude", home, from)).find((p) => p != null);
+  if (!main) return [];
+  const source = join(dirname(main), from, "subagents");
+  // The same project's in the home it starts in (the shared one, where homes share their transcripts).
+  const target = join(on.home, "projects", basename(dirname(main)), to, "subagents");
+  const carried: string[] = [];
+  for (const id of ids) {
+    try {
+      if (!existsSync(join(source, `agent-${id}.jsonl`))) continue;
+      mkdirSync(target, { recursive: true });
+      for (const ext of ["jsonl", "meta.json"]) if (existsSync(join(source, `agent-${id}.${ext}`))) copyFileSync(join(source, `agent-${id}.${ext}`), join(target, `agent-${id}.${ext}`));
+      carried.push(id);
+    } catch (error) {
+      log.warn("session", "could not carry a subagent to the new runtime session", { from, to, subagent: id, error: (error as Error).message });
+    }
+  }
+  return carried;
 }

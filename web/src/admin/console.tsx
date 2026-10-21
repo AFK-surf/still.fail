@@ -4,13 +4,13 @@
 // the page is (a list's words, filter and sort, the item open) is in its URL, so a link shows the same.
 import { useTopic } from "../core/react.ts";
 import type { CoreError, Topic } from "../core/client.ts";
-import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Ticket, Users } from "@stillfail/ui/icons.tsx";
+import { Boxes, ChevronRight, Close, Copy, LogOut, Monitor, Plus, Said, Search, Server, Ticket, Users } from "@stillfail/ui/icons.tsx";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { Lockup } from "../brand.tsx";
 import { stamp, type Stamp } from "../api.ts";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
-import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
+import { Button, Confirm, CopyCommand, Dialog, Field, IconButton, MobileBack, Pill, ResizeHandle, Segmented, Select, StatusDot, Switch, SwitchRow, Time, ICON, type Presence, type Tone, Waiting } from "../ui.tsx";
 import { useAccounts, useSignOut, type Account } from "../cloud/accounts.ts";
 import { admin, useAction, type FeedbackStatus } from "../cloud/api.ts";
 import { Prose } from "../Prose.tsx";
@@ -65,7 +65,11 @@ type UserPage = Timed & {
 };
 type WorkspacePage = Timed & {
   id: string; title: string; creator: { id: string; title: string } | null; people: string;
+  /** Missing from a core from before. */
+  stationCount?: string; plan?: string | null; limits?: { members: number; stations: number } | null; enrollable?: boolean;
   members: (Timed & { id: string; title: string; person: PersonLike; role: string })[];
+  /** Emails added that have not signed in yet. */
+  added?: (Timed & { id: string; email: string; line: string })[];
   stations: (Timed & { id: string; name: string; version: string | null; outdated: boolean; state: Presence })[];
   invitations: (Timed & { id: string; email: string; line: string })[];
 };
@@ -77,6 +81,23 @@ type FeedbackPage = Timed & {
   /** All of it as plain text, to hand to an agent. */
   text: string;
 };
+type Range = "day" | "week";
+type RelaysView = {
+  range: Range;
+  ranges: { id: Range; label: string }[];
+  relays: Relay[];
+};
+type Relay = {
+  url: string; name: string;
+  state: "online" | "offline" | "error";
+  /** When it was last heard from, said for people ("1 分钟前更新"). */
+  seen: string;
+  numbers: { label: string; value: string; tone?: "amber" | "red" }[];
+  charts: RelayChart[];
+  /** Where times are marked along the charts: `index` a bucket's. */
+  ticks: { index: number; label: string }[];
+};
+type RelayChart = { id: string; label: string; peak: string; series: { id: string; label: string; values: (number | null)[] }[] };
 type Overview = {
   stats: { label: string; value: number; note: string; list: List; filter: string }[];
   weeks: { count: number; label: string }[];
@@ -111,6 +132,7 @@ export function Console({ account }: { account: Account }) {
           <NavLink className={nav.navRow} to="/workspaces"><Boxes {...ICON} />Workspace</NavLink>
           <NavLink className={nav.navRow} to="/codes"><Ticket {...ICON} />{t("web-pages.cloud.inviteCode")}</NavLink>
           <NavLink className={nav.navRow} to="/feedback"><Said {...ICON} />{t("web-pages.admin.feedback")}</NavLink>
+          <NavLink className={nav.navRow} to="/relays"><Server {...ICON} />{t("web-pages.admin.relays")}</NavLink>
         </div>
         <div className={`${nav.navFootRow} ${css.adminFoot}`}>
           <span className={css.adminAccount}><Avatar account={account} size={20} /><span className={css.accountEmail}>{account.email}</span></span>
@@ -125,6 +147,7 @@ export function Console({ account }: { account: Account }) {
           <Route path="workspaces/:id?" element={<ListPage account={account} list="workspaces" />} />
           <Route path="codes" element={<ListPage account={account} list="invite-codes" />} />
           <Route path="feedback/:id?" element={<ListPage account={account} list="feedback" />} />
+          <Route path="relays" element={<RelaysPage account={account} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
@@ -186,6 +209,112 @@ function OverviewPage({ account }: { account: Account }) {
   );
 }
 
+// ── the relays ──────────────────────────────────────────────────────────
+
+/** still.fail's relays, a card each: how each stands, its numbers, and its load over the range picked (in the URL). */
+function RelaysPage({ account }: { account: Account }) {
+  const [params, setParams] = useSearchParams();
+  const range = params.get("range") === "week" ? "week" : undefined;
+  const { value: view, error } = useKept<RelaysView>({ topic: "adminRelays", account: account.sub, ...(range ? { range } : {}) });
+  const pick = (to: Range) => setParams((p) => { const next = new URLSearchParams(p); if (to === "day") next.delete("range"); else next.set("range", to); return next; }, { replace: true });
+  // A still.fail cloud from before has none.
+  const none = error?.status === 404 || view?.relays.length === 0;
+  return (
+    <div className={`${pagesCss.page} ${css.mid}`}>
+      <MobileBack to="/" label={t("web-pages.admin.title")} />
+      <header className={pagesCss.pageHead}>
+        <div><h1>{t("web-pages.admin.relays")}</h1></div>
+        {view && view.ranges.length > 1 && (
+          <Segmented<Range> label={t("web-pages.admin.relays.range")} value={view.range} onChange={pick} options={view.ranges.map((r) => ({ value: r.id, label: r.label }))} />
+        )}
+      </header>
+      {none ? <p className={css.relaysNone}>{t("web-pages.admin.relays.none")}</p> : <Failed error={error} />}
+      {!view ? !error && <Waiting shape="cards" count={3} /> : !none && (
+        <div className={css.relays}>{view.relays.map((r) => <RelayCard key={r.url} relay={r} />)}</div>
+      )}
+    </div>
+  );
+}
+
+function RelayCard({ relay }: { relay: Relay }) {
+  return (
+    <section className={`${pagesCss.card} ${css.relay}`} aria-label={relay.name}>
+      <div className={css.relayHead}>
+        <StatusDot state={relay.state} />
+        <b>{relay.name}</b>
+        <span className={css.relaySeen}>{relay.seen}</span>
+      </div>
+      {relay.numbers.length > 0 && (
+        <dl className={css.relayNumbers}>
+          {relay.numbers.map((n) => (
+            <div key={n.label}><dt>{n.label}</dt><dd data-tone={n.tone}>{n.value}</dd></div>
+          ))}
+        </dl>
+      )}
+      {relay.charts.map((c) => <LoadChart key={c.id} chart={c} ticks={relay.ticks} />)}
+    </section>
+  );
+}
+
+/** Each series' line, in a fixed order (the first blue, the second the accent): the same series the same colour in every chart. */
+const SERIES = [css.seriesFirst, css.seriesSecond];
+
+/**
+ * One chart of a relay's load: a line for each series (a lone one with a faint wash under it: two washes over each
+ * other only muddy), from 0 at the foot to the highest value of any of its series at the top (its peak, said above
+ * it); a gap where a bucket has no value.
+ */
+function LoadChart({ chart, ticks }: { chart: RelayChart; ticks: Relay["ticks"] }) {
+  const n = Math.max(1, ...chart.series.map((s) => s.values.length));
+  const top = Math.max(0, ...chart.series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
+  // Drawn in a box 0–100 across (stretched to the chart's width; the lines keep their width) and 0–100 down.
+  const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
+  const y = (v: number) => (top > 0 ? 100 - (v / top) * 100 : 100);
+  return (
+    <figure className={css.loadChart} aria-label={`${chart.label} · ${chart.peak}`}>
+      <figcaption className={css.loadHead}>
+        <b>{chart.label}</b>
+        {chart.series.length > 1 && chart.series.map((s, i) => <span key={s.id} className={`${css.legend} ${SERIES[i % SERIES.length]}`}>{s.label}</span>)}
+        <span className={css.peak}>{chart.peak}</span>
+      </figcaption>
+      <div className={css.plot}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <line className={css.rule} x1="0" x2="100" y1="0" y2="0" vectorEffect="non-scaling-stroke" />
+          <line className={css.rule} x1="0" x2="100" y1="100" y2="100" vectorEffect="non-scaling-stroke" />
+          {chart.series.map((s, i) => {
+            const runs = stretches(s.values);
+            return (
+              <g key={s.id} className={SERIES[i % SERIES.length]}>
+                {chart.series.length === 1 && <path className={css.wash} d={runs.map((r) => `M${x(r.from)} 100${r.values.map((v, k) => `L${x(r.from + k)} ${y(v)}`).join("")}L${x(r.from + r.values.length - 1)} 100Z`).join("")} />}
+                <path className={css.trace} vectorEffect="non-scaling-stroke"
+                  d={runs.map((r) => `M${x(r.from)} ${y(r.values[0]!)}${r.values.length === 1 ? "h0" : r.values.slice(1).map((v, k) => `L${x(r.from + k + 1)} ${y(v)}`).join("")}`).join("")} />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className={css.ticks} aria-hidden="true">
+        {ticks.map((tk) => {
+          const at = x(tk.index);
+          return <span key={tk.index} style={{ left: `${at}%` }} data-edge={at < 3 ? "start" : at > 97 ? "end" : undefined}>{tk.label}</span>;
+        })}
+      </div>
+    </figure>
+  );
+}
+
+/** A series' values in the stretches between its gaps (null). */
+function stretches(values: (number | null)[]): { from: number; values: number[] }[] {
+  const out: { from: number; values: number[] }[] = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    const last = out.at(-1);
+    if (last && last.from + last.values.length === i) last.values.push(v);
+    else out.push({ from: i, values: [v] });
+  });
+  return out;
+}
+
 // ── the lists ───────────────────────────────────────────────────────────
 
 // Getters: read in the language at the time.
@@ -211,6 +340,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
   const set = (key: string, value: string | null) => setParams((p) => { const next = new URLSearchParams(p); if (value) next.set(key, value); else next.delete(key); return next; }, { replace: true });
   const [making, setMaking] = useState(false);
   const [granting, setGranting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const search = params.toString() ? `?${params}` : "";
   const detail = id && list !== "invite-codes";
   return (
@@ -221,6 +351,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
           <div><h1>{TITLE[list]}{view && <span className={css.total}>{view.total}</span>}</h1></div>
           {list === "invite-codes" && <Button icon={Plus} variant="primary" onClick={() => setMaking(true)}>{t("web-pages.admin.code.make")}</Button>}
           {list === "users" && <Button icon={Plus} onClick={() => setGranting(true)}>{t("web-pages.admin.pending.add")}</Button>}
+          {list === "workspaces" && <Button icon={Plus} onClick={() => setCreating(true)}>{t("web-pages.admin.ws.new")}</Button>}
         </header>
         <div className={css.toolbar}>
           <label className={css.search}>
@@ -262,6 +393,7 @@ function ListPage({ account, list }: { account: Account; list: List }) {
           : <WorkspaceDetail key={id} account={account} id={id} close={`${PATH.workspaces}${search}`} />)}
       {making && <NewCodeDialog account={account} onClose={() => setMaking(false)} />}
       {granting && <PendingDialog account={account} search={search} onClose={() => setGranting(false)} />}
+      {creating && <NewWorkspaceDialog account={account} search={search} onClose={() => setCreating(false)} />}
     </div>
   );
 }
@@ -416,6 +548,8 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
   const navigate = useNavigate();
   const { value: w, error } = useKept<WorkspacePage>({ topic: "adminItem", account: account.sub, list: "workspaces", id });
   const [deleting, setDeleting] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+  const [limiting, setLimiting] = useState(false);
   const remove = useAction(() => admin.deleteWorkspace(account.sub, id), () => toast(t("web-pages.settings.workspace.deleted")));
   if (!w) return <aside className={css.detail}>{error ? <Failed error={error} /> : <Waiting shape="cards" count={2} />}</aside>;
   return (
@@ -425,7 +559,9 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
     </>}>
       <dl className={css.kv}>
         <dt>{t("web-pages.chat.info.created")}</dt><dd>{w.creator ? <Link className={css.link} to={`${PATH.users}/${encodeURIComponent(w.creator.id)}`}>{w.creator.title}</Link> : t("web-pages.admin.ws.gone")} · <Time stamp={stamp(w, "created_at")} /></dd>
+        {w.plan && <><dt>{t("web-pages.admin.ws.plan")}</dt><dd>{w.plan}</dd></>}
         <dt>{t("web-pages.admin.ws.people")}</dt><dd>{w.people}</dd>
+        {w.stationCount !== undefined && <><dt>Station</dt><dd>{w.stationCount}</dd></>}
       </dl>
       <div className={css.group}>{t("web-pages.admin.ws.members", { n: w.members.length })}</div>
       {w.members.map((m) => (
@@ -436,6 +572,15 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
           <ChevronRight {...ICON} />
         </Link>
       ))}
+      {w.added && w.added.length > 0 && <>
+        <div className={css.group}>{t("web-pages.admin.ws.added", { n: w.added.length })}</div>
+        {w.added.map((a) => (
+          <div key={a.id} className={css.line}>
+            <span className={css.grow}>{a.email}</span>
+            <span className={css.lineAside}>{a.line}</span>
+          </div>
+        ))}
+      </>}
       <div className={css.group}>Station {w.stations.length}</div>
       {w.stations.length === 0 && <div className={css.line} data-quiet>{t("web-pages.admin.ws.noStations")}</div>}
       {w.stations.map((s) => (
@@ -457,7 +602,13 @@ function WorkspaceDetail({ account, id, close }: { account: Account; id: string;
           </div>
         ))}
       </>}
-      <div className={css.actions}><Button variant="danger" onClick={() => setDeleting(true)}>{t("web-pages.settings.workspace.delete")}</Button></div>
+      <div className={css.actions}>
+        {w.enrollable && <Button icon={Plus} onClick={() => setEnrolling(true)}>{t("web-pages.admin.ws.addStation")}</Button>}
+        {w.limits && <Button onClick={() => setLimiting(true)}>{t("web-pages.admin.ws.limits")}</Button>}
+        <Button variant="danger" onClick={() => setDeleting(true)}>{t("web-pages.settings.workspace.delete")}</Button>
+      </div>
+      {enrolling && <EnrollDialog account={account} workspace={id} onClose={() => setEnrolling(false)} />}
+      {limiting && w.limits && <LimitsDialog account={account} workspace={id} limits={w.limits} onClose={() => setLimiting(false)} />}
       {/* Back to the list at once: it goes on by itself, a failure said by toast. */}
       <Confirm open={deleting} onClose={() => setDeleting(false)} onConfirm={() => { setDeleting(false); void navigate(close, { replace: true }); void remove.run(); }}
         title={t("web-pages.settings.workspace.deleteConfirm", { name: w.title })} action={t("web-pages.settings.workspace.delete")}
@@ -572,6 +723,108 @@ function PendingDialog({ account, search, onClose }: { account: Account; search:
       <SwitchRow title={t("web-pages.admin.user.beta")} description={t("web-pages.admin.user.betaHint")} checked={beta} onChange={setBeta} />
       <SwitchRow title={t("web-pages.admin.user.mayCreate")} description={t("web-pages.admin.pending.mayCreateHint")} checked={mayCreate} onChange={setMayCreate} />
       {add.error && <p className={controlsCss.fieldError} role="alert">{add.error.message}</p>}
+    </Dialog>
+  );
+}
+
+// ── a workspace made for a company ──────────────────────────────────────
+
+/** Whole numbers from 1 to the most the cloud takes (directory.ts LIMITS_MAX), or null. */
+const limit = (text: string, max: number): number | null => (/^[0-9]{1,4}$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= max ? Number(text) : null);
+const MAX = { members: 1000, stations: 256 };
+
+function LimitFields({ members, stations, setMembers, setStations, submit }: { members: string; stations: string; setMembers(v: string): void; setStations(v: string): void; submit(): void }) {
+  const enter = (e: React.KeyboardEvent) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); };
+  return (
+    <>
+      <Field label={t("web-pages.admin.ws.memberLimit")} htmlFor="limit-members" hint={t("web-pages.admin.ws.limitHint", { max: MAX.members })}>
+        <input id="limit-members" className={controlsCss.input} inputMode="numeric" value={members} onChange={(e) => setMembers(e.target.value)} onKeyDown={enter} />
+      </Field>
+      <Field label={t("web-pages.admin.ws.stationLimit")} htmlFor="limit-stations" hint={t("web-pages.admin.ws.limitHint", { max: MAX.stations })}>
+        <input id="limit-stations" className={controlsCss.input} inputMode="numeric" value={stations} onChange={(e) => setStations(e.target.value)} onKeyDown={enter} />
+      </Field>
+    </>
+  );
+}
+
+/** Makes a workspace for a company: its name, its owners by email, its limits; opens its page. */
+function NewWorkspaceDialog({ account, search, onClose }: { account: Account; search: string; onClose(): void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [name, setName] = useState("");
+  const [owners, setOwners] = useState("");
+  const [members, setMembers] = useState("20");
+  const [stations, setStations] = useState("2");
+  const emails = owners.split(/[\s,，;；]+/).filter(Boolean);
+  const caps = { members: limit(members, MAX.members), stations: limit(stations, MAX.stations) };
+  const create = useAction(() => admin.createWorkspace(account.sub, { name: name.trim(), owners: emails, members: caps.members!, stations: caps.stations! }), (made) => {
+    toast(t("web-pages.admin.ws.created"));
+    navigate(`${PATH.workspaces}/${encodeURIComponent(made.id)}${search}`);
+    onClose();
+  });
+  const ready = name.trim() !== "" && emails.length > 0 && caps.members !== null && caps.stations !== null && !create.busy;
+  const submit = () => { if (ready) create.run(); };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.admin.ws.new")} description={t("web-pages.admin.ws.newLead")}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" busy={create.busy} disabled={!ready} onClick={submit}>{t("web-pages.admin.ws.create")}</Button>
+      </>}>
+      <Field label={t("web-pages.admin.ws.name")} htmlFor="ws-name">
+        <input id="ws-name" className={controlsCss.input} value={name} autoFocus maxLength={80} onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); }} />
+      </Field>
+      <Field label={t("web-pages.admin.ws.owners")} htmlFor="ws-owners" hint={t("web-pages.admin.ws.ownersHint")}>
+        <input id="ws-owners" className={controlsCss.input} inputMode="email" autoComplete="off" spellCheck={false} value={owners} placeholder="name@example.com" onChange={(e) => setOwners(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(); }} />
+      </Field>
+      <LimitFields members={members} stations={stations} setMembers={setMembers} setStations={setStations} submit={submit} />
+      {create.error && <p className={controlsCss.fieldError} role="alert">{create.error.message}</p>}
+    </Dialog>
+  );
+}
+
+function LimitsDialog({ account, workspace, limits, onClose }: { account: Account; workspace: string; limits: { members: number; stations: number }; onClose(): void }) {
+  const toast = useToast();
+  const [members, setMembers] = useState(String(limits.members));
+  const [stations, setStations] = useState(String(limits.stations));
+  const caps = { members: limit(members, MAX.members), stations: limit(stations, MAX.stations) };
+  const save = useAction(() => admin.setLimits(account.sub, workspace, { members: caps.members!, stations: caps.stations! }), () => { toast(t("web-pages.admin.ws.limitsSaved")); onClose(); });
+  const ready = caps.members !== null && caps.stations !== null && !save.busy;
+  const submit = () => { if (ready) save.run(); };
+  return (
+    <Dialog open onClose={onClose} title={t("web-pages.admin.ws.limits")} description={t("web-pages.admin.ws.limitsLead")}
+      footer={<>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" busy={save.busy} disabled={!ready} onClick={submit}>{t("common.save")}</Button>
+      </>}>
+      <LimitFields members={members} stations={stations} setMembers={setMembers} setStations={setStations} submit={submit} />
+      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
+    </Dialog>
+  );
+}
+
+/** A station's install command for the workspace, the admin not in it: its name first. */
+function EnrollDialog({ account, workspace, onClose }: { account: Account; workspace: string; onClose(): void }) {
+  const [name, setName] = useState("");
+  const make = useAction(() => admin.enroll(account.sub, workspace, name.trim()));
+  const made = make.result;
+  const ready = name.trim() !== "" && !make.busy;
+  return (
+    <Dialog open onClose={onClose} wide title={t("web-pages.admin.ws.addStation")} description={made ? t("web-pages.admin.ws.commandLead") : t("web-pages.admin.ws.addStationLead")}
+      footer={made ? <Button variant="primary" onClick={onClose}>{t("common.done")}</Button> : <>
+        <Button variant="ghost" onClick={onClose}>{t("common.cancel")}</Button>
+        <Button variant="primary" busy={make.busy} disabled={!ready} onClick={() => make.run()}>{t("web-pages.admin.ws.makeCommand")}</Button>
+      </>}>
+      {made ? (
+        <Field label={t("web-pages.settings.enroll.run")}><div className={css.command}><CopyCommand text={made.install} /></div></Field>
+      ) : (
+        <Field label={t("web-pages.admin.ws.stationName")} htmlFor="station-name">
+          <input id="station-name" className={controlsCss.input} value={name} autoFocus maxLength={80} placeholder="Mac mini" onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && ready) make.run(); }} />
+        </Field>
+      )}
+      {make.error && <p className={controlsCss.fieldError} role="alert">{make.error.message}</p>}
     </Dialog>
   );
 }

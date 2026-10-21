@@ -1,0 +1,2 @@
+check "the station has the agent's answer" '[ "$(sql "select count(*) from entries where author_kind=\"agent\" and text=\"收到，这是 agent 的回复 $TAG\"")" -ge 1 ]'
+check "the answer was shown at the list's end" 'grep -q "DRIVE ok untiln 2 收到" $OUT/$name.log'

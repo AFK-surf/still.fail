@@ -1,0 +1,17 @@
+import {
+  "mbui/host",
+  "moonbitlang/core/json",
+}
+
+options(
+  "is-main": true,
+  targets: { "platform_native.mbt": [ "native" ], "platform_js.mbt": [ "js" ] },
+  "native-stub": [ "render_stub.c" ],
+  link: {
+    "js": { "format": "iife" },
+    "native": {
+      "stub-cc-flags": "-O2",
+      "cc-link-flags": "-framework Cocoa -framework Metal -framework QuartzCore -framework CoreText -framework CoreGraphics -framework ImageIO -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework WebKit",
+    },
+  },
+)

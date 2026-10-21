@@ -33,8 +33,11 @@ export function useLongJobs(scope: string, toast: (text: string) => void) {
   return { groups, stop };
 }
 
-/** Its chat's address, when it is in one. */
-export const chatPath = (job: Job) => job.chat && job.station ? `${stationBase(job.station)}/chats/${encodeURIComponent(job.chat.id)}` : null;
+/** Its chat's address, when it is in one (on another station for a task that station's chat runs here). */
+export function chatPath(job: Job): string | null {
+  const station = job.chat?.station ?? job.station;
+  return job.chat && station ? `${stationBase(station)}/chats/${encodeURIComponent(job.chat.id)}` : null;
+}
 
 export function OpenJobs({ scope }: { scope: string }) {
   const toast = useToast();

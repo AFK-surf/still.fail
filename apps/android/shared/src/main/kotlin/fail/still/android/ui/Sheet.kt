@@ -199,8 +199,8 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
                     val p = m.measure(c.copy(minHeight = h, maxHeight = h)); layout(p.width, h) { p.place(0, 0) }
                 }
                 .offset { IntOffset(0, offset.value.toInt()) }
-                .shadow(24.dp, Smooth(topStart = 26.dp, topEnd = 26.dp))
-                .clip(Smooth(topStart = 26.dp, topEnd = 26.dp))
+                .shadow(24.dp, Smooth(topStart = SHEET_CORNER, topEnd = SHEET_CORNER))
+                .clip(Smooth(topStart = SHEET_CORNER, topEnd = SHEET_CORNER))
                 // Frosted glass over the page, as the bars and capsules are. The web's backdrop has the scrim in it (it
                 // frosts all that is behind it); here the pages alone are the source, so the scrim goes under the glass.
                 .then(if (current.solid) Modifier.background(paper) else Modifier.hazeEffect(haze) {
@@ -218,6 +218,29 @@ fun SheetHost(spec: SheetSpec?, haze: HazeState, close: () -> Unit) {
     }
 }
 
+/** A sheet's top corners. */
+val SHEET_CORNER = 26.dp
+/** How tall the grabber's band is (SheetGrab: 8 and 4 round it, 4 more each side of its 5), and where a head's row begins. */
+private val GRAB_HEIGHT = 25.dp
+/** Where a sheet's first row begins: under the grabber's band and 4 more. */
+val SHEET_ROW_TOP = GRAB_HEIGHT + 4.dp
+private val HEAD_TOP = SHEET_ROW_TOP
+private val HEAD_SIDE = 18.dp
+/**
+ * A round button or capsule laid `side` in from the sheet's side and `top` down from its top (where its row puts it, it
+ * the tallest there), moved into the sheet's corner: SHEET_CORNER less its half from both edges, concentric with it.
+ * `end`: the end's corner (else the start's).
+ */
+fun Modifier.sheetCorner(side: Dp, top: Dp, end: Boolean = true): Modifier = layout { m, c ->
+    val p = m.measure(c)
+    val inset = SHEET_CORNER.roundToPx() - p.height / 2
+    val dx = side.roundToPx() - inset
+    layout(p.width, p.height) { p.place(if (end) dx else -dx, inset - top.roundToPx()) }
+}
+
+/** A button in a sheet's corner (SheetHead action): this high, SHEET_CORNER less its half from both edges. */
+val SHEET_ACTION = 32.dp
+
 /** The sheet's grabber: drags a draggable sheet, and a tap switches it between half and full. */
 @Composable
 fun SheetGrab() {
@@ -231,12 +254,18 @@ fun SheetGrab() {
     ) { Box(Modifier.size(38.dp, 5.dp).clip(RoundedCornerShape(3.dp)).background(C.line)) }
 }
 
+/**
+ * A sheet's head, under its grabber. `action`: a button with a ground of its own (a capsule, SHEET_ACTION high), put in
+ * the sheet's corner as far from its top as from its side, so it is concentric with the corner (its half and that
+ * distance the sheet's corner), not 18 from the side and under the grabber's band from the top.
+ */
 @Composable
-fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null, lead: (@Composable () -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+fun SheetHead(title: String, trailing: (@Composable () -> Unit)? = null, lead: (@Composable () -> Unit)? = null, action: (@Composable () -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = HEAD_SIDE, top = HEAD_TOP - GRAB_HEIGHT, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         lead?.invoke()
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = C.ink, modifier = Modifier.weight(1f))
         trailing?.invoke()
+        if (action != null) Box(Modifier.sheetCorner(side = HEAD_SIDE, top = HEAD_TOP)) { action() }
     }
 }
 
@@ -271,7 +300,7 @@ fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
         val width = 180.dp
         val x = with(density) { current.anchor.left.toDp() }.coerceAtMost(maxWidth - width - 12.dp).coerceAtLeast(12.dp)
         // Under the message, or over it when there is no room below.
-        val menuHeight = 45.dp * current.items.size
+        val menuHeight = 45.dp * current.items.size + MENU_PAD * 2
         val below = with(density) { current.anchor.bottom.toDp() } + 6.dp
         val y = if (below + menuHeight < maxHeight - 24.dp) below else (with(density) { current.anchor.top.toDp() } - menuHeight - 6.dp).coerceAtLeast(24.dp)
         val origin = TransformOrigin(0f, if (y == below) 0f else 1f)
@@ -281,10 +310,13 @@ fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
             enter = fadeIn(tween(160, easing = Ease.Out)) + scaleIn(MenuSpring, 0.9f, origin),
             exit = fadeOut(tween(120, easing = Ease.CssOut)) + scaleOut(MenuSpring, 0.9f, origin),
         ) {
-            Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, Smooth(14.dp)).clip(Smooth(14.dp)).background(C.surface)) {
+            // A list panel's (docs/ui-panels.md 小面板): each row's ground under the finger MENU_PAD from the edge,
+            // rounded MENU_ROW, the menu's corner concentric with theirs; their words 16 from the edge.
+            val corner = concentricOut(MENU_ROW, MENU_PAD)
+            Column(Modifier.widthIn(min = width).width(width).shadow(18.dp, Smooth(corner)).clip(Smooth(corner)).background(C.surface).padding(MENU_PAD)) {
                 current.items.forEachIndexed { i, item ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { closed(); item.action() }.padding(horizontal = 16.dp, vertical = 12.dp),
+                        Modifier.fillMaxWidth().clip(Smooth(MENU_ROW)).clickable { closed(); item.action() }.padding(horizontal = 16.dp - MENU_PAD, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(item.label, fontSize = 15.sp, color = C.ink)
@@ -295,6 +327,9 @@ fun MenuHost(spec: MenuSpec?, closed: () -> Unit) {
         }
     }
 }
+
+private val MENU_PAD = 6.dp
+private val MENU_ROW = 14.dp
 
 // ── a short note ───────────────────────────────────────────────────────
 

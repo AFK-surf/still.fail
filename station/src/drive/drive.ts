@@ -16,7 +16,7 @@
 import { statSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, parse } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { platform } from "../platform/index.ts";
@@ -205,9 +205,11 @@ const isDir = (path: string) => stat(path).then((s) => s.isDirectory(), () => fa
 /// The way to `at`: from the home when it is under it (the home first, in words), else from the top.
 function crumbs(at: string, home: string, lang: Lang): { name: string; path: string }[] {
   const under = platform.paths.relativeIn(home, at);
-  const [top, rest] = under !== null ? [{ name: tr(lang, "station.drive.place.home"), path: home }, under] : [{ name: platform.paths.clean("/"), path: platform.paths.clean("/") }, at];
-  const out = [top];
-  let path = top.path;
+  // Else from the top of its own disk (`/`; on Windows its drive, `E:\`).
+  const top = parse(at).root;
+  const [first, rest] = under !== null ? [{ name: tr(lang, "station.drive.place.home"), path: home }, under] : [{ name: top, path: top }, at.slice(top.length)];
+  const out = [first];
+  let path = first.path;
   for (const part of rest.split(/[\\/]/).filter((p) => p !== "")) {
     path = join(path, part);
     out.push({ name: part, path });
@@ -633,14 +635,10 @@ export class Drive {
       const path = join(home, name);
       if (await isDir(path)) found.push({ name: tr(lang, `station.drive.place.${name}`), path, unreadable: this.#unreadable(path) });
     }
-    // Disks: macOS mounts them in /Volumes (the system's own there is a link to /), Linux in /media/<user> and /mnt.
-    for (const mounts of ["/Volumes", join("/media", basename(home)), "/mnt"]) {
-      for (const name of (await readdir(mounts).catch(() => [] as string[])).sort((a, b) => collator.compare(a, b))) {
-        if (name.startsWith(".")) continue;
-        const path = join(mounts, name);
-        if (!(await isDir(path)) || (await real(path)) === "/" || (await this.isProtected(path, await real(path), protect))) continue;
-        found.push({ name, path, unreadable: this.#unreadable(path), disk: true });
-      }
+    // Disks: those the machine has (macOS's own, in /Volumes a link to /, left out).
+    for (const { name, path } of await platform.disks(home)) {
+      if (!(await isDir(path)) || (await real(path)) === "/" || (await this.isProtected(path, await real(path), protect))) continue;
+      found.push({ name, path, unreadable: this.#unreadable(path), disk: true });
     }
     return found;
   }

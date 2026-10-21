@@ -31,7 +31,7 @@ Patents are a separate question from copyright: H.264, HEVC, AAC, AC-3 and other
 
 ## Model and runtime marks
 
-The AI model and runtime logos (`web/public/models/`, `design/mobile/assets/`, the Android `maker_*` drawables and the marks drawn in `web/src/ui.tsx`) are adapted from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0-1.0) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT). The names and logos are trademarks of their respective owners; their use here identifies the services and does not imply endorsement.
+The AI model and runtime logos (`web/public/models/`, `design/mobile/assets/`, the Android `maker_*` drawables, their copies in `apps/mbui/src/sf/drawable_data.mbt` and the marks drawn in `web/src/ui.tsx`) are adapted from [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0-1.0) and [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT). The names and logos are trademarks of their respective owners; their use here identifies the services and does not imply endorsement.
 
 LobeHub Icons is distributed under this notice:
 
@@ -58,6 +58,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## still.fail mbui
+
+`apps/mbui` is written in mbui (MIT, Copyright (c) 2026 still.fail contributors), which is in this repository at `apps/mbui/mbui`; its notices are its `THIRD_PARTY_NOTICES.md`. Its ThumbHash decoder (`apps/mbui/src/gallery/thumbhash.mbt`) is ported from [ThumbHash](https://github.com/evanw/thumbhash)'s reference implementation (MIT, Copyright (c) 2023 Evan Wallace), as `web/src/thumbhash.ts` has it. Its Android build fetches Hermes, JSI and fbjni (MIT, Meta Platforms) and AndroidX Media3 (Apache-2.0) from Maven Central. The pictures its photos and books apps show are drawn by mbui's `scripts/test_images.swift` (CC0 1.0); its `goldens/` are its own output over made-up data, drawn with the system's fonts.
 
 ## Installed dependencies
 

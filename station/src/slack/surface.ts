@@ -1,6 +1,7 @@
-// Slack as a chat surface (chat/slack.rs): Socket Mode for what Slack tells the station (no public endpoint needed),
-// the Web API for what the station and its agents say and ask. One SlackSurface per connected connect; its Socket Mode
-// loop is a fiber in the surface's scope, and stopping the surface closes the scope (the socket with it).
+// Slack as a chat surface (chat/slack.rs): Socket Mode for what Slack tells the station (no public endpoint needed, a
+// card's buttons too), the Web API for what the station and its agents say and ask. One SlackSurface per connected
+// connect; its Socket Mode loop is a fiber in the surface's scope, and stopping the surface closes the scope (the socket
+// with it).
 import { readFile } from "node:fs/promises";
 import { Clock, Deferred, Effect, Exit, FiberSet, Result, Scope } from "effect";
 import WebSocket from "ws";
@@ -8,6 +9,7 @@ import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { log } from "../ops/log.ts";
 import type { Attachment } from "../store/store.ts";
 import { type ChatEvent, type ChatMessage, type ChatSurface, type Handler, type InboundFile, type Person, type ThreadRef, splitForSlack } from "../sessions/chat.ts";
+import { answerOf, answeredBlocks, markdown, questionBlocks } from "./cards.ts";
 import type { NameBook } from "./names.ts";
 import { ThreadStatus } from "./status.ts";
 import { type Params, SlackClient, field } from "./web.ts";
@@ -237,8 +239,12 @@ export type SlackSurfaceOptions = {
 };
 
 const MAX_BACKOFF_MS = 60_000;
+/// The most of a question's words its card carries (Slack takes 12,000 characters of Markdown in a message, and long
+/// options are listed with them).
+const QUESTION_CHARS = 8_000;
 
 export class SlackSurface implements ChatSurface {
+  readonly cards = true;
   readonly appToken: string;
   readonly botToken: string;
   readonly client: SlackClient;
@@ -250,6 +256,8 @@ export class SlackSurface implements ChatSurface {
   private listeners = new Set<() => void>();
   /// Each thread an agent works for: its status line (status.ts).
   private lines = new Map<string, ThreadStatus>();
+  /// The questions answered (their messages' ts): a second press before the card changed is not said again.
+  private answered = new Set<string>();
   private pingMs: number;
   private staleMs: number;
   private backoffMs: number;
@@ -424,6 +432,14 @@ export class SlackSurface implements ChatSurface {
             } catch {}
             return end(null);
           }
+          // A card's button pressed: acknowledged at once (Slack waits 3 s), then said as the person's answer.
+          if (envelope?.type === "interactive") {
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ envelope_id: envelope.envelope_id ?? null }));
+            if (envelope.payload?.type === "block_actions") {
+              void self.answer(envelope.payload, handler).catch((error) => log.error("slack", "failed to take a card's answer", { error: (error as Error).message }));
+            }
+            return;
+          }
           if (envelope?.type !== "events_api") return;
           const event = toEvent(envelope.payload?.event ?? null, bot, botId);
           const envelopeId = envelope.envelope_id ?? null;
@@ -472,26 +488,38 @@ export class SlackSurface implements ChatSurface {
     return this.clock ? socket.pipe(Effect.provideService(Clock.Clock, this.clock)) : socket;
   }
 
-  /// Posted as written (the agent writes Slack's formatting); a long message goes out in parts, the first part's ts
-  /// standing for the whole. Files are uploaded before anything is posted (an app without `files:write` fails there,
-  /// with nothing said), then shared into the thread below the text.
-  async post(thread: ThreadRef, message: string, files: Attachment[]): Promise<string> {
+  /// Posted as written, in a markdown block (Slack draws the agent's Markdown as still.fail does, tables too); a long
+  /// message goes out in parts, the first part's ts standing for the whole. A question (`card`: options or a field) is
+  /// one message with its buttons (cards.ts). Files are uploaded before anything is posted (an app without
+  /// `files:write` fails there, with nothing said), then shared into the thread below the text.
+  async post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string> {
     const uploaded: [string, string][] = [];
     for (const file of files) uploaded.push(await this.upload(file));
     let first: string | null = null;
-    for (const part of splitForSlack(message, 3500).filter((t) => t !== "")) {
+    const send = async (said: string, blocks: Json[]) => {
       const posted = await this.client.api(
         "chat.postMessage",
         [
           ["channel", thread.channel],
           ["thread_ts", thread.threadTs],
-          ["text", part],
+          ["text", said],
+          ["blocks", JSON.stringify(blocks)],
           ["unfurl_links", "false"],
         ],
         this.botToken,
       );
       if (first === null && typeof posted?.ts === "string") first = posted.ts;
+    };
+    const question = card && (card.type === "options" || card.type === "text") ? card : null;
+    let parts = splitForSlack(message, 3500).filter((t) => t !== "");
+    // A question is one message with its buttons; what is too long for it goes before it, in parts.
+    let asking = "";
+    if (question) {
+      if (Array.from(message).length <= QUESTION_CHARS) [asking, parts] = [message, []];
+      else asking = parts.pop() ?? "";
     }
+    for (const part of parts) await send(part, [markdown(part)]);
+    if (question) await send(asking, questionBlocks(asking, question, stationLang()));
     if (uploaded.length > 0) {
       const list = JSON.stringify(uploaded.map(([id, title]) => ({ id, title })));
       const shared = await this.client.api(
@@ -513,6 +541,55 @@ export class SlackSurface implements ChatSurface {
     }
     if (first === null) throw new Error("nothing to post");
     return first;
+  }
+
+  /// A card's send button pressed: said in its thread as the person's message, and the card changed to say who
+  /// answered what. Nothing chosen or written, or answered before: only they are told, and nothing is said.
+  private async answer(payload: Json, handler: Handler) {
+    const answer = answerOf(payload);
+    if (answer === null) return;
+    const channel = text(payload?.channel?.id) || text(payload?.container?.channel_id);
+    const asked = text(payload?.message?.ts) || text(payload?.container?.message_ts);
+    const threadTs = text(payload?.message?.thread_ts) || text(payload?.container?.thread_ts) || asked;
+    const user = text(payload?.user?.id);
+    if (channel === "" || asked === "" || user === "") return;
+    const lang = stationLang();
+    const tell = (key: string) =>
+      this.client.api(
+        "chat.postEphemeral",
+        [
+          ["channel", channel],
+          ["user", user],
+          ["thread_ts", threadTs],
+          ["text", tr(lang, key)],
+        ],
+        this.botToken,
+      );
+    if (answer.said === "") return void (await tell(answer.field ? "station.feishu.answerEmpty" : "station.slack.chooseFirst"));
+    if (this.answered.has(asked)) return void (await tell("station.feishu.answeredBefore"));
+    this.answered.add(asked);
+    // The oldest go once there are many: their cards have changed long since.
+    if (this.answered.size > 500) this.answered.delete(this.answered.values().next().value!);
+    const action = (payload.actions as Json[]).find((a) => text(a?.action_ts) !== "");
+    const ts = text(action?.action_ts) || (wall.now() / 1000).toFixed(6);
+    try {
+      await handler({ type: "message", message: { channel, threadTs, ts, user, text: answer.said, addressed: true } });
+    } catch (error) {
+      this.answered.delete(asked);
+      throw error;
+    }
+    const asking = text(payload?.message?.text);
+    const who = (await this.userName(user)) ?? "";
+    await this.client.api(
+      "chat.update",
+      [
+        ["channel", channel],
+        ["ts", asked],
+        ["text", asking],
+        ["blocks", JSON.stringify(answeredBlocks(asking, who, answer.said, lang))],
+      ],
+      this.botToken,
+    );
   }
 
   /// Sends a file's bytes to Slack (not yet shared anywhere): its file id and title.

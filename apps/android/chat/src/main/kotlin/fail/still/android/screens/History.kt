@@ -115,6 +115,7 @@ import fail.still.android.ui.Seg
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Follow
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.keepsBottom
 import fail.still.android.ui.Smooth
 import fail.still.core.CoreException
 import androidx.compose.ui.platform.LocalDensity
@@ -207,7 +208,7 @@ private fun Summary(agent: ChatAgent) {
             val quota = a.quota
             when {
                 quota != null -> QuotaChip(quota.mark, quota.left, quota.level)
-                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warn)
+                a.kind == "disk" -> Text(a.text, fontSize = 12.sp, color = C.warnInk)
                 else -> Text(a.text, fontSize = 12.sp, color = C.red)
             }
         }
@@ -270,7 +271,7 @@ private fun Steps(station: String, of: ChatOf, agent: ChatAgent, history: Histor
     // A step or thought in brief is read whole as it is opened (`history.detail`).
     val detail: suspend (List<Long>) -> Unit = { entries -> api.historyDetail(agent.session.key, entries) }
     CompositionLocalProvider(LocalFollow provides follow, LocalDetail provides detail) {
-        LazyColumn(Modifier.fillMaxWidth(), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxWidth().keepsBottom(follow), state = list, contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item(key = "edge") { if (older) Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { WaitLine() } else Edge(history.edge) }
             itemsIndexed(lines, key = { _, l -> when (l) { is Line.Live -> "live/${l.step.id}"; is Line.Phase -> "phase"; is Line.Item -> l.item.key } }) { _, line ->
                 when (line) {
@@ -412,7 +413,7 @@ internal fun Pill(text: String, color: androidx.compose.ui.graphics.Color) =
 
 /**
  * A place, as the core names it: its platform's mark and its name; a chat on still.fail's page leads to it, a Slack thread
- * opens in Slack (its link, while a connect is signed in to its workspace).
+ * opens in Slack (its link, while a connect is signed in to its workspace), a Feishu chat in Feishu.
  */
 @Composable
 internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.Place) {
@@ -420,8 +421,8 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
     val context = androidx.compose.ui.platform.LocalContext.current
     // A still.fail chat (surface "ember") is its agent's item: opened by the session it is bound to.
     val chat = place.session?.let { key -> { if (of != ChatOf.Session(key)) app.push(Screen.Chat(station, ChatOf.Session(key))) else app.pop() } }
-    // A Slack thread by its link: the Slack app takes it when installed, the browser otherwise.
-    val slack = place.url?.takeIf { place.surface == "slack" }?.let { url ->
+    // A Slack (or Feishu) thread by its link: the Slack (Feishu) app takes it when installed, the browser otherwise.
+    val slack = place.url?.takeIf { place.surface == "slack" || place.surface == "feishu" || place.surface.startsWith("feishu:") }?.let { url ->
         {
             try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
             catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
@@ -432,7 +433,7 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
         Modifier.clip(Smooth(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp)
+        if (place.surface in setOf("ember", "stillfail")) Mark(12.dp) else SlackMark(12.dp, place.surface)
         Text(place.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (open != null) C.accentInk else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -531,7 +532,7 @@ private fun Folding(name: String, hint: String?, meta: String?, failed: Boolean,
     var open by remember { mutableStateOf(false) }
     val follow = LocalFollow.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().clip(Smooth(6.dp)).clickable { if (!open) follow?.stay(); open = !open }.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(name, fontSize = 13.sp, color = if (failed) C.red else C.ink, fontWeight = if (hint != null) FontWeight.Medium else null, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = if (hint == null) Modifier.weight(1f) else Modifier.widthIn(max = 160.dp))
             // The hint takes all the width the name and meta leave: two weights would cut it at half the row.
             if (hint != null) Text(hint, fontSize = 12.sp, style = Mono, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -599,7 +600,8 @@ private fun RunRow(agent: ChatAgent, onOpen: () -> Unit) {
         MakerIcon(s.maker, s.runtime, 15.dp)
         Text(s.model?.let { s.modelName ?: it } ?: t("android-chat.pick.model"), fontSize = 14.sp, color = C.ink, maxLines = 1, softWrap = false)
         Text(
-            " · ${s.effort ?: t("android-chat.pick.effort.default")} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
+            // No effort where the runtime sets none (Cursor).
+            "${if (s.effort != null || s.efforts.isNotEmpty()) " · ${s.effort ?: t("android-chat.pick.effort.default")}" else ""} · ${if (s.profilePinned == true) name else t("android-chat.history.run.auto", "name" to name)}",
             fontSize = 14.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
         )
         QuotaRings(agent.account?.quota)
@@ -650,11 +652,11 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                         Text(was, fontSize = 14.sp, color = if (moved) C.muted else C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = !moved))
                         if (moved) {
                             IconIn(Icons.ArrowRight, 14.dp, C.accent)
-                            Text(becomes, fontSize = 14.sp, color = C.accent, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text(becomes, fontSize = 14.sp, color = C.link, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         }
                     }
                 }
-                v.force?.let { Text(it, fontSize = 12.sp, color = C.warn) }
+                v.force?.let { Text(it, fontSize = 12.sp, color = C.warnInk) }
                 Text(t("android-chat.run.next"), fontSize = 12.sp, color = C.subtle)
             }
             GroupLabel(t("android-chat.run.label.model"))
@@ -666,9 +668,12 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
                     from?.let { o -> o.fromStation?.let { ModelFrom(it, o.fromText) } }
                 }
             }
-            GroupLabel(t("android-chat.run.effort.title"))
-            Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
-            EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            // No efforts where the runtime sets none (Cursor).
+            if (v.efforts.isNotEmpty()) {
+                GroupLabel(t("android-chat.run.effort.title"))
+                Text(t("android-chat.run.effort.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
+                EffortChips(listOf<String?>(null) + v.efforts, v.draft.effort) { e -> pick { put("effort", e) } }
+            }
             if (v.fastAvailable == true) {
                 GroupLabel(t("android-chat.run.label.speed"))
                 Text(t("android-chat.run.speed.note"), fontSize = 12.sp, color = C.muted, modifier = Modifier.padding(bottom = 8.dp))
@@ -682,7 +687,7 @@ fun RunSettingsScreen(station: String, of: ChatOf, key: String) {
             SettingRow(onClick = { list = "account" }, leading = { chosen?.let { id -> v.accounts.firstOrNull { it.id == id } }?.let { ProviderMark(it.runtime ?: s.runtime, it.kind, 18.dp, it.mark) } }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(v.accountNote, fontSize = 12.sp, color = C.muted)
-                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warn)
+                if (v.accountWarn) Text(t("android-chat.run.account.warn"), fontSize = 12.sp, color = C.warnInk)
             }
             Box(Modifier.height(16.dp))
         }

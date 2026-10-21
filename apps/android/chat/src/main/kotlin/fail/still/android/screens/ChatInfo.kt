@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -57,6 +58,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentricOut
 import fail.still.android.ui.DoingMark
 import fail.still.android.ui.PickRow
 import fail.still.android.ui.Button
@@ -64,11 +66,11 @@ import fail.still.android.ui.Field
 /**
  * The chat itself, from "…": its name (with a way to change it) over who started it, how many take part and when it was
  * last written in, in a line; its agents, each where it stands (a tap opens its card, AgentSheet.kt); then what can be
- * done with it, within reach: pin it, copy its link, open it in Slack, archive it. As tall as what it shows.
+ * done with it, within reach: pin it, copy its link, open it in Slack (or Feishu), archive it. As tall as what it shows.
  */
 fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread, first: ChatView? = null) {
     val publish = shownPublish(first?.publish)
-    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
+    val rows = (first?.agents?.size ?: 1) * 56 + ((if (first?.pinned != null) 1 else 0) + (if (first?.slackUrl != null) 1 else 0) + (if (first?.feishuUrl != null) 1 else 0) + (if (first?.xshare != null) 1 else 0) + 2) * 40 +
         (if (publish != null) ((if (publish.may) 1 else 0) + publish.links.size) * 40 + 10 else 0)
     app.sheet = SheetSpec(0.55f, fit = (22 + 84 + rows + 10 + 30).dp) {
         val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
@@ -111,7 +113,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                         val s = a.session
                         // The account it runs on now, with what is left of it (so a glance here saves the trip to settings).
                         val quota = a.account?.quota ?: a.profile?.quota
-                        InfoRow(onClick = { openAgent(app, station, of, a) }) {
+                        InfoRow(onClick = { openAgent(app, station, of, a) }, tile = true) {
                             ModelMark(s.maker, s.runtime, 36.dp, a.state, around = C.surface2)
                             Column(Modifier.weight(1f)) {
                                 Text(s.agentText, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -125,7 +127,7 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                 }
                 Spacer(Modifier.height(10.dp))
             }
-            if (open || link != null || view?.slackUrl != null || view?.xshare != null) InfoList {
+            if (open || link != null || view?.slackUrl != null || view?.feishuUrl != null || view?.xshare != null) InfoList {
                 // A station from before pins says nothing of them: its chats are not pinned from here.
                 if (open) view!!.pinned?.let { pinned ->
                     // Under way: a spinner on the row, not tapped again.
@@ -151,6 +153,17 @@ fun openChatInfo(app: AppState, station: String, of: ChatOf, thread: ChatThread,
                     InfoRow(onClick = { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }) {
                         SlackMark(16.dp)
                         Text(t("android-chat.info.slack.open"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
+                }
+                view?.feishuUrl?.let { url ->
+                    val context = LocalContext.current
+                    InfoRow(onClick = {
+                        try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
+                    }) {
+                        SlackMark(16.dp, "feishu")
+                        Text(t("web-mobile.chat.openFeishu"), fontSize = 14.sp, color = C.ink, modifier = Modifier.weight(1f))
                         IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                     }
                 }
@@ -259,15 +272,25 @@ internal fun askTitle(app: AppState, station: String, thread: Long?, session: St
     }
 }
 
+// A group of rows in a sheet, as a small panel's (docs/ui-panels.md): each row's ground under the finger INFO_PAD from
+// the group's edge, rounded INFO_ROW, the group's corner concentric with theirs; its words INFO_PAD + INFO_TEXT from
+// the edge. A row that leads with a tile (a model's, 36 and rounded 11) has it INFO_IN inside it all round, so the
+// tile is concentric with the row and the group too.
+private val INFO_PAD = 6.dp
+private val INFO_ROW = 14.dp
+private val INFO_TEXT = 10.dp
+private val INFO_IN = 4.dp
+
 @Composable
 fun InfoList(content: @Composable () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f))) { content() }
+    Column(Modifier.fillMaxWidth().clip(Smooth(concentricOut(INFO_ROW, INFO_PAD))).background(C.ink.copy(alpha = 0.05f)).padding(INFO_PAD)) { content() }
 }
 
 @Composable
-fun InfoRow(onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+fun InfoRow(onClick: (() -> Unit)? = null, tile: Boolean = false, content: @Composable RowScope.() -> Unit) {
     Row(
-        Modifier.fillMaxWidth().let { if (onClick != null) it.clickable(onClick = onClick) else it }.padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(Smooth(INFO_ROW)).let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(horizontal = if (tile) INFO_IN else INFO_TEXT, vertical = INFO_IN),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp), content = content,
     )
 }

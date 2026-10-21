@@ -27,6 +27,7 @@ import * as pagesCss from "./styles/pages.css.ts";
 import { StationScreen, StationsScreen } from "./Stations.tsx";
 import { NewProfileScreen, ProfileAccountScreen, ProfileScreen, ProfilesScreen } from "./Profiles.tsx";
 import { AppearanceScreen, LanguageScreen, SettingsScreen } from "./Settings.tsx";
+import { FontScreen } from "./Fonts.tsx";
 import { ChangelogScreen } from "./Changelog.tsx";
 import { WorkspaceScreen } from "./WorkspacePage.tsx";
 import { SecurityOpenScreen, SecurityPrompt, SecurityScreen, SecurityWaitingScreen } from "./Security.tsx";
@@ -56,6 +57,7 @@ export function MobileWorkspace({ entry }: { entry: Entry }) {
       <Route path="settings" element={<SettingsScreen />} />
       <Route path="settings/account" element={<MeScreen />} />
       <Route path="settings/appearance" element={<AppearanceScreen />} />
+      <Route path="settings/appearance/fonts" element={<FontScreen />} />
       <Route path="settings/bar" element={<BarSettingsScreen />} />
       <Route path="settings/language" element={<LanguageScreen />} />
       <Route path="settings/changelog" element={<ChangelogScreen />} />

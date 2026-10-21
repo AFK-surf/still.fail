@@ -258,6 +258,21 @@ export class TranscriptTail {
         usage.contextTokens = input;
         const model = r.data?.message?.source?.model;
         if (typeof model === "string") usage.model = model;
+      } else if (this.runtime === "cursor" || this.runtime === "devin") {
+        // A Cursor turn's counts as the station's driver kept them (agents/cursor-bridge.mjs): the whole run's, not each
+        // call's, so they say no context. Devin's driver keeps its turns' the same way (agents/devin.ts), with the context
+        // the turn ended with and the model's window where Devin said them.
+        const u = r?.type === "usage" ? r.usage : undefined;
+        if (u === undefined || u === null) continue;
+        const read = n(u.cacheReadTokens);
+        // Devin's line says how many calls the turn made.
+        usage.modelCalls += Math.max(1, n(r.calls));
+        usage.inputTokens += n(u.inputTokens) + read + n(u.cacheWriteTokens);
+        usage.cachedTokens += read;
+        usage.outputTokens += n(u.outputTokens);
+        if (typeof r.model === "string") usage.model = r.model;
+        if (n(r.context) > 0) usage.contextTokens = n(r.context);
+        if (n(r.window) > 0) usage.contextWindow = n(r.window);
       } else if (this.runtime === "grok") {
         // Grok Build's transcript says no counts (the station keeps them apart: agents/grok.ts), only the model.
         if (r?.type === "assistant" && typeof r.model_id === "string" && usage.model === null) usage.model = r.model_id;

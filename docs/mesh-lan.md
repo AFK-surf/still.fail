@@ -67,3 +67,9 @@ longer matters.
   showed 正在重连 for a moment.
 - Tests: `client/core-ts/test/mesh.test.ts`. The simulated LAN (`SimNet.lan` with `quietAfterMs`) has the punched path
   go quiet, and `SimNet.away` puts the device off the LAN.
+
+## Storms
+
+2026-10-19 a phone on ccvm's LAN and the station traded some 48,000 packets a second for over ten minutes with no request among them: the phone's of QUIC's smallest size (room for a PING or an IMMEDIATE_ACK only), the station's ACK-only. Neither kind is held back by congestion control or pacing in noq, so it ran at what the LAN took, four station threads half busy, until the phone's Wi-Fi went off. What kept the phone asking is not known yet (suspects: `network_change` pinging every path with an ACK request on each suspecting wake, or tail-loss probes built up).
+
+The station looks at each connection's counts every second (`Connection.stats`: packets and the frames in them; `station/src/mesh/storms.ts`). One receiving 1,000 packets a second or more, at most one in 50 carrying data, logs `a connection is storming` once with that second's counts and its paths, and is closed (code 5, `storm`) once it has gone on 10 s; the device connects again. Next time one shows, its line says which frames went which way.

@@ -3,7 +3,7 @@
 // The agent reads that chat by the link (the station's chat_read and session_history tools).
 import { Fragment, useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { hrefOf } from "./go.ts";
-import { useChats, useChatSearch, useStationLook, type ChatItem } from "./api.ts";
+import { stationApi, useChats, useChatSearch, useStationCall, useStationLook, type ChatItem } from "./api.ts";
 import { ChatMark, stateLine } from "./ChatMark.tsx";
 import { StationMark } from "./StationMark.tsx";
 import { scopeOf, useStation } from "./station.tsx";
@@ -77,7 +77,7 @@ function RefTitle({ href, here }: { href: string; here: string }) {
 }
 
 /**
- * What a reference's chat is, while it is pointed at: its title and state, where and when it was last active, and the
+ * What a reference's chat is, while it is pointed at: its title, state and when it was last active, where it is, and the
  * last thing said (or where it stands) — from the workspace's list, so a chat not in it (archived, or not this
  * workspace's) says only that.
  */
@@ -87,15 +87,20 @@ function RefPreview({ href, here, station, emoji, icon }: { href: string; here: 
   const state = stateLine(item);
   return (
     <div className={hover.rich}>
-      <div className={hover.meta}>
+      {/* Its title on one line with its mark and age, as a file's card has its name. */}
+      <div className={hover.fileTitle}>
         <ChatMark item={item} inline />
-        <span className={hover.ref}>
-          {station && <><StationMark emoji={emoji} icon={icon} size={11} className={hover.refIcon} />{station}{of?.history ? " · " : ""}</>}
-          {of?.history ? t("web-main.chatRef.previewHistory") : ""}
-        </span>
-        <Time className={hover.time} stamp={item.time?.lastActiveAt} fixed />
+        <span className={hover.title}>{item.title}</span>
+        <Time className={hover.fileTime} stamp={item.time?.lastActiveAt} fixed />
       </div>
-      <span className={hover.title}>{item.title}</span>
+      {(station || of?.history) && (
+        <div className={hover.meta}>
+          <span className={hover.ref}>
+            {station && <><StationMark emoji={emoji} icon={icon} size={11} className={hover.refIcon} />{station}{of?.history ? " · " : ""}</>}
+            {of?.history ? t("web-main.chatRef.previewHistory") : ""}
+          </span>
+        </div>
+      )}
       {(state ?? item.last?.preview) && <p className={hover.excerpt}>{state ?? item.last?.preview}</p>}
     </div>
   );
@@ -149,6 +154,24 @@ export function useCopyChatLink(toast: (text: string) => void) {
       () => toast(t(history ? "web-main.chat.historyLinkCopied" : "web-main.chat.linkCopied")),
       (e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })),
     );
+  };
+}
+
+/**
+ * Copying where the agents' sessions keep their transcripts on the station's machine (`keys`: theirs), one per line,
+ * to open them or hand them to another tool. `toast` says it is copied, that none is written yet, or why not.
+ */
+export function useCopyTranscripts(station: string, toast: (text: string) => void) {
+  const api = stationApi(useStationCall(station));
+  return (keys: string[]) => {
+    void Promise.all(keys.map((key) => api.transcriptPath(key)))
+      .then(async (paths) => {
+        const found = paths.filter((p): p is string => p !== null);
+        if (found.length === 0) return toast(t("web-main.chat.transcriptNone"));
+        await navigator.clipboard.writeText(found.join("\n"));
+        toast(found.length > 1 ? t("web-main.chat.transcriptsCopied", { n: found.length }) : t("web-main.chat.transcriptCopied"));
+      })
+      .catch((e: unknown) => toast(t("web-main.chat.copyFailed", { error: failure(e) })));
   };
 }
 

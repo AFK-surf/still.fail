@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cursor's mark, from web/public/models/cursor.svg (simple-icons, CC0). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M 11.503 0.131 L 1.891 5.678 a 0.84 0.84 0 0 0 -0.42 0.726 v 11.188 c 0 0.3 0.162 0.575 0.42 0.724 l 9.609 5.55 a 1 1 0 0 0 0.998 0 l 9.61 -5.55 a 0.84 0.84 0 0 0 0.42 -0.724 V 6.404 a 0.84 0.84 0 0 0 -0.42 -0.726 L 12.497 0.131 a 1.01 1.01 0 0 0 -0.996 0 M 2.657 6.338 h 18.55 c 0.263 0 0.43 0.287 0.297 0.515 L 12.23 22.918 c -0.062 0.107 -0.229 0.064 -0.229 -0.06 V 12.335 a 0.59 0.59 0 0 0 -0.295 -0.51 l -9.11 -5.257 c -0.109 -0.063 -0.064 -0.23 0.061 -0.23"
+        android:fillColor="#FF000000" />
+</vector>

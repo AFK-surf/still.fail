@@ -43,6 +43,7 @@ runner → 客户端：
 - 进程组换成 Job Object：agent 挂起启动、放进 job 后再恢复，它启动的东西都在 job 里；`signal` 没有信号可发，`group: true` 结束整个 job、否则只结束 agent（Node 在 Windows 上的 `process.kill` 也是结束），exit 的 `signal` 字段照样写 `TERM`/`KILL`/`INT`。agent 不开控制台窗口，能脱离外层 job 时就脱离。
 - 启动时关掉从启动者继承来的、stdio 以外的句柄：Windows 把父进程所有可继承句柄都传给子进程（Unix 靠 close-on-exec），不关的话 runner 会一直占着 station 的 stdout，读它的一方（启动器、桌面端）等不到结束。
 - 裸命令名按 PATH + PATHEXT 找（`codex` 是 npm 装的 `codex.cmd`），`.cmd`/`.bat` 由 Rust 的 Command 转义后交给 cmd。
+- runner 从数据目录里的副本启动（`<data>/run/bin/stillfail-runner-<内容哈希>.exe`，`platform/processes.ts` 的 `keepRunnerIn`），不从发布目录。桌面端的 NSIS 安装器（electron-builder 的 `_CHECK_APP_RUNNING`）在换文件之前，会结束所有可执行文件在 app 目录下的进程：从那里启动的 runner 每次升级都被结束，留下的 agent 没人接管，新 station 又起了一个，同一个会话就有了两个 agent。只剩 1 个 runner 时它能活下来，只是因为安装器的计数在 Windows PowerShell 5.1 上数不出单个结果。副本按内容命名，同一个发布的 runner 只有一份；station 启动时删掉别的发布的副本，还在运行的删不掉（Windows 不让），就留着。复制失败时照旧从发布目录启动。
 - `stillfail-runner --job -- <program> <args…>`：后台任务、设备命令在 Windows 上的“进程组”。把命令放进一个 `KILL_ON_JOB_CLOSE` 的 job，用自己的 stdio；等 job 里没有进程了才以命令的退出码退出；结束这个 runner 就结束整个 job。需要它是因为 Git Bash（MSYS）`exec` 出的进程在 Windows 看来父进程已经没了，按进程树（`taskkill /T`）找不到。
 
 测试：`tests/windows.rs`（Windows 上的 `cargo test`），`station/test/runner-windows.test.ts`。

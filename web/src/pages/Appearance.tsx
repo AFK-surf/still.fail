@@ -1,5 +1,6 @@
 // What only this client (browser, desktop app) keeps: how the pages look here.
 import { AppearanceSetting } from "../components.tsx";
+import { FontSetting } from "../FontSetting.tsx";
 import { t } from "../i18n.ts";
 import { setPrefs, usePrefs } from "../prefs.ts";
 import { useMotionSetting } from "../theme.ts";
@@ -16,6 +17,9 @@ export function AppearancePage({ back }: { back: string }) {
       <header className={pagesCss.pageHead}><div><h1>{t("web-pages.appearance.title")}</h1></div></header>
       <Section title={t("web-pages.appearance.theme.title")} description={t("web-pages.appearance.theme.description")}>
         <div className={chatCss.appearanceSetting}><AppearanceSetting /></div>
+      </Section>
+      <Section title={t("web-pages.appearance.fonts.title")} description={t("web-pages.appearance.fonts.description")}>
+        <FontSetting />
       </Section>
       <Section title={t("web-pages.appearance.motion.title")} description={t("web-pages.appearance.motion.description")}>
         <div className={chatCss.appearanceSetting}><MotionSetting /></div>

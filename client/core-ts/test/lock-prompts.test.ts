@@ -9,7 +9,7 @@ import { hooks } from "../src/core/execute.ts";
 import { HostError } from "../src/error.ts";
 import { type Entry, Signer, entryHash, next, shortCode } from "../src/lock.ts";
 import { utf8 } from "../src/util.ts";
-import { BEHIND_MS, BEHIND_TRIES } from "../src/views/lock.ts";
+import { BEHIND_MS, BEHIND_TRIES, read } from "../src/views/lock.ts";
 import { ME, PHONE, elsewhere, genesis, rig, unhex } from "./lock-rig.ts";
 import { stationLater, stationReplies, status } from "./station-fixture.ts";
 
@@ -45,6 +45,43 @@ test("a device not in the lock waits and asks only by hand; one that cannot keep
   const after = await lock();
   assert.equal(after.me.failed ?? null, null);
   assert.equal(after.me.asked, true);
+});
+
+test("a device that made its signing key after it started, then was confirmed: its vault sees it confirmed without a restart", async () => {
+  const owner = elsewhere();
+  // The owner's other app signs the lock; this one kept no key when it started (a device new to security mode).
+  const r = await rig((_me) => ({ ws: genesis("ws", owner, true, [], {}, "ef".repeat(32)) }), (host) => {
+    host.secure.delete(Signer.KEY);
+    host.storage.delete(Signer.KEY);
+  });
+  // The vault page open from the start: it follows the lock as it is read.
+  const vaults = await r.watch({ topic: "vaults", workspace: "ws" });
+  const lock = await r.watch({ topic: "lock", workspace: "ws" });
+  assert.equal((await lock()).me.waiting, true);
+  assert.deepEqual([(await vaults()).locked, (await vaults()).canSign], [true, false]);
+  // Asked by hand: its key made now; the owner's other device confirms it.
+  await r.ask("lock.request", { workspace: "ws" });
+  const mine = Effect.runSync(Signer.load(r.host))!;
+  const chain = r.cloud.chains.get("ws")!;
+  const e = next("ws", r.cloud.head("ws"), 2000, "device", { id: ME, sub: "s1", kind: "app", label: "this", sign_key: mine.id });
+  chain.push({ ...e, sig: { key: owner.id, alg: "Ed25519", sig: owner.signBytes(new Uint8Array([...utf8("stillfail-lock/1 sig\0"), ...unhex(entryHash(e))])) } });
+  r.cloud.requests.set("ws", []);
+  r.core.inner.runner.fork(Effect.ignore(read(r.core.inner, "ws")));
+  const l = await lock();
+  assert.deepEqual([l.me.waiting, l.signs], [false, true]);
+  const v = await vaults();
+  assert.deepEqual([v.locked, v.canSign], [true, true], "the vault page offers to set up, not 'not confirmed'");
+});
+
+test("an app in the lock without its signing key (the genesis put it in before it kept one) is not waiting, but may be made one that signs", async () => {
+  const owner = elsewhere();
+  const r = await rig((_me) => ({ ws: genesis("ws", owner, true, [], {}, "ef".repeat(32), [{ id: ME, sub: "s1", kind: "app", label: "Windows" }]) }));
+  const v = await (await r.watch({ topic: "lock", workspace: "ws" }))();
+  assert.deepEqual([v.me.confirmed, v.me.waiting, v.signs, v.me.unsigned], [true, false, false, true]);
+  // One that signs with its key is neither.
+  const s = await rig((me) => ({ ws: genesis("ws", me, true) }));
+  const w = await (await s.watch({ topic: "lock", workspace: "ws" }))();
+  assert.deepEqual([w.signs, w.me.unsigned ?? false], [true, false]);
 });
 
 test("a station's refusal names the workspace and the code to approve, where the device is not in that workspace's lock", async () => {

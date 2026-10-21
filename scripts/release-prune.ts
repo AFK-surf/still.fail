@@ -12,10 +12,10 @@
 const BUCKET = "stillfail-releases";
 const FEEDS = [
   "desktop/stillfail-beta-mac.yml", "desktop/stillfail-beta.yml", "android/beta/latest.json",
-  "desktop/stillfail-mac.yml", "desktop/stillfail.yml", "android/latest.json",
+  "desktop/stillfail-mac.yml", "desktop/stillfail.yml", "android/latest.json", "android/mbui/latest.json", "mac/mbui/latest.json",
 ];
 /** An installer: its name before and after the version, and the version; then .blockmap or .sig when it is one. */
-const INSTALLER = /^((?:desktop|android)\/stillfail-(?:beta-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)(\.blockmap|\.sig)?$/;
+const INSTALLER = /^((?:desktop|android|mac)\/stillfail-(?:beta-|mbui-)?)(\d+(?:\.\d+\.\d+)?)(-[\w-]+\.(?:zip|exe)|\.apk)(\.blockmap|\.sig)?$/;
 /** How many of a beta's newest installers, and of its blockmaps, stay. */
 const BETA_INSTALLERS = 5;
 const BETA_BLOCKMAPS = 30;
@@ -62,7 +62,8 @@ const older = (a: string, b: string) => {
 /** An installer's group (its name without the version), version, and whether it is the installer's blockmap or .sig. */
 const installer = (key: string) => {
   const m = key.match(INSTALLER);
-  return m ? { group: m[1]! + m[3]!, version: m[2]!, beta: m[1]!.endsWith("beta-"), map: !!m[4] } : null;
+  // (still.fail mbui's, android/stillfail-mbui-<n>.apk, kept as a beta's)
+  return m ? { group: m[1]! + m[3]!, version: m[2]!, beta: m[1]!.endsWith("beta-") || m[1]!.endsWith("mbui-"), map: !!m[4] } : null;
 };
 
 // The version each feed names, by group. The desktop's feeds name the file without its directory.

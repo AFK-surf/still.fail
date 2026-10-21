@@ -623,7 +623,7 @@ private fun FlightLayer(host: Host) {
         ) {
             // As the field showed them: scrolled to its last lines when there were more than it holds.
             Text(
-                f.text, style = SendTextStyle.copy(color = C.ink),
+                f.text, style = SendTextFaced.copy(color = C.ink),
                 modifier = Modifier.wrapContentHeight(Alignment.Top, unbounded = true).offset { IntOffset(0, -f.scroll.roundToInt()) },
             )
         }

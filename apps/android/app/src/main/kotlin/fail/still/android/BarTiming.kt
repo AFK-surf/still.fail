@@ -2,7 +2,8 @@
 // `bar_switch`): from the finger lifted to the place's page on the stack, to the page shown (once it has what it opens
 // with, App.kt Pages, LOCAL_MS at most), its first composition and first frame drawn; and for each topic the page
 // follows anew, how long the core took to give its first value, decoding it, and how big it was. Logged on the device
-// (`adb logcat -s StillfailTiming`), and to PostHog as the account signed in, in a build with its key (Crashes.kt).
+// (`adb logcat -s StillfailTiming`), and to PostHog as the account signed in, in a build with its key, unless turned off
+// in settings (Crashes.kt).
 // Only names of places and topics, counts and times: nothing a person wrote, no ids.
 package fail.still.android
 
@@ -227,11 +228,12 @@ object BarTiming {
             if (waiting.size < BATCH) return
             waiting.toList().also { waiting.clear() }
         }
-        try { Crashes.send(batch) } catch (_: Exception) { }
+        try { Crashes.send(context, batch) } catch (_: Exception) { }
     }
 
     private fun flush() {
+        val context = context ?: return
         val batch = synchronized(waiting) { waiting.toList().also { waiting.clear() } }
-        if (batch.isNotEmpty()) Thread { try { Crashes.send(batch) } catch (_: Exception) { } }.start()
+        if (batch.isNotEmpty()) Thread { try { Crashes.send(context, batch) } catch (_: Exception) { } }.start()
     }
 }

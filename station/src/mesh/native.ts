@@ -12,6 +12,22 @@ export type Stream = {
   stopped(): Promise<void>;
   reset(code: number): Promise<void>;
 };
+/// What went over a connection since it opened (native/mesh `Stats`): bytes; and from the addon of 2026-10-19 on,
+/// packets and the frames in them, those that carry nothing (pings, ACK requests, ACKs) and those that carry data.
+export type Traffic = {
+  rxBytes: number;
+  txBytes: number;
+  rxPackets?: number;
+  txPackets?: number;
+  rxPings?: number;
+  txPings?: number;
+  rxAckRequests?: number;
+  txAckRequests?: number;
+  rxAcks?: number;
+  txAcks?: number;
+  rxData?: number;
+  txData?: number;
+};
 export type Connection = {
   remoteId(): string;
   alpn(): Buffer;
@@ -23,6 +39,8 @@ export type Connection = {
   /// Whether the other end is still there: true once anything is heard from it within `withinMs` (superseded.ts).
   /// A mesh addon from before it has none.
   answers?(withinMs: number): Promise<boolean>;
+  /// What went over it (a test's may have none).
+  stats?(): Traffic;
   close(code: number, reason: string): void;
   isClosed(): boolean;
   closed(): Promise<string>;

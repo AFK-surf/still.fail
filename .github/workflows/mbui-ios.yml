@@ -1,0 +1,230 @@
+# still.fail mbui's iOS smoke flows (signed in, a message sent, the agent's answer: apps/mbui/scripts/ios-smoke.sh) on
+# an iOS simulator, against a local still.fail of its own. Only for what iOS has of its own: its packing, its scripts,
+# the core's Apple engine, the smoke flows and their runner, the pinned mbui (its iOS host). What else the app does is
+# the same MoonBit as on the other hosts, checked by check-mbui's Tester replays (pipeline.yml).
+# On GitHub's macos-26 (free for a public repository), not Mini1: its simulator was much of Mini1's load, and Mini1
+# waited for its load, and for the simulator's lock beside mbui's host-ios contracts (ios-smoke.sh gate and take, still
+# there for a run by hand). A fresh runner has neither to wait for; what is slow to fetch or build is cached instead.
+name: mbui-ios
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mbui/mbui/**"
+      - "apps/mbui/ios/**"
+      - "apps/mbui/scripts/ios*.sh"
+      - "apps/mbui/src/sfcore/apple_*"
+      - "apps/mbui/src/*/core_engine.m"
+      - "apps/mbui/e2e/ios-flow.sh"
+      - "apps/mbui/e2e/flows/01-signin.*"
+      - "apps/mbui/e2e/flows/03-send-text.*"
+      - "apps/mbui/e2e/flows/05-agent-reply.*"
+      - ".github/workflows/mbui-ios.yml"
+  workflow_dispatch:
+concurrency:
+  group: mbui-ios-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  # 10 minutes at most. What is slow cold is cached, read by every run and written by main's (also a run that timed
+  # out: what it got through is kept, so the next one starts from there): Hermes for Apple, the Rust shell's target,
+  # MoonBit with the app's build (moon's _build, mbc's objects, the core's engine: scripts/core.sh engine makes it again
+  # when its sources are newer).
+  smoke:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: macos-26
+    timeout-minutes: 10
+    env:
+      # (the scripts' own places: actions/cache takes no path with ..)
+      MBUI_CACHE: /Users/runner/stillfail-ci/mbui
+      STILLFAIL_BUILD_CACHE: /Users/runner/Library/Caches/stillfail-build
+      SAVE: ${{ github.ref == 'refs/heads/main' }}
+      SIM_DATA: /Users/runner/stillfail-ci/simdata
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Cache keys
+        id: keys
+        run: |
+          echo "hermes=$(sed -n 's/^HERMES_RN=//p' apps/mbui/scripts/core.sh)" >> "$GITHUB_OUTPUT"
+          echo "rustc=$(rustc --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+          echo "sysroot=$(rustc --print sysroot)" >> "$GITHUB_OUTPUT"
+          echo "sim=$(xcrun simctl list runtimes -j | python3 -c "import json,sys;r=[x for x in json.load(sys.stdin)['runtimes'] if x['platform']=='iOS' and x['isAvailable']];print(r[-1]['buildversion'])")" >> "$GITHUB_OUTPUT"
+          touch "$RUNNER_TEMP/start"
+      - uses: actions/cache/restore@v4
+        id: hermes
+        with:
+          path: ${{ env.STILLFAIL_BUILD_CACHE }}
+          key: mbui-ios-hermes-${{ steps.keys.outputs.hermes }}
+      # rustc's library for the simulator (rustup took 90 s to fetch it), by rustc
+      - uses: actions/cache/restore@v4
+        id: rustlib
+        with:
+          path: ${{ steps.keys.outputs.sysroot }}/lib/rustlib/aarch64-apple-ios-sim
+          key: mbui-ios-rustlib-${{ steps.keys.outputs.rustc }}
+      - uses: actions/cache/restore@v4
+        id: cargo
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ env.MBUI_CACHE }}/cargo-target-ios
+          key: mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-${{ hashFiles('client/Cargo.lock') }}-${{ github.sha }}
+          restore-keys: |
+            mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-${{ hashFiles('client/Cargo.lock') }}-
+            mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-
+      - uses: actions/cache/restore@v4
+        id: build
+        with:
+          path: |
+            ${{ env.MBUI_CACHE }}/moon
+            ${{ env.MBUI_CACHE }}/tools
+            apps/mbui/out/ios/_build
+            apps/mbui/out/ios/obj
+            apps/mbui/out/core/aarch64-apple-ios-sim/libmbui_core.a
+          key: mbui-ios-build-${{ github.sha }}
+          restore-keys: mbui-ios-build-
+      # moon and cargo go by their sources' times, which a checkout makes new: a cache keeps the time each tracked file
+      # had when it was built from (mtimes.json, by git's hash of it), and every file whose content is the same gets
+      # that time back; one that changed keeps the checkout's, newer than what was built
+      - name: The sources' times, as the caches were built from them
+        run: |
+          cat > "$RUNNER_TEMP/mtimes.py" <<'EOF'
+          import json, os, subprocess, sys
+          out = subprocess.run(["git", "ls-files", "-s", "-z"], capture_output=True, check=True).stdout.decode()
+          index = {path: meta.split()[1] for meta, path in (e.split("\t", 1) for e in out.split("\0") if e)}
+          def files(under, mine):
+              return [p for p in index if p.startswith(under) == mine and os.path.isfile(p) and not os.path.islink(p)]
+          mode, manifest, under, mine = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "in"
+          if mode == "record":
+              json.dump({p: [index[p], os.stat(p).st_mtime_ns] for p in files(under, mine)}, open(manifest, "w"))
+          else:
+              try:
+                  kept = json.load(open(manifest))
+              except OSError:
+                  sys.exit(0)
+              n = 0
+              for p in files(under, mine):
+                  if p in kept and kept[p][0] == index[p]:
+                      os.utime(p, ns=(kept[p][1], kept[p][1]))
+                      n += 1
+              print(f"{manifest}: {n} files' times put back")
+          EOF
+          python3 "$RUNNER_TEMP/mtimes.py" apply apps/mbui/out/ios/_build/mtimes.json apps/mbui/ in
+          python3 "$RUNNER_TEMP/mtimes.py" apply "$MBUI_CACHE/cargo-target-ios/mtimes.json" apps/mbui/ out
+      - name: Tools (MoonBit, mbui, the core's packages)
+        run: bash apps/mbui/scripts/beta.sh tools
+      # a simulator's data after its first boot (ios-smoke.sh boot), by its runtime's build: kept once (1.1 GB), by
+      # main's first run of a new runtime
+      - uses: actions/cache/restore@v4
+        id: sim
+        with:
+          path: ${{ env.SIM_DATA }}
+          key: mbui-ios-sim-${{ steps.keys.outputs.sim }}
+      # (booted in the background while the app builds: a fresh simulator's first boot is a minute or more)
+      - name: The simulator, this run's alone, booting
+        run: bash apps/mbui/scripts/ios-smoke.sh take && bash apps/mbui/scripts/ios-smoke.sh boot
+      # (a simulator made afresh runs iOS's own services for minutes after its first boot, widgets, posters, News,
+      # Spotlight…: a 3-core runner's load in the hundreds, the app's build 4 minutes instead of half of one. In the
+      # background, by macOS's own policy (taskpolicy -b), while the app builds; given back after it: its boot does not
+      # end in the background, and with the flows beside it the app did not start)
+      - name: The simulator's own processes in the background
+        run: |
+          cat > "$RUNNER_TEMP/simbg.sh" <<'EOF'
+          seen=" "
+          while :; do
+            for p in $(pgrep -f 'CoreSimulator/Volumes'); do
+              case "$seen" in *" $p "*) continue ;; esac
+              seen="$seen$p "
+              taskpolicy -b -p "$p" 2>/dev/null
+            done
+            sleep 3
+          done
+          EOF
+          cat > "$RUNNER_TEMP/simbg-stop.sh" <<'EOF'
+          kill "$(cat "$RUNNER_TEMP/simbg.pid" 2>/dev/null)" 2>/dev/null
+          for p in $(pgrep -f 'CoreSimulator/Volumes'); do taskpolicy -B -p "$p" 2>/dev/null; done
+          true
+          EOF
+          nohup bash "$RUNNER_TEMP/simbg.sh" > /dev/null 2>&1 &
+          echo $! > "$RUNNER_TEMP/simbg.pid"
+      # (beside the app's build, while the simulator's processes are held back: after it, beside them, its install 3
+      # minutes and its start up to 2.5)
+      - name: The local still.fail installing and starting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/mbui/scripts/ios-smoke.sh prepare
+      - name: The app for the simulator
+        run: bash apps/mbui/scripts/ios-smoke.sh build
+      - name: The simulator's processes given back
+        if: always()
+        run: bash "$RUNNER_TEMP/simbg-stop.sh"
+      - name: The smoke flows (01, 03, 05)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash apps/mbui/scripts/ios-smoke.sh run
+      - name: The simulator shut down, its lock given back
+        if: always()
+        env:
+          SIM_SAVE: ${{ env.SAVE == 'true' && job.status == 'success' && steps.sim.outputs.cache-hit != 'true' && '1' || '' }}
+        run: bash apps/mbui/scripts/ios-smoke.sh done
+      - if: env.SIM_KEPT == '1'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.SIM_DATA }}
+          key: mbui-ios-sim-${{ steps.keys.outputs.sim }}
+      # the flows' logs and shots, the app's, and the local still.fail's own (its station, relay, cloud: whether what
+      # the app asked of a station reached it)
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: mbui-ios-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            apps/mbui/out/e2e/ios/
+            apps/mbui/out/e2e/ios.txt
+            apps/mbui/out/ios/app.log
+            ${{ env.MBUI_CACHE }}/e2e-ios/run/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+      # what this run added to each cache (a file newer than its start), kept
+      - name: What the caches got
+        if: always() && env.SAVE == 'true'
+        run: |
+          new() { for d in "$@"; do [ -z "$(find "$d" -newer "$RUNNER_TEMP/start" -print -quit 2>/dev/null)" ] || { echo true; return; }; done; echo false; }
+          echo "HERMES_NEW=$(new "$STILLFAIL_BUILD_CACHE")" >> "$GITHUB_ENV"
+          echo "CARGO_NEW=$(new "$MBUI_CACHE/cargo-target-ios")" >> "$GITHUB_ENV"
+          echo "BUILD_NEW=$(new "$MBUI_CACHE/moon" apps/mbui/out/ios/_build apps/mbui/out/ios/obj apps/mbui/out/core/aarch64-apple-ios-sim)" >> "$GITHUB_ENV"
+      - name: The sources' times, kept with the caches
+        if: always() && env.SAVE == 'true'
+        run: |
+          [ "$CARGO_NEW" != true ] || python3 "$RUNNER_TEMP/mtimes.py" record "$MBUI_CACHE/cargo-target-ios/mtimes.json" apps/mbui/ out
+          [ "$BUILD_NEW" != true ] || python3 "$RUNNER_TEMP/mtimes.py" record apps/mbui/out/ios/_build/mtimes.json apps/mbui/ in
+      - if: always() && env.HERMES_NEW == 'true' && steps.hermes.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.STILLFAIL_BUILD_CACHE }}
+          key: mbui-ios-hermes-${{ steps.keys.outputs.hermes }}
+      - if: always() && steps.rustlib.outputs.cache-hit != 'true' && env.SAVE == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.keys.outputs.sysroot }}/lib/rustlib/aarch64-apple-ios-sim
+          key: mbui-ios-rustlib-${{ steps.keys.outputs.rustc }}
+      - if: always() && env.CARGO_NEW == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ env.MBUI_CACHE }}/cargo-target-ios
+          key: mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-${{ hashFiles('client/Cargo.lock') }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - if: always() && env.BUILD_NEW == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.MBUI_CACHE }}/moon
+            ${{ env.MBUI_CACHE }}/tools
+            apps/mbui/out/ios/_build
+            apps/mbui/out/ios/obj
+            apps/mbui/out/core/aarch64-apple-ios-sim/libmbui_core.a
+          key: mbui-ios-build-${{ github.run_id }}-${{ github.run_attempt }}

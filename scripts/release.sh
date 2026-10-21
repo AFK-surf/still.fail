@@ -128,6 +128,16 @@ for platform in $platforms; do
       # fail.still.android on android/latest.json; with --beta fail.still.android.beta on android/beta/latest.json.
       ORG_GRADLE_PROJECT_stillfailBuild=$build python3 "$root/apps/android/build.py" --release ${beta:+--beta} --tasks :app:assembleRelease
       apk="$root/apps/android/app/build/outputs/apk/release/app-release.apk"
+      # its signature verified before anything is uploaded: one that does not verify is not released (it was, printed
+      # and passed over, until 2026-10-20)
+      apksigner="${ANDROID_HOME:-$HOME/Library/Android/sdk}/build-tools/36.0.0/apksigner"
+      "$apksigner" verify "$apk" || { echo "release.sh: $apk does not verify (apksigner): not released" >&2; exit 1; }
+      # and signed with our key, not merely a key: an installed app updates only to an APK of the same certificate.
+      # The certificate of studio's ~/.android/debug.keystore (ANDROID_DEBUG_KEYSTORE_B64), as every release so far has
+      # it (apksigner verify --print-certs of stillfail-beta-3787.apk, 2026-10-20)
+      want=a01a48b5e1a6d2abfbea3457b6c71d1257bc429793bd8b3ebef6be8ee155b56a
+      have=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+      [ "$have" = "$want" ] || { echo "release.sh: $apk is signed with ${have:-no certificate}, not $want (studio's key): not released" >&2; exit 1; }
       name="stillfail${beta:+-beta}-$build.apk"
       put "$apk" "android/$name" application/vnd.android.package-archive
       printf '{"versionCode":%s,"versionName":"0.1.%s","file":"android/%s","sha256":"%s","size":%s}\n' \

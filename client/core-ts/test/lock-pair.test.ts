@@ -60,9 +60,10 @@ async function pipe(): Promise<[Duplex, Duplex]> {
   return [end(a, b), end(b, a)];
 }
 
-async function met() {
+/// `inLock`: the phone in the lock already (an app of s2's, as the genesis put it: its sign key, if any).
+async function met(inLock?: { sign_key?: string }) {
   const g = grant();
-  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys) }));
+  const r = await rig((me) => ({ ws: genesis("ws", me, true, [], g.keys, ME, inLock ? [{ id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", ...inLock }] : []) }));
   await r.watch({ topic: "lock", workspace: "ws" });
   const prompts = await r.watch({ topic: "lockPrompts" });
   const [trusted, phone] = await pipe();
@@ -125,6 +126,21 @@ test("turned away on the trusted device, or a credential for another device: not
   const n = await met();
   assert.deepEqual(await n.hello(n.g.credential("ws", "ef".repeat(32), "s2")), { ok: { t: "no", error: "not_here" } });
   assert.deepEqual((await n.prompts()).pairing, []);
+});
+
+test("an app in the lock that does not sign (let in before it kept a key) is made one that signs, as a new one is approved", async () => {
+  const m = await met({});
+  assert.deepEqual(await m.hello(), { ok: { t: "code", workspaces: ["ws"] } });
+  const done = await m.prove((await m.prompts()).pairing[0].code);
+  assert.ok("ok" in done && "approved" in done.ok, JSON.stringify(done));
+  assert.deepEqual(m.cloud.posted.map((p) => [p.ws, p.kind, p.id]), [["ws", "device", PHONE]]);
+  assert.deepEqual(m.cloud.chains.get("ws")!.at(-1)!.body, { id: PHONE, sub: "s2", kind: "app", label: "Pixel 8", sign_key: "ed25519:" + "11".repeat(32) });
+  // One that signs with the key it brings: nothing to approve. Its credential another person's: not here either.
+  const same = await met({ sign_key: "ed25519:" + "11".repeat(32) });
+  assert.deepEqual(await same.hello(), { ok: { t: "no", error: "not_here" } });
+  const theirs = await met({});
+  assert.deepEqual(await theirs.hello(theirs.g.credential("ws", PHONE, "s1")), { ok: { t: "no", error: "not_here" } });
+  assert.deepEqual([same.cloud.posted, theirs.cloud.posted], [[], []]);
 });
 
 test("a new device that dialled someone else cannot prove even the right code to the trusted one", async () => {

@@ -5,15 +5,14 @@
 package fail.still.android.screens
 
 import fail.still.android.data.t
-import androidx.compose.ui.layout.AlignmentLine
-import androidx.compose.ui.layout.FirstBaseline
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import androidx.compose.ui.layout.boundsInRoot
+import fail.still.android.ui.inkCentred
+import fail.still.android.ui.pressText
 import fail.still.android.ui.MenuItem
 import fail.still.android.ui.MenuSpec
 import androidx.compose.foundation.background
@@ -142,6 +141,7 @@ import kotlinx.coroutines.launch
 import fail.still.android.ui.initial
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.DoingMark
+import fail.still.android.ui.UiFont
 
 @Composable
 fun HomeScreen(current: WorkspaceEntry) {
@@ -370,7 +370,7 @@ private fun Empty(current: WorkspaceEntry, view: ChatsView, filter: String) {
         else if (filter == "watching") Text(t("android-chat.home.empty.watching"), fontSize = 14.sp, color = C.muted)
         else {
             Text(if (view.stations.size > 1) t("android-chat.home.empty.many") else t("android-chat.home.empty.one"), fontSize = 14.sp, color = C.muted, textAlign = TextAlign.Center)
-            Text(t("android-chat.newChat"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { app.push(Screen.NewChat) })
+            Text(t("android-chat.newChat"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { app.push(Screen.NewChat) })
         }
     }
 }
@@ -394,8 +394,10 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
     var line by remember { mutableStateOf(Rect.Zero) }
     if (app.menu == null && menuOpen) menuOpen = false
     // Nothing left in it: archived with one tap on the 归档 at its start (as its menu's 归档), or swiped away to the left.
-    val archivable = live && item.archivable == true && item.offline == null && item.pending != true
-    val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else null
+    // A copy leaving the list (not live, Leaving) keeps its 归档 drawn as it goes, doing nothing: dropped, it would vanish at once.
+    val offered = item.archivable == true && item.offline == null && item.pending != true
+    val archivable = live && offered
+    val onArchive = if (archivable) ({ if (!rowBusy(app, item)) archiveRow(app, item) }) else if (offered) ({}) else null
     val body = Modifier.onGloballyPositioned { bounds = it.boundsInRoot() }.then(if (!live) Modifier else Modifier.pointerInput(item.station, item.id, item.pinned, item.title, item.offline, item.pending, item.stateAbout) {
         detectTapGestures(
             // Pressed, the chat is read ahead of its page (AppState.prime).
@@ -416,7 +418,7 @@ private fun ChatRow(item: ChatItem, view: ChatsView, live: Boolean = true, motio
             },
         )
     })
-    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onStateLine = { line = it }, modifier = body)
+    if (!archivable) return ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     SwipeToArchive(item, motion) {
         ChatRowBody(item, view.leading ?: "agents", held || menuOpen, busy = rowBusy(app, item), failed = rowFailed(app, item), onArchive = onArchive, onStateLine = { line = it }, modifier = body)
     }
@@ -552,18 +554,6 @@ private fun rowBusy(app: AppState, item: ChatItem): Boolean =
 private fun rowFailed(app: AppState, item: ChatItem): String? =
     app.failedOf(setOf("chat.pin", "chat.archive"), "station" to item.station, "session" to item.session)
 
-/**
- * Text moved so its characters' ink, not its line, is in the middle of its box: the marks centred beside it are then
- * centred on its words. A Chinese font's line has more room above its characters than below (its ascent is the line's),
- * so they sit low in it; a character's ink is centred 0.38em above the baseline.
- */
-private fun Modifier.inkCentred(size: androidx.compose.ui.unit.TextUnit) = layout { m, c ->
-    val p = m.measure(c)
-    val base = p[FirstBaseline]
-    val dy = if (base == AlignmentLine.Unspecified) 0 else (p.height / 2f - base + 0.38f * size.toPx()).roundToInt()
-    layout(p.width, p.height) { p.place(0, dy) }
-}
-
 /** What a row shows, `lead` leading who is in it (RowPicture.kt); its station by its icon (the core gives one only with several stations); the time while it is `held`; `busy`: a spinner where its mark goes; `failed`: a red mark there a moment (DoingMark). */
 @Composable
 internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Boolean = false, failed: String? = null, onArchive: (() -> Unit)? = null, onStateLine: (Rect) -> Unit = {}, modifier: Modifier = Modifier) {
@@ -602,7 +592,7 @@ internal fun ChatRowBody(item: ChatItem, lead: String, held: Boolean, busy: Bool
                     // Its station offline, or its link coming back: unplugged (a spinner is only something its person did).
                     else if (offline != null) Box(Modifier.semantics { contentDescription = offline }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
                     else if (reconnecting != null) Box(Modifier.semantics { contentDescription = reconnecting }) { IconIn(Icons.Unplug, 13.dp, C.subtle) }
-                    else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp) }
+                    else if (item.connect != null) Box(Modifier.semantics { contentDescription = item.originText ?: "Slack" }) { SlackMark(13.dp, item.originKind) }
                 }
             }
             Row(Modifier.height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -699,7 +689,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
             Box(Modifier.width(10.dp), contentAlignment = Alignment.Center) { IconIn(icon, 14.dp, tint, Modifier.requiredSize(14.dp)) }
             if (rest.isNotEmpty()) Text(
                 rest, fontSize = 14.sp, lineHeight = 20.sp, color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
                     androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
                 )),
             )
@@ -714,7 +704,7 @@ private fun StateLine(state: String, modifier: Modifier = Modifier) {
     }
     Text(
         text, modifier, fontSize = 14.sp, lineHeight = 20.sp, color = if (lead != null) C.ink else C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
     )
@@ -731,7 +721,7 @@ private val watchLead = Regex("^(?:监控中|Watching)(?:：|: |$)")
 private fun LastMessage(item: ChatItem) {
     Text(
         item.last!!.preview, fontSize = 14.sp, lineHeight = 20.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-        style = androidx.compose.ui.text.TextStyle(lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+        style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
     )

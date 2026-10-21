@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AdbCodeReader (AdbCodeReader.java): Settings' windows only, as they open and change, read but never acted on (no
+     gestures, no keys); it looks only while 共享调试 is pairing. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/adb_reader_about"
+    android:packageNames="com.android.settings"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:notificationTimeout="200"
+    android:canRetrieveWindowContent="true" />

@@ -474,8 +474,6 @@
   "android-misc.screen.gone": "此屏幕已不存在",
   "android-misc.screen.denied": "暂时无法查看此屏幕",
   "android-misc.screen.failed": "无法打开此屏幕",
-  "android-misc.screen.retry": "重试",
-  "android-misc.screen.exit": "退出",
   "android-misc.screen.outdatedRow": "此 station 版本过旧，更新后才能查看屏幕",
   "android-misc.screen.drives": "{who} 正在控制",
   "android-misc.screen.someoneDrives": "他人正在控制",

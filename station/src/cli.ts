@@ -40,6 +40,14 @@ export async function enroll(data: string, origin: string, token: string, provid
   if (lock !== undefined) console.log(tr(stationLang(), "station.cli.lock.pending", { code: shortCode(key.id) }));
 }
 
+/// Whether `enroll --stay` (what the installers run) joins rather than enrolls: the station is in a workspace and not
+/// removed from it. Re-enrolling moves a station out of every workspace it is in, which someone adding a machine
+/// already in one to another does not mean; a machine is moved by removing it from its workspace first.
+export function staysIn(data: string): boolean {
+  const state = readState(data);
+  return state !== null && !!state.workspace && state.removed_at === undefined;
+}
+
 /// Joins one more workspace with its one-time token, staying in those the station is in (docs/multi-workspace.md):
 /// at the control plane it is enrolled with, which then names it in its `state` frames. Kept in cloud.json's `joined`
 /// at once, so `status` says it before the running station hears. A locked station joins none: its lock is one

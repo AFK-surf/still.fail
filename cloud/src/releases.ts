@@ -15,15 +15,17 @@ type Range = { start: number; end: number };
 /** Reads that would be more than this many are made from ranges further apart, reading the bytes between. */
 const MAX_READS = 40;
 
-/** A file named by its version (a build's zip or installer and its blockmap, an apk, a Node, a module's package) never changes; the rest do (the feeds, the station's). */
-const VERSIONED = /-[0-9.]+-(arm64-mac\.zip|x64-win\.exe)(\.blockmap)?$|^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$|-[0-9]+\.apk$|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$|^modules\/[a-z][a-z0-9]*\/[a-z][a-z0-9]*-0\.1\.[0-9]+(-[a-z0-9-]+)?\.tar\.gz$/;
+/** A file named by its version (a build's zip or installer and its blockmap, an apk, a Node, a module's package, a face's) never changes; the rest do (the feeds, the station's). */
+const VERSIONED = /^fonts\/|-[0-9.]+-(arm64-mac\.zip|x64-win\.exe)(\.blockmap)?$|^desktop\/web\/stillfail-beta-web-[0-9.]+\.tar\.gz$|-[0-9]+\.apk$|^node\/node-v[0-9.]+-[a-z0-9-]+\.tar\.gz(\.sha256)?$|^modules\/[a-z][a-z0-9]*\/[a-z][a-z0-9]*-0\.1\.[0-9]+(-[a-z0-9-]+)?\.tar\.gz$/;
 
 export async function serveRelease(request: Request, bucket: ReleaseBucket | undefined, file: string, type: string): Promise<Response> {
-  const headers = {
+  const headers: Record<string, string> = {
     "content-type": type,
     "accept-ranges": "bytes",
     "cache-control": VERSIONED.test(file) ? "public, max-age=31536000, immutable" : "no-store",
   };
+  // A face is fetched by pages of other origins too: the desktop app's (app://), the test channel's.
+  if (file.startsWith("fonts/")) headers["access-control-allow-origin"] = "*";
   const asked = request.headers.get("range");
   if (!asked) {
     const object = await bucket?.get(file);
@@ -152,6 +154,10 @@ const FEEDS: Record<string, string> = {
   "android-beta": "android/beta/latest.json",
   win: "desktop/stillfail.yml",
   "win-beta": "desktop/stillfail-beta.yml",
+  // still.fail mbui (apps/mbui), the test app in mbui
+  "android-mbui": "android/mbui/latest.json",
+  "mac-mbui": "mac/mbui/latest.json",
+  "win-mbui": "win/mbui/latest.json",
 };
 
 /**
@@ -163,7 +169,8 @@ export async function latestDownload(bucket: ReleaseBucket | undefined, app: str
   const object = feed ? await bucket?.get(feed) : null;
   if (!object) return null;
   const text = await new Response(object.body).text();
-  if (app.startsWith("mac") || app.startsWith("win")) {
+  // electron-updater's feeds (the desktop app's) are YAML; the rest are an AppRelease's JSON
+  if (feed!.endsWith(".yml")) {
     const file = /^path:\s*(\S+)\s*$/m.exec(text)?.[1];
     return file ? `desktop/${file}` : null;
   }

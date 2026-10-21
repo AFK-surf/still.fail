@@ -1,0 +1,1 @@
+{ "name": "@cursor/sdk", "version": "1.0.38-fake", "type": "module", "exports": { ".": { "import": "./index.js" } } }

@@ -1104,9 +1104,11 @@ export class StationsSync {
           }
           break;
       }
-      // Profile and connect edits answer the overview as it is now.
-      if (get(answer, "connects") !== undefined && get(answer, "profiles") !== undefined) {
-        this.#core.data.set({ topic: "overview", station: address }, answer);
+      // Profile and connect edits answer the overview as it is now (the Feishu routes beside what they made, as
+      // `overview`).
+      const told = get(answer, "connects") !== undefined && get(answer, "profiles") !== undefined ? answer : get(get(answer, "overview"), "connects") !== undefined && get(get(answer, "overview"), "profiles") !== undefined ? get(answer, "overview") : undefined;
+      if (told !== undefined) {
+        this.#core.data.set({ topic: "overview", station: address }, told);
         reads.splice(0, reads.length, ...reads.filter(([what]) => what !== "overview"));
       }
       yield* Effect.all(
@@ -1116,10 +1118,21 @@ export class StationsSync {
     });
   }
 
-  /// Runtimes first, the station last: one at a time, each awaited to its end (the overview as it goes).
+  /// Runtimes first, the station last: one at a time, each awaited to its end: the overview as the station's events
+  /// tell it (its updates' progress is pushed as it goes, as the pages see it), never asked again on a timer.
   #updateAll(addr: StationAddr, ctx: SpanContext | null): Effect.Effect<unknown, CoreError> {
+    const topic: Topic = { topic: "overview", station: addr.toString() };
+    // (each change of the overview counted, and whoever waits for the next woken: held from the first update to the end)
+    let changes = 0;
+    let next: Deferred.Deferred<void> | null = null;
+    let watch: { drop(): void } | null = null;
+    const changed = () => {
+      changes++;
+      if (next) Deferred.doneUnsafe(next, Exit.void);
+    };
     return Effect.gen({ self: this }, function* () {
       const address = addr.toString();
+      watch = this.#core.store.watch(topic, changed);
       const overview = yield* this.requests.call(addr, "GET", "/overview", null, { ctx });
       const updates = get(overview, "updates");
       if (!Array.isArray(updates)) return yield* Effect.fail(CoreError.invalid(t("station.core.updatesUnsupported")));
@@ -1135,6 +1148,7 @@ export class StationsSync {
         yield* this.afterWrite(address, { kind: "overview" }, answer);
         if (id === "station") break;
         const deadline = this.#core.host.nowMs() + 15 * 60_000;
+        let seen = changes;
         for (;;) {
           const status = Array.isArray(answer) ? answer.find((v) => get(v, "id") === id) : undefined;
           if (status === undefined) return yield* Effect.fail(CoreError.invalid(t("station.core.progressUnreadable")));
@@ -1144,15 +1158,20 @@ export class StationsSync {
             return yield* Effect.fail(CoreError.invalid(t("station.core.updateFailed", { name, error: message })));
           }
           if (get(status, "state") !== "updating") break;
-          if (this.#core.host.nowMs() >= deadline) return yield* Effect.fail(CoreError.invalid(t("station.core.updateUnfinished")));
-          yield* Effect.sleep(1000);
-          const now = yield* this.requests.call(addr, "GET", "/overview", null, { ctx });
-          this.#core.data.set({ topic: "overview", station: address }, now);
-          answer = get(now, "updates");
+          const left = deadline - this.#core.host.nowMs();
+          if (left <= 0) return yield* Effect.fail(CoreError.invalid(t("station.core.updateUnfinished")));
+          // (the next change the station tells, unless one came since this one was looked at)
+          if (changes === seen) {
+            next = Deferred.makeUnsafe<void>();
+            yield* Effect.raceFirst(Deferred.await(next), Effect.sleep(left));
+            next = null;
+          }
+          seen = changes;
+          answer = get(this.#core.data.get(topic), "updates") ?? answer;
         }
       }
       return answer;
-    });
+    }).pipe(Effect.ensuring(Effect.sync(() => watch?.drop())));
   }
 
   /// A person's message into a thread; answers its entry number once the thread's entries hold it.

@@ -1,0 +1,83 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# The renderer's pixels on Android (docs/determinism.md, "Pixel references belong to one kind of machine"): a Tester's
+# draw list drawn offscreen by the app's GL renderer in an x86_64 emulator (SwiftShader) on GitHub's ubuntu-24.04
+# runner, twice in each of two jobs at once, against its reference (goldens/render/android-controls.png) to the byte,
+# on the runner image, emulator and system image the reference was made on (goldens/render/android.txt). The picture
+# drawn is the artifact: what a PR that changes it commits, saying why.
+name: mbui-render-android
+on:
+  pull_request:
+    paths: &paths
+      - "apps/mbui/mbui/src/host/android_host.c"
+      - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/MBText.java"
+      - "apps/mbui/mbui/android/app/src/main/java/dev/mbui/Images.java"
+      - "apps/mbui/mbui/android/app/build.gradle.kts"
+      - "apps/mbui/mbui/scripts/android.sh"
+      - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/ui/drawlist.mbt"
+      - "apps/mbui/mbui/src/ui/scene.mbt"
+      - "apps/mbui/mbui/src/ui/line.mbt"
+      - "apps/mbui/mbui/scripts/lines_check.py"
+      - "apps/mbui/mbui/src/kitdemo/dl_print_wbtest.mbt"
+      - "apps/mbui/mbui/src/ui/smooth.mbt"
+      - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/goldens/render/android*"
+      - "apps/mbui/mbui/scripts/render_dl.sh"
+      - "apps/mbui/mbui/scripts/render_android.sh"
+      - "apps/mbui/mbui/scripts/render_android_hook.sh"
+      - ".github/workflows/mbui-render-android.yml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+
+
+jobs:
+  offscreen:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    strategy:
+      fail-fast: false
+      matrix:
+        run: [a, b]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - name: The draw list and the APK (scripts/render_android.sh build)
+        run: scripts/render_android.sh build
+      # (the emulator's build the reference was made with, goldens/render/android.txt: the action's, 16428233)
+      - uses: ./.github/actions/mbui-android-emulator
+        with: { target: default, profile: pixel_6, animations: "false" }
+      - name: Drawn offscreen in the emulator, twice (scripts/render_android.sh run)
+        run: bash scripts/render_android.sh run
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render-android-${{ matrix.run }}
+          # (a rerun's own: the attempt before's put by, so `same` compares this attempt's pictures)
+          overwrite: true
+          path: apps/mbui/mbui/out/render/
+      - name: Against the reference, on the machine it was made on
+        run: scripts/render_android.sh against
+
+  # the two jobs' pictures (two machines of the kind, at once): the same to the byte
+  same:
+    needs: offscreen
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { pattern: render-android-*, path: runs }
+      - run: |
+          md5sum runs/*/controls.png
+          grep -h '^cpu ' runs/*/machine.txt
+          cmp runs/render-android-a/controls.png runs/render-android-b/controls.png && echo "the two jobs' pictures: the same to the byte"
+
+        working-directory: ${{ github.workspace }}

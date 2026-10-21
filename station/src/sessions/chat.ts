@@ -41,21 +41,30 @@ export interface ChatSurface {
   botUserId(): string;
   /// The bot's name on the platform (what people there call the agent), once started; empty where it has none.
   botName?(): string;
+  /// How someone is mentioned there; absent: Slack's `<@ID>`.
+  mention?(user: string): string;
   /// The platform workspace (Slack team id) once started; threads are named by it.
   workspace(): string | null;
   /// Starts receiving.
   start?(handler: Handler): Promise<void>;
-  /// Posts a message into the thread as written (Slack's mrkdwn, or Markdown in the station's chats) and gives the
-  /// posted message's ts. `files` are attachments already copied into the session's uploads; surfaces that cannot carry
-  /// files refuse them.
-  post(thread: ThreadRef, message: string, files: Attachment[]): Promise<string>;
+  /// Posts a message into the thread as written (Markdown, which Slack and Feishu draw too) and gives
+  /// the posted message's ts. `files` are attachments already copied into the session's uploads; surfaces that cannot
+  /// carry files refuse them. `card`: the question it asks (an options or text card, chat_post's), where `cards` says
+  /// the platform shows them.
+  post(thread: ThreadRef, message: string, files: Attachment[], card?: Json | null): Promise<string>;
+  /// The answer cards it shows (options and text; Slack's and Feishu's buttons and fields): absent, none but the
+  /// station's chats.
+  cards?: boolean;
+  /// How a new session's link is said as it starts (null: it is not said: Feishu's status card has it); absent: Slack's
+  /// `<url|label>`.
+  sessionLink?(url: string, label: string): string | null;
   /// A shared file's bytes, as the bot may read them; throws where it may not (a Slack app without files:read).
   download?(file: InboundFile): Promise<Uint8Array>;
   /// A person's display name, or null if unknown.
   userName?(user: string): Promise<string | null>;
   /// Says in the thread what the agent working for it is doing ("" when it is done), best effort, never waited on.
-  /// `messageTs`: the message that started the work.
-  working?(thread: ThreadRef, messageTs: string | null, status: string): void;
+  /// `messageTs`: the message that started the work; `page`: the session's page in still.fail, where there is one.
+  working?(thread: ThreadRef, messageTs: string | null, status: string, page?: string | null): void;
   /// Calls the platform's API as the bot (Slack's Web API): what the agent reaches through slack_api.
   api?(method: string, params: Record<string, Json>): Promise<Json>;
   /// A person's email, where the platform shares it.
@@ -78,7 +87,7 @@ export async function callApi(chat: ChatSurface, method: string, params: Record<
 }
 
 /// Splits text for Slack's message size, preferring paragraph, then line boundaries. Slack messages go out as the
-/// agent wrote them, in Slack's own formatting: no converting, only splitting what is too long for one message.
+/// agent wrote them: no converting, only splitting what is too long for one message.
 /// Lengths are in characters (code points), as the Rust's.
 export function splitForSlack(text: string, limit: number): string[] {
   const chunks: string[] = [];
@@ -121,7 +130,8 @@ export function toolStatus(tool: string): string {
   else if (starts(["websearch", "web_search", "search_query", "image_query"])) key = "station.status.searchingWeb";
   else if (starts(["webfetch", "fetch", "browse"])) key = "station.status.readingWeb";
   else if (starts(["task", "agent", "spawn"])) key = "station.status.delegating";
-  else if (starts(["chat_", "slack"])) key = "station.status.readingSlack";
+  else if (starts(["slack"])) key = "station.status.readingSlack";
+  else if (starts(["chat_", "feishu"])) key = "station.status.readingChat";
   else if (starts(["todowrite", "update_plan", "plan"])) key = "station.status.planning";
   else key = "station.status.working";
   return tr(stationLang(), key);

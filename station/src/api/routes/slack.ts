@@ -42,11 +42,11 @@ import { wall } from "../../ops/fibers.ts";
 import { runtimeKind, type RuntimeKind } from "../../agents/runtime.ts";
 
 type Json = any;
-type Input = Record<string, unknown>;
+export type Input = Record<string, unknown>;
 
 const segment = (s: string) => percentDecode(s.replace(/\+/g, "%2B"));
-const ok = (value: unknown) => json(200, JSON.stringify(value));
-class Refused extends Error {
+export const ok = (value: unknown) => json(200, JSON.stringify(value));
+export class Refused extends Error {
   status: number;
   constructor(status: number, message: string) {
     super(message);
@@ -55,7 +55,7 @@ class Refused extends Error {
 }
 
 /// A request's JSON object (`read_json`): nothing is `{}`, as is anything not an object; more than a megabyte refused.
-function input(r: Request): Input {
+export function input(r: Request): Input {
   if (r.body.length > 1_000_000) throw new Refused(413, "request too large");
   if (r.body.length === 0) return {};
   let value: unknown;
@@ -67,16 +67,16 @@ function input(r: Request): Input {
   return isObject(value) ? (value as Input) : {};
 }
 
-const isObject = (v: unknown): v is Record<string, Json> => v !== null && typeof v === "object" && !Array.isArray(v);
+export const isObject = (v: unknown): v is Record<string, Json> => v !== null && typeof v === "object" && !Array.isArray(v);
 /// `Input::str`: a string field, as given.
-const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
+export const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 /// `Input::text`: JavaScript's String(x ?? "") as serde writes it.
 const text = (v: unknown): string => (v === undefined || v === null ? "" : typeof v === "string" ? v : JSON.stringify(v));
 /// serde's `Value::get`: a field of an object, nothing of anything else.
-const get = (v: unknown, key: string): unknown => (isObject(v) ? v[key] : undefined);
+export const get = (v: unknown, key: string): unknown => (isObject(v) ? v[key] : undefined);
 
 /// Who asks: their id (an email), their name, whether they manage the workspace (access.rs `Viewer`).
-const idOf = (v: Viewer) => v.email;
+export const idOf = (v: Viewer) => v.email;
 const nameOf = (v: Viewer) => (v.name === "" ? v.email : v.name);
 const manages = (v: Viewer) => v.role === "owner" || v.role === "admin";
 
@@ -86,14 +86,14 @@ const urlEncode = (s: string) => [...Buffer.from(s, "utf8")].map((b) => (/[A-Za-
 const colorOk = (color: string) => /^#[0-9a-fA-F]{6}$/.test(color.trim());
 
 /// A connect id from its bot's name: lower case, runs of anything else as one dash.
-function connectSlug(name: string): string {
+export function connectSlug(name: string, fallback = "slack"): string {
   let out = "";
   for (const c of name.toLowerCase()) {
     if (/^[a-z0-9]$/.test(c)) out += c;
     else if (!out.endsWith("-")) out += "-";
   }
   const slug = [...out.replace(/^-+|-+$/g, "")].slice(0, 32).join("").replace(/-+$/, "");
-  return slug === "" ? "slack" : slug;
+  return slug === "" ? fallback : slug;
 }
 
 /// A form's edits as serde reads them (`SlackAppEdit`): null when a field has the wrong kind.
@@ -153,21 +153,12 @@ export type SlackRoutesDeps = {
   overviewChanged?: () => void;
 };
 
-export const routes = (deps: SlackRoutesDeps): Route[] => {
-  const { slack, config, store } = deps;
-  const apps: SlackService = deps.apps ?? slack.apps;
-  /// App ids learned from bot tokens, by connect.
-  const appIds = new Map<string, string>();
+/// What every connect's pages edit, whatever its kind (Slack's here, Feishu's in routes/feishu.ts): its config entry
+/// as the viewer may change it, answered with the overview.
+export type ConnectEditDeps = Pick<SlackRoutesDeps, "config" | "data" | "hub" | "overview" | "place">;
 
-  const answer = (f: (r: Request, args: string[]) => Promise<Answer> | Answer) => async (r: Request, args: string[]) => {
-    try {
-      return await f(r, args);
-    } catch (e) {
-      if (e instanceof Refused) return error(e.status, e.message);
-      log.error("admin", "admin request failed", { path: r.path, error: (e as Error).message });
-      return error(500, (e as Error).message);
-    }
-  };
+export function connectEdits(deps: ConnectEditDeps) {
+  const { config } = deps;
   const overview = async (r: Request) => await deps.overview(r.viewer, r.lang);
   /// Edits the config for the viewer (said in the log as `what`); its refusals are the asker's (400).
   const change = (r: Request, what: string, f: (raw: Json) => void) => {
@@ -193,49 +184,6 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
     const c = (Array.isArray(raw().connects) ? raw().connects : []).find((c: Json) => c?.id === id);
     if (c !== undefined && !ofViewer(r, c)) throw new Refused(404, `unknown connect ${id}`);
     return id;
-  };
-
-  /// A Slack app made here and not connected yet, by its app id or its install's state.
-  const madeApp = (key: string): SlackAppMade | undefined => madeApps(raw()).find((a) => a.appId === key || a.oauth?.state === key);
-
-  /// The workspace an app is made in: the one asked for, or the only one the viewer has.
-  const teamFor = (i: Input, r: Request): string => {
-    const by = idOf(r.viewer);
-    const teams = configTokens(raw()).filter((t) => t.by === by);
-    if (teams.length === 0) throw new Refused(400, tr(r.lang, "station.slackApp.noConfigToken"));
-    const team = str(i.team) ?? (teams.length === 1 ? teams[0]!.teamId : undefined);
-    if (team === undefined || !teams.some((t) => t.teamId === team)) throw new Refused(400, tr(r.lang, "station.slackApp.chooseTeam"));
-    return team;
-  };
-
-  /// The Slack workspace a connect's app is in, as last seen.
-  const teamOf = (id: string) => slack.connects().find((c) => c.id === id)?.team?.id ?? null;
-
-  const appId = async (id: string): Promise<string | null> => {
-    const connect = slack.connects().find((c) => c.id === id);
-    if (!connect) throw new Refused(404, `unknown connect ${id}`);
-    if (connect.appId !== null) return connect.appId;
-    const known = appIds.get(id);
-    if (known !== undefined) return known;
-    if (connect.botToken === "") return null;
-    const app = await appIdOf(slack.client, connect.botToken);
-    appIds.set(id, app);
-    return app;
-  };
-
-  /// Sets an app's icon (an image's data URL); what went wrong, in words, or null.
-  const setIcon = async (by: string, app: string, icon: string, lang: Lang): Promise<string | null> => {
-    const at = icon.indexOf(";base64,");
-    const [head, data] = at >= 0 ? [icon.slice(0, at), icon.slice(at + 8)] : ["data:image/png", ""];
-    const mime = head.startsWith("data:") && head.slice(5).startsWith("image/") ? head.slice(5) : "image/png";
-    const bytes = /^[A-Za-z0-9+/]*={0,2}$/.test(data) && data.length % 4 === 0 ? Buffer.from(data, "base64") : Buffer.alloc(0);
-    try {
-      await apps.setIcon(by, app, bytes, mime);
-      return null;
-    } catch (e) {
-      if (e instanceof SlackApiError && e.code === "app_not_owned_by_manager_app") return tr(lang, "station.slackApp.iconNotOwned");
-      return slackError(e, lang);
-    }
   };
 
   /// A connect added or edited (edits.rs `put_connect`): tokens left blank stay, its runtime stays as it was made.
@@ -303,7 +251,7 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
         botImage = typeof old.botImage === "string" ? old.botImage : null;
       }
       const oldAppId = typeof old.appId === "string" ? old.appId : null;
-      const anySlack = appToken !== null || botToken !== null || oldAppId !== null || team !== null;
+      const anySlack = (appToken !== null || botToken !== null || oldAppId !== null || team !== null) && (str(i.kind) ?? existing?.kind ?? "slack") === "slack";
       const next: Json = { id };
       const owner = ownerOf(existing?.createdBy ?? null, i.owner, r.viewer, lang);
       next.enabled = typeof i.enabled === "boolean" ? i.enabled : typeof existing?.enabled === "boolean" ? existing.enabled : true;
@@ -320,6 +268,21 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
         if (botImage !== null) s.botImage = botImage;
         next.slack = s;
       }
+      // A Feishu connect's app (docs/feishu.md): its id and secret as given (blank ones stay), and who it is as last seen.
+      const feishuIn = i.feishu;
+      const oldFeishu: Json = isObject(existing?.feishu) ? existing.feishu : null;
+      if (next.kind === "feishu" && (isObject(feishuIn) || oldFeishu !== null)) {
+        const f: Json = { ...(oldFeishu ?? {}) };
+        for (const key of ["appId", "appSecret", "botName", "botImage", "botOpenId"]) {
+          const [, value] = field(feishuIn, key);
+          if (value !== null) f[key] = value;
+        }
+        const domain = str(get(feishuIn, "domain"));
+        if (domain === "feishu" || domain === "lark") f.domain = domain;
+        const tenant = get(feishuIn, "tenant");
+        if (isObject(tenant) && typeof tenant.key === "string") f.tenant = { key: tenant.key, name: typeof tenant.name === "string" ? tenant.name : "" };
+        next.feishu = f;
+      }
       if (owner !== null) next.createdBy = owner;
       // Added in a workspace the station joined: that workspace's (one of the home workspace says none, as before).
       if (existing === undefined && home() !== null && r.viewer.workspace !== home()) next.workspace = r.viewer.workspace;
@@ -329,12 +292,74 @@ export const routes = (deps: SlackRoutesDeps): Route[] => {
       if (profile !== null) b.profile = profile;
       next.bind = b;
       // What this station does not know of it is kept.
-      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "slack", "createdBy", "bind"]);
+      const known = new Set(["id", "enabled", "kind", "mode", "requireMention", "slack", "feishu", "createdBy", "bind"]);
       for (const [k, v] of Object.entries(existing ?? {})) if (!known.has(k)) next[k] = v;
       const at = connects.findIndex((c) => c?.id === id);
       if (at >= 0) connects[at] = next;
       else connects.push(next);
     });
+
+  return { overview, change, save, raw, connectsRaw, home, ofViewer, mine, putConnect };
+}
+
+export const routes = (deps: SlackRoutesDeps): Route[] => {
+  const { slack, config, store } = deps;
+  const apps: SlackService = deps.apps ?? slack.apps;
+  /// App ids learned from bot tokens, by connect.
+  const appIds = new Map<string, string>();
+
+  const answer = (f: (r: Request, args: string[]) => Promise<Answer> | Answer) => async (r: Request, args: string[]) => {
+    try {
+      return await f(r, args);
+    } catch (e) {
+      if (e instanceof Refused) return error(e.status, e.message);
+      log.error("admin", "admin request failed", { path: r.path, error: (e as Error).message });
+      return error(500, (e as Error).message);
+    }
+  };
+  const { overview, change, save, raw, connectsRaw, home, ofViewer, mine, putConnect } = connectEdits(deps);
+  /// A Slack app made here and not connected yet, by its app id or its install's state.
+  const madeApp = (key: string): SlackAppMade | undefined => madeApps(raw()).find((a) => a.appId === key || a.oauth?.state === key);
+
+  /// The workspace an app is made in: the one asked for, or the only one the viewer has.
+  const teamFor = (i: Input, r: Request): string => {
+    const by = idOf(r.viewer);
+    const teams = configTokens(raw()).filter((t) => t.by === by);
+    if (teams.length === 0) throw new Refused(400, tr(r.lang, "station.slackApp.noConfigToken"));
+    const team = str(i.team) ?? (teams.length === 1 ? teams[0]!.teamId : undefined);
+    if (team === undefined || !teams.some((t) => t.teamId === team)) throw new Refused(400, tr(r.lang, "station.slackApp.chooseTeam"));
+    return team;
+  };
+
+  /// The Slack workspace a connect's app is in, as last seen.
+  const teamOf = (id: string) => slack.connects().find((c) => c.id === id)?.team?.id ?? null;
+
+  const appId = async (id: string): Promise<string | null> => {
+    const connect = slack.connects().find((c) => c.id === id);
+    if (!connect) throw new Refused(404, `unknown connect ${id}`);
+    if (connect.appId !== null) return connect.appId;
+    const known = appIds.get(id);
+    if (known !== undefined) return known;
+    if (connect.botToken === "") return null;
+    const app = await appIdOf(slack.client, connect.botToken);
+    appIds.set(id, app);
+    return app;
+  };
+
+  /// Sets an app's icon (an image's data URL); what went wrong, in words, or null.
+  const setIcon = async (by: string, app: string, icon: string, lang: Lang): Promise<string | null> => {
+    const at = icon.indexOf(";base64,");
+    const [head, data] = at >= 0 ? [icon.slice(0, at), icon.slice(at + 8)] : ["data:image/png", ""];
+    const mime = head.startsWith("data:") && head.slice(5).startsWith("image/") ? head.slice(5) : "image/png";
+    const bytes = /^[A-Za-z0-9+/]*={0,2}$/.test(data) && data.length % 4 === 0 ? Buffer.from(data, "base64") : Buffer.alloc(0);
+    try {
+      await apps.setIcon(by, app, bytes, mime);
+      return null;
+    } catch (e) {
+      if (e instanceof SlackApiError && e.code === "app_not_owned_by_manager_app") return tr(lang, "station.slackApp.iconNotOwned");
+      return slackError(e, lang);
+    }
+  };
 
   /// A new Slack connect from its tokens: named as its bot is in Slack, with an id made from that name.
   const newSlackConnect = async (r: Request, i: Input) => {

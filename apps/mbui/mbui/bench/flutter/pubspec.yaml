@@ -1,0 +1,17 @@
+# Flutter's twin of mbui's hill-climb (src/bench, bench/README.md), built
+# and run by scripts/bench_flutter.sh. Only the sources live here; the
+# script makes the rest of the macOS runner with `flutter create`.
+name: mbui_bench
+description: The five scenes of nanoui's hill-climb, in Flutter.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  uses-material-design: false

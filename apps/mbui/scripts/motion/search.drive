@@ -1,0 +1,14 @@
+# The search over Home (search.mbt; the Android app's SearchMotionTest): the list pulled down to its field, the field
+# tapped (it comes up to the top as 取消 comes in, the list and the bars going away), words typed (what they find, the
+# words' strokes drawn in), then 取消 (the field back into the list).
+timeout 20000
+until 整理发布清单
+wait 600
+drag 195 300 0 300 300
+wait 900
+tap 搜索全部内容
+wait 900
+type 签名
+wait 2500
+tap 取消
+wait 1200

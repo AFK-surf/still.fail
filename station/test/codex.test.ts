@@ -266,42 +266,27 @@ describe("the Codex driver", { concurrency: true }, () => {
     assert.equal(starts(p.dump).length, 2);
   });
 
-  test("a profile edit restarts its app-server only once no thread uses it", async () => {
+  test("a profile edit restarts its app-server once no turn runs on it, its other threads opened again", async () => {
     const d = driver();
     const p = profile();
-    const one = await d.open(options(p), () => {});
+    const a = listen();
+    const one = await d.open(options(p), a.push);
+    await one.prompt("hold:1");
+    await a.until((e) => deltas(e).length >= 1);
     const edited = { ...p, env: { ...(p.env as object), EXTRA: "1" } };
     const two = await d.open(options(edited), () => {});
-    assert.equal(starts(p.dump).length, 1, "in use: it keeps serving");
-    await one.dispose();
+    assert.equal(starts(p.dump).length, 1, "a turn runs on it: it keeps serving");
+    await one.abort();
+    await a.until(ended(1));
+    // A thread opened on it meanwhile does not keep it: its next turn is refused, to be opened again on a new one.
+    await assert.rejects(two.prompt("say:x"), /profile changed/);
     await two.dispose();
     const { push, until } = listen();
     const three = await d.open(options(edited), push);
     assert.equal(starts(p.dump).length, 2);
     assert.equal(starts(p.dump)[1].env.EXTRA, "1");
+    await a.until((e) => e.some((x) => x.type === "closed"));
     await three.prompt("say:x");
-    await until(ended(1));
-  });
-
-  test("the station's variables for its agents: an app-server starts with them, again once idle when they change; a profile's own win", async (t) => {
-    t.after(() => readAgentEnvFrom(() => null));
-    let raw: any = {};
-    readAgentEnvFrom(() => raw);
-    const d = driver();
-    const p = profile({ env: { FAKE_DUMP: "", MINE: "profile's" } });
-    (p.env as Record<string, string>).FAKE_DUMP = p.dump;
-    const one = await d.open(options(p), () => {});
-    await one.dispose();
-    assert.equal(starts(p.dump)[0].env.HTTPS_PROXY, undefined);
-    raw = { agentEnv: { HTTPS_PROXY: "http://127.0.0.1:7890", MINE: "station's" } };
-    const { push, until } = listen();
-    const two = await d.open(options(p), push);
-    assert.equal(starts(p.dump).length, 2);
-    const env = starts(p.dump)[1].env;
-    assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:7890");
-    assert.match(env.NO_PROXY, /(^|,)127\.0\.0\.1(,|$)/);
-    assert.equal(env.MINE, "profile's");
-    await two.prompt("say:x");
     await until(ended(1));
   });
 
@@ -458,5 +443,30 @@ describe("the Codex driver", { concurrency: true }, () => {
     await eventually(() => !alive() && !existingRunners(data).some((r) => r.pid === pid));
     assert.throws(() => process.kill(pid, 0));
     assert.ok(!existingRunners(data).some((r) => r.pid === pid));
+  });
+});
+
+// Alone: the station's variables are the whole process's, and every app-server above would be out of date under them.
+describe("the Codex driver under the station's variables", () => {
+  test("the station's variables for its agents: an app-server starts with them, again once idle when they change; a profile's own win", async (t) => {
+    t.after(() => readAgentEnvFrom(() => null));
+    let raw: any = {};
+    readAgentEnvFrom(() => raw);
+    const d = driver();
+    const p = profile({ env: { FAKE_DUMP: "", MINE: "profile's" } });
+    (p.env as Record<string, string>).FAKE_DUMP = p.dump;
+    const one = await d.open(options(p), () => {});
+    await one.dispose();
+    assert.equal(starts(p.dump)[0].env.HTTPS_PROXY, undefined);
+    raw = { agentEnv: { HTTPS_PROXY: "http://127.0.0.1:7890", MINE: "station's" } };
+    const { push, until } = listen();
+    const two = await d.open(options(p), push);
+    assert.equal(starts(p.dump).length, 2);
+    const env = starts(p.dump)[1].env;
+    assert.equal(env.HTTPS_PROXY, "http://127.0.0.1:7890");
+    assert.match(env.NO_PROXY, /(^|,)127\.0\.0\.1(,|$)/);
+    assert.equal(env.MINE, "profile's");
+    await two.prompt("say:x");
+    await until(ended(1));
   });
 });

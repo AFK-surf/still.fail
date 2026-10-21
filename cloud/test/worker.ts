@@ -1,9 +1,9 @@
 // Only the test bundler imports this entry. Production exports no fixture routes.
-import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, TelemetryLimiter } from "../src/index";
+import worker, { Account as ProductionAccount, Directory as ProductionDirectory, LoginAttempt as ProductionLoginAttempt, LoginLimiter, RelayLoad, TelemetryLimiter } from "../src/index";
 import { clock, signToken, nowSeconds, reply, readJson } from "../src/auth";
 import type { Env } from "../src/env";
 import type { MailMessage } from "../src/mail";
-export { LoginLimiter, TelemetryLimiter };
+export { LoginLimiter, RelayLoad, TelemetryLimiter };
 
 // The moment the tests run at (harness.ts NOW_MS), unless they run on the machine's time (dev.ts). The Worker and its
 // objects share this isolate, and so the clock.
@@ -216,6 +216,7 @@ export default {
     }
     return worker.fetch(request, env, ctx);
   },
+  scheduled: worker.scheduled,
 };
 let offline = false;
 let loseRefreshResponse = false;

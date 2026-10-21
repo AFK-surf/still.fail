@@ -94,7 +94,9 @@ class StationPermissionsTest {
 
     @Test fun someMissingAreAskedForAndTheDesktopOpens() {
         val h = launch(missing) { buildJsonObject { put("window", "up"); put("screen", true) } }
-        rule.onNodeWithText(missing.note!!).performScrollTo().assertIsDisplayed()
+        // What is unavailable is said by each row (申请 at its end), not again under them.
+        rule.onNodeWithText("外接磁盘").performScrollTo().assertIsDisplayed()
+        rule.onAllNodesWithText(missing.note!!).assertCountEquals(0)
         rule.onAllNodesWithText("已允许").assertCountEquals(3)
         rule.onAllNodesWithText("申请").assertCountEquals(3)
         rule.onNodeWithContentDescription("申请「辅助功能」").performScrollTo().performClick()
@@ -130,7 +132,7 @@ class StationPermissionsTest {
 
     @Test fun aReadOnlyMemberSeesWhatIsMissing() {
         launch(missing.copy(canRequest = false))
-        rule.onNodeWithText(missing.note!!).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("外接磁盘").performScrollTo().assertIsDisplayed()
         rule.onAllNodesWithText("未允许").assertCountEquals(3)
         rule.onAllNodesWithText("申请").assertCountEquals(0)
     }
@@ -147,7 +149,7 @@ class StationPermissionsTest {
 
     private fun pictured(state: String, p: StationPermissions, dark: Boolean) {
         val h = launch(p, dark)
-        picture(h, "station-perms-$state-${if (dark) "dark" else "light"}", p.note!!)
+        picture(h, "station-perms-$state-${if (dark) "dark" else "light"}", "外接磁盘")
     }
 
     @Test fun picturedMissingLight() = pictured("missing", missing, false)

@@ -29,16 +29,21 @@ import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, logins
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
+import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
 import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
 import { libraryDemo, vaultDemo } from "./vault.ts";
-import { installDemo } from "./install.ts";
+import { cursorPickDemo, installDemo, installFlowDemo } from "./install.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
 import { lockDemo } from "./lock.ts";
+import { feishuConnectDemo, feishuFlowDemo } from "./feishu.ts";
+import { relaysDemo } from "./relays.ts";
+import { Console } from "../src/admin/console.tsx";
+import { ACCOUNT } from "../src/demo/station.ts";
 import { ModelTriple } from "../src/ModelTriple.tsx";
 import { ModelList } from "../src/mobile/History.tsx";
 import type { Picking } from "../src/pick.ts";
@@ -83,6 +88,12 @@ const toStation = (part: "设置" | "软件与设备"): Step[] => [{ click: '[ar
 /** To a station's page on the phone (settings › Station › the demo's one). */
 const toPhoneStation: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }];
 const toPhoneVault: Step[] = [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "密钥" }];
+
+/** Fonts chosen on this device (client/core-ts/src/fonts.ts): each place a face of its own. */
+const chosenFonts: DemoExtension = (() => {
+  const choice = { ui: "noto-serif-sc", text: "lxgw-wenkai", code: "maple-mono" };
+  return { topic: (t) => (t.topic === "prefs" ? { fonts: choice, faces: fontsShown(choice) } : undefined) };
+})();
 
 /** The demo with stations of other workspaces to add (`list`), or one that refuses to join (none to add: no choice). */
 const joining = (kind: "list" | "error"): DemoExtension => ({
@@ -135,6 +146,48 @@ const openCode = (signingIn: boolean): DemoExtension => ({
     };
   },
 });
+/** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back. */
+const claudeSignIn: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    const at = Date.UTC(2026, 9, 19, 3, 0);
+    const login = { profile: "machine-claude", runtime: "claude", state: "needs_code", url: "https://claude.ai/oauth/authorize?code=true&client_id=still.fail", startedAt: at, expiresAt: at + 600_000 };
+    return {
+      ...o,
+      profiles: o.profiles.map((p) => ({
+        ...p, machine: false, access: { kind: "subscription", key: "" }, quota: null, trouble: null,
+        login, check: { ...(p.check as object), state: "login", detail: "Claude 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber",
+      })),
+    };
+  },
+};
+/** The workspace's list with an account of each kind, a section each, its mark before its title. */
+const everyKind: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "profiles" || !value || typeof value !== "object") return undefined;
+    const v = value as { items: Record<string, unknown>[] };
+    const e = v.items[0]!;
+    const p = e.profile as Record<string, unknown>;
+    const as = (id: string, group: string, groupTitle: string, profile: Record<string, unknown>) => ({ ...e, key: `${String(e.key)}-${id}`, group, groupTitle, profile: { ...p, id, ...profile } });
+    return {
+      ...v,
+      items: [
+        ...v.items,
+        as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
+        as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
+        as("cursor", "cursor", "Cursor 订阅", { name: "lin@acme.dev", runtime: "cursor", runtimes: ["cursor"], quota: null }),
+        as("devin", "devin", "Devin 订阅", { name: "lin@acme.dev", runtime: "devin", runtimes: ["devin"], quota: null }),
+        // A key with an allowance of several windows: they take a line of their own, under its name and where it is.
+        as("key", "key", "API Key", { name: "OpenRouter", access: { kind: "api-provider", key: "sk-or…9f2c" }, providerMark: "openrouter", quota: { checkedAt: 0, state: "ok", windows: [
+          { label: "5 小时", mark: "5H", left: 100, level: "ok", usedPercent: 0 },
+          { label: "每周", mark: "W", left: 64, level: "ok", usedPercent: 36 },
+          { label: "每月", mark: "M", left: 8, level: "red", usedPercent: 92 },
+        ] } }),
+      ],
+    };
+  },
+};
 /** The demo's profile as a SuperGrok subscription (Grok Build's): signed in, or being signed in again (`signingIn`: xAI's
  *  device code is up). The workspace's list has it under its own kind too. */
 const superGrok = (signingIn: boolean): DemoExtension => {
@@ -160,6 +213,66 @@ const superGrok = (signingIn: boolean): DemoExtension => {
       if (t.topic === "profiles") {
         const v = value as { items: Record<string, unknown>[] };
         return { ...v, items: v.items.map((e) => ({ ...e, group: "grok", groupTitle: "SuperGrok 订阅", profile: grok(e.profile as Record<string, unknown>) })) };
+      }
+      return undefined;
+    },
+  };
+};
+/** The demo's profile as a Cursor subscription: signed in, or being signed in again (`signingIn`: Cursor's page is up, with
+ *  no code; it is only confirmed there). The workspace's list has it under its own kind too. */
+const cursorAccount = (signingIn: boolean): DemoExtension => {
+  const at = Date.UTC(2026, 9, 20, 3, 0);
+  const login = { profile: "machine-claude", runtime: "cursor", state: "needs_approval", url: "https://cursor.com/loginDeepControl?challenge=Xq7…&uuid=5b1e…&mode=login", userCode: null, startedAt: at, expiresAt: at + 600_000 };
+  const models = ["composer-2", "gpt-5.5"];
+  const cursor = (p: Record<string, unknown>) => ({
+    ...p, machine: false, runtime: "cursor", runtimes: ["cursor"], loginCommand: undefined, providerName: undefined,
+    access: { kind: "subscription", key: "" }, quota: { state: "unavailable", windows: [], checkedAt: at }, trouble: null,
+    models, available: models, modelsText: "已启用 2 / 2 个模型", series: [{ name: "Composer", models: ["composer-2"] }, { name: "GPT", models: ["gpt-5.5"] }],
+    makers: { "composer-2": { id: "cursor", name: "Cursor" }, "gpt-5.5": { id: "openai", name: "OpenAI" } }, names: { "composer-2": "Composer 2", "gpt-5.5": "GPT-5.5" },
+    ...(signingIn
+      ? { login, check: { checkedAt: 0, state: "login", detail: "Cursor 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+      : { login: null, check: { checkedAt: 0, state: "ok", detail: "已登录", models }, checkText: "可用", checkTone: "green" }),
+  });
+  return {
+    then: (t, value) => {
+      if (!value || typeof value !== "object") return undefined;
+      if (t.topic === "overview") {
+        const o = value as { profiles: Record<string, unknown>[] };
+        return { ...o, profiles: o.profiles.map(cursor) };
+      }
+      if (t.topic === "profiles") {
+        const v = value as { items: Record<string, unknown>[] };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "cursor", groupTitle: "Cursor 订阅", profile: cursor(e.profile as Record<string, unknown>) })) };
+      }
+      return undefined;
+    },
+  };
+};
+/** The demo's profile as a Devin subscription: signed in, or being signed in again (`signingIn`: Devin's page is up; the code
+ *  it shows once signed in is pasted back, as Claude's). The workspace's list has it under its own kind too. */
+const devinAccount = (signingIn: boolean): DemoExtension => {
+  const at = Date.UTC(2026, 9, 21, 3, 0);
+  const login = { profile: "machine-claude", runtime: "devin", state: "needs_code", url: "https://app.devin.ai/auth/cli/continue?state=4b1e…&code_challenge=Qx2…&code_challenge_method=S256&cli_pkce_marker=1", startedAt: at, expiresAt: at + 600_000 };
+  const models = ["swe-2", "claude-opus-5-5"];
+  const devin = (p: Record<string, unknown>) => ({
+    ...p, machine: false, runtime: "devin", runtimes: ["devin"], loginCommand: undefined, providerName: undefined,
+    access: { kind: "subscription", key: "" }, quota: { state: "unavailable", windows: [], checkedAt: at }, trouble: null,
+    models, available: models, modelsText: "已启用 2 / 2 个模型", series: [{ name: "SWE", models: ["swe-2"] }, { name: "Claude", models: ["claude-opus-5-5"] }],
+    makers: { "swe-2": { id: "devin", name: "Cognition" }, "claude-opus-5-5": { id: "anthropic", name: "Anthropic" } }, names: { "swe-2": "SWE-2", "claude-opus-5-5": "Claude Opus 5.5" },
+    ...(signingIn
+      ? { login, check: { checkedAt: 0, state: "login", detail: "Devin 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber" }
+      : { login: null, check: { checkedAt: 0, state: "ok", detail: "已登录", models }, checkText: "可用", checkTone: "green" }),
+  });
+  return {
+    then: (t, value) => {
+      if (!value || typeof value !== "object") return undefined;
+      if (t.topic === "overview") {
+        const o = value as { profiles: Record<string, unknown>[] };
+        return { ...o, profiles: o.profiles.map(devin) };
+      }
+      if (t.topic === "profiles") {
+        const v = value as { items: Record<string, unknown>[] };
+        return { ...v, items: v.items.map((e) => ({ ...e, group: "devin", groupTitle: "Devin 订阅", profile: devin(e.profile as Record<string, unknown>) })) };
       }
       return undefined;
     },
@@ -277,6 +390,20 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
+/** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
+ *  (`Outgoing.waits`), and the chat's head says the station is updating. */
+const sentUpdating: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const at = Date.now() - 20_000;
+    return {
+      ...chat,
+      outbox: [{ id: "o-updating", text: "更新完把首页的图换成新的", attachments: [], quotes: [], createdAt: at, state: "sending", time: { createdAt: stamp(at) }, waits: "station 正在更新，完成后发送" }],
+      stationUpdate: { tone: "busy", label: "更新中", text: "「Studio」正在更新", station: "Studio", detail: "正在等待 station 重新连接；消息仍在发送，连接恢复后自动继续", from: "0.1.3640", to: "0.1.3650", open: false, canUpdate: false, dismissible: false },
+    };
+  },
+};
 /** One login's card, as an agent's message has it. */
 const loginCard = (id: string, padding?: number) => loginCards([id], padding);
 /** A chat's login cards, one for each login, as an agent's message has them. */
@@ -302,6 +429,10 @@ const usageWaiting: DemoExtension = {
   then: (t, value) => (t.topic !== "usage" || !value ? undefined : { ...(value as object), empty: true, wait: { reading: true, text: "正在从 Studio 读取用量", failing: [], empty: false } }),
 };
 
+/** The admin console as the demo's account, the admin. */
+const adminConsole = () => stage(<Console account={ACCOUNT} />);
+/** To its 中继 (on the phone, from the sidebar its "/" is). */
+const toRelays: Step[] = [{ click: 'a[href="/relays"]' }];
 /** A part drawn alone on the app's ground, the whole window its room. */
 const stage = (node: ReactNode) => <div style={{ position: "relative", width: "100%", height: "100vh", overflow: "hidden", background: vars.canvas, color: vars.text }}>{node}</div>;
 /** A model control on ccvm with the workspace's models (docs/station-share.md 借用): its own, one borrowed from Studio,
@@ -478,7 +609,7 @@ export const stories: Story[] = [
     render: () => sheet([
       ["标签", <><Pill>普通</Pill><Pill tone="green">在线</Pill><Pill tone="blue">进行中</Pill><Pill tone="amber">等待</Pill><Pill tone="red">失败</Pill><Pill tone="accent">强调</Pill></>],
       ["状态", <><StatusDot state="online" label="在线" /><StatusDot state="busy" label="忙" /><StatusDot state="error" label="出错" /><StatusDot state="offline" label="离线" /><StatusText text="已连接 · 3 分钟前" /></>],
-      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok"]} /></>],
+      ["模型和运行时", <><ModelLogo maker={ANTHROPIC} runtime="claude" size={20} /><ModelLogo maker={OPENAI} runtime="codex" size={20} /><ModelLogo maker={null} runtime="dsh" size={20} /><ModelLogo maker={null} runtime="grok" size={20} /><ModelLogo maker={null} runtime="cursor" size={20} /><ModelLogo maker={null} runtime="devin" size={20} /><AgentMark maker={ANTHROPIC} runtime="claude" badge={undefined} size={28} /><RuntimeTags runtimes={["claude", "codex", "dsh", "grok", "cursor", "devin"]} /></>],
     ]),
   },
   {
@@ -512,6 +643,9 @@ export const stories: Story[] = [
   { id: "runtime-missing-member", group: "对话", title: "缺少运行时 · 成员", app: true, demo: installDemo("member") },
   { id: "runtime-missing-notice", group: "对话", title: "缺少运行时 · 别人的消息", app: true, demo: installDemo("notice") },
   { id: "phone-runtime-missing", group: "对话", title: "手机 · 缺少运行时 · 安装", app: true, phone: true, demo: installDemo("missing") },
+  { id: "turn-failed-report", group: "对话", title: "本轮出错 · 上报", app: true, demo: installDemo("report") },
+  { id: "phone-turn-failed-report", group: "对话", title: "手机 · 本轮出错 · 上报", app: true, phone: true, demo: installDemo("report") },
+  { id: "turn-failed-report-ask", group: "对话", title: "本轮出错 · 上报 · 确认", app: true, demo: installDemo("report"), steps: [{ text: "上报" }] },
 
   // ── dialogs and toasts ──
   { id: "dialog", group: "弹窗", title: "弹窗", render: () => stage(<Dialog open title="添加 station" description="在要接入的机器上运行这条命令。" onClose={noop} footer={<><Button variant="ghost">取消</Button><Button variant="primary">完成</Button></>}><CopyCommand text="curl -fsSL https://still.fail/install.sh | sh" /></Dialog>) },
@@ -526,6 +660,8 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
+  { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
+  { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },
   { id: "app-chat-history", group: "应用", title: "执行历史", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }] },
   { id: "app-chat-history-turns", group: "应用", title: "执行历史 · 一轮一轮", app: true, steps: [{ click: '[aria-label$="的执行历史"]' }], demo: historyTurns },
@@ -565,13 +701,42 @@ export const stories: Story[] = [
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-claude-signing-in", group: "应用", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, demo: claudeSignIn, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-add-installing", group: "应用", title: "添加 Profile · SuperGrok · 正在安装 Grok Build", app: true, demo: installFlowDemo("installing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
   { id: "app-profile-supergrok-signing-in", group: "应用", title: "Profile · SuperGrok 重新登录（设备码）", app: true, demo: superGrok(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-cursor", group: "应用", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-cursor", group: "应用", title: "Profile · Cursor 订阅", app: true, demo: cursorAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-cursor-signing-in", group: "应用", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-add-devin", group: "应用", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
+  { id: "app-profile-devin", group: "应用", title: "Profile · Devin 订阅", app: true, demo: devinAccount(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-devin-signing-in", group: "应用", title: "Profile · Devin 重新登录（贴回代码）", app: true, demo: devinAccount(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "pick-workspace-models", group: "选模型", title: "模型 · 本机、借用的、可借用的", render: () => borrowStory(false), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-borrow", group: "选模型", title: "模型 · 选了别的 station 的，借用", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }] },
   { id: "pick-phone-models", group: "选模型", title: "手机 · 模型列表（本机、借用的、可借用的）", phone: true, render: phoneModels },
   { id: "pick-borrow-confirm", group: "选模型", title: "模型 · 借用前再次确认", render: () => borrowStory(true), steps: [{ click: "text=Opus 5.5" }, { click: "text=借用账号" }] },
   { id: "app-new-chat-not-shared", group: "应用", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, demo: notShared, steps: [{ text: "新建对话" }] },
   { id: "app-connects", group: "应用", title: "连接", app: true, steps: [{ click: '[aria-label="连接"]' }] },
+  { id: "app-connect-platform", group: "连接", title: "添加连接 · 选平台", app: true, demo: feishuFlowDemo("platform"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-platform-old", group: "连接", title: "添加连接 · 选平台 · station 尚无飞书", app: true, demo: feishuFlowDemo("old"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-bind", group: "连接", title: "添加连接 · 飞书 · 绑定模型", app: true, demo: feishuFlowDemo("bind"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-way", group: "连接", title: "添加连接 · 飞书 · 创建方式", app: true, demo: feishuFlowDemo("way"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-scan", group: "连接", title: "添加连接 · 飞书 · 扫码等待", app: true, demo: feishuFlowDemo("scan"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-expired", group: "连接", title: "添加连接 · 飞书 · 二维码过期", app: true, demo: feishuFlowDemo("expired"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-made", group: "连接", title: "添加连接 · 飞书 · 已创建，正在添加", app: true, demo: feishuFlowDemo("made"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-made-failed", group: "连接", title: "添加连接 · 飞书 · 已创建，添加失败", app: true, demo: feishuFlowDemo("made-failed"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app", group: "连接", title: "添加连接 · 飞书 · 已有应用", app: true, demo: feishuFlowDemo("app"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app-wrong", group: "连接", title: "添加连接 · 飞书 · 已有应用 · 验证失败", app: true, demo: feishuFlowDemo("app-wrong"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "app-connect-app-verified", group: "连接", title: "添加连接 · 飞书 · 已有应用 · 已验证", app: true, demo: feishuFlowDemo("app-verified"), steps: [{ click: '[aria-label="连接"]' }, { text: "添加连接" }] },
+  { id: "phone-connect-platform", group: "连接", title: "手机 · 添加连接 · 选平台", app: true, phone: true, demo: feishuFlowDemo("platform", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-way", group: "连接", title: "手机 · 添加连接 · 飞书 · 创建方式", app: true, phone: true, demo: feishuFlowDemo("way", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-scan", group: "连接", title: "手机 · 添加连接 · 飞书 · 扫码等待", app: true, phone: true, demo: feishuFlowDemo("scan", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-expired", group: "连接", title: "手机 · 添加连接 · 飞书 · 二维码过期", app: true, phone: true, demo: feishuFlowDemo("expired", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "phone-connect-app-verified", group: "连接", title: "手机 · 添加连接 · 飞书 · 已有应用 · 已验证", app: true, phone: true, demo: feishuFlowDemo("app-verified", true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: '[aria-label="添加连接"]' }] },
+  { id: "app-connects-feishu", group: "连接", title: "连接列表 · 含飞书", app: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="连接"]' }] },
+  { id: "app-connect-feishu", group: "连接", title: "飞书连接 · 已连接", app: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="连接"]' }, { click: "text=Codex 机器人" }] },
+  { id: "app-connect-feishu-error", group: "连接", title: "飞书连接 · 出错", app: true, demo: feishuConnectDemo(true), steps: [{ click: '[aria-label="连接"]' }, { click: "text=Codex 机器人" }] },
+  { id: "phone-connect-feishu", group: "连接", title: "手机 · 飞书连接 · 已连接", app: true, phone: true, demo: feishuConnectDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "连接" }, { click: "text=Codex 机器人" }] },
   { id: "app-usage", group: "应用", title: "用量", app: true, steps: [{ click: '[aria-label="用量"]' }] },
 
   // ── waiting (docs/ui-panels.md「等待」): a list or page read the first time, a row or button at work ──
@@ -606,6 +771,8 @@ export const stories: Story[] = [
   { id: "login-card-device", group: "登录", title: "卡片 · 设备码", render: loginCard("device"), demo: logins() },
   { id: "login-card-paste", group: "登录", title: "卡片 · 打开网址，再贴回页面给的码", render: loginCard("paste"), demo: logins() },
   { id: "login-card-paste-phone", group: "登录", title: "卡片 · 贴码 · 手机", phone: true, render: loginCard("paste", 12), demo: logins() },
+  { id: "login-card-checking", group: "登录", title: "卡片 · 码已贴回，正在确认", render: loginCard("checking"), demo: logins() },
+  { id: "login-card-checking-phone", group: "登录", title: "卡片 · 码已贴回，正在确认 · 手机", phone: true, render: loginCard("checking", 12), demo: logins() },
   { id: "login-card-question", group: "登录", title: "卡片 · agent 在回答命令的问题", render: loginCard("question"), demo: logins() },
   { id: "logins-section-past", group: "登录", title: "station 页 · 登录（只有做过的）", render: loginsSection, demo: logins({ listed: ["done", "failed", "cancelled"] }) },
   { id: "login-card-open", group: "登录", title: "卡片 · 打开网址", render: loginCard("open"), demo: logins() },
@@ -632,6 +799,10 @@ export const stories: Story[] = [
   // ── settings ──
   { id: "settings-appearance", group: "设置", title: "外观", app: true, steps: [{ click: '[aria-label="设置"]' }] },
   { id: "phone-settings-appearance", group: "设置", title: "手机 · 外观", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }] },
+  { id: "settings-appearance-fonts", group: "设置", title: "外观 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }] },
+  { id: "settings-appearance-fonts-text", group: "设置", title: "外观 · 字体 · 正文，指着思源宋体（预览里先试）", app: true, demo: chosenFonts, steps: [{ click: '[aria-label="设置"]' }, { click: '[aria-label="字体"] button:has-text("正文")' }, { hover: 'button[aria-pressed]:has-text("思源宋体")' }] },
+  { id: "phone-settings-fonts", group: "设置", title: "手机 · 外观 › 字体", app: true, phone: true, demo: chosenFonts, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "外观" }, { text: "字体" }] },
+  { id: "app-chat-fonts", group: "设置", title: "对话 · 字体已选（思源宋体、霞鹜文楷、Maple Mono）", app: true, demo: chosenFonts },
   { id: "settings-notifications", group: "设置", title: "通知", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }] },
   { id: "settings-notifications-type", group: "设置", title: "通知 · 展开一个类别", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "通知" }, { click: 'button:has-text("有人发言")' }] },
   {
@@ -653,6 +824,10 @@ export const stories: Story[] = [
     </div>),
   },
   { id: "settings-changelog", group: "设置", title: "更新日志", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "更新日志" }] },
+  { id: "settings-about", group: "设置", title: "关于", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "关于" }] },
+  { id: "settings-account-delete", group: "设置", title: "账号 · 注销", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "you@acme.dev" }, { click: 'button:has-text("注销")' }] },
+  { id: "phone-me", group: "设置", title: "手机 · 账号", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "you@acme.dev" }] },
+  { id: "phone-me-delete", group: "设置", title: "手机 · 账号 · 注销", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "you@acme.dev" }, { text: "注销账号" }] },
   { id: "settings-archive", group: "设置", title: "归档", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "归档" }] },
   { id: "settings-decisions", group: "设置", title: "自动决策", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "自动决策" }] },
   { id: "settings-memory", group: "设置", title: "记忆", app: true, steps: [{ click: '[aria-label="设置"]' }, { text: "记忆" }] },
@@ -859,15 +1034,27 @@ export const stories: Story[] = [
   { id: "phone-chat-info", group: "手机", title: "对话信息", app: true, phone: true, steps: [{ click: '[aria-label="对话信息"]' }] },
   { id: "phone-files", group: "手机", title: "文件", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="文件"]' }] },
   { id: "phone-profile", group: "手机", title: "Profile", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
+  { id: "phone-profile-kinds", group: "手机", title: "Profile · 各类账号（分组带标记）", app: true, phone: true, demo: everyKind, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }] },
   { id: "phone-memory", group: "手机", title: "记忆", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }] },
   { id: "phone-memory-skill", group: "手机", title: "记忆 · 项目", app: true, phone: true, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "记忆" }, { text: "Studio" }, { text: "acme-web" }] },
+  { id: "phone-profile-add-install", group: "手机", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, phone: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-add-cursor", group: "手机", title: "添加 Profile · 选择服务商（Cursor 只有订阅）", app: true, phone: true, demo: cursorPickDemo(), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
+  { id: "phone-profile-cursor-signing-in", group: "手机", title: "Profile · Cursor 重新登录（无代码，打开页面确认）", app: true, phone: true, demo: cursorAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-add-devin", group: "手机", title: "添加 Profile · 选择服务商（Cursor、Devin 只有订阅）", app: true, phone: true, demo: cursorPickDemo(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
+  { id: "phone-profile-devin-signing-in", group: "手机", title: "Profile · Devin 重新登录（贴回代码）", app: true, phone: true, demo: devinAccount(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-new-chat-not-shared", group: "手机", title: "新建对话 · 加入的 station 没有开放的 Profile", app: true, phone: true, demo: notShared, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="新建对话"]' }] },
   { id: "phone-station-add-existing", group: "手机", title: "添加 station · 已有的", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }] },
   { id: "phone-station-add-existing-done", group: "手机", title: "添加 station · 已加入", app: true, phone: true, demo: joining("list"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-add-existing-error", group: "手机", title: "添加 station · 加入失败", app: true, phone: true, demo: joining("error"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { click: '[aria-label="添加 station"]' }, { text: "已有的 station" }, { text: "添加到此 workspace" }] },
   { id: "phone-station-workspaces", group: "手机", title: "station · 在几个 workspace 里", app: true, phone: true, demo: memberships(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="设置"]' }, { text: "Station" }, { text: "Studio" }] },
+  // The admin console (admin.still.fail), its sidebar beside the page: from the overview to 中继.
+  { id: "admin-relays", group: "管理后台", title: "中继 · 24 小时", render: adminConsole, demo: relaysDemo("normal"), steps: toRelays },
+  { id: "admin-relays-week", group: "管理后台", title: "中继 · 7 天", render: adminConsole, demo: relaysDemo("normal"), steps: [...toRelays, { text: "7 天" }] },
+  { id: "admin-relays-old", group: "管理后台", title: "中继 · 旧 cloud 没有数据（404）", render: adminConsole, demo: relaysDemo("old"), steps: toRelays },
+  { id: "phone-admin-relays", group: "手机", title: "管理后台 · 中继", render: adminConsole, phone: true, demo: relaysDemo("normal"), steps: toRelays },
 ];

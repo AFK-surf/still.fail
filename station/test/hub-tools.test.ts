@@ -170,7 +170,7 @@ test("a post carries a card, kept with it and checked", async () => {
   const shown = [{ label: "按今天累计", detail: "重连不清零，零点归零", recommended: true }, { label: "先不改" }];
   // An options card, with the turn ending need_help: the card is the message's, the state the turn's.
   let said = await r.call(key, "chat_post", { to, text: "「共」改成按今天累计吗？", kind: "need_help", need: "选统计口径", card: { type: "options", options } });
-  assert.ok(said.startsWith(`Posted to ${to}, and recorded state need_human. People can pick: 按今天累计 (recommended); 先不改;`), said);
+  assert.ok(said.startsWith(`Posted to ${to}, and recorded state need_human. People can pick, numbered as the card shows them: 1. 先不改; 2. 按今天累计 (recommended);`), said);
   let entry = kept();
   assert.deepEqual(entry.card, { type: "options", options: shown });
   assert.deepEqual(entry.options, shown, "kept as options too: what stations and clients from before cards read");
@@ -289,14 +289,14 @@ test("a state says which message it is about, the pending card by default", asyn
   await r.close();
 });
 
-test("options are refused in a Slack thread", async () => {
+test("options are refused where the chat shows no cards", async () => {
   const r = new Rig();
   const m = message();
   await r.accept(m);
   await settle();
   const key = sessionKey("cl", "C1", m.threadTs);
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("only in still.fail chats"));
-  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("only in still.fail chats"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "选哪个？", kind: "need_decision", options: [{ label: "A" }] })).includes("cards (options, a text field) are not shown here"));
+  assert.ok((await r.refused(key, "chat_post", { to: `C1/${m.threadTs}`, text: "key？", card: { type: "text" } })).includes("cards (options, a text field) are not shown here"));
   await r.close();
 });
 

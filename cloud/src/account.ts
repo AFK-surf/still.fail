@@ -200,6 +200,12 @@ export class Account extends DurableObject<Env> {
     return reply({ revoked: true, scope: all ? "account" : "session" });
   }
 
+  /** The account deleted itself (DELETE /v1/me, once the Directory let it go): every session ends and nothing of it is kept. */
+  async erase(): Promise<void> {
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+  }
+
   async administer(blocked: boolean): Promise<Response> {
     const data = this.data();
     if (!data) return reply({ error: "account_not_found" }, 404);

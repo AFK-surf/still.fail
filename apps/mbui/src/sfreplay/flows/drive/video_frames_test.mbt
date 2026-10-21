@@ -1,0 +1,67 @@
+// 97-video-frames (e2e/traces/video-frames.trace): a video's frames (VideoViewer.kt): alice's other device sends a
+// clip; opened, its frames' times read from the file (the host's player: 4 s at 30 a second, 120 frames); ‹ and › to
+// the one before and the very next, each as the player says it is there; 保存此帧: the frame showing grabbed by the
+// host and kept with the downloads, a PNG at the video's own size, named by the frame it is.
+
+///|
+/// The system's player of view `v` reads the clip as the run's did: its first two bytes, then `rest` from its start;
+/// each given through the core (station.file.part), the whole `total` long; then it is ready.
+fn clip_reads(f : @sfreplay.Flow, v : Int, rest : Int, total : Int) -> Unit raise {
+  let head = f.t.view_reads(v, 0.0, 2)
+  f.t.draw()
+  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == head }) })
+  let all = f.t.view_reads(v, 0.0, rest)
+  f.t.draw()
+  f.until(fn() { f.t.view_answers(v).iter().any(fn(a) { a.0 == all }) })
+  let answers = f.t.view_answers(v)
+  f.check(answers.contains((head, 2, total.to_double())), "the clip's head: \{answers}")
+  f.check(answers.contains((all, rest, total.to_double())), "the clip read: \{answers}")
+  f.t.finish(2, v)
+  f.t.draw()
+  f.core()
+}
+
+///|
+test "97-video-frames" {
+  @sfreplay.orders(fn(seed) raise {
+    let f = @sfreplay.Flow::start(@sfreplay.trace_video_frames, seed~, env=[("MBUI_VIEWER_AWAKE", "1")])
+    f.see("端到端测试")
+    f.peer("peer createfiles 一段视频 201493 post:收到视频 201493 -- e2e-clip.mp4")
+    f.see("一段视频 201493")
+    f.tap("一段视频 201493")
+    f.run_for(@ui.nav_push_ms)
+    f.see("=studio")
+    f.see("e2e-clip.mp4")
+    f.tap("e2e-clip.mp4")
+    // flown open, its bars on once it is in (preview.mbt: the viewer's way in)
+    f.run_to(@sfapp.preview_rest())
+    // the system's player reads it through the core, then says its frames' times
+    let v = opened_view(f)
+    clip_reads(f, v, 423168, 423168)
+    player_told(f)
+    f.see("/ 120 帧")
+    // ‹ pauses on the frame before the one showing; again; › the very next: each shown as the player says it is there
+    f.tap("icon:chevron-left")
+    player_told(f)
+    // paused, as the player says (its button 播放 again)
+    f.see("icon:play")
+    f.tap("icon:chevron-left")
+    player_told(f)
+    f.tap("icon:chevron-right")
+    player_told(f)
+    // 保存此帧 takes the frame of a player paused and ready (preview.mbt: the button on only then)
+    f.see("icon:play")
+    f.tap("icon:camera")
+    f.see("已保存到「下载」")
+    // kept: the grabbed frame, a PNG of the video's size (640 × 360), named by its frame
+    let kept = f.t.kept().filter(fn(k) { k.0.has_prefix("e2e-clip-") && k.0.has_suffix(".png") })
+    f.check(kept.length() == 1, "kept: \{f.t.kept().map(fn(k) { k.0 })}")
+    if kept.length() == 1 {
+      let b = kept[0].2
+      let be32 = fn(i : Int) { (b[i].to_int() << 24) | (b[i + 1].to_int() << 16) | (b[i + 2].to_int() << 8) | b[i + 3].to_int() }
+      f.check(b.length() > 24 && b[1] == b'P' && b[2] == b'N' && b[3] == b'G', "not a PNG")
+      f.check(be32(16) == 640 && be32(20) == 360, "the frame kept \{be32(16)} × \{be32(20)}, not the video's 640 × 360")
+    }
+    f.end()
+  })
+}

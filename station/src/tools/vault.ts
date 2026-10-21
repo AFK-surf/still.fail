@@ -26,7 +26,7 @@ export function vaultTools(secrets: Secrets, workspace: (session: string) => str
       run: async (key) => {
         const items = secrets.listings(key).map(({ item, listing }) => ({ item, name: listing.name, kind: listing.kind, modes: listing.modes, hosts: listing.hosts, ...(listing.env ? { env: listing.env } : {}) }));
         const held = secrets.held(key).map((h) => ({ grant: h.request.id, item: h.request.item, mode: h.grant.mode, hosts: h.grant.hosts, scope: h.grant.scope, until: new Date(h.grant.exp * 1000).toISOString(), ...(h.grant.mode === "proxy" ? { placeholder: placeholder(h.request.id) } : {}) }));
-        if (items.length === 0 && held.length === 0) return "No secrets may be asked for here: none of the vault's items are open to agents for whoever started this chat.";
+        if (items.length === 0 && held.length === 0) return "No secrets may be asked for here: this station holds none of the vault's items open to agents for whoever started this chat. One kept on another station of the workspace reaches this one once a device of its owner's still.fail app has been online with both.";
         return JSON.stringify({ secrets: items, grants: held }, null, 2);
       },
     },

@@ -25,8 +25,12 @@ export type Profile = RuntimeProfile & {
 
 export type ConnectMode = "multi-session" | "single-session";
 
+/// What a connect's bot is on: Slack, or Feishu (src/feishu; Lark too).
+export type ConnectKind = "slack" | "feishu";
+
 export type Connect = {
   id: string;
+  kind: ConnectKind;
   enabled: boolean;
   mode: ConnectMode;
   /// single-session only: whether starting on a new thread needs an @mention (multi-session: always).
@@ -102,6 +106,7 @@ export function hubConfig(raw: any, dataDir: string): HubConfig {
     const bind = c.bind ?? {};
     return {
       id: c.id,
+      kind: c.kind === "feishu" ? "feishu" : "slack",
       enabled: c.enabled !== false,
       mode,
       requireMention: mode === "multi-session" ? true : c.requireMention !== false,

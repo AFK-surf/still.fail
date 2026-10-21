@@ -6,7 +6,7 @@ import { useDoing, useDoingFailed } from "./doing.ts";
 import { useToast, failure } from "@stillfail/ui/toast.tsx";
 import { usePick } from "./pick.ts";
 
-const actions = ["config", "make", "verify", "create"].map((a) => `connect.flow.${a}`);
+const actions = ["config", "make", "verify", "register", "create"].map((a) => `connect.flow.${a}`);
 export function useConnectFlow(station: string, mobile: boolean, resume?: string | null) {
   const [form] = useState(() => crypto.randomUUID());
   const call = useCall();

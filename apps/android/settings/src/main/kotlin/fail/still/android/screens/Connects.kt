@@ -1,6 +1,7 @@
 // Connects (as the narrow web's web/src/mobile/Connects.tsx, from the desktop's Connects.tsx and Connect.tsx): the
-// list of every station's, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its Slack link, what
-// is done to it less often under "…"); how it runs, picked on a page of its own; a new one, a step a screen.
+// list of every station's, all or the viewer's; a connect's page (how it runs, how its conversations become sessions, its Slack link
+// or Feishu app, what is done to it less often under "…"); how it runs, picked on a page of its own; a new one, a step a
+// screen (Feishu's steps in FeishuConnect.kt).
 package fail.still.android.screens
 
 import fail.still.android.shared.BuildConfig
@@ -73,6 +74,7 @@ import fail.still.android.data.Topics
 import fail.still.android.data.WorkspaceEntry
 import fail.still.android.data.WorkspaceView
 import fail.still.android.data.rememberTopic
+import fail.still.android.ui.pressText
 import fail.still.android.ui.Avatar
 import fail.still.android.ui.C
 import fail.still.android.ui.CodeFont
@@ -94,6 +96,7 @@ import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.SlackMark
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.RowsCard
 import fail.still.android.data.t
 import fail.still.core.CoreException
 import fail.still.android.data.errorText
@@ -111,12 +114,12 @@ import fail.still.android.ui.Button
 import fail.still.android.ui.Field
 import fail.still.android.ui.GroupLabel
 
-/** A connect as its people see it in Slack: its bot's picture; Slack's mark until Slack has said what that is. */
+/** A connect as its people see it in Slack (or Feishu): its bot's picture; its kind's mark until that is known. */
 @Composable
 fun ConnectAvatar(c: Connect, size: androidx.compose.ui.unit.Dp) {
     val image = c.botImage
     if (image != null) Avatar(c.id, c.name, size, picture = image)
-    else Box(Modifier.size(size), contentAlignment = Alignment.Center) { SlackMark(size * 0.55f) }
+    else Box(Modifier.size(size), contentAlignment = Alignment.Center) { SlackMark(size * 0.55f, c.kind) }
 }
 
 /** A connect in its station's list: its bot's picture and name, how it runs, and its presence. */
@@ -215,27 +218,28 @@ fun ConnectScreen(station: String, id: String) {
     if (item == null) return Column(Modifier.fillMaxSize()) { NavBar(t("android-settings.connects.title"), app::pop, t("android-settings.connects.title")); missing() }
     val connect = item.connect
     val c = connect.connection
+    val feishu = connect.feishu
     Column(Modifier.fillMaxSize()) {
         NavBar(t("android-settings.connects.title"), app::pop, connect.name, sub = { PresenceDot(connect.presence); fail.still.android.ui.StatusText(connect.statusText, fontSize = 11.sp, color = C.muted) },
             trailing = { NavButton(Icons.More, { openConnectMenu(app, station, connect) }) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(top = 12.dp)) {
-            // Who it is in Slack: its bot's picture, its Slack workspace, whose it is.
+            // Who it is in Slack (Feishu): its bot's picture, its Slack workspace (Feishu tenant), whose it is.
             fail.still.android.ui.Card {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ConnectAvatar(connect, 44.dp)
                     Column(Modifier.weight(1f)) {
-                        Text(connect.team ?: "Slack", fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(placeOf(connect), fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(item.stationName + (connect.createdBy?.let { t("android-settings.connect.owner", "name" to (it.shown?.display ?: it.name)) } ?: ""), fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     // A change asked from its menu or sheets (they close at once): a spinner until the station has it, a red mark a moment if it failed.
-                    val calls = setOf("connect.reconnect", "connect.put")
+                    val calls = setOf("connect.reconnect", "connect.put", "feishu.putSecret")
                     DoingMark(app.isDoing(calls, "station" to station, "id" to connect.id), app.failedOf(calls, "station" to station, "id" to connect.id))
                 }
             }
-            if (c.state == "no_tokens" || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
+            if ((c.state == "no_tokens" && feishu == null) || c.state == "error" || (c.state == "reconnecting" && c.lastError != null)) Callout {
                 if (c.state == "no_tokens") Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(t("android-settings.connect.noTokens"), fontSize = 13.sp, color = C.ink)
-                    Text(t("android-settings.connect.fillTokens"), fontSize = 13.sp, color = C.accent, modifier = Modifier.clickable { openTokens(app, station, connect) })
+                    Text(t("android-settings.connect.fillTokens"), fontSize = 13.sp, color = C.link, modifier = Modifier.pressText { openTokens(app, station, connect) })
                 } else Text(if (c.state == "error") c.error ?: "" else t("android-settings.connect.reconnecting", "error" to c.lastError), fontSize = 13.sp, color = C.ink)
             }
             SectionHeader(t("android-settings.connect.run"), start = 24.dp)
@@ -251,8 +255,8 @@ fun ConnectScreen(station: String, id: String) {
                 ListRow(onClick = { app.sheet = SheetSpec(0.8f, draggable = true) { ModeSheet(station, item) } }) {
                     Text(t("android-settings.connect.sessions"), fontSize = 13.sp, color = C.muted, maxLines = 1, modifier = Modifier.widthIn(min = 32.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(MODE_LABEL[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
-                        Text((MODE_TEXT[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
+                        Text(modeLabel(connect.kind)[connect.mode] ?: connect.mode, fontSize = 15.sp, color = C.ink)
+                        Text((modeText(connect.kind)[connect.mode] ?: "") + if (connect.mode == "single-session") (if (connect.requireMention) t("android-settings.connect.mentionOnly") else t("android-settings.connect.everyMessage")) else "", fontSize = 13.sp, color = C.muted)
                     }
                     IconIn(Icons.ChevronRight, 14.dp, C.subtle)
                 }
@@ -264,21 +268,42 @@ fun ConnectScreen(station: String, id: String) {
                 }
             }
             Text(t("android-settings.connect.runtime", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-            // Its Slack app, changed now and then: name, picture, colour, permissions (the desktop's SlackAppSection).
-            SectionHeader("Slack app", start = 24.dp)
-            ListCard {
-                ListRow(onClick = { app.push(Screen.SlackApp(station, connect.id)) }) {
-                    SlackMark(16.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(t("android-settings.slack.sub"), fontSize = 15.sp, color = C.ink)
-                        Text(t("android-settings.connect.slackAppNote"), fontSize = 13.sp, color = C.muted)
+            // A Feishu connect's app: its App ID, its secret (masked) replaced from here.
+            if (feishu != null) {
+                SectionHeader(t("web-mobile.connects.feishu.section"), start = 24.dp)
+                ListCard {
+                    ListRow {
+                        Column(Modifier.weight(1f)) {
+                            Text("App ID", fontSize = 15.sp, color = C.ink)
+                            Text(feishu.appId, fontSize = 13.sp, color = C.muted)
+                        }
                     }
-                    IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    ListRow(onClick = { openFeishuSecret(app, station, connect) }) {
+                        Column(Modifier.weight(1f)) {
+                            Text("App Secret", fontSize = 15.sp, color = C.ink)
+                            Text(feishu.appSecret.ifEmpty { "••••••••" }, fontSize = 13.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Text(t("web-mobile.connects.feishu.replaceShort"), fontSize = 14.sp, color = C.link)
+                    }
+                }
+            }
+            // Its Slack app, changed now and then: name, picture, colour, permissions (the desktop's SlackAppSection).
+            if (connect.kind != "feishu") {
+                SectionHeader("Slack app", start = 24.dp)
+                ListCard {
+                    ListRow(onClick = { app.push(Screen.SlackApp(station, connect.id)) }) {
+                        SlackMark(16.dp)
+                        Column(Modifier.weight(1f)) {
+                            Text(t("android-settings.slack.sub"), fontSize = 15.sp, color = C.ink)
+                            Text(t("android-settings.connect.slackAppNote"), fontSize = 13.sp, color = C.muted)
+                        }
+                        IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+                    }
                 }
             }
             SectionHeader(t("android-settings.connect.recent"), start = 24.dp)
             ListCard {
-                if (item.sessions.isEmpty()) ListRow { Text(t("android-settings.connect.noSessions", "name" to connect.name), fontSize = 15.sp, color = C.muted) }
+                if (item.sessions.isEmpty()) ListRow { Text(t(if (connect.kind == "feishu") "web-mobile.connects.noSessions.feishu" else "android-settings.connect.noSessions", "name" to connect.name), fontSize = 15.sp, color = C.muted) }
                 item.sessions.forEach { s ->
                     ListRow(onClick = { app.push(Screen.Chat(station, fail.still.android.data.ChatOf.Session(s.key))) }) {
                         Text(s.titleText, fontSize = 15.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -296,7 +321,10 @@ private fun Callout(content: @Composable () -> Unit) {
     Box(Modifier.padding(horizontal = 12.dp).padding(bottom = 10.dp).fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(horizontal = 12.dp, vertical = 10.dp)) { content() }
 }
 
-/** What is done to a connect less often: reconnecting, its tokens, Slack, turning it off or on, its owner, deleting it. */
+/**
+ * What is done to a connect less often: reconnecting, its tokens and Slack (a Feishu one's App Secret and developer
+ * console), turning it off or on, its owner, deleting it.
+ */
 private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
     val api = app.api(station)
     app.sheet = SheetSpec(0.6f) {
@@ -309,18 +337,23 @@ private fun openConnectMenu(app: AppState, station: String, connect: Connect) {
         // Failed a moment ago (the sheet may have been closed meanwhile): a red mark on its row, a tap says why.
         val reconnectFailed = app.failedOf("connect.reconnect", "station" to station, "id" to connect.id)
         val switchFailed = app.failedOf("connect.put", "station" to station, "id" to connect.id)
+        // A Feishu connect's words say Feishu, not Slack.
+        val feishu = connect.kind == "feishu"
         SheetGrab()
         SheetHead(connect.name)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
             PickRow(t("android-settings.connect.reconnect"), enabled = !switching, busy = reconnecting, failed = reconnectFailed) { act(t("android-settings.connect.reconnectWhat"), t("android-settings.connect.reconnected")) { api.reconnect(connect.id) } }
-            PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
-            connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t("android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t("android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
+            if (feishu) PickRow(t("web-mobile.connects.feishu.replace")) { openFeishuSecret(app, station, connect) }
+            else PickRow(t("android-settings.connect.changeTokens")) { openTokens(app, station, connect) }
+            if (!feishu) connect.connection.workspace?.url?.let { url -> PickRow(t("android-settings.connect.openSlack")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
+            connect.feishu?.console?.let { url -> PickRow(t("web-mobile.connects.feishu.openConsole")) { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
+            if (connect.enabled) PickRow(t("android-settings.connect.disable"), t(if (feishu) "web-mobile.connects.disableNote.feishu" else "android-settings.connect.disableNote"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.disableWhat"), t(if (feishu) "web-mobile.connects.disabled.feishu" else "android-settings.connect.disabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", false) }) } }
             else PickRow(t("android-settings.connect.enable"), enabled = !reconnecting, busy = switching, failed = switchFailed) { act(t("android-settings.connect.enableWhat"), t("android-settings.connect.enabled")) { api.putConnect(connect.id, buildJsonObject { put("enabled", true) }) } }
             PickRow(t("android-settings.connect.changeOwner"), connect.createdBy?.shown?.display ?: connect.createdBy?.name) { app.sheet = SheetSpec(0.6f) { OwnerSheet(station, connect) } }
             PickRow(t("android-settings.connect.delete"), color = C.red) {
                 confirm(app, t("android-settings.connect.deleteTitle", "name" to connect.name),
-                    if (connect.sessions > 0) t("android-settings.connect.deleteTextSessions", "n" to connect.sessions) else t("android-settings.connect.deleteText"),
+                    if (connect.sessions > 0) t(if (feishu) "web-mobile.connects.deleteTextSessions.feishu" else "android-settings.connect.deleteTextSessions", "n" to connect.sessions)
+                    else t(if (feishu) "web-mobile.connects.deleteText.feishu" else "android-settings.connect.deleteText"),
                     t("android-settings.connect.delete"), danger = true, what = t("android-settings.connect.deleteWhat"), then = app::pop) { api.deleteConnect(connect.id); app.toast = t("android-settings.connect.deleted") }
             }
         }
@@ -352,25 +385,38 @@ private fun ColumnScope.OwnerSheet(station: String, connect: Connect) {
 
 /** What switching a connect to `next` does to its conversations, in plain words (web/src/pages/Connect.tsx → consequences). */
 private fun consequences(connect: Connect, mode: String, requireMention: Boolean, running: Long): List<String> {
+    // A Feishu connect's groups in place of Slack's threads and channels.
+    val feishu = mapOf(
+        "android-settings.mode.toSingle" to "web-pages.connect.effects.toSingle.feishu", "android-settings.mode.toMulti" to "web-pages.connect.effects.toMulti.feishu",
+        "android-settings.mode.oldThreads" to "web-pages.connect.effects.threadsRestart.feishu", "android-settings.mode.mention" to "web-pages.connect.effects.mentionOnly.feishu",
+        "android-settings.mode.noMention" to "web-pages.connect.effects.noMention.feishu",
+    )
+    val say = { key: String -> t(if (connect.kind == "feishu") feishu[key] ?: key else key) }
     val out = mutableListOf<String>()
     if (connect.mode == "multi-session" && mode == "single-session") {
-        out += t("android-settings.mode.toSingle")
-        out += if (connect.session != null) t("android-settings.mode.keepSession") else t("android-settings.mode.newSession")
-        if (!requireMention) out += t("android-settings.mode.noMention")
+        out += say("android-settings.mode.toSingle")
+        out += if (connect.session != null) say("android-settings.mode.keepSession") else say("android-settings.mode.newSession")
+        if (!requireMention) out += say("android-settings.mode.noMention")
     } else if (connect.mode == "single-session" && mode == "multi-session") {
-        out += t("android-settings.mode.toMulti")
-        out += t("android-settings.mode.oldThreads")
-        out += t("android-settings.mode.back")
+        out += say("android-settings.mode.toMulti")
+        out += say("android-settings.mode.oldThreads")
+        out += say("android-settings.mode.back")
     } else if (requireMention != connect.requireMention) {
-        out += if (requireMention) t("android-settings.mode.mention") else t("android-settings.mode.noMention")
+        out += if (requireMention) say("android-settings.mode.mention") else say("android-settings.mode.noMention")
     }
     if (running > 0) out += t("android-settings.mode.running", "n" to running)
     return out
 }
 
-/** The mode picker: each way with what it means, and in single-session whether it waits for an @. */
+/** The modes as a connect of `kind` has them: a Feishu connect's groups in place of Slack's threads (web: format.ts modeOf). */
+private fun modeLabel(kind: String?): Map<String, String> =
+    if (kind != "feishu") MODE_LABEL else mapOf("multi-session" to t("web-main.mode.feishu.multi.label"), "single-session" to t("web-main.mode.feishu.single.label"))
+private fun modeText(kind: String?): Map<String, String> =
+    if (kind != "feishu") MODE_TEXT else mapOf("multi-session" to t("web-main.mode.feishu.multi.description"), "single-session" to t("web-main.mode.feishu.single.description"))
+
+/** The mode picker: each way with what it means, and in single-session whether it waits for an @; in `kind`'s words. */
 @Composable
-private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String, Boolean) -> Unit) {
+private fun ModeChoices(mode: String, requireMention: Boolean, kind: String?, onChange: (String, Boolean) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         listOf("multi-session", "single-session").forEach { m ->
             val on = mode == m
@@ -378,8 +424,8 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
                 Modifier.fillMaxWidth().clip(Smooth(14.dp)).background(C.surface).border(if (on) 2.dp else 1.dp, if (on) C.accent else C.line, Smooth(14.dp))
                     .clickable { onChange(m, if (m == "multi-session") true else requireMention) }.padding(horizontal = 14.dp, vertical = 12.dp),
             ) {
-                Text(MODE_LABEL[m] ?: m, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(MODE_TEXT[m] ?: "", fontSize = 13.sp, color = C.muted)
+                Text(modeLabel(kind)[m] ?: m, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
+                Text(modeText(kind)[m] ?: "", fontSize = 13.sp, color = C.muted)
             }
         }
         if (mode == "single-session") Row(
@@ -388,7 +434,12 @@ private fun ModeChoices(mode: String, requireMention: Boolean, onChange: (String
         ) {
             Column(Modifier.weight(1f)) {
                 Text(t("android-settings.mode.mentionTitle"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
-                Text(if (requireMention) t("android-settings.mode.mentionOn") else t("android-settings.mode.mentionOff"), fontSize = 13.sp, color = C.muted)
+                val feishu = kind == "feishu"
+                Text(
+                    if (requireMention) t(if (feishu) "web-mobile.connects.mentionOn.feishu" else "android-settings.mode.mentionOn")
+                    else t(if (feishu) "web-mobile.connects.mentionOff.feishu" else "android-settings.mode.mentionOff"),
+                    fontSize = 13.sp, color = C.muted,
+                )
             }
             Switch(requireMention)
         }
@@ -408,7 +459,7 @@ private fun ColumnScope.ModeSheet(station: String, item: ConnectItem) {
     SheetGrab()
     SheetHead(t("android-settings.mode.title"))
     Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        ModeChoices(mode, mention) { m, r -> mode = m; mention = r }
+        ModeChoices(mode, mention, connect.kind) { m, r -> mode = m; mention = r }
         if (effects.isNotEmpty()) Column(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.warn.copy(alpha = 0.12f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(t("android-settings.mode.after"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             effects.forEach { Text("· $it", fontSize = 13.sp, color = C.ink) }
@@ -534,7 +585,7 @@ private fun TokenFields(tokens: Tokens, masked: Pair<String, String>? = null, in
             Text("Bot Token", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
             SecretField(tokens.bot, { tokens.bot = it }, masked?.second?.ifEmpty { null }?.let { t("android-settings.tokens.kept", "token" to it) } ?: "xoxb-…")
         }
-        tokens.verified?.let { Text(t("android-settings.tokens.verified", "team" to it.team, "bot" to it.botName), fontSize = 12.sp, color = C.green) }
+        tokens.verified?.let { Text(t("android-settings.tokens.verified", "team" to it.team, "bot" to it.botName), fontSize = 12.sp, color = C.greenInk) }
         tokens.errors.forEach { Text(it, fontSize = 13.sp, color = C.red) }
     }
 }
@@ -571,7 +622,7 @@ fun ConnectRunScreen(station: String, id: String) {
         if (list == "model") return ModelList(models, runtime, model) { m -> pick { put("model", m) }; list = null }
         if (list == "account") return AccountList(accounts, runtime, profile) { p -> pick { put("profile", p) }; list = null }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
-            if (models.isEmpty()) Text(t("android-settings.run.noModels", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.warn, modifier = Modifier.padding(top = 8.dp))
+            if (models.isEmpty()) Text(t("android-settings.run.noModels", "runtime" to connect.runtimeText), fontSize = 13.sp, color = C.warnInk, modifier = Modifier.padding(top = 8.dp))
             GroupLabel(t("android-settings.connect.model"))
             SettingRow(onClick = { list = "model" }, leading = { MakerIcon(v.maker, runtime, 18.dp) }) {
                 // Another station's: where it comes from, on the same line.
@@ -581,8 +632,11 @@ fun ConnectRunScreen(station: String, id: String) {
                     from?.let { o -> o.fromStation?.let { ModelFrom(it, o.fromText) } }
                 }
             }
-            GroupLabel(t("android-settings.run.effort"))
-            EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
+            // No efforts where the runtime sets none (Cursor).
+            if (efforts.isNotEmpty()) {
+                GroupLabel(t("android-settings.run.effort"))
+                EffortChips(listOf<String?>(null) + efforts, effort) { e -> pick { put("effort", e) } }
+            }
             GroupLabel(t("android-settings.run.account"))
             SettingRow(onClick = { list = "account" }) {
                 Text(v.accountText, fontSize = 15.sp, color = C.ink)
@@ -637,10 +691,11 @@ fun ConnectRunScreen(station: String, id: String) {
 // ── a new connect ──────────────────────────────────────────────────────
 
 /**
- * A new Slack connect, a step a screen: the Slack workspace to make its app in (a configuration token each, or a new
- * one); the app's name and description; making and installing it, then the app-level token; last, the model it runs and
- * how its conversations become sessions. Without a configuration token the app is made in Slack by hand and both
- * tokens are pasted.
+ * A new connect, a step a screen: where the station has the Feishu connect, the platform first (Feishu's path in
+ * FeishuConnect.kt: the model, then the bot made by scanning or an app of one's own). Slack's: the Slack workspace to
+ * make its app in (a configuration token each, or a new one); the app's name and description; making and installing
+ * it, then the app-level token; last, the model it runs and how its conversations become sessions. Without a
+ * configuration token the app is made in Slack by hand and both tokens are pasted.
  */
 @Composable
 fun NewConnectScreen(station: String) {
@@ -669,14 +724,28 @@ fun NewConnectScreen(station: String) {
     var icon by remember { mutableStateOf<IconPick?>(null) }
     val iconError = view.iconError
     val back = { flow.go("back") { app.pop() } }
-    androidx.activity.compose.BackHandler(enabled = step != "team") { back() }
+    androidx.activity.compose.BackHandler(enabled = view.back != "close") { back() }
     val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    // The model it runs and how its conversations become sessions: Slack's last step, Feishu's first.
+    val bind = @Composable {
+        GroupLabel(t("android-settings.connect.model"))
+        if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warnInk)
+        else RowsCard {
+            models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
+        }
+        if (entry != null && entry.runtimes.size > 1) {
+            GroupLabel(t("android-settings.flow.runtime"))
+            Seg(entry.runtimes.map { RUNTIME_LABEL[it] ?: it }, entry.runtimes.indexOf(rt).coerceAtLeast(0), { flow.choose { put("runtime", entry.runtimes[it]) } }, Modifier.fillMaxWidth(), height = 36.dp, fill = true)
+        }
+        GroupLabel(t("android-settings.mode.title"))
+        ModeChoices(mode, mention, if (step == "feishuBind") "feishu" else null) { m, r -> flow.edit { put("mode", m); put("requireMention", r) } }
+    }
     Column(Modifier.fillMaxSize()) {
         NavBar(if (view.back == "close") t("common.cancel") else t("android-settings.flow.previous"), back, t("android-settings.flow.title"), sub = { Text("${view.title} · ${view.number} / ${view.total}", fontSize = 11.sp, color = C.muted) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 18.dp).padding(top = 8.dp, bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // A connect runs a profile's model: with none on this station, that comes first.
             val noProfile = view.noProfile
-            if (step == "team" && noProfile) Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if ((step == "team" || step == "platform") && noProfile) Column(Modifier.fillMaxWidth().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 fail.still.android.ui.Illustration(fail.still.android.shared.R.drawable.illus_no_profile, fail.still.android.shared.R.drawable.illus_no_profile_dark, 240.dp)
                 Text(t("android-settings.flow.noProfile"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink)
                 Text(t("android-settings.flow.noProfileNote"), fontSize = 14.sp, color = C.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -686,22 +755,22 @@ fun NewConnectScreen(station: String) {
                 "team" -> if (teams.isEmpty()) {
                     Text(t("android-settings.flow.tokenNote", "app" to BuildConfig.APP_NAME), fontSize = 14.sp, color = C.muted)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.slack.addToken"), primary = true) { flow.go("token") } }
-                    Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Text(t("android-settings.flow.manualInSlack"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("manual") })
                 } else {
                     Text(t("android-settings.flow.whichTeam"), fontSize = 14.sp, color = C.muted)
-                    Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
+                    RowsCard {
                         teams.forEach { t -> PickRow(t.name, t.owner?.let { o -> o.user + (o.teamDomain?.let { " · $it.slack.com" } ?: "") }, checked = chosen?.teamId == t.teamId) { flow.edit { put("team", t.teamId) } } }
                     }
-                    Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("token") })
+                    Text(t("android-settings.flow.addTeamToken"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("token") })
                     chosen?.let { team ->
-                        Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.clickable {
+                        Text(t("android-settings.flow.removeToken", "name" to team.name), fontSize = 14.sp, color = C.muted, modifier = Modifier.pressText {
                             confirm(app, t("android-settings.flow.removeTokenTitle", "name" to team.name), t("android-settings.flow.removeTokenText", "app" to BuildConfig.APP_NAME), t("android-settings.members.remove"), danger = true,
                                 what = t("android-settings.flow.removeTokenWhat"), then = { flow.edit { put("team", null as String?) } }) {
                                 api.removeConfigToken(team.teamId); app.toast = t("android-settings.flow.tokenRemoved")
                             }
                         })
                     }
-                    Text(t("android-settings.flow.manual"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { flow.go("manual") })
+                    Text(t("android-settings.flow.manual"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { flow.go("manual") })
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { Button(t("android-settings.flow.next"), primary = true, enabled = chosen != null) { flow.go("app") } }
                 }
                 "token" -> ConfigTokenSteps(station, flow) {}
@@ -729,7 +798,7 @@ fun NewConnectScreen(station: String) {
                         t("android-settings.flow.appToken") to { open(m.links.appToken) },
                         (if (install != null) t("android-settings.flow.pasteAppToken") else t("android-settings.flow.pasteTokens")) to null,
                     ))
-                    if (install == null) Text(t("android-settings.flow.oauthPage"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open(m.links.oauth) })
+                    if (install == null) Text(t("android-settings.flow.oauthPage"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open(m.links.oauth) })
                     TokenFields(tokens, install = m.state)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Button(t("android-settings.flow.next"), primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
@@ -747,18 +816,9 @@ fun NewConnectScreen(station: String) {
                         Button(t("android-settings.flow.next"), primary = true, busy = busy, enabled = tokens.ready) { flow.act("verify") }
                     }
                 }
+                in FEISHU_STEPS -> FeishuSteps(station, view, flow) { bind() }
                 else -> {
-                    GroupLabel(t("android-settings.connect.model"))
-                    if (models.isEmpty()) Text(t("android-settings.flow.noModels"), fontSize = 13.sp, color = C.warn)
-                    else Column(Modifier.fillMaxWidth().clip(Smooth(16.dp)).background(C.surface)) {
-                        models.forEach { m -> PickRow(m.name, m.runtimes.joinToString(" · ") { RUNTIME_LABEL[it] ?: it }, checked = entry?.model == m.model, leading = { MakerIcon(m.maker, m.runtimes.first(), 18.dp) }) { flow.choose { put("model", m.model) } } }
-                    }
-                    if (entry != null && entry.runtimes.size > 1) {
-                        GroupLabel(t("android-settings.flow.runtime"))
-                        Seg(entry.runtimes.map { RUNTIME_LABEL[it] ?: it }, entry.runtimes.indexOf(rt).coerceAtLeast(0), { flow.choose { put("runtime", entry.runtimes[it]) } }, Modifier.fillMaxWidth(), height = 36.dp, fill = true)
-                    }
-                    GroupLabel(t("android-settings.mode.title"))
-                    ModeChoices(mode, mention) { m, r -> flow.edit { put("mode", m); put("requireMention", r) } }
+                    bind()
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         Button(t("android-settings.flow.create"), primary = true, busy = busy, enabled = entry != null) {
                             flow.act("create") { result ->
@@ -769,7 +829,8 @@ fun NewConnectScreen(station: String) {
                     }
                 }
             }
-            error?.let { Text(it, fontSize = 13.sp, color = C.red) }
+            // Feishu's steps say their own (why adding or scanning failed, what the verification found).
+            error?.takeIf { step !in FEISHU_STEPS }?.let { Text(it, fontSize = 13.sp, color = C.red) }
         }
     }
 }
@@ -795,7 +856,7 @@ internal fun WaitingApp(app: AppState, station: String, a: MadeSlackApp, online:
         }
         // Being dropped (the sheet that asked gone): a spinner until the station has it, a red mark a moment if it failed.
         DoingMark(app.isDoing("slack.dropApp", "station" to station, "appId" to a.appId), app.failedOf("slack.dropApp", "station" to station, "appId" to a.appId))
-        if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { openNewConnect(app, station, a.appId) })
+        if (online) Text(t("android-settings.waiting.continue"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { openNewConnect(app, station, a.appId) })
         else Text(t("android-settings.waiting.offline"), fontSize = 12.sp, color = C.muted)
     }
 }
@@ -826,7 +887,7 @@ internal fun Steps(steps: List<Pair<String, (() -> Unit)?>>) {
                 Text("${i + 1}.", fontSize = 14.sp, color = C.muted)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(text, fontSize = 14.sp, color = C.ink)
-                    if (open != null) Text(t("android-settings.open"), fontSize = 14.sp, color = C.accent, modifier = Modifier.clickable { open() })
+                    if (open != null) Text(t("android-settings.open"), fontSize = 14.sp, color = C.link, modifier = Modifier.pressText { open() })
                 }
             }
         }

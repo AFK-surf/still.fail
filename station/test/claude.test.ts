@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { after, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { ClaudeDriver, classifyResult } from "../src/agents/claude.ts";
+import { ClaudeDriver, type Turn, backgroundOf, classifyResult, onFrame } from "../src/agents/claude.ts";
 import { existingRunners } from "../src/agents/runner.ts";
 import type { AgentSession, OpenOptions, RuntimeEvent } from "../src/agents/runtime.ts";
 
@@ -81,6 +81,39 @@ const outcome = (events: RuntimeEvent[], k = 0) => (ends(events)[k] as Extract<R
 const stdin = (dump: string) => readFileSync(`${dump}.stdin`, "utf8").trim().split("\n").map((l) => JSON.parse(l));
 
 // Each test has its own driver, profile and runners: they run side by side.
+test("what a process runs in the background, as its task frames tell it", () => {
+  const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
+  const feed = (frame: object) => onFrame(frame, turn, () => {}, () => {});
+  const ids = () => backgroundOf(turn).map((t) => `${t.kind}:${t.id}:${t.description}`);
+  feed({ type: "system", subtype: "init" });
+  feed({ type: "system", subtype: "task_started", task_id: "a1", task_type: "local_agent", description: "gaps", is_backgrounded: true });
+  feed({ type: "system", subtype: "task_started", task_id: "b1", task_type: "local_bash", description: "watch CI", is_backgrounded: true });
+  feed({ type: "system", subtype: "task_started", task_id: "b2", task_type: "local_bash", description: "build", is_backgrounded: false });
+  feed({ type: "system", subtype: "task_started", task_id: "b3", task_type: "local_bash", description: "test", is_backgrounded: false });
+  // A subagent's own command is the subagent's.
+  feed({ type: "system", subtype: "task_started", task_id: "b4", task_type: "local_bash", description: "its", is_backgrounded: true, owned_by_subagent: true });
+  assert.deepEqual(ids(), ["agent:a1:gaps", "command:b1:watch CI"]);
+  // Moved to the background (ctrl+b); one waited on ends.
+  feed({ type: "system", subtype: "task_updated", task_id: "b2", patch: { is_backgrounded: true } });
+  feed({ type: "system", subtype: "task_notification", task_id: "b3", status: "completed" });
+  assert.deepEqual(ids(), ["agent:a1:gaps", "command:b1:watch CI", "command:b2:build"]);
+  feed({ type: "result", result: "ok" });
+  assert.deepEqual(ids(), ["agent:a1:gaps", "command:b1:watch CI", "command:b2:build"]);
+  // Ended: told by a notification, or by an update with a final status.
+  feed({ type: "system", subtype: "task_updated", task_id: "a1", patch: { status: "killed", end_time: 1 } });
+  feed({ type: "system", subtype: "task_notification", task_id: "b1", status: "failed" });
+  feed({ type: "system", subtype: "task_updated", task_id: "b2", patch: { status: "running" } });
+  assert.deepEqual(ids(), ["command:b2:build"]);
+});
+
+test("a command a turn waited on and was never told ended does not outlive the turn", () => {
+  const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
+  onFrame({ type: "system", subtype: "task_started", task_id: "b1", task_type: "local_bash", description: "x", is_backgrounded: false }, turn, () => {}, () => {});
+  onFrame({ type: "result", result: "ok" }, turn, () => {}, () => {});
+  assert.deepEqual(backgroundOf(turn), []);
+  assert.deepEqual(turn.tasks, {});
+});
+
 describe("the Claude Code driver", { concurrency: true }, () => {
   test("a turn completes, from a process started with the flags and environment of claude.rs", async () => {
     const d = driver();

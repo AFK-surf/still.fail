@@ -9,6 +9,7 @@ import { stationApi, useStationCall } from "./api.ts";
 import { useTopic } from "./core/react.ts";
 import { ArrowRight, ChevronDown, ChevronRight, PanelOpen, Stop } from "@stillfail/ui/icons.tsx";
 import { Empty, Segmented, Tip, WaitLine } from "./ui.tsx";
+import { TermText } from "./TermText.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { DoingShown, useDoingState } from "./DoingMark.tsx";
 import * as css from "./Jobs.css.ts";
@@ -253,7 +254,7 @@ function Output({ station, job }: { station: string; job: Job }) {
   if (log === null) return <div className={css.jobOutput}><WaitLine /></div>;
   return (
     <pre ref={box} className={css.jobOutput} onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}>
-      {log.text || t("web-main.jobs.noOutput")}
+      {log.text ? <TermText text={log.text} runs={log.runs} /> : t("web-main.jobs.noOutput")}
     </pre>
   );
 }

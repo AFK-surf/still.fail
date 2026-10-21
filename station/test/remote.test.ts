@@ -12,7 +12,7 @@ import { type Clock, type Duration, Effect, Exit, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
-import { IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
+import { GIVE_UP_MS, IDLE_MS, type PeerCall, Refused, Remote, answerPeer, filePath, readJson, writeJson } from "../src/jobs/remote.ts";
 import { type Load, OLDER } from "../src/jobs/load.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -224,6 +224,34 @@ describe("remote", { concurrency: true }, () => {
     await r.remote.handle("ws", "peer-a", { method: "session.close", session: "s" });
   });
 
+  test("one chat's slow request holds up no other chat's, nor what only reads", async () => {
+    // Every request of every chat was answered in one line: on a loaded station a task's state, asked by one chat,
+    // waited behind another chat's sync past its caller's 30 s (2026-10-21, Studio for ccvm).
+    const r = station();
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const stop = r.jobs.stop.bind(r.jobs);
+    r.jobs.stop = async (id: string) => {
+      await released;
+      return stop(id);
+    };
+    await callAs(r, "s", "long", "task.prepare", { spec: { command: FOREVER } });
+    await callAs(r, "s", "long", "task.start");
+    const stopping = callAs(r, "s", "long", "task.stop");
+    let next = false;
+    const queued = callAs(r, "s", "next", "task.prepare", { spec: { command: "true" } }).then(() => (next = true));
+    assert.equal((await callAs(r, "s", "long", "task.get")).job.state, "running", "what only reads is answered at once");
+    const both = await r.remote.handle("ws", "peer-a", { method: "task.gets", tasks: [{ session: "s", key: "long" }, { session: "s", key: "none" }] });
+    assert.equal(both.tasks[0].result.job.state, "running");
+    assert.deepEqual([both.tasks[1].key, both.tasks[1].error], ["none", "unknown task"]);
+    assert.deepEqual(await callAs(r, "t", "other", "task.prepare", { spec: { command: "true" } }), { key: "other", prepared: true }, "another chat's is answered meanwhile");
+    assert.equal(next, false, "the same chat's next one waits its turn");
+    release();
+    await stopping;
+    await queued;
+    assert.equal((await callAs(r, "s", "long", "task.get")).job.state, "stopped");
+  });
+
   test("the target removes idle session and old task directories itself", async () => {
     const r = station();
     await run(r, "idle", "a", "touch made");
@@ -286,11 +314,10 @@ describe("remote", { concurrency: true }, () => {
       const n = attempts++;
       assert.equal(station, "target");
       assert.equal(request.workspace, "ws");
-      assert.equal(request.session, "original-session");
-      assert.equal(request.key, "stable-key");
-      assert.equal(request.method, "task.get", "recovery queries; it does not resubmit the command");
+      assert.equal(request.method, "task.gets", "recovery queries; it does not resubmit the command");
+      assert.deepEqual(request.tasks, [{ session: "original-session", key: "stable-key" }]);
       if (n < 2) throw new Error("offline");
-      return { job: { state: "exited", exitCode: 0 }, log: "done", notices: [] };
+      return { tasks: [{ session: "original-session", key: "stable-key", result: { job: { state: "exited", exitCode: 0 }, log: "done", notices: [] } }] };
     });
     await rounds("delivered", clock, "1 second", () => readJson(path).delivered === true);
     assert.equal(attempts, 3);
@@ -480,5 +507,67 @@ describe("remote", { concurrency: true }, () => {
     assert.equal(asked.filter((r) => r.method === "task.get").length, asked.slice(0, before).filter((r) => r.method === "task.get").length, "not followed");
     await assert.rejects(use("station_task", { station: "B", key: "", action: "get" }), /station and key are required/);
     await assert.rejects(use("station_task", { station: "B", key: "k", action: "run" }), /unknown task action/);
+  });
+
+  test("the tasks followed on one station are asked about in one request", async () => {
+    const { use, asked, clock } = pair();
+    for (const key of ["k1", "k2", "k3"]) {
+      await use("station_task", { station: "B", key, action: "prepare", command: FOREVER });
+      await use("station_task", { station: "B", key, action: "start" });
+    }
+    const before = asked.length;
+    const all = (r: Json) => r.method === "task.gets" && r.tasks.length === 3;
+    await rounds("a round asking about all three", clock, "5 seconds", () => asked.slice(before).some(all));
+    assert.deepEqual(asked.slice(before).find(all)!.tasks.map((t: Json) => t.key).sort(), ["k1", "k2", "k3"]);
+    assert.equal(asked.filter((r) => r.method === "task.get").length, 0, "none on its own");
+  });
+
+  test("a station from before task.gets is asked about each task on its own", async () => {
+    const clock = testClock();
+    const s = station({ clock });
+    const paths = ["k1", "k2"].map((key) => {
+      const path = s.remote.outgoing("ws", "s1", "old", key);
+      writeJson(path, { workspace: "ws", session: "s1", station: "old", key, delivered: false });
+      return path;
+    });
+    const methods: string[] = [];
+    s.remote.attach(async (_station, _workspace, request) => {
+      methods.push(request.method);
+      // What a station from before answers a request it does not know.
+      if (request.method === "task.gets") throw new Refused("session and task key are required (at most 256 / 128 bytes)");
+      return { job: { state: "exited", exitCode: 0 }, log: request.key, notices: [] };
+    });
+    await rounds("both told", clock, "5 seconds", () => paths.every((p) => readJson(p).delivered === true));
+    assert.deepEqual(methods.sort(), ["task.get", "task.get", "task.gets"]);
+    assert.deepEqual(s.told.map(([session]) => session), ["s1", "s1"]);
+  });
+
+  test("a task its station does not know, or never started, is told and no longer followed after a while", async () => {
+    // Followed for good every 5 s: an agent whose prepare or start did not get through goes on with another key, and
+    // ccvm followed 90 such tasks on Studio (2026-10-21).
+    const clock = testClock();
+    const store = Store.open(":memory:", null, clock);
+    cleanup.push(() => store.close());
+    const s = station({ clock, store });
+    const record = (key: string) => {
+      const path = s.remote.outgoing("ws", "s1", "B", key);
+      writeJson(path, { workspace: "ws", session: "s1", station: "B", key, delivered: false });
+      return path;
+    };
+    const [unknown, unstarted, running] = [record("unknown"), record("unstarted"), record("running")];
+    s.remote.attach(async (_station, _workspace, request) => ({
+      tasks: request.tasks.map((t: Json) =>
+        t.key === "unknown" ? { ...t, error: "unknown task" }
+        : t.key === "unstarted" ? { ...t, result: { key: t.key, job: null, log: null, notices: [] } }
+        : { ...t, result: { key: t.key, job: { state: "running" }, log: "", notices: [] } }),
+    }));
+    await rounds("followed a while", clock, "1 minute", () => store.now() - readJson(unknown).since >= GIVE_UP_MS - 60_000);
+    assert.equal(s.told.length, 0, "not before");
+    await rounds("both given up", clock, "1 minute", () => s.told.length === 2);
+    assert.deepEqual(s.told.map(([, text]) => text.split(":")[0]).sort(), ["Remote task unknown on B", "Remote task unstarted on B"]);
+    assert.ok(s.told.some(([, text]) => text.includes("does not know it")));
+    assert.ok(s.told.some(([, text]) => text.includes("never started")));
+    for (const path of [unknown, unstarted]) assert.deepEqual([readJson(path).delivered, readJson(path).lost], [true, true]);
+    assert.equal(readJson(running).delivered, false, "a running one is followed on");
   });
 });

@@ -18,6 +18,8 @@ import android.graphics.Rect
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalUriHandler
@@ -32,8 +34,10 @@ import fail.still.android.LocalApp
 import fail.still.android.Screen
 import fail.still.android.StillFailApp
 import fail.still.android.Updates
+import fail.still.android.data.PrefsView
 import fail.still.android.data.Topics
 import fail.still.android.data.I18n
+import fail.still.android.ui.KeyboardAt
 import fail.still.android.ui.StillFailTheme
 import java.io.File
 import java.io.FileOutputStream
@@ -56,10 +60,10 @@ class Harness(val rule: MotionRule) {
 
     /**
      * Shows the app signed in to Fixtures' workspace, with the pages of `stack` over its list (the last on top), in the
-     * light or dark theme; lets it come to rest. `uris`: what opens the links the app hands the system (by default the
+     * light or dark theme, with the prefs `kept` (the core's as the app starts); lets it come to rest. `uris`: what opens the links the app hands the system (by default the
      * system's own).
      */
-    fun launch(stack: List<Screen>, dark: Boolean = false, uris: UriHandler? = null) {
+    fun launch(stack: List<Screen>, dark: Boolean = false, uris: UriHandler? = null, keyboard: WindowInsets? = null, kept: PrefsView = PrefsView()) {
         fake.put(Topics.accounts, listOf(Fixtures.account))
         fake.put(Topics.workspaces, Fixtures.workspaces)
         fake.put(Topics.stations(Fixtures.WS), listOf(Fixtures.station))
@@ -67,12 +71,15 @@ class Harness(val rule: MotionRule) {
         val prefs = context.getSharedPreferences("motion-test", Context.MODE_PRIVATE)
         prefs.edit().clear().putBoolean("notifyAsked", true).putString("workspace", Fixtures.WS).putString("theme", if (dark) "dark" else "light").commit()
         rule.runOnUiThread { context.enableEdgeToEdge() }
-        app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core))
+        fail.still.android.ui.FaceFiles.init(context)
+        app = AppState(fake.core, prefs, "http://127.0.0.1:9", Updates(context, "http://127.0.0.1:9", fake.core), kept)
         stack.forEach { if (it != Screen.Home) app.push(it) }
         rule.setContent {
-            StillFailTheme(dark) {
+            // As MainActivity: the faces chosen (ui/Fonts.kt).
+            StillFailTheme(dark, fail.still.android.ui.rememberFonts(app.kept.faces)) {
                 CompositionLocalProvider(LocalApp provides app, LocalUi provides app) {
-                    if (uris == null) StillFailApp(app) else CompositionLocalProvider(LocalUriHandler provides uris) { StillFailApp(app) }
+                    val shown = @Composable { if (uris == null) StillFailApp(app) else CompositionLocalProvider(LocalUriHandler provides uris) { StillFailApp(app) } }
+                    if (keyboard == null) shown() else KeyboardAt(keyboard) { shown() }
                 }
             }
         }

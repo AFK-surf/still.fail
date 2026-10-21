@@ -76,7 +76,7 @@ chat EMBER/1792240320.234000。凭据都放在「密钥」这一个库里；库�
 
 ## 存储和同步
 
-- **station**：新表 `vaults`、`vault_items`、`vault_boxes`（`CREATE TABLE IF NOT EXISTS`，`station/src/vault/store.ts`），只存密文和签名，每个库、条目、设备只留最新一版。一个库挂在一台 station 上（建库时选，默认 workspace 里第一台能放库的）。**以后**再做副本：别的 station 存一份，做法照搬「分享」，host 是正本，副本只读，host 离线时照样能读；这一期没有副本，那台 station 离线时库读不到新的（core 里缓存的照样显示）。
+- **station**：新表 `vaults`、`vault_items`、`vault_boxes`（`CREATE TABLE IF NOT EXISTS`，`station/src/vault/store.ts`），只存密文和签名，每个库、条目、设备只留最新一版。一个库写在一台 station 上（建库时选，默认 workspace 里第一台能放库的，叫它的 host），**workspace 里每台 station 都存一份副本**，这样哪台 station 上的 agent 都能申请它的密钥（库是账号的，不是某台 station 的）。副本由成员的设备带过去：core 读各台 station 时记下每台存到哪一版，缺的或旧的就用 `PUT vault/vaults?copy=1`、`PUT vault/items?copy=1` 补上最新一版；写库、写条目之后也补一遍。副本照样逐条验签、验锁，只是版本号不要求刚好 +1，只收比手上新的（不比手上新的原样回手上那版，不回退）。写仍然只写 host（有冲突在 host 上判），host 不再有这个库时换一台有的。只存密文和签名，所以多存几份不多泄露什么；值仍然只在批准时封给提出申请的那台 station 的 keeper。没更新的旧 station 只认 +1，补不上的就留着它手上的那版。host 离线时库读不到新的（core 里缓存的照样显示），写不进去。
 - **core**：两个新 topic，`vaults` 和 `vaultItems`（`client/core-ts/src/views/vault.ts`），按 id 增量发给界面；station 给的库、条目、证书、申请存进 core 的 db（workspace 的 `vault`、`vaultItems:<库>` 记录），station 每次重新读（事件流重开）时一起读，之后靠事件。解开的库钥匙只放在内存里，最后一次解开后 5 分钟清掉（`vault.lock` 立刻清）；明文不缓存。
 - **冲突**：条目按 `version` 写入，station 只收恰好大一的，不是就回 `vault_conflict`（带上 station 手上的那版）；core 重新读这个库的条目，调用以 `vault_conflict` 失败，由人决定再写一次。「两份都留下」以后再做。
 - **cloud**：什么都不加。

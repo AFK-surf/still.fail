@@ -61,7 +61,8 @@ about and which holds the grants, so they open without the station restarting:
   three minutes after it was shown, so a page read again, a client retrying or
   a refresh never puts it up again; the refusal says the window was just closed
   then. It is the station's one window for grants (helper/grants.ts): one asked
-  for from the station's page or by an agent counts the same. Its Allow has the
+  for by an agent counts the same; a person's own ask from the station's page
+  puts it up again however lately it was shown. Its Allow has the
   helper open the folder, and macOS asks. One refused before opens System
   Settings › Files and Folders instead, where the helper has a switch for it.
   The window tells the station when a grant changes, and the roots are told
@@ -116,7 +117,7 @@ Helper has no grant for):
 |---|---|
 | `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`; `state` `unreadable` for a folder macOS protects until still.fail Helper has its grant) |
 | `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
-| `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin |
+| `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin; with the way there (`crumbs`, from the home or the top of its disk) and the places to start from (`places`: the home's folders, then the disks: macOS's in /Volumes, Linux's in /media/<user> and /mnt, Windows' drives `C:\` to `Z:\`) |
 | `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number; past 50000 entries the first 50000 in that order |
 | `GET /drive/stat?root=&path=` | one entry |
 | `GET /drive/read?root=&path=&offset=&length=` | the bytes (at most 8 MB), `stillfail-total`, `stillfail-mtime`, `content-type` |

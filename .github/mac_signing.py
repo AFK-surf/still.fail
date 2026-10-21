@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""still.fail's macOS signing on the organization's Mac: the identity (apps/desktop/package.json build.mac.identity)
+and Apple's notary service at hand, for the desktop app (.github/release-desktop.py), the station's native parts
+(.github/sign-station.sh) and the mbui app (apps/mbui/scripts/beta.sh).
+
+The keychain is AFK's (cue.surf's), the one AFK-surf/Cue signs and notarizes its apps with: its Developer ID
+Application identity and its notarytool profile (Apple ID and app-specific password), in production's
+MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 and _2 (the file's base64 in two halves: one secret holds 48 KB at most), opened with
+KEYCHAIN_PASSWORD_AFK (both copied from Cue's; a rotation there is copied again). A copy of it is put on the user's
+search list for the command and taken off after (the list restored, the copy deleted), under the lock mini1's signing
+jobs share: they run beside each other on its one search list. The Apple Development certificate the apps were signed
+with before (MACOS_SIGNING_CERTIFICATE_B64 / _PASSWORD), while it is still given, is imported into that copy too: the
+apps already installed take an update only signed as the build they run says (after-sign.cjs), so it signs one more
+release, which says the Developer ID too, before the identity moves.
+Without the keychain's secrets (a maintainer's own Mac), nothing is set up: the login keychain has the identity.
+
+    python3 .github/mac_signing.py run -- COMMAND…   COMMAND with MAC_SIGN_IDENTITY, STILLFAIL_SIGNING_KEYCHAIN and
+                                                     STILLFAIL_NOTARY_PROFILE in its environment, the secrets not
+    python3 .github/mac_signing.py notarize APP      APP (a signed .app) notarized and its ticket stapled to it
+"""
+import base64
+import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+identity = json.loads((root / 'apps/desktop/package.json').read_text())['build']['mac']['identity']
+SECRETS = ('MACOS_DEVELOPER_ID_KEYCHAIN_B64_1', 'MACOS_DEVELOPER_ID_KEYCHAIN_B64_2', 'KEYCHAIN_PASSWORD_AFK',
+           'MACOS_SIGNING_CERTIFICATE_B64', 'MACOS_SIGNING_CERTIFICATE_PASSWORD')
+
+
+def run(args, **kwargs):
+    result = subprocess.run(args, **kwargs)
+    if result.returncode:
+        raise SystemExit('mac_signing: failed: ' + ' '.join(args[:2]))
+    return result
+
+
+def found(keychain=None):
+    """The signing identity's full name as the keychain (default the search list) has it, None when it is not there:
+    package.json gives a Developer ID without its "Developer ID Application:" (electron-builder refuses the prefix)."""
+    listing = subprocess.check_output(['security', 'find-identity', '-v', '-p', 'codesigning', *([keychain] if keychain else [])], text=True)
+    for line in listing.splitlines():
+        if '"' in line and identity in line:
+            return line.split('"')[1]
+    return None
+
+
+def notary_profile(keychain):
+    """The name notarytool's saved credentials go by in the keychain (notarytool store-credentials --keychain)."""
+    dump = subprocess.run(['security', 'dump-keychain', keychain], capture_output=True, text=True, errors='replace').stdout
+    prefix = 'com.apple.gke.notary.tool.saved-creds.'
+    for line in dump.splitlines():
+        if prefix in line:
+            return line.split(prefix, 1)[1].split('"', 1)[0]
+    return None
+
+
+@contextlib.contextmanager
+def keychain():
+    """The signing keychain on the search list while inside: {'identity' (its full name), 'keychain', 'notary_profile'}
+    (the last two None without its secrets). Leaves only with the identity found: nothing unsigned goes out."""
+    halves = [os.environ.get(k, '') for k in SECRETS[:2]]
+    password = os.environ.get('KEYCHAIN_PASSWORD_AFK', '')
+    if not any(halves) and not password:
+        name = found()
+        if not name:
+            raise SystemExit(f'mac_signing: {identity} is not in this Mac\'s keychains (CI: MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 / _2 and KEYCHAIN_PASSWORD_AFK in production)')
+        yield {'identity': name, 'keychain': None, 'notary_profile': None}
+        return
+    if not all(halves) or not password:
+        raise SystemExit('mac_signing: MACOS_DEVELOPER_ID_KEYCHAIN_B64_1, _2 and KEYCHAIN_PASSWORD_AFK go together')
+    lock = open(Path.home() / '.stillfail-mac-signing.lock', 'a')
+    fcntl.flock(lock, fcntl.LOCK_EX)
+    previous = shlex.split(subprocess.check_output(['security', 'list-keychains', '-d', 'user'], text=True))
+    with tempfile.TemporaryDirectory(prefix='stillfail-signing-', dir=os.environ.get('RUNNER_TEMP')) as directory:
+        path = str(Path(directory) / 'signing.keychain-db')
+        Path(path).write_bytes(base64.b64decode(''.join(''.join(halves).split()), validate=True))
+        Path(path).chmod(0o600)
+        try:
+            run(['security', 'unlock-keychain', '-p', password, path])
+            run(['security', 'set-keychain-settings', '-lut', '21600', path])
+            certificate = os.environ.get('MACOS_SIGNING_CERTIFICATE_B64')
+            if certificate:
+                p12 = Path(directory) / 'certificate.p12'
+                p12.write_bytes(base64.b64decode(''.join(certificate.split()), validate=True))
+                p12.chmod(0o600)
+                run(['security', 'import', str(p12), '-k', path, '-P', os.environ.get('MACOS_SIGNING_CERTIFICATE_PASSWORD', ''), '-T', '/usr/bin/codesign'], stdout=subprocess.DEVNULL)
+                run(['security', 'set-key-partition-list', '-S', 'apple-tool:,apple:', '-k', password, path], stdout=subprocess.DEVNULL)
+                p12.unlink()
+            run(['security', 'list-keychains', '-d', 'user', '-s', path, *previous])
+            name = found(path)
+            if not name:
+                raise SystemExit(f'mac_signing: {identity} is not in the signing keychain: nothing unsigned goes out')
+            profile = notary_profile(path)
+            if not profile:
+                raise SystemExit('mac_signing: no notarytool profile in the signing keychain')
+            yield {'identity': name, 'keychain': path, 'notary_profile': profile}
+        finally:
+            subprocess.run(['security', 'list-keychains', '-d', 'user', '-s', *previous], stdout=subprocess.DEVNULL)
+            subprocess.run(['security', 'delete-keychain', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def signing_env(opened, env=None):
+    """env (default this process's) for a command signing in `opened`: the secrets left out."""
+    env = {k: v for k, v in (env or os.environ).items() if k not in SECRETS}
+    env['MAC_SIGN_IDENTITY'] = opened['identity']
+    if opened['keychain']:
+        env['STILLFAIL_SIGNING_KEYCHAIN'] = opened['keychain']
+        env['STILLFAIL_NOTARY_PROFILE'] = opened['notary_profile']
+    return env
+
+
+def notarize(app):
+    """Sends `app` to Apple's notary service, waits for its verdict (its log printed when not Accepted) and staples the
+    ticket to it, so Gatekeeper lets it open downloaded, offline too. In `run`'s keychain (STILLFAIL_NOTARY_PROFILE)."""
+    profile = os.environ.get('STILLFAIL_NOTARY_PROFILE')
+    if not profile:
+        raise SystemExit('mac_signing: notarize runs under `mac_signing.py run` (no STILLFAIL_NOTARY_PROFILE)')
+    auth = ['--keychain-profile', profile, '--keychain', os.environ['STILLFAIL_SIGNING_KEYCHAIN']]
+    with tempfile.TemporaryDirectory(prefix='stillfail-notarize-', dir=os.environ.get('RUNNER_TEMP')) as directory:
+        archive = str(Path(directory) / (Path(app).stem + '.zip'))
+        run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', app, archive])
+        out = run(['xcrun', 'notarytool', 'submit', archive, *auth, '--wait', '--output-format', 'json'], capture_output=True, text=True).stdout
+    verdict = json.loads(out)
+    print(f"notarytool: {verdict.get('id')} {verdict.get('status')}", flush=True)
+    if verdict.get('status') != 'Accepted':
+        subprocess.run(['xcrun', 'notarytool', 'log', verdict.get('id', ''), *auth])
+        raise SystemExit(f'mac_signing: Apple did not notarize {app}: {verdict.get("status")}')
+    run(['xcrun', 'stapler', 'staple', app])
+    run(['xcrun', 'stapler', 'validate', app])
+    run(['spctl', '--assess', '--type', 'execute', '-vv', app])
+
+
+if __name__ == '__main__':
+    if sys.argv[1:2] == ['notarize'] and len(sys.argv) == 3:
+        notarize(sys.argv[2])
+    elif sys.argv[1:3] == ['run', '--'] and len(sys.argv) > 3:
+        with keychain() as opened:
+            code = subprocess.run(sys.argv[3:], env=signing_env(opened)).returncode
+        sys.exit(code)
+    else:
+        raise SystemExit(__doc__)

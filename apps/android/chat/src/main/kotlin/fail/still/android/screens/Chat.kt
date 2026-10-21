@@ -169,6 +169,7 @@ import fail.still.android.ui.endInView
 import fail.still.android.ui.floating
 import fail.still.android.ui.glass
 import fail.still.android.ui.rememberFollow
+import fail.still.android.ui.keepsBottom
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.drawSmooth
 import fail.still.core.CoreException
@@ -377,23 +378,80 @@ class AgentAtWork(val key: String, val who: String, val runtime: String, val mak
 class Here(val station: String, val of: ChatOf, val view: ChatView, val agents: List<AgentHere>, val orOwner: String? = null) {
     fun agent(key: String) = agents.firstOrNull { it.key == key }
     fun mine(m: ChatMessage) = m.mine
-    /** The post 归档这个 chat goes under: the agents' latest that ended all done, while the chat is offered to archive
-     *  (the core's `archiveOffered`: archivable, and the viewer's `archiveHint` offers it). */
-    val archiveUnder: Long? by lazy {
-        if (view.archiveOffered != true || view.archived == true || view.pending == true) null
-        else view.messages.lastOrNull { it.authorKind == "agent" && it.ending == "all_done" }?.seq
-    }
-    /** The post what the archive check made of the chat goes under: the agents' latest, when it ended all done. */
-    val checkUnder: Long? by lazy {
-        if (view.archiveCheck == null) null
-        else view.messages.lastOrNull { it.authorKind == "agent" && !it.system }?.takeIf { it.ending == "all_done" }?.seq
-    }
     /** Files are kept in a session's workspace: the agent whose workspace holds it, else the first. */
     fun owner(file: Attachment): String? = agents.firstOrNull { file.path.startsWith("${it.view.session.workspace}/") }?.key ?: agents.firstOrNull()?.key ?: orOwner
 }
 
-/** How an activity glides to a new place (web useActivityGlide: a spring, 0.3s, no bounce). */
-private val ACTIVITY_GLIDE = androidx.compose.animation.core.spring(dampingRatio = 1f, stiffness = 300f, visibilityThreshold = IntOffset(1, 1))
+/**
+ * An activity pushed by what comes in above it glides to its new place (web useActivityGlide: a spring, 0.3s, no
+ * bounce), going on from where it is and its speed when pushed again. A move is judged as the web's is, by where it
+ * stands in the list's content: how far under the nearest row above it that was there the frame before, as laid out.
+ * The list scrolling, or laid out anew from elsewhere (the keyboard coming or going, the list keeping its bottom), moves
+ * that row with it: not a move of its own. (The list's own placement animation takes any move it did not scroll by as
+ * one: the keyboard going had it glide after the chat.)
+ */
+private class Glide(private val list: androidx.compose.foundation.lazy.LazyListState, private val key: Any) {
+    /** How far it is drawn from where it is laid out, gliding to nothing, and how fast (`v`, per second). */
+    var y by androidx.compose.runtime.mutableFloatStateOf(0f)
+    private var v = 0f
+    var moving by mutableStateOf(false)
+    /** How far under each row in view above it it was laid out, the last time. */
+    private var under = HashMap<Any, Int>()
+
+    /** Where it is drawn, from where the list lays it out now; `on`: a move glides (else it is where it is laid out). */
+    fun place(on: Boolean): Int {
+        val rows = list.layoutInfo.visibleItemsInfo
+        val me = rows.firstOrNull { it.key == key } ?: return y.roundToInt()
+        val now = HashMap<Any, Int>(rows.size)
+        var moved = 0
+        var found = false
+        for (row in rows) {
+            if (row.index >= me.index) break
+            val gap = me.offset - row.offset
+            now[row.key] = gap
+            under[row.key]?.let { moved = gap - it; found = true }
+        }
+        under = now
+        if (!on) { y = 0f; v = 0f; moving = false }
+        else if (found && moved != 0) { y -= moved; moving = true }
+        return y.roundToInt()
+    }
+
+    /** `dt` seconds on (critically damped, as spring(dampingRatio = 1f, stiffness = 300f)). */
+    fun step(dt: Float) {
+        val w = 17.32f
+        val e = kotlin.math.exp(-w * dt)
+        val c = v + w * y
+        val nextY = (y + c * dt) * e
+        v = (v - w * c * dt) * e
+        y = nextY
+        if (kotlin.math.abs(y) < 0.5f && kotlin.math.abs(v) < 5f) { y = 0f; v = 0f; moving = false }
+    }
+}
+
+/** Glides as [Glide] says, while `on`. */
+@Composable
+private fun Modifier.glides(list: androidx.compose.foundation.lazy.LazyListState, key: Any, on: Boolean): Modifier {
+    val glide = remember(list, key) { Glide(list, key) }
+    LaunchedEffect(glide) {
+        snapshotFlow { glide.moving }.collect { moving ->
+            if (!moving) return@collect
+            val scale = kotlinx.coroutines.currentCoroutineContext()[androidx.compose.ui.MotionDurationScale]?.scaleFactor ?: 1f
+            var last = -1L
+            while (glide.moving) withFrameNanos { now ->
+                // Reduced motion: where it is laid out, at once.
+                val dt = if (scale <= 0f) 1f else if (last < 0) 0.016f else minOf(0.064f, (now - last) / 1e9f) / scale
+                last = now
+                glide.step(dt)
+            }
+        }
+    }
+    val glides = rememberUpdatedState(on)
+    return layout { measurable, constraints ->
+        val p = measurable.measure(constraints)
+        layout(p.width, p.height) { p.place(0, glide.place(glides.value)) }
+    }
+}
 
 /** How long an activity stays once its agent stops, then how long it takes to fade (web Chat.tsx HOLD_MS, FADE_MS). */
 private const val HOLD_MS = 600L
@@ -567,7 +625,12 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
             // before the options close, as they do once it is answered.)
             (r is Entry.Working || r is Entry.Out || (r is Entry.Said && !motion.emits(r.m.seq)))
     }
-    val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(turns.sendWaiting && sentRow(r)) }
+    // Words sent from here (the composer counts them: `sends`) wait from this very composition, not only once their turn
+    // is asked for after it (a SideEffect): a core that has them in the outbox at once would else bring their row in now.
+    val sends = host.sends
+    val sentCount = remember { intArrayOf(sends) }
+    val sendWaits = turns.sendWaiting || sends > sentCount[0]
+    val inList = all.filter { r -> r.id !in turns.waiting && r !in newcomers && !(sendWaits && sentRow(r)) }
     SideEffect { newcomers.forEach { r -> admitted += r.id; turns.admit(r.id, if (r is Entry.Working) 220L else 320L, after = r is Entry.Working) } }
     val rows = if (reveal.count < inList.size) inList.takeLast(reveal.count) else inList
     // What is new is told here, as the list is composed: its rows are composed later (as it is laid out), after the
@@ -757,15 +820,24 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
     // A message sent from up the list takes the reader to its end at once, following again (web Chat.tsx useToEnd). Told
     // by the composer as it sends, not by the outbox growing: on a quick link the station has the message before the
     // outbox ever shows it.
-    val sends = host.sends
-    val sentCount = remember { intArrayOf(sends) }
     SideEffect {
         val was = lastHead[0]
         lastHead[0] = headKey
         val sent = sends > sentCount[0]
         sentCount[0] = sends
         // Words sent take their turn among what changes the list's height, till they have landed (or never set out).
-        host.flight?.takeIf { sent }?.let { f -> turns.send { snapshotFlow { host.flight !== f }.first { it } } }
+        // Having waited for others' turns, what came in meanwhile has moved the rows already there: they go from where
+        // they are now. Their row comes into the list only now, under the end the list was put at (below, here) and
+        // not followed meanwhile: laid out out of sight (a frame to compose it, one to lay it out), the list goes to it,
+        // for it to come into view rather than wait unseen.
+        host.flight?.takeIf { sent }?.let { f ->
+            turns.send { waited ->
+                if (waited) f.beforePositions = host.rowPositions.toMap()
+                repeat(2) { withFrameNanos { } }
+                if (!short && host.flight === f && !f.placed && list.canScrollForward) list.requestScrollToItem(list.layoutInfo.totalItemsCount - 1, 1_000_000)
+                snapshotFlow { host.flight !== f }.first { it }
+            }
+        }
         // Words sent flying in, while it follows: it is put in place by them (below), not glided after their row.
         if (sent && host.flight?.carried == false && !short) follow.paused = true
         if (toLatest[0] && !short) { toLatest[0] = false; atLatest(); return@SideEffect }
@@ -835,6 +907,8 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
         // The list is what the bars and capsules over it frost (the button over it too, so it is not in it).
         LazyColumn(
             Modifier.fillMaxSize()
+                // The keyboard coming or going: what is at its bottom stays there, in the same frame.
+                .keepsBottom(follow)
                 .let { m ->
                     if (flight?.carried != true) m else m.drawWithContent {
                         val cut = host.overlayY(box)?.let { flight.top - it } ?: size.height
@@ -863,7 +937,7 @@ private fun Messages(station: String, of: ChatOf, view: ChatView, agents: List<A
                 // place, going on from where it is and its speed when pushed again (web useActivityGlide); folded to an
                 // avatar that is out flying it shows nothing, and is put there at once for the avatar to fly to.
                 val glides = row is Entry.Working && !motion.away(row.agent.key)
-                Box(Modifier.sendReflow(host, row.id).animateItem(fadeInSpec = null, placementSpec = if (glides && flight == null) ACTIVITY_GLIDE else null, fadeOutSpec = if (fades) tween(200) else null).rise(eases).flying(host, f).onSizeChanged { size ->
+                Box(Modifier.sendReflow(host, row.id).animateItem(fadeInSpec = null, placementSpec = null, fadeOutSpec = if (fades) tween(200) else null).let { m -> if (row is Entry.Working) m.glides(list, row.id, glides && flight == null) else m }.rise(eases).flying(host, f).onSizeChanged { size ->
                     if (row is Entry.Floor) return@onSizeChanged
                     val before = heights.put(row.id, size.height)
                     // Something new took its place at the bottom: the floor gives that much back.
@@ -977,7 +1051,7 @@ private fun AskDismiss(ctx: Here, m: ChatMessage, asking: Boolean) {
     val app = LocalApp.current
     var gone by remember(m.seq) { mutableStateOf(false) }
     val answered = m.decision?.resolved == true || m.decision?.dismissed == true
-    // Going as the archive buttons go (below), rather than vanishing; back at once if letting it go failed. Answered, it
+    // Going rather than vanishing; back at once if letting it go failed. Answered, it
     // goes with the options (`asking`), in their turn.
     AnimatedVisibility(
         visible = asking && inTurn((m.asked == true || answered) && !gone, 280), enter = EnterTransition.None,
@@ -1076,12 +1150,12 @@ private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.padding(top = 3.dp)) {
             if (received) Avatar(s.by.name, s.by.name, 18.dp) else AgentAvatar(s.by.maker, s.by.runtime)
-            // Said in Slack, not here: Slack's mark on its corner (web: msgAvatarSlack).
+            // Said in Slack (or Feishu), not here: its mark on its corner (web: msgAvatarSlack).
             Box(
                 Modifier.align(Alignment.BottomEnd).offset(6.dp, 6.dp).size(14.dp).clip(CircleShape).background(chatInk().canvas)
                     .border(1.dp, C.line, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { SlackMark(9.dp) }
+            ) { SlackMark(9.dp, s.place?.surface) }
         }
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(Modifier.padding(start = 25.dp).heightIn(min = 24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1123,7 +1197,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
     val jump = rememberJump(list, rows)
     val ink = chatInk()
     // What still.fail itself says (role "ember", as the core sends it): a notice across the chat, apart from people's and agents' messages.
-    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }, m.install, ctx.station); return }
+    if (m.system) { SystemNotice(m.text, m.time?.get("createdAt"), m.profile?.let { p -> { app.push(Screen.Profile(ctx.station, p)) } }, m.install, ctx.station, if (m.reportable == true) m.thread to m.seq else null); return }
     val motion = LocalChatMotion.current
     val flash = accentBg()
     if (ctx.mine(m)) {
@@ -1186,15 +1260,6 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             if (decide) DecisionUnder(ctx, m, asking)
             // It asks what no one has decided (the core's `asked`): letting it go, right under it (web Chat.tsx AskDismiss).
             if (decide) AskDismiss(ctx, m, asking)
-            // What the archive check made of the chat (web Chat.tsx archiveCheck): a quiet line, red when it failed.
-            if (decide && ctx.checkUnder == m.seq) ctx.view.archiveCheck?.let { Text(it.text, fontSize = 12.sp, lineHeight = 18.sp, color = if (it.failed) C.red else C.muted, modifier = Modifier.padding(top = 6.dp)) }
-            // Under its agent's latest 做完了 while nothing is left in the chat: archiving it, right there.
-            // Keep the button alive until its exit finishes; the rest of the row closes the space with it.
-            if (decide) AnimatedVisibility(
-                visible = inTurn(ctx.archiveUnder == m.seq, 280),
-                enter = fadeIn(tween(280, easing = ArchiveEase)) + scaleIn(tween(280, easing = ArchiveEase), initialScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + expandVertically(tween(280, easing = ArchiveEase), expandFrom = Alignment.Top, clip = false),
-                exit = fadeOut(tween(280, easing = ArchiveEase)) + scaleOut(tween(280, easing = ArchiveEase), targetScale = 0.85f, transformOrigin = TransformOrigin(0.5f, 0f)) + shrinkVertically(tween(280, easing = ArchiveEase), shrinkTowards = Alignment.Top, clip = false),
-            ) { ArchiveUnder(ctx, enabled = ctx.archiveUnder == m.seq) }
         }
     }
 }
@@ -1204,39 +1269,13 @@ private fun archiveSession(of: ChatOf, view: ChatView, agents: List<AgentHere>):
     (of as? ChatOf.Session)?.key ?: view.key ?: agents.firstOrNull()?.key
 
 /**
- * Archives the chat (its bar's 归档, and the one under its last 做完了): home at once, the chat gone from the list
+ * Archives the chat (its bar's 归档): home at once, the chat gone from the list
  * meanwhile (the core's), not waiting on the station; back in the list, and said, if it could not.
  */
 private fun archiveChat(app: fail.still.android.AppState, station: String, view: ChatView, session: String) {
     app.home()
     app.act(t("android-chat.archive.verb"), t("android-chat.archived")) {
         app.api(station).setArchived(view.thread?.id, session, true)
-    }
-}
-
-/**
- * 归档这个 chat, full width under the agent's latest post that ended its turn all done, while nothing is left in the
- * chat (the core's `archivable`): drawn as buttons (Decisions.kt OptionButton), this one in the accent, a spinner on it meanwhile.
- */
-@Composable
-private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
-    val app = LocalApp.current
-    val session = archiveSession(ctx.of, ctx.view, ctx.agents) ?: return
-    val label = t("android-chat.chat.archiveThis")
-    val busy = app.isDoing("chat.archive", "station" to ctx.station, "session" to session)
-    val thread = ctx.view.thread?.id ?: return
-    val keep = t("android-chat.chat.keep")
-    val keeping = app.isDoing("chat.keep", "station" to ctx.station, "thread" to thread)
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OptionButton(
-            keep, Modifier.weight(1f),
-            enabled = enabled && !ctx.view.offline && !busy, busy = keeping,
-            failed = app.failedOf("chat.keep", "station" to ctx.station, "thread" to thread),
-        ) { app.act(t("android-chat.chat.keep.verb")) { app.api(ctx.station).keepChat(thread); app.toast = t("android-chat.chat.kept") } }
-        OptionButton(
-            label, Modifier.weight(1f), strong = true,
-            enabled = enabled && !ctx.view.offline && !keeping, busy = busy,
-        ) { archiveChat(app, ctx.station, ctx.view, session) }
     }
 }
 
@@ -1248,7 +1287,7 @@ private fun ArchiveUnder(ctx: Here, enabled: Boolean) {
  * them: BlockedLine), ends in installing it.
  */
 @Composable
-private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "") {
+private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toProfile: (() -> Unit)?, install: fail.still.android.data.RuntimeInstall? = null, station: String = "", report: Pair<Long, Long>? = null) {
     val failed = remember(text) { Regex("^⚠️\\s*").find(text) }
     val said = remember(text) { (failed?.let { text.substring(it.range.last + 1) } ?: text).replace(Regex("。\\s*$"), "") }
     var open by remember { mutableStateOf(false) }
@@ -1281,6 +1320,16 @@ private fun SystemNotice(text: String, time: fail.still.android.data.Stamp?, toP
             } else if (install != null) Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(said, fontSize = 15.sp, lineHeight = 24.75.sp, color = ink, maxLines = if (open) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 InstallAction(install, station, ink)
+            } else if (report != null) Row(verticalAlignment = Alignment.Bottom) {
+                // A failure the viewer may report (core `reportable`): its words cut short before the word that does it.
+                Box(Modifier.weight(1f, fill = false)) {
+                    if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
+                    else Text(
+                        plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                ReportAction(report.first, report.second, station, ink)
             } else if (open) CompositionLocalProvider(fail.still.android.ui.LocalMdInk provides ink) { Markdown(said) }
             else Text(
                 plain(said.lineSequence().firstOrNull { it.isNotBlank() } ?: said), fontSize = 15.sp, lineHeight = 24.75.sp, color = ink,
@@ -1334,6 +1383,29 @@ private fun InstallAction(install: fail.still.android.data.RuntimeInstall, stati
     )
 }
 
+/**
+ * Sending a failure notice to the still.fail team (web Chat.tsx ReportAction), a word at its end: asked first, saying
+ * when to and what goes; what it was filed as is said once sent.
+ */
+@Composable
+private fun ReportAction(thread: Long, seq: Long, station: String, ink: Color) {
+    val app = LocalApp.current
+    val action = t("common.report.action")
+    val busy = app.isDoing("chat.report", "station" to station, "thread" to thread, "seq" to seq)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(" · ", fontSize = 15.sp, lineHeight = 24.75.sp, color = ink.copy(alpha = 0.6f))
+        Text(
+            action, fontSize = 15.sp, lineHeight = 24.75.sp, fontWeight = FontWeight.SemiBold, color = ink, textDecoration = TextDecoration.Underline, maxLines = 1,
+            modifier = Modifier.clickable(enabled = !busy) {
+                confirm(app, t("common.report.title"), t("common.report.lead") + "\n\n" + t("common.report.sends"), action, what = action) {
+                    val (number, again) = app.api(station).reportNotice(thread, seq)
+                    app.toast = t(if (again) "common.report.again" else "common.report.done", "number" to (number ?: "?"))
+                }
+            },
+        )
+    }
+}
+
 /** A spinner and a word, small, under a message of yours: waiting for its agents, or on its way (the chat's own size, not WaitLine's). */
 @Composable
 private fun UnderWay(text: String) {
@@ -1363,7 +1435,7 @@ private fun Bubble(text: String, hold: Modifier, ts: String? = null) {
         val (pick, picking) = fail.still.android.ui.pickable(words.text)
         Text(
             // A lone full-width mark (？ ！ 。) sits at the left of its wide cell: proportional alternates ("palt") cut that cell to the glyph, so the bubble's padding centres it.
-            words, style = SendTextStyle.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); linked(it); picking(it); flight?.words = it },
+            words, style = SendTextFaced.copy(color = ink.text, fontFeatureSettings = if (text.trim().let { it.codePointCount(0, it.length) == 1 && !it[0].isLetterOrDigit() }) "palt" else null), onTextLayout = { laid(it); linked(it); picking(it); flight?.words = it },
             modifier = Modifier.widthIn(max = if (fieldWidth > 0) with(density) { fieldWidth.toDp() } + 28.dp else maxWidth * 0.78f).then(hold)
                 .let { m ->
                     if (flight == null || host == null) m else m.onGloballyPositioned {
@@ -1425,7 +1497,7 @@ private fun Out(ctx: Here, o: Outgoing) {
             // another sent soon after it says so for both.
             val flight = LocalFlight.current
             val host = LocalFlightHost.current
-            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(t("android-chat.chat.sending")) }
+            Box(Modifier.graphicsLayer { alpha = if (flight != null && host?.flight === flight) 0f else 1f }) { UnderWay(o.waits ?: t("android-chat.chat.sending")) }
         }
     }
 }

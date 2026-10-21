@@ -4,7 +4,7 @@
 // around synchronous calls (`enter`) and is handed on explicitly to what runs later (`ctx` parameters).
 import { Effect } from "effect";
 import type { Host } from "./host.ts";
-import type { Runner } from "./runtime.ts";
+import { laterSleep, type Runner } from "./runtime.ts";
 import { hex, toJsonBytes } from "./util.ts";
 
 /// The share of traces recorded.
@@ -137,7 +137,7 @@ export class Tracer {
     this.#buffer.push(span);
     if (this.#scheduled) return;
     this.#scheduled = true;
-    this.#runner.fork(Effect.sleep(EXPORT_MS).pipe(Effect.andThen(Effect.sync(() => this.flush()))));
+    this.#runner.fork(laterSleep(EXPORT_MS).pipe(Effect.andThen(Effect.sync(() => this.flush()))));
   }
 
   /// Sends what waits now, if there is somewhere to send it.

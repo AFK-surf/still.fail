@@ -1,7 +1,7 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { mJobLast } from "./Chat.css.ts";
-import { mDetails } from "./Profiles.css.ts";
+import { mDetails, mSignIn } from "./Profiles.css.ts";
 import { mButton } from "./parts.css.ts";
 import { surfaceCorner } from "@stillfail/ui/styles/align.ts";
 
@@ -17,6 +17,9 @@ export const mCommand = style({
     [`${mDetails} &`]: { marginTop: "6px" },
   },
 });
+/** A sign-in card with the command to run by hand last: the box in its bottom corners, as far from its foot as from its
+ *  sides (16), and its corner from the box's. */
+globalStyle(`${mSignIn}:has(> ${mCommand}:last-child)`, { paddingBottom: "16px", borderRadius: surfaceCorner(16, surfaceCorner(COMMAND_PAD, COMMAND_BUTTON_CORNER)) });
 /** Asking: a destructive action's button in red; a command with its copy button. */
 globalStyle(`${mDangerButton}[data-danger] ${mButton}`, { background: "var(--m-red)", color: "#fff !important" });
 globalStyle(`${mCommand} code`, {

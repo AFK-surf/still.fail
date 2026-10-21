@@ -2,7 +2,7 @@
 // serving files from memory, and the service started on sockets of its own with a client for it.
 import { crc32, deflateRawSync } from "node:zlib";
 import { createServer, request, type IncomingMessage } from "node:http";
-import { type FSWatcher, mkdtempSync, realpathSync, watch as fsWatch } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
@@ -210,13 +210,14 @@ export const POSTER = () => jpeg(640, 360);
 /// A station's local API over a unix socket, serving `files` (paths under the root `/books`) to the right token, and
 /// the disk under `dir` (any root there: the photo library's folders); reads answer at most `part` bytes. `reads`
 /// counts the reads; `viewers` the viewer headers it was sent, `asked` with what for; `thumbs` and `posters` the
-/// pictures it made. A disk folder's watch (as the station's: each asker's kept between its askings) answers false
-/// after `held` ms. `/thumb` answers a png/jpg/jpeg/webp itself with a made-up ThumbHash; `/poster` POSTER.
+/// pictures it made. A disk folder's watch (as the station's: each asker's kept between its askings) answers true once
+/// the test says the folder changed (`changed`: no watch of the disk's own, whose events came late or not at all,
+/// 39476782243), false after `held` ms. `/thumb` answers a png/jpg/jpeg/webp itself with a made-up ThumbHash; `/poster` POSTER.
 export async function fakeStation(dir: string, token: string, part = 4096, held = 2000) {
   const files = new Map<string, FakeFile>();
   const seen = { reads: 0, viewers: [] as string[], asked: [] as { route: string; root: string; path: string; viewer: string }[], thumbs: 0, posters: 0 };
   const socket = join(dir, "st.sock");
-  const watches = new Map<string, { watcher: FSWatcher; changed: boolean; waiting: Set<() => void> }>();
+  const watches = new Map<string, { dir: string; changed: boolean; waiting: Set<() => void> }>();
   const reply = (res: import("node:http").ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
@@ -250,11 +251,7 @@ export async function fakeStation(dir: string, token: string, part = 4096, held 
       const key = `${url.searchParams.get("id")}\0${full}`;
       let w = watches.get(key);
       if (!w) {
-        const made = { watcher: fsWatch(full, { persistent: false }, () => {
-          made.changed = true;
-          for (const wake of [...made.waiting]) wake();
-        }), changed: false, waiting: new Set<() => void>() };
-        made.watcher.on("error", () => {});
+        const made = { dir: full, changed: false, waiting: new Set<() => void>() };
         watches.set(key, made);
         w = made;
       }
@@ -345,9 +342,16 @@ export async function fakeStation(dir: string, token: string, part = 4096, held 
     socket,
     files,
     seen,
+    /// What the disk's watch would say of folder `dir` (a full path) after the test changed it: its watches woken.
+    changed(dir: string) {
+      for (const w of watches.values()) {
+        if (w.dir !== dir) continue;
+        w.changed = true;
+        for (const wake of [...w.waiting]) wake();
+      }
+    },
     close: () =>
       new Promise<void>((done) => {
-        for (const w of watches.values()) w.watcher.close();
         server.close(() => done());
         server.closeAllConnections();
       }),

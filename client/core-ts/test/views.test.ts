@@ -14,7 +14,8 @@ import { Runner } from "../src/runtime.ts";
 import { EVICT_AFTER_MS, Store, type Source, type Value } from "../src/store.ts";
 import { FakeHost } from "../src/testing.ts";
 import { attention, choices, runnableOn } from "../src/views/models.ts";
-import { Views, betaOffered, blockedUnder, chatDerive, down, installView, shownMessage } from "../src/views/views.ts";
+import { Views, betaOffered, blockedUnder, chatDerive, down, shownMessage } from "../src/views/views.ts";
+import { installView } from "../src/present.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -209,7 +210,7 @@ function deciding(id: string, th: number, seq: number, at: number, dismissed: bo
 const ids = (v: J): string[] => v.days.flatMap((d: J) => d.items.map((i: J) => i.id));
 
 /// A value without what the clients show of it: what a view puts together, alone.
-const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "summary", "modelsText"]);
+const SHOWN = new Set(["trouble", "settled", "archivable", "stateText", "face", "line", "available", "offered", "connection", "glyph", "note", "time", "statusText", "tone", "badgeText", "titleText", "agentText", "maker", "runtimeText", "processText", "efforts", "modeText", "modeShort", "runText", "presence", "checkText", "checkTone", "preview", "makers", "mark", "order", "left", "level", "refills", "shown", "processesText", "by", "waiting", "since", "originText", "originKind", "summary", "modelsText"]);
 function plain(v: J): J {
   if (Array.isArray(v)) return v.map(plain);
   if (v !== null && typeof v === "object") return Object.fromEntries(Object.entries(v).filter(([k, x]) => !SHOWN.has(k) && x !== null && x !== undefined).map(([k, x]) => [k, plain(x)]));
@@ -1017,6 +1018,25 @@ test("an_items_page_is_its_agents_and_becomes_its_chat", async () => {
   assert.equal(v.messages.length, 1);
 });
 
+test("a_failure_notice_is_offered_to_report_where_the_station_takes_bug_reports", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now)]);
+  const ember = (n: number, text: string): J => ({ ...entry(n, text), authorKind: "ember", author: "ember" });
+  t.set(pageOf("ws/a", 7), { first: 1, last: 3, entries: [entry(1, "开始吧"), ember(2, "⚠️ 本轮出错：workspace routing discovery timed out"), ember(3, "已停止当前任务")], thread: null });
+  t.set(overview("ws/a"), overviewOf([], []));
+  await t.read(u, 1);
+  const reportable = () => u.value.messages.map((m: J) => [m.seq, m.reportable ?? false]);
+  // A station that takes none (another provider's, the beta channel, one from before): nothing offered.
+  assert.deepEqual(reportable(), [[1, false], [2, false], [3, false]]);
+  t.set(overview("ws/a"), { ...overviewOf([], []), feedback: true });
+  await t.read(u, 1);
+  assert.deepEqual(reportable(), [[1, false], [2, true], [3, false]]);
+});
+
 test("a_card_answered_from_here_stays_answered_once_its_message_leaves_the_outbox", () => {
   const t = setup();
   const views = t.views;
@@ -1539,7 +1559,7 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   ]);
 });
 
-test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archiving_is_offered", async () => {
+test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_nothing_under_its_last_done_post", async () => {
   const t = setup();
   const u = ui();
   t.subscribe(1, chatTopic("ws/a", 7));
@@ -1560,17 +1580,9 @@ test("a_chats_page_is_told_by_each_message_whose_its_files_are_and_where_archivi
   // Kept by the chat's agent: the only one, its workspace's or not.
   assert.deepEqual(v.messages.map((m: J) => m.attachments.map((a: J) => a.owner)), [["k"], [], ["k"]]);
   assert.equal(v.archivable, true);
-  assert.equal(v.archiveOffered, true);
-  // 归档 only under its last all-done post, and why: no review on its station, its agents are all done.
-  assert.deepEqual(v.messages.map((m: J) => m.archive ?? false), [false, false, true]);
-  assert.deepEqual(v.messages[2].archiveCheck, { text: "所有 agent 都做完了", recommended: true, failed: false });
-  // Not offered where the viewer's archiveHint says off: archivable with one tap all the same, nothing under the post.
-  t.set(prefs(), { archiveHint: "off" });
-  await t.read(u, 1);
-  assert.equal(u.value.archivable, true);
-  assert.equal(u.value.archiveOffered, undefined);
-  assert.deepEqual(u.value.messages.map((m: J) => m.archive ?? false), [false, false, false]);
-  assert.equal(u.value.messages[2].archiveCheck, undefined);
+  // Archived from its bar or the list: nothing offers it under its last all-done post, nor says what the check made of it.
+  assert.equal(v.archiveOffered, undefined);
+  assert.deepEqual(v.messages.map((m: J) => [m.archive, m.archiveCheck]), [[undefined, undefined], [undefined, undefined], [undefined, undefined]]);
 });
 
 test("the_viewers_messages_sent_one_after_another_go_close_together_their_time_under_the_last", async () => {

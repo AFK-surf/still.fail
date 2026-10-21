@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { Drive, DriveError } from "../src/drive/drive.ts";
 import { routes } from "../src/api/routes/drive.ts";
@@ -218,6 +218,11 @@ test("routes: folders pinned by any member who may write, kept in config.json; r
   assert.deepEqual(picked.json.places.slice(0, 2).map((p: any) => [p.name, p.path]), [["Home", base], ["Movies", join(base, "Movies")]]);
   const deeper = await ask(table, request("GET", "/drive/folders", { path: join(root, "Season 1") }, null, "owner"));
   assert.deepEqual(deeper.json.crumbs.map((c: any) => c.name), ["Home", "root", "Season 1"]);
+  // One outside the home: the way there from the top of its disk, each step a folder.
+  const above = await ask(table, request("GET", "/drive/folders", { path: dirname(base) }, null, "owner"));
+  assert.deepEqual(above.json.crumbs[0], { name: "/", path: "/" });
+  assert.equal(above.json.crumbs.at(-1).path, dirname(base));
+  assert.deepEqual(above.json.crumbs.slice(1).map((c: any) => c.path), above.json.crumbs.slice(1).map((c: any, i: number) => join(above.json.crumbs[i].path, c.name)));
   // One the station may not list: there, said so, nothing in it.
   if (process.getuid?.() !== 0) {
     mkdirSync(join(base, "Locked"));

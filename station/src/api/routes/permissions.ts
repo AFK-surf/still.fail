@@ -1,10 +1,10 @@
 // What macOS lets still.fail Helper do on this Mac (helper/grants.ts; docs/remote-screens.md "Grants"), as members ask
 // it. The overview says the grants (`permissions`); POST /permissions/request `{grant}` puts the helper's window up on
-// the Mac for that one (a member who may change the station: the admin API refuses a read-only one's), once in a while
-// as the drive does, and answers `{window, screen}`: `up` (shown, or up already asking for it) or `granted` (nothing
+// the Mac for that one (a member who may change the station: the admin API refuses a read-only one's), again however
+// lately it was shown (the person asks: a client retrying is answered once, by its idempotency key), and answers `{window, screen}`: `up` (shown, or up already asking for it) or `granted` (nothing
 // to ask), and whether the screen can be seen and driven (the client then opens it, for the person to click in the
-// window from wherever they are). Not shown: an error in the asker's words, 409 when it was shown a moment ago (or a
-// disk's grant has no disk of its kind to ask with), 503 when it could not be shown. A station without the helper has
+// window from wherever they are). Not shown: an error in the asker's words, 409 when a disk's grant has no disk of its
+// kind to ask with, 503 when it could not be shown. A station without the helper has
 // no such route (404).
 import { type Answer, type Request, json } from "../request.ts";
 import type { Route } from "../admin.ts";
@@ -35,8 +35,7 @@ export function routes({ grants }: { grants: HelperGrants }): Route[] {
         } catch {}
         if (!isGrant(grant)) return refused(400, "station.permissions.unknown", r.lang);
         try {
-          const { window, screen } = await grants.request(grant, askWords(r.lang));
-          if (window === "closed") return refused(409, "station.permissions.closed", r.lang, { grant: tr(r.lang, `station.helper.window.${grant}`) });
+          const { window, screen } = await grants.request(grant, askWords(r.lang), true);
           if (window === "none") return refused(503, "station.permissions.none", r.lang);
           return json(200, JSON.stringify({ window, screen }));
         } catch (e) {

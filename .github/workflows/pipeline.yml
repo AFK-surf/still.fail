@@ -9,7 +9,9 @@
 # The native parts (scripts/native.ts: the station's mesh addon, launcher and runner, the web's iroh, Android's shell
 # and engine, the desktop's dock, the media service's ffmpeg) are prebuilt: the natives job builds those whose key the release
 # native-artifacts lacks, on mini1, and on main publishes them there; every other job gets them from the release (a
-# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust.
+# branch's: from its natives job's run artifact), so a change that is not to a native part compiles no Rust. The mbui
+# app's Windows shell and engine are prebuilt on a development Mac instead (node scripts/native.ts prebuild: cross-built,
+# put in the releases bucket by their keys) and never built here: windows-natives fetches them and runs the shell's tests.
 # Stable: the manual Publish stable workflow. Relay remains manual (deploying it drops every connection).
 name: pipeline
 on:
@@ -54,6 +56,9 @@ jobs:
       desktop_web: ${{ steps.plan.outputs.desktop_web }}
       windows: ${{ steps.plan.outputs.windows }}
       natives: ${{ steps.natives.outputs.natives }}
+      windows_natives: ${{ steps.plan.outputs.windows_natives }}
+      mbui: ${{ steps.plan.outputs.mbui }}
+      mbui_native: ${{ steps.plan.outputs.mbui_native }}
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0, fetch-tags: true }
@@ -113,6 +118,23 @@ jobs:
           # the app's code and its iroh addon (a change to the web app it carries is the Mac app's check too).
           windows=false
           if has '^(apps/desktop/|station/native/mesh/|vendor/|scripts/native\.ts$|\.github/windows-smoke\.ps1$)'; then windows=true; fi
+          # The mbui app's Windows shell and engine, prebuilt: fetched and the shell's tests run (windows-natives), for a
+          # change to what they are made of.
+          windows_natives=false
+          if has '^(client/shell/|client/Cargo\.(toml|lock)$|vendor/|apps/mbui/engine/|scripts/native\.ts$)'; then windows_natives=true; fi
+          # The mbui app's own tests (check-mbui, mbui-check.yml; main's run there on their own): for a change to it, or
+          # to mbui (apps/mbui/mbui).
+          mbui=false
+          if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
+          # The same tests on native (check-mbui's native): only where native can differ from js, a change to the hosts,
+          # the FFI (*_native.mbt, C and Objective-C), the packages' link options (moon.pkg) or mbui's, or to
+          # how they are run (on main, mbui-check.yml's own run has them for any change to the app).
+          mbui_native=false
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            mbui_native=$mbui
+          elif has '^apps/mbui/(mbui/|src/host/|scripts/test\.sh$|(.*/)?moon\.pkg$|.*_native\.mbt$|.*\.(c|h|m|mm|cpp)$)' || has '^\.github/workflows/(pipeline|mbui-check)\.yml$'; then
+            mbui_native=true
+          fi
           {
             echo "range=$range"
             echo "parts=${static[*]}"
@@ -126,8 +148,11 @@ jobs:
             echo "desktop=$desktop"
             echo "desktop_web=$desktop_web"
             echo "windows=$windows"
+            echo "windows_natives=$windows_natives"
+            echo "mbui=$mbui"
+            echo "mbui_native=$mbui_native"
           } >> "$GITHUB_OUTPUT"
-          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay"
+          echo "range $range ($(printf '%s\n' "$changed" | grep -c .) files): api=$api static=${static[*]:-none} station=$station modules=$modules android=$android android_lint=$android_lint desktop=$desktop desktop_web=$desktop_web relay=$relay mbui=$mbui mbui_native=$mbui_native"
 
   # The native parts for this commit (scripts/native.ts): each one whose key the release native-artifacts lacks is
   # built here (once per key and machine: mini1's cache is shared by its runners and the checks beside this job wait
@@ -167,6 +192,58 @@ jobs:
       - if: github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with: { name: "natives-${{ github.sha }}", path: "${{ runner.temp }}/natives", if-no-files-found: ignore, retention-days: 7 }
+
+  # The mbui app's Windows shell and engine (scripts/native.ts `msvc`) are prebuilt on a development Mac, cross-built
+  # (node scripts/native.ts prebuild), and put in the releases bucket by their keys; CI never builds them. Here, on
+  # GitHub's Windows (no runner of ours is), for a change to what they are made of: both fetched (a key not there fails,
+  # saying how to prebuild it), and the shell's tests, built with it, run where it runs.
+  windows-natives:
+    needs: plan
+    if: needs.plan.outputs.windows_natives == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # the keys are git's blobs: the checkout as git has it
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version-file: .node-version, package-manager-cache: false }
+      # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
+      # to break off, 39431384793)
+      - name: The Windows natives' keys
+        id: native-keys
+        run: echo "key=natives-win32-x64-$(node scripts/native.ts key shell win32-x64)-$(node scripts/native.ts key engine win32-x64)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/stillfail-native
+          key: ${{ steps.native-keys.outputs.key }}
+      - name: The Windows engine and shell, prebuilt; the shell's tests
+        run: |
+          node scripts/native.ts fetch engine win32-x64
+          shell=$(node scripts/native.ts fetch shell win32-x64)
+          for t in "$shell"/tests/*.exe; do echo "== $(basename "$t")"; "$t" --test-threads=2 || exit 1; done
+
+  # main: the prebuilt Windows natives in the releases bucket's natives/ (what `prebuild --release` put in the release
+  # native-artifacts from a development Mac, copied over: nothing is built here), once the API (which serves natives/)
+  # is out. Seconds when the store has them.
+  natives-store:
+    needs: [plan, api]
+    if: always() && github.ref == 'refs/heads/main' && contains(fromJSON('["success","skipped"]'), needs.api.result)
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup
+      - name: Copy what the store lacks from the release
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          (cd cloud && pnpm install --frozen-lockfile --prefer-offline > /dev/null)
+          node scripts/native.ts store-sync
 
   # mini1-5 (label quick, on mini1 too) takes only the short jobs everything else waits on: natives (what a run's
   # builds and checks need), and main's done and station-update. Behind the builds in mini1's four, natives waited
@@ -242,6 +319,15 @@ jobs:
           range='${{ needs.plan.outputs.range }}'
           if git diff --name-only "$(git merge-base origin/main HEAD)" HEAD | grep -q '^.github/'; then range=all; fi
           if [ "$range" = all ]; then sh scripts/check.sh all; else sh scripts/check.sh full "$range"; fi
+
+  # The mbui app's check and tests on js and, where native can differ (plan's mbui_native), on native: mbui-check.yml,
+  # main's there on its own.
+  check-mbui:
+    needs: plan
+    if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && needs.plan.outputs.mbui == 'true' }}
+    uses: ./.github/workflows/mbui-check.yml
+    with:
+      native: ${{ needs.plan.outputs.mbui_native == 'true' }}
 
   # The web in Chrome (scripts/check.sh's browser part: its stories measured, the message list's motion watched), shared
   # out between five of GitHub's runners side by side: on one beside the Linux check it took ~3 minutes (2026-10-15);
@@ -383,16 +469,17 @@ jobs:
         run: sh .github/deploy.sh --dry-run $([ '${{ needs.plan.outputs.api }}' = true ] && echo api) ${{ needs.plan.outputs.parts }}
 
   # A branch: the apps main would release, built with the prebuilt native parts (unsigned, nothing sent): the desktop
-  # app and the TypeScript station's bundle (a branch's Android app is check-android's).
+  # app and the TypeScript station's bundle (a branch's Android app is check-android's). On GitHub's macos-15 (free for
+  # a public repository): unsigned, it needs nothing of Mini1's (main's signed builds stay there, with its keychain).
   mac-build:
     needs: [plan, natives]
     if: ${{ !cancelled() && !failure() && github.ref != 'refs/heads/main' && (needs.plan.outputs.desktop == 'true' || needs.plan.outputs.station == 'true') }}
-    runs-on: [self-hosted, mini1]
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      - uses: ./.github/actions/setup-mac
+      - uses: ./.github/actions/setup
       - uses: ./.github/actions/natives
       - name: The TypeScript station's bundle (darwin-arm64)
         run: |
@@ -446,6 +533,25 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v4
         with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
+
+  # A branch: the one check main's protection requires (2026-10-20, as asked: what is red goes into main by nobody, an
+  # admin's merge too): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
+  # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
+  gate:
+    needs: [plan, natives, windows-natives, check, check-linux, check-mbui, check-browser, check-android, check-android-lint, bundle, mac-build, windows-build, windows-smoke]
+    if: always() && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          if echo "$RESULTS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' >/dev/null; then
+            echo "::error::a branch job failed or was cancelled: main's protection keeps this branch out"
+            exit 1
+          fi
 
   # The API and the web wait for the checks of what they are made of, not the Android app's (2026-10-17, as asked: its
   # lint on GitHub's runners held a release's web back for minutes); the apps' releases (put) wait for all.
@@ -513,6 +619,11 @@ jobs:
       - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64, win32-x64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
+          KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           # The key the release is signed with (docs/release-signing.md): none is an error.
@@ -564,6 +675,10 @@ jobs:
       - name: Build and sign the beta desktop app on the organization Mac
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
+          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
+          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
+          MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
           MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}

@@ -6,6 +6,19 @@ import { Cause, Clock, Effect, Exit, Fiber, FiberSet, Scope } from "effect";
 /// A scope and the fibers forked in it: closing it interrupts them, and anything else that was opened in it.
 export type Scoped = { readonly scope: Scope.Closeable; readonly fibers: FiberSet.FiberSet<unknown, unknown> };
 
+/// Waits `ms` as Effect.sleep does, for what nothing shown waits on: what comes again by itself (a keepalive, a
+/// measurement's next sample, a shown clock's next second) or does nothing to what is shown (traces sent, a cache let
+/// go). A host that keeps the core's timers on an app's own clock (an mbui app in a run on a clock of its own,
+/// apps/mbui/core/clock.ts) is told so of the timer it sets: such a run is at rest while only these are set. A wait
+/// that may change what is shown (a retry, a request's time running out) is Effect.sleep.
+export function laterSleep(ms: number): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    // (the next timer set for these ms, which this sleep sets at once on the live clock)
+    (globalThis as { __stillfail_later?: number }).__stillfail_later = ms;
+    return Effect.sleep(ms);
+  });
+}
+
 export class Runner {
   readonly clock: Clock.Clock | null;
   /// The core's own: closing it ends everything.

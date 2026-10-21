@@ -1,0 +1,22 @@
+# A photo and a file from ＋'s sheet (文件; MBUI_PICK_FILES answers the panel), each put up in parts at once, then sent.
+timeout 60000
+tap 端到端测试
+until =studio
+until 发消息
+answered draft.get
+tap icon:plus
+until =文件
+shot 1-sheet
+tap =文件
+until e2e-data.bin
+shot 2-picked
+timeout 180000
+gone 正在上传
+shot 3-uploaded
+timeout 60000
+tap 发消息
+type 一张照片和一个文件 {T}
+tap icon:arrow-up
+until 一张照片和一个文件 {T}
+gone 正在发送
+shot 4-sent

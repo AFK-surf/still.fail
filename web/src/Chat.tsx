@@ -13,7 +13,7 @@ import { Mark } from "./brand.tsx";
 import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
-import { Avatar, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
+import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
@@ -36,7 +36,7 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ArchiveCheck, ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
@@ -327,6 +327,7 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
   const sending = useChatSend();
   const station = useStation().address;
   const toast = useToast();
+  const draftKey = useContext(DraftKey);
   // Each turns in its icon's place while it goes; failed, a red mark there a few seconds, why on hover.
   const retry = useDoingState("chat.retry", { station, id: o.id });
   const drop = useDoingState("chat.discard", { station, id: o.id });
@@ -345,18 +346,28 @@ function OutboxRow({ o, to, locked }: { o: Outgoing; to: ChatTo | null; locked: 
         // Not sent: said briefly, why in its tip; sending it again or dropping it right beside.
         ? <div className={css.msgUnsent}>
             <Tip label={o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.notSent")}>
-              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{t("web-main.chat.unsent")}</span>
+              <span className={css.msgUnsentNote}><Info size={12} strokeWidth={2} />{o.final && o.error ? t("web-main.draft.notSent", { error: o.error }) : t("web-main.chat.unsent")}</span>
             </Tip>
-            <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
-              onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
-              <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>
+            {o.final
+              // Refused as it is (a file this station does not have): sent again it would be again. Its words go back to
+              // the composer, to be sent anew.
+              ? <button type="button" className={css.msgUnsentBtn} disabled={locked || busy || !draftKey}
+                  onClick={() => {
+                    if (to === null || !draftKey) return;
+                    if (!offerToDraft(draftKey, { files: [], text: o.text, quotes: o.quotes.map((q, i) => ({ ...q, id: `${o.id}-${i}` })) })) return;
+                    sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) })));
+                  }}>
+                  <Edit size={12} strokeWidth={2} />{t("common.edit")}</button>
+              : <button type="button" className={css.msgUnsentBtn} disabled={locked || busy} aria-busy={retrying || undefined}
+                  onClick={() => { if (to !== null) sending.retry(to, o.id).catch((e: unknown) => toast(t("web-main.chat.resendFailed", { error: failure(e) }))); }}>
+                  <DoingShown state={retry} inline idle={<Retry size={12} strokeWidth={2} />} />{t("common.retry")}</button>}
             <button type="button" className={css.msgUnsentBtn} disabled={busy} aria-busy={dropping || undefined}
               onClick={() => { if (to !== null) sending.discard(to, o.id).catch((e: unknown) => toast(t("web-main.chat.deleteFailed", { error: failure(e) }))); }}>
               <DoingShown state={drop} inline idle={<Trash size={12} strokeWidth={2} />} />{t("common.delete")}</button>
           </div>
         // Another sent soon after it: that one says it is on its way.
         : o.followed ? null
-        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : t("web-main.chat.sending")}</span>}
+        : <span className={`${conversationCss.msgTime} ${chatCss2.msgWaiting} ${chatCss2.msgSending}`} data-shows-at={showsAt} style={{ animationDelay: delay }}><Spinner inline />{o.uploads?.length ? t("common.uploading") : o.waits ?? t("web-main.chat.sending")}</span>}
     </MineMessage>
   );
 }
@@ -1000,7 +1011,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     );
   }
   // What still.fail itself says (a limit hit, a failure): a notice across the chat, not someone's message.
-  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
+  if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
   return (
@@ -1024,9 +1035,6 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
           {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}
           {options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={false} />}
         </>}
-      {m.archiveCheck && <p className={css.archiveCheck} data-failed={m.archiveCheck.failed || undefined}>{m.archiveCheck.text}</p>}
-      {/* Coming and going in one motion (settling.tsx), as the phone's does. */}
-      {options && chat && <Settles shown={!!m.archive}><ArchiveOption thread={m.thread} chat={chat} /></Settles>}
     </OthersMessage>
   );
 }, (a, b) => a.enter === b.enter && a.emitted === b.emitted && a.thread === b.thread && a.options === b.options && sameMessage(a.message, b.message));
@@ -1040,14 +1048,15 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
   const chat = useContext(DraftKey);
   const agent = s.by.here ? s.by.agent : undefined;
   const received = s.received === true;
+  const kind = s.place?.surface;
   const place = s.place
-    ? <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
+    ? <><ElsewhereLogo kind={kind} size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
   return (
     <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
-        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><SlackLogo size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack agent={agent} />}
+        ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}
@@ -1065,33 +1074,6 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     </OthersMessage>
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
-
-/**
- * 归档这个 chat, under the agent's post that said it is all done, while nothing is left in the chat: as wide as the
- * message, in the accent. Turns while the archive is under way (doing.ts).
- */
-function ArchiveOption({ thread, chat }: { thread: number; chat: string }) {
-  const station = useStation().address;
-  const busy = useDoing("chat.archive", { station, thread, archived: true });
-  const keepState = useDoingState("chat.keep", { station, thread });
-  const keeping = keepState.running;
-  const api = useApi();
-  const act = useAct();
-  return (
-    <div className={decisionsCss.archiveOptions}>
-      <button type="button" className={decisionsCss.option} data-busy={keeping || undefined} disabled={busy || keeping}
-        aria-busy={keeping || undefined} onClick={() => act(api.keepChat(thread), t("web-main.chat.keep.what"), t("web-main.chat.keep.done"))}>
-        <span className={decisionsCss.optionLabel}>{t("web-main.chat.keep")}</span>
-        <DoingShown state={keepState} className={decisionsCss.optionSpinner} inline />
-      </button>
-      <button type="button" className={decisionsCss.option} data-recommended="" data-busy={busy || undefined} disabled={busy || keeping}
-        aria-busy={busy || undefined} onClick={() => chatPage.archive(chat)}>
-        <span className={decisionsCss.optionLabel}>{t("web-main.chat.archiveThis")}</span>
-        {busy && <Spinner inline className={decisionsCss.optionSpinner} />}
-      </button>
-    </div>
-  );
-}
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
 export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
@@ -1139,7 +1121,7 @@ export function PersonWords({ text }: { text: string }) {
  * One saying the station does not have the chat's runtime, with none of the viewer's messages waiting for it (those say
  * it under them: BlockedLine), ends in installing it.
  */
-function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
+function SystemNotice({ text, profile, install, report, time, ts, enter, caught, vk }: { text: string; profile: string | undefined; install: RuntimeInstall | undefined; /** A failure the viewer may report (core `reportable`): its entry. */ report?: { thread: number; seq: number } | undefined; time: Stamp | undefined; ts: string | undefined; enter: true | undefined; caught: true | undefined; /** Its item's key in a list (virtual/list.tsx). */ vk?: string }) {
   const station = useStation();
   const failed = /^⚠️\s*/u.exec(text);
   const words = failed ? text.slice(failed[0].length) : text;
@@ -1154,10 +1136,13 @@ function SystemNotice({ text, profile, install, time, ts, enter, caught, vk }: {
         role="button" tabIndex={0} aria-expanded={open}
         onClick={(e) => { if (!(e.target as Element).closest("a, button")) toggle(); }}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } }}>
-        <div className={conversationCss.markdown}>
-          {profile && colon >= 0
-            ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
-            : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+        <div className={css.msgSystemLine}>
+          <div className={conversationCss.markdown}>
+            {profile && colon >= 0
+              ? <p>{said.slice(0, colon + 1)}<Link className={css.msgSystemLink} to={`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(profile)}`}>{said.slice(colon + 1)}</Link></p>
+              : install ? <p>{said}<InstallAction install={install} /></p> : <Prose>{said}</Prose>}
+          </div>
+          {report && <ReportAction thread={report.thread} seq={report.seq} />}
         </div>
       </div>
       {open && <Time className={conversationCss.msgTime} stamp={time} />}
@@ -1204,6 +1189,35 @@ function InstallAction({ install }: { install: RuntimeInstall }) {
   return <><span className={css.blockedDot} aria-hidden>·</span><button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={run}>{install.action}</button></>;
 }
 
+/** Sending a failure notice to the still.fail team, a word at its end (out of its words, so a long one cut short keeps
+ * it): asked first, saying when to and what goes; what it was filed as is said once sent. */
+function ReportAction({ thread, seq }: { thread: number; seq: number }) {
+  const station = useStation().address;
+  const busy = useDoing("chat.report", { station, thread, seq });
+  const call = useCall();
+  const toast = useToast();
+  const act = useAct();
+  const [asking, setAsking] = useState(false);
+  const action = t("common.report.action");
+  const run = () => {
+    setAsking(false);
+    act(call("chat.report", { station, thread, seq }).then((a) => {
+      const answer = a as { number?: number; duplicate?: boolean } | null;
+      toast(t(answer?.duplicate ? "common.report.again" : "common.report.done", { number: answer?.number ?? "?" }));
+    }), action);
+  };
+  return (
+    <span className={css.msgSystemEnd}>
+      <span className={css.blockedDot} aria-hidden>·</span>
+      <button type="button" className={css.blockedAction} disabled={busy} aria-busy={busy || undefined} onClick={() => setAsking(true)}>{action}</button>
+      <Dialog open={asking} title={t("common.report.title")} description={t("common.report.lead")} onClose={() => setAsking(false)}
+        footer={<><Button variant="ghost" onClick={() => setAsking(false)}>{t("common.cancel")}</Button><Button variant="primary" onClick={run}>{action}</Button></>}>
+        <p className={css.reportSends}>{t("common.report.sends")}</p>
+      </Dialog>
+    </span>
+  );
+}
+
 /** Someone else's message as a chat draws it: `avatar`, then `name` and `time` over what it says; `route` (where it
  * went or came from, when not here) between the two. */
 export function OthersMessage({ avatar, name, route, time, children, ...data }: Data & { avatar: ReactNode; name: ReactNode; route?: ReactNode; time: Stamp | undefined; children: ReactNode }) {
@@ -1224,13 +1238,13 @@ export function OthersMessage({ avatar, name, route, time, children, ...data }: 
 
 /** An agent's picture in a chat: its model's maker, in the agents' ground. One of the chat's (`agent`, its session's key)
  * has its card while it is pointed at (AgentCard.tsx). */
-export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean; agent?: string | undefined }) {
+export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; slack?: boolean | "feishu"; agent?: string | undefined }) {
   return (
     <AgentHover agent={agent}>
       <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
         {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
         {/* What it said went to Slack, not here: Slack's mark on its corner. */}
-        {slack && <span className={css.msgAvatarSlack}><SlackLogo size={9} /></span>}
+        {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
       </span>
     </AgentHover>
   );

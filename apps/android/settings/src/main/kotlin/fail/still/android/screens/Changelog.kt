@@ -4,6 +4,8 @@
 // the page is opened or it is put away (`changelog.seen`).
 package fail.still.android.screens
 
+import fail.still.android.ui.LIST_PAD
+import fail.still.android.ui.CARD_PAD
 import fail.still.android.ui.WaitShape
 import fail.still.android.ui.Waiting
 import androidx.compose.foundation.background
@@ -69,6 +71,7 @@ import fail.still.android.data.t
 import fail.still.core.CoreException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.buildJsonObject
+import fail.still.android.ui.UiFont
 
 @Composable
 fun ChangelogScreen() {
@@ -103,7 +106,8 @@ fun ChangelogScreen() {
  *  what is not out yet (in the accent: an update would bring it). */
 @Composable
 private fun Change(item: ChangelogItem) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    // On a list card: its words CARD_PAD from the card's edge, as its rows'.
+    Column(Modifier.fillMaxWidth().padding(horizontal = CARD_PAD - LIST_PAD, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         item.lines.forEach { Line(it) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(item.versionName, fontSize = 13.sp, lineHeight = 18.sp, color = C.muted)
@@ -119,7 +123,7 @@ private fun Line(line: ChangelogLine) {
         Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = C.ink)
         return
     }
-    val labelStyle = TextStyle(fontSize = 13.sp, lineHeight = 19.sp)
+    val labelStyle = TextStyle(fontFamily = UiFont, fontSize = 13.sp, lineHeight = 19.sp)
     val measurer = rememberTextMeasurer()
     val width = with(LocalDensity.current) { (measurer.measure(line.label, labelStyle).size.width.toDp() + 12.dp + 6.dp).toSp() }
     val new = line.kind == "new"

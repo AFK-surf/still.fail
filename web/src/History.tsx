@@ -12,7 +12,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffec
 import { flushSync } from "react-dom";
 import { animate, EASE_OUT, type AnimationPlaybackControls } from "@stillfail/ui/motion.ts";
 import { useApi, useHistory, useHistoryDetail, useHistoryOlder, type HistoryGroup, type HistoryItem, type HistoryMark, type HistoryMessage, type HistoryStep, type HistoryTask, type HistoryTurn, type HistoryView, type Place } from "./api.ts";
-import { ICON, IconButton, Pill, SlackLogo, Tip, Waiting, WaitLine } from "./ui.tsx";
+import { ElsewhereLogo, ICON, IconButton, Pill, SlackLogo, Tip, Waiting, WaitLine } from "./ui.tsx";
 import { useCopyChatLink } from "./ChatRef.tsx";
 import { useLink, useStation } from "./station.tsx";
 import { Link } from "react-router";
@@ -276,7 +276,7 @@ function Ev({ icon, state, tone, children }: { icon: ReactNode; state?: string |
 /** A place as its platform's mark and its name: a Slack thread opens in Slack; a still.fail chat, its agent's page. */
 function Where({ place }: { place: Place }) {
   const link = useLink();
-  const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <SlackLogo size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
+  const inner = <>{(place.surface === "ember" || place.surface === "stillfail") ? <Mark size={12} /> : <ElsewhereLogo kind={place.surface} size={12} />}<span className={css.hPlaceName}>{place.name}</span></>;
   if (place.url) return <a className={css.hPlace} href={place.url} target="_blank" rel="noopener">{inner}</a>;
   return place.session
     ? <Link className={css.hPlace} to={link(`/chats/${encodeURIComponent(place.session)}`)}>{inner}</Link>

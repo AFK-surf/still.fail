@@ -21,7 +21,9 @@ globalStyle(`${card} ${btn}:not(${btnPrimary}, ${btnDangerSolid}):hover:not(:dis
   background: "color-mix(in oklab, currentColor 10%, transparent)",
 });
 globalStyle(`${inputRow} ${input}`, { flex: "1" });
-globalStyle(`${signIn} ${steps}`, { gap: "14px" });
+// A sign-in's steps: their numbers in their lines, so what is under them (the page's button, the code's field) stands
+// where the card's words do.
+globalStyle(`${signIn} ${steps}`, { gap: "14px", paddingLeft: "0", listStylePosition: "inside" });
 globalStyle(`${steps} li > ${inputRow}`, { marginTop: "8px" });
 globalStyle(`${steps} ${stepActions}`, { display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" });
 /** After the package's field errors, and wins over them. */

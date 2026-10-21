@@ -21,13 +21,39 @@ export function plainText(text: string): string {
       continue;
     }
     if (c === "\r") {
-      if (text[i + 1] !== "\n") out += "\n";
+      // "\r\r\n" too (a "\r\n" written through the terminal's own newline translation) is one line's end.
+      let j = i + 1;
+      while (text[j] === "\r") j++;
+      if (text[j] !== "\n") out += "\n";
+      i = j - 1;
       continue;
     }
     if (c === "\b" || c === "\u0007" || c === "\u000f" || c === "\u000e") continue;
     out += c;
   }
   return out;
+}
+
+/// A link a program broke at its terminal's width put back together: where a line as wide as the terminal (a few
+/// columns short, for a box's margin) ends in a link, the next line goes on with it (Devin's, past 200 columns, comes
+/// on two lines).
+export function unwrapped(text: string, cols: number): string {
+  const lines = text.split("\n");
+  const full = (line: string) => line.trimEnd().length >= cols - 4;
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]!;
+    let wide = full(line);
+    while (wide && i + 1 < lines.length && /https?:\/\/[^\s"'<>`]+$/.test(line.trimEnd())) {
+      const next = lines[i + 1]!;
+      if (!/^\s*[^\s"'<>`]/.test(next)) break;
+      line = line.trimEnd() + next.trimStart();
+      i++;
+      wide = full(next);
+    }
+    out.push(line);
+  }
+  return out.join("\n");
 }
 
 /// The http(s) addresses in some text, in order, without the punctuation that ends a sentence around them.
@@ -89,10 +115,12 @@ export function domainOf(url: string): string | null {
 
 /// A device code in some output, whichever tool says it: a `user_code=` in a page's address (Vercel's); one like
 /// ABCD-1234 (four capitals or digits, a dash, four to six more: gh, Docker, AWS, Cloudflare); else on a line that says
-/// "code", a word of six to ten capitals and digits right after the word "code" or with a digit in it (az).
-export function deviceCodeIn(text: string): string | null {
-  const given = /[?&]user_code=([A-Z0-9]{4,}-?[A-Z0-9]{4,})/.exec(text);
+/// "code", a word of six to ten capitals and digits right after the word "code" or with a digit in it (az). Never one in
+/// a page's other parameters (a PKCE challenge, a state).
+export function deviceCodeIn(said: string): string | null {
+  const given = /[?&]user_code=([A-Z0-9]{4,}-?[A-Z0-9]{4,})/.exec(said);
   if (given) return given[1]!;
+  const text = said.replace(/https?:\/\/[^\s"'<>`]+/g, " ");
   for (const word of text.split(/[^A-Za-z0-9_-]/)) {
     const parts = word.split("-");
     const code = (s: string, min: number, max: number) => s.length >= min && s.length <= max && /^[A-Z0-9]+$/.test(s);
@@ -134,6 +162,51 @@ export const prompts = (line: string) => /(\?|:|>|\)|\]|＞|：|？)\s*$/.test(l
 
 /// Whether a prompt asks for a secret (its input is then not echoed).
 export const secretAsked = (line: string) => /password|passphrase|token|secret|密码/i.test(line);
+
+/// What a command runs, by its program's name (devin, not env or /x/bin/devin): past the environment it is given (`env`,
+/// its options, `VAR=value`) and what only runs it (sudo, npx, uvx, pnpm dlx…), a package without its version.
+export function programOf(words: string[]): string {
+  let i = 0;
+  const skip = (valued: string[]) => {
+    while (i < words.length && words[i]!.startsWith("-") && words[i] !== "-") {
+      const option = words[i++]!;
+      if (option === "--") break;
+      if (valued.includes(option)) i++;
+    }
+  };
+  for (;;) {
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i]!)) i++;
+    const word = words[i];
+    if (word === undefined) break;
+    const base = word.split(/[\\/]/).at(-1)!;
+    const two = RUNNERS[`${base} ${words[i + 1] ?? ""}`];
+    const one = RUNNERS[base];
+    if (two === undefined && one === undefined) break;
+    i += two !== undefined ? 2 : 1;
+    skip(two ?? one!);
+  }
+  const word = words[i] ?? words[0] ?? "";
+  return word.split(/[\\/]/).at(-1)!.replace(/(.)@.*$/, "$1");
+}
+
+/// What only runs another command, and its options that take a value.
+const RUNNERS: Record<string, string[]> = {
+  env: ["-u", "--unset", "-C", "--chdir", "-S", "--split-string", "-P"],
+  sudo: ["-u", "--user", "-g", "--group", "-C", "--close-from", "-D", "--chdir", "-h", "--host", "-p", "--prompt", "-r", "--role", "-t", "--type", "-T", "--command-timeout", "-U", "--other-user"],
+  doas: ["-u", "-C"],
+  nohup: [],
+  command: [],
+  exec: ["-a"],
+  npx: ["-p", "--package", "-c", "--call"],
+  pnpx: ["-p", "--package"],
+  bunx: ["-p", "--package"],
+  uvx: ["--from", "--with", "-p", "--python", "--index", "--index-url"],
+  "npm exec": ["-p", "--package", "-c", "--call"],
+  "pnpm dlx": ["-p", "--package"],
+  "pnpm exec": [],
+  "yarn dlx": ["-p", "--package"],
+  "pipx run": ["--spec", "--python"],
+};
 
 /// A command line in words (`vercel login --scope "my team"`): split as a POSIX shell would split plain words and
 /// quotes (no variables, no globs); null when a quote is left open.

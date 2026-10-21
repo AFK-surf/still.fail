@@ -1,0 +1,439 @@
+// Batch 1's controls driven as a person and a screen reader drive them, the values kept by the test (the view's),
+// read back through the semantics tree.
+
+///|
+test "switch: a tap turns it, the view keeps it; Activate too; disabled, nothing does" {
+  let on = Ref(false)
+  let off = Ref(false)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=8.0, fn() {
+      on.val = switch(c, "wifi", on.val, label="Wi-Fi").value
+      ignore(switch(c, "air", off.val, label="Airplane", disabled=true))
+    })
+    |> ignore
+  })
+  t.click(@ui.Switch, label="Wi-Fi")
+  assert_true(on.val)
+  assert_eq(t.get(@ui.Switch, label="Wi-Fi").check, Some(@ui.On))
+  t.act(@ui.Switch, @ui.Activate, label="Wi-Fi")
+  assert_false(on.val)
+  t.click(@ui.Switch, label="Airplane")
+  assert_false(off.val)
+}
+
+///|
+test "checkbox: a click checks it; Space with the focus unchecks it; neither (mixed) goes to checked" {
+  let v : Ref[@ui.Check] = Ref(@ui.Off)
+  let t = @ui.Tester::new(fn(c) { v.val = checkbox(c, "terms", v.val, label="Terms").value })
+  t.click(@ui.Checkbox, label="Terms")
+  assert_eq(v.val, @ui.On)
+  t.key(@ui.key_tab)
+  t.key(@ui.key_space)
+  assert_eq(v.val, @ui.Off)
+  v.val = @ui.Mixed
+  t.frame()
+  t.click(@ui.Checkbox, label="Terms")
+  assert_eq(v.val, @ui.On)
+}
+
+///|
+test "radio group: a tap checks one; the arrows move the focus along it and check what they reach, wrapping" {
+  let v = Ref("a")
+  let t = @ui.Tester::new(fn(c) {
+    v.val = radio_group(c, "size", [item("a", label="Small"), item("b", label="Medium"), item("c", label="Large")], v.val, label="Size").value
+  })
+  t.click(@ui.Radio, label="Large")
+  assert_eq(v.val, "c")
+  // Tab lands on the checked one; Down from the last wraps to the first
+  t.key(@ui.key_tab)
+  t.key(@ui.key_code_down)
+  assert_eq(v.val, "a")
+  t.key(@ui.key_code_down)
+  assert_eq(v.val, "b")
+  assert_eq(t.get(@ui.Radio, label="Medium").check, Some(@ui.On))
+  assert_eq(t.get(@ui.Radio, label="Small").check, Some(@ui.Off))
+}
+
+///|
+test "toggle group: single, a tap picks one and a second tap lets it go; multiple, each on its own" {
+  let one : Ref[Array[String]] = Ref([])
+  let many : Ref[Array[String]] = Ref([])
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=8.0, fn() {
+      one.val = toggle_group(c, "align", [item("l", label="Left"), item("r", label="Right")], one.val, label="Align").value
+      many.val = toggle_group(
+        c,
+        "fmt",
+        [item("b", label="Bold"), item("i", label="Italic")],
+        many.val,
+        multiple=true,
+        label="Format",
+      ).value
+    })
+    |> ignore
+  })
+  t.click(@ui.Radio, label="Left")
+  assert_eq(one.val, ["l"])
+  t.click(@ui.Radio, label="Right")
+  assert_eq(one.val, ["r"])
+  t.click(@ui.Radio, label="Right")
+  assert_eq(one.val, [])
+  t.click(@ui.Button, label="Bold")
+  t.click(@ui.Button, label="Italic")
+  assert_eq(many.val, ["b", "i"])
+}
+
+///|
+test "toggle group that slides: its thumb behind the pressed item, getting there on a spring" {
+  let v : Ref[Array[String]] = Ref(["l"])
+  let t = @ui.Tester::new(fn(c) {
+    c.box(pad=20.0, fn() {
+      v.val = toggle_group(
+        c,
+        "seg",
+        [item("l", label="Left"), item("m", label="Middle"), item("r", label="Right")],
+        v.val,
+        slide=true,
+        thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
+        label="Seg",
+      ).value
+    })
+    |> ignore
+  })
+  // (the thumb is placed over its item once the items are laid out: a layout read back, drawn now)
+  t.draw()
+  let thumb = fn() {
+    t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL }).map(fn(r) { (r.0.round(), r.1.round(), r.2.round(), r.3.round()) })
+  }
+  let under = fn(s : String) {
+    let (x, y, w, h) = t.rect_of(s).unwrap()
+    match thumb() {
+      [(tx, ty, tw, th)] => tx <= x && x + w <= tx + tw && ty <= y && y + h <= ty + th
+      _ => false
+    }
+  }
+  assert_true(under("Left"))
+  t.click(@ui.Radio, label="Right")
+  assert_eq(v.val, ["r"])
+  // the thumb on its spring, set out from rest as the click was taken: there once its slide is over
+  t.run_for(@ui.cover_slide_ms)
+  assert_true(under("Right"))
+  assert_false(under("Left"))
+  // the view's choice: on its way a tenth of its slide's time, not yet under the words it goes to
+  v.val = ["m"]
+  t.draw()
+  let part_way = @ui.cover_slide_ms / 10.0
+  t.run_for(part_way)
+  assert_false(under("Middle"))
+  t.run_for(@ui.cover_slide_ms - part_way)
+  assert_true(under("Middle"))
+  t.assert_idle()
+}
+
+///|
+/// A sliding group (its thumb drawn 0x123456) in a box that cuts what is outside it, moved `x` sideways; what is
+/// pressed in `v`, the last item's words in `last`.
+fn slid_group(x : Ref[Double], v : Ref[Array[String]], last? : Ref[String] = Ref("Right")) -> @ui.Tester {
+  @ui.Tester::new(
+    fn(c) {
+      c.box(w=Fill(1.0), h=Fill(1.0), clip=true, fn() {
+        c.box(tx=x.val, fn() {
+          v.val = toggle_group(
+            c,
+            "seg",
+            [item("l", label="Left"), item("m", label="Middle"), item("r", label=last.val)],
+            v.val,
+            slide=true,
+            thumb=fn(c, w, h) { c.box(w=Px(w), h=Px(h), bg=0x123456FFL, fn() {  }) |> ignore },
+            label="Seg",
+          ).value
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=200.0,
+  )
+}
+
+///|
+/// The thumb's box (x, y, w, h), drawn once.
+fn thumb_of(t : @ui.Tester) -> (Double, Double, Double, Double) {
+  let rs = t.drawn_rects().filter(fn(r) { r.4 == 0x123456FFL })
+  if rs.length() != 1 {
+    abort("the thumb drawn \{rs.length()} times")
+  }
+  (rs[0].0, rs[0].1, rs[0].2, rs[0].3)
+}
+
+///|
+/// Whether the thumb is where the words `s` are, to a hundredth of a point either way.
+fn thumb_on(t : @ui.Tester, s : String) -> Bool {
+  let (x, _, w, _) = thumb_of(t)
+  let (ix, _, iw, _) = t.rect_of(s).unwrap()
+  x <= ix + 0.01 && ix + iw <= x + w + 0.01
+}
+
+///|
+test "a sliding group coming in past an edge that cuts it: its thumb whole from the first, nothing to grow on after" {
+  // (a page sliding in: the group's last item cut at the edge from the first frame, halfway across it)
+  let (rx, rw, full) = {
+    let at_rest = slid_group(Ref(0.0), Ref(["r"]))
+    at_rest.draw()
+    let (rx, _, rw, _) = at_rest.rect_of("Right").unwrap()
+    (rx, rw, thumb_of(at_rest).2)
+  }
+  let x = Ref(300.0 - rx - rw / 2.0)
+  let v = Ref(["r"])
+  let t = slid_group(x, v)
+  t.draw()
+  let (_, _, w0, _) = thumb_of(t)
+  assert_eq(w0, full)
+  x.val = 0.0
+  t.draw()
+  let (_, _, w1, _) = thumb_of(t)
+  assert_eq(w0, w1)
+  assert_true(thumb_on(t, "Right"))
+  t.assert_idle()
+}
+
+///|
+test "the pressed item laid out anew (its words longer): its thumb on it in the same frame, no motion" {
+  let last = Ref("Right")
+  let t = slid_group(Ref(0.0), Ref(["r"]), last~)
+  t.draw()
+  last.val = "Right of it"
+  t.draw()
+  assert_true(thumb_on(t, "Right of it"))
+  t.assert_idle()
+}
+
+///|
+test "another item pressed: the thumb on its way between the two, and another chosen mid-way it goes on from there" {
+  // a moment on its way
+  let mid_way = 60.0
+  let on_its_way = fn(v : Ref[Array[String]]) -> @ui.Tester raise {
+    let t = slid_group(Ref(0.0), v)
+    t.draw()
+    t.click(@ui.Radio, label="Right")
+    assert_eq(v.val, ["r"])
+    t.run_for(mid_way)
+    assert_false(thumb_on(t, "Left"))
+    assert_false(thumb_on(t, "Right"))
+    t
+  }
+  // where it is the frame after, nothing else chosen: still on its way to Right
+  let going_on = {
+    let t = on_its_way(Ref(["l"]))
+    t.draw()
+    thumb_of(t)
+  }
+  let v = Ref(["l"])
+  let t = on_its_way(v)
+  let before = thumb_of(t)
+  // another chosen (the view's choice), the frame that takes it: from where it is in that frame, not from an item; the
+  // same frame as going on would have shown, not a jump
+  v.val = ["m"]
+  t.draw()
+  let after = thumb_of(t)
+  assert_true((after.0 - going_on.0).abs() < 0.000001 && (after.2 - going_on.2).abs() < 0.000001)
+  assert_true(after != before)
+  t.run_for(@ui.cover_slide_ms)
+  assert_true(thumb_on(t, "Middle"))
+  t.assert_idle()
+}
+
+///|
+test "slider: the arrows a step, Page keys ten, Home and End the ends; Increment and Decrement; held in range" {
+  let v = Ref(50.0)
+  let t = @ui.Tester::new(fn(c) {
+    v.val = slider(c, "vol", v.val, min=0.0, max=100.0, step=5.0, label="Volume").value
+  })
+  t.key(@ui.key_tab)
+  t.key(@ui.key_code_right)
+  assert_eq(v.val, 55.0)
+  t.key(@ui.key_code_down)
+  assert_eq(v.val, 50.0)
+  t.key(@ui.key_code_page_up)
+  assert_eq(v.val, 100.0)
+  t.key(@ui.key_code_right)
+  assert_eq(v.val, 100.0)
+  t.key(@ui.key_code_home)
+  assert_eq(v.val, 0.0)
+  t.act(@ui.Slider, @ui.Increment, label="Volume")
+  assert_eq(v.val, 5.0)
+  t.act(@ui.Slider, @ui.Decrement, label="Volume")
+  t.act(@ui.Slider, @ui.Decrement, label="Volume")
+  assert_eq(v.val, 0.0)
+  let s = t.get(@ui.Slider, label="Volume")
+  assert_eq(s.value, "0")
+  assert_eq(s.range, Some((0.0, 100.0, 0.0)))
+}
+
+///|
+test "slider: dragged along its track, it follows the pointer to the nearest step; right to left, mirrored" {
+  let v = Ref(0.0)
+  let t = @ui.Tester::new(fn(c) {
+    v.val = slider(c, "s", v.val, min=0.0, max=10.0, step=1.0, w=Px(200.0), label="S").value
+  })
+  let (x, y, w, h) = t.get(@ui.Slider, label="S").rect
+  t.drag(x + 1.0, y + h / 2.0, x + w * 0.7, y + h / 2.0)
+  assert_eq(v.val, 7.0)
+  t.drag(x + w * 0.7, y + h / 2.0, x + w * 0.2, y + h / 2.0)
+  assert_eq(v.val, 2.0)
+}
+
+///|
+test "snap: in range, on the step from min" {
+  assert_eq(snap(7.4, 0.0, 10.0, 1.0), 7.0)
+  assert_eq(snap(-3.0, 0.0, 10.0, 1.0), 0.0)
+  assert_eq(snap(12.0, 0.0, 10.0, 1.0), 10.0)
+  assert_eq(snap(0.26, 0.0, 1.0, 0.25), 0.25)
+  assert_eq(snap(3.3, 1.0, 10.0, 2.0), 3.0)
+}
+
+///|
+test "progress: its value as a percentage and its range; not known, neither, and its band a cycle said (frames while shown)" {
+  let v : Ref[Double?] = Ref(Some(30.0))
+  let t = @ui.Tester::new(fn(c) { progress(c, v.val, max=60.0, label="Upload") })
+  let p = t.get(@ui.ProgressBar, label="Upload")
+  assert_eq(p.value, "50%")
+  assert_eq(p.range, Some((0.0, 60.0, 30.0)))
+  v.val = None
+  t.draw()
+  assert_eq(t.get(@ui.ProgressBar, label="Upload").range, None)
+  // a frame asked for each frame while it shows, said as a cycle: what never ends does not keep a test from idle
+  assert_true(t.ctx().wants_frame)
+  assert_eq(t.cycles().length(), 1)
+  t.assert_idle()
+}
+
+///|
+test "avatar: named by its person, their initials while it has no picture" {
+  assert_eq(initials("Ada Lovelace"), "AL")
+  assert_eq(initials("ada"), "A")
+  assert_eq(initials("林 子 健"), "林子")
+  let t = @ui.Tester::new(fn(c) { avatar(c, "", "Ada Lovelace") })
+  ignore(t.get(@ui.Image, label="Ada Lovelace"))
+  assert_true(t.find("AL") is Some(_))
+}
+
+///|
+test "password field: hidden, its words are not read out; the button shows them, named for what it does next" {
+  let shown = Ref(false)
+  let words = Ref("")
+  let t = @ui.Tester::new(fn(c) {
+    let p = password_field(c, "pw", shown.val, placeholder="Password")
+    shown.val = p.visible
+    words.val = p.text
+  })
+  t.tap_text("Password")
+  t.type_text("hunter2")
+  assert_eq(words.val, "hunter2")
+  assert_eq(t.get(@ui.TextField).value, "")
+  t.click(@ui.Button, label="显示")
+  assert_true(shown.val)
+  assert_eq(t.get(@ui.TextField).value, "hunter2")
+  assert_eq(t.get(@ui.Button, label="隐藏").pressed, Some(true))
+  t.click(@ui.Button, label="隐藏")
+  assert_false(shown.val)
+  assert_eq(t.get(@ui.TextField).value, "")
+}
+
+///|
+test "toggle: a tap presses it, Activate lets it go; said pressed or not" {
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { on.val = toggle(c, "Bold", on.val).value })
+  t.click(@ui.Button, label="Bold")
+  assert_true(on.val)
+  assert_eq(t.get(@ui.Button, label="Bold").pressed, Some(true))
+  t.act(@ui.Button, @ui.Activate, label="Bold")
+  assert_false(on.val)
+  assert_eq(t.get(@ui.Button, label="Bold").pressed, Some(false))
+}
+
+///|
+test "label: a tap on it turns its control, or gives its field the focus" {
+  let v : Ref[@ui.Check] = Ref(@ui.Off)
+  let t = @ui.Tester::new(fn(c) {
+    c.column(gap=8.0, fn() {
+      c.row(gap=8.0, fn() {
+        v.val = checkbox(c, "terms", v.val, label="Terms").value
+        label(c, "Accept the terms", for_id=c.id("terms")) |> ignore
+      })
+      |> ignore
+      label(c, "Name", for_id=c.id("name"), field=true) |> ignore
+      c.editor("name", placeholder="Your name") |> ignore
+    })
+    |> ignore
+  })
+  t.tap_text("Accept the terms")
+  assert_eq(v.val, @ui.On)
+  t.tap_text("Name")
+  assert_true(t.get(@ui.TextField, label="Your name").focused)
+  t.type_text("Ada")
+  assert_eq(t.get(@ui.TextField, label="Your name").value, "Ada")
+}
+
+///|
+test "separator, aspect ratio, accessible icon, visually hidden: what the tree says, and the shape kept" {
+  let t = @ui.Tester::new(fn(c) {
+    c.column(fn() {
+      separator(c)
+      separator(c, decorative=true)
+      c.box(w=Px(160.0), fn() {
+        let i = aspect_ratio(c, 16.0 / 9.0, fn() {  })
+        c.semantics(i, Group, label="Picture")
+      })
+      |> ignore
+      accessible_icon(c, "Favourite", fn() { c.text("★") |> ignore })
+      visually_hidden(c, "3 unread")
+    })
+    |> ignore
+  })
+  inspect(
+    t.semantics_dump(),
+    content=(
+      #|Separator value="horizontal"
+      #|Group "Picture"
+      #|Image "Favourite"
+      #|Text "3 unread"
+      #|
+    ),
+  )
+  let (_, _, w, h) = t.get(@ui.Group, label="Picture").rect
+  assert_eq(w, 160.0)
+  assert_eq(h, 90.0)
+}
+
+///|
+test "text field: typed in, its words the view's to read; Enter hands them on" {
+  let got = Ref("")
+  let sent = Ref(0)
+  let t = @ui.Tester::new(fn(c) {
+    let f = text_field(c, "name", placeholder="Name")
+    got.val = f.text
+    if f.submitted {
+      sent.val += 1
+    }
+  })
+  t.tap_text("Name")
+  t.type_text("Ada")
+  assert_eq(got.val, "Ada")
+  assert_eq(t.get(@ui.TextField, label="Name").value, "Ada")
+  t.enter()
+  assert_eq(sent.val, 1)
+}
+
+///|
+test "switch: its knob slides to the side it was turned to by a rest of its own (switch_rest)" {
+  let on = Ref(false)
+  let t = @ui.Tester::new(fn(c) { on.val = switch(c, "wifi", on.val, label="Wi-Fi").value })
+  t.click(@ui.Switch, label="Wi-Fi")
+  let rest = switch_rest("wifi")
+  assert_true(rest > t.time())
+  t.run_for(rest - t.time())
+  assert_eq(switch_rest("wifi"), -1.0)
+  t.assert_idle()
+}

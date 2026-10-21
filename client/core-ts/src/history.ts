@@ -135,10 +135,14 @@ function tagEnd(text: string, open: number): number | null {
 
 const unescape = (v: string) => v.replaceAll("&quot;", '"').replaceAll("&amp;", "&");
 
+/// How the station ends words it cut to its length (station/src/read/transcript.ts `clip`).
+const CLIPPED = /\n… \(\d+ more characters\)$/;
+
+/// A message's words up to its closing tag; a prompt the station cut short before it, to the end.
 function body(text: string, openEnd: number, closeTag: string): [string, number] | null {
   const start = text.startsWith("\n", openEnd) ? openEnd + 1 : openEnd;
   const at = text.indexOf(closeTag, start);
-  if (at < 0) return null;
+  if (at < 0) return CLIPPED.test(text) ? [text.slice(start), text.length] : null;
   const inner = text.slice(start, at);
   return [inner.endsWith("\n") ? inner.slice(0, -1) : inner, at + closeTag.length];
 }
@@ -172,7 +176,8 @@ export function parsePrompt(text: string): [Sourced[], string] {
       ts: attr(attrs, "ts") ?? "",
       text: b[0],
       thread: attr(attrs, "thread"),
-      slack: attr(attrs, "via") === "slack",
+      // A person in a Feishu chat is told as one in Slack is (docs/feishu.md).
+      slack: attr(attrs, "via") === "slack" || attr(attrs, "via") === "feishu",
       station: ["ember", "stillfail"].includes(attr(attrs, "via") ?? ""),
     });
     rest += text.slice(at, open);

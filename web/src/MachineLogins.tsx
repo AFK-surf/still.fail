@@ -16,9 +16,9 @@ import { Link } from "react-router";
 import { stationBase } from "./station.tsx";
 import { useDoing } from "./doing.ts";
 import { useThisMachineAddress } from "./thisMachine.ts";
-import { PanelButton, Section, Spinner } from "./ui.tsx";
+import { PanelIconButton, Section, Spinner } from "./ui.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
-import { Key } from "@stillfail/ui/icons.tsx";
+import { ArrowUpRight, Close, Key } from "@stillfail/ui/icons.tsx";
 import * as pagesCss from "./styles/pages.css.ts";
 import * as css from "./MachineLogins.css.ts";
 import { t } from "./i18n.ts";
@@ -97,78 +97,119 @@ export function LoginCard({ station, id, marked = false }: { station: string; id
   }
   return (
     <div ref={box} className={css.card} data-login-card="" data-marked={marked || undefined}>
-      <span className={css.cardTitle}>{login.title}</span>
-      {canLogin ? <ActiveCard station={station} login={login} canRelay={logins?.canRelay ?? false} />
-        : <span className={css.cardStatus}>{login.statusText}</span>}
+      {canLogin ? <>
+        <span className={css.cardHead}><span className={css.cardTitle}>{login.title}</span><CancelLogin station={station} id={login.id} /></span>
+        <ActiveCard station={station} login={login} canRelay={logins?.canRelay ?? false} />
+      </> : <>
+        <span className={css.cardTitle}>{login.title}</span>
+        <span className={css.cardStatus}>{login.statusText}</span>
+      </>}
     </div>
   );
 }
 
 /**
  * A login under way, for one who may finish it: what the person does now, by its step (or, while its agent answers the
- * command or it is starting, how it stands), then one row of buttons: the step's own first (filled), 取消 beside it
- * (plain: a ground only under the pointer).
+ * command or it is starting, how it stands), then the step's own button (filled). 取消 is the card's ×, beside its title.
+ * One whose page gives a code to paste back is its own (PasteSteps).
  */
 function ActiveCard({ station, login, canRelay }: { station: string; login: MachineLoginShown; canRelay: boolean }) {
   const relay = useRelay(station, login);
-  const call = useCall();
-  const act = useAct();
-  const cancelling = useDoing("machineLogin.cancel", { station, id: login.id });
-  const step = login.waiting ? undefined : login.step;
+  // Checking what came back (the browser's callback): nothing left for the person but to wait.
+  const step = login.waiting || login.state === "verifying" ? undefined : login.step;
   const waiting = (words: string) => <span className={css.cardStatus}><Spinner inline />{words}</span>;
   const domain = login.domain ? <span className={css.cardStatus}>{t("web-main.logins.domain", { domain: login.domain })}</span> : null;
+  // Its one button solid while it is the thing to do, a plain grey one once pressed here (as a pasted code's steps).
+  const [pressed, setPressed] = useState(false);
+  if (login.paste && login.url) return <PasteSteps station={station} login={login} />;
   let said: ReactNode = waiting(login.statusText);
   let main: ReactNode = null;
   if (step === "device" && login.code) {
     said = <><span className={css.cardStatus}>{t("web-main.logins.device", { domain: login.domain ?? "" })}</span><CardCode code={login.code} /></>;
-    main = <CardButton label={t("web-main.logins.copyOpen")} onClick={() => copyAndOpen(login)} />;
+    main = <StepButton label={t("web-main.logins.copyOpen")} solid={!pressed} onClick={() => { setPressed(true); copyAndOpen(login); }} />;
   } else if (step === "loopback") {
     // A web page cannot take the browser's callback: said here, the page's host all the same.
     if (!canRelay) said = <><span className={css.cardStatus}>{t("web-main.logins.needsDesktop")}</span>{domain}</>;
     else {
       said = relay.opened ? waiting(t("web-main.logins.waitingBrowser"))
         : login.relayText ? <><span className={css.cardStatusFailed}>{login.relayText}</span>{domain}</> : domain;
-      main = <CardButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} busy={relay.busy} onClick={relay.open} />;
+      main = <StepButton label={relay.opened ? t("web-main.logins.openAgain") : t("web-main.logins.signIn")} solid={!relay.opened} busy={relay.busy} onClick={relay.open} />;
     }
   } else if (step === "open" && login.url) {
-    said = login.paste ? <><span className={css.cardStatus}>{login.statusText}</span>{domain}</> : domain;
-    main = <CardButton label={t("web-main.logins.signIn")} onClick={() => openPage(login.url)} />;
+    said = domain;
+    main = <StepButton label={t("web-main.logins.signIn")} solid={!pressed} onClick={() => { setPressed(true); openPage(login.url); }} />;
   }
   return (
     <>
       {said}
-      <span className={css.cardActions}>
-        {main}
-        <PanelButton disabled={cancelling} aria-busy={cancelling || undefined}
-          onClick={() => act(call("machineLogin.cancel", { station, id: login.id }), t("web-main.logins.cancelWhat"))}>
-          {t("common.cancel")}
-        </PanelButton>
-      </span>
-      {/* Its page first, then what the page gave: under the buttons, in the order they are done. */}
-      {step === "open" && login.paste && <PasteCode station={station} id={login.id} />}
+      {main}
+    </>
+  );
+}
+
+/** 取消, as the card's ×: in its corner, concentric with it. */
+function CancelLogin({ station, id }: { station: string; id: string }) {
+  const call = useCall();
+  const act = useAct();
+  const cancelling = useDoing("machineLogin.cancel", { station, id });
+  return (
+    <PanelIconButton label={t("web-main.logins.cancelWhat")} disabled={cancelling} aria-busy={cancelling || undefined} data-login-cancel=""
+      onClick={() => act(call("machineLogin.cancel", { station, id }), t("web-main.logins.cancelWhat"))}>
+      <Close size={14} />
+    </PanelIconButton>
+  );
+}
+
+/**
+ * A login whose page gives a code to paste back (Devin's, gcloud --no-launch-browser's): one line saying where to sign in
+ * and what to bring back, then its two steps in the order they are done, each a row of its own (用户定: B, the page's
+ * button not in the field), the eye led by which is next: 打开登录页 solid until it has been pressed here (or a code is
+ * in), then the card's pill tint; the field under it, 完成 in its end once a code is in (Enter too). Sent, the code
+ * stays and 完成 turns while it is checked (正在确认登录), nothing moving, until the login ends.
+ */
+function PasteSteps({ station, login }: { station: string; login: MachineLoginShown }) {
+  const call = useCall();
+  const act = useAct();
+  const sending = useDoing("machineLogin.answer", { station, id: login.id });
+  const [opened, setOpened] = useState(false);
+  const [typed, setTyped] = useState(false);
+  const checking = login.state === "verifying";
+  const busy = sending || checking;
+  return (
+    <>
+      {/* Checked: said here, its spinner where 完成 was pressed. */}
+      <span className={css.cardStatus}>{checking || !login.domain ? login.statusText : t("web-main.logins.pasteLead", { domain: login.domain })}</span>
+      <StepButton label={t("web-main.logins.openPage")} solid={!opened && !typed && !busy} external data-login-paste-open=""
+        onClick={() => { setOpened(true); openPage(login.url); }} />
+      <CodeField busy={busy} onTyped={setTyped}
+        send={(code) => act(call("machineLogin.answer", { station, id: login.id, text: code }), t("web-main.logins.answerWhat"))} />
     </>
   );
 }
 
 /**
- * What the login's page gave (gcloud --no-launch-browser's verification code), pasted here and sent to the command, as a
- * profile's sign-in takes Claude's code (pages/Accounts.tsx LoginSteps): Enter or 完成 sends it.
+ * What a sign-in's page gave (a code), pasted back: a field the card's width, 完成 in its end once a code is in (solid:
+ * the next thing to do then; Enter too). `busy`: sent and being checked, the code kept (read-only) and 完成 turning in
+ * place, nothing moving. `onTyped`: whether a code is in, for the step above it to step back.
  */
-function PasteCode({ station, id }: { station: string; id: string }) {
-  const call = useCall();
-  const act = useAct();
-  const sending = useDoing("machineLogin.answer", { station, id });
+function CodeField({ busy, send, onTyped }: { busy: boolean; send(code: string): void; onTyped?(typed: boolean): void }) {
+  const placeholder = t("web-main.logins.pasteCode");
   const [code, setCode] = useState("");
-  const send = () => {
-    if (!code.trim() || sending) return;
-    act(call("machineLogin.answer", { station, id, text: code.trim() }).then(() => setCode("")), t("web-main.logins.answerWhat"));
-  };
+  const typed = code.trim() !== "";
+  const go = () => { if (typed && !busy) send(code.trim()); };
   return (
     <span className={css.cardPaste}>
-      <input className={css.cardPasteInput} spellCheck={false} autoComplete="off" value={code} placeholder={t("web-main.logins.pasteCode")}
-        aria-label={t("web-main.logins.pasteCode")} data-login-paste="" onChange={(e) => setCode(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }} />
-      <PanelButton tone="filled" disabled={!code.trim() || sending} aria-busy={sending || undefined} onClick={send}>{t("web-main.logins.finish")}</PanelButton>
+      <input className={css.cardPasteInput} spellCheck={false} autoComplete="off" autoCapitalize="off" autoCorrect="off" value={code}
+        placeholder={placeholder} aria-label={placeholder} data-login-paste="" readOnly={busy}
+        onChange={(e) => { setCode(e.target.value); onTyped?.(e.target.value.trim() !== ""); }}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing) go(); }} />
+      {/* In the field's end once a code is in; busy, a spinner over its word (as wide as before). */}
+      {(typed || busy) && (
+        <button type="button" className={css.cardPasteDone} aria-busy={busy || undefined} data-login-paste-go="" onClick={go}>
+          <span className={css.cardPasteDoneWord}>{t("web-main.logins.finish")}</span>
+          {busy && <span className={css.cardPasteDoneSpin}><Spinner inline /></span>}
+        </button>
+      )}
     </span>
   );
 }
@@ -186,11 +227,17 @@ function CardCode({ code }: { code: string }) {
   );
 }
 
-function CardButton({ label, busy = false, onClick }: { label: string; busy?: boolean; onClick(): void }) {
+/**
+ * A sign-in's step to press (its page, a code copied and its page): the card's width, solid while it is the next thing to
+ * do, a plain grey one once it has been (the eye on to what follows). Android's profile sign-in has the same (Profiles.kt).
+ */
+function StepButton({ label, solid, busy = false, external = false, onClick, ...rest }: {
+  label: string; solid: boolean; busy?: boolean; external?: boolean; onClick(): void; [data: `data-${string}`]: string;
+}) {
   return (
-    <PanelButton tone="filled" disabled={busy} aria-busy={busy || undefined} onClick={onClick}>
-      {label}
-    </PanelButton>
+    <button type="button" className={css.cardStep} data-next={solid || undefined} disabled={busy} aria-busy={busy || undefined} onClick={onClick} {...rest}>
+      {busy && <Spinner inline />}{label}{external && <ArrowUpRight size={14} />}
+    </button>
   );
 }
 

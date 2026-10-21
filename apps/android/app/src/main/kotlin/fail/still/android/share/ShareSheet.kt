@@ -4,6 +4,7 @@
 // shared in that chat's composer (`shareIn.open`) and opens the app there, where it is added to and sent.
 package fail.still.android.share
 
+import fail.still.android.ui.pressText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,7 +128,7 @@ private fun ColumnScope.ShareSheetContent(shared: Shared, target: ShareTarget?, 
         Box(Modifier.weight(1f)) { GroupLabel(t("android-misc.shareIn.to")) }
         if (searching || (view?.items?.size ?: 0) >= SEARCHED_FROM) Text(
             if (searching) t("common.cancel") else t("android-misc.shareIn.search"), fontSize = 13.sp, color = C.muted,
-            modifier = Modifier.padding(top = 14.dp, bottom = 4.dp).clickable { searching = !searching; if (!searching) query = "" },
+            modifier = Modifier.padding(top = 14.dp, bottom = 4.dp).pressText { searching = !searching; if (!searching) query = "" },
         )
     }
     if (searching) Field(query, { query = it }, t("android-misc.shareIn.find"), modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp))
@@ -195,8 +196,8 @@ private fun Note(text: String) = Text(text, fontSize = 15.sp, color = C.muted, m
 private fun SignInFirst(onOpenApp: () -> Unit) {
     Note(t("android-misc.shareIn.signIn"))
     Text(
-        t("android-misc.shareIn.openApp"), fontSize = 15.sp, color = C.accent, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 20.dp).clickable { onOpenApp() }.padding(vertical = 8.dp),
+        t("android-misc.shareIn.openApp"), fontSize = 15.sp, color = C.link, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 20.dp).padding(vertical = 8.dp).pressText { onOpenApp() },
     )
     Spacer(Modifier.heightIn(min = 24.dp))
 }

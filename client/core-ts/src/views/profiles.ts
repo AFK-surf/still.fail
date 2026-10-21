@@ -1,5 +1,5 @@
 // The workspace's profiles in one list (the `profiles` view, docs/station-share.md), grouped by the kind of account
-// (Claude's subscriptions, ChatGPT's, SuperGrok's, keys), one row an account: the same
+// (Claude's subscriptions, ChatGPT's, SuperGrok's, Cursor's, Devin's, keys), one row an account: the same
 // subscription (by its runtime and the address signed in) or the same key (by its provider and key), whether shared
 // between stations or signed in on several of them each, is one row; its stations are its members, each with what it
 // is there (the one that has it and lends it, one borrowing it, one signed in on its own). Made from what the stations'
@@ -27,13 +27,13 @@ function account(p: J): string | null {
   return null;
 }
 
-/// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's, SuperGrok's),
-/// then keys and the rest.
-export const GROUPS = ["claude", "chatgpt", "grok", "key"] as const;
+/// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's, SuperGrok's,
+/// Cursor's, Devin's), then keys and the rest.
+export const GROUPS = ["claude", "chatgpt", "grok", "cursor", "devin", "key"] as const;
 
 export function group(p: J): (typeof GROUPS)[number] {
   if (p.access?.kind !== "subscription") return "key";
-  return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : "claude";
+  return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : p.runtime === "cursor" ? "cursor" : p.runtime === "devin" ? "devin" : "claude";
 }
 
 /// A kind of account in words: Claude 订阅.
@@ -70,12 +70,14 @@ export function workspaceProfiles(stations: J[]): J {
     const [s, p] = list[at]!;
     const subscription = p.access?.kind === "subscription";
     const share = list.map(([, x]) => x.share).find((x) => isObject(x)) ?? null;
-    const signedIn = members.filter(owns).map((m) => m.stationName);
+    // Each station once: two of its profiles signed in to the same account are one place it is signed in.
+    const stationsOf = (ms: J[]): string[] => [...new Map(ms.map((m) => [m.stationId, m.stationName])).values()];
+    const signedIn = stationsOf(members.filter(owns));
     const allow: string[] | null = share && Array.isArray(share.allow) ? share.allow : null;
     const parts: string[] = [];
     if (members.length === 1 && !share) parts.push(t("core-views.profiles.only", { station: String(s.name) }));
     else if (subscription) parts.push(t("core-views.profiles.signedIn", { station: signedIn.join(t("core-views.list_separator")) }));
-    else if (!share) parts.push(t("core-views.profiles.on", { stations: members.map((m) => m.stationName).join(t("core-views.list_separator")) }));
+    else if (!share) parts.push(t("core-views.profiles.on", { stations: stationsOf(members).join(t("core-views.list_separator")) }));
     if (allow !== null) parts.push(t("core-views.profiles.allowed", { stations: allow.map(name).join(t("core-views.list_separator")) }));
     const host = share ? String(share.host) : String(s.id);
     const kind = group(p);

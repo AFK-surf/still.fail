@@ -6,6 +6,7 @@
 // (drivePlace) and opened at next time.
 package fail.still.android.drive
 
+import fail.still.android.ui.LIST_ROW_CORNER
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -111,6 +112,7 @@ import fail.still.android.ui.SheetGrab
 import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
+import fail.still.android.ui.concentric
 import fail.still.android.ui.Progress
 import fail.still.android.ui.WaitPill
 import fail.still.core.CoreException
@@ -127,6 +129,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import fail.still.android.data.DriveCache
+import fail.still.android.ui.UiFont
 
 /** How a text comes: how much of it so far (and of how much), then the text itself, or why not. */
 private sealed interface Opening {
@@ -377,7 +380,8 @@ private fun BarIcon(icon: ImageVector, label: String, p: PaperInk, onClick: () -
 private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onBack: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier.windowInsetsPadding(WindowInsets.statusBars).padding(horizontal = 8.dp, vertical = 6.dp).fillMaxWidth()
-            .paperGlass(haze, Smooth(16.dp), p).height(52.dp).padding(horizontal = 4.dp),
+            // Its round keys (40) 6 from every edge: a capsule, concentric with them.
+            .paperGlass(haze, Smooth(26.dp), p).height(52.dp).padding(horizontal = 6.dp),
     ) {
         Box(Modifier.align(Alignment.CenterStart)) { BarIcon(Icons.ChevronLeft, t("common.back"), p, onBack) }
         Column(Modifier.align(Alignment.Center).padding(horizontal = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -391,10 +395,11 @@ private fun TopBar(haze: HazeState, p: PaperInk, title: String, sub: String, onB
 @Composable
 private fun FoundPill(haze: HazeState, p: PaperInk, r: Reading, modifier: Modifier = Modifier) {
     Row(
-        modifier.padding(top = 6.dp).paperGlass(haze, Smooth(18.dp), p).height(40.dp).padding(start = 14.dp, end = 4.dp),
+        // A capsule as high as its round keys, the last one its end.
+        modifier.padding(top = 6.dp).paperGlass(haze, Smooth(20.dp), p).height(40.dp).padding(start = 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
+        Text(t("android-misc.drive.reader.foundAt", "query" to r.query, "at" to r.hit + 1, "n" to r.matches.size), fontSize = 13.sp, color = p.ink, maxLines = 1, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.padding(end = 6.dp))
         BarIcon(Icons.ChevronLeft, t("android-misc.drive.reader.prevHit"), p) { r.step(-1) }
         BarIcon(Icons.ChevronRight, t("android-misc.drive.reader.nextHit"), p) { r.step(1) }
         BarIcon(Icons.Close, t("common.close"), p) { r.query = ""; r.hit = -1 }
@@ -408,7 +413,8 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
     val ch = r.chapter
     Column(
         Modifier.windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 8.dp, vertical = 8.dp).fillMaxWidth()
-            .paperGlass(haze, Smooth(20.dp), p).padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 6.dp),
+            // Its keys BAR_PAD from every edge, rounded concentric with it.
+            .paperGlass(haze, Smooth(BAR_CORNER), p).padding(BAR_PAD),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (r.hasChapters) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -423,7 +429,7 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.weight(1f)) { Hairline(r.fraction, p.ink.copy(alpha = 0.14f), p.accent, p.bar) { r.jumpTo(it) } }
-            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.ink, textAlign = TextAlign.End, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(40.dp))
+            Text("${(r.fraction * 100).roundToInt()}%", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = p.ink, textAlign = TextAlign.End, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.width(40.dp))
         }
         Row {
             Tool(Icons.List, t("android-misc.drive.reader.contents"), p, onChapters)
@@ -433,12 +439,15 @@ private fun BottomBar(haze: HazeState, p: PaperInk, r: Reading, onChapters: () -
     }
 }
 
+private val BAR_CORNER = 20.dp
+private val BAR_PAD = 10.dp
+
 /** A small key on the bar (上一章, 下一章); faded and inert when there is nowhere to go. */
 @Composable
 private fun TextKey(label: String, p: PaperInk, onClick: (() -> Unit)?) {
     Text(
         label, fontSize = 13.sp, color = if (onClick != null) p.ink else p.ink.copy(alpha = 0.3f), maxLines = 1,
-        modifier = Modifier.clip(Smooth(10.dp)).background(p.ink.copy(alpha = if (onClick != null) 0.07f else 0.04f)).clickable(enabled = onClick != null) { onClick?.invoke() }
+        modifier = Modifier.clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).background(p.ink.copy(alpha = if (onClick != null) 0.07f else 0.04f)).clickable(enabled = onClick != null) { onClick?.invoke() }
             .padding(horizontal = 12.dp, vertical = 6.dp),
     )
 }
@@ -446,7 +455,7 @@ private fun TextKey(label: String, p: PaperInk, onClick: (() -> Unit)?) {
 @Composable
 private fun RowScope.Tool(icon: ImageVector, label: String, p: PaperInk, onClick: () -> Unit) {
     Column(
-        Modifier.weight(1f).clip(Smooth(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        Modifier.weight(1f).clip(Smooth(concentric(BAR_CORNER, BAR_PAD))).clickable(onClick = onClick).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         IconIn(icon, 20.dp, p.ink)
@@ -538,7 +547,7 @@ private fun openSearch(app: AppState, r: Reading) {
                 if (r.query.isEmpty()) Text(t("android-misc.drive.reader.searchAll"), color = C.subtle, fontSize = 15.sp)
                 BasicTextField(
                     r.query, { r.query = it }, singleLine = true, cursorBrush = SolidColor(C.accent),
-                    textStyle = TextStyle(color = C.ink, fontSize = 15.sp),
+                    textStyle = TextStyle(fontFamily = UiFont, color = C.ink, fontSize = 15.sp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     modifier = Modifier.fillMaxWidth().focusRequester(focus),
                 )
@@ -555,7 +564,7 @@ private fun openSearch(app: AppState, r: Reading) {
                 val accent = C.accent
                 Text(
                     remember(m, ink, accent) { snippet(chunk, m, ink, accent) }, fontSize = 15.sp, lineHeight = 22.sp, color = ink, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().clickable { focused.clearFocus(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null }.padding(horizontal = 20.dp, vertical = 10.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable { focused.clearFocus(); r.hit = i; r.jumpTo(m.chunk, m.start); app.sheet = null }.padding(horizontal = 8.dp, vertical = 10.dp),
                 )
             }
         }
@@ -611,7 +620,7 @@ private fun Stepper(label: String, value: String, less: Boolean, more: Boolean, 
     SettingRow(label) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StepKey(Icons.Minus, t("android-misc.drive.reader.less", "what" to label), less) { step(-1) }
-            Text(value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, style = TextStyle(fontFeatureSettings = "tnum"), modifier = Modifier.width(48.dp))
+            Text(value, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = C.ink, textAlign = TextAlign.Center, style = TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"), modifier = Modifier.width(48.dp))
             StepKey(Icons.Plus, t("android-misc.drive.reader.more", "what" to label), more) { step(1) }
         }
     }

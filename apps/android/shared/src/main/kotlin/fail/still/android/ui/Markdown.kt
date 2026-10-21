@@ -36,8 +36,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -308,9 +310,14 @@ fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placin
     }
     val doc = ready?.takeIf { it.first == text }?.second
     val blocks = remember(doc, size, placing, fillTables, screens) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables, screens), tight = false) } }
-    Box(modifier) {
-        if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
-        else Stack(blocks)
+    // What was written, in the text face chosen (ui/Fonts.kt); code in the code face, said where it is.
+    val face = TextFont
+    val style = LocalTextStyle.current
+    CompositionLocalProvider(LocalTextStyle provides if (face == null) style else style.copy(fontFamily = face)) {
+        Box(modifier) {
+            if (blocks == null) Text(t("android-misc.markdown.laying"), color = webSubtle, fontSize = size.sp)
+            else Stack(blocks)
+        }
     }
 }
 
@@ -514,7 +521,8 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
         if (bar) Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp).height(24.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             Text(language ?: "text", fontSize = 10.sp, letterSpacing = 0.2.sp, color = webSubtle, modifier = Modifier.padding(horizontal = 6.dp))
             Row(
-                Modifier.height(24.dp).clip(Smooth(6.dp)).background(C.surface.copy(alpha = 0.8f)).clickable {
+                // In the block's corner, 4 from both its edges: concentric with it.
+                Modifier.height(24.dp).clip(Smooth(concentric(12.dp, 4.dp))).background(C.surface.copy(alpha = 0.8f)).clickable {
                     (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("code", code))
                     copied = true
                 }.padding(horizontal = 7.dp),

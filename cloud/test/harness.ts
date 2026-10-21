@@ -48,6 +48,9 @@ export async function harness(
     /** REVIEW_ACCOUNTS: who signs in with a password (password.ts). */
     reviewAccounts?: string;
     relayUrl?: string;
+    /** RELAY_URLS and RELAY_NAMES: relays beside it, and what they are called (the console's 中继 page). */
+    relayUrls?: string;
+    relayNames?: Record<string, string>;
     /** The console's admin (alice unless said otherwise). */
     adminEmail?: string;
     /** The console's host. */
@@ -70,6 +73,8 @@ export async function harness(
     fcm?: string;
     /** "real": the machine's time instead of NOW_MS (dev.ts, which real stations sign in to). */
     clock?: "real";
+    /** The grant key (its private JWK, kid "test-grant"): one made now unless given (dev.ts's RESUME keeps it). */
+    grantJwk?: JsonWebKey & { kid?: string };
     /** Signing in with an email: the codes sent are kept in `mails` (and handed to this, if it is one: false, or an
      * error code, and the binding throws as Cloudflare's would). */
     mail?: true | ((message: MailMessage) => boolean | string);
@@ -98,9 +103,10 @@ export async function harness(
   };
   const codes = new Map<string, { nonce: string; challenge: string; sub: string; invalid?: string }>();
   const mails: MailMessage[] = [];
-  const grantPair = await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
-  const grantJwk = { ...(await exportJWK(grantPair.privateKey)), kid: "test-grant" };
-  const grantPublicJwk = { ...(await exportJWK(grantPair.publicKey)), kid: "test-grant" };
+  const grantPair = options.grantJwk ? null : await generateKeyPair("EdDSA", { crv: "Ed25519", extractable: true });
+  const grantJwk = options.grantJwk ? { ...options.grantJwk, kid: "test-grant" } : { ...(await exportJWK(grantPair!.privateKey)), kid: "test-grant" };
+  const { d: _d, ...grantPublicFields } = grantJwk as JsonWebKey & { kid: string };
+  const grantPublicJwk = options.grantJwk ? { ...grantPublicFields, kid: "test-grant" } : { ...(await exportJWK(grantPair!.publicKey)), kid: "test-grant" };
   const bundle = async (entry: string) => (await build({
     entryPoints: [entry],
     bundle: true,
@@ -157,6 +163,8 @@ export async function harness(
         ADMIN_EMAIL: options.adminEmail ?? "alice@example.test",
         GRANT_SIGNING_JWK: JSON.stringify(grantJwk),
         ...(options.relayUrl ? { RELAY_URL: options.relayUrl } : {}),
+        ...(options.relayUrls ? { RELAY_URLS: options.relayUrls } : {}),
+        ...(options.relayNames ? { RELAY_NAMES: options.relayNames } : {}),
         ...(options.vapid ? { VAPID_PUBLIC_KEY: options.vapid.publicKey, VAPID_PRIVATE_KEY: options.vapid.privateKey, VAPID_SUBJECT: "mailto:ops@example.test" } : {}),
         ...(options.fcm ? { FCM_SERVICE_ACCOUNT: options.fcm } : {}),
         ...(options.reviewAccounts ? { REVIEW_ACCOUNTS: options.reviewAccounts } : {}),
@@ -164,7 +172,10 @@ export async function harness(
         ...(options.axiom ? { AXIOM_TOKEN: options.axiom === "real" ? process.env.AXIOM_TOKEN! : "test-axiom-token", AXIOM_DATASET: options.axiom === "real" ? process.env.AXIOM_DATASET ?? "ember" : "ember-test" } : {}),
       },
       r2Buckets: ["RELEASES"],
-      durableObjects: Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS"][i], { className, useSQLite: true }])),
+      durableObjects: {
+        ...Object.fromEntries(["Account", "LoginAttempt", "LoginLimiter", "Directory", "TelemetryLimiter", "RelayLoad"].map((className, i) => [["ACCOUNTS", "LOGINS", "LOGIN_LIMITS", "DIRECTORY", "TELEMETRY_LIMITS", "RELAY_LOAD"][i], { className, useSQLite: true }])),
+        RELAY: { className: "Relay", scriptName: "relay", useSQLite: true },
+      },
       outboundService: async (request) => {
         const url = new URL(request.url);
         if (url.href === "https://www.googleapis.com/oauth2/v3/certs") {
@@ -311,6 +322,7 @@ export async function harness(
     oldOrigin,
     oldAdminOrigin,
     as,
+    grantJwk,
     grantPublicJwk,
     adminToken,
     signingKey,

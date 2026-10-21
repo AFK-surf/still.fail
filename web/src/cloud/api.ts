@@ -96,6 +96,14 @@ export const admin = {
   /** Takes back what an email nobody signed in with yet was given. */
   removePending: (sub: string, email: string) => operations(sub).adminRemovePending<{ ok: true }>({ email }),
   deleteWorkspace: (sub: string, workspace: string) => operations(sub).adminDeleteWorkspace<{ ok: true }>({ workspace }),
+  /** A workspace for a company: its owners by email (members when they first sign in), and limits of its own. */
+  createWorkspace: (sub: string, input: { name: string; owners: string[]; members: number; stations: number }) =>
+    operations(sub).adminCreateWorkspace<{ id: string; joined: string[]; added: string[] }>(input),
+  setLimits: (sub: string, workspace: string, limits: { members: number; stations: number }) =>
+    operations(sub).adminSetLimits<{ members: number; stations: number }>({ workspace, ...limits }),
+  /** A station's enrollment for any workspace, the admin not in it. */
+  enroll: (sub: string, workspace: string, name: string) =>
+    operations(sub).adminEnroll<{ token: string; expires_at: number; install: string; installWindows?: string; command: string }>({ workspace, name }),
   /** Where a bug report stands. */
   feedbackStatus: (sub: string, id: string, status: FeedbackStatus) => operations(sub).adminFeedbackStatus<{ ok: true }>({ id, status }),
 };

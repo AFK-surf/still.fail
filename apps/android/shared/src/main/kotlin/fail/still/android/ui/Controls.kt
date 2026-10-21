@@ -28,6 +28,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -53,9 +55,13 @@ fun DoingMark(running: Boolean, failed: String?, inline: Boolean = false) {
  */
 @Composable
 fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enabled: Boolean = true, busy: Boolean = false, done: Boolean = false, failed: String? = null, color: Color = C.ink, leading: (@Composable () -> Unit)? = null, mark: (@Composable () -> Unit)? = null, subLines: Int = Int.MAX_VALUE, onClick: () -> Unit) {
-    Column(Modifier.padding(horizontal = 12.dp)) {
+    // Its ground under the finger rounded as a list card's rows (Parts.kt ListRow), its words CARD_PAD from the edge of
+    // what it is on: a sheet's, or a list card's (whose padding has it LIST_PAD in already).
+    val onCard = LocalOnCard.current
+    Column(Modifier.padding(horizontal = if (onCard) 0.dp else 12.dp)) {
         Row(
-            Modifier.fillMaxWidth().clickable(enabled = enabled && !busy && !done, onClick = onClick).padding(horizontal = 8.dp, vertical = 12.dp),
+            Modifier.fillMaxWidth().clip(Smooth(LIST_ROW_CORNER)).clickable(enabled = enabled && !busy && !done, onClick = onClick)
+                .padding(horizontal = if (onCard) CARD_PAD - LIST_PAD else 8.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             leading?.invoke()
@@ -65,7 +71,7 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
                     mark()
                     Text(label, fontSize = 15.sp, color = if (enabled) color else C.subtle)
                 }
-                if (sub != null) Text(sub, fontSize = 12.sp, color = if (done) C.green else C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
+                if (sub != null) Text(sub, fontSize = 12.sp, color = if (done) C.greenInk else C.muted, maxLines = subLines, overflow = TextOverflow.Ellipsis)
             }
             if (busy || failed != null) DoingMark(busy, failed)
             else if (done) IconIn(Icons.Check, 14.dp, C.green)
@@ -74,14 +80,46 @@ fun PickRow(label: String, sub: String? = null, checked: Boolean = false, enable
     }
 }
 
+/**
+ * A text button's press (a link's, 全选, 删除 beside a row): its ground under the finger rounded and PRESS_OUT past its
+ * words on each side, they stay where they are laid out (in line with the text round them); not a square ripple, which
+ * in a rounded card's corner squares it off.
+ */
+fun Modifier.pressText(enabled: Boolean = true, onClick: () -> Unit): Modifier = this
+    .layout { m, c ->
+        val out = PRESS_OUT.roundToPx()
+        val p = m.measure(c.copy(maxWidth = if (c.hasBoundedWidth) c.maxWidth + out * 2 else c.maxWidth, minWidth = c.minWidth + out * 2, maxHeight = if (c.hasBoundedHeight) c.maxHeight + out else c.maxHeight))
+        layout(p.width - out * 2, p.height - out) { p.place(-out, -out / 2) }
+    }
+    .clip(Smooth(PRESS_CORNER)).clickable(enabled = enabled, onClick = onClick).padding(horizontal = PRESS_OUT, vertical = PRESS_OUT / 2)
+
+/**
+ * Out to `x` past each side of what it is in (a sheet's padded column): rows that keep their own room from the sheet's
+ * edges (PickRow) laid there, their words in line with the column's.
+ */
+fun Modifier.bleed(x: Dp): Modifier = layout { m, c ->
+    val px = x.roundToPx()
+    val w = if (c.hasBoundedWidth) c.maxWidth + px * 2 else c.maxWidth
+    val p = m.measure(c.copy(minWidth = w, maxWidth = w))
+    layout(p.width - px * 2, p.height) { p.place(-px, 0) }
+}
+
+private val PRESS_OUT = 6.dp
+private val PRESS_CORNER = 8.dp
+
+/** A button's height: a capsule, BUTTON_HEIGHT / 2 its corner (what a card's corner with one in it is taken from). */
+val BUTTON_HEIGHT = 38.dp
+
 @Composable
-fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, onClick: () -> Unit) {
+fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Boolean = true, danger: Boolean = false, height: Dp = BUTTON_HEIGHT, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val on = enabled && !busy
-    val ink = if (primary && danger && enabled) Color.White else if (primary) C.bg else C.ink
+    // A solid one not yet to be pressed: its words still read (muted on its pale ground), not paper on paper.
+    val ink = if (primary && !enabled) C.muted else if (primary && danger) Color.White else if (primary) C.bg else C.ink
+    // Its words in the middle: the same as wrapped round them, centred where `modifier` makes it wider (full width).
     Row(
-        Modifier.height(38.dp).clip(Smooth(19.dp)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
+        modifier.height(height).clip(Smooth(height / 2)).background(if (primary) (if (!enabled) C.line else if (danger) C.red else C.ink) else C.chip)
             .clickable(enabled = on, onClick = onClick).padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
     ) {
         // A solid one's spinner in its words' colour.
         BusyIcon(busy, solid = if (primary) ink else null)
@@ -91,14 +129,14 @@ fun Button(label: String, primary: Boolean, busy: Boolean = false, enabled: Bool
 
 /** A line to type in, on a soft frame; `lines` above one: a few lines, of any length (a pasted list). */
 @Composable
-fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1, max: Int = if (mono) 32 else 80) {
+fun Field(value: String, onChange: (String) -> Unit, placeholder: String, mono: Boolean = false, modifier: Modifier = Modifier, lines: Int = 1, max: Int = if (mono) 32 else 80, corner: Dp = 12.dp) {
     Box(
-        modifier.fillMaxWidth().clip(Smooth(12.dp)).background(C.surface).border(1.dp, C.line, Smooth(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier.fillMaxWidth().clip(Smooth(corner)).background(C.surface).border(1.dp, C.line, Smooth(corner)).padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
-        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null)
+        if (value.isEmpty()) Text(placeholder, color = C.subtle, fontSize = 15.sp, fontFamily = if (mono) CodeFont else UiFont)
         BasicTextField(
             value, { onChange(if (lines > 1) it else it.take(max)) }, singleLine = lines == 1, minLines = lines, cursorBrush = SolidColor(C.accent),
-            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else null), modifier = Modifier.fillMaxWidth(),
+            textStyle = TextStyle(color = C.ink, fontSize = 15.sp, fontFamily = if (mono) CodeFont else UiFont), modifier = Modifier.fillMaxWidth(),
         )
     }
 }

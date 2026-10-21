@@ -41,5 +41,15 @@
   "common.link.copied": "Link copied",
   "common.link.copyFailed": "Couldn't copy the link: {error}",
   "common.reload": "Reload",
-  "common.folderOn": "Folder on {station}: {path}"
+  "common.folderOn": "Folder on {station}: {path}",
+  "common.telemetry.title": "Send usage statistics and error reports",
+  "common.telemetry.note": "Helps improve {name}. Never includes what's in your chats.",
+  "common.legal.terms": "Terms of Service",
+  "common.legal.privacy": "Privacy Policy",
+  "common.report.action": "Report",
+  "common.report.done": "Reported as FB-{number}",
+  "common.report.again": "Already reported as FB-{number}",
+  "common.report.title": "Report to the still.fail team?",
+  "common.report.lead": "Report only if you think the problem is in still.fail itself. Check problems with your network, proxy, account quota or model provider yourself first.",
+  "common.report.sends": "This sends the error, why the turn failed, the agent and station versions, the names (not values) of the agents' environment variables, this chat's station log lines, and your name and email."
 }
