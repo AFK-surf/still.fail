@@ -7,7 +7,7 @@ import android.net.Network;
 
 /**
  * The default network, followed (as still.fail's MainActivity.kt NetworkWatch): said to the app when it becomes
- * another one than before (Wi-Fi to mobile data, back online after none: src/host/system.mbt `network`). Every
+ * another one than before (Wi-Fi to mobile data, back online after none: src/hostapi/system.mbt `network`). Every
  * connection the app had was on the old one and is dead with nothing said. The first network seen is the one the app
  * started on, so nothing is said of it. Only with ACCESS_NETWORK_STATE in the app's manifest. One for the process, however
  * many activities are alive (MainActivity and OverActivity both, a share sheet over another app while the app is in

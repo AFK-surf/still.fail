@@ -5,5 +5,5 @@ import {
   "stillfail/sf",
   "mbui/motion",
   "mbui/kit",
-  "mbui/host",
+  "mbui/hostapi",
 }

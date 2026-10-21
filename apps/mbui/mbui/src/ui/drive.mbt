@@ -1,7 +1,7 @@
 // Scripted runs over the app's own screen (MBUI_DRIVE, or MBUI_DRIVE_B64 as base64): a script of steps, one a line,
 // run frame by frame on any host, finding what to tap by its words on screen and waiting on what should come there,
 // for end-to-end runs against a live backend (scripts/e2e-local.sh, e2e/flows). Input goes the way the system sends
-// it where the host has that way (@host.drive: on macOS the input method's calls and Cmd+V, on Android the view's
+// it where the host has that way (@hostapi.drive: on macOS the input method's calls and Cmd+V, on Android the view's
 // InputConnection and KEYCODE_PASTE); else straight to the app's handlers.
 //
 //   # a comment                 wait MS                   timeout MS (for until/gone/field after it; 20000 to start)
@@ -42,7 +42,7 @@
 //   dragon DX DY MS TEXT        the same from the lowest TEXT on screen, where the frame has it
 //   shot NAME                   the window's picture, as the frame just drawn, as $MBUI_SHOT_DIR/NAME.png (where the host cannot,
 //                               "SHOT NAME" is logged and the run waits 1.5 s for whoever takes it: adb's screencap)
-//   noticed TEXT                one of the app's notifications (the system's, @host.notice_show) holds TEXT in its
+//   noticed TEXT                one of the app's notifications (the system's, @hostapi.notice_show) holds TEXT in its
 //                               title or words, within the timeout       nonotice TEXT   none does
 //   notice TEXT                 that notification, once there, tapped (as the system's shade sends the tap)
 //   log TEXT                    DRIVE LOG TEXT on the log (a mark for whoever watches it)
@@ -146,10 +146,10 @@ pub fn Ctx::say(self : Ctx, what : String) -> Unit {
 ///|
 /// Reads the script from the environment, once, as the window opens.
 fn drive_init() -> Unit {
-  let script = @host.env_text("MBUI_DRIVE")
+  let script = @hostapi.env_text("MBUI_DRIVE")
   if script != "" {
-    let dir = @host.env("MBUI_SHOT_DIR")
-    let done_dir = match @host.env("MBUI_DONE_DIR") {
+    let dir = @hostapi.env("MBUI_SHOT_DIR")
+    let done_dir = match @hostapi.env("MBUI_DONE_DIR") {
       "" => if dir == "" { "" } else { dir + "/done" }
       d => d
     }
@@ -488,11 +488,11 @@ fn fields_hold(c : Ctx, words : String) -> Bool {
 }
 
 ///|
-/// The host's way of sending a step's input (@host.drive); a test's fake host has none.
+/// The host's way of sending a step's input (@hostapi.drive); a test's fake host has none.
 fn h_drive(kind : Int, text : String) -> Bool {
   match fake.val {
     Some(_) => false
-    None => @host.drive(kind, text)
+    None => @hostapi.drive(kind, text)
   }
 }
 
@@ -503,7 +503,7 @@ fn drive_end(code : Int) -> Unit {
   driver.val = None
   match fake.val {
     Some(f) => f.logs.push("EXIT \{code}")
-    None => @host.exit(code)
+    None => @hostapi.exit(code)
   }
 }
 
@@ -844,7 +844,7 @@ fn drive_steps(c : Ctx) -> Unit {
         }
       }
       "notice" | "noticed" | "nonotice" => {
-        // the host's notifications (@host.drive 6: tapped, 7: looked for)
+        // the host's notifications (@hostapi.drive 6: tapped, 7: looked for)
         let ok = match cmd {
           "notice" => h_drive(6, arg)
           "noticed" => h_drive(7, arg)
@@ -1131,7 +1131,7 @@ fn drive_steps(c : Ctx) -> Unit {
         driver.val = None
         match fake.val {
           Some(f) => f.logs.push("EXIT 0")
-          None => @host.exit(0)
+          None => @hostapi.exit(0)
         }
         return
       }

@@ -102,7 +102,7 @@ public class MainActivity extends Activity {
         // the app lays out above it, its composer riding on the keyboard as Compose's imePadding does), the surface
         // itself not resized. Over another app (OverActivity) the view takes the whole window, under the bars too (as
         // still.fail's ShareActivity is edge to edge: its scrim from the screen's top, its sheet down to its foot), and
-        // the bars are said to the app instead (src/host/system.mbt `bars`).
+        // the bars are said to the app instead (src/hostapi/system.mbt `bars`).
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             Insets bars = insets.getInsets(WindowInsets.Type.systemBars()
                     | WindowInsets.Type.displayCutout());
@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
         if (Host.script != null) Script.start(view);
         // started by a notification's tap (Notices): what it opens, for the app
         Notices.from(getIntent());
-        // the default network as it changes, told to the app (src/host/system.mbt), while an activity of the app lives
+        // the default network as it changes, told to the app (src/hostapi/system.mbt), while an activity of the app lives
         NetworkWatch.hold(this);
     }
 
@@ -178,7 +178,7 @@ public class MainActivity extends Activity {
      */
     private static long hiddenAt;
 
-    /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/host/system.mbt). */
+    /** The Wi-Fi multicast lock held while on screen, when the manifest asks for it (src/hostapi/system.mbt). */
     private android.net.wifi.WifiManager.MulticastLock multicast;
 
     @Override
@@ -193,7 +193,7 @@ public class MainActivity extends Activity {
             }
         }
         if (multicast != null) multicast.acquire();
-        // back on screen after a while off it: said to the app (src/host/system.mbt)
+        // back on screen after a while off it: said to the app (src/hostapi/system.mbt)
         if (hiddenAt != 0) {
             long away = Math.max(0, android.os.SystemClock.elapsedRealtime() - hiddenAt);
             hiddenAt = 0;
@@ -225,13 +225,13 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    /** What was last said of being over another app (src/host/system.mbt `over`): null nothing yet. */
+    /** What was last said of being over another app (src/hostapi/system.mbt `over`): null nothing yet. */
     private static Boolean saidOver;
 
     /** The bars last said to the app (over another app: sayBars), in pixels; null none yet. */
     private static Insets saidBars;
 
-    /** The system bars over the view, said to the app as they change (src/host/system.mbt `bars`): in points. */
+    /** The system bars over the view, said to the app as they change (src/hostapi/system.mbt `bars`): in points. */
     private void sayBars(Insets bars) {
         if (bars.equals(saidBars)) return;
         saidBars = bars;
@@ -368,7 +368,7 @@ public class MainActivity extends Activity {
         mbView.onResume();
         Host.resumed = true;
         Host.tellAppState();
-        // whether it is over another app, said to the app as it changes (src/host/system.mbt `over`)
+        // whether it is over another app, said to the app as it changes (src/hostapi/system.mbt `over`)
         if (saidOver == null || saidOver != over()) {
             saidOver = over();
             Native.post("system", "{\"over\":" + over() + "}");

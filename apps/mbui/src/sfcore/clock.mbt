@@ -37,7 +37,7 @@ fn take_core_clock(rt : @effect.Runtime) -> Unit {
     start: what => rt.outside_start(what),
     end: t => rt.outside_end(t),
     log: if @ui.env("MB_CORE_TRACE") == "1" {
-      Some(fn(s) { @host.log(s) })
+      Some(fn(s) { @hostapi.log(s) })
     } else {
       None
     },

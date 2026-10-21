@@ -21,10 +21,9 @@ jobs:
   # The mbui app's check and tests (apps/mbui/scripts/check.sh, test.sh: still.fail's design system and pages over the
   # fixtures, the screens, the media screens, the core client, and the end-to-end flows seen again over their recorded
   # cores, src/sfreplay), on native, as the apps are built (2026-10-22, as asked: "我们只用原生"; js is no longer
-  # tested), against mbui's fake host: no window, no station. On GitHub's Linux: the tests link the hosts' code but
-  # never run it, so scripts/linux_host.py gives this checkout's packages a Linux stand-in for it (each extern answering
-  # nothing, but mbui's src/host/linux_host.c: a text's decoding), built with clang (gcc took the 16 GB runner's memory
-  # on the largest units and the job was killed). The units each test is split into kept in the Actions cache by
+  # tested), against mbui's fake host: no window, no station. On GitHub's Linux: a test's program links no host's
+  # code (its host the Tester's fake, mbui/hostapi; the platforms' hosts are an app's main's alone), built with clang
+  # (gcc took the 16 GB runner's memory on the largest units and the job was killed). The units each test is split into kept in the Actions cache by
   # content (MBC_STORE: main's written, a branch reads them): 667 tests, ~170 s a part with them, ~390 s without
   # (2026-10-22). A merge's evidence and main's, apart from the app's beta (mbui.yml), which its tests do not hold back
   # (as asked, 2026-10-19). The latest MoonBit (.github/actions/mbui-moonbit); mbui in apps/mbui/mbui. Its tests' two
@@ -49,8 +48,6 @@ jobs:
       - name: The mbui app's check (detlint, then js and native type-checked)
         if: matrix.part == 'app'
         run: moon version && bash apps/mbui/scripts/check.sh
-      - name: The hosts' code for Linux (this checkout's packages)
-        run: python3 apps/mbui/scripts/linux_host.py apps/mbui/mbui/src apps/mbui/src
       - uses: actions/cache/restore@v4
         id: store
         with:
@@ -93,9 +90,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
 
-  # The mbui app's tests on native, on macOS, as they run on js above: a test's binary links mbui's hosts' Objective-C
-  # through mbui's scripts/cc_apple.sh (a test package is given no cc-link-flags). Only where native can differ
-  # from js (plan's mbui_native): the hosts, the FFI, the link options, the pinned mbui; on main, any change to the app.
+  # The mbui app's tests on native, on macOS, as they run on Linux above (a test's program links no host's code): the
+  # Apple toolchain's C and link, ThinLTO as the apps are built. Only where native can differ (plan's mbui_native): the
+  # FFI, the link options, the pinned mbui; on main, any change to the app.
   # On GitHub's macos-15 (free for a public repository): it needs nothing of Mini1's, whose mbui runner (mini1-6) is
   # main's beta's. On one runner, not shared out as check-mbui's are: the organization runs 5 macOS jobs at once
   # (GitHub's Team plan), and two of them for each run had a few branches' runs waiting minutes for one.

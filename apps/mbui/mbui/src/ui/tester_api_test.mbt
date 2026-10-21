@@ -58,11 +58,11 @@ test "a test sees the notifications the app shows, and taps one: what it opens i
 ///|
 test "what the system says between frames comes on its channel, once, kept on the tape; a page in a tab, a secret copied, a package handed over and the hold notice's words are kept" {
   let said : Array[String] = []
-  @ui.on_message(@host.system_channel, fn(json, _) { said.push(json) })
+  @ui.on_message(@hostapi.system_channel, fn(json, _) { said.push(json) })
   let t = @ui.Tester::new(fn(c) { c.text("app", wrap=false) |> ignore })
   t.start_tape()
   t.draw()
-  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/o/w/s/k\"}")
+  t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/o/w/s/k\"}")
   t.frame()
   assert_eq(said, ["{\"link\":\"https://app.still.fail/o/w/s/k\"}"])
   t.frame()

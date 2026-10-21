@@ -2,7 +2,7 @@
 // and FaceFiles): the prefs' `faces` say each place's (ui, text, code); one still.fail keeps is had from the core, which
 // keeps its files for this app (client/core-ts/src/font-files.ts: `fonts.file`, fetched first where it has none,
 // `fonts.fetch`), each unzipped here and checked by its hash (and given back unzipped: `fonts.keep`), and given to the
-// host once all are here (@ui.face_add_bytes: @host.face_ui, face_text, face_code). Until then, and where none is
+// host once all are here (@ui.face_add_bytes: @hostapi.face_ui, face_text, face_code). Until then, and where none is
 // chosen, the app's own stands in (code's: JetBrains Mono). The fonts page shows each face in its preview (`fonts.preview`:
 // its characters alone), given to a face of its own (4 on, by its place in the list).
 
@@ -76,7 +76,7 @@ fn faces(src : Source) -> Unit {
     }
     @ui.face_clear(host_face)
     if now == "" {
-      if host_face == @host.face_code {
+      if host_face == @hostapi.face_code {
         ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
       }
     } else {

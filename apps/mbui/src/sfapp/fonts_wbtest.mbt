@@ -39,20 +39,20 @@ test "a face picked: kept as the device's, fetched, unzipped and checked, and wh
   t.tap_text("正文")
   t.draw()
   assert_true(t.find("跟随界面") is Some(_))
-  assert_false(@ui.face_given(@host.face_text))
+  assert_false(@ui.face_given(@hostapi.face_text))
   t.tap_text("霞鹜文楷")
   t.draw()
   // fetched (the core had none of it), its two files unzipped, checked, and given for what people write
   assert_true(face_here("lxgw-wenkai"))
-  assert_true(@ui.face_given(@host.face_text))
+  assert_true(@ui.face_given(@hostapi.face_text))
   // here: no size said any more
   assert_true(t.find("26 MB") is None)
   // the interface's stays the app's own
-  assert_false(@ui.face_given(@host.face_ui))
+  assert_false(@ui.face_given(@hostapi.face_ui))
   t.tap_text("跟随界面")
   t.draw()
   assert_false(face_here("lxgw-wenkai"))
-  assert_false(@ui.face_given(@host.face_text))
+  assert_false(@ui.face_given(@hostapi.face_text))
 }
 
 ///|
@@ -60,5 +60,5 @@ test "a face being fetched: how far said on its row, the app's own standing in u
   let t = settings_tester("fonts", mode="settings-fonts-coming", shows="settings-fonts-coming")
   assert_true(t.find("正在下载 42%") is Some(_))
   assert_false(face_here("noto-sans-sc"))
-  assert_false(@ui.face_given(@host.face_ui))
+  assert_false(@ui.face_given(@hostapi.face_ui))
 }

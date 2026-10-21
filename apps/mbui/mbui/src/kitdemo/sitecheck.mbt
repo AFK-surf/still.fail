@@ -46,7 +46,7 @@ let site_check_page_html : String =
 
 ///|
 fn site_check_log(s : String) -> Unit {
-  @host.log("SITECHECK " + s)
+  @hostapi.log("SITECHECK " + s)
 }
 
 ///|
@@ -127,7 +127,7 @@ fn site_check_page_open() -> Unit {
           p.script("__ping('two')")
         } else if w == "page-pong two" {
           site_check_log("done")
-          @host.exit(0)
+          @hostapi.exit(0)
         }
       None => ()
     }

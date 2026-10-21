@@ -39,7 +39,7 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
             _ => 6
           }
           let out = FixedArray::make(6, 0.0)
-          @host.font_metrics(size, weight, style, out)
+          @hostapi.font_metrics(size, weight, style, out)
           Some(("m " + head.stringify(), nums(out, if kept < 6 { kept } else { 6 })))
         }
         None => None
@@ -53,7 +53,7 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
           }
           let cap = if kept > text.length() * 4 + 16 { kept } else { text.length() * 4 + 16 }
           let out = FixedArray::make(cap, 0.0)
-          let k = @host.shape(text, size, weight, style, out)
+          let k = @hostapi.shape(text, size, weight, style, out)
           Some(("s " + head.stringify(), nums(out, k * 4)))
         }
         None => None
@@ -61,12 +61,12 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
     (_, _, Some(head), _) =>
       match args(Some(head)) {
         Some((size, weight, style, text)) =>
-          Some(("k " + head.stringify(), Json::number(@host.text_key(text, size, weight, style).to_double())))
+          Some(("k " + head.stringify(), Json::number(@hostapi.text_key(text, size, weight, style).to_double())))
         None => None
       }
     (_, _, _, Some(Number(key, ..) as head)) => {
       let out = FixedArray::make(7, 0.0)
-      @host.glyph(key.to_int(), out)
+      @hostapi.glyph(key.to_int(), out)
       Some(("g " + head.stringify(), nums(out, 7)))
     }
     _ => None
@@ -77,7 +77,7 @@ fn ask_again(m : Map[String, Json]) -> (String, Json)? {
 /// The kept run `name`'s text asked again (above): how many answers, how many differ, how many skipped.
 fn text_check(name : String) -> (Int, Int, Int) {
   guard kept_run(name) is Some(run) else {
-    @host.log("TEXTCHECK no kept run \"\{name}\" (src/kitdemo/textrec_runs.mbt)")
+    @hostapi.log("TEXTCHECK no kept run \"\{name}\" (src/kitdemo/textrec_runs.mbt)")
     return (0, 1, 0)
   }
   let mut asked = 0
@@ -107,7 +107,7 @@ fn text_check(name : String) -> (Int, Int, Int) {
         }).stringify()
         if kept != now {
           differ += 1
-          @host.log("TEXTCHECK differs \{what}: kept \{kept}, now \{now}")
+          @hostapi.log("TEXTCHECK differs \{what}: kept \{kept}, now \{now}")
         }
       }
       None => skipped += 1
@@ -126,8 +126,8 @@ fn text_check_run(c : @ui.Ctx, name : String) -> Unit {
   if !text_checked.val {
     text_checked.val = true
     let (asked, differ, skipped) = text_check(name)
-    @host.log("TEXTCHECK done \{name}: \{asked} answers, \{differ} differ, \{skipped} skipped")
-    @host.exit(if differ == 0 && asked > 0 { 0 } else { 1 })
+    @hostapi.log("TEXTCHECK done \{name}: \{asked} answers, \{differ} differ, \{skipped} skipped")
+    @hostapi.exit(if differ == 0 && asked > 0 { 0 } else { 1 })
   }
   c.text("TEXTCHECK \{name}") |> ignore
 }

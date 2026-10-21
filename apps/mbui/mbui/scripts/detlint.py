@@ -16,7 +16,7 @@ forbidden.
 The rules (see RULES below for each one's words):
 
     frame-request  anything but the scheduler itself (mbt.frame_core: the frame loop, the dispatch, the host's
-                   bridge) asks for a frame (Ctx::request_frame, @host.request_frame, @ui.request_frame): components
+                   bridge) asks for a frame (Ctx::request_frame, @hostapi.request_frame, @ui.request_frame): components
                    and motion included; the framework knows when a frame is due (an input, an event, an animation's
                    declared end, a layout read)
     settle         anything waits for, or asks whether, the app is "settled" (Tester::settle / settled, Ctx::settled /
@@ -29,6 +29,9 @@ The rules (see RULES below for each one's words):
                    simctl io … screenshot): the app's screens are compared in the Tester, its draw list at a declared
                    moment, and pixels by each host's offscreen render of that list; a device runs only the host's
                    contracts and a few end-to-end smoke flows. Each place counted; a new one fails
+    host-import    a package that is not an app's main imports mbui/host (its moon.pkg): the platforms' hosts are
+                   linked into the apps alone; the framework and the app ask theirs through mbui/hostapi, which a
+                   Tester answers, so a test's program links no host's code and runs on any system
     frame-wait     a fiber waits for the next frame (@effect.next_frame()) outside the runtime itself: an animation
                    waits until the moment its run ends, a step until its time or its event, never a frame (how many
                    frames come is the display's)
@@ -43,7 +46,7 @@ The rules (see RULES below for each one's words):
     frame-count    a test runs a fixed number of frames (for _ in 0..<N { t.frame() })
     literal-time   a time given as a bare number (run_for(347), wake_in(500.0), advance(16.0), frame(ms=33.0),
                    wake_at(c.now() + 500.0)): a time names what it is (an animation's, a timer's declared length)
-    app-clock      the app reads the clock (c.now(), @ui.now(), @host.now()) to work out where an animation is or
+    app-clock      the app reads the clock (c.now(), @ui.now(), @hostapi.now()) to work out where an animation is or
                    whether a time has passed: motion / wake_at do that from what they declared
     engine-math    a sine, an exponential, a power… from @math (sin, cos, tan, asin, acos, atan, atan2, exp, expm1, ln,
                    ln_1p, log2, log10, pow, Double's pow): on js the engine's Math.*, its last bits the machine's (an
@@ -59,13 +62,13 @@ The rules (see RULES below for each one's words):
                    everywhere. A Map's own keys are not this: only a hash taken out as data
     hash-order     a @hashmap / @hashset: gone through, its order is its hash's, the process's; a Map (in the order
                    put) or a sorted list
-    host-read      the app reads where it runs from @host (now, wake_after, platform, system_dark, window_inset, env),
+    host-read      the app reads where it runs from @hostapi (now, wake_after, platform, system_dark, window_inset, env),
                    not through @ui, which a Tester answers
     globals        a mutable global (a top-level let of a Ref, Map, Array or struct) that its package's reset (reset,
                    reset_globals, or what on_reset is given) does not put back, nor says `// kept across runs: why`
     build-effect   a view (a function given the Ctx: what a frame's build runs) tells outside of it while it builds: a
                    call to its core ((src.call)(…), what detlint.json's build_effect.fields names), a host's effect
-                   (@host.share, @ui.keep… : build_effect.calls), a native view's own (its reload, set_scale, seek,
+                   (@hostapi.share, @ui.keep… : build_effect.calls), a native view's own (its reload, set_scale, seek,
                    close…: build_effect.methods, by name), or a function of the app's that does one, other than
                    in Ctx::after_build or Ctx::tell, in a callback (fn(…) { … }: an answer, an event's handler) or under an input
                    the frame takes (a click, a tap, a key, a drag let go, a menu's choice: taken by the frame's first
@@ -564,6 +567,8 @@ RULES = {
     "device-shot": "a script takes a picture of the app off a device, an emulator or a simulator: what it shows is "
                    "compared in the Tester (its draw list at a declared moment), pixels by the hosts' offscreen "
                    "render of that list; a device runs the host's contracts and a few smoke flows only",
+    "host-import": "a package that is not an app's main imports mbui/host: ask the host through mbui/hostapi (a "
+                   "Tester answers it); the platforms' hosts are an app's main's alone, so a test links none",
     "frame-wait": "a fiber waits for the next frame: wait until the moment (an animation's declared end, a timer) or the "
                   "event, not a frame: how many frames come is the display's",
     "at-rest-wait": "goes on until the app is at rest (settled by another name): at_rest is asserted (assert_true("
@@ -582,7 +587,7 @@ RULES = {
     "engine-math": "a sine, an exponential, a power from @math: on js the engine's Math.*, whose last bits are the "
                    "machine's; @dmath's (mbui/dmath) are the same on every machine",
     "poll": "a frame or a wake asked for under a condition that reads the host or the layout: that answer is an event",
-    "host-read": "the app reads where it runs from @host: through @ui, which a Tester answers",
+    "host-read": "the app reads where it runs from @hostapi: through @ui, which a Tester answers",
     "builtin-hash": "a value made from MoonBit's own hash (seeded anew in each process, not the same on js and "
                     "native): @ui.stable_hash",
     "hash-order": "a @hashmap / @hashset, its order the process's hash's: a Map (in the order put), or sort it",
@@ -639,15 +644,18 @@ RANDOM_IDS = {"uuid", "uuid4", "uuid_v4", "new_uuid", "random_uuid", "random_id"
 PLAIN_TYPES = {"Int", "Int64", "UInt", "UInt64", "Int16", "UInt16", "Double", "Float", "String", "Bool", "Char", "Byte",
                "Bytes", "Json", "Unit"}
 
+# a package importing the platforms' hosts (moon.pkg): an app's main's alone
+HOST_IMPORT = re.compile(r'"mbui/host"')
+
 # what a host does that is seen outside the app (a sheet opened, a file kept, the system's state set), as the app calls
 # it: @pkg.name
-BUILD_EFFECT_CALLS = ["@host.share", "@host.open_url", "@host.notice_show", "@host.set_sideways", "@host.set_dark",
-                      "@host.update_install", "@host.push_token", "@host.gallery_ask", "@host.exit", "@host.keep",
-                      "@host.save_file", "@host.clipboard_set", "@ui.share", "@ui.open_url", "@ui.notice_show",
+BUILD_EFFECT_CALLS = ["@hostapi.share", "@hostapi.open_url", "@hostapi.notice_show", "@hostapi.set_sideways", "@hostapi.set_dark",
+                      "@hostapi.update_install", "@hostapi.push_token", "@hostapi.gallery_ask", "@hostapi.exit", "@hostapi.keep",
+                      "@hostapi.save_file", "@hostapi.clipboard_set", "@ui.share", "@ui.open_url", "@ui.notice_show",
                       "@ui.notice_ask", "@ui.keep", "@ui.keep_bytes", "@ui.clipboard_set", "@ui.save_file",
                       "@ui.pick", "@ui.set_sideways", "@ui.exit", "@ui.clipboard_set_png", "@ui.clipboard_read",
-                      "@ui.keep_awake", "@ui.haptic", "@host.clip_set_text", "@host.clip_set_png", "@host.clip_read",
-                      "@host.keep_awake", "@host.haptic", "@ui.native_call", "@host.native_call"]
+                      "@ui.keep_awake", "@ui.haptic", "@hostapi.clip_set_text", "@hostapi.clip_set_png", "@hostapi.clip_read",
+                      "@hostapi.keep_awake", "@hostapi.haptic", "@ui.native_call", "@hostapi.native_call"]
 # a native view's (a page, a site, a video), a PDF's and a keep's own that tell its host (NativeView::reload, …):
 # by their names, whatever they are called on but the Ctx (an app's own of the same name, a player's seek, tells it on)
 BUILD_EFFECT_METHODS = ["go_back", "go_forward", "reload", "load", "set_scale", "close", "play", "pause", "seek",
@@ -795,8 +803,8 @@ def lint_mbt(f, cfg, out, returns, readers):
         if c.name == "hash" and not test and ((c.kind == "method" and not c.args) or (c.kind == "type" and
                                                                                      c.qual == "Hash")):
             add("builtin-hash", c.at, line_text)
-        # 7a. @host's reads in the app
-        if c.kind == "pkg" and c.qual == "@host" and c.name in HOST_READS and app and not test:
+        # 7a. @hostapi's reads in the app
+        if c.kind == "pkg" and c.qual == "@hostapi" and c.name in HOST_READS and app and not test:
             add("host-read", c.at, line_text)
     # wall clock and randomness in externs' bodies and anywhere else
     if not under(f.rel, cfg.clock_sources):
@@ -936,7 +944,7 @@ def lint_style(f, cfg, out):
 
 
 def cfg_host_dirs(self):
-    return [p for p in self.framework if p.rstrip("/").endswith("/host")]
+    return [p for p in self.framework if p.rstrip("/").endswith(("/host", "/hostapi"))]
 
 
 Config.host_dirs = cfg_host_dirs
@@ -972,8 +980,8 @@ def reads_query(f, cond, cfg, readers=None):
             prev = toks[i - 1] if i else None
             if readers and (prev is None or prev.text != ".") and (os.path.dirname(f.rel), t.text) in readers:
                 return t.text + "() → " + readers[(os.path.dirname(f.rel), t.text)]
-            if prev is not None and prev.text == "." and i >= 2 and toks[i - 2].kind == "at" and toks[i - 2].text == "@host":
-                return "@host." + t.text
+            if prev is not None and prev.text == "." and i >= 2 and toks[i - 2].kind == "at" and toks[i - 2].text == "@hostapi":
+                return "@hostapi." + t.text
             if t.text in cfg.queries and prev is not None and prev.text == ".":
                 return t.text
             if t.text.startswith("h_") and t.text[2:] in cfg.queries:
@@ -1178,7 +1186,12 @@ def collect(root, cfg):
             if matches(rel, cfg.skip):
                 continue
             path = os.path.join(dirpath, n)
-            if n.endswith(".mbt") and under(rel, cfg.mbt_roots):
+            if n == "moon.pkg" and under(rel, cfg.mbt_roots):
+                src = read(path)
+                texts[rel] = src.split("\n")
+                if "is-main" not in src:
+                    lint_lines(rel, src, "host-import", [HOST_IMPORT], findings, "//")
+            elif n.endswith(".mbt") and under(rel, cfg.mbt_roots):
                 src = read(path)
                 texts[rel] = src.split("\n")
                 mbts.append(MbtFile(path, rel, src))

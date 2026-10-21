@@ -727,7 +727,7 @@ fn scroll_logging() -> Bool {
   if scroll_log.val < 0 {
     scroll_log.val = match fake.val {
       Some(_) => 0
-      None => if @host.env("MBUI_SCROLL_LOG") == "1" { 1 } else { 0 }
+      None => if @hostapi.env("MBUI_SCROLL_LOG") == "1" { 1 } else { 0 }
     }
   }
   scroll_log.val == 1

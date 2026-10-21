@@ -181,7 +181,7 @@ Nothing else in a build tells outside (detlint's build-effect): those two are it
   (Windows' runner has "Show animations" off: its run is drawn with motion reduced, and so is its replay). The kitdemo pages' own
   state, which a kept run's test starts from, is put back by `reset` (src/kitdemo/reset.mbt); detlint's `globals` has src/kitdemo among its roots, so a global it misses fails.
 - **The marks' contract** (`scripts/host_contract.sh HOST marks`, in the same workflows as a step of its own, run
-  when the host's marks code, src/host/marks.mbt, test/marks or the reference change): `@host.draw_marks` draws
+  when the host's marks code, src/hostapi/marks.mbt, test/marks or the reference change): `@hostapi.draw_marks` draws
   test/marks/marks.json (a box, an arrow, two hand-drawn lines, words, three numbered pins) onto test/marks/base.png
   (made by test/marks/base.py, flat colours), kitdemo's MBUI_MARKS, twice on the host; the two PNGs the same to the
   byte, and the same as goldens/marks/`<host>`.png, made on what goldens/marks/`<host>`.txt says (checked: `system`,
@@ -215,7 +215,7 @@ The migration ends when each of detlint's rules is at 0 (docs/detlint.md). What 
    (and `@ui.request_frame`) are made the framework's own (not `pub`), so the compiler stops what the lint did.
 7. Done (mbui#91, and the PR after it): `Tester::settle`, `Tester::settled`, `Tester::unsettled`, `Ctx::settled`,
    `Ctx::unsettled`, `Runtime::settle` / `settled` deleted; the hosts are told only what the app awaits of them
-   (`@host.frame_awaiting`); a Mac picture is taken at a declared moment, a script's steps wait for named things only,
+   (`@hostapi.frame_awaiting`); a Mac picture is taken at a declared moment, a script's steps wait for named things only,
    textdiff turns its pages on a declared time. The `settle` rule is at 0, forbidden.
 
 ## Where it stops

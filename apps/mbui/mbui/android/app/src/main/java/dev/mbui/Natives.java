@@ -4,7 +4,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * An app's own calls of its host (src/host/native.mbt, @ui.native_call): what the app's own code puts here for a name
+ * An app's own calls of its host (src/hostapi/native.mbt, @ui.native_call): what the app's own code puts here for a name
  * (still.fail's AdbShare: "adb.phone", "adb.open", …) answers that name's calls. A handler is given the call's params
  * (JSON) and its Reply, and answers once, on any thread, now or later; the answer reaches the app as an outside of kind
  * OUTSIDE_NATIVE at a frame's boundary. A name nobody put here is answered at once that it cannot be.

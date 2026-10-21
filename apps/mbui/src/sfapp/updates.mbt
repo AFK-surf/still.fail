@@ -1,6 +1,6 @@
 // The app keeping itself current (ember apps/android app/Updates.kt, Install.kt; Home.kt's update button,
 // SettingsHome.kt Version): a newer build is asked of the update source the app is given (`set_update_source`), and
-// one found is downloaded, checked against its sha256 and handed to the system's installer (@host.update_install:
+// one found is downloaded, checked against its sha256 and handed to the system's installer (@hostapi.update_install:
 // Android's Updates.java), which installs it over this one once the person agrees. Asked at the start; Home offers a
 // build that brings something the changelog says (a download key with its dot; how far while it downloads), the
 // settings' version row any (更新到 …; 检查更新 asks now, 已是最新 said when none). Hosts that do not update
@@ -114,7 +114,7 @@ pub fn cloud_updates(src : Source, feed : String, origin : String) -> UpdateSour
 /// Asks the source for a newer build; `done` gets what to say when it was asked now (none newer, or why it failed),
 /// "" otherwise.
 fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {  }) -> Unit {
-  let version = if update_version.val > 0 { update_version.val } else { @host.app_version() }
+  let version = if update_version.val > 0 { update_version.val } else { @hostapi.app_version() }
   let source = match update.source {
     Some(s) => s
     None => return
@@ -126,7 +126,7 @@ fn update_check(src : Source, now : Bool, done? : (String) -> Unit = fn(_) {  })
     match r {
       Ok(Object(_) as v) => {
         update.available = Some(v)
-        @host.log("update: \{text(Some(v), "versionName")} (\{number(Some(v), "versionCode").to_int()}) is newer than this build (\{version})")
+        @hostapi.log("update: \{text(Some(v), "versionName")} (\{number(Some(v), "versionCode").to_int()}) is newer than this build (\{version})")
         done("")
       }
       Ok(_) => {
@@ -155,7 +155,7 @@ fn update_install(src : Source) -> Unit {
           Some(i) => file.view(start_offset=i + 1).to_owned()
           None => file
         }
-        @host.log("update: \{file} asked for")
+        @hostapi.log("update: \{file} asked for")
         match update.source {
           Some(source) =>
             @ui.update_install((source.url)(file), text(Some(v), "sha256"), number(Some(v), "size"), name)

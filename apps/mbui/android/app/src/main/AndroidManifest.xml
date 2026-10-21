@@ -50,7 +50,7 @@
             <!-- still.fail's links, as still.fail's Android app takes them (apps/android/app/src/main/AndroidManifest.xml):
                  an item's link (a session's link in Slack), verified by still.fail cloud's assetlinks.json (served on both
                  hosts: app.still.fail, and ember.3720.org from before the rename), which lists this app's package; mbui's
-                 Notices keeps the link for the app (@host.link_opened), which asks the core what it opens (src/sfapp/links.mbt). -->
+                 Notices keeps the link for the app (@hostapi.link_opened), which asks the core what it opens (src/sfapp/links.mbt). -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

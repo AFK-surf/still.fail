@@ -103,17 +103,17 @@ fn run_scene(name : String, fixed : Int, target_ms : Int) -> Result {
   while i < warmup + frames {
     if i == warmup {
       cpu0 = cpu_ms()
-      t_start = @host.now()
+      t_start = @hostapi.now()
     }
     state.frame = i
     state.time = i.to_double() / 120.0
-    let t0 = @host.now()
+    let t0 = @hostapi.now()
     let c = @ui.frame_offscreen(view, width, height, scale, state.time * 1000.0)
-    let ft = @host.now() - t0
+    let ft = @hostapi.now() - t0
     draw_timed(c.inst, c.ninst, timing)
     ops = c.ninst
     if i < warmup {
-      warm.push(@host.now() - t0)
+      warm.push(@hostapi.now() - t0)
       if i == warmup - 1 && fixed == 0 {
         // the warm-up's later half: its first frames are the cold ones
         let late = []
@@ -132,7 +132,7 @@ fn run_scene(name : String, fixed : Int, target_ms : Int) -> Result {
     }
     i += 1
   }
-  let run_ms = @host.now() - t_start
+  let run_ms = @hostapi.now() - t_start
   let cpu = (cpu_ms() - cpu0) / frames.to_double()
   {
     scene: name,
@@ -147,13 +147,13 @@ fn run_scene(name : String, fixed : Int, target_ms : Int) -> Result {
     build_ms: median(build),
     layout_ms: median(layout),
     paint_ms: median(paint),
-    mem_mb: @host.mem_bytes() / 1048576.0,
+    mem_mb: @hostapi.mem_bytes() / 1048576.0,
   }
 }
 
 ///|
 fn env_int(name : String, default : Int) -> Int {
-  let s = @host.env(name)
+  let s = @hostapi.env(name)
   if s == "" {
     return default
   }
@@ -288,16 +288,16 @@ fn main {
   let frames = env_int("BENCH_FRAMES", 0)
   let target_ms = env_int("BENCH_MS", 300)
   let repeat = env_int("BENCH_REPEAT", 3)
-  let label = @host.env("BENCH_LABEL")
+  let label = @hostapi.env("BENCH_LABEL")
   let history = {
-    let h = @host.env("BENCH_HISTORY")
+    let h = @hostapi.env("BENCH_HISTORY")
     if h == "" {
       "bench/history.jsonl"
     } else {
       h
     }
   }
-  let wanted = @host.env("BENCH_SCENES")
+  let wanted = @hostapi.env("BENCH_SCENES")
   let scenes = if wanted == "" {
     scene_names
   } else {
@@ -332,7 +332,7 @@ fn main {
         _ => Some(r)
       }
     }
-    let shots = @host.env("BENCH_SHOTS")
+    let shots = @hostapi.env("BENCH_SHOTS")
     if shots != "" {
       snapshot("\{shots}/\{name}.png")
     }

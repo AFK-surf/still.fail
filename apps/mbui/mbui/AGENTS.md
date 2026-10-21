@@ -29,6 +29,16 @@ yet and you can add one, add it.
   replayed frame by frame, the text, the marks) and a few end-to-end smoke flows that wait for named events; their
   pictures are for people. detlint's `device-shot` counts each picture taken off a device: a new one fails.
 
+## A test links no host
+
+- Everything mbui and an app ask of their host goes through `mbui/hostapi` (`@hostapi.…`, its `Host` trait). Only an
+  app's main imports `mbui/host`, which sets the platform's host as the program starts; a Tester sets its fake
+  (`src/ui/fake_host.mbt`). So a test's program links no host's code (Objective-C, C++, JNI) and builds and runs on
+  native on any system: CI runs the native tests on Linux. detlint's `host-import` holds it.
+- A new host call: a method of `Host` in `src/hostapi/host.mbt` (its default is what a host with nothing for it
+  answers) and its wrapper there, the platform's in `src/host/native_host.mbt` over the function each target has, and
+  the fake's in `src/ui/fake_host.mbt` where a test needs another answer than the default.
+
 ## There are no flaky failures
 
 > 不稳定测试是整个系统最严重的故障。我们的系统就不应该存在偶发失败。存在偶发失败说明整个系统就是烂的，而不是某个测试有问题。

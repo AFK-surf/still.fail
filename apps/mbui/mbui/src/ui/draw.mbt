@@ -889,9 +889,9 @@ pub fn reduced_motion() -> Bool {
     return f.reduce_motion || f.env.get("MBUI_REDUCE_MOTION") == Some("1")
   }
   if reduce_env.val < 0 {
-    reduce_env.val = if @host.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
+    reduce_env.val = if @hostapi.env("MBUI_REDUCE_MOTION") == "1" { 1 } else { 0 }
   }
-  reduce_env.val == 1 || @host.reduce_motion()
+  reduce_env.val == 1 || @hostapi.reduce_motion()
 }
 
 ///|

@@ -78,8 +78,8 @@ fn dump_one(name : String, s : @core.Sub) -> Unit {
   if dumped.get(name) != Some(s.version) {
     dumped[name] = s.version
     match (s.value, s.error) {
-      (Some(v), _) => @host.log("DUMP \{name} \{v.stringify()}")
-      (_, Some(e)) => @host.log("DUMP \{name} error \{e.stringify()}")
+      (Some(v), _) => @hostapi.log("DUMP \{name} \{v.stringify()}")
+      (_, Some(e)) => @hostapi.log("DUMP \{name} error \{e.stringify()}")
       _ => ()
     }
   }
@@ -226,7 +226,7 @@ fn main {
   app.photos = env("MBUI_PHOTOS") == "1"
   app.videos = env("MBUI_VIDEOS") == "1"
   if env("MBUI_SECURE_TEST") == "1" && secure_test() == 0 {
-    @host.log("SECURE_TEST: not on this host")
+    @hostapi.log("SECURE_TEST: not on this host")
   }
   @ui.run("still.fail · mbui", view)
 }

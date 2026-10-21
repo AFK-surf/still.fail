@@ -269,7 +269,7 @@ pub fn Ctx::any_right_click(self : Ctx) -> Bool {
 
 ///|
 /// A press on `id` drags the window (and a double click on it zooms it, as the system's title bar does): the app's
-/// own top row, in a window with none of the system's (@host.window_setup `inset`). Said each frame it is drawn.
+/// own top row, in a window with none of the system's (@hostapi.window_setup `inset`). Said each frame it is drawn.
 pub fn Ctx::window_drag(self : Ctx, id : Int) -> Unit {
   ignore(self)
   if id != 0 {

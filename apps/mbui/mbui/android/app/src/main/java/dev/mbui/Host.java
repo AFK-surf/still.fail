@@ -44,7 +44,7 @@ final class Host {
         if (view != null) view.toGL(() -> Native.appState(s));
     }
 
-    /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @host.system_dark. */
+    /** The system in night mode (MainActivity: its configuration's uiMode, kept as it changes): @hostapi.system_dark. */
     static volatile boolean systemDark;
 
     static boolean systemDark() {
@@ -54,7 +54,7 @@ final class Host {
     /** What shows under the system bars (the app's view is inside them), light and dark: MainActivity's dev.mbui.ground. */
     static int groundLight = android.graphics.Color.rgb(245, 245, 247), groundDark = 0xFF1B1C1F;
 
-    /** The app drawn dark or light (@host.set_dark): the system bars' icons light over it or dark, as the Android app's. */
+    /** The app drawn dark or light (@hostapi.set_dark): the system bars' icons light over it or dark, as the Android app's. */
     static void setDark(boolean dark) {
         main.post(() -> {
             if (activity == null) return;
@@ -73,7 +73,7 @@ final class Host {
     }
 
     /**
-     * Turned sideways for a film (@host.set_sideways, still.fail's Player.kt): landscape asked for (a phone with rotation
+     * Turned sideways for a film (@hostapi.set_sideways, still.fail's Player.kt): landscape asked for (a phone with rotation
      * locked turns too) and the system bars away, a swipe bringing them for a while; off, upright and the bars back.
      */
     static void setSideways(boolean on) {
@@ -198,7 +198,7 @@ final class Host {
     }
 
     /**
-     * A secret on the clipboard (@host.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
+     * A secret on the clipboard (@hostapi.clipboard_set_secret, still.fail's Vault.kt copy): marked sensitive (the
      * system's preview of it masked, Android 13 on: ClipDescription.EXTRA_IS_SENSITIVE, by its value, which older
      * systems pass over), and cleared `clearMs` later unless something else was copied meanwhile (when the clipboard
      * cannot be read then, the app not in front, it is cleared all the same: a secret left there is worse).
@@ -270,7 +270,7 @@ final class Host {
     }
 
     /**
-     * The app over another app done (@host.over_done, OverActivity): it ends, back to the app it was over; `openApp`, on
+     * The app over another app done (@hostapi.over_done, OverActivity): it ends, back to the app it was over; `openApp`, on
      * into the app's own activity (its task brought to the front) as it ends.
      */
     static void overDone(boolean openApp) {

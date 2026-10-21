@@ -210,7 +210,7 @@ pub fn Player::close(self : Player) -> Unit {
   self.close_view()
   if self.sideways {
     self.sideways = false
-    @host.set_sideways(false)
+    @hostapi.set_sideways(false)
   }
 }
 
@@ -292,7 +292,7 @@ pub fn Player::is_sideways(self : Player) -> Bool {
 pub fn Player::upright(self : Player) -> Unit {
   if self.sideways {
     self.sideways = false
-    @host.set_sideways(false)
+    @hostapi.set_sideways(false)
   }
 }
 
@@ -782,7 +782,7 @@ fn Player::controls(
       if !audio &&
         key_button(c, p.key + "/sideways", "landscape", on, lit=p.sideways) {
         p.sideways = !p.sideways
-        @host.set_sideways(p.sideways)
+        @hostapi.set_sideways(p.sideways)
         p.wake()
       }
     })

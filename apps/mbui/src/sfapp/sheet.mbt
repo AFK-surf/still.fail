@@ -127,9 +127,9 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
   )
   // what it comes to, for scripted runs (e2e: a sheet opened and closed by dragging)
   match r.dragged {
-    Some(DraggedClosed) => @host.log("SHEET dragged closed")
-    Some(DraggedBack) => @host.log("SHEET dragged back")
-    Some(DraggedTo(f)) => @host.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
+    Some(DraggedClosed) => @hostapi.log("SHEET dragged closed")
+    Some(DraggedBack) => @hostapi.log("SHEET dragged back")
+    Some(DraggedTo(f)) => @hostapi.log(if f > 0.72 { "SHEET dragged to 94%" } else { "SHEET dragged to 55%" })
     None => ()
   }
   if s.kind != NoSheet && !r.open {

@@ -238,7 +238,7 @@ fn add_photo_folder() -> Unit {
       Ok(Array(list)) => list
       _ => []
     }
-    @host.log("PHOTOS folders before " + Json::array(folders).stringify())
+    @hostapi.log("PHOTOS folders before " + Json::array(folders).stringify())
     let have = folders.iter().any(fn(f) { str(Some(f), "root") == root && str(Some(f), "path") == path })
     if !have {
       let one : Map[String, Json] = { "root": Json::string(root), "path": Json::string(path) }
@@ -250,8 +250,8 @@ fn add_photo_folder() -> Unit {
     }
     @core.call("media.photos.setFolders", params=Json::object(params), on_done=fn(r) {
       match r {
-        Ok(v) => @host.log("PHOTOS setFolders ok " + v.stringify())
-        Err(e) => @host.log("PHOTOS setFolders failed " + e.stringify())
+        Ok(v) => @hostapi.log("PHOTOS setFolders ok " + v.stringify())
+        Err(e) => @hostapi.log("PHOTOS setFolders failed " + e.stringify())
       }
     })
   })

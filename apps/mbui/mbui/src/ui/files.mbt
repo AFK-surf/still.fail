@@ -1,27 +1,27 @@
-// The system's pickers and the files the app keeps on the device (as @host's pick.mbt and keep.mbt have them), through
+// The system's pickers and the files the app keeps on the device (as @hostapi's pick.mbt and keep.mbt have them), through
 // the framework, so that under a Tester the system is the test's: its pickers give what the test said (Tester::picks)
 // and what the app keeps is kept by the test (Tester::kept), each answer at the next frame, as a host's event comes at
 // a frame's boundary.
 
 ///|
-/// An ask of the system's pickers under way (@host.Pick).
+/// An ask of the system's pickers under way (@hostapi.Pick).
 pub struct Pick {
-  priv host : @host.Pick?
+  priv host : @hostapi.Pick?
   priv fake : Int
 }
 
 ///|
 priv struct FakePick {
-  kind : @host.PickKind
+  kind : @hostapi.PickKind
   /// the frame it was asked in: answered from the next on
   frame : Int
   mut taken : Bool
 }
 
 ///|
-/// Asks the system for files of `kind` (@host.pick): None when this host cannot. Under a Tester, what the test said the
+/// Asks the system for files of `kind` (@hostapi.pick): None when this host cannot. Under a Tester, what the test said the
 /// pickers give (Tester::picks), from the next frame.
-pub fn pick(kind : @host.PickKind) -> Pick? {
+pub fn pick(kind : @hostapi.PickKind) -> Pick? {
   match fake.val {
     Some(f) => {
       f.pick_asks.push({ kind, frame: g().frame_no, taken: false })
@@ -31,7 +31,7 @@ pub fn pick(kind : @host.PickKind) -> Pick? {
       Some(p)
     }
     None =>
-      match @host.pick(kind) {
+      match @hostapi.pick(kind) {
         Some(h) => {
           let p : Pick = { host: Some(h), fake: -1 }
           p.wait("a pick")
@@ -58,13 +58,13 @@ fn Pick::wait(self : Pick, what : String) -> Unit {
 }
 
 ///|
-/// A photo of the gallery read whole, as a pick of it (@host.pick_photo): None where the host has no gallery (a
+/// A photo of the gallery read whole, as a pick of it (@hostapi.pick_photo): None where the host has no gallery (a
 /// Tester's has none).
 pub fn pick_photo(src : String) -> Pick? {
   match fake.val {
     Some(_) => None
     None =>
-      match @host.pick_photo(src) {
+      match @hostapi.pick_photo(src) {
         Some(h) => {
           let p : Pick = { host: Some(h), fake: -1 }
           p.wait("a gallery photo read")
@@ -77,7 +77,7 @@ pub fn pick_photo(src : String) -> Pick? {
 
 ///|
 /// What was picked, once the system has answered (empty: called off); None while it asks. Taken once.
-pub fn Pick::files(self : Pick) -> Array[@host.Picked]? {
+pub fn Pick::files(self : Pick) -> Array[@hostapi.Picked]? {
   let got = self.answer()
   if got is Some(_) {
     outside_end(outside_pick, self.outside_id())
@@ -86,7 +86,7 @@ pub fn Pick::files(self : Pick) -> Array[@host.Picked]? {
 }
 
 ///|
-fn Pick::answer(self : Pick) -> Array[@host.Picked]? {
+fn Pick::answer(self : Pick) -> Array[@hostapi.Picked]? {
   match self.host {
     Some(p) => p.files()
     None =>
@@ -119,14 +119,14 @@ pub fn Tester::picks(self : Tester, files : Array[(String, Bytes)]) -> Unit {
 
 ///|
 /// What the app asked of the system's pickers, oldest first.
-pub fn Tester::pick_asks(self : Tester) -> Array[@host.PickKind] {
+pub fn Tester::pick_asks(self : Tester) -> Array[@hostapi.PickKind] {
   self.fake.pick_asks.map(fn(a) { a.kind })
 }
 
 ///|
-/// A file being kept on the device (@host.Keep).
+/// A file being kept on the device (@hostapi.Keep).
 pub struct Keep {
-  priv host : @host.Keep?
+  priv host : @hostapi.Keep?
   priv fake : Int
 }
 
@@ -134,7 +134,7 @@ pub struct Keep {
 priv struct FakeKeep {
   name : String
   mime : String
-  way : @host.KeepWay
+  way : @hostapi.KeepWay
   data : Array[Byte]
   /// the frame it was finished in (-1: not yet): kept from the next on; let go of
   mut finished : Int
@@ -142,16 +142,16 @@ priv struct FakeKeep {
 }
 
 ///|
-/// A file named `name` (`mime`, "" when unknown) to keep on the device, its bytes to come (@host.keep_begin): None
+/// A file named `name` (`mime`, "" when unknown) to keep on the device, its bytes to come (@hostapi.keep_begin): None
 /// when this host keeps none.
-pub fn keep_begin(name : String, mime : String, way? : @host.KeepWay = Downloads) -> Keep? {
+pub fn keep_begin(name : String, mime : String, way? : @hostapi.KeepWay = Downloads) -> Keep? {
   match fake.val {
     Some(f) => {
       f.keeps.push({ name, mime, way, data: [], finished: -1, ended: false })
       Some({ host: None, fake: f.keeps.length() - 1 })
     }
     None =>
-      match @host.keep_begin(name, mime, way~) {
+      match @hostapi.keep_begin(name, mime, way~) {
         Some(k) => Some({ host: Some(k), fake: -1 })
         None => None
       }
@@ -206,7 +206,7 @@ pub fn Keep::finish(self : Keep) -> Unit {
 ///|
 /// How it stands: under a Tester, kept from the frame after it was finished, where the system keeps downloads
 /// ("Download/" and its name).
-pub fn Keep::kept(self : Keep) -> @host.Kept {
+pub fn Keep::kept(self : Keep) -> @hostapi.Kept {
   match self.host {
     Some(k) => k.kept()
     None =>
@@ -233,8 +233,8 @@ pub fn Keep::end(self : Keep) -> Unit {
 }
 
 ///|
-/// `data`, all here, kept as a file named `name` (@host.keep): None when this host keeps none.
-pub fn keep(name : String, mime : String, data : Bytes, way? : @host.KeepWay = Downloads) -> Keep? {
+/// `data`, all here, kept as a file named `name` (@hostapi.keep): None when this host keeps none.
+pub fn keep(name : String, mime : String, data : Bytes, way? : @hostapi.KeepWay = Downloads) -> Keep? {
   match keep_begin(name, mime, way~) {
     Some(k) => {
       if k.append(data) {
@@ -253,18 +253,18 @@ pub fn Tester::kept(self : Tester) -> Array[(String, String, Bytes)] {
 }
 
 ///|
-/// The device's gallery being read (@host.GalleryRead), waited on until its photos are taken.
+/// The device's gallery being read (@hostapi.GalleryRead), waited on until its photos are taken.
 pub struct GalleryRead {
-  priv host : @host.GalleryRead
+  priv host : @hostapi.GalleryRead
 }
 
 ///|
-/// The gallery's photos read (@host.gallery_read): None where there is no gallery (a Tester's has none).
+/// The gallery's photos read (@hostapi.gallery_read): None where there is no gallery (a Tester's has none).
 pub fn gallery_read() -> GalleryRead? {
   match fake.val {
     Some(_) => None
     None =>
-      match @host.gallery_read() {
+      match @hostapi.gallery_read() {
         Some(h) => {
           outside_start(outside_gallery, h.id(), "the gallery read \{h.id()}")
           Some({ host: h })
@@ -275,8 +275,8 @@ pub fn gallery_read() -> GalleryRead? {
 }
 
 ///|
-/// Its photos once read (empty: none, or not allowed), None while it reads; taken once (@host.GalleryRead::photos).
-pub fn GalleryRead::photos(self : GalleryRead) -> Array[@host.GalleryPhoto]? {
+/// Its photos once read (empty: none, or not allowed), None while it reads; taken once (@hostapi.GalleryRead::photos).
+pub fn GalleryRead::photos(self : GalleryRead) -> Array[@hostapi.GalleryPhoto]? {
   let got = self.host.photos()
   if got is Some(_) {
     outside_end(outside_gallery, self.host.id())
@@ -285,21 +285,21 @@ pub fn GalleryRead::photos(self : GalleryRead) -> Array[@host.GalleryPhoto]? {
 }
 
 ///|
-/// A newer build downloaded, checked and handed to the system's installer (@host.update_install): how it goes,
+/// A newer build downloaded, checked and handed to the system's installer (@hostapi.update_install): how it goes,
 /// `update_state`, and the host's word as it changes (hostcall.mbt's outside_update). Under a Tester, nothing.
 pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
   match fake.val {
     Some(_) => ()
-    None => @host.update_install(url, sha256, size, name)
+    None => @hostapi.update_install(url, sha256, size, name)
   }
 }
 
 ///|
-/// How an update goes (@host.update_state's JSON), "" where there is none (a Tester's): read as a frame builds, each
+/// How an update goes (@hostapi.update_state's JSON), "" where there is none (a Tester's): read as a frame builds, each
 /// change of it bringing a frame of its own (outside_update), not looked for frame after frame.
 pub fn update_state() -> String {
   match fake.val {
     Some(_) => ""
-    None => @host.update_state()
+    None => @hostapi.update_state()
   }
 }

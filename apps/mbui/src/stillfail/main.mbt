@@ -17,8 +17,8 @@ fn core_topic(name : String, params : Map[String, Json]) -> @sfapp.Topic {
     if dumped.get(key) != Some(s.version) {
       dumped[key] = s.version
       match (s.value, s.error) {
-        (Some(v), _) => @host.log("DUMP \{key} \{v.stringify()}")
-        (_, Some(e)) => @host.log("DUMP \{key} error \{e.stringify()}")
+        (Some(v), _) => @hostapi.log("DUMP \{key} \{v.stringify()}")
+        (_, Some(e)) => @hostapi.log("DUMP \{key} error \{e.stringify()}")
         _ => ()
       }
     }
@@ -145,7 +145,7 @@ let read_only_calls : Array[String] = [
 
 ///|
 fn refused(name : String) -> Json {
-  @host.log("MBUI_READONLY: not calling " + name)
+  @hostapi.log("MBUI_READONLY: not calling " + name)
   {
     "code": "read_only",
     "message": "只读运行：不发送，不上传，不保存草稿（" + name + "）",
@@ -161,13 +161,13 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{logged(name, params)}")
+      @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call(name, params~, on_done=fn(r) {
       if call_log {
         match r {
-          Ok(v) => @host.log("ANSWER \{name} ok \{logged(name, v)}")
-          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+          Ok(v) => @hostapi.log("ANSWER \{name} ok \{logged(name, v)}")
+          Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
         }
       }
       done(r)
@@ -179,13 +179,13 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
+      @hostapi.log("CALL \{name} \{logged(name, params)} with \{bytes.length()} bytes")
     }
     @core.call(name, params~, bytes=Some(bytes), on_done=fn(r) {
       if call_log {
         match r {
-          Ok(v) => @host.log("ANSWER \{name} ok \{logged(name, v)}")
-          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+          Ok(v) => @hostapi.log("ANSWER \{name} ok \{logged(name, v)}")
+          Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
         }
       }
       done(r)
@@ -197,19 +197,19 @@ let core_source : @sfapp.Source = {
       return
     }
     if call_log {
-      @host.log("CALL \{name} \{logged(name, params)}")
+      @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.call_bytes(name, params~, on_done=fn(r) {
       match r {
         Ok((v, bytes)) => {
           if call_log {
-            @host.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
+            @hostapi.log("ANSWER \{name} ok \{logged(name, v)} with \{bytes.map(fn(b) { b.length() }).unwrap_or(0)} bytes")
           }
           done(Ok((v, bytes.unwrap_or(Bytes::new(0)))))
         }
         Err(e) => {
           if call_log {
-            @host.log("ANSWER \{name} error \{e.stringify()}")
+            @hostapi.log("ANSWER \{name} error \{e.stringify()}")
           }
           done(Err(e))
         }
@@ -223,15 +223,15 @@ let core_source : @sfapp.Source = {
       return 0
     }
     if call_log {
-      @host.log("CALL \{name} \{logged(name, params)}")
+      @hostapi.log("CALL \{name} \{logged(name, params)}")
     }
     @core.stream(name, params~, bytes~, on_value=fn(v, b) {
       on_value(v, b)
     }, on_done=fn(r) {
       if call_log {
         match r {
-          Ok(_) => @host.log("ANSWER \{name} ok")
-          Err(e) => @host.log("ANSWER \{name} error \{e.stringify()}")
+          Ok(_) => @hostapi.log("ANSWER \{name} ok")
+          Err(e) => @hostapi.log("ANSWER \{name} error \{e.stringify()}")
         }
       }
       done(r)
@@ -286,7 +286,7 @@ fn main {
   if @ui.env("MBUI_CORE_TRACE") == "1" && local_cloud(cloud) {
     // (bytes over MBUI_CORE_TRACE_BYTES, scripts/trace.py's MAX_BYTES, kept as their length alone)
     let bytes_max = @string.parse_int(@ui.env("MBUI_CORE_TRACE_BYTES")[:]) catch { _ => 16384 }
-    @core.trace_to(fn(line) { @host.log("CORETRACE " + line) }, bytes_max~)
+    @core.trace_to(fn(line) { @hostapi.log("CORETRACE " + line) }, bytes_max~)
     // first, what the app was started with (sfcore.begin reads it: the local cloud, its made-up account, what is asked
     // of signing in), for a replay's app to be started the same (src/sfreplay: Flow::start)
     let started : Map[String, Json] = {}
@@ -296,7 +296,7 @@ fn main {
         started[name] = Json::string(v)
       }
     }
-    @host.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
+    @hostapi.log("CORETRACE " + Json::object({ "env": Json::object(started) }).stringify())
     // and what the host said of its views (a video's frames' times, a frame grabbed), at the core's clock, beside it
     @ui.trace_views(fn(m) { @core.trace_note(m) })
     // and each line of a scripted run's script as it began (`{"step":…}`), and a line that acts again as its input

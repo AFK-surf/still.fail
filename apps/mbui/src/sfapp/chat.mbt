@@ -573,7 +573,7 @@ fn messages(
             flash_start(rd)
           }
           c.list_scroll_to(key, at, offset=-(chat_bar_h + 14.0))
-          @host.log("chat: gone to message \{target.to_int()}")
+          @hostapi.log("chat: gone to message \{target.to_int()}")
         } else {
           match v.thread {
             Some(thread) if v.more && first > target =>
@@ -616,7 +616,7 @@ fn messages(
                 match res {
                   Err(e) => {
                     rd.asked = -1.0
-                    @host.log("chat.older failed: " + text(Some(e), "message"))
+                    @hostapi.log("chat.older failed: " + text(Some(e), "message"))
                   }
                   _ => ()
                 }
@@ -1759,7 +1759,7 @@ fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) 
   if rd.bench_phase == 0 {
     if rows != rd.bench_rows {
       rd.bench_rows = rows
-      @host.log("CHATBENCH rows=\{rows} after \{rd.bench} frames")
+      @hostapi.log("CHATBENCH rows=\{rows} after \{rd.bench} frames")
     }
     if more && rows < 3000 && rd.bench < 3600 {
       c.list_scroll_to(key, 0)
@@ -1803,12 +1803,12 @@ fn chat_bench(c : @ui.Ctx, key : String, rd : Reading, more : Bool, rows : Int) 
       Some(i) => i.count
       None => 0
     }
-    @host.log(
+    @hostapi.log(
       "CHATBENCH frames=\{n} rows=\{rows} cpu_avg=\{sum / n.to_double()} cpu_p50=\{a[n / 2]} " +
       "cpu_p95=\{a[n * 95 / 100]} cpu_p99=\{a[n * 99 / 100]} cpu_max=\{a[n - 1]} slow(>8ms)=\{slow} " +
       "present_avg=\{psum / n.to_double()}",
     )
     // the bench's end, once its frames are counted and the frame's builds are over (MBUI_CHAT_BENCH runs only)
-    c.tell("chat-bench-end", fn() { @host.exit(0) })
+    c.tell("chat-bench-end", fn() { @hostapi.exit(0) })
   }
 }

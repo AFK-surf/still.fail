@@ -1,4 +1,4 @@
-// The device beyond the window on Android (src/host/device.mbt): dev.mbui.Device does it, these call it. Included at
+// The device beyond the window on Android (src/hostapi/device.mbt): dev.mbui.Device does it, these call it. Included at
 // the end of android_host.c (its env_, jstr, jbytes, mstr); device_init runs in its JNI_OnLoad.
 
 static jclass device_cls;
@@ -102,7 +102,7 @@ void mb_host_haptic(int32_t kind) {
   (*env)->CallStaticVoidMethod(env, device_cls, m_dv_haptic, kind);
 }
 
-// ---- an app's own native calls (src/host/native.mbt): dev.mbui.Natives answers them ----
+// ---- an app's own native calls (src/hostapi/native.mbt): dev.mbui.Natives answers them ----
 
 int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) {
   JNIEnv *env = env_();

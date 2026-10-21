@@ -1,4 +1,4 @@
-// The device beyond the window on macOS and iOS (src/host/device.mbt): a key catcher's keys, the soft keyboard's
+// The device beyond the window on macOS and iOS (src/hostapi/device.mbt): a key catcher's keys, the soft keyboard's
 // height, the clipboard read and written (pictures as PNG), the screen kept awake, haptics. Included by mac_app.m and
 // ios_app.m before their view's implementation (their mb_cb and the_view declared above it); everything here runs on
 // the main thread, MoonBit's.
@@ -8,7 +8,7 @@
 
 void mb_host_request_frame(void);
 
-// ---- a key catcher (@host.key_catch) ----
+// ---- a key catcher (@hostapi.key_catch) ----
 
 // the focus is a key catcher's: the view's keys are its (catch_key below), its input method has no text of its own
 static int key_catching;
@@ -286,7 +286,7 @@ void mb_host_haptic(int32_t kind) {
 #endif
 }
 
-// An app's own native calls (src/host/native.mbt): none on this host yet.
+// An app's own native calls (src/hostapi/native.mbt): none on this host yet.
 int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) { return 0; }
 int32_t mb_host_native_state(int32_t id) { return -1; }
 moonbit_string_t mb_host_native_result(int32_t id) { return moonbit_make_string_raw(0); }

@@ -2014,7 +2014,7 @@ fn attach_sheet(
   d : Draft,
 ) -> Unit {
   let t = @sf.theme()
-  let ask = fn(kind : @host.PickKind) {
+  let ask = fn(kind : @hostapi.PickKind) {
     cui.attach = false
     match @ui.pick(kind) {
       Some(p) => {
@@ -2058,7 +2058,7 @@ fn attach_sheet(
           cui.attach = false
           say(c, "这个版本还不能读相册的最近照片")
         }
-        _ => @host.gallery_ask()
+        _ => @hostapi.gallery_ask()
       }
     }
   }

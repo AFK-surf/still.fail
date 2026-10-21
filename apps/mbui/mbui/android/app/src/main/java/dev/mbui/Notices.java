@@ -13,7 +13,7 @@ import android.os.Bundle;
 import android.service.notification.StatusBarNotification;
 
 /**
- * The system's notifications (src/host/notify.mbt), as still.fail's Android app shows them (its app/Notices.kt
+ * The system's notifications (src/hostapi/notify.mbt), as still.fail's Android app shows them (its app/Notices.kt
  * Notifier): one channel ("messages", named as the app says), one notification per tag (the same id for all, the tag
  * telling them apart: a newer one for a chat replaces the older), tapped it opens MainActivity with what it was shown
  * with ({@link #OPENS}), which the app reads once ({@link #text} 0). POST_NOTIFICATIONS is asked for from the activity
@@ -159,7 +159,7 @@ public final class Notices {
     /**
      * The activity started or brought back by a notification's tap: what it opens, kept for the app; or by a link (an
      * http(s) ACTION_VIEW the manifest takes: one of the app's links tapped in another app), posted to the app on its
-     * system channel ({"link": url}: src/host/system.mbt), so a run's tape has it. Each is taken off the intent once
+     * system channel ({"link": url}: src/hostapi/system.mbt), so a run's tape has it. Each is taken off the intent once
      * told (as still.fail's MainActivity.handle sets an empty one).
      */
     static void from(Intent intent) {

@@ -71,7 +71,7 @@ fn answer(reply : @ui.SiteReply, status : Int, kind : String, body : String) -> 
 ///|
 fn serve(req : @ui.SiteRequest, reply : @ui.SiteReply) -> Unit {
   served.push("\{req.verb} \{req.path}")
-  @host.log("webdemo: site asked \{req.verb} \{req.path} (page \{req.page}, body \{req.body.length()} bytes)")
+  @hostapi.log("webdemo: site asked \{req.verb} \{req.path} (page \{req.page}, body \{req.body.length()} bytes)")
   match req.path {
     "/" => answer(reply, 200, "text/html; charset=utf-8", site_index)
     "/style.css" => answer(reply, 200, "text/css; charset=utf-8", site_css)
@@ -139,7 +139,7 @@ fn pane(c : @ui.Ctx, title : String, v : @ui.NativeView, body : () -> Unit) -> U
 fn view(c : @ui.Ctx) -> Unit {
   let page = once(page_view, fn() { @ui.NativeView::page(page_html) })
   let site = once(site_view, fn() {
-    @ui.NativeView::site("/", serve, leave=fn(url) { @host.log("webdemo: link left by to \{url}") })
+    @ui.NativeView::site("/", serve, leave=fn(url) { @hostapi.log("webdemo: link left by to \{url}") })
   })
   c.box(w=Fill(1.0), h=Fill(1.0), bg=0xFFFFFFFFL, pad=20.0, gap=12.0, fn() {
     c.text("网页视图", size=22.0, weight=700, wrap=false) |> ignore
@@ -173,6 +173,6 @@ fn view(c : @ui.Ctx) -> Unit {
 
 ///|
 fn main {
-  @host.window_setup(640.0, 480.0, 900.0, 640.0)
+  @hostapi.window_setup(640.0, 480.0, 900.0, 640.0)
   @ui.run("mbui web views", view)
 }

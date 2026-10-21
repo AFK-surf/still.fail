@@ -76,7 +76,7 @@ fn taping() -> Bool {
 /// A line of the run's tape, where it is kept.
 fn tape_line(s : String) -> Unit {
   if draw_logging() {
-    @host.log(s)
+    @hostapi.log(s)
   }
   match tape.val {
     Some(lines) => lines.push(s)
@@ -114,10 +114,10 @@ fn take_messages() -> Unit {
       }
     }
     None => {
-      if @host.post_take() == 0 {
+      if @hostapi.post_take() == 0 {
         return
       }
-      while @host.post_next() is Some((channel, json, b)) {
+      while @hostapi.post_next() is Some((channel, json, b)) {
         hand_on(channel, json, if b.length() > 0 { Some(b) } else { None })
       }
     }

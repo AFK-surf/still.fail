@@ -40,14 +40,14 @@ fn keeps_frame(c : @ui.Ctx) -> Unit {
     match k.keep.kept() {
       Keeping => left.push(k)
       KeptAt(at) => {
-        @host.log("kept \{k.name}: \{at}")
+        @hostapi.log("kept \{k.name}: \{at}")
         k.keep.end()
         say(c, tr("android-chat.file.saved"))
       }
       // the person called the panel or the sheet off: nothing to say
       CalledOff => k.keep.end()
       Failed => {
-        @host.log("keep \{k.name}: failed")
+        @hostapi.log("keep \{k.name}: failed")
         k.keep.end()
         say(c, tr("android-chat.file.saveFailed"))
       }

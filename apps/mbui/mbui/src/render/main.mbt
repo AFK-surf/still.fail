@@ -172,9 +172,9 @@ fn main {
   dl.glyphs.each(fn(no, gl) {
     let (size, weight, style, cluster, text) = gl
     let key = if cluster < 0 {
-      @host.text_key(text, size, weight, style)
+      @hostapi.text_key(text, size, weight, style)
     } else {
-      let n = @host.shape(text, size, weight, style, shaped)
+      let n = @hostapi.shape(text, size, weight, style, shaped)
       if cluster < n {
         shaped[cluster * 4 + 3].to_int()
       } else {
@@ -184,7 +184,7 @@ fn main {
     if key < 0 {
       unknown = unknown + 1
     } else {
-      @host.glyph(key, g)
+      @hostapi.glyph(key, g)
       places[no] = (g[0], g[1], g[2] * dl.scale, g[3] * dl.scale)
     }
   })
@@ -198,12 +198,12 @@ fn main {
         Some(b64) => from_base64(b64)
         None => read_bytes(path + ".img\{no}")
       }
-      @host.image_load_bytes(data, px)
+      @hostapi.image_load_bytes(data, px)
     } else {
-      @host.image_load(src, px)
+      @hostapi.image_load(src, px)
     }
     let mut tries = 0
-    while @host.image_info(mine, info) == 0 && tries < 3000 {
+    while @hostapi.image_info(mine, info) == 0 && tries < 3000 {
       spin(1.0)
       tries = tries + 1
     }

@@ -9,7 +9,7 @@
 // linking Firebase Cloud Messaging hands dev.mbui.Notices the token and each push delivered: still.fail's Push.java):
 // `push_token` and `push_next` give what it handed, none where the app links none. macOS: UNUserNotificationCenter (mac_app.m) when the app is a bundle (its .app); a bare
 // executable has no bundle for it, and keeps what would be shown, said on the log (`NOTICE …`), as iOS, Windows and the
-// page do (no way in there yet). A scripted run taps one by its words everywhere (@host.drive 6, src/ui/drive.mbt
+// page do (no way in there yet). A scripted run taps one by its words everywhere (@hostapi.drive 6, src/ui/drive.mbt
 // `notice`), as on Android.
 
 ///|

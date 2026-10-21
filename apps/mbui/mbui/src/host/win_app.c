@@ -50,7 +50,7 @@ static int marked_len;
 static WCHAR high_surrogate;
 static const char *script;
 static const wchar_t *shot_dir;
-// The window as the app asks for it (@host.window_setup), the pointer's shape (@host.set_cursor), whether the
+// The window as the app asks for it (@hostapi.window_setup), the pointer's shape (@hostapi.set_cursor), whether the
 // pointer's leaving is asked to be told (TrackMouseEvent), whether the right button is down
 static double setup_w, setup_h, setup_min_w, setup_min_h;
 static int cursor_kind, tracking_leave, right_down;
@@ -361,7 +361,7 @@ static LRESULT CALLBACK wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
       }
       break;
     case WM_GETMINMAXINFO: {
-      // the least the app asked for (@host.window_setup), as a client area at the window's scale
+      // the least the app asked for (@hostapi.window_setup), as a client area at the window's scale
       if (setup_min_w > 0 || setup_min_h > 0) {
         UINT dpi = GetDpiForWindow(h);
         double k = (dpi ? dpi : 96) / 96.0;
@@ -526,7 +526,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
   memcpy(t, title, (size_t)n * sizeof(WCHAR));
   DWORD style = WS_OVERLAPPEDWINDOW;
   // MBUI_WIN=<w>x<h>: the client area's size in points (a phone's, for the narrow layouts); else the app's own
-  // (@host.window_setup); 900 x 720 by default
+  // (@hostapi.window_setup); 900 x 720 by default
   double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
   const char *win = getenv("MBUI_WIN");
   if (win) sscanf(win, "%lfx%lf", &ww, &wh);
@@ -646,7 +646,7 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   CloseClipboard();
 }
 
-// A secret on the clipboard (@host.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
+// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) {
   (void)clear_ms;
   mb_host_clipboard_set(s);
@@ -664,21 +664,21 @@ void mb_host_log(moonbit_string_t s) {
   free(u);
 }
 
-// The app over another app done (@host.over_done): it never is here.
+// The app over another app done (@hostapi.over_done): it never is here.
 void mb_host_over_done(int32_t open_app) { (void)open_app; }
 
-// A page in a browser's tab over the app (@host.open_tab): the default browser, as open_url.
+// A page in a browser's tab over the app (@hostapi.open_tab): the default browser, as open_url.
 int32_t mb_host_open_url(moonbit_string_t s);
 int32_t mb_host_open_tab(moonbit_string_t s) { return mb_host_open_url(s); }
 
-// What holds the app up while it listens for a browser (@host.hold_words): nothing here, the app runs on.
+// What holds the app up while it listens for a browser (@hostapi.hold_words): nothing here, the app runs on.
 void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {
   (void)channel;
   (void)title;
   (void)body;
 }
 
-// A URL handed to the system (@host.open_url): ShellExecute, the default browser or the app that takes it; only
+// A URL handed to the system (@hostapi.open_url): ShellExecute, the default browser or the app that takes it; only
 // http, https and mailto (nothing ShellExecute would run as a program).
 int32_t mb_host_open_url(moonbit_string_t s) {
   int n = Moonbit_array_length(s);
@@ -694,7 +694,7 @@ int32_t mb_host_open_url(moonbit_string_t s) {
   return ok;
 }
 
-// The word around an offset (@host.word_at): none from the host here yet (the app's own rule, words.mbt).
+// The word around an offset (@hostapi.word_at): none from the host here yet (the app's own rule, words.mbt).
 double mb_host_word_at(moonbit_string_t text, int32_t off) {
   (void)text; (void)off;
   return -1;
@@ -734,13 +734,13 @@ void mb_host_exit(int32_t code) { exit(code); }
 void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) { back_on = on; }
 
-// The app in front or not (@host.set_app_state): not told here yet (the app counts itself shown and in front).
+// The app in front or not (@hostapi.set_app_state): not told here yet (the app counts itself shown and in front).
 void mb_host_set_app_state(void (*f)(int32_t)) { (void)f; }
 
-// Whether the system is set to dark (@host.system_dark): not read here yet (light).
+// Whether the system is set to dark (@hostapi.system_dark): not read here yet (light).
 int32_t mb_host_system_dark(void) { return 0; }
 
-// Sharing (@host.share, @host.shared_in): no share sheet here yet; nothing comes in.
+// Sharing (@hostapi.share, @hostapi.shared_in): no share sheet here yet; nothing comes in.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
   (void)text; (void)name; (void)mime; (void)data;
   return 0;
@@ -748,9 +748,9 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
 
-// Updates (@host.app_version, update_install, update_state): this app does not update itself here.
+// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
-// A package for the system's installer (@host.install_package): none here, said on the system channel (system.mbt):
+// A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt):
 // its name as UTF-8, escaped for JSON.
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   (void)data;
@@ -777,10 +777,10 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
 }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
-// Turned sideways for a film (@host.set_sideways): a window does not turn.
+// Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 
-// The app drawn dark (@host.set_dark): nothing of the host's own follows it here yet.
+// The app drawn dark (@hostapi.set_dark): nothing of the host's own follows it here yet.
 void mb_host_set_dark(int32_t dark) { (void)dark; }
 
 // Notifications (notify.mbt): none shown here yet (the toast notifications and WNS are a later slice's): nothing kept, nothing tapped, no push; what the
@@ -836,7 +836,7 @@ int32_t mb_host_drive(int32_t kind, moonbit_string_t text) {
   return 0;
 }
 
-// The window as the app wants it, asked before `run` (@host.window_setup). Windows keeps its own title bar here.
+// The window as the app wants it, asked before `run` (@hostapi.window_setup). Windows keeps its own title bar here.
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   (void)inset;
   setup_min_w = min_w;
@@ -854,7 +854,7 @@ void mb_host_window_drag(void) {
   SendMessageW(hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
 }
 
-// The pointer's shape (@host.set_cursor), shown at once where it is over the window.
+// The pointer's shape (@hostapi.set_cursor), shown at once where it is over the window.
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
   POINT p;

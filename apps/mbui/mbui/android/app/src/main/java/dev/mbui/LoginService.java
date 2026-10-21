@@ -27,7 +27,7 @@ public final class LoginService extends Service {
     private static final int ID = 9;
     private static final long MOST_MS = 16 * 60_000L;
     /**
-     * What its notice says (@host.hold_words, the app's words: still.fail's LoginRelay.kt notification): its channel's
+     * What its notice says (@hostapi.hold_words, the app's words: still.fail's LoginRelay.kt notification): its channel's
      * name, its title (在 Studio 上登录 gcloud), its line.
      */
     private static volatile String channelName = "Login", title = "Login", body = "";

@@ -21,7 +21,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 
 /**
- * The app keeping itself current (@host.update_install, still.fail's Updates.kt and Install.kt): a newer build the core
+ * The app keeping itself current (@hostapi.update_install, still.fail's Updates.kt and Install.kt): a newer build the core
  * found (`app.update`) downloaded into the cache, picking up where a cut connection left off (the bytes so far kept in
  * `<name>.part`, the rest asked for as a range, a few times over with a growing pause while each try gets further),
  * checked against its sha256, and handed to the system's installer, which installs it over this one once the person
@@ -185,11 +185,11 @@ final class Updates {
     }
 
     /**
-     * A package the app has (an APK of a chat: @host.install_package, still.fail's FilePreview.kt install) handed to the
+     * A package the app has (an APK of a chat: @hostapi.install_package, still.fail's FilePreview.kt install) handed to the
      * system's installer, which asks the person to confirm, its bytes written and committed on a thread of their own.
      * When the app may not install apps yet, the system's page for that leave opens instead (as Install.kt mayInstall).
      * What comes of it, when it is not installed, comes to the app on its system channel ({"install": {"name", "allow"}}
-     * or {"install": {"name", "error"}}: src/host/system.mbt), so a run's tape has it.
+     * or {"install": {"name", "error"}}: src/hostapi/system.mbt), so a run's tape has it.
      */
     static void installPackage(String name, byte[] bytes) {
         Context c = Host.activity;
@@ -220,7 +220,7 @@ final class Updates {
         }, "mbui-install").start();
     }
 
-    /** A package's install failed: said to the app (src/host/system.mbt `install`). */
+    /** A package's install failed: said to the app (src/hostapi/system.mbt `install`). */
     static void installFailed(String name, String error) {
         Host.log("install: " + name + " failed: " + error);
         installSaid(name, "error", error);

@@ -117,7 +117,10 @@ def lto_for(cc, j):
         os.makedirs(cache, exist_ok=True)
     if apple:
         return ['-flto=thin'] + ([f'-Wl,-cache_path_lto,{os.path.abspath(cache)}'] if cache else [])
-    return ['-flto=thin', f'-Wl,--thinlto-jobs={j}'] + ([f'-Wl,--thinlto-cache-dir={os.path.abspath(cache)}'] if cache else [])
+    # (elsewhere lld, which these flags are for, as Linux's own ld takes no bitcode: clang's own beside it, as
+    # GitHub's ubuntu-24.04 has it)
+    return ['-flto=thin', '-fuse-ld=lld', f'-Wl,--thinlto-jobs={j}'] + (
+        [f'-Wl,--thinlto-cache-dir={os.path.abspath(cache)}'] if cache else [])
 
 
 def lto_compile(msvc):
@@ -262,7 +265,7 @@ _tools = {}
 
 def tool_identity(tool):
     """What a compiler or linker is, beyond its command line: its own --version and the file it runs (a wrapper such
-    as scripts/cc_apple.sh by its content too); MSVC's cl and link by their files. A new Xcode, a new MSVC or a
+    as the shim mbc.py writes, by its content too); MSVC's cl and link by their files. A new Xcode, a new MSVC or a
     wrapper changed: its objects and links are not taken for the ones it makes."""
     k = tuple(tool)
     if k not in _tools:

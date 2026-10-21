@@ -32,7 +32,7 @@ static void go_back(void) {
 static MBView *the_view;
 static void notice_start(void);  // the system's notifications (below), before the app runs
 static int bench_mode;
-// The desktop window as the app asks for it (@host.window_setup): its first size and its least, and whether its
+// The desktop window as the app asks for it (@hostapi.window_setup): its first size and its least, and whether its
 // title bar is the app's own top row (the system's buttons in it, 16 in and centred on its 44: as still.fail's
 // desktop app's hiddenInset window)
 static double setup_w, setup_h, setup_min_w, setup_min_h;
@@ -45,7 +45,7 @@ static int ground_dark;
 // the same value); else the hosts' own (F5F5F7, 1B1C1F)
 static uint32_t ground_light = 0xF5F5F7, ground_of_dark = 0x1B1C1F;
 static NSView *the_box;
-// the pointer's shape (@host.set_cursor), and the press under way (what @host.window_drag drags the window with)
+// the pointer's shape (@hostapi.set_cursor), and the press under way (what @hostapi.window_drag drags the window with)
 static int cursor_kind;
 static NSEvent *down_event;
 static int down_secondary;
@@ -718,7 +718,7 @@ static void place_buttons(NSWindow *w) {
 // ---------------------------------------------------------------------------
 // The host API MoonBit calls
 
-// The window as the app wants it, asked before `run` (@host.window_setup).
+// The window as the app wants it, asked before `run` (@hostapi.window_setup).
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   setup_min_w = min_w;
   setup_min_h = min_h;
@@ -733,7 +733,7 @@ int32_t mb_host_window_inset(void) {
   return setup_inset && w && !(w.styleMask & NSWindowStyleMaskFullScreen) ? 1 : 0;
 }
 
-// The press under way drags the window (the app's top row: @host.window_drag); twice, what the system's title bar
+// The press under way drags the window (the app's top row: @hostapi.window_drag); twice, what the system's title bar
 // does on a double click (zoom, minimize or nothing, as set in the system's settings).
 void mb_host_window_drag(void) {
   NSWindow *w = the_view.window;
@@ -748,7 +748,7 @@ void mb_host_window_drag(void) {
   [w performWindowDragWithEvent:e];
 }
 
-// The pointer's shape (@host.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
+// The pointer's shape (@hostapi.set_cursor): 0 the arrow, 1 a hand, 2 the I-beam, 3 and 4 resizing sideways and up and
 // down, 5 an open hand.
 void mb_host_set_cursor(int32_t kind) {
   cursor_kind = kind;
@@ -769,7 +769,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
     notice_start();
     // MBUI_WIN=<w>x<h>: the window's size (a phone's, for the narrow layouts)
-    // (else the app's own, @host.window_setup; else 900×720)
+    // (else the app's own, @hostapi.window_setup; else 900×720)
     double ww = setup_w > 0 ? setup_w : 900, wh = setup_h > 0 ? setup_h : 720;
     const char *win = getenv("MBUI_WIN");
     if (win) sscanf(win, "%lfx%lf", &ww, &wh);
@@ -782,7 +782,7 @@ void mb_host_run(moonbit_string_t title, mb_frame_fn frame, mb_pointer_fn pointe
     if (setup_min_w > 0 || setup_min_h > 0) w.contentMinSize = NSMakeSize(setup_min_w, setup_min_h);
     if (!win && setup_w > 0) [w center];
     if (setup_inset) {
-      // no title bar of the system's: the app's top row is it (the buttons in it, its drag: @host.window_drag)
+      // no title bar of the system's: the app's top row is it (the buttons in it, its drag: @hostapi.window_drag)
       w.titlebarAppearsTransparent = YES;
       w.titleVisibility = NSWindowTitleHidden;
     }
@@ -943,7 +943,7 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   [pb setString:mb_ns_from_string(s) forType:NSPasteboardTypeString];
 }
 
-// A secret on the clipboard (@host.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
+// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
 
 
@@ -952,17 +952,17 @@ void mb_host_log(moonbit_string_t s) {
   fflush(stdout);
 }
 
-// The app over another app done (@host.over_done): it never is here.
+// The app over another app done (@hostapi.over_done): it never is here.
 void mb_host_over_done(int32_t open_app) {}
 
-// A page in a browser's tab over the app (@host.open_tab): macOS has none of its own, so the browser, as open_url.
+// A page in a browser's tab over the app (@hostapi.open_tab): macOS has none of its own, so the browser, as open_url.
 int32_t mb_host_open_url(moonbit_string_t s);
 int32_t mb_host_open_tab(moonbit_string_t s) { return mb_host_open_url(s); }
 
-// What holds the app up while it listens for a browser (@host.hold_words): nothing to say here, the app runs on.
+// What holds the app up while it listens for a browser (@hostapi.hold_words): nothing to say here, the app runs on.
 void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {}
 
-// A URL handed to the system (@host.open_url): NSWorkspace, the browser or the app that takes it. A scripted run
+// A URL handed to the system (@hostapi.open_url): NSWorkspace, the browser or the app that takes it. A scripted run
 // (MBUI_SCRIPT, MBUI_DRIVE) only says it on the log (open-url: …), opening nothing on the machine it runs on.
 int32_t mb_host_open_url(moonbit_string_t s) {
   NSString *u = mb_ns_from_string(s);
@@ -1017,7 +1017,7 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
 }
 
-// The app in front or not (@host.set_app_state): 1 while the window is shown (not hidden, minimized or covered), | 2
+// The app in front or not (@hostapi.set_app_state): 1 while the window is shown (not hidden, minimized or covered), | 2
 // while it is also the active app's key window; told as any of that changes.
 static void (*state_cb)(int32_t);
 void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
@@ -1030,7 +1030,7 @@ static void tell_state(void) {
   [the_view requestFrame];
 }
 
-// Whether the system's appearance is dark (@host.system_dark): the app's own (NSApp.appearance is never set, so this is
+// Whether the system's appearance is dark (@hostapi.system_dark): the app's own (NSApp.appearance is never set, so this is
 // the system's even while the window is made to look otherwise below).
 int32_t mb_host_system_dark(void) {
   NSAppearanceName n = [NSApp.effectiveAppearance
@@ -1038,7 +1038,7 @@ int32_t mb_host_system_dark(void) {
   return [n isEqualToString:NSAppearanceNameDarkAqua] ? 1 : 0;
 }
 
-// Sharing out (@host.share): the system's sharing picker over the window, the words or the file (kept in a folder
+// Sharing out (@hostapi.share): the system's sharing picker over the window, the words or the file (kept in a folder
 // of the app's own in the temporary directory). Nothing comes in on macOS but, for scripted runs, the files
 // MBUI_SHARE_FILES names (paths split by |) once, as Android's ACTION_SEND of files would bring them.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
@@ -1093,9 +1093,9 @@ moonbit_bytes_t mb_host_shared_in_file(int32_t i) {
   return out;
 }
 
-// Updates (@host.app_version, update_install, update_state): this app does not update itself here.
+// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
-// A package for the system's installer (@host.install_package): none here, said on the system channel (system.mbt).
+// A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt).
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   NSDictionary *said = @{@"install" : @{@"name" : mb_ns_from_string(name), @"error" : @"unsupported"}};
   NSData *json = [NSJSONSerialization dataWithJSONObject:said options:0 error:NULL];
@@ -1107,10 +1107,10 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
 }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
-// Turned sideways for a film (@host.set_sideways): a window does not turn.
+// Turned sideways for a film (@hostapi.set_sideways): a window does not turn.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 
-// The app drawn dark or light (@host.set_dark): the window's title bar the same.
+// The app drawn dark or light (@hostapi.set_dark): the window's title bar the same.
 void mb_host_set_dark(int32_t dark) {
   NSWindow *w = the_view.window;
   if (w) w.appearance = [NSAppearance appearanceNamed:dark ? NSAppearanceNameDarkAqua : NSAppearanceNameAqua];

@@ -9,7 +9,7 @@
 #   scripts/host_contract.sh HOST text [NAME]   the kept run NAME's text (HOST_controls by default; mac: mini1_controls) asked of the host's
 #        text system again (MBUI_TEXTCHECK, src/kitdemo/textcheck.mbt): each answer the same, or it fails
 #   scripts/host_contract.sh HOST marks         (mac, ios, android) test/marks/marks.json drawn by the host onto
-#        test/marks/base.png (@host.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
+#        test/marks/base.png (@hostapi.draw_marks; kitdemo's MBUI_MARKS, src/kitdemo/markscheck.mbt), twice: the two PNGs
 #        the same to the byte (out/host/HOST/marks.png), and the same as goldens/marks/HOST.png, on what drew it
 #        (goldens/marks/HOST.txt's checked lines: the system's build, its fonts; out/host/HOST/marks.txt this run's)
 #   scripts/host_contract.sh HOST runner        (mac, windows, android) the run's runner says it has done what was
@@ -160,7 +160,7 @@ run() {
       pid=${pid##*: }
       [[ $pid =~ ^[0-9]+$ ]] || { echo "host_contract: the app did not start"; tail -20 "$2"; return 1; }
       # the app's own named end, or its process gone without it (a crash); then its exit (the drive's and the check's
-      # own, @host.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
+      # own, @hostapi.exit), so that its log is all written (scripts/logwait.py: kqueue's events, no time)
       "$PY" scripts/logwait.py --log "$2" --line "DRIVE (PASS|END|FAIL)|TEXTCHECK (done|no kept)|MARKS (done|none|failed)|VIEWCHECK done|SITECHECK done" --pid $pid \
         || { echo "host_contract: the app ($pid) ended, or hung, saying nothing of its end"; tail -20 "$2"; return 1; }
       "$PY" scripts/logwait.py --pid $pid ;;
@@ -454,8 +454,8 @@ print(f"site contract ({h}): " + " | ".join(steps))
 PYEOF
     ;;
   marks)
-    # (Windows and the web draw no marks: @host.draw_marks is None there)
-    case $H in mac|ios|android) ;; *) echo "marks contract: $H draws no marks (@host.draw_marks is None there)"; exit 1 ;; esac
+    # (Windows and the web draw no marks: @hostapi.draw_marks is None there)
+    case $H in mac|ios|android) ;; *) echo "marks contract: $H draws no marks (@hostapi.draw_marks is None there)"; exit 1 ;; esac
     MK="MBUI_MARKS=$(base64 < test/marks/marks.json | tr -d '\n\r') MBUI_MARKS_IMAGE=$(base64 < test/marks/base.png | tr -d '\n\r')"
     rm -f $O/marks*.png $O/marks*.log $O/marks.txt
     for n in 1 2; do

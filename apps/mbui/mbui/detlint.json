@@ -6,12 +6,15 @@
     "framework": [
       "src/ui",
       "src/host",
+      "src/hostapi",
       "src/motion",
       "src/effect"
     ],
     "clock_sources": [
       "src/host",
-      "src/ui/hostcall.mbt"
+      "src/hostapi",
+      "src/ui/hostcall.mbt",
+      "src/ui/fake_host.mbt"
     ],
     "frame_core": [
       "src/ui/app.mbt",
@@ -19,7 +22,9 @@
       "src/ui/hostcall.mbt",
       "src/ui/hostread.mbt",
       "src/host",
-      "src/ui/fx.mbt"
+      "src/hostapi",
+      "src/ui/fx.mbt",
+      "src/ui/fake_host.mbt"
     ]
   },
   "globals": {
@@ -152,7 +157,8 @@
     },
     "style-exact": {},
     "build-effect": {},
-    "unsettled-ok": {}
+    "unsettled-ok": {},
+    "host-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -181,6 +187,7 @@
     "box-loose": {},
     "style-exact": {},
     "build-effect": {},
-    "unsettled-ok": {}
+    "unsettled-ok": {},
+    "host-import": {}
   }
 }

@@ -55,7 +55,7 @@ test "a link held still: its menu (打开链接, 复制链接), the link not fol
 }
 
 // still.fail's own links (links.mbt): what the core says each opens (`link.parse`), opened as pages; from outside
-// (@host.system_channel `link`), an item's chat over its workspace's Home; an invitation's link, its sheet.
+// (@hostapi.system_channel `link`), an item's chat over its workspace's Home; an invitation's link, its sheet.
 
 ///|
 /// The fixture's app in `mode`, its calls kept and answered (`link.parse` as the core would, `invitation.*` as
@@ -156,7 +156,7 @@ test "an item's link from another app (an App Link): its chat alone over its wor
   let t = links_core(calls, "chat")
   app.nav.push(Settings)
   t.run_for(@ui.nav_push_ms)
-  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/o/ws1/st1/s-c2\"}")
+  t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/o/ws1/st1/s-c2\"}")
   t.frame()
   let pages = app.nav.pages()
   assert_eq(pages.length(), 2)
@@ -250,7 +250,7 @@ test "an entry before what is loaded: the page before asked for first" {
 test "an invitation's link: what it leads to, then joined as the account (InviteLinkSheet)" {
   let calls : Array[Made] = []
   let t = links_core(calls, "home")
-  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok1\"}")
+  t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok1\"}")
   t.frame()
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("加入「新的工作室」") is Some(_))
@@ -269,7 +269,7 @@ test "an invitation's link: what it leads to, then joined as the account (Invite
 test "an invitation that cannot be used: why, and only 关闭" {
   let calls : Array[Made] = []
   let t = links_core(calls, "home", invitation=Err({ "code": "gone", "message": "邀请已过期" }))
-  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok2\"}")
+  t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok2\"}")
   t.frame()
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("邀请无效") is Some(_))
@@ -283,7 +283,7 @@ test "an invitation that cannot be used: why, and only 关闭" {
 test "an invitation's link opened signed out: sign in first" {
   let calls : Array[Made] = []
   let t = links_core(calls, "signin")
-  t.post(@host.system_channel, "{\"link\":\"https://app.still.fail/invite#tok3\"}")
+  t.post(@hostapi.system_channel, "{\"link\":\"https://app.still.fail/invite#tok3\"}")
   t.frame()
   t.run_for(@ui.nav_push_ms)
   assert_true(t.find("登录 still.fail") is Some(_))
@@ -304,12 +304,12 @@ test "an invitation's token: from its link, or pasted alone" {
 test "back on screen after a while, the core is told how long it was away; another network, that its links are dead" {
   let calls : Array[Made] = []
   let t = links_core(calls, "home")
-  t.post(@host.system_channel, "{\"shown\":{\"away\":42000}}")
+  t.post(@hostapi.system_channel, "{\"shown\":{\"away\":42000}}")
   t.frame()
   let woke = named(calls, "client.wake")
   assert_eq(woke.length(), 1)
   assert_eq(number(Some(woke[0].params), "away"), 42000.0)
-  t.post(@host.system_channel, "{\"network\":true}")
+  t.post(@hostapi.system_channel, "{\"network\":true}")
   t.frame()
   let again = named(calls, "client.wake")
   assert_eq(again.length(), 2)

@@ -21,7 +21,7 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * A small HTTP listener on a loopback address, Android's twin of src/host/apple_listen.m (listen_api.h): a login's
  * browser coming back to http://127.0.0.1:&lt;port&gt;/… Two users, as on Apple's systems: an app's own sign-in in the
- * browser ({@link BrowserLogin}, mbui/host {@code browser_login}) and the still.fail core's {@code listen.*}
+ * browser ({@link BrowserLogin}, mbui/hostapi {@code browser_login}) and the still.fail core's {@code listen.*}
  * ({@link CoreHost}: taking a station's login callback on this device, {@code canRelay}).
  *
  * <p>Each request is read whole (head up to 64 KB, body up to 1 MB, 15 s at most, as ember's Loopback.kt) and handed on

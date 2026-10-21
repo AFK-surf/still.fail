@@ -13,7 +13,7 @@
 // - `invite` (/invite#<token>): what the invitation leads to, in a sheet, before it is accepted (links_sheet.mbt).
 // - `screen` (/w/…/s/…/screen/<id>): the station's screen in the viewer (open_screen).
 //
-// A link the system opened the app with (@host.system_channel `link`: one of the app's links tapped in another app,
+// A link the system opened the app with (@hostapi.system_channel `link`: one of the app's links tapped in another app,
 // the manifest's App Links) opens as from outside, once signed in and the workspaces known.
 
 ///|
@@ -62,7 +62,7 @@ let link_workspace : Ref[String] = Ref("")
 let link_src : Ref[Source?] = Ref(None)
 
 ///|
-/// The links the system opened the app with (@host.system_channel `link`), oldest first, not opened yet: opened once
+/// The links the system opened the app with (@hostapi.system_channel `link`), oldest first, not opened yet: opened once
 /// signed in and the workspaces known (an invitation's shows its sheet signed out too).
 let link_later : Array[String] = []
 
@@ -80,7 +80,7 @@ fn links_given(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
   for url in given {
-    @host.log("link opens " + url)
+    @hostapi.log("link opens " + url)
     open_link_in(src, url, outside=true)
   }
 }
@@ -92,7 +92,7 @@ fn signed_out_links(src : Source) -> Unit {
   let given = link_later.copy()
   link_later.clear()
   for url in given {
-    @host.log("link opens " + url + " (signed out)")
+    @hostapi.log("link opens " + url + " (signed out)")
     (src.call)("link.parse", { "url": Json::string(url) }, fn(r) {
       match r {
         Ok(Object(_) as t) if text(Some(t), "opens") == "invite" && text(Some(t), "token") != "" =>
@@ -120,7 +120,7 @@ fn open_link_in(
       Ok(Object(_) as t) => if !open_target(src, link_target(t), outside, at) { or_else() }
       Ok(_) => or_else()
       Err(e) => {
-        @host.log("link.parse failed: " + text(Some(e), "message"))
+        @hostapi.log("link.parse failed: " + text(Some(e), "message"))
         or_else()
       }
     }
@@ -306,7 +306,7 @@ fn open_item(
   match at {
     Some(seq) => {
       // (what the end-to-end flows of a notification tapped look for: e2e/flows/40-notice-wait.check)
-      @host.log("notice opens \{station}|\{session} at \{seq.to_int()}")
+      @hostapi.log("notice opens \{station}|\{session} at \{seq.to_int()}")
       go_to(r, seq)
     }
     None => ()

@@ -101,7 +101,7 @@ core_has() {
 # whether the device's own values the core keeps with the host (its prefs: `storage.set` of device/prefs) hold $1
 core_device_has() { grep -rqaF "$1" $CORE 2>/dev/null; }
 peer() { "$ROOT/scripts/e2e-local.sh" peer "$@"; }
-# a file the app kept on the device (its log's "kept NAME: WHERE", @host.keep: on macOS a path in MBUI_DOWNLOADS_DIR,
+# a file the app kept on the device (its log's "kept NAME: WHERE", @hostapi.keep: on macOS a path in MBUI_DOWNLOADS_DIR,
 # on Android Download/<name as MediaStore made it>): its path here (on Android a copy pulled from the emulator)
 kept_file() {
   local where=$(sed -n "s/^kept $1: //p" $OUT/$name.log | tail -1)

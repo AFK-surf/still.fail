@@ -462,7 +462,7 @@ static void touch_gone(int end, NSSet<UITouch *> *t, UIView *v) {
 static MBController *the_controller;
 
 @implementation MBController
-// the status bar's words light over the app drawn dark, dark over it drawn light (@host.set_dark)
+// the status bar's words light over the app drawn dark, dark over it drawn light (@hostapi.set_dark)
 - (UIStatusBarStyle)preferredStatusBarStyle {
   return self.dark ? UIStatusBarStyleLightContent : UIStatusBarStyleDarkContent;
 }
@@ -639,7 +639,7 @@ void mb_host_clipboard_set(moonbit_string_t s) {
   UIPasteboard.generalPasteboard.string = mb_ns_from_string(s);
 }
 
-// A secret on the clipboard (@host.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
+// A secret on the clipboard (@hostapi.clipboard_set_secret): as any words here (no sensitive mark, nothing cleared yet).
 void mb_host_clipboard_secret(moonbit_string_t s, double clear_ms) { mb_host_clipboard_set(s); }
 
 
@@ -653,17 +653,17 @@ static void say(NSString *s) {
 
 void mb_host_log(moonbit_string_t s) { say(mb_ns_from_string(s)); }
 
-// The app over another app done (@host.over_done): it never is here.
+// The app over another app done (@hostapi.over_done): it never is here.
 void mb_host_over_done(int32_t open_app) {}
 
-// A page in a browser's tab over the app (@host.open_tab): Safari for now, as open_url (SFSafariViewController later).
+// A page in a browser's tab over the app (@hostapi.open_tab): Safari for now, as open_url (SFSafariViewController later).
 int32_t mb_host_open_url(moonbit_string_t s);
 int32_t mb_host_open_tab(moonbit_string_t s) { return mb_host_open_url(s); }
 
-// What holds the app up while it listens for a browser (@host.hold_words): iOS keeps no such notice.
+// What holds the app up while it listens for a browser (@hostapi.hold_words): iOS keeps no such notice.
 void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {}
 
-// A URL handed to the system (@host.open_url): UIApplication, Safari or the app that takes it.
+// A URL handed to the system (@hostapi.open_url): UIApplication, Safari or the app that takes it.
 int32_t mb_host_open_url(moonbit_string_t s) {
   NSString *u = mb_ns_from_string(s);
   NSURL *url = [NSURL URLWithString:u];
@@ -719,7 +719,7 @@ static int back_on;
 void mb_host_set_back(mb_back_fn f) { back_cb = f; }
 void mb_host_back_enabled(int32_t on) { back_on = on; }
 
-// The app in front or not (@host.set_app_state): 1 while its scene is on screen (in front, or behind the app switcher or
+// The app in front or not (@hostapi.set_app_state): 1 while its scene is on screen (in front, or behind the app switcher or
 // a system sheet), | 2 while it is also active; told as that changes.
 static void (*state_cb)(int32_t);
 static void tell_state(void) {
@@ -751,12 +751,12 @@ void mb_host_set_app_state(void (*f)(int32_t)) {
   dispatch_async(dispatch_get_main_queue(), ^{ tell_state(); });
 }
 
-// Whether the system is set to dark (@host.system_dark): the screen's interface style.
+// Whether the system is set to dark (@hostapi.system_dark): the screen's interface style.
 int32_t mb_host_system_dark(void) {
   return UIScreen.mainScreen.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark ? 1 : 0;
 }
 
-// Sharing out (@host.share): the system's share sheet over the app, the words or the file (kept in a folder of the app's
+// Sharing out (@hostapi.share): the system's share sheet over the app, the words or the file (kept in a folder of the app's
 // own in its temporary directory). Nothing comes in (shared_in ""): that is a share extension's, not made yet.
 int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_string_t mime, moonbit_bytes_t data) {
   (void)mime;
@@ -781,9 +781,9 @@ int32_t mb_host_share(moonbit_string_t text, moonbit_string_t name, moonbit_stri
 moonbit_string_t mb_host_shared_in(void) { return moonbit_make_string_raw(0); }
 moonbit_bytes_t mb_host_shared_in_file(int32_t i) { (void)i; return moonbit_make_bytes(0, 0); }
 
-// Updates (@host.app_version, update_install, update_state): this app does not update itself here.
+// Updates (@hostapi.app_version, update_install, update_state): this app does not update itself here.
 int32_t mb_host_app_version(void) { return 0; }
-// A package for the system's installer (@host.install_package): none here, said on the system channel (system.mbt).
+// A package for the system's installer (@hostapi.install_package): none here, said on the system channel (system.mbt).
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   NSDictionary *said = @{@"install" : @{@"name" : mb_ns_from_string(name), @"error" : @"unsupported"}};
   NSData *json = [NSJSONSerialization dataWithJSONObject:said options:0 error:NULL];
@@ -795,10 +795,10 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
 }
 moonbit_string_t mb_host_update_state(void) { return moonbit_make_string_raw(0); }
 
-// Turned sideways for a film (@host.set_sideways): the iPhone app does not turn yet.
+// Turned sideways for a film (@hostapi.set_sideways): the iPhone app does not turn yet.
 void mb_host_set_sideways(int32_t on) { (void)on; }
 
-// The app drawn dark or light (@host.set_dark): what shows under the status bar and the home indicator (the app's view
+// The app drawn dark or light (@hostapi.set_dark): what shows under the status bar and the home indicator (the app's view
 // is inside the safe area) the dark page's ground or the light one's, the status bar's words over it to match.
 void mb_host_set_dark(int32_t dark) {
   MBController *c = the_controller;
@@ -899,7 +899,7 @@ moonbit_string_t mb_host_env(moonbit_string_t name) {
   return mb_string_from_ns(v ? [NSString stringWithUTF8String:v] ?: @"" : @"");
 }
 
-// The desktop's window and pointer (@host.window_setup, window_inset, window_drag, set_cursor): no window to size
+// The desktop's window and pointer (@hostapi.window_setup, window_inset, window_drag, set_cursor): no window to size
 // or move here, no pointer to shape.
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;

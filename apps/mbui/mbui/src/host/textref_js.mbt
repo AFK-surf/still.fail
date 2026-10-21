@@ -26,12 +26,12 @@ extern "js" fn js_ref_frame(name : String) -> Bool =
   #|(n) => globalThis.__mbhost.refFrame(n)
 
 ///|
-pub fn ref_begin(w : Double, h : Double, scale : Double, bg : Int) -> Unit {
+fn ref_begin(w : Double, h : Double, scale : Double, bg : Int) -> Unit {
   js_ref_begin(w, h, scale, bg)
 }
 
 ///|
-pub fn ref_text(
+fn ref_text(
   text : String,
   size : Double,
   weight : Int,
@@ -45,11 +45,11 @@ pub fn ref_text(
 }
 
 ///|
-pub fn ref_end(name : String) -> Bool {
+fn ref_end(name : String) -> Bool {
   js_ref_end(name)
 }
 
 ///|
-pub fn ref_frame(name : String) -> Bool {
+fn ref_frame(name : String) -> Bool {
   js_ref_frame(name)
 }

@@ -15,7 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Marks drawn onto an image at its own size, as a PNG (src/host/marks.mbt), as still.fail's Android app's ImageMarks.kt
+ * Marks drawn onto an image at its own size, as a PNG (src/hostapi/marks.mbt), as still.fail's Android app's ImageMarks.kt
  * draws them (drawMarks, drawPins): strokes round-capped, a box with rounded corners, an arrow's two barbs, a line drawn
  * by hand smoothed through its midpoints, words edged in their halo, the numbered marks' pins. Off the main thread;
  * MoonBit asks after each every frame (android_host.c).

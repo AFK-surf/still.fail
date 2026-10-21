@@ -28,7 +28,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Sharing out and in (@host.share, @host.shared_in; still.fail's DriveScreen.kt hand and ShareActivity.kt): words or a
+ * Sharing out and in (@hostapi.share, @hostapi.shared_in; still.fail's DriveScreen.kt hand and ShareActivity.kt): words or a
  * file handed to another app through the system's share sheet (a file kept in the cache's shared/ for it, read through
  * Shares.Files, a provider of this app's own that lets another app read only what was handed to it); and what another
  * app shares into this one (ACTION_SEND of text: its words and subject; ACTION_SEND or ACTION_SEND_MULTIPLE of files,

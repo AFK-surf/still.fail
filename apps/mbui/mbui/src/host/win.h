@@ -51,7 +51,7 @@ void mb_render_commit(void);  // the composition's changes shown
 // images (win_image.cpp): the ID3D11ShaderResourceView * of a ready one
 void *mb_image_srv(int id);
 // streams (win_stream.cpp): what stream id is drawn with now (ID3D11ShaderResourceView *), NULL before a frame shows;
-// an instance's image MB_STREAM_TEX + id is it (src/host/stream.mbt)
+// an instance's image MB_STREAM_TEX + id is it (src/hostapi/stream.mbt)
 #define MB_STREAM_TEX 4194304
 void *mb_stream_srv(int id);
 // the images decoded (or failed) since the last call, each told once to f(1, id, state) on the calling thread (the
