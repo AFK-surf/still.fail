@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -15,8 +15,7 @@ import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript } from "../src/platform/windows.ts";
 import {
-  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, platform as buildOf, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail,
-  versionIn,
+  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
@@ -605,76 +604,87 @@ esac
     assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
   });
 
-  /// nodejs.org as the station reads it: Node `version`'s build for this machine (its node, and an npm that installs
-  /// Grok Build in its own prefix and says where that is), and its SHASUMS256 (`sum`: the build's, unless given); and
-  /// the registry's latest Grok Build.
-  async function nodeWorld(version: string, sum?: string): Promise<[string, Server, string]> {
+  /// nodejs.org as the station reads it: Node `version`'s build for this machine (an npm that installs Grok Build in the
+  /// prefix it is given, as npm puts a command there: bin/ and lib/node_modules, on Windows a .cmd at its top), and its
+  /// SHASUMS256 (`sum`: the build's, unless given); and the registry's latest Grok Build.
+  async function nodeWorld(version: string, sum?: string): Promise<[string, Server]> {
     const dir = temp();
-    const dist = `node-v${version}-${buildOf()}`;
-    const bin = join(dir, dist, "bin");
+    const build = machine.nodeBuild(version)!;
+    const bin = join(dir, build.dist, build.bin);
     mkdirSync(bin, { recursive: true });
-    const sh = (name: string, text: string) => {
-      writeFileSync(join(bin, name), `#!/bin/sh\n${text}\n`);
-      chmodSync(join(bin, name), 0o755);
-    };
-    sh("node", `echo v${version}`);
-    sh("npx", "exit 0");
-    sh("npm", `prefix=$(cd "$(dirname "$(/bin/realpath "$0")")/.." && pwd)
-case "$1" in
-  prefix) echo "$prefix" ;;
-  install)
-    pkg="$prefix/lib/node_modules/@xai-official/grok"
-    mkdir -p "$pkg/bin"
-    printf '#!/bin/sh\\necho "grok 1.0.62 (1474f9cb)"\\n' > "$pkg/bin/grok"
-    chmod +x "$pkg/bin/grok"
-    ln -s ../lib/node_modules/@xai-official/grok/bin/grok "$prefix/bin/grok"
-    echo "added 1 package" ;;
-esac`);
-    execFileSync("tar", ["-czf", join(dir, "node.tar.gz"), "-C", dir, dist]);
-    const tarball = readFileSync(join(dir, "node.tar.gz"));
-    const sums = `${"0".repeat(64)}  node-v${version}-aix-ppc64.tar.gz\n${sum ?? createHash("sha256").update(tarball).digest("hex")}  ${dist}.tar.gz\n`;
+    script(join(bin, "npx"), "#!/bin/sh\nexit 0\n");
+    script(join(bin, "npm"), `#!/bin/sh
+prefix=
+while [ $# -gt 0 ]; do [ "$1" = --prefix ] && prefix="$2"; shift; done
+${WINDOWS
+  ? `printf '@echo grok 1.0.62 (1474f9cb)\\r\\n' > "$prefix/grok.cmd"`
+  : `pkg="$prefix/lib/node_modules/@xai-official/grok"
+mkdir -p "$pkg/bin" "$prefix/bin"
+printf '#!/bin/sh\\necho "grok 1.0.62 (1474f9cb)"\\n' > "$pkg/bin/grok"
+chmod +x "$pkg/bin/grok"
+ln -s ../lib/node_modules/@xai-official/grok/bin/grok "$prefix/bin/grok"`}
+echo "added 1 package"
+`);
+    const archive = join(dir, build.archive);
+    execFileSync(build.tar, [WINDOWS ? "-a" : "-z", "-cf", archive, "-C", dir, build.dist]);
+    const bytes = readFileSync(archive);
+    const sums = `${"0".repeat(64)}  node-v${version}-aix-ppc64.tar.gz\n${sum ?? createHash("sha256").update(bytes).digest("hex")}  ${build.archive}\n`;
     const [base, server] = await serve((path) =>
       path === "/@xai-official/grok/latest" ? { body: JSON.stringify({ version: "1.0.62" }) }
       : path === `/dist/v${version}/SHASUMS256.txt` ? { type: "text/plain", body: sums }
-      : path === `/dist/v${version}/${dist}.tar.gz` ? { type: "application/gzip", body: tarball }
+      : path === `/dist/v${version}/${build.archive}` ? { type: "application/octet-stream", body: bytes }
       : null);
-    return [base, server, dist];
+    return [base, server];
   }
 
-  test("where the machine has no npm, a runtime npm installs is installed with nodejs.org's Node: put in the station's data, linked into ~/.local/bin", { skip: WINDOWS && "nothing linked on Windows" }, async (t) => {
-    const [base, server, dist] = await nodeWorld("24.22.1");
+  test("where the machine has no npm, a runtime npm installs is installed with nodejs.org's Node, kept in the station's data and on its PATH only", async (t) => {
+    const [base, server] = await nodeWorld("24.22.1");
     t.after(() => server.close());
     const dir = temp();
     const [data, home] = [join(dir, "data"), join(dir, "home")];
     const bin = join(home, ".local", "bin");
-    mkdirSync(home);
+    mkdirSync(bin, { recursive: true });
     const env: Env = { PATH: withSystem(bin), HOME: home };
     assert.equal(findCommand("npm", env), null, "no npm on the system's PATH");
+    const own = ownNode(data, "24.22.1")!;
+    // Links an earlier release made into ~/.local/bin to that Node are taken away; others are left.
+    if (!WINDOWS) {
+      for (const name of ["node", "npm", "grok"]) symlinkSync(join(own.bin, name), join(bin, name));
+      symlinkSync(join(dir, "elsewhere", "claude"), join(bin, "claude"));
+    }
     const updates = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env });
     writeFileSync(join(data, "app", "NODE_VERSION"), "24.22.1\n");
     t.after(() => updates.close());
+    if (!WINDOWS) assert.deepEqual(readdirSync(bin), ["claude"]);
     await updates.check();
     const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
     assert.deepEqual([grok().installed, grok().updatable, grok().note], [false, true, undefined]);
     await updates.update("grok", "zh");
     await until("installed", () => grok().state !== "updating");
     assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
-    const at = join(data, "node", dist);
-    for (const name of ["node", "npm", "npx", "grok"]) assert.equal(readlinkSync(join(bin, name)), join(at, "bin", name));
-    // Nothing of the download left beside it.
-    assert.deepEqual(readdirSync(join(data, "node")), [dist]);
-    // npm on PATH now, and Grok Build updated with its own Node's.
-    assert.equal(findCommand("npm", env)!.onPath, join(bin, "npm"));
-    assert.deepEqual(howToUpdate("grok", findCommand("grok", env)!, env), { program: join(at, "bin", "npm"), args: ["install", "-g", "@xai-official/grok@latest", "--prefix", at] });
+    // Nothing of the download left beside it, nothing put in ~/.local/bin; the station's PATH has it, last.
+    assert.deepEqual(readdirSync(join(data, "node")), [own.build.dist]);
+    if (!WINDOWS) assert.deepEqual(readdirSync(bin), ["claude"]);
+    assert.ok(machine.pathOf(env).endsWith(own.bin), machine.pathOf(env));
+    assert.equal(findCommand("npm", env)!.onPath.toLowerCase(), join(own.bin, own.build.npm).toLowerCase());
+    // A station started again finds it there; Grok Build updated with that Node's npm.
+    const again: Env = { PATH: withSystem(bin), HOME: home };
+    const later = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env: again });
+    t.after(() => later.close());
+    assert.equal(machine.pathOf(again), machine.pathOf(env));
+    if (!WINDOWS) {
+      assert.deepEqual(howToUpdate("grok", findCommand("grok", env)!, env), { program: join(own.bin, "npm"), args: ["install", "-g", "@xai-official/grok@latest", "--prefix", own.at] });
+    }
   });
 
-  test("a Node whose download does not match nodejs.org's checksum is not installed, nor anything with it", { skip: WINDOWS && "nothing linked on Windows" }, async (t) => {
+  test("a Node whose download does not match nodejs.org's checksum is not installed, nor anything with it", async (t) => {
     const [base, server] = await nodeWorld("24.22.1", "f".repeat(64));
     t.after(() => server.close());
     const dir = temp();
     const [data, home] = [join(dir, "data"), join(dir, "home")];
     mkdirSync(home);
-    const updates = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env: { PATH: withSystem(join(home, ".local", "bin")), HOME: home } });
+    const env: Env = { PATH: withSystem(join(home, ".local", "bin")), HOME: home };
+    const updates = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env });
     writeFileSync(join(data, "app", "NODE_VERSION"), "24.22.1\n");
     t.after(() => updates.close());
     await updates.check();
@@ -684,7 +694,7 @@ esac`);
     assert.deepEqual([grok().installed, grok().state, grok().message], [false, "failed", "下载的 Node 校验失败"]);
     assert.equal(updates.get("en").find((v) => v.id === "grok")!.message, "The downloaded Node failed verification");
     assert.deepEqual(readdirSync(join(data, "node")), []);
-    assert.equal(existsSync(join(home, ".local", "bin")), false);
+    assert.equal(machine.pathOf(env), withSystem(join(home, ".local", "bin")));
   });
 
   test("Devin's latest is its installer's manifest's, and Devin as its installer put it is updated by its installer again, without the `devin setup` it ends with", { skip: WINDOWS && "a link to the version the installer keeps" }, async (t) => {
@@ -807,23 +817,18 @@ INSTALLER
     if (WINDOWS) assert.ok(say_(howToUpdate("codex", found("C:/Users/a/.codex/packages/standalone/releases/0.1.0-x86_64-pc-windows-msvc/bin/codex.exe"), env)).includes("手动更新"));
     assert.deepEqual(howToInstall("codex", env), { program: npm, args: ["install", "-g", "@openai/codex@latest"] });
     const bare: Env = { PATH: "/nowhere", HOME: "/Users/a" };
-    // Without npm: Codex by its own installer (a shell script: on Windows, Node wanted first).
-    if (WINDOWS) assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
-    else assert.equal((howToInstall("codex", bare) as any).args[2], "stillfail-codex-install");
-    // DeepSeek Harness and Grok Build by npm, a Node of the station's put in place first (none on Windows: Node wanted).
-    const own = ownNode(bare, "/data", "24.22.1");
+    // Without npm: Codex by its own installer (a shell script: on Windows, a Node of the station's npm).
+    const own = ownNode(join("/", "data"), "24.22.1")!;
+    const build = machine.nodeBuild("24.22.1")!;
+    assert.deepEqual(own, { version: "24.22.1", build, at: join("/", "data", "node", build.dist), bin: join("/", "data", "node", build.dist, build.bin) });
+    const ownNpm = (pkg: string) => ({ program: join(own.bin, build.npm), args: ["install", "-g", pkg, "--prefix", own.at], node: own });
+    if (WINDOWS) assert.deepEqual(howToInstall("codex", bare, own), ownNpm("@openai/codex@latest"));
+    else assert.equal((howToInstall("codex", bare, own) as any).args[2], "stillfail-codex-install");
+    // DeepSeek Harness and Grok Build by npm: the machine's, else a Node of the station's put in place first, into it.
     for (const kind of ["dsh", "grok"] as const) {
       const pkg = `${kindPackage(kind)}@latest`;
       assert.deepEqual(howToInstall(kind, env, own), { program: npm, args: ["install", "-g", pkg] });
-      if (WINDOWS) {
-        assert.equal(own, null);
-        assert.ok(say_(howToInstall(kind, bare, own)).startsWith("安装 "));
-      } else {
-        assert.deepEqual(howToInstall(kind, bare, own), {
-          program: "/Users/a/.local/bin/npm", args: ["install", "-g", pkg],
-          node: { version: "24.22.1", dist: `node-v24.22.1-${buildOf()}`, home: "/data/node", bin: "/Users/a/.local/bin" },
-        });
-      }
+      assert.deepEqual(howToInstall(kind, bare, own), ownNpm(pkg));
       assert.equal(say_(howToInstall(kind, bare)), `安装 ${kind === "dsh" ? "DeepSeek Harness" : "Grok Build"} 需要 npm：请先在本机安装 Node（含 npm）`);
     }
     assert.equal((howToInstall("claude", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");

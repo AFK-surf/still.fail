@@ -1,6 +1,6 @@
 // A station's software for the stories (Versions.tsx SoftwareList): the demo station's overview with `updates` as the
 // station says them, every runtime it can install offered (`installable`), or a machine it cannot install some on (no
-// npm on Windows), why said under each.
+// npm, nor a Node of nodejs.org's for it), why said under each.
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import type { SoftwareVersion, StationView } from "../src/core/shapes.ts";
 

@@ -29,6 +29,11 @@ export type Host = {
   ownRss(): number;
 };
 
+/// A Node release's build for one machine, as nodejs.org has it: `dist` (node-v<version>-<os>-<arch>), its `archive` in
+/// the release's directory (`dist` at its top), where in it its commands are (`bin`, relative: node, npm, and what that
+/// npm installs with `--prefix` the build), npm's name there, and the tar that unpacks the archive.
+export type NodeBuild = { dist: string; archive: string; bin: string; npm: string; tar: string };
+
 export type Platform = {
   /// std::env::consts::OS as Rust names it (macos, linux, windows; another its own name): what a station says it runs
   /// on to its peers and in feedback.
@@ -45,6 +50,8 @@ export type Platform = {
   pathOf(env: Env): string;
   /// `env` with `dir` first on its PATH (one PATH variable, whatever its case).
   prependPath(env: NodeJS.ProcessEnv, dir: string): NodeJS.ProcessEnv;
+  /// `dir` put last on `env`'s own PATH, in place, unless it is on it already (one PATH variable, whatever its case).
+  appendPath(env: Env, dir: string): void;
   /// A command on `env`'s PATH as a shell finds it (with PATHEXT's extensions on Windows).
   findCommand(name: string, env: Env): Found | null;
   /// How Node runs a command (a name on PATH, or a path) with `args`: on Windows a .cmd is run around cmd when it can
@@ -148,9 +155,9 @@ export type Platform = {
   /// Whether Codex's standalone install updates by its installer here, and installs by it (a shell script: not on
   /// Windows).
   codexStandalone: boolean;
-  /// Whether a Node is installed for npm where the machine has none, its commands linked into ~/.local/bin
-  /// (updates/runtimes.ts ownNode; not on Windows, which links nothing).
-  linksNode: boolean;
+  /// Node's build for this machine as nodejs.org names it, for npm where the machine has none (updates/runtimes.ts
+  /// OwnNode); none where nodejs.org has no build for it.
+  nodeBuild(version: string): NodeBuild | null;
 
   // Sleep (ops/awake.ts).
   /// Keeps the machine from going to sleep for want of use, `why` said where the system shows it: a process of its own
