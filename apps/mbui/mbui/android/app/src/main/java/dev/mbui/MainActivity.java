@@ -149,6 +149,11 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(root);
+        // edge to edge on every version, as Android 15 and later make it (an app targeting them): the view takes the
+        // insets itself, the bars' and the keyboard's (above). Before it (Android 14, API 34) the decor fitted the
+        // system's windows and, the soft input adjusting nothing, kept the keyboard's from the view: its height never
+        // told, the composer under it (scripts/android-keyboard.sh on CI's API 34 emulator, run 39528189692)
+        getWindow().setDecorFitsSystemWindows(false);
         WindowInsetsController c = getWindow().getInsetsController();
         if (c != null) {
             c.setSystemBarsAppearance(WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
