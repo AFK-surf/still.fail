@@ -456,9 +456,12 @@ fn stack(c : @ui.Ctx, ps : Array[Piece], _outer : Bool) -> Unit {
 }
 
 ///|
+/// A line of `size`'s words, as Markdown.kt's lh: (size * 1.65f).sp, worked out in Float as Kotlin does (15: 24.75,
+/// 64.97 pixels at 2.625, a line of 65 on Android's whole pixels), not rounded to a half (25: 66).
 fn Md::lh(self : Md, size : Double) -> Double {
   ignore(self)
-  (size * 1.65 * 2.0).round() / 2.0
+  let k : Float = 1.65
+  (Float::from_double(size) * k).to_double()
 }
 
 ///|

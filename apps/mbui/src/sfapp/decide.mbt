@@ -509,11 +509,25 @@ fn sheet_frame(
 let sheet_detents : Array[Double] = [0.55, 0.94]
 
 ///|
-/// The sheet's grabber (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 16 above it and 8 under.
+/// The grabber's two paddings (Sheet.kt SheetGrab's padding(top 8, bottom 4), then padding(vertical 4)).
+// kept across runs: a value (no field of it changes)
+let grab_outer : @ui.Style = @ui.style(w=Full, pt=S2, pb=S1)
+
+///|
+// kept across runs: a value (no field of it changes)
+let grab_inner : @ui.Style = @ui.style(w=Full, py=S1, align=ACenter)
+
+///|
+/// The sheet's grabber (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 12 above it and 8 under.
 fn sheet_grab(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
-  c.box(w=Fill(1.0), pt=12.0, pb=8.0, align=ACenter, fn() {
-    c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
+  // (two paddings, as Sheet.kt's two: each a length of its own, on Android's whole pixels 21 + 11 above the grabber and
+  // 11 + 11 under it, not one 12 and one 8)
+  c.box(style=grab_outer, fn() {
+    c.box(style=grab_inner, fn() {
+      c.box(w=Px(38.0), h=Px(5.0), radius=3.0, bg=t.p.line, fn() {  }) |> ignore
+    })
+    |> ignore
   })
   |> ignore
 }
