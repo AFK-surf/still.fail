@@ -106,12 +106,10 @@ case "$cmd" in
       exec 3< $FIFO
       $ADB shell am start -n $PKG/dev.mbui.MainActivity --ei shot_at $at --es env "'MBUI_FIXTURE=json;MBUI_FIXTURE_JSON_B64=$json'" > /dev/null
       ok=0
-      # (the run ends at its shot, or the app's death is logged; 120 s only a failure)
-      deadline=$(($(date +%s) + 120))
+      # (the run ends at its shot, or the app's death is logged; the app says its way there every 30 frames, "shot:
+      # frame n at t": 120 s with no word from it is a failure, however long the way takes on a machine drawing slowly)
       while :; do
-        left=$((deadline - $(date +%s)))
-        [ $left -gt 0 ] || { echo "the run's time is up" >> $log; break; }
-        IFS= read -r -t $left line <&3 || { echo "the log ended or the run's time is up" >> $log; break; }
+        IFS= read -r -t 120 line <&3 || { echo "the log ended, or 120 s with no word from the app" >> $log; break; }
         echo "$line" >> $log
         case "$line" in
           "SHOT "*) $ADB exec-out screencap -p < /dev/null > $O/mbui/$n.png; ok=1; break ;;
