@@ -515,7 +515,7 @@ export const SHAPES: Record<string, Shape> = {
     ["checkText", "String"],
     ["checkTone", "Tone"],
     ["trouble", opt("ProfileTrouble"), { doc: "The first problem to resolve, with its next step; absent when nothing needs attention." }],
-    ["group", "String", { default: true, doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). A station's\nprofiles come by kind, in that order." }],
+    ["group", "String", { default: true, doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest). A station's\nprofiles come by kind, in that order." }],
     ["groupTitle", "String", { default: true, doc: "That kind in words: Claude 订阅." }],
     ["makers", map(opt("Maker")), { doc: "The makers of its models, and of those its check found, by model." }],
     ["names", map("String"), { doc: "Its models, its default and those its check found as people call them (Opus 5.5), by model." }],
@@ -2107,7 +2107,7 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "The workspace's profiles in one list (the `profiles` view): one shared between stations once, the others each with\nthe station they are on; by kind of account (`group`, in its order), usable ones first in each.", keepNone: true }),
   WorkspaceProfile: struct([
     ["key", "String", { doc: "The share's id, or station/profile for one on a station only." }],
-    ["group", "String", { doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest)." }],
+    ["group", "String", { doc: "The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest)." }],
     ["groupTitle", "String", { doc: "That kind in words: Claude 订阅." }],
     ["station", "String", { doc: "The station whose copy this is (its page is there)." }],
     ["stationId", "String"],

@@ -184,6 +184,8 @@ fun ProfilesScreen(current: WorkspaceEntry, only: String? = null) {
 @Composable
 private fun GroupMark(group: String?) {
     if (group == "key") IconIn(Icons.Key, 16.dp, C.ink)
+    else if (group == "kimi") ProviderMark("claude", "api-provider", 16.dp, "kimi")
+    else if (group == "opencode") ProviderMark("claude", "opencode-go", 16.dp)
     else ProviderMark(if (group == "chatgpt") "codex" else group ?: "claude", "subscription", 16.dp)
 }
 

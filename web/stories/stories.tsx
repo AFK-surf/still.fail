@@ -196,6 +196,9 @@ const everyKind: DemoExtension = {
         ...v.items,
         as("codex", "chatgpt", "ChatGPT 订阅", { name: "lin@acme.dev", runtime: "codex", runtimes: ["codex"], quota: null }),
         as("grok", "grok", "SuperGrok 订阅", { name: "lin@acme.dev", runtime: "grok", runtimes: ["grok"], quota: null }),
+        // Signed in to an account rather than given a key: its vendor's subscription.
+        as("kimi", "kimi", "Kimi Code 订阅", { name: "Kimi Code", runtime: undefined, runtimes: ["claude"], access: { kind: "api-provider", provider: "kimi-code", key: "", login: true }, providerMark: "kimi", quota: null }),
+        as("go", "opencode", "OpenCode Go 订阅", { name: "lin@acme.dev", runtime: undefined, runtimes: ["claude", "codex", "dsh"], access: { kind: "opencode-go", key: "st_4a…3f9c", login: true }, quota: null }),
         as("cursor", "cursor", "Cursor 订阅", { name: "lin@acme.dev", runtime: "cursor", runtimes: ["cursor"], quota: null }),
         as("devin", "devin", "Devin 订阅", { name: "lin@acme.dev", runtime: "devin", runtimes: ["devin"], quota: null }),
         // A key with an allowance of several windows: they take a line of their own, under its name and where it is.

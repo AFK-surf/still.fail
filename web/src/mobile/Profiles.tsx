@@ -100,6 +100,8 @@ export function ProfilesScreen() {
 
 /** A kind of account's mark, before its section's title: its vendor's for a subscription, a key for keys. */
 function GroupMark({ group }: { group?: string | undefined }) {
+  if (group === "kimi") return <ProviderMark runtime="claude" kind="api-provider" mark="kimi" size={16} />;
+  if (group === "opencode") return <ProviderMark runtime="claude" kind="opencode-go" size={16} />;
   return group === "key" ? <Key size={16} /> : <ProviderMark runtime={group === "chatgpt" ? "codex" : group ?? "claude"} kind="subscription" size={16} />;
 }
 

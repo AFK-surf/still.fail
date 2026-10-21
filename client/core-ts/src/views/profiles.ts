@@ -28,10 +28,12 @@ function account(p: J): string | null {
 }
 
 /// The kinds of account the list is grouped by, in their order: a vendor's subscription (Claude's, ChatGPT's, SuperGrok's,
-/// Cursor's, Devin's), then keys and the rest.
-export const GROUPS = ["claude", "chatgpt", "grok", "cursor", "devin", "key"] as const;
+/// Kimi Code's, OpenCode Go's, Cursor's, Devin's), then keys and the rest. A profile signed in to an account rather than
+/// given a key (`access.login`: Kimi Code's, OpenCode Go's) is its vendor's subscription.
+export const GROUPS = ["claude", "chatgpt", "grok", "kimi", "opencode", "cursor", "devin", "key"] as const;
 
 export function group(p: J): (typeof GROUPS)[number] {
+  if (p.access?.login === true) return p.access?.provider === "kimi-code" ? "kimi" : "opencode";
   if (p.access?.kind !== "subscription") return "key";
   return p.runtime === "codex" ? "chatgpt" : p.runtime === "grok" ? "grok" : p.runtime === "cursor" ? "cursor" : p.runtime === "devin" ? "devin" : "claude";
 }

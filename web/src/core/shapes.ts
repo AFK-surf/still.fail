@@ -1116,7 +1116,7 @@ export interface Profile {
 	/** The first problem to resolve, with its next step; absent when nothing needs attention. */
 	trouble?: ProfileTrouble;
 	/**
-	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). A station's
+	 * The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest). A station's
 	 * profiles come by kind, in that order.
 	 */
 	group?: string;
@@ -4372,7 +4372,7 @@ export interface ShareStation {
 export interface WorkspaceProfile {
 	/** The share's id, or station/profile for one on a station only. */
 	key: string;
-	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). */
+	/** The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest). */
 	group: string;
 	/** That kind in words: Claude 订阅. */
 	groupTitle: string;
