@@ -13,11 +13,13 @@ export const dropSays = style({
 });
 
 export const empty = style({ margin: "8px 12px", color: vars.muted, fontSize: vars.textMeta });
-/** Where favourites go while there are none: a place to drop, as tall as a row, outlined. */
+/** Where favourites go while there are none: a row of the list, as a favourite's is laid out (its mark, then its
+ * words where a name would be), faint. */
 export const hint = style({
-  display: "grid", placeItems: "center", minHeight: "34px", margin: "0", boxSizing: "border-box", borderRadius: vars.rNav,
-  border: `1px dashed ${vars.lineStrong}`, color: vars.subtle, fontSize: vars.textMeta,
+  display: "flex", alignItems: "center", gap: "8px", margin: "0", padding: "7px 10px", lineHeight: "20px",
+  color: vars.subtle, fontSize: vars.textUi,
 });
+globalStyle(`${hint} svg`, { flex: "none", color: vars.subtle });
 /** 个人收藏: ringed while a folder dragged over it would be kept there. */
 export const keep = style({ borderRadius: vars.rNav, selectors: { "&[data-over]": { boxShadow: `inset 0 0 0 1px ${vars.accent}` } } });
 export const favorite = style({ position: "relative" });
