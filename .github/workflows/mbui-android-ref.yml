@@ -49,8 +49,10 @@ jobs:
           else echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept"; fi
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
+      # (read only, on main too: it restores the newest Gradle home of the OS (mbui's android job writes one), and its own
+      # writes, ~1 GB a commit with their parts, pushed out of the 10 GB the toolchain caches the jobs need)
       - uses: gradle/actions/setup-gradle@v4
-        with: { cache-read-only: "${{ github.ref != 'refs/heads/main' }}" }
+        with: { cache-read-only: true }
       - uses: ./.github/actions/setup
         with:
           android: 'true'
