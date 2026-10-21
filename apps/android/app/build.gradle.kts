@@ -154,5 +154,10 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.runner)
+    // The core's Markdown made of fixtures' words (motion/FakeMarkdown.kt): the app itself reads none.
+    androidTestImplementation(libs.commonmark)
+    androidTestImplementation(libs.commonmark.ext.gfm.tables)
+    androidTestImplementation(libs.commonmark.ext.gfm.strikethrough)
+    androidTestImplementation(libs.commonmark.ext.task.list.items)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
