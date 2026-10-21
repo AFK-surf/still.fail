@@ -1,7 +1,8 @@
 # MoonBit for a job, as the moonbit workflow put its latest release in the Actions cache (each release once, by its
 # downloads' ETags): restored, never downloaded here. No cached release for this runner's OS and architecture: the job
 # fails saying so (run the moonbit workflow), not a download that now and then breaks off (cli.moonbitlang.com's
-# SSL_ERROR_SYSCALL, 2026-10-20). MOON_HOME and PATH for the steps after it; `moon version --all` said.
+# SSL_ERROR_SYSCALL, 2026-10-20). Into ../moon-ci, the runner's own, beside the checkout. MOON_HOME and PATH for the
+# steps after it; `moon version --all` said.
 name: MoonBit
 description: The latest MoonBit, from the cache the moonbit workflow fills
 runs:
@@ -10,13 +11,15 @@ runs:
     - uses: actions/cache/restore@v4
       id: moon
       with:
-        path: ~/.moon-ci
+        # (beside the job's checkout, the runner's own: two runners on one machine (Mini1's) shared ~/.moon-ci, and one's
+        # restore wrote over the MoonBit the other's tests were running with: moon test said nothing, run 39532570138)
+        path: ../moon-ci
         # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
         key: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-none
         restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
     - shell: bash
       run: |
-        m=$(cd ~ && pwd)/.moon-ci
+        m=$(cd "$GITHUB_WORKSPACE/.." && pwd)/moon-ci
         if [ ! -x "$m/bin/moon" ] && [ ! -x "$m/bin/moon.exe" ]; then
           echo "::error::no MoonBit for ${{ runner.os }} ${{ runner.arch }} in the Actions cache: run the moonbit workflow (it puts each new release in once)"
           exit 1

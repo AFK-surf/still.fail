@@ -45,14 +45,14 @@ jobs:
       - uses: actions/cache/restore@v4
         id: had
         with:
-          path: ~/.moon-ci
+          path: ../moon-ci
           key: ${{ steps.tag.outputs.key }}
           lookup-only: true
-      - name: Installed (MOON_HOME=~/.moon-ci)
+      - name: Installed (MOON_HOME=../moon-ci, beside the checkout)
         if: steps.had.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          export MOON_HOME=$(cd ~ && pwd)/.moon-ci
+          export MOON_HOME=$(cd "$GITHUB_WORKSPACE/.." && pwd)/moon-ci
           if [ "${{ runner.os }}" = Windows ]; then
             MOON_HOME=$(cygpath -w "$MOON_HOME") powershell -NoProfile -Command "irm https://cli.moonbitlang.com/install/powershell.ps1 | iex"
           else
@@ -63,7 +63,7 @@ jobs:
       - if: steps.had.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ~/.moon-ci
+          path: ../moon-ci
           key: ${{ steps.tag.outputs.key }}
       # (what a job gets: the action over what was put in)
       - uses: actions/checkout@v4
