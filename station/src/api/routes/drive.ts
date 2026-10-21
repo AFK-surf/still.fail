@@ -71,6 +71,9 @@ export const driveView = (drive: Drive, r: { viewer: Request["viewer"] }, home =
   // What is deleted goes to the machine's trash (macOS, Linux); folders are watched for what changes in them, and zipped
   // to download.
   ...(platform.trash ? { trash: true } : {}), watch: true, ...(anywhere(r) ? { zip: true } : {}),
+  // Copies into it, from its own folders or another station's (routes/transfers.ts), and grants another station reads
+  // this one's with.
+  transfers: true,
 });
 
 /// The most a file sent in a chat from the drive is (as an upload in parts).

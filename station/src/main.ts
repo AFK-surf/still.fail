@@ -38,6 +38,7 @@ import { FeedbackLive } from "./feedback/module.ts";
 import { AgentHomeLive } from "./agenthome/module.ts";
 import { PublishLive } from "./publish/module.ts";
 import { LoginsLive } from "./logins/module.ts";
+import { DriveTransfersLive } from "./drive/module.ts";
 import { UsageLive } from "./usage/module.ts";
 import { SearchLive } from "./search/module.ts";
 import { SlackLive } from "./slack/module.ts";
@@ -143,7 +144,7 @@ function run() {
   const parts = ControlPlane.layer.pipe(Layer.provideMerge(base));
   const station = Layer.mergeAll(MeshLive, Loopback(control), AwakeLive, ModulesLive).pipe(
     // The station's parts in its own process (parts.ts), made before the mesh answers anyone: each says what it adds.
-    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, UsageLive, SearchLive, SlackLive, FeishuLive)),
+    Layer.provideMerge(Layer.mergeAll(VaultLive, AdbLive, BrowserLive, LinksLive, FeedbackLive, AgentHomeLive, PublishLive, LoginsLive, DriveTransfersLive, UsageLive, SearchLive, SlackLive, FeishuLive)),
     Layer.provideMerge(AdminApi.layer),
     Layer.provideMerge(AgentsLive(control)),
     // The drive, the admin API's and the modules' local API's (modules/local.ts): the platform's, before the agents.

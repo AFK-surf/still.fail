@@ -30,8 +30,9 @@ function place() {
   return { base, root, data, config, drive };
 }
 
-/// What every member is told the drive does here: deleting to the trash (where there is one), watching folders.
-const CAN = { ...(platform.trash ? { trash: true } : {}), watch: true };
+/// What every member is told the drive does here: deleting to the trash (where there is one), watching folders,
+/// copying into it (routes/transfers.ts).
+const CAN = { ...(platform.trash ? { trash: true } : {}), watch: true, transfers: true };
 
 const code = async (p: Promise<unknown>) => {
   try {
