@@ -95,6 +95,13 @@ const bases = new WeakMap<Inner, string>();
 export const signerOf = (inner: Inner): string | null => signers.get(inner) ?? null;
 export const baseOf = (inner: Inner): string | null => bases.get(inner) ?? null;
 
+/// This device's signing key as known now (loaded, or made as it is put forward): what shows whether it signs told
+/// (the lock's, and the vault's, whose page waits on it).
+export function signerKnown(inner: Inner, id: string | null): void {
+  signers.set(inner, id);
+  inner.store.invalidateAll((t) => t.topic === "lock" || t.topic === "lockPrompts" || t.topic === "vaults" || t.topic === "vaultItems");
+}
+
 /// What each workspace's lock was read at (its head's hash and the waiting count the workspace view said), per core.
 const readAt = new WeakMap<Inner, Map<string, string>>();
 
@@ -177,10 +184,7 @@ export function install(inner: Inner): void {
   handlers.lockPrompt = (core, call, _progress, _at, ctx) => runPrompt(core, (call as Extract<Call, { kind: "lockPrompt" }>).name, (call as Extract<Call, { kind: "lockPrompt" }>).params, ctx);
   // The signing key, once (it is the device's).
   inner.runner.fork(
-    Effect.map(Effect.orElseSucceed(Signer.load(inner.host), () => null), (s) => {
-      signers.set(inner, s?.id ?? null);
-      inner.store.invalidateAll((t) => t.topic === "lock" || t.topic === "lockPrompts");
-    }),
+    Effect.map(Effect.orElseSucceed(Signer.load(inner.host), () => null), (s) => signerKnown(inner, s?.id ?? null)),
   );
   // The workspace view says how far the cloud's lock goes and how many wait: read again when that changes.
   inner.data.onChange((topic) => {
@@ -239,7 +243,8 @@ function readOnce(inner: Inner, ws: string): Effect.Effect<void, CoreError> {
     // In the lock, or its request at the cloud: what kept it from asking is past.
     if (base !== null && (f.devices.has(base) || requests.some((r) => r.base === base))) part(inner, ws).failed = null;
     if ((was?.head?.hash ?? null) !== (head?.hash ?? null)) moved(inner, ws);
-    inner.store.invalidateAll((t) => ((t.topic === "lock" || t.topic === "lockDraft") && t.workspace === ws) || t.topic === "lockPrompts");
+    // The vault's too: whether it is locked, this device confirmed in it, whose vaults are trusted (views/vault.ts).
+    inner.store.invalidateAll((t) => ((t.topic === "lock" || t.topic === "lockDraft" || t.topic === "vaults" || t.topic === "vaultItems") && t.workspace === ws) || t.topic === "lockPrompts");
     // This device not in the lock: it waits, and asks to be confirmed only by hand (`lock.request`, its waiting page):
     // the person who will compare the codes is the one who asks (2026-10-19).
   });
@@ -700,7 +705,7 @@ export class Lock {
       const v = view(inner, self.ws);
       if (get(v, "role") !== "owner") return yield* Effect.fail(new CoreError("forbidden", "only the workspace's owner turns its lock on"));
       const signer = yield* Signer.make(inner.host);
-      signers.set(inner, signer.id);
+      signerKnown(inner, signer.id);
       const base = yield* self.#base();
       const p = part(inner, self.ws);
       if (p.devices === null || arr(get(v, "stations")).some((s) => !p.probes.has(s.id))) yield* draft(inner, self.ws);
@@ -737,7 +742,7 @@ export class Lock {
       // waiting page says so.
       const made = Effect.mapError(Signer.make(self.#inner.host), (e) => new CoreError("lock_key", t("core-misc.lock.keyNotKept", { error: e.message })));
       const signer = self.#inner.host.appKeys ? yield* made : null;
-      if (signer) signers.set(self.#inner, signer.id);
+      if (signer) signerKnown(self.#inner, signer.id);
       yield* self.#cloud("POST", "/lock/requests", { base, kind: self.#kind(), label: prefs.deviceName(self.#inner.data) ?? "", sign_key: signer?.id ?? null });
       return { device: base, code: shortCode(base) };
     });

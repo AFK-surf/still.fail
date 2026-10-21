@@ -29,7 +29,7 @@ import * as prefs from "../prefs.ts";
 import { get, hex, isObject, parseJson, utf8 } from "../util.ts";
 import { fromB64url } from "../vault/crypto.ts";
 import { checkLock } from "../vault/lock-check.ts";
-import { Lock, baseOf, fold, held, nameOf, pairs, read, signerOf, view } from "./lock.ts";
+import { Lock, baseOf, fold, held, nameOf, pairs, read, signerKnown, signerOf, view } from "./lock.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -294,6 +294,7 @@ function begin(inner: Inner): Effect.Effect<unknown, CoreError> {
       if (c._tag === "Success") credentials.push({ ws, credential: c.success.credential });
     }
     const signer = inner.host.appKeys ? yield* Effect.mapError(Signer.make(inner.host), (e) => new CoreError("lock_key", t("core-misc.lock.keyNotKept", { error: e.message }))) : null;
+    if (signer) signerKnown(inner, signer.id);
     const hello = { t: "hello", v: 1, workspaces: credentials, kind: inner.host.appKeys ? "app" : "web", label: prefs.deviceName(inner.data) ?? "", sign_key: signer?.id ?? null };
     const relays = [...new Set([...(inner.cloudSync.relays ?? []), ...workspaces.flatMap((ws) => inner.cloudSync.workspaceRelays(ws))])];
     inner.runner.fork(
