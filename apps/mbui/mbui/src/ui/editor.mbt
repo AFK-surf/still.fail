@@ -302,6 +302,7 @@ pub fn Ctx::editor(
   enter_sends? : Bool = true,
   paste_limit? : Int = 0,
   secret? : Bool = false,
+  words? : Bool = false,
   look? : (String) -> (String, Array[(Int, Int, Int64)]),
   field? : Field,
 ) -> EditorResult {
@@ -327,6 +328,7 @@ pub fn Ctx::editor(
   st.limit = paste_limit
   st.enter_sends = enter_sends
   st.secret = secret
+  st.words = words
   st.look = look
   // (what the look makes of the words worked out again, once, for this build: it may say other colours now)
   st.looked = None
@@ -548,6 +550,7 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     caret_color: 0L,
     sel_color: 0L,
     secret: false,
+    words: false,
     look: None,
     looked: None,
     blink_again: false,

@@ -28,6 +28,12 @@ origin):
 - `<weight>.ttf.gz` (`var` for a variable face) for the Android app, which fetches a face's files whole when it is
   chosen, checks each one's sha256, keeps them in `files/fonts/<sha256>.ttf` and uses the face once all are there
   (until then the app's own stands in). A face no longer chosen has its files removed.
+- The mbui app (apps/mbui) fetches the same `.ttf.gz` files, through the core, which keeps them for it in the host's
+  storage (client/core-ts/src/font-files.ts): `fonts.fetch {id}` fetches a face's files not kept yet (how far it got
+  on the `fonts` topic: `fetching` by face, 0 to 1, and `failed`, why); `fonts.file {sha256}` gives one back beside
+  the answer (`zipped`: as fetched); the app unzips it (mbui's `zip`), checks its sha256 and gives it back unzipped
+  (`fonts.keep {sha256}`), and gives a face to the host once all its files are here. Only the chosen faces' files
+  stay. `fonts.preview {id}` gives a face's preview (below), fetched once and kept.
 - `preview-<hash>.ttf` for the Android app too: the face's glyphs for the fonts page's own words alone (its catalog
   keys `web-pages.appearance.fonts.*`, the faces' names, ASCII; tens of KB), fetched as the page opens so each face
   is shown in itself before it is chosen. Changing those words: `scripts/fonts.py --put --previews` and copy the

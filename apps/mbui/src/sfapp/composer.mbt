@@ -1409,6 +1409,8 @@ fn composer_bar(
         let res = c.editor(
           field_key,
           placeholder~,
+          // in the face chosen for what people write (Composer.kt SendTextFaced)
+          words=true,
           font_size=send_size,
           line=send_line,
           max_lines=6,
@@ -1539,6 +1541,7 @@ fn draft_extras(c : @ui.Ctx, src : Source, r : ChatRef, d : Draft, locked : Bool
             let res = c.editor(
               key,
               placeholder=tr("android-chat.quote.comment"),
+              words=true,
               font_size=15.0,
               line=22.0,
               max_lines=1,

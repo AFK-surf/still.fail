@@ -3,6 +3,7 @@ import { parseAdb, type AdbCall } from "../adb-parse.ts";
 import { parseAsk, type Ask } from "../asks-parse.ts";
 import { parseAttend, type AttendCall } from "../attend-parse.ts";
 import { parseScreen, type ScreenCall } from "../screens.ts";
+import type { FontsCall } from "../font-files.ts";
 import { parseComposer, type ComposerAct } from "../composer.ts";
 import { conform } from "../conform.ts";
 import { type HeldCall, type ModuleCall, parseModuleCall } from "../module.ts";
@@ -98,6 +99,8 @@ export type Call =
   | { kind: "prefsSet"; patch: unknown; fill: boolean }
   | { kind: "clientDevice"; facts: unknown }
   | { kind: "changelogSeen" }
+  /// A face's files on a device that keeps none of its own (font-files.ts): fetched, kept, given back.
+  | { kind: "fonts"; call: FontsCall }
   | { kind: "ask"; ask: Ask }
   | { kind: "adb"; call: AdbCall }
   /// A station's screen seen and driven (screens.ts): `screen.view` and what goes on it.
@@ -657,6 +660,17 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       return { kind: "clientDevice", facts: orEmpty(params) };
     case "changelog.seen":
       return { kind: "changelogSeen" };
+    case "fonts.fetch":
+    case "fonts.preview": {
+      const id = read(params, [["id", S, "req"]]).id as string;
+      return { kind: "fonts", call: name === "fonts.fetch" ? { kind: "fetch", id } : { kind: "preview", id } };
+    }
+    // The file the app unzipped comes beside the call.
+    case "fonts.file":
+    case "fonts.keep": {
+      const sha256 = read(params, [["sha256", S, "req"]]).sha256 as string;
+      return { kind: "fonts", call: name === "fonts.file" ? { kind: "file", sha256 } : { kind: "keep", sha256, bytes: beside(bytes) } };
+    }
     // A file going up comes beside the call, not in it.
     case "station.upload": {
       const p = read(params, [

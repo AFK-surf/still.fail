@@ -283,6 +283,7 @@ fn reset() -> Unit {
   ask_turns.clear()
   flash_held.val = false
   notices_reset()
+  faces_reset()
   links_reset()
   wide_reset()
   // the made-up chats and their station (chat_fixture.mbt, service_fixture.mbt, drive_fixture.mbt)
@@ -393,6 +394,7 @@ fn pages_left(src : Source) -> Unit {
 pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   fix_ctx.val = Some(c)
   appearance(src)
+  faces(src)
   let t = @sf.begin(c)
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
   wide_on.val = is_wide(c)
@@ -802,6 +804,10 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       }
     },
     login_card: fn(c, station, id, marked) { login_card(c, src, station, id, marked~, fill=true) },
+    face_preview: fn(id, index, variable) { face_preview(src, id, index, variable) },
+    face_here: face_here,
+    face_failed: face_failed,
+    own_code_face: own_code_preview,
   }
 }
 

@@ -65,6 +65,11 @@ jobs:
           set -o pipefail
           moon test --target js -p mbui/dmath 2>&1 | tail -3
           moon test --target native -p mbui/dmath 2>&1 | tail -3
+      - name: "gzip unzipped and SHA-256 (mbui/zip: a face's files as fetched): on js and on native"
+        run: |
+          set -o pipefail
+          moon test --target js -p mbui/zip 2>&1 | tail -3
+          moon test --target native -p mbui/zip 2>&1 | tail -3
       - name: "The C step: the splitter on made-up C, and a MoonBit program built whole and split (scripts/mbc_test.py)"
         run: python3 scripts/mbc_test.py
 

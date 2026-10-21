@@ -809,6 +809,8 @@ fn Md::words(
     code_scale=0.9,
     on_link=self.on_link,
     on_link_hold=self.on_link_hold,
+    // what people and agents wrote: in the face chosen for it (Markdown.kt's TextFont)
+    words=true,
   )
   |> ignore
 }

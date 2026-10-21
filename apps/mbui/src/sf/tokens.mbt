@@ -655,3 +655,7 @@ pub let link_mark_w : @ui.Len = Fixed(30.0)
 ///|
 /// A quiet ground under what is grouped on a sheet (Publish.kt: the ink at 4%).
 pub let faint_ground : @ui.Color = A(Fg, Exact(0.04))
+
+///|
+/// How wide a face's status at its row's end may be (Fonts.kt:142).
+pub let face_status_most : @ui.Len = Fixed(140.0)

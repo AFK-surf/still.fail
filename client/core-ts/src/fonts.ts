@@ -95,6 +95,16 @@ function face(e: Entry): Record<string, unknown> {
   };
 }
 
+/// A face still.fail keeps, by its id, as a device fetches it: each file's address, size and hash, and its preview's.
+export type FaceFiles = { files: { weight: number; url: string; bytes: number; sha256: string }[]; bytes: number; preview?: string };
+
+export function faceOf(id: string): FaceFiles | null {
+  const e = FACES.find((f) => f.id === id);
+  if (!e) return null;
+  const f = face(e);
+  return { files: f.files as FaceFiles["files"], bytes: f.bytes as number, ...(typeof f.preview === "string" ? { preview: f.preview } : {}) };
+}
+
 const OWN = { id: "", name: "", mono: false, family: "", files: [], bytes: 0 };
 
 function resolve(id: string | null, place: Place): Record<string, unknown> {

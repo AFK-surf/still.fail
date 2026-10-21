@@ -20,6 +20,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Home => settings_home(c, core, here)
     Me => me_page(c, core, here)
     Appearance => appearance_page(c, core)
+    Fonts => fonts_page(c, core)
     Workspace => workspace_page(c, core, here)
     Security => security_page(c, core, here)
     Vault => vault_page(c, core, here)
@@ -434,10 +435,18 @@ fn use_notify(core : Core, on : Bool) -> Unit {
 let build_version : String = "mbui 0.1"
 
 ///|
+/// The words under a switch (SettingsHome.kt's notes under a Seg; Fonts.kt's under the faces): 24 in, 8 under it, 13
+/// on 19.5 in the muted.
+fn seg_note(c : @ui.Ctx, note : String) -> Unit {
+  let t = @sf.theme()
+  c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() { c.text(note, size=13.0, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore })
+  |> ignore
+}
+
+///|
 /// How this device shows still.fail (AppearanceScreen): its theme, its motion, the language it speaks, when a done chat
 /// is offered to archive; each the core's prefs (`appearance`, `motion`, `language`, `archiveHint`).
 fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
-  let t = @sf.theme()
   let prefs = (core.topic)("prefs", Map::new()).value
   let choice = fn(
     key : String,
@@ -464,10 +473,7 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
         })
         |> ignore
         if note != "" {
-          c.box(w=Fill(1.0), pl=24.0, pr=24.0, pt=8.0, fn() {
-            c.text(note, size=13.0, color=t.p.muted, w=Fill(1.0), line=19.5) |> ignore
-          })
-          |> ignore
+          seg_note(c, note)
         }
       },
     ]
@@ -482,6 +488,11 @@ fn appearance_page(c : @ui.Ctx, core : Core) -> Unit {
     fn() { large_title(c, tr("android-settings.appearance.title")) },
   ]
   blocks.append(choice("appearance", tr("android-settings.appearance.theme"), themes, appearance(prefs), 0, ""))
+  // SettingsHome.kt: 12 under the theme's switch, the faces' row on a card of its own
+  blocks.push(fn() {
+    gap(c, 12.0)
+    list_card(c, fn() { font_row(c, core) })
+  })
   blocks.append(
     choice(
       "motion",

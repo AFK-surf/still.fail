@@ -1,0 +1,208 @@
+// The faces the app is set in, as this device chose them (docs/fonts.md; the Android app's ui/Fonts.kt rememberFonts
+// and FaceFiles): the prefs' `faces` say each place's (ui, text, code); one still.fail keeps is had from the core, which
+// keeps its files for this app (client/core-ts/src/font-files.ts: `fonts.file`, fetched first where it has none,
+// `fonts.fetch`), each unzipped here and checked by its hash (and given back unzipped: `fonts.keep`), and given to the
+// host once all are here (@ui.face_add_bytes: @host.face_ui, face_text, face_code). Until then, and where none is
+// chosen, the app's own stands in (code's: JetBrains Mono). The fonts page shows each face in its preview (`fonts.preview`:
+// its characters alone), given to a face of its own (4 on, by its place in the list).
+
+///|
+/// What of a chosen face is here: being asked for, being fetched, its files whole (each with the weight it is for),
+/// or why not.
+priv enum FaceHad {
+  Asking
+  Fetching
+  Whole(Array[(Bytes, Int)])
+  NotHad(String)
+}
+
+///|
+let faces_had : Map[String, FaceHad] = {}
+
+///|
+/// The face each place's host face holds now, by its id ("": the app's own); index 1 ui, 2 text, 3 code.
+let faces_in : Array[String] = ["", "", "", ""]
+
+///|
+/// A face's preview, by its id: the host face it is given to (> 0), being asked for (0), not had (-1).
+let previews : Map[String, Int] = {}
+
+///|
+/// The host face the app's own code face is given to for the fonts page's 默认 (code's own may be another's then).
+let own_code_face : Int = 15
+
+///|
+/// The first host face of the previews (each face's by its place in the list, faces_most - 1 the last).
+let preview_faces_from : Int = 4
+
+///|
+fn faces_reset() -> Unit {
+  faces_had.clear()
+  for i in 0..<faces_in.length() {
+    faces_in[i] = ""
+  }
+  previews.clear()
+}
+
+///|
+/// The places' faces as the prefs say them, given to the host as each is here (call each frame, before the pages).
+fn faces(src : Source) -> Unit {
+  let prefs = (src.topic)("prefs", {}).value
+  guard prefs is Some(_) else { return }
+  let shown = field(prefs, "faces")
+  let chosen = field(prefs, "fonts")
+  let wanted : Array[String] = []
+  for slot, place in ["ui", "text", "code"] {
+    let host_face = slot + 1
+    let face = field(shown, place)
+    let files = items(face, "files")
+    // text not chosen: as ui (what people wrote in the app's words' face); a face of the device's own (local:): not
+    // this app's to have
+    let id = if text(chosen, place) == "" || files.is_empty() { "" } else { text(face, "id") }
+    if id != "" {
+      wanted.push(id)
+    }
+    let now = if id == "" {
+      ""
+    } else {
+      match face_had(src, id, files) {
+        Some(_) => id
+        // until it is here: the app's own
+        None => ""
+      }
+    }
+    if faces_in[host_face] == now {
+      continue
+    }
+    @ui.face_clear(host_face)
+    if now == "" {
+      if host_face == @host.face_code {
+        ignore(@ui.face_add_bytes(host_face, @sf.code_face()))
+      }
+    } else {
+      match faces_had.get(now) {
+        Some(Whole(files)) => for f in files { ignore(@ui.face_add_bytes(host_face, f.0, weight=f.1)) }
+        _ => ()
+      }
+    }
+    faces_in[host_face] = now
+  }
+  // a face no longer chosen: let go (what failed stays said until it is chosen again)
+  for id in faces_had.keys().collect() {
+    if !wanted.contains(id) && faces_had.get(id) is Some(Whole(_)) {
+      faces_had.remove(id)
+    }
+  }
+}
+
+///|
+/// Face `id`'s files when all are here; None while they come (asked for the first time it is wanted).
+fn face_had(src : Source, id : String, files : Array[Json]) -> Array[(Bytes, Int)]? {
+  match faces_had.get(id) {
+    Some(Whole(b)) => Some(b)
+    Some(_) => None
+    None => {
+      faces_had[id] = Asking
+      face_files(src, id, files, 0, [], false)
+      // (all here at once where the core had them so)
+      match faces_had.get(id) {
+        Some(Whole(b)) => Some(b)
+        _ => None
+      }
+    }
+  }
+}
+
+///|
+/// Face `id`'s files from the `at`th on, each from the core: unzipped and checked where it is as fetched; where the
+/// core has one not, the face fetched first (once).
+fn face_files(src : Source, id : String, files : Array[Json], at : Int, got : Array[(Bytes, Int)], fetched : Bool) -> Unit {
+  if at >= files.length() {
+    faces_had[id] = Whole(got)
+    return
+  }
+  let f = Some(files[at])
+  let sha = text(f, "sha256")
+  let weight = number(f, "weight").to_int()
+  (src.read_bytes)("fonts.file", Json::object({ "sha256": sha.to_json() }), fn(r) {
+    match r {
+      Ok((v, bytes)) => {
+        let whole = if flag(Some(v), "zipped") { @zip.gunzip(bytes) } else { Some(bytes) }
+        match whole {
+          Some(b) if @zip.sha256(b) == sha => {
+            // kept unzipped from now on
+            if flag(Some(v), "zipped") {
+              (src.call_bytes)("fonts.keep", Json::object({ "sha256": sha.to_json() }), b, fn(_) {  })
+            }
+            got.push((b, weight))
+            face_files(src, id, files, at + 1, got, fetched)
+          }
+          _ => faces_had[id] = NotHad(tr("android-settings.fonts.damaged"))
+        }
+      }
+      Err(e) if text(Some(e), "code") == "not_found" && !fetched => {
+        faces_had[id] = Fetching
+        (src.call)("fonts.fetch", Json::object({ "id": id.to_json() }), fn(r) {
+          match r {
+            Ok(_) => face_files(src, id, files, 0, [], true)
+            Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+          }
+        })
+      }
+      Err(e) => faces_had[id] = NotHad(text(Some(e), "message"))
+    }
+  })
+}
+
+///|
+/// Whether face `id` is what a place is set in now (all its files here).
+fn face_here(id : String) -> Bool {
+  id != "" && faces_in.contains(id)
+}
+
+///|
+/// Why face `id` could not be had here (unzipped wrong; the core's fetch failing is the `fonts` topic's to say), "" none.
+fn face_failed(id : String) -> String {
+  match faces_had.get(id) {
+    Some(NotHad(why)) => why
+    _ => ""
+  }
+}
+
+///|
+/// The host face face `id` is shown in itself in on the fonts page (its preview's), at `index` in the list; 0 until it
+/// is here (asked for the first time).
+fn face_preview(src : Source, id : String, index : Int, variable : Bool) -> Int {
+  let host_face = preview_faces_from + index
+  if host_face >= own_code_face {
+    return 0
+  }
+  match previews.get(id) {
+    Some(f) => if f > 0 { f } else { 0 }
+    None => {
+      previews[id] = 0
+      (src.read_bytes)("fonts.preview", Json::object({ "id": id.to_json() }), fn(r) {
+        match r {
+          Ok((_, bytes)) =>
+            previews[id] = if @ui.face_add_bytes(host_face, bytes, weight=if variable { 0 } else { 400 }) {
+              host_face
+            } else {
+              -1
+            }
+          // not shown in itself: its name in the app's face
+          Err(_) => previews[id] = -1
+        }
+      })
+      0
+    }
+  }
+}
+
+///|
+/// The host face the fonts page's 默认 for code is in: the app's own code face, given to one of its own once.
+fn own_code_preview() -> Int {
+  if !@ui.face_given(own_code_face) {
+    ignore(@ui.face_add_bytes(own_code_face, @sf.code_face()))
+  }
+  own_code_face
+}

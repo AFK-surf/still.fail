@@ -15,6 +15,9 @@ priv struct Fixture {
   mut appearance : String
   archived : Map[String, Bool]
   filters : Map[String, String]
+  /// the faces chosen (the prefs' `fonts`), and those whose files the core has (fonts_fixture.mbt)
+  fonts : Map[String, String]
+  fonts_fetched : Map[String, Bool]
   mut version : Int
   /// the first row's chat: how many older pages have come in
   mut older : Int
@@ -328,8 +331,11 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
         "workspace": Json::string(f.workspace),
         "listFilter": Json::object(lf),
         "appearance": Json::string(f.appearance),
+        "fonts": fixture_fonts(f.fonts),
+        "faces": fixture_faces(f.fonts),
       })
     }
+    "fonts" => Some(fixture_fonts_topic(f))
     "job" | "previewLoad" => fixture_service_topic(f, name, params)
     "shareIn" => fixture_share_topic(params)
     "imageNear" => fixture_image_near(params)
@@ -394,6 +400,8 @@ pub fn fixture(mode : String) -> Source {
     },
     archived: {},
     filters: {},
+    fonts: if mode == "settings-fonts-coming" { { "ui": "noto-sans-sc" } } else { {} },
+    fonts_fetched: {},
     version: 1,
     older: 0,
     step: 0,
@@ -429,6 +437,10 @@ pub fn fixture(mode : String) -> Source {
           return
         }
         None => ()
+      }
+      // the faces' files (fonts_fixture.mbt)
+      if fixture_fonts_call(f, name, params, done) {
+        return
       }
       match name {
         "chat.archive" => {
@@ -466,6 +478,17 @@ pub fn fixture(mode : String) -> Source {
               }
             _ => ()
           }
+          // a place's face (null: back to the app's own)
+          match field(Some(params), "fonts") {
+            Some(Object(m)) =>
+              for k, v in m {
+                match v {
+                  String(s) => f.fonts[k] = s
+                  _ => f.fonts.remove(k)
+                }
+              }
+            _ => ()
+          }
           f.version += 1
           done(Ok(Json::object({})))
         }
@@ -492,6 +515,14 @@ pub fn fixture(mode : String) -> Source {
       }
     },
     read_bytes: fn(name, params, done) {
+      // the faces' files (fonts_fixture.mbt)
+      match fixture_fonts_read(f, name) {
+        Some(r) => {
+          done(r)
+          return
+        }
+        None => ()
+      }
       // a chat's made-up files (the preview's), else the made-up drive's
       if name.has_prefix("station.file") {
         fixture_fetch(name, params, done)
@@ -519,6 +550,9 @@ pub fn fixture(mode : String) -> Source {
     },
     cancel: fn(_) {  },
     call_bytes: fn(name, params, _bytes, done) {
+      if fixture_fonts_call(f, name, params, done) {
+        return
+      }
       match fixture_chat_call(f, name, params) {
         Some(r) => done(r)
         None => done(Err({ "code": "unknown_call", "message": "这份假数据没有 " + name }))

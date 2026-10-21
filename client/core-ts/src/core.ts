@@ -44,6 +44,7 @@ import type { Choose } from "./choose.ts";
 import { installChoose } from "./choose-calls.ts";
 import { install as installShareIn } from "./share-in.ts";
 import { Changelog } from "./changelog.ts";
+import { FontFiles } from "./font-files.ts";
 import { installForms, type Forms } from "./forms-calls.ts";
 import { Loads } from "./preview-load.ts";
 import { Asks } from "./asks.ts";
@@ -56,7 +57,7 @@ import * as lockCalls from "./views/lock.ts";
 import * as pairing from "./views/pair.ts";
 import * as vaultCalls from "./views/vault.ts";
 import * as transferCalls from "./views/transfers.ts";
-import { isObject } from "./util.ts";
+import { get, isObject } from "./util.ts";
 import { type CoreModule, type ModuleCall, installModules } from "./module.ts";
 
 /// Where a device's member credentials are kept (`credential/<account>/<workspace>`), and how long one serves.
@@ -240,6 +241,9 @@ export class Core {
       inner.changelog = new Changelog(inner.host, inner.store, inner.data);
       inner.router.owners.push(inner.changelog);
       handlers.changelogSeen = () => Effect.sync(() => (inner.changelog.seen(), null));
+      const fontFiles = new FontFiles(inner.host, inner.store, () => get(inner.data.get({ topic: "prefs" }), "fonts"));
+      inner.router.owners.push(fontFiles);
+      handlers.fonts = (_i, call) => fontFiles.run((call as Extract<Call, { kind: "fonts" }>).call);
       hooks.device = (_inner, facts) => inner.changelog.device(facts);
       inner.router.owners.push(new AdminRelays(inner));
       inner.router.owners.push(new Pills(inner.store, inner.runner, () => inner.host.nowMs(), (station) => inner.views.stationName(station)));
