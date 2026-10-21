@@ -56,6 +56,10 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           android: 'true'
+          # the NDK (a gigabyte from Google's servers) only for Android's own app, built when its pictures are taken
+          # anew: the mbui app's C is built with the runner's own (ANDROID_NDK_LATEST_HOME, scripts/android.sh). A
+          # download cut short failed this job on main (2026-10-22, c2627b0a: "Error on ZipFile unknown archive")
+          ndk: ${{ steps.what.outputs.refs == '1' && 'true' || 'false' }}
       - uses: ./.github/actions/mbui-moonbit
       - name: The mbui app (APP=sffix, debug, for the x86_64 emulator)
         run: |
