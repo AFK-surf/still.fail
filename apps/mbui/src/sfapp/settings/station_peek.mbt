@@ -67,7 +67,7 @@ fn station_peek(c : @ui.Ctx, core : Core, address : String) -> Unit {
         c.text(text(s, "summary"), style=peek_said) |> ignore
         // what its agents' processes are is on its page, a tap away
         if flag(s, "online") {
-          peek_figures(c, s)
+          peek_figures(c, core, s)
         } else {
           c.text(fill("android-settings.stations.offline", [("app", "still.fail")]), style=peek_said) |> ignore
         }
@@ -171,9 +171,9 @@ let net_bar_h : Double = 10.0
 ///|
 /// The machine in brief: what is left of it in the allowance's boxes (grey bars until it is read), its network under
 /// them (Stations.kt StationFigures, `peek`).
-fn peek_figures(c : @ui.Ctx, s : Json?) -> Unit {
+fn peek_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let host = field(s, "host")
-  let net = field(s, "net")
+  let net = station_net(core, s)
   c.box(style=if flag(s, "reconnecting") { peek_figures_faded } else { peek_figures_box }, fn() {
     c.box(style=peek_meters_room, fn() {
       match host {

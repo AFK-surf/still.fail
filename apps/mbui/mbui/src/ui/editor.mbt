@@ -283,6 +283,44 @@ fn EditorState::text_input(
     let n = self.text.length()
     self.anchor = imin(imax(a, 0), n)
     self.caret = imin(imax(b, 0), n)
+  } else if kind == text_composing {
+    self.comp_a = a
+    self.comp_b = b
+  } else if kind == text_state {
+    self.text_set(s, a, b)
+  }
+}
+
+///|
+/// The field as the input method left it (Android's: its edits made on the host's copy of the words, MBView.MBInput):
+/// words `s` with the composing region last said (text_composing) in them, the selection from `a` to `b`. A
+/// composition holding the caret is kept apart, at the caret, as the field keeps one; one that does not is let be as
+/// words. As much put in at once as the field's limit or more is a paste, not put in (`pasted`), as kind 0's.
+fn EditorState::text_set(self : EditorState, s : String, a : Int, b : Int) -> Unit {
+  let n = s.length()
+  let ca = self.comp_a
+  let cb = self.comp_b
+  self.comp_a = -1
+  self.comp_b = -1
+  let sa = imin(imax(a, 0), n)
+  let sb = imin(imax(b, 0), n)
+  let grown = n - self.display().length()
+  if self.limit > 0 && grown >= self.limit && sa == sb && sa >= grown {
+    self.pasted = Some(sub(s, sa - grown, sa))
+    return
+  }
+  if ca >= 0 && cb > ca && cb <= n && sa == sb && sa >= ca && sa <= cb {
+    self.text = sub(s, 0, ca) + sub(s, cb, n)
+    self.caret = ca
+    self.anchor = ca
+    self.marked = sub(s, ca, cb)
+    self.msel_a = sa - ca
+    self.msel_b = sa - ca
+  } else {
+    self.text = s
+    self.anchor = sa
+    self.caret = sb
+    self.marked = ""
   }
 }
 
@@ -394,6 +432,24 @@ pub fn Ctx::editor(
 pub let caret_blink_ms : Double = 530.0
 
 ///|
+/// Android's: Compose's text field's, shown the first 500 ms of each second (TextFieldCursor.kt cursorAnimationSpec).
+pub let caret_blink_android_ms : Double = 500.0
+
+///|
+/// How long the caret is shown, and then hidden, here.
+fn caret_blink() -> Double {
+  if h_platform() == 2 {
+    caret_blink_android_ms
+  } else {
+    caret_blink_ms
+  }
+}
+
+///|
+/// The caret's width (Compose's DefaultCursorThickness, 2 dp; 2 elsewhere too).
+let caret_w : Double = 2.0
+
+///|
 fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   let st = match self.editors.get(n.id) {
     Some(s) => s
@@ -458,17 +514,26 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
   // caret
   if focused {
     let since = self.now - st.blink0
-    let phase = (since / caret_blink_ms).to_int()
-    self.wake_at_time(st.blink0 + (phase + 1).to_double() * caret_blink_ms, later=true)
+    let blink = caret_blink()
+    let phase = (since / blink).to_int()
+    self.wake_at_time(st.blink0 + (phase + 1).to_double() * blink, later=true)
     let coff = if ml > 0 { st.caret + st.msel_a } else { st.caret }
     if phase % 2 == 0 {
       let (cx, cl) = tl.caret(coff)
+      let top = st.oy + cl.to_double() * tl.line_h
+      // Android's as Compose's text field draws it (TextFieldCursor.kt): from the caret rightwards (kept in the
+      // field), its line's whole height, square; elsewhere about the caret, 2 short of each end, round
+      let (x, y, h, r) = if h_platform() == 2 {
+        (dmin(st.ox + cx, n.x + n.fw - caret_w), top, tl.line_h, 0.0)
+      } else {
+        (st.ox + cx - caret_w / 2.0, top + 2.0, tl.line_h - 4.0, 1.0)
+      }
       self.emit_rect(
-        st.ox + cx - 1.0,
-        st.oy + cl.to_double() * tl.line_h + 2.0,
-        2.0,
-        tl.line_h - 4.0,
-        1.0,
+        x,
+        y,
+        caret_w,
+        h,
+        r,
         st.caret_color,
         0.0,
         0L,
@@ -534,6 +599,8 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     marked: "",
     msel_a: 0,
     msel_b: 0,
+    comp_a: -1,
+    comp_b: -1,
     blink0: now,
     tl: None,
     ox: 0.0,

@@ -388,6 +388,22 @@ pub fn Tester::key_catching(self : Tester) -> Bool {
 }
 
 ///|
+/// The field as Android's input method left it (its edits made on the host's copy of the words): words `s`, the
+/// selection from `a` to `b`, the composing region from `ca` to `cb` (-1: none); the frames it causes drawn.
+pub fn Tester::ime_state(self : Tester, s : String, a : Int, b : Int, ca? : Int = -1, cb? : Int = -1) -> Unit {
+  on_text(text_composing, "", ca, cb)
+  on_text(text_state, s, a, b)
+  self.draw()
+}
+
+///|
+/// The soft keyboard put away by the person (its own key, Back); the frames it causes drawn.
+pub fn Tester::keyboard_gone(self : Tester) -> Unit {
+  on_text(text_keyboard_gone, "", 0, 0)
+  self.draw()
+}
+
+///|
 /// The input method deletes `before` UTF-16 units before the caret and `after` after it (Android's
 /// deleteSurroundingText); the frames it causes drawn.
 pub fn Tester::ime_delete(self : Tester, before : Int, after : Int) -> Unit {
@@ -406,6 +422,18 @@ pub fn Tester::ime_finish(self : Tester) -> Unit {
 ///|
 /// The input method's text event deleting around the caret (`a` before it, `b` after: on_text's kind).
 let text_delete_around = 4
+
+///|
+/// The input method's text event saying the composing region (`a` to `b`, -1 none) of the state it sends next.
+let text_composing = 6
+
+///|
+/// The input method's text event giving the field's whole state: its words, the selection from `a` to `b`.
+let text_state = 5
+
+///|
+/// The host's event saying the soft keyboard was put away by the person: the field lets go of the focus.
+let text_keyboard_gone = 7
 
 ///|
 fn h_key_catch(on : Bool) -> Unit {

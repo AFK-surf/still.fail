@@ -143,30 +143,22 @@ final class Host {
         main.postDelayed(Host::requestFrame, (long) Math.max(1, ms));
     }
 
+    /** The input method's edits sent to MoonBit (MBView.MBInput.edited, main thread) and taken by it (GL thread). */
+    static int imeSent;
+    static volatile int imeTaken;
+
     static void setIme(boolean active, double x, double y, double w, double h,
                        String text, int a, int b) {
         boolean was = imeActive;
         boolean cleared = text.isEmpty() && !imeText.isEmpty();
-        // MoonBit's text leaves out what the input method is composing (it is at the caret until committed); the input
-        // method's view of the field has it in, the selection after it and the composing region on it. Told without it
-        // (no composing region), an input method takes its composition as ended and commits what it had composed:
-        // Chinese typed through pinyin came out as "ni'hao你好".
-        MBView.MBInput in = view != null ? view.input : null;
-        String comp = in != null && in.composing ? in.composingText : "";
-        int cs = -1, ce = -1;
-        if (active && !comp.isEmpty()) {
-            int at = Math.max(0, Math.min(Math.min(a, b), text.length()));
-            text = text.substring(0, at) + comp + text.substring(at);
-            cs = at;
-            ce = at + comp.length();
-            a = ce;
-            b = ce;
-        }
+        // (MoonBit's words, what is composed left out: what a connection made anew starts from, MBView.MBInput)
         imeActive = active;
         imeText = text;
         selStart = a;
         selEnd = b;
-        final int sa = a, sb = b, ca = cs, cb = ce;
+        // the input method's edits MoonBit had taken when it said this: said before it took them all, it is not its
+        // own change but what it had before them (the field's state here is newer)
+        final int taken = imeTaken;
         main.post(() -> {
             InputMethodManager imm = (InputMethodManager)
                     activity.getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -179,11 +171,15 @@ final class Host {
                 imeOwed = false;
                 imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
             } else if (active) {
-                if (cleared && (view.input == null || !view.input.composing)) {
+                MBView.MBInput in = view.input;
+                if (in == null || taken != imeSent || !in.took(text, a, b)) return;
+                // MoonBit changed the field itself: its words cleared (sent) as a TextView's set anew, the input
+                // method started over; else told where the selection is now
+                if (cleared) {
                     imm.restartInput(view);
                 } else {
-                    if (imeLog()) log("ime: updateSelection " + sa + "," + sb + " composing " + ca + "," + cb);
-                    imm.updateSelection(view, sa, sb, ca, cb);
+                    if (imeLog()) log("ime: updateSelection " + a + "," + b + " (the app's)");
+                    imm.updateSelection(view, a, b, -1, -1);
                 }
             }
         });

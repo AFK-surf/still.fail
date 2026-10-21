@@ -89,6 +89,78 @@ pub fn spinner(
 }
 
 ///|
+/// What is at work steps round (Spokes.kt, the web's spokes.ts): eight, the brightest a step further every 100 ms,
+/// the others fading behind it. It steps, it does not turn: a frame for each step, none between.
+pub let spoke_step_ms : Double = 100.0
+
+///|
+/// The spokes' strength from the brightest back (Spokes.kt SPOKE_ALPHA).
+// kept across runs: a table, never written
+let spoke_alpha : Array[Double] = [1.0, 0.75, 0.55, 0.42, 0.32, 0.25, 0.2, 0.2]
+
+///|
+/// Which of the eight leads now: one clock for every mark (the frames'), so the marks on a page step together; with
+/// motion reduced, held at the first.
+fn spoke_step(c : @ui.Ctx) -> Int {
+  if @ui.reduced_motion() {
+    0
+  } else {
+    c.every(spoke_step_ms) % 8
+  }
+}
+
+///|
+/// The eight spokes in a box `size` across (Spokes.kt drawSpokes, the web's 24-unit drawing): each from 4.8 to 9.6
+/// out, 2.9 thick with round ends, the first straight up and the rest clockwise, in a box `box` across about its
+/// middle (`size` by default).
+pub fn spokes(c : @ui.Ctx, size : Double, color : Int64, box? : Double) -> Int {
+  let box = box.unwrap_or(size)
+  let step = spoke_step(c)
+  let u = size / 24.0
+  let mid = box / 2.0
+  let pi = 3.141592653589793
+  let lines = []
+  for i in 0..<8 {
+    let a = i.to_double() * pi / 4.0
+    let dx = @dmath.sin(a) * u
+    let dy = -@dmath.cos(a) * u
+    lines.push(
+      @ui.line(
+        [(mid + dx * 4.8, mid + dy * 4.8), (mid + dx * 9.6, mid + dy * 9.6)],
+        width=2.9 * u,
+        color=alpha(color, spoke_alpha[(step - i + 8) % 8]),
+      ),
+    )
+  }
+  c.lines(lines, w=Px(box), h=Px(box))
+}
+
+///|
+/// The same steps as a ring of eight arcs round an avatar (Spokes.kt drawSegments, the web's `segments`): in a box
+/// `size` across, a circle `stroke` thick on its edge, each arc 31° of its 45° with round ends (shortened by their
+/// ends' reach, so the gaps stay 14°), the first straight up.
+pub fn segments(c : @ui.Ctx, size : Double, stroke : Double, color : Int64) -> Int {
+  let step = spoke_step(c)
+  let r = size / 2.0 - stroke / 2.0
+  let mid = size / 2.0
+  let pi = 3.141592653589793
+  let deg = pi / 180.0
+  let cap = stroke / 2.0 / r / deg
+  let lines = []
+  for i in 0..<8 {
+    let from = (i.to_double() * 45.0 - 90.0 - 15.5 + cap) * deg
+    lines.push(
+      @ui.line(
+        @ui.arc(mid, mid, r, from~, sweep=(31.0 - 2.0 * cap) * deg),
+        width=stroke,
+        color=alpha(color, spoke_alpha[(step - i + 8) % 8]),
+      ),
+    )
+  }
+  c.lines(lines, w=Px(size), h=Px(size))
+}
+
+///|
 /// A ring that says how far (PreviewLoad.kt's): `size` square, a track of `color` at 18% and `part` of a turn of it
 /// from the top, clockwise, 2 wide, still.
 pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -> Int {

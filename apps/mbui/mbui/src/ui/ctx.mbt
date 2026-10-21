@@ -91,6 +91,10 @@ struct EditorState {
   mut marked : String
   mut msel_a : Int
   mut msel_b : Int
+  /// the composing region the input method said with the field's state it sends next (on_text kinds 6 and 5,
+  /// Android's): -1 none
+  mut comp_a : Int
+  mut comp_b : Int
   mut blink0 : Double
   mut tl : TextLayout?
   mut ox : Double

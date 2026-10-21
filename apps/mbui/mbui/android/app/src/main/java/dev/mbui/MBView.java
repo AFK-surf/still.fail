@@ -3,14 +3,20 @@ package dev.mbui;
 import android.content.Context;
 import android.opengl.GLSurfaceView;
 import android.os.Looper;
+import android.icu.text.BreakIterator;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.Selection;
 import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ViewTreeObserver;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputMethodManager;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -305,6 +311,7 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         return Host.imeActive;
     }
 
+    /** The field's input connection, the last made (null while a key catcher has the focus). */
     MBInput input;
 
     @Override
@@ -316,8 +323,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             out.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN | EditorInfo.IME_ACTION_NONE;
             out.initialSelStart = 0;
             out.initialSelEnd = 0;
-            input = new MBInput(this);
-            return input;
+            input = null;
+            return new CatchInput(this);
         }
         // multi-line, with no action of the keyboard's own: its Enter is a key the field decides on (a new line in
         // still.fail's composer, as its Android app's field does; the demo sends)
@@ -331,17 +338,16 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
     }
 
     /**
-     * What an input method talks to. Edits go to MoonBit as events; MoonBit
-     * owns the text and tells the host the text and selection after each
-     * frame (Host.setIme), which is what the queries below answer from.
+     * What an input method talks to while a key catcher has the focus (Device): no text of its own; what it commits,
+     * composes and deletes goes to MoonBit as events (src/ui/device.mbt takes them).
      */
-    static class MBInput extends BaseInputConnection {
+    static class CatchInput extends BaseInputConnection {
         final MBView view;
         volatile boolean composing;
         /** What is being composed (shown at the caret, not yet in MoonBit's text). */
         volatile String composingText = "";
 
-        MBInput(MBView v) {
+        CatchInput(MBView v) {
             super(v, false);
             view = v;
         }
@@ -453,6 +459,236 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
             int a = Math.max(0, Math.min(Host.selStart, t.length()));
             int b = Math.max(a, Math.min(Host.selEnd, t.length()));
             return a == b ? null : t.substring(a, b);
+        }
+    }
+
+    /**
+     * What an input method talks to while a field has the focus: the field's words kept here as well, in an Editable
+     * the input method's edits are made on at once, as a TextView's are. An input method reads what it just did right
+     * after doing it (the word before the caret, to put a space after a full stop or between Chinese and English;
+     * where the caret is, which it is told after each edit): answered from words MoonBit had not taken in yet, it
+     * read the field as before its edit, took the caret as moved by someone else and forgot the space it owed. Each
+     * edit (a batch of them: once the batch ends) goes to MoonBit as the field's whole state (src/ui/editor.mbt
+     * text_set), and the input method is told the selection then, as a TextView tells it; what MoonBit changes itself
+     * (a key, the app clearing the field once sent) comes back after its frame (Host.setIme) and is put in here.
+     */
+    static final class MBInput extends BaseInputConnection {
+        final MBView view;
+        final Editable ed;
+        private int batch;
+        /** What MoonBit was last told, or last told this: the state it has (once it has taken what it was sent). */
+        String saidText;
+        int saidA, saidB, saidCs = -1, saidCe = -1;
+
+        MBInput(MBView v) {
+            super(v, true);
+            view = v;
+            String t = Host.imeText;
+            ed = Editable.Factory.getInstance().newEditable(t);
+            int a = Math.max(0, Math.min(Host.selStart, t.length())), b = Math.max(0, Math.min(Host.selEnd, t.length()));
+            Selection.setSelection(ed, a, b);
+            saidText = t;
+            saidA = a;
+            saidB = b;
+        }
+
+        @Override
+        public Editable getEditable() {
+            return ed;
+        }
+
+        @Override
+        public boolean beginBatchEdit() {
+            batch++;
+            return true;
+        }
+
+        @Override
+        public boolean endBatchEdit() {
+            if (batch > 0) batch--;
+            if (batch == 0) edited();
+            return batch > 0;
+        }
+
+        /** The field's state after the input method's edits, to MoonBit and to the input method, when it changed. */
+        void edited() {
+            if (batch > 0) return;
+            String t = ed.toString();
+            int a = Selection.getSelectionStart(ed), b = Selection.getSelectionEnd(ed);
+            int cs = getComposingSpanStart(ed), ce = getComposingSpanEnd(ed);
+            if (cs > ce) { int x = cs; cs = ce; ce = x; }
+            if (t.equals(saidText) && a == saidA && b == saidB && cs == saidCs && ce == saidCe) return;
+            saidText = t;
+            saidA = a;
+            saidB = b;
+            saidCs = cs;
+            saidCe = ce;
+            final int seq = ++Host.imeSent;
+            final int fa = a, fb = b, fcs = cs, fce = ce;
+            if (Host.imeLog()) Host.log("ime: edited " + a + "," + b + " composing " + cs + "," + ce + " (" + t.length() + ")");
+            view.toGL(() -> {
+                Native.text(6, "", fcs, fce);
+                Native.text(5, t, fa, fb);
+                Host.imeTaken = seq;
+            });
+            imm().updateSelection(view, a, b, cs, ce);
+        }
+
+        InputMethodManager imm() {
+            return (InputMethodManager) view.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        }
+
+        /**
+         * MoonBit's own change to the field (Host.setIme, on the main thread): its words `text` (without what is
+         * composed) and selection, once it has taken every edit sent it. Put in here when they are not what it was
+         * told; true then (the input method to be told).
+         */
+        boolean took(String text, int a, int b) {
+            int cs = saidCs, ce = saidCe;
+            // what it was told, as MoonBit keeps it: a composition holding the caret apart from its words (editor.mbt)
+            String has = saidText;
+            int ha = saidA, hb = saidB;
+            boolean comp = cs >= 0 && ce > cs && ha == hb && ha >= cs && ha <= ce;
+            if (comp) {
+                has = saidText.substring(0, cs) + saidText.substring(ce);
+                ha = cs;
+                hb = cs;
+            }
+            if (text.equals(has) && Math.min(a, b) == Math.min(ha, hb) && Math.max(a, b) == Math.max(ha, hb)) return false;
+            removeComposingSpans(ed);
+            ed.replace(0, ed.length(), text);
+            int n = text.length();
+            Selection.setSelection(ed, Math.max(0, Math.min(a, n)), Math.max(0, Math.min(b, n)));
+            saidText = text;
+            saidA = Selection.getSelectionStart(ed);
+            saidB = Selection.getSelectionEnd(ed);
+            saidCs = -1;
+            saidCe = -1;
+            return true;
+        }
+
+        @Override
+        public boolean commitText(CharSequence text, int pos) {
+            if (Host.imeLog()) Host.log("ime: commitText " + text);
+            if (text.toString().equals("\n")) {
+                // Enter: the field's to decide (a new line, or sent), after what is composed is in
+                finishComposingText();
+                view.toGL(() -> Native.key(7, 0));
+                return true;
+            }
+            return super.commitText(text, pos);
+        }
+
+        @Override
+        public boolean setComposingText(CharSequence text, int pos) {
+            if (Host.imeLog()) Host.log("ime: setComposingText " + text);
+            return super.setComposingText(text, pos);
+        }
+
+        @Override
+        public boolean finishComposingText() {
+            if (Host.imeLog()) Host.log("ime: finishComposingText");
+            boolean r = super.finishComposingText();
+            edited();
+            return r;
+        }
+
+        @Override
+        public boolean setComposingRegion(int start, int end) {
+            boolean r = super.setComposingRegion(start, end);
+            edited();
+            return r;
+        }
+
+        @Override
+        public boolean setSelection(int start, int end) {
+            boolean r = super.setSelection(start, end);
+            edited();
+            return r;
+        }
+
+        @Override
+        public boolean deleteSurroundingText(int before, int after) {
+            boolean r = super.deleteSurroundingText(before, after);
+            edited();
+            return r;
+        }
+
+        @Override
+        public boolean deleteSurroundingTextInCodePoints(int before, int after) {
+            boolean r = super.deleteSurroundingTextInCodePoints(before, after);
+            edited();
+            return r;
+        }
+
+        /** Backspace (`back`) or Delete sent as a key by the input method: made here, as a TextView makes it. */
+        void deleteKey(boolean back) {
+            removeComposingSpans(ed);
+            int a = Selection.getSelectionStart(ed), b = Selection.getSelectionEnd(ed);
+            if (a > b) { int x = a; a = b; b = x; }
+            if (a == b) {
+                // a grapheme cluster (an emoji of several code points, a letter and its marks)
+                BreakIterator g = BreakIterator.getCharacterInstance();
+                g.setText(ed.toString());
+                if (back) {
+                    if (a == 0) { edited(); return; }
+                    a = g.preceding(a);
+                } else {
+                    if (b >= ed.length()) { edited(); return; }
+                    b = g.following(b);
+                }
+            }
+            ed.delete(a, b);
+            Selection.setSelection(ed, a);
+            edited();
+        }
+
+        @Override
+        public boolean sendKeyEvent(KeyEvent e) {
+            if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+            if (e.getKeyCode() == KeyEvent.KEYCODE_PASTE) { view.paste(); return true; }
+            if ((e.getKeyCode() == KeyEvent.KEYCODE_DEL || e.getKeyCode() == KeyEvent.KEYCODE_FORWARD_DEL)
+                    && !e.isShiftPressed() && !e.isCtrlPressed() && !e.isAltPressed()) {
+                deleteKey(e.getKeyCode() == KeyEvent.KEYCODE_DEL);
+                return true;
+            }
+            int k = keyCode(e.getKeyCode());
+            if (k != 0) {
+                int mods = e.isShiftPressed() ? 1 : 0;
+                view.toGL(() -> Native.key(k, mods));
+                return true;
+            }
+            int ch = e.getUnicodeChar();
+            if (ch != 0) super.commitText(new String(Character.toChars(ch)), 1);
+            return true;
+        }
+
+        @Override
+        public boolean performContextMenuAction(int id) {
+            if (id == android.R.id.paste || id == android.R.id.pasteAsPlainText) view.paste();
+            else if (id == android.R.id.selectAll) view.toGL(() -> Native.key(12, 0));
+            else if (id == android.R.id.copy) view.toGL(() -> Native.key(13, 0));
+            else if (id == android.R.id.cut) view.toGL(() -> Native.key(14, 0));
+            return true;
+        }
+
+        @Override
+        public boolean performEditorAction(int action) {
+            view.toGL(() -> Native.key(7, 0));
+            return true;
+        }
+
+        @Override
+        public ExtractedText getExtractedText(ExtractedTextRequest req, int flags) {
+            ExtractedText x = new ExtractedText();
+            x.text = ed.toString();
+            x.startOffset = 0;
+            x.partialStartOffset = -1;
+            x.partialEndOffset = -1;
+            x.selectionStart = Selection.getSelectionStart(ed);
+            x.selectionEnd = Selection.getSelectionEnd(ed);
+            x.flags = 0;
+            return x;
         }
     }
 }

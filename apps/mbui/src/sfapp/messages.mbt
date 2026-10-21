@@ -1606,6 +1606,82 @@ fn elapsed(ms : Double) -> String {
 }
 
 ///|
+/// What an activity shows, steadied (Chat.kt steady): another thing replaces the shown one once it has stayed 700 ms
+/// (a passing 请求中 does not flicker by); the same thing's new words show at once. Per row: what shows (its key, its
+/// words), what showed before it, and when it came (the frames' clock).
+priv struct Steady {
+  mut key : String
+  mut words : String
+  mut was : String
+  mut at : Double
+}
+
+///|
+let steadies : Map[String, Steady] = {}
+
+///|
+/// How long a shown thing stays before another replaces it (Chat.kt steady).
+let steady_ms : Double = 700.0
+
+///|
+/// How long the new words take to come in as the old go (Chat.kt Activity's AnimatedContent: 240 ms).
+let now_swap_ms : Double = 240.0
+
+///|
+/// What the agent does now, steadied (`said`: its key and words), the new crossfading in from a quarter of its
+/// height below as the old leaves a quarter above (Chat.kt Activity's AnimatedContent), on one line.
+fn now_words(c : @ui.Ctx, row : String, said : (String, String), color : Int64) -> Unit {
+  let (key, words) = said
+  let st = match steadies.get(row) {
+    Some(s) => s
+    None => {
+      let s = { key, words, was: "", at: -1.0e9 }
+      steadies[row] = s
+      s
+    }
+  }
+  let swap = @motion.anim(c, "now-swap/" + row, 1.0, global=true)
+  if key == st.key || words == st.words {
+    st.key = key
+    st.words = words
+  } else if c.now >= st.at + steady_ms {
+    st.was = st.words
+    st.key = key
+    st.words = words
+    st.at = c.now
+    swap.snap(0.0)
+    swap.animate(1.0, @motion.tween(now_swap_ms))
+  } else {
+    c.wake_in(st.at + steady_ms - c.now)
+  }
+  let p = swap.get()
+  // one line's room: the words going laid out under the new ones and drawn over them
+  c.box(style=now_room, fn() {
+    let said = fn(words : String) { c.text(words, style=now_said, color~) }
+    let cur = said(st.words)
+    if p < 1.0 {
+      c.look(cur, @ui.look(alpha=p, dy=now_line / 4.0 * (1.0 - p)))
+      c.look(said(st.was), @ui.look(alpha=1.0 - p, dy=-now_line - now_line / 4.0 * p))
+    }
+  })
+  |> ignore
+}
+
+///|
+/// The words' room, a line high: what goes and comes cut at its edges (AnimatedContent's SizeTransform clips).
+// kept across runs: a value (no field of it changes)
+let now_room : @ui.Style = @ui.style(h=Fixed(now_line), clip=true)
+
+///|
+/// What it does now: 15, on one line.
+// kept across runs: a value (no field of it changes)
+let now_said : @ui.TextStyle = @ui.text_style(size=Lg, wrap=false)
+
+///|
+/// Its line's height (Lg's): the words come and go a quarter of it.
+let now_line : Double = 21.0
+
+///|
 /// An agent at work, in one line (Chat.kt Activity): its picture ringed while it works (a still, quiet ring while it
 /// waits on work it started), what it does now as the core says, and how long its turn has run.
 fn activity(
@@ -1626,13 +1702,15 @@ fn activity(
   let t = @sf.theme()
   let k = ink()
   let live = (src.topic)("live", { "station": Json::string(here.station), "key": Json::string(a.key) })
-  let now_words = match a.wait {
-    Some((_, _, w)) => if w != "" { w } else { tr("android-chat.chat.waiting") }
-    None =>
-      match text(field(field(live.value, "activity"), "now"), "text") {
-        "" => tr("android-chat.chat.working")
-        s => s
+  let said = match a.wait {
+    Some((_, _, w)) => ("wait", if w != "" { w } else { tr("android-chat.chat.waiting") })
+    None => {
+      let n = field(field(live.value, "activity"), "now")
+      match text(n, "text") {
+        "" => ("busy", tr("android-chat.chat.working"))
+        s => (text(n, "key"), s)
       }
+    }
   }
   let now = (src.now)()
   let clock = match a.wait {
@@ -1687,7 +1765,8 @@ fn activity(
           c.box(w=Px(24.0), h=Px(24.0), radius=12.0, border=1.5, border_color=t.p.line, fn() {  })
           |> ignore
         } else {
-          @sf.spinner(c, size=24.0, ring=0L, arc=k.accent, sweep=0.4, period=2000.0) |> ignore
+          // eight arcs in the accent, the brightest a step further round every 100 ms (Chat.kt WorkRing, Spokes.kt)
+          @sf.segments(c, 24.0, 1.5, k.accent) |> ignore
         }
       })
       c.look(rl, @ui.look(alpha=ring))
@@ -1701,7 +1780,7 @@ fn activity(
     let cut = tail < 1.0 && natural > 0.0
     let tb = c.box(dir=Row, max_w=if cut { natural * tail } else { 1.0e9 }, clip=cut, fn() {
       let inner = c.box(dir=Row, fn() {
-        c.box(fn() { c.text(now_words, size=15.0, color=k.muted, wrap=false) |> ignore }) |> ignore
+        now_words(c, ek + "\u{1}" + a.key, said, k.muted)
         if clock != "" {
           c.box(pl=3.0, fn() { c.text(clock, size=15.0, color=k.subtle, wrap=false) |> ignore })
           |> ignore

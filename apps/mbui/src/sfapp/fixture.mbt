@@ -289,6 +289,37 @@ fn fixture_chats(f : Fixture, params : Map[String, Json]) -> Json? {
 ///|
 fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topic {
   fix_tick(f)
+  let value = fixture_topic_inner(f, name, params)
+  // a station's network as the core gives it: how this device reaches it (`way`) in the list, its figures in the
+  // `stationNet` view of its own (the made-up stations say both as `net`)
+  let value = match name {
+    "stations" => fixture_stations_way(value)
+    "stationNet" => {
+      let address = text(Some(Json::object(params)), "station")
+      let ws = match address.find("/") {
+        Some(i) => address.view(end_offset=i).to_owned()
+        None => address
+      }
+      let mut net = None
+      match fixture_topic_inner(f, "stations", { "scope": Json::string(ws) }) {
+        Some(Array(list)) =>
+          for x in list {
+            if text(Some(x), "station") == address && flag(Some(x), "online") {
+              net = field(Some(x), "net")
+            }
+          }
+        _ => ()
+      }
+      net
+    }
+    _ => value
+  }
+  { value, error: None, version: f.version + @settings.fixture_version() }
+}
+
+///|
+/// What a made-up topic says (fixture_topic: as the screens' fixtures have it, before the core's shapes are made of it).
+fn fixture_topic_inner(f : Fixture, name : String, params : Map[String, Json]) -> Json? {
   let account : Json = { "sub": "u1", "email": "lin@example.com", "name": "林" }
   let value : Json? = match name {
     "accounts" => if f.mode == "signin" { Some([]) } else { Some([account]) }
@@ -383,7 +414,40 @@ fn fixture_topic(f : Fixture, name : String, params : Map[String, Json]) -> Topi
           }
       }
   }
-  { value, error: None, version: f.version + @settings.fixture_version() }
+  value
+}
+
+///|
+/// The made-up stations as the core lists them: each one's `net` left out, how this device reaches it (`way`: its
+/// path and via) in its place.
+fn fixture_stations_way(v : Json?) -> Json? {
+  match v {
+    Some(Array(list)) =>
+      Some(
+        Json::array(
+          list.map(fn(x) {
+            match x {
+              Object(o) => {
+                let m : Map[String, Json] = {}
+                for k, val in o {
+                  if k != "net" {
+                    m[k] = val
+                  }
+                }
+                match o.get("net") {
+                  Some(n) =>
+                    m["way"] = { "path": Json::string(text(Some(n), "path")), "via": Json::string(text(Some(n), "via")) }
+                  None => ()
+                }
+                Json::object(m)
+              }
+              _ => x
+            }
+          }),
+        ),
+      )
+    _ => v
+  }
 }
 
 ///|

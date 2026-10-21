@@ -724,7 +724,7 @@ fn row_tone(item : ChatItem) -> String {
 
 ///|
 /// A chat's state, a mark before its title (Home.kt ChatMark): a blue dot done and unread, a red one with a soft
-/// halo to be seen now, a turning yellow ring with a gap at work, a blue ring when something waits on the viewer, a
+/// halo to be seen now, yellow spokes stepping round at work, a blue ring when something waits on the viewer, a
 /// grey one when only on others.
 fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
   let t = @sf.theme()
@@ -734,16 +734,8 @@ fn chat_mark(c : @ui.Ctx, tone : String, pop? : String = "") -> Unit {
       "alert" => halo_dot(c, mark_red)
       "wait" => ring(c, mark_blue)
       "other" => ring(c, t.p.subtle)
-      _ =>
-        @sf.spinner(
-          c,
-          size=10.0,
-          ring=@sf.alpha(mark_yellow, 0.25),
-          arc=mark_yellow,
-          sweep=0.75,
-          period=1200.0,
-        )
-        |> ignore
+      // yellow spokes stepping round (Spokes.kt)
+      _ => @sf.spokes(c, 10.0, mark_yellow) |> ignore
     }
   })
   // one that came while the list shows pops in (Home.kt ChatMark: 320 ms, CSS's ease-out, 0 → 1.3 at 60% → 1)

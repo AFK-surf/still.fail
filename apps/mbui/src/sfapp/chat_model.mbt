@@ -466,7 +466,8 @@ pub fn stations_of(v : Json?) -> Array[Station] {
         } else if flag(s, "reconnecting") {
           "waiting"
         } else {
-          match text(field(s, "net"), "via") {
+          // how this device reaches it (PageParts.kt stationVia: StationView's `way`)
+          match text(field(s, "way"), "via") {
             "direct" => "direct"
             "relay" => "relay"
             "choosing" => "waiting"

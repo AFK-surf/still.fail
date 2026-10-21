@@ -166,6 +166,7 @@ fn reset() -> Unit {
   attention.src = None
   app.nav = new_nav()
   home_rows.val = []
+  steadies.clear()
   app.picked = ""
   app.filters.clear()
   sheet_host.kind = NoSheet
