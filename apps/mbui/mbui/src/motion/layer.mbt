@@ -73,6 +73,7 @@ pub fn Trans::at(self : Trans, pf : Double, pm : Double) -> @ui.Look {
     sy: s,
     ox: self.ox,
     oy: self.oy,
+    rot: 0.0,
   }
 }
 
@@ -989,7 +990,7 @@ fn after_layout(c : @ui.Ctx) -> Unit {
         let s = fs + (1.0 - fs) * ps
         let x = fx + (nx - fx) * px
         let y = fy + (ny - fy) * py
-        look = look.then({ alpha: 1.0, dx: x - nx, dy: y - ny, sx: s, sy: s, ox: 0.0, oy: 0.0 })
+        look = look.then({ alpha: 1.0, dx: x - nx, dy: y - ny, sx: s, sy: s, ox: 0.0, oy: 0.0, rot: 0.0 })
       }
       None => ()
     }

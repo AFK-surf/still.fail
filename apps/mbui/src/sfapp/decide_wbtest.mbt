@@ -138,6 +138,31 @@ test "the 奏 page: swiped right, a decision is dismissed; none left, the day so
 }
 
 ///|
+test "the 奏 page: the card turns as it is moved across, 4° a width about its top's middle, and on as it flies off" {
+  let calls : Array[Made] = []
+  let t = decide_core(calls, "decisions")
+  // (the deck as wide as the window)
+  let width = 390.0
+  assert_eq(t.turn_of("把首页和聊天页的截图都更新"), Some(0.0))
+  t.press_at(100.0, 400.0)
+  t.move(130.0, 400.0)
+  t.move(200.0, 400.0)
+  // held across: turned as far as it is moved (Decisions.kt rotationZ = drag / width * 4)
+  assert_true(dui.drag > 0.0)
+  let held = t.turn_of("把首页和聊天页的截图都更新").unwrap()
+  assert_true((held - dui.drag / width * card_tilt).abs() < 1.0e-9, msg="\{held} at \{dui.drag}")
+  // let go far across: it flies off turning on, the next one in front not turned
+  t.move(360.0, 400.0)
+  t.release(360.0, 400.0)
+  t.run_for(card_off_ms / 2.0)
+  assert_true(t.turn_of("把首页和聊天页的截图都更新").unwrap() > held)
+  t.run_for(card_off_ms)
+  assert_eq(t.turn_of("把首页和聊天页的截图都更新"), None)
+  assert_true(t.find("1 / 1") is Some(_))
+  t.assert_idle()
+}
+
+///|
 test "a call is drawn by what it is" {
   assert_eq(command_of({ "command": ["bash", "-lc", "ls -la"] }), Some("ls -la"))
   assert_eq(command_of({ "cmd": "git status" }), Some("git status"))

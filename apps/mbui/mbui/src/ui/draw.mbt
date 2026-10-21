@@ -20,6 +20,8 @@ pub(all) struct Look {
   sy : Double
   ox : Double
   oy : Double
+  /// turned by this, in radians (clockwise on the screen), about (ox, oy) as it scales
+  rot : Double
 } derive(Show, Eq, Debug)
 
 ///|
@@ -33,6 +35,7 @@ pub let still_look : Look = {
   sy: 1.0,
   ox: 0.5,
   oy: 0.5,
+  rot: 0.0,
 }
 
 ///|
@@ -46,14 +49,16 @@ pub fn look(
   sy? : Double = scale,
   ox? : Double = 0.5,
   oy? : Double = 0.5,
+  rot? : Double = 0.0,
 ) -> Look {
-  { alpha, dx, dy, sx, sy, ox, oy }
+  { alpha, dx, dy, sx, sy, ox, oy, rot }
 }
 
 ///|
-/// Both: opacities multiplied, offsets added, scales multiplied (about the first's point when it scales).
+/// Both: opacities multiplied, offsets added, scales multiplied, turns added (about the first's point when it scales
+/// or turns).
 pub fn Look::then(self : Look, o : Look) -> Look {
-  let scales = self.sx != 1.0 || self.sy != 1.0
+  let scales = self.sx != 1.0 || self.sy != 1.0 || self.rot != 0.0
   {
     alpha: self.alpha * o.alpha,
     dx: self.dx + o.dx,
@@ -62,13 +67,19 @@ pub fn Look::then(self : Look, o : Look) -> Look {
     sy: self.sy * o.sy,
     ox: if scales { self.ox } else { o.ox },
     oy: if scales { self.oy } else { o.oy },
+    rot: self.rot + o.rot,
   }
 }
 
 ///|
 /// Whether it is drawn as laid out.
 pub fn Look::is_still(self : Look) -> Bool {
-  self.alpha == 1.0 && self.dx == 0.0 && self.dy == 0.0 && self.sx == 1.0 && self.sy == 1.0
+  self.alpha == 1.0 &&
+  self.dx == 0.0 &&
+  self.dy == 0.0 &&
+  self.sx == 1.0 &&
+  self.sy == 1.0 &&
+  self.rot == 0.0
 }
 
 ///|
@@ -483,7 +494,7 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   let (c0, c1, c2, c3) = outer
   let moved = look.sx > 0.001 &&
     look.sy > 0.001 &&
-    (dx != 0.0 || dy != 0.0 || look.sx != 1.0 || look.sy != 1.0)
+    (dx != 0.0 || dy != 0.0 || look.sx != 1.0 || look.sy != 1.0 || look.rot != 0.0)
   if moved {
     // what cuts it, where it is laid out (its corners as round there: transform_insts scales them back)
     let sm = dmin(look.sx, look.sy)
@@ -532,6 +543,9 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
   }
   if !look.is_still() {
     self.transform_insts(i0, self.ninst, ox, oy, look.sx, look.sy, dx, dy, outer, outer_r, outer_s)
+    if look.rot != 0.0 {
+      turn_insts(self.inst, i0, self.ninst, look.rot, ox + dx, oy + dy, outer)
+    }
   }
   match e.keep {
     Some(d) if e.keep_rel >= 0 => {
@@ -550,6 +564,11 @@ fn Ctx::drawn_paint(self : Ctx, i : Int, alpha : Double) -> Bool {
         d.insts[q + 17] = d.insts[q + 17] - l.y
         d.insts[q + 18] = d.insts[q + 18] - l.x
         d.insts[q + 19] = d.insts[q + 19] - l.y
+        // where it turns about, as its rect is
+        if d.insts[q + 32] != 0.0 {
+          d.insts[q + 33] = d.insts[q + 33] - l.x
+          d.insts[q + 34] = d.insts[q + 34] - l.y
+        }
         q = q + inst_size
       }
       let (x, y, w, h) = self.drawn_rect(i)
@@ -590,6 +609,11 @@ fn Ctx::transform_insts(
     let b = k * inst_size
     a[b] = ox + (a[b] - ox) * sx + dx
     a[b + 1] = oy + (a[b + 1] - oy) * sy + dy
+    // turned already (a look inside this one's): where it turns about moves as its rect does
+    if a[b + 32] != 0.0 {
+      a[b + 33] = ox + (a[b + 33] - ox) * sx + dx
+      a[b + 34] = oy + (a[b + 34] - oy) * sy + dy
+    }
     if scales {
       a[b + 2] = a[b + 2] * sx
       a[b + 3] = a[b + 3] * sy
@@ -623,6 +647,65 @@ fn Ctx::transform_insts(
         outer_r,
         outer_s,
       )
+    }
+  }
+}
+
+///|
+/// Instances `i0` to `i1` turned by `rot` radians about (`px`, `py`), where they are drawn now: one turned already (a
+/// look inside) turns about the point the two turns come to together (a turn after a turn is one turn, or, adding up to
+/// none, a move). One cut by `outer`, what cuts the box that turns from outside it, keeps it where it is drawn (35: as
+/// Compose's clipToBounds over a turned graphicsLayer, not turned with it); one cut inside it turns with what it cuts.
+fn turn_insts(
+  a : FixedArray[Double],
+  i0 : Int,
+  i1 : Int,
+  rot : Double,
+  px : Double,
+  py : Double,
+  outer : (Double, Double, Double, Double),
+) -> Unit {
+  let same = fn(x : Double, y : Double) { (x - y).abs() <= 1.0e-6 * dmax(1.0, y.abs()) }
+  for k in i0..<i1 {
+    let b = k * inst_size
+    let screen = same(a[b + 16], outer.0) &&
+      same(a[b + 17], outer.1) &&
+      same(a[b + 18], outer.2) &&
+      same(a[b + 19], outer.3)
+    a[b + 35] = if screen { 1.0 } else { 0.0 }
+    let was = a[b + 32]
+    if was == 0.0 {
+      a[b + 32] = rot
+      a[b + 33] = px
+      a[b + 34] = py
+      continue
+    }
+    // p ↦ R(rot)(R(was)(p - q) + q - c) + c = R(all) p + t: about the point that leaves where it is
+    let (qx, qy) = (a[b + 33], a[b + 34])
+    let all = was + rot
+    let (ca, sa) = (@dmath.cos(all), @dmath.sin(all))
+    let (cb, sb) = (@dmath.cos(rot), @dmath.sin(rot))
+    let tx = -(ca * qx - sa * qy) + (cb * (qx - px) - sb * (qy - py)) + px
+    let ty = -(sa * qx + ca * qy) + (sb * (qx - px) + cb * (qy - py)) + py
+    let det = 2.0 - 2.0 * ca
+    if det.abs() < 1.0e-12 {
+      // turned back to as it was: moved by t (what cuts it from outside staying)
+      a[b] = a[b] + tx
+      a[b + 1] = a[b + 1] + ty
+      if !screen {
+        a[b + 16] = a[b + 16] + tx
+        a[b + 17] = a[b + 17] + ty
+        a[b + 18] = a[b + 18] + tx
+        a[b + 19] = a[b + 19] + ty
+      }
+      a[b + 32] = 0.0
+      a[b + 33] = 0.0
+      a[b + 34] = 0.0
+      a[b + 35] = 0.0
+    } else {
+      a[b + 32] = all
+      a[b + 33] = ((1.0 - ca) * tx - sa * ty) / det
+      a[b + 34] = (sa * tx + (1.0 - ca) * ty) / det
     }
   }
 }

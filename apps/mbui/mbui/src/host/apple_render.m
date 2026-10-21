@@ -6,7 +6,7 @@
 
 int mb_atlas_size = 2048;
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 32
+#define MB_INST 36
 
 static id<MTLDevice> dev;
 static id<MTLCommandQueue> queue;
@@ -37,14 +37,14 @@ static double last_gpu = -1;
 static NSString *shader_src = @
 "#include <metal_stdlib>\n"
 "using namespace metal;\n"
-"// scene.mbt's 32 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
-"// how smooth they are)\n"
-"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; };\n"
+"// scene.mbt's 36 numbers: clip, rc and rs the rounded rect it is cut to (its rect x0 y0 x1 y1, its corners' radii,\n"
+"// how smooth they are); rot how it is turned (radians, about rot.yz; its clip where it is drawn when rot.w is 1)\n"
+"struct Inst { float4 rect; float4 p; float4 color; float4 c2; float4 clip; float4 pad; float4 rc; float4 rs; float4 rot; };\n"
 "struct U { float2 vp; float scale; float pad; };\n"
 "// glass: where a point's backdrop is in the blurred copy (uv = p * map.xy + map.zw, kept in uvc), a liquid group's\n"
 "// bounds, shapes and corners, how many\n"
 "struct G { float4 map; float4 uvc; float4 gb; float4 shape[8]; float4 rad[2]; float4 misc; };\n"
-"struct VOut { float4 pos [[position]]; float2 p; uint iid [[flat]]; };\n"
+"struct VOut { float4 pos [[position]]; float2 p; float2 cp; uint iid [[flat]]; };\n"
 "vertex VOut vmain(uint vid [[vertex_id]], uint iid [[instance_id]],\n"
 "    const device Inst* inst [[buffer(0)]], constant U& u [[buffer(1)]], constant G& g [[buffer(2)]]) {\n"
 "  Inst I = inst[iid];\n"
@@ -54,9 +54,13 @@ static NSString *shader_src = @
 "  float grow = kind == 2 ? I.p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
 "  float2 pos = I.rect.xy - grow + corner * (I.rect.zw + 2.0 * grow);\n"
 "  if (kind == 6) pos = mix(g.gb.xy, g.gb.zw, corner);\n"
+"  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (o.p), its clip there\n"
+"  // too or (35: one from outside what turned) where it is drawn (o.cp)\n"
+"  float2 at = pos;\n"
+"  if (I.rot.x != 0.0) { float2 d = pos - I.rot.yz; float c = cos(I.rot.x), s = sin(I.rot.x); at = I.rot.yz + float2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
 "  VOut o;\n"
-"  o.pos = float4(pos.x / u.vp.x * 2.0 - 1.0, 1.0 - pos.y / u.vp.y * 2.0, 0.0, 1.0);\n"
-"  o.p = pos; o.iid = iid;\n"
+"  o.pos = float4(at.x / u.vp.x * 2.0 - 1.0, 1.0 - at.y / u.vp.y * 2.0, 0.0, 1.0);\n"
+"  o.p = pos; o.cp = I.rot.w > 0.5 ? at : pos; o.iid = iid;\n"
 "  return o;\n"
 "}\n"
 MB_CORNER_SL
@@ -107,13 +111,13 @@ MB_CORNER_SL
 "    constant U& u [[buffer(1)]], constant G& g [[buffer(2)]], texture2d<float> atlas [[texture(0)]],\n"
 "    texture2d<float> img [[texture(1)]], texture2d<float> bd [[texture(2)]]) {\n"
 "  Inst I = inst[in.iid];\n"
-"  float2 p = in.p;\n"
+"  float2 p = in.p, cp = in.cp;\n"
 "  // cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
 "  float cover = 1.0;\n"
 "  if (max(max(I.rc.x, I.rc.y), max(I.rc.z, I.rc.w)) > 0.0) {\n"
-"    cover = clip_cover(p, I.clip, I.rc, I.rs, u.scale);\n"
+"    cover = clip_cover(cp, I.clip, I.rc, I.rs, u.scale);\n"
 "    if (cover <= 0.0) discard_fragment();\n"
-"  } else if (p.x < I.clip.x || p.y < I.clip.y || p.x > I.clip.z || p.y > I.clip.w) discard_fragment();\n"
+"  } else if (cp.x < I.clip.x || cp.y < I.clip.y || cp.x > I.clip.z || cp.y > I.clip.w) discard_fragment();\n"
 "  int kind = int(I.p.y + 0.5);\n"
 "  float4 col = I.color;\n"
 "  if (kind == 1 || kind == 3 || kind == 7) {\n"

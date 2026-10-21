@@ -2,7 +2,8 @@
 # Whether a renderer draws lines (scene.mbt's kind 10) as they are: the picture of src/kitdemo/dl_print_wbtest.mbt's
 # lines_shown (160 by 160 at scale 2, on white) drawn by it. Its horizontal line is the same as the rounded rect of the
 # same shape drawn 40 under it (each pixel's channels within TOL), its slanted line and its arc are inked along their
-# middles and not off them, and its half drawn line ends halfway.
+# middles and not off them, its half drawn line ends halfway, and its box turned 30° clockwise about its top left is
+# drawn turned so (scene.mbt 32-34: the renderer turns it).
 #
 #   lines_check.py PNG      exit 0, saying what it found; else 1, saying what is wrong where
 import math, os, sys
@@ -57,10 +58,22 @@ def main(path):
         bad.append("the half drawn line is not inked halfway along what is drawn of it")
     if not near(at(90, 150), white) or not near(at(130, 150), white):
         bad.append("the half drawn line is inked past its half")
+    # the box 20 by 20 at (70, 85) turned 30° clockwise about (70, 85): red where its own points are taken, white just
+    # outside its sides (and so where they would be turned the other way)
+    red = (0xFF, 0x3B, 0x30)
+    c, s = math.cos(math.radians(30)), math.sin(math.radians(30))
+    turned = lambda u, v: (70 + c * u - s * v, 85 + s * u + c * v)
+    for u in (3, 10, 17):
+        for v in (3, 10, 17):
+            if not near(at(*turned(u, v)), red):
+                bad.append(f"the turned box is not drawn at its own ({u}, {v}), turned: {turned(u, v)} {at(*turned(u, v))}")
+    for u, v in ((-3, 10), (23, 10), (10, -3), (10, 23), (17, -3), (-3, 17)):
+        if not near(at(*turned(u, v)), white):
+            bad.append(f"the turned box is drawn off its side, at its own ({u}, {v}) turned: {turned(u, v)}")
     if bad:
         return f"{path}:\n  " + "\n  ".join(bad)
     print(f"lines check: {path}: the line is the rounded rect of its shape (a channel {worst} apart at most), the "
-          "slanted line, the arc and the half line drawn where they are")
+          "slanted line, the arc, the half line and the turned box drawn where they are")
     return None
 
 

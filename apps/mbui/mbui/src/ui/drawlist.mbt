@@ -8,7 +8,8 @@
 // places and image ids are each renderer's own.
 //
 // The format, a line each, numbers as MoonBit writes doubles (exact), in this order:
-//   mbui-dl 4                     (4: an instance's 32 numbers, how smooth its clip's corners are 28-31; 3 had 28,
+//   mbui-dl 4|5                   (5: an instance's 36 numbers, how it is turned 32-35, written only where something is
+//                                 turned; 4: 32, how smooth its clip's corners are 28-31; 3 had 28,
 //                                 its clip's corners' radii 24-27, round; 2 had 24)
 //   window W H SCALE              the window in points, its device pixels a point
 //   clear R G B                   what is under everything (0-1), as this frame was presented
@@ -214,7 +215,15 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
     _ => ()
   }
   let sb = StringBuilder()
-  sb.write_string("mbui-dl 4\n")
+  // (turned: 5 and its 36 numbers; else 4 and 32, as before anything turned)
+  let mut turned = false
+  for k in 0..<c.ninst {
+    if c.inst[k * inst_size + 32] != 0.0 {
+      turned = true
+    }
+  }
+  let numbers = if turned { inst_size } else { 32 }
+  sb.write_string(if turned { "mbui-dl 5\n" } else { "mbui-dl 4\n" })
   sb.write_string("window")
   dl_num(sb, c.width)
   dl_num(sb, c.height)
@@ -283,7 +292,7 @@ fn drawlist_of(c : Ctx, bytes? : Bool = false) -> String {
   for k in 0..<c.ninst {
     sb.write_string("i")
     let o = k * inst_size
-    for j in 0..<inst_size {
+    for j in 0..<numbers {
       let v = match (j, inst_glyph.get(k)) {
         (12, Some(n)) => n.to_double()
         (13, Some(_)) => 0.0

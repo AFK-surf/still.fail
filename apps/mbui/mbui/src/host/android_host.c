@@ -263,7 +263,7 @@ static int image_new(void) {
 // Renderer: the same instances and shader as Metal and WebGL2.
 
 // the numbers of an instance (src/ui/scene.mbt)
-#define MB_INST 32
+#define MB_INST 36
 
 static const char *VS =
     "#version 300 es\n"
@@ -275,9 +275,10 @@ static const char *VS =
     "layout(location=5) in vec4 a_pad;\n"
     "layout(location=6) in vec4 a_rc;\n"
     "layout(location=7) in vec4 a_rs;\n"
+    "layout(location=8) in vec4 a_rot;\n"
     "uniform vec2 u_vp;\n"
     "uniform vec4 u_gb;\n"
-    "out vec2 v_pos;\n"
+    "out vec2 v_pos; out vec2 v_cpos;\n"
     "flat out vec4 v_rect; flat out vec4 v_p; flat out vec4 v_color; flat out vec4 v_c2; flat out vec4 v_clip; flat out vec4 v_pad;\n"
     "flat out vec4 v_rc; flat out vec4 v_rs;\n"
     "void main() {\n"
@@ -287,14 +288,18 @@ static const char *VS =
     "  float grow = kind == 2 ? a_p.w * 2.0 + 2.0 : ((kind == 0 || kind == 4 || kind == 5) ? 1.0 : 0.0);\n"
     "  vec2 pos = a_rect.xy - grow + corner * (a_rect.zw + 2.0 * grow);\n"
     "  if (kind == 6) pos = mix(u_gb.xy, u_gb.zw, corner);\n"
-    "  gl_Position = vec4(pos.x / u_vp.x * 2.0 - 1.0, 1.0 - pos.y / u_vp.y * 2.0, 0.0, 1.0);\n"
-    "  v_pos = pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;\n"
+    "  // turned (scene.mbt 32-35): drawn turned about its point, everything of how in its own place (v_pos), its clip\n"
+    "  // there too or (35: one from outside what turned) where it is drawn (v_cpos)\n"
+    "  vec2 at = pos;\n"
+    "  if (a_rot.x != 0.0) { vec2 d = pos - a_rot.yz; float c = cos(a_rot.x), s = sin(a_rot.x); at = a_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y); }\n"
+    "  gl_Position = vec4(at.x / u_vp.x * 2.0 - 1.0, 1.0 - at.y / u_vp.y * 2.0, 0.0, 1.0);\n"
+    "  v_pos = pos; v_cpos = a_rot.w > 0.5 ? at : pos; v_rect = a_rect; v_p = a_p; v_color = a_color; v_c2 = a_c2; v_clip = a_clip; v_pad = a_pad; v_rc = a_rc; v_rs = a_rs;\n"
     "}\n";
 
 static const char *FS =
     "#version 300 es\n"
     "precision highp float;\n"
-    "in vec2 v_pos;\n"
+    "in vec2 v_pos; in vec2 v_cpos;\n"
     "flat in vec4 v_rect; flat in vec4 v_p; flat in vec4 v_color; flat in vec4 v_c2; flat in vec4 v_clip; flat in vec4 v_pad;\n"
     "flat in vec4 v_rc; flat in vec4 v_rs;\n"
     "uniform float u_scale;\n"
@@ -458,12 +463,12 @@ static const char *FS =
     "}\n"
     "// cut to its clip: a rect's, hard; a rounded one's, covered as edges are\n"
     "void main() {\n"
-    "  vec2 p = v_pos;\n"
+    "  vec2 p = v_pos, cp = v_cpos;\n"
     "  float cover = 1.0;\n"
     "  if (max(max(v_rc.x, v_rc.y), max(v_rc.z, v_rc.w)) > 0.0) {\n"
-    "    cover = clip_cover(p, v_clip, v_rc, v_rs, u_scale);\n"
+    "    cover = clip_cover(cp, v_clip, v_rc, v_rs, u_scale);\n"
     "    if (cover <= 0.0) discard;\n"
-    "  } else if (p.x < v_clip.x || p.y < v_clip.y || p.x > v_clip.z || p.y > v_clip.w) discard;\n"
+    "  } else if (cp.x < v_clip.x || cp.y < v_clip.y || cp.x > v_clip.z || cp.y > v_clip.w) discard;\n"
     "  shade(p);\n"
     "  o *= cover;\n"
     "}\n";
@@ -568,7 +573,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_surfaceCreated(JNIEnv *env, jclass c
   glBindVertexArray(vao);
   glGenBuffers(1, &vbo);
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  for (int i = 0; i < 8; i++) {
+  for (int i = 0; i < 9; i++) {
     glEnableVertexAttribArray(i);
     glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(i * 16));
     glVertexAttribDivisor(i, 1);
@@ -812,7 +817,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
         main_state();
       }
       if (shows) {
-        for (int i = 0; i < 8; i++)
+        for (int i = 0; i < 9; i++)
           glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
         // liquid: the group as one shape, drawn once
         glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (int)(fbuf[start * MB_INST + 5] + 0.5f) == 6 ? 1 : end - start);
@@ -824,7 +829,7 @@ void mb_host_present(double *buf, int32_t count, double r, double g, double b) {
     if (t) {  // 0: lost with the context, decoding again
       glActiveTexture(GL_TEXTURE1);
       glBindTexture(GL_TEXTURE_2D, t);
-      for (int i = 0; i < 8; i++)
+      for (int i = 0; i < 9; i++)
         glVertexAttribPointer(i, 4, GL_FLOAT, GL_FALSE, MB_INST * 4, (void *)(intptr_t)(start * MB_INST * 4 + i * 16));
       if (hole) glDisable(GL_BLEND);
       glDrawArraysInstanced(GL_TRIANGLES, 0, 6, end - start);
