@@ -102,6 +102,17 @@ export function linkedChat(l: string): { station: string; id: string } | null {
   }
 }
 
+/// The station (`<workspace>/<station>`) and chat a short link names (`…/o/<workspace>/<station>/<key>`), or null.
+export function openedLink(l: string): { station: string; id: string } | null {
+  const m = /^https?:\/\/[^/]+\/o\/([^/?#\s]+)\/([^/?#\s]+)\/([^/?#\s]+)\/?(?:[?#].*)?$/.exec(l);
+  if (!m) return null;
+  try {
+    return { station: `${m[1]}/${m[2]}`, id: decodeURIComponent(m[3]!) };
+  } catch {
+    return null;
+  }
+}
+
 /// What is written in a chat on `station`, its marks made links to chats of its workspace.
 export function expand(data: Data, station: string, text: string): string {
   if (!text.includes("@[")) return text;

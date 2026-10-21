@@ -148,6 +148,7 @@
   "web-main.chat.deleteFailed": "无法删除：{error}",
   "web-main.chat.empty": "在此发送消息，此对话中的 agent 会在这里回复",
   "web-main.chat.fromSlack": "来自 ",
+  "web-main.chat.fromChat": "来自 ",
   "web-main.chat.unkeep": "取消保留",
   "web-main.chat.unkeep.done": "已取消保留，做完后会再提示归档",
   "web-main.chat.unkeep.what": "取消保留",

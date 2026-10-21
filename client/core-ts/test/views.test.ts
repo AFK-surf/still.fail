@@ -254,8 +254,9 @@ test("canonical_and_legacy_station_notices_have_the_same_presentation", () => {
   assert.deepEqual(shown[0], shown[1]);
 });
 
-test("another_chats_agent_goes_by_that_chats_name_without_the_header_line", () => {
+test("another_chats_agent_goes_by_its_model_and_says_the_chat_it_wrote_from_without_the_header_line", () => {
   const agents = [{ session: { key: "k", agentText: "Opus", runtime: "claude" } }];
+  const opus = format.agentLabel("claude-opus-5-5", "high");
   for (const [text, title] of [
     ["来自 [发版 0.1.1780](https://x/o/w/s/a)：\n\n回归过了吗？", "发版 0.1.1780"],
     ["From <https://x/o/w/s/a|Release>:\n\n回归过了吗？", "Release"],
@@ -263,13 +264,23 @@ test("another_chats_agent_goes_by_that_chats_name_without_the_header_line", () =
     ["由 [发版 0.1.1780](https://x/o/w/s/a) 开的 chat：\n\n回归过了吗？", "发版 0.1.1780"],
     ["Opened by [Release](https://x/o/w/s/a):\n\n回归过了吗？", "Release"],
   ]) {
-    let message: J = { authorKind: "agent", author: "far/a", text, agentIdentity: { model: "claude-opus-5-5" } };
+    let message: J = { authorKind: "agent", author: "far/a", text, agentIdentity: { model: "claude-opus-5-5", effort: "high" } };
     message = shownMessage(message, agents, null, [], [], [], undefined);
-    assert.deepEqual([message.text, message.by.name, message.by.from], ["回归过了吗？", title, "https://x/o/w/s/a"]);
+    assert.deepEqual([message.text, message.by.name, message.by.from, message.by.maker?.id], ["回归过了吗？", opus, "https://x/o/w/s/a", "anthropic"]);
+    assert.deepEqual(message.came, { name: title, surface: "ember", url: "https://x/o/w/s/a" });
   }
+  // No model in the message (a session whose model is its runtime's default): as its session on the station names it.
+  const sender = { session: { key: "s", agentText: "Claude", runtime: "claude", maker: { id: "anthropic", name: "Anthropic" } } };
+  let local: J = { authorKind: "agent", author: "s", text: "来自 [b](https://x/o/w/s/s)：\n\nok", agentIdentity: { model: null } };
+  local = shownMessage(local, agents, null, [], [], [], undefined, (key) => (key === "s" ? sender : null));
+  assert.deepEqual([local.by.name, local.by.runtime, local.by.maker?.id, local.came.name], ["Claude", "claude", "anthropic", "b"]);
+  // Known to neither: an agent all the same.
+  let far: J = { authorKind: "agent", author: "far/s", text: "来自 [b](https://x/o/w/s/s)：\n\nok" };
+  far = shownMessage(far, agents, null, [], [], [], undefined);
+  assert.deepEqual([far.by.name, far.by.maker], ["Agent", null]);
   let own: J = { authorKind: "agent", author: "k", text: "来自 [a](https://x/o/w/s/a)：\n\nhi" };
   own = shownMessage(own, agents, null, [], [], [], undefined);
-  assert.deepEqual([own.text, own.by.name], ["来自 [a](https://x/o/w/s/a)：\n\nhi", "Opus"]);
+  assert.deepEqual([own.text, own.by.name, own.came], ["来自 [a](https://x/o/w/s/a)：\n\nhi", "Opus", undefined]);
 });
 
 test("historical_messages_do_not_follow_the_current_model", () => {
@@ -1507,6 +1518,36 @@ test("a_sent_message_that_arrives_before_its_seq_leaves_the_outbox_with_it", asy
   views.outboxSent("ws/a", 7, first, 7);
   await t.read(u, 1);
   assert.equal(u.value.outbox.length, 1);
+});
+
+test("what_a_chats_agent_sent_another_chats_agent_shows_after_the_message_it_followed_naming_that_chat", async () => {
+  const t = setup();
+  const u = ui();
+  t.subscribe(1, chatTopic("ws/a", 7));
+  const now = t.host.nowMs();
+  t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" }), fullSession("o", { connect: "ember" })]);
+  t.set(threads("ws/a"), [thread(7, ["k"], now), { ...thread(8, ["o"], now), title: "Devices 页面简化" }]);
+  const said = (n: number, at: number, text: string) => ({ ...entry(n, text), at });
+  t.set(pageOf("ws/a", 7), { first: 1, last: 1, entries: [said(1, 1000, "告诉它等一下")], thread: null });
+  const call = (args: J, at: string, callId: string) => ({ at, kind: "tool_call", tool: "mcp__stillfail__session_send", text: JSON.stringify(args), callId });
+  const link = "https://app.still.fail/w/ws/s/a/chats/o";
+  t.data.putItems("transcript", "ws/a", "k", [
+    // By its link, by its agent's key, and to a chat of another station by its short link: Markdown as written.
+    [0, call({ to: link, text: "等 **#3876** 合了再 rebase" }, "1970-01-01T00:00:02Z", "c1")],
+    [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "Sent to EMBER/8.0 (agents there: o). They answer with session_send to your chat.", ok: true, callId: "c1" }],
+    [2, call({ to: "o", text: "再说一句" }, "1970-01-01T00:00:03Z", "c2")],
+    [3, call({ to: "https://app.still.fail/o/ws/b/x", text: "那边" }, "1970-01-01T00:00:04Z", "c3")],
+    [4, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: "not sent: no session x", ok: false, callId: "c3" }],
+  ]);
+  await t.read(u, 1);
+  const v = u.value;
+  const sent: J[] = v.messages.flatMap((m: J) => m.elsewhere ?? []);
+  assert.deepEqual(sent.map((s: J) => [s.after, s.text, s.place, s.failed, s.by.here ?? false]), [
+    [1, "等 **#3876** 合了再 rebase", { name: "Devices 页面简化", surface: "ember", session: "o", url: link }, false, true],
+    [1, "再说一句", { name: "Devices 页面简化", surface: "ember", session: "o" }, false, true],
+    // Another station's chat this one does not know: a chat, opened by its link.
+    [1, "那边", { name: "still.fail 对话", surface: "ember", url: "https://app.still.fail/o/ws/b/x" }, true, true],
+  ]);
 });
 
 test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_without_being_one_of_the_chats", async () => {

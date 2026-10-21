@@ -782,9 +782,17 @@ test("what_agents_said_in_slack_is_read_as_their_transcripts_are_written_kept_pa
   db().run("DROP TABLE slack_said", []);
   const d = await again();
   assert.deepEqual(d.slackSaid("w/a", "k1").map((s) => [s.i, s.failed]), [[1, true]]);
-  // Its transcript cut before it: it goes.
-  d.putItems("transcript", "w/a", "k1", [], 0);
+  // One read by a core that took only Slack's (its reader older): read again, for what went to other chats' agents.
+  const send = { at: "1970-01-01T00:00:03Z", kind: "tool_call", tool: "mcp__stillfail__session_send", text: JSON.stringify({ to: "o", text: "等一下" }), callId: "c2" };
+  d.putItems("transcript", "w/a", "k1", [[3, send]]);
   await flush();
-  assert.deepEqual(d.slackSaid("w/a", "k1"), []);
+  db().run("DELETE FROM slack_said WHERE i = 3", []);
+  db().run("DELETE FROM meta WHERE key = 'slack_said_reader'", []);
+  const e = await again();
+  assert.deepEqual(e.slackSaid("w/a", "k1").map((s) => [s.i, s.to, s.text, s.failed]), [[1, "C0OPS/1.2", "**好了**", true], [3, "chat:o", "等一下", false]]);
+  // Its transcript cut before it: it goes.
+  e.putItems("transcript", "w/a", "k1", [], 0);
+  await flush();
+  assert.deepEqual(e.slackSaid("w/a", "k1"), []);
   runner.shutdown();
 });

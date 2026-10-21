@@ -230,6 +230,10 @@ fn said(
         open_sheet(c, AgentOf(ref_of(here), m.by.agent))
       }
       said_head(c, m.by.name, if mine { name } else { 0 }, m.ts, m.time)
+      // another chat's agent wrote it: that chat after its name (Chat.kt SaidRow)
+      if m.came is Some(p) {
+        route_line(c, "received", "android-chat.chat.slack.from", Some(p), false, pl=25.0)
+      }
       quote_cards(c, m.quotes, false)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -1312,6 +1316,90 @@ fn login_ended_line(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
 }
 
 ///|
+/// Where a message went or came from, over its words (Chat.kt SentElsewhere, SaidRow's `came`): its mark, the words
+/// around the place (`key`'s `{name}`), the place (still.fail's mark for a chat, else Slack's), failed if it did.
+fn route_line(
+  c : @ui.Ctx,
+  icon : String,
+  key : String,
+  place : Place?,
+  failed : Bool,
+  pl? : Double = 0.0,
+) -> Unit {
+  let t = @sf.theme()
+  c.box(dir=Row, pl~, align=ACenter, fn() {
+    c.box(pr=5.0, fn() {
+      @sf.icon(c, icon, size=14.0, color=t.p.muted)
+      |> ignore
+    })
+    |> ignore
+    let words = tr(key)
+    let (before, after) = match words.find("{name}") {
+      Some(i) =>
+        (
+          words.view(end_offset=i).to_string(),
+          words.view(start_offset=i + 6).to_string(),
+        )
+      None => (words, "")
+    }
+    c.text(before, size=13.0, color=t.p.muted, wrap=false) |> ignore
+    match place {
+      Some(p) =>
+        c.box(dir=Row, gap=3.0, align=ACenter, fn() {
+          if p.surface == "ember" || p.surface == "stillfail" {
+            @sf.drawable(
+              c,
+              if t.dark {
+                "stillfail_mark_dark"
+              } else {
+                "stillfail_mark"
+              },
+              12.0,
+            )
+            |> ignore
+          } else {
+            @sf.slack_mark(c, 12.0) |> ignore
+          }
+          c.box(fn() {
+            c.text(
+              p.name,
+              size=13.0,
+              weight=600,
+              color=if p.session != "" || p.url != "" {
+                t.p.accent_text
+              } else {
+                t.p.text
+              },
+              wrap=false,
+            )
+            |> ignore
+          })
+          |> ignore
+        })
+        |> ignore
+      None =>
+        c.box(dir=Row, gap=3.0, align=ACenter, fn() {
+          @sf.slack_mark(c, 12.0) |> ignore
+          c.text("Slack", size=13.0, weight=600, color=t.p.text, wrap=false) |> ignore
+        })
+        |> ignore
+    }
+    c.text(after, size=13.0, color=t.p.muted, wrap=false) |> ignore
+    if failed {
+      c.box(pl=6.0, fn() {
+        c.box(padx=6.0, pady=1.0, radius=6.0, bg=@sf.alpha(t.p.red, 0.12), fn() {
+          c.text(tr("android-chat.history.send.failed"), size=11.0, color=t.p.red, wrap=false)
+          |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    }
+  })
+  |> ignore
+}
+
+///|
 /// What an agent said in Slack, or a person's Slack message it was given (Chat.kt SentElsewhere): a picture with
 /// Slack's mark on its corner and a name as messages have them, then where it went or came from over its words
 /// beside a bar.
@@ -1331,82 +1419,17 @@ fn sent_elsewhere(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit
       })
       |> ignore
       c.box(w=Fill(1.0), gap=5.0, fn() {
-        c.box(dir=Row, align=ACenter, fn() {
-          c.box(pr=5.0, fn() {
-            @sf.icon(c, if s.received { "received" } else { "send" }, size=14.0, color=t.p.muted)
-            |> ignore
-          })
-          |> ignore
-          let words = tr(
-            if s.received {
-              "android-chat.chat.slack.from"
-            } else {
-              "android-chat.history.sent.to"
-            },
-          )
-          let (before, after) = match words.find("{name}") {
-            Some(i) =>
-              (
-                words.view(end_offset=i).to_string(),
-                words.view(start_offset=i + 6).to_string(),
-              )
-            None => (words, "")
-          }
-          c.text(before, size=13.0, color=t.p.muted, wrap=false) |> ignore
-          match s.place {
-            Some(p) =>
-              c.box(dir=Row, gap=3.0, align=ACenter, fn() {
-                if p.surface == "ember" || p.surface == "stillfail" {
-                  @sf.drawable(
-                    c,
-                    if t.dark {
-                      "stillfail_mark_dark"
-                    } else {
-                      "stillfail_mark"
-                    },
-                    12.0,
-                  )
-                  |> ignore
-                } else {
-                  @sf.slack_mark(c, 12.0) |> ignore
-                }
-                c.box(fn() {
-                  c.text(
-                    p.name,
-                    size=13.0,
-                    weight=600,
-                    color=if p.session != "" || p.url != "" {
-                      t.p.accent_text
-                    } else {
-                      t.p.text
-                    },
-                    wrap=false,
-                  )
-                  |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
-            None =>
-              c.box(dir=Row, gap=3.0, align=ACenter, fn() {
-                @sf.slack_mark(c, 12.0) |> ignore
-                c.text("Slack", size=13.0, weight=600, color=t.p.text, wrap=false) |> ignore
-              })
-              |> ignore
-          }
-          c.text(after, size=13.0, color=t.p.muted, wrap=false) |> ignore
-          if s.failed {
-            c.box(pl=6.0, fn() {
-              c.box(padx=6.0, pady=1.0, radius=6.0, bg=@sf.alpha(t.p.red, 0.12), fn() {
-                c.text(tr("android-chat.history.send.failed"), size=11.0, color=t.p.red, wrap=false)
-                |> ignore
-              })
-              |> ignore
-            })
-            |> ignore
-          }
-        })
-        |> ignore
+        route_line(
+          c,
+          if s.received { "received" } else { "send" },
+          if s.received {
+            "android-chat.chat.slack.from"
+          } else {
+            "android-chat.history.sent.to"
+          },
+          s.place,
+          s.failed,
+        )
         c.box(dir=Row, w=Fill(1.0), align=AStretch, fn() {
           c.box(w=Px(2.0), radius=1.0, bg=t.p.line, fn() {  }) |> ignore
           c.box(w=Fill(1.0), pl=10.0, max_h=42.0, clip=true, fn() {
@@ -1426,6 +1449,12 @@ fn sent_elsewhere(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit
         } else {
           agent_avatar(c, s.by.maker, s.by.runtime)
         }
+        // sent to another chat's agent: still.fail's, no Slack mark on its corner
+        let to_chat = match s.place {
+          Some(p) => p.surface == "ember" || p.surface == "stillfail"
+          None => false
+        }
+        if !to_chat {
         c.box(
           w=Px(14.0),
           h=Px(14.0),
@@ -1440,6 +1469,7 @@ fn sent_elsewhere(c : @ui.Ctx, src : Source, here : Here, s : Elsewhere) -> Unit
           fn() { @sf.slack_mark(c, 9.0) |> ignore },
         )
         |> ignore
+        }
       })
       |> ignore
     })

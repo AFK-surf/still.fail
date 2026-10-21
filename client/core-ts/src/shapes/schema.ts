@@ -151,7 +151,7 @@ export const SHAPES: Record<string, Shape> = {
     ["maker", opt("Maker")],
     ["runtime", opt("RuntimeKind")],
     ["picture", opt("String")],
-    ["from", opt("String"), { doc: "Another chat's agent (session_send): that chat's link, its name opens it." }],
+    ["from", opt("String"), { doc: "Another chat's agent (session_send): that chat's link (its `came`)." }],
     ["here", opt("bool"), { doc: "In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise." }],
   ], { doc: "Who said a message, as its line shows them: an agent by its label and mark, a person by name and picture." }),
   Message: struct([
@@ -202,6 +202,7 @@ export const SHAPES: Record<string, Shape> = {
     ["card", opt("MessageCard"), { doc: "The card it carries (options to pick, or a text field), as shown. Absent for a message with none." }],
     ["decision", opt("MessageDecision"), { doc: "With a card: whether it still waits for an answer, and who answered it how." }],
     ["asked", opt("bool"), { doc: "In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card\nor an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise." }],
+    ["came", opt("Place"), { doc: "Another chat's agent wrote it (session_send, or the first message of a chat it opened): that chat, said after\nits name (`by` names the agent, by its model). Absent otherwise." }],
     ["elsewhere", opt(vec("ChatSentElsewhere")), { doc: "In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent\nwhen nothing." }],
     ["placed", opt(vec("String")), { doc: "In a chat's page: the names of the files its text places (`![](shot.png)`, `[the report](report.pdf)`), in the\norder it names them, drawn where it names them; the rest go below it. Absent when it places none (a person's\nwords never do)." }],
   ], { doc: "A message of a chat, with what the core decides of it: the viewer's (their bubble), still.fail's own notice, who said\nit, and whether its agents have yet to take it." }),
@@ -2271,7 +2272,7 @@ export const SHAPES: Record<string, Shape> = {
     ["received", opt("bool"), { doc: "A person's message in Slack its agent was given (`by`: who said it); absent for what the agent sent there." }],
     ["by", "MessageBy"],
     ["time", opt(map("Stamp")), { doc: "Its times in words, by field (`createdAt`)." }],
-  ], { doc: "A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,\nread from its transcript: the chat shows it after the message it followed, without it being one of the chat's." }),
+  ], { doc: "A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,\nor one it sent another chat's agent (session_send: `place` is that chat), read from its transcript: the chat shows it after the message it followed, without it being one of the chat's." }),
   ChatView: struct([
     ["archived", "bool", { default: true, doc: "Archived chats must be restored before composing another message." }],
     ["pinned", opt("bool"), { doc: "Pinned to the top of the viewer's list. Absent when its station does not know pins (it cannot be pinned)." }],

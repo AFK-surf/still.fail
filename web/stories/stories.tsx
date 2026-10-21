@@ -30,7 +30,7 @@ import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
 import { shown as fontsShown } from "../../client/core-ts/src/fonts.ts";
-import type { ChatMessage, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
+import type { ChatMessage, ChatSentElsewhere, ChatView, ShareInView, StationView } from "../src/core/shapes.ts";
 import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
@@ -390,6 +390,32 @@ const followed: DemoExtension = {
     return { ...chat, messages: [...chat.messages, ...said] };
   },
 };
+/** Another chat's agent in the chat: what the chat's agent sent it (session_send) under the agent's last message, that
+ *  chat named after its name; then its answer, by its model, the chat it wrote from after its name (`came`). */
+const otherAgent: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "chat" || !value) return undefined;
+    const chat = value as ChatView;
+    const last = chat.messages.at(-1);
+    const agent = [...chat.messages].reverse().find((m) => m.authorKind === "agent");
+    if (!last || !agent) return undefined;
+    const link = "https://app.still.fail/w/demo/s/local/chats/devices";
+    const sentAt = Date.now() - 4 * 60_000;
+    const sent: ChatSentElsewhere = {
+      key: "e-devices", after: last.seq, createdAt: sentAt, failed: false, time: { createdAt: stamp(sentAt) },
+      text: "#3861 也改了这个 spec，等 #3876 合进 main 再 rebase，保留它的自动继续和 Retry 语义。",
+      place: { name: "Devices 页面简化", surface: "ember", url: link }, by: { ...agent.by },
+    };
+    const at = Date.now() - 2 * 60_000;
+    const answer: ChatMessage = {
+      seq: last.seq + 1, thread: last.thread, ts: `${at / 1000}`, authorKind: "agent", author: "demo/devices", text: "收到。#3876 合了告诉我一声，我再合 main 解冲突，spec 以 #3876 的版本为准。",
+      attachments: [], quotes: [], createdAt: at, mine: false, system: false, waiting: false, time: { createdAt: stamp(at) },
+      by: { name: "Claude Opus 5.5 · high", from: link, maker: ANTHROPIC, runtime: "claude" },
+      came: { name: "Devices 页面简化", surface: "ember", url: link },
+    };
+    return { ...chat, messages: [...chat.messages.slice(0, -1), { ...last, elsewhere: [...(last.elsewhere ?? []), sent] }, answer] };
+  },
+};
 /** A message sent while the chat's station updates: it waits for the update to finish, saying so under it
  *  (`Outgoing.waits`), and the chat's head says the station is updating. */
 const sentUpdating: DemoExtension = {
@@ -660,6 +686,8 @@ export const stories: Story[] = [
   { id: "app-chat-files", group: "应用", title: "对话 · 消息里的附件", app: true, files: true },
   { id: "app-chat-followed", group: "应用", title: "对话 · 连发几条", app: true, demo: followed },
   { id: "phone-chat-followed", group: "手机", title: "对话 · 连发几条", app: true, phone: true, demo: followed },
+  { id: "app-chat-other-agent", group: "应用", title: "对话 · 别的 chat 的 agent", app: true, demo: otherAgent },
+  { id: "phone-chat-other-agent", group: "手机", title: "对话 · 别的 chat 的 agent", app: true, phone: true, demo: otherAgent },
   { id: "app-chat-sent-updating", group: "应用", title: "对话 · station 更新时发出的消息", app: true, demo: sentUpdating },
   { id: "phone-chat-sent-updating", group: "手机", title: "对话 · station 更新时发出的消息", app: true, phone: true, demo: sentUpdating },
   { id: "phone-chat-files", group: "手机", title: "对话 · 消息里的附件", app: true, phone: true, files: true },

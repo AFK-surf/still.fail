@@ -1147,11 +1147,13 @@ private fun SentElsewhere(ctx: Here, s: ChatSentElsewhere) {
     val ink = chatInk()
     val agent = s.by.agent?.let { ctx.agent(it) }
     val received = s.received == true
+    // Sent to another chat's agent (session_send): still.fail's, no other platform's mark on the avatar.
+    val toChat = s.place?.surface in setOf("ember", "stillfail")
     Box(Modifier.fillMaxWidth()) {
         Box(Modifier.padding(top = 3.dp)) {
             if (received) Avatar(s.by.name, s.by.name, 18.dp) else AgentAvatar(s.by.maker, s.by.runtime)
             // Said in Slack (or Feishu), not here: its mark on its corner (web: msgAvatarSlack).
-            Box(
+            if (!toChat) Box(
                 Modifier.align(Alignment.BottomEnd).offset(6.dp, 6.dp).size(14.dp).clip(CircleShape).background(chatInk().canvas)
                     .border(1.dp, C.line, CircleShape),
                 contentAlignment = Alignment.Center,
@@ -1244,6 +1246,16 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
                     },
                 )
                 MessageTime(m.time?.get("createdAt"))
+            }
+            // Another chat's agent wrote it: that chat after its name (web Chat.tsx → its route).
+            m.came?.let { came ->
+                Row(Modifier.padding(start = 25.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val (before, after) = around("android-chat.chat.slack.from")
+                    IconIn(Icons.Received, 14.dp, C.muted, Modifier.padding(end = 5.dp))
+                    Text(before, fontSize = 13.sp, color = C.muted)
+                    Box(Modifier.weight(1f, fill = false)) { Place(ctx.station, ctx.of, came) }
+                    Text(after, fontSize = 13.sp, color = C.muted)
+                }
             }
             QuoteCards(m.quotes, jump, Alignment.Start)
             Box(hold) { CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) {

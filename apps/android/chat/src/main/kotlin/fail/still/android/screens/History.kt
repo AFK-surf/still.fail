@@ -428,7 +428,9 @@ internal fun Place(station: String, of: ChatOf, place: fail.still.android.data.P
             catch (_: android.content.ActivityNotFoundException) { app.toast = t("android-chat.link.failed") }
         }
     }
-    val open = chat ?: slack
+    // One on another station: by its link, as a link to a chat opens.
+    val linked = place.url?.takeIf { place.surface == "ember" || place.surface == "stillfail" }?.let { url -> { app.openLink(url) } }
+    val open = chat ?: slack ?: linked
     Row(
         Modifier.clip(Smooth(4.dp)).let { if (open != null) it.clickable(onClick = open) else it },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp),

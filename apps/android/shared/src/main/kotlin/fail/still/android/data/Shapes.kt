@@ -1648,7 +1648,7 @@ data class MessageBy (
 	val maker: Maker? = null,
 	val runtime: RuntimeKind? = null,
 	val picture: String? = null,
-	/// Another chat's agent (session_send): that chat's link, its name opens it.
+	/// Another chat's agent (session_send): that chat's link (its `came`).
 	val from: String? = null,
 	/// In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise.
 	val here: Boolean? = null
@@ -1683,7 +1683,7 @@ data class Place (
 )
 
 /// A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
-/// read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+/// or one it sent another chat's agent (session_send: `place` is that chat), read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
 @Serializable
 data class ChatSentElsewhere (
 	val key: String,
@@ -1762,6 +1762,9 @@ data class ChatMessage (
 	/// In a chat's page: it asks what no one has decided and the viewer has not let go (one of the chat's `asks`, a card
 	/// or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	val asked: Boolean? = null,
+	/// Another chat's agent wrote it (session_send, or the first message of a chat it opened): that chat, said after
+	/// its name (`by` names the agent, by its model). Absent otherwise.
+	val came: Place? = null,
 	/// In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	/// when nothing.
 	val elsewhere: List<ChatSentElsewhere>? = null,

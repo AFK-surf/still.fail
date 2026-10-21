@@ -20,6 +20,7 @@ import * as looks from "../looks.ts";
 import * as present from "../present.ts";
 import { topicKey, type Topic } from "../protocol.ts";
 import * as refs from "../refs.ts";
+import { CHAT } from "../elsewhere.ts";
 import type { Value, Watch } from "../store.ts";
 import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
@@ -188,7 +189,8 @@ export function blockedUnder(messages: J[]): J[] {
 }
 
 /// A message as a chat shows it: whether it is the viewer's, still.fail's own notice, who said it, mentions named.
-export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: string[], members_: J[], bots: [string, string][], creator: J): J {
+/// `sender`: another session of the station by its key (an agent of another chat that wrote here), or null.
+export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: string[], members_: J[], bots: [string, string][], creator: J, sender: (key: string) => J = () => null): J {
   const m: J = { ...message };
   const card = decisions.ofMessage(message);
   if (card !== null) m.card = decisions.labelAssignee(card, viewer, members_, creator);
@@ -206,7 +208,16 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
     if (sent !== null) {
       const [title, link, rest] = sent;
       m.text = rest;
-      m.by = { name: title, from: link, maker: model !== null ? present.maker(model) : null };
+      // Named as the agents of the chat are, by its model (as the message says, else as its session here does); the
+      // chat it wrote from said after its name (`came`).
+      const there = model === null ? get(sender(author), "session") : undefined;
+      m.by = {
+        name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(there, "agentText")) ?? "Agent"),
+        from: link,
+        maker: model !== null ? present.maker(model) : (get(there, "maker") ?? null),
+        runtime: get(there, "runtime") ?? null,
+      };
+      m.came = { name: title, surface: "ember", url: link };
     } else {
       m.by = {
         name: model !== null ? format.agentLabel(model, str(get(identity, "effort"))) : (str(get(session, "agentText")) ?? saidName ?? "agent"),
@@ -1318,7 +1329,7 @@ export class Views implements Owner {
     // A failure notice may be sent to the still.fail team where the station takes bug reports.
     const reports = get(this.ok({ topic: "overview", station }), "feedback") === true;
     for (let i = 0; i < messages.length; i++) {
-      const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator);
+      const m = shownMessage(messages[i], agents, viewer, slackUsers, members_, bots, thread.creator, (key) => this.agent(station, key));
       messages[i] = { ...m, waiting: u64(m.seq) !== null && waits.includes(m.seq) };
       const install = m.system === true && typeof m.runtime === "string" ? present.installView(m.runtime, updates, manages) : null;
       if (install !== null) messages[i].install = install;
@@ -1468,8 +1479,9 @@ export class Views implements Owner {
           if (typeof m.createdAt !== "number" || m.createdAt > s.at) break;
           after = m.seq;
         }
-        let place: J = s.to === "" ? null : format.place(threads, s.to, offsetMin, workspaces);
-        if (place === null && s.to !== "") {
+        const chat = s.to.startsWith(CHAT) ? this.#chatPlace(station, s.to.slice(CHAT.length)) : undefined;
+        let place: J = chat !== undefined ? chat : s.to === "" ? null : format.place(threads, s.to, offsetMin, workspaces);
+        if (place === null && s.to !== "" && chat === undefined) {
           // A message of its own in a channel, before its ts is known.
           const named = threads.find((th) => get(th, "channel") === s.to && typeof get(th, "channelName") === "string");
           const channel = s.to.split("/")[0]!;
@@ -1485,6 +1497,24 @@ export class Views implements Owner {
       }
     }
     return out.sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  /// The chat a message to another chat's agent (session_send from `station`) went to, by what it named: its link, its
+  /// agent's session key, or its thread's address. Named as its station's list names it; else as a chat.
+  #chatPlace(station: string, to: string): J {
+    const linked = refs.linkedChat(to) ?? refs.openedLink(to);
+    const there = linked?.station ?? station;
+    const id = linked?.id ?? to;
+    const split = linked === null ? format.splitThread(to) : null;
+    const found = arr(this.ok({ topic: "threads", station: there })).find((th) => split !== null
+      ? get(th, "channel") === split[0] && get(th, "threadTs") === split[1]
+      : String(get(th, "id")) === id || arr(get(th, "sessions")).some((x) => get(x, "session") === id));
+    const session = str(get(arr(get(found, "sessions"))[0], "session")) ?? (linked === null && split === null ? to : null);
+    // Its page opens it: by its agent on this station, else by its link.
+    const place: J = { name: found !== undefined ? chatTitle(found) : t("core-logic.format.thread.chat", { brand: brandName() }), surface: "ember" };
+    if (session !== null && there === station) place.session = session;
+    if (linked !== null) place.url = to;
+    return place;
   }
 
   /// A pending chat's page: its station's chat once made and read, else what is known here.
