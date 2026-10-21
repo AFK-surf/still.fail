@@ -175,7 +175,8 @@ fn fitted_foot(t : @ui.Tester, last : String) -> Double raise {
 test "a fitted sheet is as tall as what it shows: under its last card its padding as Android's (30 the chat's, 24 the agent's)" {
   let calls : Array[Made] = []
   let t = decide_core(calls, "chat-info")
-  let foot = fitted_foot(t, "归档对话")
+  // (its last card the public links': the last of them, Publish.kt PublishList)
+  let foot = fitted_foot(t, "2 天前 · Bob")
   assert_true((foot - chat_info_foot).abs() < 0.5, msg="under the chat's sheet: \{foot}")
   let t = decide_core(calls, "chat-agent")
   let foot = fitted_foot(t, "服务在线：web · 在盯着：CI")

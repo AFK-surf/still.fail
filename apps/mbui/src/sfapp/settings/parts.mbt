@@ -538,7 +538,7 @@ let near_beside : @ui.Style = @ui.style(row=true, gap=S1_5, align=ACenter)
 ///|
 /// A switch (PageParts.kt Switch): 44 by 26, green when on, its knob white: mbui's switch's look (@kit.switch_look_of)
 /// in still.fail's colours; the row it is in takes the tap.
-fn switch(c : @ui.Ctx, on : Bool) -> Unit {
+pub fn switch(c : @ui.Ctx, on : Bool) -> Unit {
   let t = @sf.theme()
   @kit.switch_look_of(w=44.0, h=26.0, inset=3.0, on_color=t.p.green, off_color=t.p.line, knob=0xFFFFFFFFL, shadow=false)(
     c,
@@ -810,7 +810,7 @@ fn spinner(c : @ui.Ctx, inline? : Bool = false) -> Unit {
 ///|
 /// Where what someone set going shows how it is (Controls.kt DoingMark): a spinner while it is under way, a small red
 /// mark for a few seconds after it failed.
-fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = false) -> Unit {
+pub fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = false) -> Unit {
   let t = @sf.theme()
   if running {
     spinner(c, inline~)
@@ -821,7 +821,7 @@ fn doing_mark(c : @ui.Ctx, running : Bool, failed : String?, inline? : Bool = fa
 
 ///|
 /// A wait said in a line of its own (Waiting.kt WaitLine): a spinner before it; what is wrong in red.
-fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool = false) -> Unit {
+pub fn wait_line(c : @ui.Ctx, words : String, error? : Bool = false, pad? : Bool = false) -> Unit {
   c.box(style=if pad { wait_line_padded } else { @sf.beside }, fn() {
     if !error {
       spinner(c, inline=true)
@@ -980,7 +980,7 @@ let place_empty_box : @ui.Style = @ui.style(w=Full, px=S8, py=S10, gap=S2, align
 /// A button (Controls.kt Button): 38 high, round; primary in ink (red when `danger`; off: the line's grey, its words
 /// muted), else the chip's grey; a spinner before its words while `busy`. True on the frame after a tap (not while
 /// busy or off).
-fn button(
+pub fn button(
   c : @ui.Ctx,
   key : String,
   label : String,
@@ -1099,7 +1099,7 @@ let wide_button_box : @ui.Style = @ui.style(row=true, w=Full, radius=Full, gap=S
 ///|
 /// A row of a picking sheet (Controls.kt PickRow): what, a line under it, a check on the one chosen; `mark` before
 /// what. True on the frame after a tap.
-fn pick_row(
+pub fn pick_row(
   c : @ui.Ctx,
   key : String,
   label : String,

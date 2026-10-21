@@ -12,7 +12,8 @@ test "89-run-settings" {
     // the chat's own sheet (decide.mbt's)
     f.run_to(@kit.sheet_rest("decide-sheet"))
     // the agent's part of the same sheet
-    f.tap("icon:chevron-right")
+    // (its first row's: under it, the public links' and the sharing's have one too)
+    f.tap("icon:chevron-right", top=true)
     f.tap("=历史")
     f.run_to(@ui.nav_rest())
     // 详情: a tab of the history page

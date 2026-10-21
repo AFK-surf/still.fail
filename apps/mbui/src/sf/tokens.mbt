@@ -511,7 +511,7 @@ pub let nav_sub_gap : @ui.Space = space_5
 ///|
 /// 5, off the scale's 4 and 6: the gap in the line under a bar's title (nav_sub_gap), a row's room above and under in
 /// a sheet of chats (Composer.kt askToShare: padding(vertical = 5)).
-pub let space_5 : @ui.Space = Exact(5.0)
+pub let space_5 : @ui.Space = S1_25
 
 ///|
 /// A tag's widest (PageParts.kt StationTag: widthIn(max = 104)).
@@ -651,3 +651,7 @@ pub let peek_card_w : @ui.Len = Fixed(peek_card_px)
 ///|
 /// A link's card's mark, 30 wide (36 high: S9), as the web's.
 pub let link_mark_w : @ui.Len = Fixed(30.0)
+
+///|
+/// A quiet ground under what is grouped on a sheet (Publish.kt: the ink at 4%).
+pub let faint_ground : @ui.Color = A(Fg, Exact(0.04))
