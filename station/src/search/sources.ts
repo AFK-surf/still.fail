@@ -133,7 +133,7 @@ function historyText(e: TimelineEntry): string | null {
 export function transcriptFiles(s: Store, session: SessionRow, profiles: Profiles): { paths: string[]; runtime: NonNullable<ReturnType<typeof runtimeKind>> } | null {
   const profile = profiles.find((p) => p.id === session.profile);
   const runtime = runtimeKind(session.runtime) ?? null;
-  if (!profile || runtime === null || session.runtimeSessionId === null) return null;
+  if (!profile || runtime === null || store.runtimeSessions(s, session.key).length === 0) return null;
   const homes = [profile.home, ...profiles.map((p) => p.home).filter((h) => h !== profile.home)];
   const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, session.key));
   return { paths, runtime };

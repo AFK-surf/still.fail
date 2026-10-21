@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { brief, readTimeline, transcriptPaths } from "../src/read/transcript.ts";
 import { linkAgentHome, linkTranscripts, writeBuiltinSkills } from "../src/sessions/agent-home.ts";
-import { isSlackMethod, isStopCommand, slackWithFiles } from "../src/sessions/args.ts";
+import { isSlackMethod, isStopCommand, slackWithFiles, threadCommand } from "../src/sessions/args.ts";
 import { splitForSlack } from "../src/sessions/chat.ts";
 import { hubConfig } from "../src/sessions/config.ts";
 import { completionQuestion, parse, request } from "../src/sessions/decision.ts";
@@ -31,6 +31,9 @@ test("long text splits on paragraph boundaries", () => {
 test("commands: -stop after mentions, Slack methods by their shape", () => {
   assert.ok(isStopCommand("<@UBOT>  -stop "));
   assert.ok(!isStopCommand("please -stop now"));
+  assert.equal(threadCommand("<@UBOT> -Compact"), "compact");
+  assert.equal(threadCommand(" -clear "), "clear");
+  assert.equal(threadCommand("-clear the cache"), null);
   assert.ok(isSlackMethod("conversations.history") && isSlackMethod("assistant.threads.setStatus"));
   assert.ok(!isSlackMethod("Chat.postMessage") && !isSlackMethod("chat") && !isSlackMethod("chat..x"));
 });

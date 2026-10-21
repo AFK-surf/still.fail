@@ -2,7 +2,7 @@
 // mark in the chat's bar (the wide screen's card over its avatar, ../AgentCard.tsx; the Android app's AgentSheet.kt).
 // What it runs and where it stands (with a stop while it works), its latest lines, the figures that say most (the
 // `agentCard` view, views/brief.ts), then where to go on: the station it runs on, its account (how it runs), its history,
-// its jobs. Only what
+// its jobs, and its context by hand (compacted, cleared). Only what
 // is worth a look is coloured. The same parts head its history's details (History.tsx).
 import { stationApi, useAgentCard, useChat, useStationCall, useStationLook, type ChatAgent } from "../api.ts";
 import type { AgentCardView } from "../core/shapes.ts";
@@ -10,7 +10,8 @@ import { Elapsed, Waited } from "../Chat.tsx";
 import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
+import { confirm } from "./sheets.tsx";
 import { t } from "../i18n.ts";
 import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
 import { InfoList, InfoRow, ModelMark, QuotaRings, stateOf } from "./parts.tsx";
@@ -28,7 +29,7 @@ const working = (agent: ChatAgent) => agent.status === "running" || agent.status
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
 function tall(agent: ChatAgent, go: AgentGo): number {
-  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
+  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0) + (agent.session.canCompact ? 1 : 0) + (agent.session.canClear ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -47,6 +48,10 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
   // A sheet lies over the page, outside its station's context: the API by the station's address.
   const call = useStationCall(at.station);
   const stopping = useDoing("session.stop", { station: at.station, key: at.key });
+  const compacting = useDoing("session.compact", { station: at.station, key: at.key });
+  const compactFailed = useDoingFailed("session.compact", { station: at.station, key: at.key });
+  const clearing = useDoing("session.clear", { station: at.station, key: at.key });
+  const clearFailed = useDoingFailed("session.clear", { station: at.station, key: at.key });
   const station = useStationLook(at.station);
   if (!agent) return <SheetGrab />;
   const s = agent.session;
@@ -100,6 +105,21 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
                 <span className={css.mAgentRowLabel}>{t("web-mobile.agent.jobs")}</span>
                 <span className={css.mAgentRowValue}>{card?.jobs ?? t("web-mobile.agent.jobsIdle")}</span>
                 <ChevronRight size={14} className={partsCss.mSubtle} />
+              </InfoRow>
+            )}
+            {s.canCompact && (
+              <InfoRow busy={compacting} failed={compactFailed} onClick={() => {
+                stationApi(call).compact(s.key).then(() => app.toast(t("web-mobile.agent.compacting")), (error) => app.toast(t("web-mobile.agent.compactFailed", { error: error instanceof Error ? error.message : String(error) })));
+              }}>
+                <span className={css.mAgentAction}>{t("web-pages.chat.compact")}</span>
+              </InfoRow>
+            )}
+            {s.canClear && (
+              <InfoRow busy={clearing} failed={clearFailed} onClick={() => confirm(app, {
+                title: t("web-pages.chat.clearConfirm"), text: t("web-pages.chat.clearBody"), action: t("web-pages.chat.clear"), danger: true,
+                atOnce: "web-mobile.agent.clearFailed", run: () => stationApi(call).clear(s.key),
+              })}>
+                <span className={css.mAgentAction}>{t("web-pages.chat.clear")}</span>
               </InfoRow>
             )}
           </InfoList>

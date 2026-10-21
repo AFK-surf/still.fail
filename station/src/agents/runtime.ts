@@ -77,6 +77,9 @@ export interface AgentSession {
   backgroundTools(): Promise<void>;
   /// Interrupts the running turn; its end still arrives as turnEnded.
   abort(): Promise<void>;
+  /// Between turns, compacts its context (asked for by hand): it runs as a turn of its own, whose end arrives as
+  /// turnEnded (failed when nothing could be compacted). Absent for a runtime that cannot.
+  compact?(): Promise<void>;
   /// Between turns, takes the model and effort of `options` (opened as they were otherwise) from its next turn on,
   /// without a new process. False when it cannot: it is then started again on them.
   retune?(options: OpenOptions): boolean;

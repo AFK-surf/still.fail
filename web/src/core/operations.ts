@@ -9,6 +9,8 @@ export interface OperationParams {
   "search.setPersonal": { personal: boolean };
   "session.warm": { key: string };
   "session.evict": { key: string };
+  "session.compact": { key: string };
+  "session.clear": { key: string };
   "session.delete": { key: string };
   "session.settings": { key: string; profile?: string | null | undefined; model?: string | null | undefined; effort?: string | null | undefined; fast?: boolean | null | undefined };
   "chat.archive": { archived?: boolean | null | undefined; session: string; thread?: number | null | undefined };
@@ -142,6 +144,8 @@ export function bindStationOperations(call: Call) {
     searchSetPersonal: <T = unknown>(params: OperationParams["search.setPersonal"]) => call("search.setPersonal", params) as Promise<T>,
     sessionWarm: <T = unknown>(params: OperationParams["session.warm"]) => call("session.warm", params) as Promise<T>,
     sessionEvict: <T = unknown>(params: OperationParams["session.evict"]) => call("session.evict", params) as Promise<T>,
+    sessionCompact: <T = unknown>(params: OperationParams["session.compact"]) => call("session.compact", params) as Promise<T>,
+    sessionClear: <T = unknown>(params: OperationParams["session.clear"]) => call("session.clear", params) as Promise<T>,
     sessionDelete: <T = unknown>(params: OperationParams["session.delete"]) => call("session.delete", params) as Promise<T>,
     sessionSettings: <T = unknown>(params: OperationParams["session.settings"]) => call("session.settings", params) as Promise<T>,
     chatArchive: <T = unknown>(params: OperationParams["chat.archive"]) => call("chat.archive", params) as Promise<T>,

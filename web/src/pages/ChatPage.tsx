@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -814,7 +814,41 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
           </span>
         )}
       </div>
+      {(session.canCompact || session.canClear) && <ContextLine session={session.key} compact={session.canCompact === true} clear={session.canClear === true} />}
       <TranscriptLine session={session.key} />
+    </div>
+  );
+}
+
+/**
+ * Its context by hand, between turns: compacted (the chat is told when it is done), or cleared so its next message
+ * starts a new conversation (asked first: what it knew is gone for it). Under way, a turning ring; failed, a red mark.
+ */
+function ContextLine({ session, compact, clear }: { session: string; compact: boolean; clear: boolean }) {
+  const api = useApi();
+  const act = useAct();
+  const station = useStation().address;
+  const compacting = useDoing("session.compact", { station, key: session });
+  const compactFailed = useDoingFailed("session.compact", { station, key: session });
+  const clearing = useDoing("session.clear", { station, key: session });
+  const clearFailed = useDoingFailed("session.clear", { station, key: session });
+  const [asking, setAsking] = useState(false);
+  return (
+    <div className={css.sessionLine}>
+      <span className={css.sessionLineMark}><Shrink size={16} /></span>
+      <span className={css.sessionLineText}>{t("web-pages.chat.context")}</span>
+      {compact && (
+        <button type="button" className={`${css.detailLink} ${css.detailButton}`} disabled={compacting || clearing} onClick={() => act(api.compact(session), t("web-pages.chat.compact"))}>
+          {t("web-pages.chat.compact")}<DoingShown state={{ running: compacting, error: compactFailed }} inline />
+        </button>
+      )}
+      {clear && (
+        <button type="button" className={`${css.detailLink} ${css.detailButton}`} disabled={compacting || clearing} onClick={() => setAsking(true)}>
+          {t("web-pages.chat.clear")}<DoingShown state={{ running: clearing, error: clearFailed }} inline />
+        </button>
+      )}
+      <Confirm open={asking} title={t("web-pages.chat.clearConfirm")} description={t("web-pages.chat.clearBody")} action={t("web-pages.chat.clear")}
+        onConfirm={() => { setAsking(false); act(api.clear(session), t("web-pages.chat.clear")); }} onClose={() => setAsking(false)} />
     </div>
   );
 }

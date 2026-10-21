@@ -878,6 +878,8 @@ export interface Session {
 	effort?: string;
 	fast?: boolean;
 	runtimeSessionId?: string;
+	/** What its station can do to its context by hand: compact, clear (one from before says none). */
+	contextActions?: string[];
 	workspace?: string;
 	running?: boolean;
 	createdAt?: number;
@@ -904,6 +906,10 @@ export interface Session {
 	processText?: string;
 	/** How hard its runtime can think, lowest first. */
 	efforts: string[];
+	/** Its context can be compacted by hand now (`session.compact`): between turns, once it has one. */
+	canCompact?: boolean;
+	/** Its context can be cleared by hand now (`session.clear`): between turns, once it has one. */
+	canClear?: boolean;
 	/** Its times in words, by field (`createdAt`, `lastActiveAt`, …). */
 	time?: Record<string, Stamp>;
 	/**

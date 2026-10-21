@@ -35,7 +35,7 @@ import { type Attachment, MANUAL, type SessionRow, type Store, STILLFAIL_SURFACE
 import { Accounts } from "./accounts.ts";
 import { SessionActor, type SessionDeps, type Snapshot, openOptions } from "./actor.ts";
 import { Places } from "../ops/places.ts";
-import { isStopCommand } from "./args.ts";
+import { threadCommand } from "./args.ts";
 import type { ChatEvent, ChatSurface, InboundFile, InboundMessage, ThreadRef } from "./chat.ts";
 import { toolStatus } from "./chat.ts";
 import { type Connect, type HubConfig, type Profile, allowedIn, profilesFor, runtimeNamed, runtimeTitle } from "./config.ts";
@@ -180,7 +180,7 @@ export class Hub {
         const row = this.store.getSession(key);
         const profile = row && this.config().profiles.find((p) => p.id === row.profile);
         const runtime = row && runtimeNamed(row.runtime);
-        if (!row || !profile || !runtime || !row.runtimeSessionId) return null;
+        if (!row || !profile || !runtime || this.store.runtimeSessions(key).length === 0) return null;
         const homes = [profile.home, ...this.config().profiles.map((p) => p.home).filter((h) => h !== profile.home)];
         const { paths, current } = transcriptPaths(runtime, homes, this.store.runtimeSessions(key));
         return paths.length === 0 ? null : { runtime, paths, current };
@@ -534,7 +534,8 @@ export class Hub {
     return { text: [text, ...missing].filter((t) => t !== "").join("\n\n"), attachments };
   }
 
-  /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`).
+  /// Gives sessions a message they have not had: each runs it, or stops for `-stop` (hub.rs `hand_over`), compacts its
+  /// context for `-compact`, clears it for `-clear` (saying in the thread why not, when it cannot now).
   /// A session archived by hand hears nothing until shown again.
   deliver(thread: number, n: number, sessions: string[], text: string) {
     const hearing = sessions.filter((key) => this.store.getSession(key)?.archivedBy !== MANUAL);
@@ -543,10 +544,15 @@ export class Hub {
       const row = this.store.getSession(key);
       if (!row) continue;
       const actor = this.actor(row);
-      if (isStopCommand(text)) {
-        this.store.markDelivered(key, [[thread, n]]);
-        void actor.stop();
-      } else void actor.kick();
+      const command = threadCommand(text);
+      if (command === null) {
+        void actor.kick();
+        continue;
+      }
+      this.store.markDelivered(key, [[thread, n]]);
+      if (command === "stop") void actor.stop();
+      else if (command === "compact") void actor.compact(true);
+      else void actor.clear(true);
     }
   }
 
@@ -725,6 +731,22 @@ export class Hub {
     const row = this.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     await this.actor(row).stop();
+  }
+
+  /// Compacts the session's context between turns, as `-compact` in a thread would (SessionActor.compact): why not,
+  /// when it cannot now.
+  async compact(key: string): Promise<string | null> {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    return this.actor(row).compact();
+  }
+
+  /// Clears the session's context between turns, as `-clear` in a thread would (SessionActor.clear): why not, when it
+  /// cannot now.
+  async clear(key: string): Promise<string | null> {
+    const row = this.store.getSession(key);
+    if (!row) throw new Error(`unknown session ${key}`);
+    return this.actor(row).clear();
   }
 
   /// A word from the station for a session's agent, outside any conversation (SessionActor.notify).

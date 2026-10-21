@@ -394,6 +394,8 @@ function claudeTimeline(r: Json, state: ReadState, out: TimelineEntry[]) {
     return v;
   };
   const content = get(get(r, "message"), "content");
+  // A command run in Claude Code itself (`/compact`, asked by hand) and what it printed: the station says it in the chat.
+  if (isStr(content) && kind === "user" && /^\s*<(command-name|local-command-stdout|local-command-caveat)>/.test(content)) return;
   if (isStr(content)) {
     out.push(entry(kind, clip(content)));
     return;

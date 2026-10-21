@@ -722,5 +722,8 @@
   "web-mobile.profiles.pickModels.reading": "Reading available models",
   "web-mobile.profiles.pickModels.selected": "{n} selected",
   "web-mobile.profiles.pickModels.skip": "Skip",
-  "web-mobile.profiles.pickModels.none": "This profile lists no models; you can add them later on its page"
+  "web-mobile.profiles.pickModels.none": "This profile lists no models; you can add them later on its page",
+  "web-mobile.agent.compacting": "Compacting context; the chat says when it's done",
+  "web-mobile.agent.compactFailed": "Couldn't compact the context: {error}",
+  "web-mobile.agent.clearFailed": "Couldn't clear the context: {error}"
 }

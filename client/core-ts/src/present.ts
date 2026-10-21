@@ -554,6 +554,9 @@ export function session(s: J): J {
   const b = markOf(s);
   const effort = strOf("effort");
   const process = strOf("process");
+  // By hand, between turns, once there is a context (a station from before can do neither).
+  const actions = Array.isArray(o.contextActions) ? (o.contextActions as unknown[]) : [];
+  const between = strOf("runtimeSessionId") !== null && process !== "running" && o.running !== true;
   return {
     ...o,
     statusText: text,
@@ -567,6 +570,8 @@ export function session(s: J): J {
     runtimeText: format.runtimeLabel(runtime),
     processText: process !== null ? format.processText(process) : null,
     efforts: format.efforts(runtime),
+    canCompact: between && actions.includes("compact"),
+    canClear: between && actions.includes("clear"),
   };
 }
 

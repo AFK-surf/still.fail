@@ -64,6 +64,8 @@ export const PARAMS: Record<string, string> = {
   "search.setPersonal": "personal:boolean",
   "session.warm": "key:string",
   "session.evict": "key:string",
+  "session.compact": "key:string",
+  "session.clear": "key:string",
   "session.delete": "key:string",
   "session.settings": "key:string profile?:string model?:string effort?:string fast?:boolean",
   "chat.archive": "archived?:boolean session:string thread?:number",
@@ -292,6 +294,12 @@ function stationOp(name: string, params: unknown): Request | null {
       return op("POST", () => `/sessions/${p.at("key")}/warm`, null, NONE);
     case "session.evict":
       return op("POST", () => `/sessions/${p.at("key")}/evict`, null, process("key"));
+    // Its context compacted by hand (the station says in its chat when it is done), or cleared: its next turn starts a
+    // new conversation. Refused (409, said why) while a turn runs.
+    case "session.compact":
+      return op("POST", () => `/sessions/${p.at("key")}/compact`, null, session("key"));
+    case "session.clear":
+      return op("POST", () => `/sessions/${p.at("key")}/clear`, null, session("key"));
     case "session.delete":
       return op("DELETE", () => `/sessions/${p.at("key")}`, null, session("key"));
     case "session.settings":

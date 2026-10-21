@@ -160,7 +160,10 @@ The archive and hide columns (`archived_by`, `shown_at`, `cwd`, `home`,
   the first part's ts. Agents' messages are not delivered to other sessions;
   still.fail's own notices are recorded as `author_kind = ember`.
 - **`-stop`** is recorded like any message and stops each session it is
-  delivered to instead of reaching the agent.
+  delivered to instead of reaching the agent; so are **`-compact`** (its
+  context compacted between turns) and **`-clear`** (its context cleared: no
+  `runtime_session_id` until its next turn starts a new runtime session, the
+  ones before kept in `runtime_sessions` for its history).
 - **Slack edits** (`message_changed`, found by the thread Slack names —
   `thread_ts`, or the message's own ts outside a thread) append an `edit`
   (the message's new words, its files and quotes as they were). An "edit"

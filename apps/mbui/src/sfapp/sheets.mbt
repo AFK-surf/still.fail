@@ -764,7 +764,7 @@ fn sheet_button(c : @ui.Ctx, key : String, label : String, primary : Bool, enabl
 ///|
 /// An agent of the chat in brief (AgentSheet.kt openAgent): what it runs and where it stands (with a stop while it
 /// works), its latest lines, the figures that say most, then where to go on: the station it runs on, its account, its
-/// history, its jobs.
+/// history, its jobs; and its context by hand (context.mbt).
 fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : String) -> Unit {
   let t = @sf.theme()
   let chat = (src.topic)("chat", chat_params(r)).value
@@ -867,6 +867,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           dui.jobs_all = false
           open_sheet(c, JobsOf(r))
         }
+        context_rows(c, src, r, key, s)
       })
     })
     |> ignore

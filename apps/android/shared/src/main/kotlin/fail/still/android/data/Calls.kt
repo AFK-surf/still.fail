@@ -206,6 +206,12 @@ class StationApi(private val core: StillFailCore, val station: String) {
     /** Releases an idle agent's process. */
     suspend fun evict(key: String) { ops.sessionEvict(key = key) }
 
+    /** Compacts an agent's context, between turns (its chat is told when it is done). */
+    suspend fun compact(key: String) { ops.sessionCompact(key = key) }
+
+    /** Clears an agent's context, between turns: its next message starts a new conversation. */
+    suspend fun clear(key: String) { ops.sessionClear(key = key) }
+
     /** A new chat: its session and its thread, made before its first message so files can go into it. */
     suspend fun newChat(runtime: String, model: String, effort: String?): Pair<String, Long> =
         ops.sessionNew() { this.runtime = runtime; this.model = model

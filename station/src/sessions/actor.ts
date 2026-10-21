@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, cleared, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
 import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
@@ -55,7 +55,9 @@ export type SessionStore = {
   startTurnFor(id: string, key: string, kind: string, by: TurnFor): void;
   endTurn(id: string, outcome: string, detail: string | null, declared: string | null, wait: number | null): void;
   setRunning(key: string, running: boolean): void;
-  setRuntimeSessionId(key: string, id: string): void;
+  setRuntimeSessionId(key: string, id: string | null): void;
+  /// The runtime sessions it ran in, the first first (optional: none known without it).
+  runtimeSessions?(key: string): string[];
   setWaitFor(turn: string, what: string): void;
   setNeed(turn: string, what: string): void;
   setAbout(turn: string, about: [number, number, string] | null): void;
@@ -165,6 +167,8 @@ export type Snapshot = {
   stale?: boolean;
   /// What it was changed in needs a new process, not one retuned (optional: a station from before it does not say).
   restart?: boolean;
+  /// Its context was being compacted by hand (optional: a station from before it does not say).
+  compacting?: boolean;
 };
 
 const t = (key: string, args?: Record<string, unknown>) => tr(stationLang(), key, args);
@@ -210,6 +214,10 @@ export class SessionActor {
   private resumeLost = false;
   /// Started afresh: what it is told of it with its next prompt.
   private afresh: string | null = null;
+  /// Its context is being compacted by hand (compact): what it is told meanwhile waits for the end, as does a wait over
+  /// meanwhile (`overWhileCompacting`).
+  private compacting = false;
+  private overWhileCompacting = false;
   /// What its processes ended by the station had going in the background (ended with them), until the next starts;
   /// then what it is told of it with its next prompt.
   private stopped: BackgroundTask[] = [];
@@ -458,6 +466,108 @@ export class SessionActor {
     });
   }
 
+  /// Compacts its context, by hand, between turns (a runtime that can: agents/runtime.ts `compact`); its end is told in
+  /// its chat. What it is told meanwhile waits until then. Why not, when it cannot now (said in its chat too when
+  /// `say`: asked there); null once begun.
+  compact(say = false): Promise<string | null> {
+    let refused: string | null = null;
+    return this.enqueue(async () => {
+      refused = await this.beginCompacting();
+      if (refused !== null && say) await this.notice(`⚠️ ${refused}`);
+    }).then(() => refused);
+  }
+
+  private async beginCompacting(): Promise<string | null> {
+    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+    if (this.deps.held(this.key)) return t("station.context.held");
+    const row = this.deps.store.getSession(this.key);
+    if (!row?.runtimeSessionId) return t("station.context.empty");
+    let agent: AgentSession;
+    try {
+      agent = await this.ensureAgent();
+    } catch (error) {
+      return t("station.notice.compactFailed", { error: (error as Error).message });
+    }
+    // Gone on in a new runtime session (another account's): nothing in it to compact yet.
+    if (this.afresh !== null) return t("station.context.empty");
+    if (!agent.compact) return t("station.context.cannotCompact", { name: runtimeLabel(this.runtime) });
+    log.info("session", "compacting its context, asked by hand", { session: this.key });
+    this.compacting = true;
+    this.deps.store.setRunning(this.key, true);
+    this.deps.store.notify(this.key);
+    try {
+      await agent.compact();
+    } catch (error) {
+      this.compacting = false;
+      this.deps.store.setRunning(this.key, false);
+      this.deps.store.notify(this.key);
+      return t("station.notice.compactFailed", { error: (error as Error).message });
+    }
+    return null;
+  }
+
+  /// Its compaction ended (`outcome`): said in its chat; then what waited meanwhile goes on.
+  private async compacted(outcome: TurnOutcome) {
+    const store = this.deps.store;
+    this.compacting = false;
+    this.idleSince = this.now();
+    const stopRequested = this.stopRequested;
+    this.stopRequested = false;
+    store.setRunning(this.key, false);
+    store.notify(this.key);
+    log.info("session", "compaction by hand ended", { session: this.key, outcome: outcome.kind });
+    if (outcome.kind === "completed") await this.notice(t("station.notice.compacted"));
+    else if (outcome.kind === "failed") await this.notice(`⚠️ ${t("station.notice.compactFailed", { error: outcome.message })}`, outcome.reason === "auth" || outcome.reason === "refused" ? this.profile : null);
+    else if (stopRequested) await this.notice(t("station.notice.stopped"));
+    if (this.archived()) {
+      await this.letGo();
+      this.deps.idle(this.key);
+      return;
+    }
+    if (this.overWhileCompacting) {
+      this.overWhileCompacting = false;
+      if (this.waiting !== null) this.waitMs(this.waitingSeconds, 0);
+    }
+    if (store.pendingMessages(this.key).length > 0) return this.pump();
+    if (this.notices.length > 0) return this.giveNotices();
+    this.deps.idle(this.key);
+  }
+
+  /// Clears its context, by hand, between turns: its process ends (with what it had going in the background, and the
+  /// wait for it), and its next turn starts a new runtime session, told so (`cleared`); the one before stays in its
+  /// history. Said in its chat. Why not, when it cannot now (said in its chat too when `say`); null once done.
+  clear(say = false): Promise<string | null> {
+    let refused: string | null = null;
+    return this.enqueue(async () => {
+      refused = await this.clearNow();
+      if (refused !== null && say) await this.notice(`⚠️ ${refused}`);
+    }).then(() => refused);
+  }
+
+  private async clearNow(): Promise<string | null> {
+    if (this.turn || this.compacting || this.agent?.session.busy()) return t("station.context.busy");
+    const store = this.deps.store;
+    const row = store.getSession(this.key);
+    if (!row?.runtimeSessionId) return t("station.context.empty");
+    await this.stopWaiting(false);
+    const agent = this.agent;
+    this.agent = null;
+    log.info("session", "clearing its context, asked by hand", { session: this.key, left: row.runtimeSessionId, background: agent?.session.background?.().length ?? 0 });
+    await agent?.session.dispose();
+    // Nothing of the conversation left is carried to the next.
+    this.stopped = [];
+    this.stoppedNote = null;
+    this.resumeLost = false;
+    this.afresh = null;
+    this.nudges = 0;
+    this.toolsRestarts = 0;
+    this.deps.ranIn?.(this.key, row.runtimeSessionId, null);
+    store.setRuntimeSessionId(this.key, null);
+    store.notify(this.key);
+    await this.notice(t("station.notice.cleared"));
+    return null;
+  }
+
   /// The station left its workspace: the runtime process ends, and with it whatever the agent was doing or had been
   /// given (session.rs `suspend`): a turn under way stays marked running (to resume once back), unless it had already
   /// said a settled state; messages given to it while it ran are pending again.
@@ -513,6 +623,7 @@ export class SessionActor {
       idleMs: Math.max(0, this.now() - this.idleSince),
       stale: this.stale,
       restart: this.restart,
+      compacting: this.compacting,
     };
     agent?.detach();
     this.close();
@@ -539,6 +650,7 @@ export class SessionActor {
     this.stopRequested = snap.stopRequested;
     this.stale = snap.stale ?? false;
     this.restart = snap.restart ?? false;
+    this.compacting = snap.compacting === true;
     this.idleSince = this.now() - (typeof snap.idleMs === "number" ? snap.idleMs : 0);
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
     if (typeof snap.refillMs === "number") this.awaitRefill(this.now() + snap.refillMs);
@@ -579,7 +691,7 @@ export class SessionActor {
   }
 
   private async giveNotices() {
-    if (this.deps.held(this.key)) return;
+    if (this.deps.held(this.key) || this.compacting) return;
     if (this.archived()) {
       this.notices = [];
       return;
@@ -598,7 +710,7 @@ export class SessionActor {
   }
 
   private async pump() {
-    if (this.deps.held(this.key) || this.archived()) return; // they stay pending
+    if (this.deps.held(this.key) || this.archived() || this.compacting) return; // they stay pending
     const store = this.deps.store;
     const pending = store.pendingMessages(this.key);
     if (pending.length === 0) return;
@@ -850,6 +962,10 @@ export class SessionActor {
     const driver = this.deps.driver(this.runtime);
     const profile = this.deps.runOn(this.key);
     const base = openOptions(row, profile, this.deps);
+    // Its context cleared by hand (clear): no runtime session now, those before on record. A new one, told so; one
+    // continued from a terminal is given still.fail's instructions as a new session is (no cache of its own to keep).
+    const wasCleared = row.runtimeSessionId === null && (store.runtimeSessions?.(this.key).length ?? 0) > 0;
+    if (wasCleared && row.cwd) base.instructions = sessionInstructions(row.workspace, row.cwd, this.deps.reposDir(), this.deps.memoryPath(this.key));
     // A runtime started where the station may not read exits at once with nothing to say why (macOS privacy protection
     // on a session continued in ~/Documents): told as it is instead. A directory someone named (one continued from a
     // terminal) is looked at as ops/places.ts does, never on this thread in a folder macOS protects (still.fail Helper
@@ -882,10 +998,11 @@ export class SessionActor {
       }
     } else {
       agent = await driver.open(base, this.listener(generation));
+      if (wasCleared) this.afresh = cleared(this.key);
     }
     if (row.runtimeSessionId !== agent.id()) {
       store.setRuntimeSessionId(this.key, agent.id());
-      if (row.runtimeSessionId) this.deps.live?.moved?.(this.key);
+      if (row.runtimeSessionId || wasCleared) this.deps.live?.moved?.(this.key);
     }
     this.deps.ranIn?.(this.key, agent.id(), profile.id);
     this.stopped = [];
@@ -907,7 +1024,7 @@ export class SessionActor {
     switch (event.type) {
       case "turnStarted":
         void this.enqueue(async () => {
-          if (this.isCurrent(generation) && !this.turn) this.beginTurn("input", nobody);
+          if (this.isCurrent(generation) && !this.turn && !this.compacting) this.beginTurn("input", nobody);
         });
         break;
       case "turnEnded":
@@ -931,6 +1048,10 @@ export class SessionActor {
         void this.enqueue(async () => {
           if (!this.isCurrent(generation)) return;
           log.info("session", "session runtime closed", { session: this.key, reason: event.why });
+          if (this.compacting) {
+            this.compacting = false;
+            this.deps.store.setRunning(this.key, false);
+          }
           // What it had going in the background is gone with it.
           this.stopped.push(...(this.agent?.session.background?.() ?? []));
           this.agent = null;
@@ -951,6 +1072,7 @@ export class SessionActor {
 
   private async onTurnEnded(generation: number, outcome: TurnOutcome) {
     if (!this.isCurrent(generation)) return;
+    if (this.compacting && !this.turn) return this.compacted(outcome);
     const store = this.deps.store;
     this.idleSince = this.now();
     const turn = this.turn;
@@ -1095,7 +1217,7 @@ export class SessionActor {
   }
 
   /// Stopped while it waits: the wait ends, and so does the work that would bring it back (session.rs `stop_waiting`).
-  private async stopWaiting() {
+  private async stopWaiting(say = true) {
     const store = this.deps.store;
     const waited = this.waiting !== null;
     this.waiting = null;
@@ -1111,7 +1233,7 @@ export class SessionActor {
     this.agent = null;
     await agent?.session.dispose();
     store.stopWait(this.key);
-    await this.notice(t("station.notice.stopped"));
+    if (say) await this.notice(t("station.notice.stopped"));
   }
 
   /// Archived (by hand or by the station): what would bring it back ends, without a word in its thread.
@@ -1153,6 +1275,10 @@ export class SessionActor {
               // Held: the wait stays, for the next station to take up.
               if (this.deps.held(this.key) || this.waiting !== wait) return;
               if (this.archived()) return this.letGo();
+              if (this.compacting) {
+                this.overWhileCompacting = true;
+                return;
+              }
               this.waiting = null;
               this.phase = "idle";
               // Keeping watch: the watch brings it back (its notices, its end), not the clock; it waits on.

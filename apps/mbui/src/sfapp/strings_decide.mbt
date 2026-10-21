@@ -4,6 +4,11 @@
 ///|
 let zh_decide : Map[String, String] = {
   "android-chat.agent.account": "账号",
+  "web-pages.chat.compact": "压缩上下文",
+  "web-pages.chat.clear": "清空上下文",
+  "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",
+  "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的对话。agent 不再看到此前的内容，执行历史仍保留。",
+  "web-mobile.agent.compacting": "正在压缩上下文，完成后会在对话中提示",
   "android-chat.agent.account.auto": "{name} · 自动",
   "android-chat.agent.account.none": "自动分配",
   "android-chat.agent.cache": "缓存命中",

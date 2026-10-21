@@ -263,19 +263,24 @@ export function slackWithFiles(text: string, files: Attachment[], link: string):
   return [posted, placeFigures(text, files)];
 }
 
-/// `-stop`, alone or after mentions.
-export function isStopCommand(text: string): boolean {
+/// What a message alone asks of the sessions of its thread, after mentions: `-stop` (the running turn, or a wait),
+/// `-compact` (its context compacted), `-clear` (its context cleared); null for a message for its agent.
+export function threadCommand(text: string): "stop" | "compact" | "clear" | null {
   let rest = text.trim();
   while (rest.startsWith("<@")) {
     const after = rest.slice(2);
     const end = after.indexOf(">");
-    if (end < 0) return false;
+    if (end < 0) return null;
     const id = after.slice(0, end);
-    if (id === "" || !/^[A-Za-z0-9]+$/.test(id)) return false;
+    if (id === "" || !/^[A-Za-z0-9]+$/.test(id)) return null;
     rest = after.slice(end + 1).trimStart();
   }
-  return rest.toLowerCase() === "-stop";
+  const word = rest.toLowerCase();
+  return word === "-stop" ? "stop" : word === "-compact" ? "compact" : word === "-clear" ? "clear" : null;
 }
+
+/// `-stop`, alone or after mentions.
+export const isStopCommand = (text: string): boolean => threadCommand(text) === "stop";
 
 /// A Slack Web API method's shape: family.method, lower camel case.
 export function isSlackMethod(method: string): boolean {

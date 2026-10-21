@@ -1,0 +1,122 @@
+// A session's context by hand (SessionActor compact, clear; `-compact`, `-clear` in a thread; POST
+// /sessions/:key/compact, /clear): compacted between turns as a turn of the runtime's own, cleared to a new runtime
+// session the next turn starts.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { sessionKey } from "../src/sessions/hub.ts";
+import { Rig, message, reply, settle } from "./hub-fakes.ts";
+
+/// A session whose first turn ended done.
+async function done(r: Rig) {
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  r.claude.last().complete();
+  await settle();
+  return { m, key, session: r.claude.last() };
+}
+
+test("-compact compacts between turns, holds what comes meanwhile, and says so once done, without a nudge", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  await r.accept(reply(m, "9999.2", "<@UBOT> -compact", { addressed: true }));
+  await settle();
+  assert.equal(session.compactions, 1);
+  assert.equal(session.prompts.length, 1, "-compact is not given to the agent");
+  assert.equal(r.session(key).running, true, "shown at work meanwhile");
+  // Said meanwhile: it waits for the compaction, not steered into it.
+  await r.accept(reply(m, "9999.3", "and then the tests"));
+  await settle();
+  assert.deepEqual(session.steers, []);
+  assert.equal(session.prompts.length, 1);
+  session.complete();
+  await settle();
+  assert.ok(r.chat.texts().includes("已压缩上下文"), r.chat.texts().join("\n"));
+  assert.equal(session.prompts.length, 2, "what waited is given after, and no nudge");
+  assert.ok(session.prompts[1]!.includes("and then the tests"));
+  await r.close();
+});
+
+test("a compaction leaves the chat's state as its last turn left it", async () => {
+  const r = new Rig();
+  const { key, session } = await done(r);
+  assert.equal(await r.hub.compact(key), null);
+  await settle();
+  session.complete();
+  await settle();
+  assert.equal(r.store.lastTurn(key)!.declared, "final", "the turn before it is still the last");
+  assert.equal(r.session(key).running, false);
+  assert.equal(session.prompts.length, 1);
+  await r.close();
+});
+
+test("a compaction that fails is said with why; one asked while a turn runs is refused", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  const session = r.claude.last();
+  assert.equal(await r.hub.compact(key), "当前任务运行中，停止后再试");
+  await r.accept(reply(m, "9999.2", "<@UBOT> -compact", { addressed: true }));
+  await settle();
+  assert.equal(r.chat.lastText(), "⚠️ 当前任务运行中，停止后再试");
+  assert.equal(session.compactions, 0);
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  session.complete();
+  await settle();
+  assert.equal(await r.hub.compact(key), null);
+  session.end({ kind: "failed", reason: "other", message: "Not enough messages to compact." });
+  await settle();
+  assert.equal(r.chat.lastText(), "⚠️ 无法压缩上下文：Not enough messages to compact.");
+  assert.equal(session.prompts.length, 1, "no nudge after it");
+  await r.close();
+});
+
+test("a runtime that cannot compact says so", async () => {
+  const r = new Rig();
+  const { key, session } = await done(r);
+  (session as { compact?: unknown }).compact = undefined;
+  assert.equal(await r.hub.compact(key), "Claude Code 不支持压缩上下文");
+  await r.close();
+});
+
+test("-clear ends its process; its next turn starts a new runtime session, told so, and its history reads both", async () => {
+  const r = new Rig();
+  const { m, key, session } = await done(r);
+  await r.accept(reply(m, "9999.2", "<@UBOT> -clear", { addressed: true }));
+  await settle();
+  assert.ok(session.disposed);
+  assert.equal(r.session(key).runtimeSessionId, null);
+  assert.equal(r.chat.lastText(), "已清空上下文，下一条消息将开始新的对话");
+  assert.deepEqual(r.store.runtimeSessions(key), [session.sessionId]);
+  await r.accept(reply(m, "9999.3", "<@UBOT> start over", { addressed: true }));
+  await settle();
+  const fresh = r.claude.last();
+  assert.notEqual(fresh, session);
+  assert.equal(fresh.options.resume, undefined);
+  assert.ok(fresh.prompts[0]!.startsWith("People cleared your context"), fresh.prompts[0]);
+  assert.ok(fresh.prompts[0]!.includes("start over"));
+  assert.deepEqual(r.store.runtimeSessions(key), [session.sessionId, fresh.sessionId]);
+  // Told once.
+  await r.call(key, "chat_state", { kind: "all_done", done: "测试任务已完成，没有剩余工作" });
+  fresh.complete();
+  await settle();
+  await r.accept(reply(m, "9999.4", "<@UBOT> again", { addressed: true }));
+  await settle();
+  assert.ok(!fresh.prompts[1]!.includes("People cleared your context"));
+  await r.close();
+});
+
+test("clear is refused while a turn runs", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const key = sessionKey("cl", "C1", m.threadTs);
+  assert.equal(await r.hub.clear(key), "当前任务运行中，停止后再试");
+  assert.equal(r.claude.last().disposed, false);
+  await r.close();
+});

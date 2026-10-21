@@ -483,5 +483,12 @@
   "station.profile.devinSubscription": "Devin account",
   "station.quota.devinUnsupported": "Devin doesn't report plan usage to the station; see Usage on app.devin.ai",
   "station.updates.devinElsewhere": "Installed at {path}, not by Devin's installer; update it manually on that machine",
-  "station.login.devinNoTerminal": "Devin's sign-in needs a terminal, which this machine can't provide; sign in on another station"
+  "station.login.devinNoTerminal": "Devin's sign-in needs a terminal, which this machine can't provide; sign in on another station",
+  "station.context.busy": "A task is running; stop it and try again",
+  "station.context.held": "This station can't run agents right now",
+  "station.context.empty": "No context yet",
+  "station.context.cannotCompact": "{name} can't compact its context",
+  "station.notice.compacted": "Context compacted",
+  "station.notice.compactFailed": "Couldn't compact the context: {error}",
+  "station.notice.cleared": "Context cleared; the next message starts a new conversation"
 }

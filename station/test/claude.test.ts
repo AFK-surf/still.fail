@@ -106,6 +106,29 @@ test("what a process runs in the background, as its task frames tell it", () => 
   assert.deepEqual(ids(), ["command:b2:build"]);
 });
 
+test("a /compact that compacted nothing ends failed, saying why; one that did, completed", () => {
+  const ended: unknown[] = [];
+  const emit = (e: RuntimeEvent) => e.type === "turnEnded" && ended.push(e.outcome);
+  const turn: Turn = { busy: true, aborting: false, authFailure: null, closed: false, compacting: true };
+  // As Claude Code 2.1.289 says it: compacting, how it went, then a result of success all the same.
+  onFrame({ type: "system", subtype: "status", status: "compacting" }, turn, emit, () => {});
+  onFrame({ type: "system", subtype: "status", status: null, compact_result: "failed", compact_error: "Not enough messages to compact." }, turn, emit, () => {});
+  onFrame({ type: "system", subtype: "init" }, turn, emit, () => {});
+  onFrame({ type: "result", subtype: "success", is_error: false }, turn, emit, () => {});
+  assert.deepEqual(ended, [{ kind: "failed", reason: "other", message: "Not enough messages to compact." }]);
+  assert.equal(turn.compacting, false);
+  Object.assign(turn, { busy: true, compacting: true });
+  onFrame({ type: "system", subtype: "status", status: null, compact_result: "success" }, turn, emit, () => {});
+  onFrame({ type: "system", subtype: "compact_boundary", compact_metadata: { trigger: "manual" } }, turn, emit, () => {});
+  onFrame({ type: "result", subtype: "success", is_error: false }, turn, emit, () => {});
+  assert.deepEqual(ended[1], { kind: "completed" });
+  // A failed compaction in a turn of its own (automatic) is not this turn's failure.
+  Object.assign(turn, { busy: true });
+  onFrame({ type: "system", subtype: "status", status: null, compact_result: "failed", compact_error: "x" }, turn, emit, () => {});
+  onFrame({ type: "result", subtype: "success", is_error: false }, turn, emit, () => {});
+  assert.deepEqual(ended[2], { kind: "completed" });
+});
+
 test("a command a turn waited on and was never told ended does not outlive the turn", () => {
   const turn: Turn = { busy: false, aborting: false, authFailure: null, closed: false };
   onFrame({ type: "system", subtype: "task_started", task_id: "b1", task_type: "local_bash", description: "x", is_backgrounded: false }, turn, () => {}, () => {});

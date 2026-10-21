@@ -21,6 +21,8 @@ priv enum Sheet {
   Publish(String, Double)
   /// sharing the chat with the viewer's other workspaces (ChatInfo.kt openShare): its thread
   XShare(ChatRef, Double?)
+  /// asking before an agent's context is cleared (AgentSheet.kt, PageParts.kt confirm): its session
+  ClearContext(ChatRef, String)
 }
 
 ///|
@@ -558,5 +560,6 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     Rename(r, thread, was) => rename_sheet(c, src, r, thread, was)
     Publish(station, thread) => publish_sheet(c, src, station, thread)
     XShare(r, thread) => xshare_sheet(c, src, r, thread)
+    ClearContext(r, key) => clear_context_sheet(c, src, r, key)
   }
 }

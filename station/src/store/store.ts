@@ -264,7 +264,8 @@ export class Store {
     this.#updateSession(key, "UPDATE sessions SET title = ?1 WHERE key = ?2", title, key);
   }
 
-  setRuntimeSessionId(key: string, id: string): void {
+  /// null: none now (its context cleared by hand); those it ran in stay in `runtime_sessions`.
+  setRuntimeSessionId(key: string, id: string | null): void {
     this.#updateSession(key, "UPDATE sessions SET runtime_session_id = ?1 WHERE key = ?2", id, key);
   }
 
