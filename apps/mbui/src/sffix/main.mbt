@@ -19,6 +19,8 @@ fn main {
   let src = @sfapp.fixture(mode)
   // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
   @sfapp.open_fixture_mode(mode)
+  // the faces the app carries (code's JetBrains Mono), as the app has them
+  @sf.give_faces()
   @sfapp.desktop_window()
   @ui.run("still.fail", fn(c) { @sfapp.view(c, src) })
 }
