@@ -2,7 +2,7 @@
 # still.fail mbui's beta (fail.still.mbui, "still.fail mbui": the release build of apps/mbui's Android app), built,
 # signed and put in the releases bucket as .github/workflows/mbui.yml does on mini1:
 #   apps/mbui/scripts/beta.sh tools      MoonBit, its latest release (installed again only when cli.moonbitlang.com
-#                                        has a newer one: its ETag), mbui at mbui.rev (scripts/mbui.sh), the core's packages
+#                                        has a newer one: its ETag), mbui (apps/mbui/mbui), the core's packages
 #   apps/mbui/scripts/beta.sh build      the APK (scripts/android.sh, VARIANT=release): versionCode the build (git
 #                                        rev-list --count HEAD), signed with ANDROID_DEBUG_KEYSTORE_B64 (every still.fail
 #                                        Android release's key; POSTHOG_JSON: the key its crash reports go with), into
@@ -44,10 +44,10 @@ setenv() { export "$1=$2"; [ -z "${GITHUB_ENV:-}" ] || echo "$1=$2" >> "$GITHUB_
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 BT=$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1 || true)
 build_number() { git -C "$REPO" rev-list --count HEAD; }
-# What the app is made of: its code, what it is built with (mbui at mbui.rev, the core, the client's packages, media's,
+# What the app is made of: its code, what it is built with (mbui, the core, the client's packages, media's,
 # vendor's crates), not their tests, docs, the scripts or CI (a push of those alone is no new package: 2026-10-21)
-APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/engine apps/mbui/mbui.rev
-  apps/mbui/moon.mod apps/mbui/moon.work client media vendor
+APP_SRC=(apps/mbui/src apps/mbui/core apps/mbui/android apps/mbui/ios apps/mbui/engine
+  apps/mbui/mbui/src apps/mbui/mbui/moon.mod apps/mbui/moon.mod apps/mbui/moon.work client media vendor
   ':(exclude,glob)**/test/**' ':(exclude,glob)**/tests/**' ':(exclude,glob)**/*_test.mbt' ':(exclude,glob)**/*_wbtest.mbt' ':(exclude,glob)**/*.test.*'
   ':(exclude,glob)**/*.md')
 # the commit PART's feed names now (versionCode n is main's nth commit); nothing when it has none
@@ -101,7 +101,7 @@ tools() {
   local mbui
   mbui=$(sh "$A/scripts/mbui.sh")
   (cd "$REPO/client/core-ts" && pnpm install --frozen-lockfile --prefer-offline 2>&1 | tail -1)
-  summary "- MoonBit $("$C/tools/moon/bin/moon" version | head -1); mbui $(tr -d '\n' < "$A/mbui.rev" | cut -c1-9); tools in $(secs $t0) s"
+  summary "- MoonBit $("$C/tools/moon/bin/moon" version | head -1); mbui $(git -C "$A" log -1 --format=%h -- mbui); tools in $(secs $t0) s"
 }
 
 # apps/mbui into WORK as git has it (a file gone goes there too), by content: a file that did not change keeps its time,

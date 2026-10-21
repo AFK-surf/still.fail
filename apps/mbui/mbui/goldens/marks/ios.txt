@@ -1,0 +1,9 @@
+# The marks' reference on iOS (docs/determinism.md, the marks' contract; scripts/host_contract.sh ios marks): made in
+# Mini1's simulator ios-mbui-sf (host-ios's artifact). Checked: system (the simulator runtime, whose Core Graphics,
+# Core Text and ImageIO draw it) and fonts (its system font's bytes); the rest is said. Either another: made again
+# from the workflow's artifact, said in the PR.
+png caa3f8ad470dd6e97a393ee00d5c0338
+system iOS 26.5 23F77
+fonts aaf5aeb4df6d963f67dbac1e38406e4c
+device iPhone-17-Pro
+host macOS 26.5 25F71, Apple M4

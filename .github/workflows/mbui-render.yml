@@ -1,0 +1,80 @@
+# mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
+# The renderer's pixels (docs/determinism.md, "Pixel references belong to one machine"): a Tester's draw list drawn
+# offscreen on Mini1 (mbui's runner there, label mbui-render), against its reference (goldens/render/mini1-*.png) to
+# the byte, on the macOS and GPU the references were made on (goldens/render/mini1.txt). The pictures drawn are the
+# artifact: what a PR that changes them commits, saying which and why.
+name: mbui-render
+on:
+  pull_request:
+    paths:
+      - "apps/mbui/mbui/src/host/apple_render.m"
+      - "apps/mbui/mbui/src/host/apple_text.m"
+      - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/ui/drawlist.mbt"
+      - "apps/mbui/mbui/src/ui/scene.mbt"
+      - "apps/mbui/mbui/src/ui/line.mbt"
+      - "apps/mbui/mbui/scripts/lines_check.py"
+      - "apps/mbui/mbui/src/kitdemo/dl_print_wbtest.mbt"
+      - "apps/mbui/mbui/src/ui/smooth.mbt"
+      - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/goldens/render/**"
+      - "apps/mbui/mbui/scripts/render_offscreen.sh"
+      - ".github/workflows/mbui-render.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/mbui/mbui/src/host/apple_render.m"
+      - "apps/mbui/mbui/src/host/apple_text.m"
+      - "apps/mbui/mbui/src/render/**"
+      - "apps/mbui/mbui/src/ui/drawlist.mbt"
+      - "apps/mbui/mbui/src/ui/scene.mbt"
+      - "apps/mbui/mbui/src/ui/line.mbt"
+      - "apps/mbui/mbui/scripts/lines_check.py"
+      - "apps/mbui/mbui/src/kitdemo/dl_print_wbtest.mbt"
+      - "apps/mbui/mbui/src/ui/smooth.mbt"
+      - "apps/mbui/mbui/src/host/corner*"
+      - "apps/mbui/mbui/goldens/render/**"
+  workflow_dispatch:
+
+concurrency:
+  group: mbui-render-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  offscreen:
+    defaults:
+      run:
+        working-directory: apps/mbui/mbui
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/mbui-moonbit
+      - name: A Tester's draw list drawn offscreen (scripts/render_offscreen.sh)
+        run: scripts/render_offscreen.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render
+          path: apps/mbui/mbui/out/render/
+      - name: The macOS and the GPU the references were made on
+        run: |
+          for k in system gpu; do
+            want=$(sed -n "s/^$k //p" goldens/render/mini1.txt)
+            have=$(sed -n "s/^$k //p" out/render/machine.txt)
+            if [ "$want" != "$have" ]; then
+              echo "$k is $have here, the references were made on $want: make them all again in one PR (this run's artifact), saying so"
+              exit 1
+            fi
+          done
+      - name: Against the references, to the byte
+        run: |
+          if cmp -s out/render/controls.png goldens/render/mini1-controls.png; then
+            echo "the same to the byte"
+          else
+            echo "goldens/render/mini1-controls.png: not what Mini1 draws now (this run's artifact has it)"
+            exit 1
+          fi

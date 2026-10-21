@@ -1,8 +1,8 @@
 # Working on still.fail's mbui app (for agents)
 
-The app is still.fail's Android app rebuilt in mbui (github.com/zzj3720/mbui, pinned in `mbui.rev`). mbui's own
-`AGENTS.md` applies here as well; read it in the pinned checkout (`scripts/mbui.sh`). In short, and what is particular
-to this app:
+The app is still.fail's Android app rebuilt in mbui, which is in this repository at `mbui/` (no pin: a change to
+mbui and to the app is one pull request). mbui's own `mbui/AGENTS.md` applies here as well. In short, and what is
+particular to this app:
 
 ## The standard is Android's app
 
@@ -24,7 +24,7 @@ to this app:
 - No flow, script or test waits for the app to settle or for a motion to end, under any name (`rest`, "until it
   stops moving", "until it landed"), nor a fixed `wait`/`sleep`, a retry or a longer timeout. An end-to-end step
   waits only for its own named event from outside the app (`answered`, `decoded`, `shown`, an outside wait done) or a
-  fact of state (a row by its id). `detlint.json` (run with the pinned mbui's `scripts/detlint.py`) counts what is
+  fact of state (a row by its id). `detlint.json` (run with `mbui/scripts/detlint.py`) counts what is
   left and only lets it fall.
 - A check that fails and then passes on the same commit is not "偶发": something uncontrolled got in (real time, the
   network, an emulator's or simulator's state, a host callback's order, another job's files). Do not rerun it green

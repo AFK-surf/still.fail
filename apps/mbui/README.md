@@ -1,7 +1,7 @@
 # still.fail mbui
 
 still.fail's Android app (and its macOS and Windows builds: a phone's pages in a narrow window, the web app's wide frame
-in a desktop's, docs/stillfail-port.md "The PC (wide) frame") written in [mbui](https://github.com/zzj3720/mbui), the MoonBit UI
+in a desktop's, docs/stillfail-port.md "The PC (wide) frame") written in mbui (`mbui/`), the MoonBit UI
 framework: an app of its own, **still.fail mbui** (`fail.still.mbui`, the debug build `fail.still.mbui.debug`),
 installable beside still.fail's apps. The plan and what is done: `docs/stillfail-port.md`.
 
@@ -16,12 +16,11 @@ over made-up data, `src/sfkit`, `src/coredemo`), the media screens (`src/gallery
 `src/player` (the full-screen player and the audio viewer) knows nothing of still.fail's core, but draws with its design
 system (`@sf` icons, theme, spinner): it could go back to mbui as framework once it takes those from its caller.
 
-## mbui, pinned
+## mbui, here
 
-`mbui.rev` is the mbui commit this builds with. `scripts/mbui.sh` makes `apps/mbui/mbui` a link to a copy of it (kept
-in `~/Library/Caches/stillfail-mbui`, shared by every worktree); `moon.work` names it a member beside this module, whose
-`moon.mod` imports `mbui`. `MBUI=<a checkout of mbui>` links that one instead (a change to both at once); `scripts/mbui.sh
-bump [REF]` moves the pin to mbui's `main` (or REF). Every script here runs `mbui.sh` first.
+mbui is in this repository, at `apps/mbui/mbui` (zzj3720/mbui merged in with its history, 2026-10-21): a change to
+the framework and the app is one pull request, checked by one run. `moon.work` names it a member beside this module,
+whose `moon.mod` imports `mbui`; `scripts/mbui.sh` says where it is.
 
 ## Building
 

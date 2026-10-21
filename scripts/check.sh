@@ -244,7 +244,7 @@ if part ts; then
   # The mbui app's determinism (mbui's docs/detlint.md): nothing waits on a guessed time or on settling, the app asks
   # for no frame and reads no clock of its own; each file's count of each rule only goes down (apps/mbui/detlint.json).
   if touches '^apps/mbui/'; then
-    # (the lint is mbui's, of the commit apps/mbui/mbui.rev pins: scripts/mbui.sh links it)
+    # (the lint is mbui's, apps/mbui/mbui's)
     step "mbui app determinism (detlint)" sh -c 'd=$(sh apps/mbui/scripts/mbui.sh) && python3 "$d/scripts/detlint.py" apps/mbui'
   fi
   if touches '^(web/src|web/ui|apps/desktop/src|apps/android)/'; then

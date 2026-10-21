@@ -10,7 +10,7 @@ on:
   push:
     branches: ["**"]
     paths:
-      - "apps/mbui/mbui.rev"
+      - "apps/mbui/mbui/**"
       - "apps/mbui/ios/**"
       - "apps/mbui/scripts/ios*.sh"
       - "apps/mbui/src/sfcore/apple_*"
