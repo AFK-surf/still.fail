@@ -41,7 +41,15 @@ const tee = Boolean(opt.tee && cmd && cmd.length);
 // (--tee runs as long as its command: no deadline)
 if (!tee)
   setTimeout(() => {
-    console.error(`waitfor: no ${what} after ${deadline} s`);
+    // (a log's line there all the same when the deadline came: its writes were not told, the watch's own failure, said
+    // apart from what was slow to come)
+    let there = "";
+    if (opt.log && re) {
+      try {
+        if (fs.readFileSync(opt.log, "utf8").split(/\r?\n/).some((l) => re.test(l))) there = ": it is in the file, its write never told";
+      } catch {}
+    }
+    console.error(`waitfor: no ${what} after ${deadline} s${there}`);
     process.exit(2);
   }, ms).unref?.();
 const timer = tee ? null : setInterval(() => {}, ms); // (keeps the process alive while it waits on the watchers)
