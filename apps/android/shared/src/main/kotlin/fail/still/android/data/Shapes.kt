@@ -1451,6 +1451,23 @@ data class DecisionOption (
 	val recommended: Boolean? = null
 )
 
+/// An agent's request to use a vault item, as its card in the chat says it (station/src/vault/secrets.ts).
+@Serializable
+data class VaultAsk (
+	/// The item's name.
+	val name: String,
+	val reason: String,
+	val command: String? = null,
+	/// proxy | env | ssh
+	val mode: String,
+	/// By the proxy: the hosts it is sent to.
+	val hosts: List<String>,
+	/// Decided: granted | denied | expired. Absent while it waits (or before its station said).
+	val status: String? = null,
+	/// Granted: once | hour | chat.
+	val scope: String? = null
+)
+
 /// What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the
 /// recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
 /// `decision.reply`). A type a UI does not know: answered by writing in the chat.
@@ -1468,6 +1485,9 @@ data class MessageCard (
 	/// then the person confirms: `vault.approve` with the option's scope, `vault.deny`) rather than answering in the chat;
 	/// a web page says to approve it in the app.
 	val vault: String? = null,
+	/// With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card
+	/// from before it did (the words say it).
+	val vaultAsk: VaultAsk? = null,
 	/// A login card: the login's id on its station (the `machineLogin` topic has the rest).
 	val login: String? = null,
 	/// A login card for a login on another station than the chat's: that station's key.

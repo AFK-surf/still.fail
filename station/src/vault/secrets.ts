@@ -309,7 +309,8 @@ export class Secrets {
             { label: "拒绝", detail: "通知 agent 已拒绝" },
           ],
           ...(owner ? { assignee: owner.toLowerCase() } : {}),
-          vault: { request: r.id },
+          // The request as the app draws it (VaultAsk.tsx); its outcome added once decided (#settle).
+          vault: { request: r.id, name: l.name, reason: r.reason, ...(r.command ? { command: r.command } : {}), mode: r.mode, hosts: r.mode === "proxy" ? (r.hosts ?? l.hosts) : [] },
         }
       : null;
     const posted = await this.#d.hub.chat(thread.connect).post(here, text, []);
@@ -319,13 +320,18 @@ export class Secrets {
   }
 
   /// A request decided otherwise than granted, or granted (`grant` checked by the keeper first).
-  #settle(r: Request, status: Request["status"]) {
+  #settle(r: Request, status: Request["status"], scope?: Scope) {
     const k = this.#kept(r.ws, r.id);
     if (k === null || k.request.status !== "pending") return;
     k.request.status = status;
     this.#save(k);
     if (status !== "granted") this.keeper.drop(r.id);
-    if (k.thread !== null && k.cardTs !== null) this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
+    if (k.thread !== null && k.cardTs !== null) {
+      this.#d.hub.store.withdrawCard(r.session, k.thread, k.cardTs);
+      // The post says how it ended: 已批准 · 仅本次, 已拒绝, 已过期.
+      const outcome = { status, ...(status === "granted" && scope ? { scope } : {}) };
+      this.#d.hub.store.restateCard(r.session, k.thread, k.cardTs, (card) => ({ ...card, vault: { ...card?.vault, outcome } }));
+    }
     this.#audit(k.request, status, "");
     const heard = (this.#waiting.get(r.id)?.size ?? 0) > 0;
     this.#told(k.request);
@@ -350,7 +356,7 @@ export class Secrets {
     if (!vault.members.includes(sub)) return "only the vault's members decide its requests";
     const why = this.keeper.accept(lock, vault, item, k.request, grant);
     if (why !== null) return why;
-    this.#settle(k.request, "granted");
+    this.#settle(k.request, "granted", grant.scope);
     return null;
   }
 
@@ -366,7 +372,7 @@ export class Secrets {
     const hosts = k.request.mode === "proxy" ? (k.request.hosts ?? item.listing.hosts) : [];
     const why = this.keeper.hold(k.request, { scope: d.scope as Scope, hosts, listing: item.listing }, { kind: item.kind, name: item.name, fields: item.fields });
     if (why !== null) return why;
-    this.#settle(k.request, "granted");
+    this.#settle(k.request, "granted", d.scope as Scope);
     return null;
   }
 

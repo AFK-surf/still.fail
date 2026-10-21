@@ -632,6 +632,21 @@ test("an agent withdraws its own card only", () => {
   assert.ok(n > 0);
 });
 
+test("an agent restates its card on its post: an edit with the same words and the new card, its latest the base of the next", () => {
+  const store = memory();
+  session(store, "a");
+  const thread = store.openThread("ember", "EMBER", "1.1", null, null);
+  const card = { type: "options", options: [{ label: "仅本次" }], vault: { request: "r_1", name: "GitHub" } };
+  const [n] = store.insertMessage({ ...newMessage(thread.id, "1.2", "agent", "a", "申请使用「GitHub」"), card });
+  assert.equal(store.restateCard("b", thread.id, "1.2", (c) => c), false, "not another's");
+  assert.equal(store.restateCard("a", thread.id, "1.2", (c) => ({ ...c, vault: { ...c.vault, outcome: { status: "granted" } } })), true);
+  assert.equal(store.restateCard("a", thread.id, "1.2", (c) => ({ ...c, seen: c.vault.outcome.status })), true);
+  const edits = store.entriesAfter(thread.id, n).filter((e) => e.kind === "edit");
+  assert.deepEqual(edits.map((e) => [e.target, e.text]), [[n, "申请使用「GitHub」"], [n, "申请使用「GitHub」"]]);
+  assert.deepEqual(edits[1]!.card, { ...card, vault: { ...card.vault, outcome: { status: "granted" } }, seen: "granted" });
+  assert.equal(store.pendingCard(thread.id)?.[1].vault.request, "r_1", "the post's card still asks: restating it decides nothing");
+});
+
 test("a turn nobody's message started goes on with the work of the one before; a wait stopped is aborted", () => {
   const store = memory();
   session(store, "a");

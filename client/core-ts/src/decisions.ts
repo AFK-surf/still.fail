@@ -60,6 +60,8 @@ export function cardShown(card: J): J {
   // An agent's request for a vault item: its id, for an app to approve it (docs/vault.md).
   const request = trimmed(get(get(card, "vault"), "request"));
   if (request !== null) v.vault = request;
+  const ask = vaultAsk(get(card, "vault"));
+  if (ask !== null) v.vaultAsk = ask;
   if (kind(card) === "options") v.options = optionsShown(get(card, "options"));
   else if (kind(card) === "text") {
     const p = trimmed(get(card, "placeholder"));
@@ -72,6 +74,22 @@ export function cardShown(card: J): J {
     if (station !== null) v.station = station;
   }
   return v;
+}
+
+/// A vault request as its card says it (station/src/vault/secrets.ts): which item, why, the command, how; and once
+/// decided, how. Null for a card from before it said so (its post's words say it).
+function vaultAsk(v: J): J | null {
+  const name = trimmed(get(v, "name"));
+  const mode = trimmed(get(v, "mode"));
+  if (name === null || mode === null) return null;
+  const out: J = { name, reason: str(get(v, "reason")) ?? "", mode, hosts: arr(get(v, "hosts")).filter((h) => typeof h === "string") };
+  const command = trimmed(get(v, "command"));
+  if (command !== null) out.command = command;
+  const status = trimmed(get(get(v, "outcome"), "status"));
+  if (status !== null) out.status = status;
+  const scope = trimmed(get(get(v, "outcome"), "scope"));
+  if (scope !== null) out.scope = scope;
+  return out;
 }
 
 /// Who decides a card: its assignee, else whoever started its chat.

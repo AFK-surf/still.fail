@@ -58,8 +58,14 @@ function items(story: VaultStory): VaultItemsView {
   return { vault: PERSONAL.id, name: "个人", open, items: open ? ITEMS : ITEMS.map((i) => (i.listed ? i : { id: i.id, version: i.version, at: i.at, listed: false, modes: [], hosts: [] })) };
 }
 
+/** A command longer than the card's three lines. */
+export const LONG_COMMAND = "sh /private/tmp/claude-501/-Users-ada--stillfail-sessions-ember-c-28ddcd9a46-workspace/a511bb72-32b1-47de-b73d-590cfd491c4a/scratchpad/s/search.sh --query 'release job' --channels eng,ops --since 2026-10-01 --limit 200 --format json --fields ts,user,text,thread_ts,reactions --sort recent --out /tmp/release-job.json";
+
+/** How the request's card is told: its command, and how it ended (none: it waits). */
+export type CardStory = { command?: string; status?: "granted" | "denied" | "expired"; scope?: "once" | "hour" };
+
 /** The station's card for the request, under the agent's post in the chat on show (as station/src/vault/secrets.ts posts it). */
-function withCard(chat: ChatView): ChatView {
+function withCard(chat: ChatView, told: CardStory): ChatView {
   const last = [...chat.messages].reverse().find((m) => m.authorKind === "agent");
   if (!last || chat.messages.some((m) => m.card?.vault)) return chat;
   const seq = (chat.messages.at(-1)?.seq ?? 0) + 1;
@@ -68,19 +74,25 @@ function withCard(chat: ChatView): ChatView {
     { label: "本对话 1 小时内", detail: "期间无需再次批准" },
     { label: "拒绝", detail: "通知 agent 已拒绝" },
   ];
+  const command = told.command ?? REQUEST.command!;
   const ask: ChatMessage = {
     ...last, seq, ts: `${Number(last.ts) + 30}`, quotes: [], attachments: [],
-    text: "PR 的检查挂在发布那一步，要用 GitHub token 重跑失败的 job。\n\n申请使用「GitHub token」：重跑 PR #512 失败的 release job\n\n命令：`gh run rerun 1846 --failed`\n\n方式：代理（限 api.github.com）",
-    options, card: { type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: REQUEST.id }, decision: { resolved: false },
+    text: `申请使用「GitHub token」：${REQUEST.reason}\n\n命令：\`${command}\`\n\n方式：代理（限 api.github.com）`,
+    options,
+    card: {
+      type: "options", options, assignee: "you@acme.dev", assigneeText: "待你决策", vault: REQUEST.id,
+      vaultAsk: { name: "GitHub token", reason: REQUEST.reason, command, mode: "proxy", hosts: REQUEST.hosts!, ...(told.status ? { status: told.status } : {}), ...(told.scope ? { scope: told.scope } : {}) },
+    },
+    decision: { resolved: !!told.status },
   };
   return { ...chat, messages: [...chat.messages, ask] };
 }
 
-/** The demo with the vault in state `story`; `card`: the request's card in the chat on show too. */
-export function vaultDemo(story: VaultStory, card = false): DemoExtension {
+/** The demo with the vault in state `story`; `card`: the request's card in the chat on show too, told as it says. */
+export function vaultDemo(story: VaultStory, card: boolean | CardStory = false): DemoExtension {
   return {
     topic: (t) => (t.topic === "vaults" ? view(story) : t.topic === "vaultItems" ? items(story) : undefined),
-    then: (t, value) => (card && t.topic === "chat" && value && typeof value === "object" && "messages" in value ? withCard(value as ChatView) : undefined),
+    then: (t, value) => (card && t.topic === "chat" && value && typeof value === "object" && "messages" in value ? withCard(value as ChatView, card === true ? {} : card) : undefined),
     call: (name, params) => {
       if (name === "vault.setup") return { words: WORDS, device: "d_demo", stations: ["local"] };
       if (name === "vault.open") {

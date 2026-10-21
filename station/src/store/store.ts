@@ -1169,6 +1169,27 @@ export class Store {
     });
   }
 
+  /// The author restates its card on the post at `ts` (an edit entry with the post's words and `card`): what became of
+  /// it, said on the post itself (a vault request's outcome). Whether the post was found.
+  restateCard(agent: string, thread: number, ts: string, card: (was: Json) => Json): boolean {
+    return this.#with((changes) => {
+      const r = this.#one("SELECT card FROM entries WHERE thread = ? AND ts = ? AND kind = 'message' AND author_kind = 'agent' AND author = ? AND card IS NOT NULL", thread, ts, agent);
+      const message = r === undefined ? null : this.#messageAt(thread, ts);
+      if (r === undefined || message === null) return false;
+      // The latest restated card, else the post's.
+      const last = this.#one("SELECT card FROM entries WHERE thread = ? AND kind = 'edit' AND target = ? AND card IS NOT NULL ORDER BY n DESC LIMIT 1", thread, message.n);
+      this.#append(
+        {
+          agentIdentity: undefined, thread, n: 0, kind: "edit", target: message.n, ts: null,
+          authorKind: message.authorKind, author: message.author, text: message.text, attachments: message.attachments, quotes: message.quotes,
+          declared: null, client: null, profile: null, runtime: null, options: undefined, card: card(parsed(last?.card ?? r.card)), at: this.now(),
+        },
+        changes,
+      );
+      return true;
+    });
+  }
+
   /// The login cards of a login (docs/remote-login.md: `{"type": "login", "login": <id>}`) still waiting: closed for
   /// everyone as the login ends, as their agent would withdraw them (nobody answered, nobody is woken: the station tells
   /// the agent itself). The sessions whose cards they were.

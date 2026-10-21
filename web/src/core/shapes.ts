@@ -1435,6 +1435,22 @@ export interface DecisionOption {
 	recommended?: boolean;
 }
 
+/** An agent's request to use a vault item, as its card in the chat says it (station/src/vault/secrets.ts). */
+export interface VaultAsk {
+	/** The item's name. */
+	name: string;
+	reason: string;
+	command?: string;
+	/** proxy | env | ssh */
+	mode: string;
+	/** By the proxy: the hosts it is sent to. */
+	hosts: string[];
+	/** Decided: granted | denied | expired. Absent while it waits (or before its station said). */
+	status?: string;
+	/** Granted: once | hour | chat. */
+	scope?: string;
+}
+
 /**
  * What an agent's message asks people to answer it with (core decisions.ts): `type` options (`options`, as shown: the
  * recommended one last; a tap answers, `decision.answer`) or text (a field to write in, with a `placeholder`;
@@ -1455,6 +1471,11 @@ export interface MessageCard {
 	 * a web page says to approve it in the app.
 	 */
 	vault?: string;
+	/**
+	 * With `vault`: the request as the card says it, drawn in place of the post's words. Absent on a card
+	 * from before it did (the words say it).
+	 */
+	vaultAsk?: VaultAsk;
 	/** A login card: the login's id on its station (the `machineLogin` topic has the rest). */
 	login?: string;
 	/** A login card for a login on another station than the chat's: that station's key. */
