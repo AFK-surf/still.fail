@@ -26,7 +26,6 @@ import { runnerId } from "../agents/process.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
-import type { JobSize } from "../store/rows.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import { Busy, LOOK_MS, type Pressure, type Started, type Waiting, type Why, cpusFor, pick, place } from "./admit.ts";
 import type { Ticks } from "../read/host.ts";
@@ -269,7 +268,7 @@ export class Jobs {
   /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port. `checked`: its caller
   /// looked at `cwd` already (ops/places.ts), which is not looked at again here (in a folder macOS protects, that would
   /// hold the station's thread).
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false, size: JobSize | null = null): JobRow {
+  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false, size: string | null = null): JobRow {
     return this.startId(session, name, command, cwd, port, watch, null, checked, null, size);
   }
 
@@ -278,7 +277,7 @@ export class Jobs {
   /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean } | null = null, size: JobSize | null = null,
+    queue: { screen: boolean } | null = null, size: string | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
@@ -441,6 +440,11 @@ export class Jobs {
     return join(this.dir, "exit", id);
   }
 
+  /// Where the sandbox bridge says a job's connection to its sandbox was lost (agents/sandbox-bridge.mjs `lostFile`).
+  private lostFile(id: string): string {
+    return join(this.dir, "exit", `${id}.lost`);
+  }
+
   private track(id: string, pgid: number, gone: Promise<void>): Running {
     let settle = () => {};
     const settled = new Promise<void>((resolve) => (settle = resolve));
@@ -455,6 +459,7 @@ export class Jobs {
     closeSync(openSync(job.log, "a"));
     const exit = this.exitFile(job.id);
     rmSync(exit, { force: true });
+    rmSync(this.lostFile(job.id), { force: true });
     // With the variables the station's owners set for what it starts for its agents (ops/agent-env.ts).
     const env: NodeJS.ProcessEnv = { ...platform.prependPath(startEnv(), join(this.dir, "bin")), ...extra };
     // Under both names: scripts written against the old ones go on working.
@@ -473,7 +478,7 @@ export class Jobs {
     const shell: [string, string[]] = [platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]];
     // In its session's sandbox when the station runs things there (agents/sandbox.ts), but a service (its port is
     // served here) or a task that uses the screen. The log and the exit file are on the storage both see.
-    const placed = job.port === null && job.screen !== true ? inSandbox(this.data, keyOfRunner(runnerId("claude", job.sessionKey)), "/bin/sh", shell[1], job.cwd, process.execPath, job.size) : null;
+    const placed = job.port === null && job.screen !== true ? inSandbox(this.data, keyOfRunner(runnerId("claude", job.sessionKey)), "/bin/sh", shell[1], job.cwd, { size: job.size, lostFile: this.lostFile(job.id) }) : null;
     const child = startLasting(...niced(...(placed === null ? shell : ([placed.program, placed.args] as [string, string[]]))), {
       cwd: job.cwd, env, stdio: "ignore",
     });
@@ -584,6 +589,14 @@ export class Jobs {
     const lines = tail(job.log, 20);
     const last = lines === "" ? "" : `\nIts last lines:\n\`\`\`\n${lines}\n\`\`\``;
     if (job.port === null) {
+      // The connection to its sandbox lost, not the job ending: started again once there.
+      if (existsSync(this.lostFile(id)) && job.restarts === 0) {
+        this.store.jobEnded(id, "exited", code);
+        this.tell(job, `${named(job)} lost the connection to the sandbox it ran in (what it was running was ended); the station starts it again once.${last}`);
+        log.info("jobs", "job's sandbox connection lost; starting it again", { job: id });
+        this.spawn(this.store.getJob(id)!, true);
+        return;
+      }
       this.store.jobEnded(id, "exited", code);
       this.tell(job, `${named(job)} ended with ${said}.${last}`);
       return;

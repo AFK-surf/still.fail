@@ -6,16 +6,32 @@
 //   node sandbox-bridge.mjs host '<json>'     here: {ssh: [argv…], program, args, cwd, ports: [n…]}; env is this process's.
 //                                            A port may be {sandbox, here} to be listened for at another port there.
 //                                            `create` (argv): run first, to make a sandbox of a size (l4es `create`).
+//                                            `agent`: a runtime's process; those started before in the sandbox are ended
+//                                            first (one runtime per sandbox: a session's, or a profile's shared host).
+//                                            `lostFile`: written when the connection is lost (sandbox.ts LOST_EXIT).
+//                                            `silentMs`: how long without a frame is lost (SILENT_MS; tests shorten it).
 //   node … -e '<this file>' remote            in the sandbox, started by the host side through ssh
 //
-// Frames both ways: type (1 byte), stream (4, big-endian), length (4), then the payload.
+// Frames both ways: type (1 byte), stream (4, big-endian), length (4), then the payload. Each side pings the other every
+// PING_MS and takes the connection as lost after SILENT_MS without a frame: a connection broken without either end
+// being told (the front door does not notice its station gone) ends within that, not when TCP gives up.
+//
+// Lost after the program started (not its own end): `CONNECTION_LOST` on stderr, exit code `LOST_EXIT`, and `lostFile`
+// written; the station starts it again once (sessions/actor.ts, jobs/jobs.ts).
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const T = { init: 0, stdin: 1, stdinEnd: 2, signal: 3, data: 5, close: 6, stdout: 10, stderr: 11, exit: 12, open: 13, error: 14 };
+const T = { init: 0, stdin: 1, stdinEnd: 2, signal: 3, ping: 4, data: 5, close: 6, stdout: 10, stderr: 11, exit: 12, open: 13, error: 14, started: 15 };
+const PING_MS = 10_000;
+const SILENT_MS = 30_000;
+/// As agents/sandbox.ts has them.
+const CONNECTION_LOST = "sandbox: the connection to the sandbox was lost";
+const LOST_EXIT = 75;
+/// Where the runtime processes the bridge started in this sandbox are kept (their process groups), one a line.
+const AGENTS = `${process.env.XDG_RUNTIME_DIR || "/tmp"}/stillfail-bridge-agents`;
 /// What the sandbox keeps of its own environment over the station's: who it is, where its home and tools are.
 const OWN = ["HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "XDG_RUNTIME_DIR", "SSH_AUTH_SOCK", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "MAIL", "PWD", "OLDPWD", "SHLVL", "_"];
 
@@ -73,9 +89,17 @@ function connect(spec) {
   const send = (type, stream, payload) => {
     if (ssh.stdin.writable) ssh.stdin.write(frame(type, stream, payload));
   };
+  // ssh gone before it read what was sent: said by its close (below).
+  ssh.stdin.on("error", () => {});
   const env = { ...process.env };
   delete env.STILLFAIL_SANDBOX_BRIDGE;
-  send(T.init, 0, JSON.stringify({ program: spec.program, args: spec.args, cwd: spec.cwd, env, ports: spec.ports }));
+  const silent = spec.silentMs ?? SILENT_MS;
+  send(T.init, 0, JSON.stringify({ program: spec.program, args: spec.args, cwd: spec.cwd, env, ports: spec.ports, agent: spec.agent === true, silentMs: silent }));
+  let heard = Date.now();
+  setInterval(() => {
+    if (Date.now() - heard > silent) ssh.kill("SIGKILL");
+    else send(T.ping, 0);
+  }, Math.min(PING_MS, silent / 3));
   process.stdin.on("data", (b) => send(T.stdin, 0, b));
   process.stdin.on("end", () => send(T.stdinEnd, 0));
   process.stdin.on("error", () => {});
@@ -83,10 +107,13 @@ function connect(spec) {
 
   const sockets = new Map();
   let exit = null;
+  let started = false;
   ssh.stdout.on(
     "data",
     reader((type, stream, payload) => {
+      heard = Date.now();
       if (type === T.stdout) process.stdout.write(payload);
+      else if (type === T.started) started = true;
       else if (type === T.stderr) process.stderr.write(payload);
       else if (type === T.exit) exit = JSON.parse(payload.toString());
       else if (type === T.error) process.stderr.write(`sandbox: ${payload.toString()}\n`);
@@ -114,8 +141,13 @@ function connect(spec) {
     process.exit(255);
   });
   ssh.on("close", (code) => {
+    if (exit === null && started) {
+      process.stderr.write(`${CONNECTION_LOST} (ssh exited ${code})\n`);
+      if (spec.lostFile) writeFileSync(spec.lostFile, "");
+      process.exit(LOST_EXIT);
+    }
     if (exit === null) {
-      process.stderr.write(`sandbox: the connection to the sandbox ended (ssh exited ${code})\n`);
+      process.stderr.write(`sandbox: the sandbox could not be reached (ssh exited ${code})\n`);
       process.exit(255);
     }
     const done = () => {
@@ -166,11 +198,35 @@ function remote() {
   process.stdin.on("end", orphaned);
   process.stdin.on("error", orphaned);
   process.stdout.on("error", orphaned);
+  let heard = Date.now();
+  let silent = SILENT_MS;
+  const watch = () =>
+    setTimeout(() => {
+      if (Date.now() - heard > silent) orphaned();
+      else (out(T.ping, 0), watch());
+    }, Math.min(PING_MS, silent / 3)).unref();
+  watch();
   process.stdin.on(
     "data",
     reader((type, stream, payload) => {
-      if (type === T.init) {
-        const spec = JSON.parse(payload.toString());
+      heard = Date.now();
+      if (type === T.init) void start(JSON.parse(payload.toString()));
+      else if (type === T.stdin) (child ? child.stdin.write(payload) : early.push(payload));
+      else if (type === T.stdinEnd) (child ? child.stdin.end() : early.push(null));
+      else if (type === T.signal) end(payload.toString());
+      else if (type === T.data) sockets.get(stream)?.write(payload);
+      else if (type === T.close) {
+        const socket = sockets.get(stream);
+        sockets.delete(stream);
+        socket?.end();
+      }
+    }),
+  );
+  // Input that comes while an earlier runtime is being ended waits for the program.
+  const early = [];
+  async function start(spec) {
+        silent = spec.silentMs ?? SILENT_MS;
+        if (spec.agent) await endEarlier();
         const env = { ...spec.env };
         for (const name of OWN) {
           if (process.env[name] === undefined) delete env[name];
@@ -187,6 +243,9 @@ function remote() {
         }
         for (const port of spec.ports ?? []) listen(typeof port === "number" ? port : port.sandbox);
         child = spawn(program, spec.args, { cwd: spec.cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
+        if (spec.agent) keep(child.pid);
+        out(T.started, 0);
+        for (const b of early.splice(0)) b === null ? child.stdin.end() : child.stdin.write(b);
         child.stdout.on("data", (b) => out(T.stdout, 0, b));
         child.stderr.on("data", (b) => out(T.stderr, 0, b));
         child.stdin.on("error", () => {});
@@ -196,21 +255,50 @@ function remote() {
           process.exit(0);
         });
         child.on("close", (code, signal) => {
+          if (spec.agent) keep(null, child.pid);
           for (const server of servers) server.close();
           out(T.exit, 0, JSON.stringify({ code, signal }));
           process.stdout.end(() => process.exit(0));
         });
-      } else if (type === T.stdin) child?.stdin.write(payload);
-      else if (type === T.stdinEnd) child?.stdin.end();
-      else if (type === T.signal) end(payload.toString());
-      else if (type === T.data) sockets.get(stream)?.write(payload);
-      else if (type === T.close) {
-        const socket = sockets.get(stream);
-        sockets.delete(stream);
-        socket?.end();
-      }
-    }),
-  );
+  }
+}
+
+const alive = (pgid) => {
+  try {
+    process.kill(-pgid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/// The runtime processes started here before, as AGENTS has them, still running.
+function kept() {
+  try {
+    return readFileSync(AGENTS, "utf8").split("\n").map(Number).filter((n) => n > 0 && alive(n));
+  } catch {
+    return [];
+  }
+}
+
+/// Adds `add` to AGENTS and takes `drop` off it.
+function keep(add, drop = null) {
+  const now = kept().filter((n) => n !== drop);
+  if (add !== null) now.push(add);
+  writeFileSync(AGENTS, now.join("\n"));
+}
+
+/// Ends every runtime process an earlier bridge started here (with what they started, their groups): one left over
+/// from a connection lost would otherwise run beside the new one, on the same transcript.
+async function endEarlier() {
+  const earlier = kept();
+  for (const pgid of earlier) {
+    try {
+      process.kill(-pgid, "SIGKILL");
+    } catch {}
+  }
+  while (earlier.some(alive)) await new Promise((r) => setTimeout(r, 50));
+  keep(null);
 }
 
 // `node -e` gives its arguments from argv[1] on, a file from argv[2].

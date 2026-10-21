@@ -9,9 +9,13 @@ import { execFile } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { JobSize } from "../store/rows.ts";
 
 export const BRIDGE = fileURLToPath(new URL("./sandbox-bridge.mjs", import.meta.url));
+
+/// What the bridge says, and its exit code, when the connection to the sandbox was lost rather than the program ending
+/// (sandbox-bridge.mjs `LOST`): what is started again once.
+export const CONNECTION_LOST = "sandbox: the connection to the sandbox was lost";
+export const LOST_EXIT = 75;
 
 /// `sandbox` in config.json.
 export type SandboxConfig = {
@@ -84,27 +88,27 @@ export function sandboxed(data: string): boolean {
   return (placed.get(data)?.config() ?? null) !== null;
 }
 
-/// The front door's `create` flags for a size (l4es: `--cpus N --mem GIB --disk GIB`), and the name's part for it.
-function sized(size: JobSize): { flags: string[]; tag: string } {
-  const flags: string[] = [];
-  const tag: string[] = [];
-  if (size.cpus !== undefined) (flags.push("--cpus", String(size.cpus)), tag.push(`c${size.cpus}`));
-  if (size.memoryGib !== undefined) (flags.push("--mem", String(size.memoryGib)), tag.push(`m${size.memoryGib}`));
-  if (size.diskGib !== undefined) (flags.push("--disk", String(size.diskGib)), tag.push(`d${size.diskGib}`));
-  return { flags, tag: tag.join("") };
-}
+/// A size's name as the sandboxes' operator gives them (l4es `SBX_SANDBOX_SIZES`).
+export const sizeName = (size: string) => /^[a-z][a-z0-9-]{0,30}$/.test(size);
+
+/// How something is started in a sandbox: `node` runs the bridge; with a `size`, in a sandbox of the key's of that size,
+/// which the front door is asked to make first; `agent`: a runtime's process, which ends those started there before;
+/// `lostFile`: written when the connection to it is lost.
+export type Placing = { node?: string; size?: string; agent?: boolean; lostFile?: string };
 
 /// What to start in place of `program args` for `key` (a session's or a runner's key): the bridge, when this station
-/// runs things in sandboxes; null to start it here. `node` is the node that runs the bridge. With a `size`, in a
-/// sandbox of the key's of that size, which the front door is asked to make first.
-export function inSandbox(data: string, key: string, program: string, args: string[], cwd: string, node = process.execPath, size?: JobSize): { program: string; args: string[] } | null {
+/// runs things in sandboxes; null to start it here.
+export function inSandbox(data: string, key: string, program: string, args: string[], cwd: string, how: Placing = {}): { program: string; args: string[] } | null {
+  const { node = process.execPath, size } = how;
   const at = placed.get(data);
   const config = at?.config() ?? null;
   if (at === undefined || config === null) return null;
-  const asked = size === undefined ? null : sized(size);
-  const name = asked === null || asked.tag === "" ? sandboxName(key) : sandboxName(`${key}|${asked.tag}`);
-  const create = asked === null || asked.tag === "" ? undefined : [...sshArgs(config, "_"), "create", name, ...asked.flags];
-  const spec = { ssh: sshArgs(config, name), program, args, cwd, ports: at.ports(), ...(create ? { create } : {}) };
+  const name = size === undefined ? sandboxName(key) : sandboxName(`${key}|${size}`);
+  const create = size === undefined ? undefined : [...sshArgs(config, "_"), "create", name, "--size", size];
+  const spec = {
+    ssh: sshArgs(config, name), program, args, cwd, ports: at.ports(),
+    ...(create ? { create } : {}), ...(how.agent ? { agent: true } : {}), ...(how.lostFile ? { lostFile: how.lostFile } : {}),
+  };
   return { program: node, args: [BRIDGE, "host", JSON.stringify(spec)] };
 }
 

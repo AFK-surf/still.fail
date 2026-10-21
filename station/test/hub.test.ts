@@ -1,11 +1,12 @@
 // The hub (src/sessions/hub.ts): routing, sessions, turns, nudges, waits, stops, sign-in retries, hold and release,
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
+import { CONNECTION_LOST } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, TOOLS_LOST } from "../src/agents/instructions.ts";
 import { latest } from "../src/agents/migrations.ts";
 import { classifyResult } from "../src/agents/claude.ts";
 import { sessionKey } from "../src/sessions/hub.ts";
@@ -385,6 +386,36 @@ test("claude auth retries once, then reports the profile and does not loop", asy
   await settle();
   assert.ok(matches(r.chat.lastText(), ["意外退出"]));
   assert.equal(last().profile, null);
+  await r.close();
+});
+
+test("a turn whose sandbox connection was lost goes on once from its transcript, then is said to have ended", async () => {
+  const r = new Rig();
+  const m = message();
+  await r.accept(m);
+  await settle();
+  const first = r.claude.last();
+  const lost = { kind: "failed" as const, reason: "exited" as const, message: `claude exited (75) during the turn: ${CONNECTION_LOST} (ssh exited 255)` };
+  first.end(lost);
+  await settle();
+  const retry = r.claude.last();
+  assert.ok(first.disposed);
+  assert.equal(r.claude.count(), 2);
+  assert.equal(retry.options.resume, first.sessionId);
+  assert.deepEqual(retry.prompts, [GO_ON_AFTER_LOST]);
+  assert.ok(!r.chat.texts().some((t) => t.includes("意外退出")));
+  // Lost again in the turn it went on in: said, not started again.
+  retry.end(lost);
+  await settle();
+  assert.equal(r.claude.count(), 2);
+  assert.ok(matches(r.chat.lastText(), ["意外退出", CONNECTION_LOST]));
+  // A runtime that exited by itself is not started again.
+  await r.accept(reply(m, "9999.2", "<@UBOT> again", { addressed: true }));
+  await settle();
+  const third = r.claude.count();
+  r.claude.last().end({ kind: "failed", reason: "exited", message: "exit 1" });
+  await settle();
+  assert.equal(r.claude.count(), third);
   await r.close();
 });
 

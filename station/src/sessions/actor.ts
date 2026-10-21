@@ -8,7 +8,8 @@
 import { join } from "node:path";
 import { Clock, Effect, Exit, FiberSet, Scope, Semaphore } from "effect";
 import type { AgentDriver, AgentSession, BackgroundTask, LiveEvent, OpenOptions, Profile, RuntimeEvent, TurnOutcome } from "../agents/runtime.ts";
-import { GO_ON_AFTER_AUTH, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { GO_ON_AFTER_AUTH, GO_ON_AFTER_LOST, GO_ON_AFTER_REFILL, GO_ON_AFTER_SPENT, NUDGE, RESUME_AFTER_RESTART, RESUME_LOST, TOOLS_LOST, backgroundStopped, continuedHere, formatInbound, formatWidgetModels, sessionInstructions, waitOver } from "../agents/instructions.ts";
+import { CONNECTION_LOST } from "../agents/sandbox.ts";
 import { chars } from "../agents/live.ts";
 import { CommandMissing } from "../agents/runner.ts";
 import { latest as latestNote, untold } from "../agents/migrations.ts";
@@ -132,7 +133,8 @@ export type SessionDeps = {
   clock: Clock.Clock;
 };
 
-type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; by: TurnFor };
+/// `lostRetried`: started again once already after the connection to its sandbox was lost (agents/sandbox.ts).
+type Turn = { id: string; declared: DeclaredState | null; authRetried: boolean; lostRetried?: boolean; by: TurnFor };
 
 /// Where a session stands: no runtime session; one starting up; a turn running; the agent waiting on work it started;
 /// or the actor closed (its station stopping or handing over).
@@ -143,7 +145,7 @@ export type Snapshot = {
   key: string;
   runtime: RuntimeKind;
   agent: unknown | null;
-  turn: { id: string; authRetried: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
+  turn: { id: string; authRetried: boolean; lostRetried?: boolean; by: TurnFor; declared: string | null; wait: number | null } | null;
   workingFor: Working[];
   notices: string[];
   waitingMs: number | null;
@@ -490,6 +492,7 @@ export class SessionActor {
       turn: this.turn && {
         id: this.turn.id,
         authRetried: this.turn.authRetried,
+        lostRetried: this.turn.lostRetried === true,
         by: this.turn.by,
         declared: this.turn.declared?.kind ?? null,
         wait: this.turn.declared?.kind === "waiting" ? this.turn.declared.seconds : null,
@@ -518,6 +521,7 @@ export class SessionActor {
     this.turn = snap.turn && {
       id: snap.turn.id,
       authRetried: snap.turn.authRetried,
+      lostRetried: snap.turn.lostRetried === true,
       by: snap.turn.by,
       declared: snap.turn.declared ? parseDeclared(snap.turn.declared, snap.turn.wait ?? 0) : null,
     };
@@ -775,7 +779,7 @@ export class SessionActor {
       this.posted = false;
     }
     const id = crypto.randomUUID();
-    this.turn = { id, declared: null, authRetried: kind === "auth_retry", by };
+    this.turn = { id, declared: null, authRetried: kind === "auth_retry", lostRetried: kind === "sandbox_retry", by };
     this.phase = "running";
     this.waiting = null;
     this.deps.store.startTurnFor(id, this.key, kind, { ...by, profile: this.profile });
@@ -973,6 +977,16 @@ export class SessionActor {
       await this.endProcess(agent);
       log.info("session", "Claude authentication failed; reopening and continuing once", { session: this.key });
       return this.startTurn("auth_retry", GO_ON_AFTER_AUTH, turn.by);
+    }
+    // Its process ran in a sandbox and the connection to it was lost (not the program ending): started again there once,
+    // going on from its transcript as after an authentication error.
+    if (outcome.kind === "failed" && outcome.reason === "exited" && outcome.message.includes(CONNECTION_LOST) && !stopRequested && !this.deps.held(this.key) && turn && !turn.lostRetried && !turn.declared) {
+      this.nudges = 0;
+      const agent = this.agent;
+      this.agent = null;
+      await this.endProcess(agent);
+      log.info("session", "the connection to its sandbox was lost; starting again and continuing once", { session: this.key });
+      return this.startTurn("sandbox_retry", GO_ON_AFTER_LOST, turn.by);
     }
     const spent = outcome.kind === "failed" && outcome.reason === "rate_limit";
     if (!spent) this.refill = null;

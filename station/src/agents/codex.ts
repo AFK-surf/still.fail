@@ -12,6 +12,7 @@ import { agentEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
+import { sandboxed } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
@@ -192,12 +193,16 @@ class Host {
   /// After a crash: where each thread stood when the station that crashed stopped acknowledging.
   recovered = new Map<string, Recovered>();
   readonly profile: string;
+  /// Which app-server of the driver's it is (`hostKey`): its profile's, or one session's when the station runs things in
+  /// sandboxes.
+  readonly key: string;
   /// What the process was started with; a profile edit that changes it needs a new process.
   readonly signature: string;
   private nextId: number;
 
-  constructor(profile: string, signature: string, nextId: number, ready: boolean) {
+  constructor(profile: string, signature: string, nextId: number, ready: boolean, key = profile) {
     this.profile = profile;
+    this.key = key;
     this.signature = signature;
     this.nextId = nextId;
     this.ready = ready;
@@ -210,25 +215,25 @@ class Host {
   /// When the login it was started with runs out, if it was lent by another station.
   lentUntil: number | null = null;
 
-  static async start(profile: Profile, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"]): Promise<Host> {
+  static async start(profile: Profile, key: string, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"]): Promise<Host> {
     mkdirSync(profile.home, { recursive: true });
     if (isMachine(profile)) linkCodexAuth(profile.home, env);
     const until = lent?.borrowed(profile) ? await lent.write(profile) : null;
     const childEnv: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(profile, "codex"), profile.id) };
     childEnv.CODEX_HOME = profile.home;
     withCaBundle(childEnv, caBundle);
-    const host = new Host(profile.id, hostSignature(profile), 1, false);
+    const host = new Host(profile.id, hostSignature(profile), 1, false, key);
     host.lentUntil = until;
-    const label = `codex app-server ${profile.id}`;
-    host.proc = await AgentProcess.start(data, runnerId("codex", profile.id), command, hostArgs(profile), childEnv, profile.home, host.processOptions(label));
+    const label = `codex app-server ${key}`;
+    host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, profile.home, host.processOptions(label));
     return host;
   }
 
   /// Takes up an app-server a runner keeps. Replies to what the previous station asked are dropped: its ids are below
   /// `nextId`.
-  static adopt(profile: string, info: RunnerInfo, signature: string, nextId: number, ready: boolean, recovered?: Map<string, Recovered>): Host {
-    log.info("agents::codex", "taking up a codex app-server", { profile, pgid: info.pgid, crashed: recovered !== undefined });
-    const host = new Host(profile, signature, nextId, ready);
+  static adopt(profile: string, info: RunnerInfo, signature: string, nextId: number, ready: boolean, recovered?: Map<string, Recovered>, key = profile): Host {
+    log.info("agents::codex", "taking up a codex app-server", { profile, key, pgid: info.pgid, crashed: recovered !== undefined });
+    const host = new Host(profile, signature, nextId, ready, key);
     if (recovered) host.recovered = recovered;
     host.orphans = new Map();
     wall.after(ORPHANS_MS, () => {
@@ -343,11 +348,12 @@ class Host {
   }
 
   snapshot(): CodexHostSnapshot {
-    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready };
+    return { runner: this.proc.info.id, signature: this.signature, nextId: this.nextId, ready: this.ready, ...(this.key !== this.profile ? { key: this.key } : {}) };
   }
 }
 
-export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean };
+/// `key`: the driver's key for it when not its profile's (`hostKey`); none from a station before it.
+export type CodexHostSnapshot = { runner: string; signature: string; nextId: number; ready: boolean; key?: string };
 
 /// A thread as a next station takes it up (codex.rs HandedThread), with what its app-server needs (HandedHost).
 export type CodexSnapshot = {
@@ -441,7 +447,13 @@ export class CodexDriver implements AgentDriver {
 
   /// Whether an app-server runs on a profile now (its login is not renewed from outside meanwhile).
   running(profileId: string): boolean {
-    return this.hosts.get(profileId)?.alive() === true;
+    return [...this.hosts.values()].some((h) => h.profile === profileId && h.alive());
+  }
+
+  /// Which app-server a session's threads go to: its profile's, shared by the profile's sessions; while the station runs
+  /// things in sandboxes (agents/sandbox.ts), the session's own, so that each session has a sandbox of its own.
+  private hostKey(profileId: string, session?: string): string {
+    return session !== undefined && sandboxed(this.data) ? session : profileId;
   }
 
   /// The version of Codex installed now, read again when the last reading is old or `fresh` asks.
@@ -482,17 +494,17 @@ export class CodexDriver implements AgentDriver {
 
   /// Replaces a profile's app-server Codex was updated under, or whose output has grown too long, once no turn runs on
   /// it: its sessions are opened again on a new one with their next turn.
-  private async retireStale(profileId: string, installed: string | null) {
-    const host = this.hosts.get(profileId);
+  private async retireStale(key: string, installed: string | null) {
+    const host = this.hosts.get(key);
     if (!host || !host.alive() || host.turns.size > 0) return;
     if (this.stale(host)) {
-      log.info("agents::codex", "codex was updated under its app-server; restarting it", { profile: profileId, running: host.version, installed });
+      log.info("agents::codex", "codex was updated under its app-server; restarting it", { profile: host.profile, key, running: host.version, installed });
     } else {
       const output = this.outgrown(host);
       if (output === null) return;
-      log.info("agents::codex", "its app-server's output has grown long; restarting it", { profile: profileId, bytes: output });
+      log.info("agents::codex", "its app-server's output has grown long; restarting it", { profile: host.profile, key, bytes: output });
     }
-    this.hosts.delete(profileId);
+    this.hosts.delete(key);
     await host.proc.kill(5000);
   }
 
@@ -507,12 +519,20 @@ export class CodexDriver implements AgentDriver {
   /// A turn ended on a host: if Codex was updated under it or its output has grown too long, it is replaced now that it
   /// may be idle.
   hostIdle(host: Host) {
-    if (host.turns.size > 0 || this.hosts.get(host.profile) !== host) return;
+    if (host.turns.size > 0 || this.hosts.get(host.key) !== host) return;
     void (async () => {
       const installed = await this.installedVersion();
       if (!this.stale(host) && this.outgrown(host) === null) return;
-      await this.serial(() => this.retireStale(host.profile, installed));
+      await this.serial(() => this.retireStale(host.key, installed));
     })().catch((error) => log.warn("agents::codex", "a codex app-server not replaced", { profile: host.profile, error: String(error) }));
+  }
+
+  /// Ends an app-server of one session's whose last thread was let go.
+  retire(host: Host): Promise<void> {
+    return this.serial(async () => {
+      if (this.hosts.get(host.key) === host) this.hosts.delete(host.key);
+      await host.proc.kill(5000);
+    });
   }
 
   /// One at a time, as Rust's hosts mutex: starting, replacing and taking up hosts.
@@ -522,11 +542,12 @@ export class CodexDriver implements AgentDriver {
     return next;
   }
 
-  private async host(profile: Profile): Promise<Host> {
+  private async host(profile: Profile, session?: string): Promise<Host> {
     const installed = await this.installedVersion();
+    const key = this.hostKey(profile.id, session);
     const host = await this.serial(async () => {
-      await this.retireStale(profile.id, installed);
-      const current = this.hosts.get(profile.id);
+      await this.retireStale(key, installed);
+      const current = this.hosts.get(key);
       if (current && current.alive()) await this.renewLent(current, profile);
       if (current && current.alive() && current.signature !== hostSignature(profile)) {
         // The profile (or the station's variables for its agents) changed. Replace the process once no turn runs on it,
@@ -534,22 +555,22 @@ export class CodexDriver implements AgentDriver {
         // next turn. Waiting for no thread at all would wait for ever: a session opened meanwhile joins the old one.
         if (current.turns.size === 0) {
           log.info("agents::codex", "profile changed; restarting its codex app-server", { profile: profile.id });
-          this.hosts.delete(profile.id);
+          this.hosts.delete(key);
           await current.proc.kill(5000);
         } else {
           log.info("agents::codex", "profile changed; its codex app-server restarts once no turn runs on it", { profile: profile.id });
         }
       }
-      const alive = this.hosts.get(profile.id);
+      const alive = this.hosts.get(key);
       if (alive && alive.alive()) return alive;
       // Its app-server exited: its runner, on its way out, is not one to take up.
       if (alive) await alive.proc.released();
       // One an earlier station left running (its threads may be taken up yet) is taken up rather than replaced.
-      const left = findRunner(this.data, runnerId("codex", profile.id));
-      const host = left ? await this.takeUp(profile, left) : await Host.start(profile, this.command, this.data, this.env, this.caBundle, this.options.lent);
+      const left = findRunner(this.data, runnerId("codex", key));
+      const host = left ? await this.takeUp(profile, left, key) : await Host.start(profile, key, this.command, this.data, this.env, this.caBundle, this.options.lent);
       // Taken up on a borrowed login: when that one runs out, as its auth.json says.
       if (left && this.options.lent?.borrowed(profile)) host.lentUntil = lentExpiry(profile.home);
-      this.hosts.set(profile.id, host);
+      this.hosts.set(key, host);
       return host;
     });
     await host.ensureReady();
@@ -558,7 +579,7 @@ export class CodexDriver implements AgentDriver {
 
   /// An app-server a runner keeps, with no snapshot: what the previous station had handled of it is read again to know
   /// where each thread stands.
-  private async takeUp(profile: Profile, info: RunnerInfo): Promise<Host> {
+  private async takeUp(profile: Profile, info: RunnerInfo, key = profile.id): Promise<Host> {
     const out = outFile(this.data, info.id);
     const at = await ackedOffset(info, out);
     const recovered = new Map<string, Recovered>();
@@ -586,7 +607,7 @@ export class CodexDriver implements AgentDriver {
     // Its signature is the profile's if it runs with what the profile says now (the arguments carry the overrides).
     const same = JSON.stringify(info.args) === JSON.stringify(hostArgs(profile));
     // Ids above any the previous station can have sent.
-    const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered);
+    const host = Host.adopt(profile.id, info, same ? hostSignature(profile) : "unknown", wall.now(), true, recovered, key);
     host.version = versionInOutput(out);
     for (const [thread, r] of recovered) if (r.busy) host.turns.add(thread);
     return host;
@@ -620,7 +641,7 @@ export class CodexDriver implements AgentDriver {
   }
 
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    const host = await this.host(options.profile);
+    const host = await this.host(options.profile, options.key);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
     const config: Json = {
@@ -652,18 +673,20 @@ export class CodexDriver implements AgentDriver {
   async adopt(options: OpenOptions, snapshot: unknown | null, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
     const handed = snapshot as CodexSnapshot | null;
     const profileId = handed?.profile ?? options.profile.id;
+    // The app-server it ran on: its runner as the previous station said, else the one it would run on now.
+    const key = handed?.host.key ?? this.hostKey(profileId, options.key);
     const host = await this.serial(async () => {
-      const current = this.hosts.get(profileId);
+      const current = this.hosts.get(key);
       if (current && current.alive()) return current;
       if (current) await current.proc.released();
-      const id = handed?.host.runner ?? runnerId("codex", profileId);
+      const id = handed?.host.runner ?? runnerId("codex", key);
       const info = findRunner(this.data, id);
-      if (!info) throw new Error(`codex app-server ${profileId} was not taken up: no runner keeps it`);
+      if (!info) throw new Error(`codex app-server ${key} was not taken up: no runner keeps it`);
       const host = handed
-        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready)
-        : await this.takeUp(options.profile, info);
+        ? Host.adopt(profileId, info, handed.host.signature, handed.host.nextId, handed.host.ready, undefined, key)
+        : await this.takeUp(options.profile, info, key);
       if (handed) host.version = versionInOutput(outFile(this.data, info.id));
-      this.hosts.set(profileId, host);
+      this.hosts.set(key, host);
       return host;
     });
     let session: CodexSession;
@@ -894,6 +917,8 @@ export class CodexSession implements AgentSession {
     this.host.turns.delete(this.threadId);
     // Handed over, the thread is the next station's.
     if (this.host.proc.handed()) return;
+    // A session's own app-server (in its sandbox) goes with its last thread: left, it would keep the sandbox.
+    if (this.host.key !== this.host.profile && this.host.threads.size === 0) return this.driver.retire(this.host);
     // Best effort: the thread just stays loaded.
     await this.host.request("thread/unsubscribe", { threadId: this.threadId }).catch(() => {});
   }

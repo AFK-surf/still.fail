@@ -93,6 +93,7 @@ export const NUDGE = `Your turn ended without a state, so nobody knows where the
 
 export const RESUME_AFTER_RESTART = `The station restarted while you were in the middle of a turn, so that turn was cut off. Check where you were (files, git state, anything you started), then continue. Post only if people need to know.`;
 
+export const GO_ON_AFTER_LOST = `Your last turn stopped because the station lost its connection to the sandbox your commands run in, and the station started you again there. Commands that were running then were ended. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 export const GO_ON_AFTER_AUTH = `Your last turn stopped on an authentication error. The station reopened Claude to reload its credentials. Continue the unfinished work from this conversation. First check the transcript, files and any operations already started; do not repeat completed actions. If an action's outcome is uncertain, verify it before retrying. Post only if people need to know.`;
 
 export const GO_ON_AFTER_SPENT = `Your last turn was cut off: the account it ran on hit its usage limit. You now run on another account (or model). Check where you were, then continue the work. Post only if people need to know.`;

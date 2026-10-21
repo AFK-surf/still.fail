@@ -9,9 +9,10 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, test } from "node:test";
-import { BRIDGE, checkSandbox, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
+import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
 import { runnerId } from "../src/agents/process.ts";
 import { ClaudeDriver } from "../src/agents/claude.ts";
+import { CodexDriver } from "../src/agents/codex.ts";
 import type { RuntimeEvent } from "../src/agents/runtime.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { routes } from "../src/api/routes/sandbox.ts";
@@ -40,7 +41,8 @@ async function until(_what: string, check: () => boolean) {
 }
 
 /// A stand-in `ssh` in `dir`: writes the destination it was given to `<dir>/destinations`, then runs the remote
-/// command detached (a session of its own, as sshd's), its stdio passed through; ends with it. To the front door
+/// command detached (a session of its own, as sshd's), its stdio passed through, its runtime directory the
+/// destination's own (each sandbox its machine); ends with it. To the front door
 /// (`_…`) it answers as l4es does a `create`: it writes the command to `<dir>/made` and is done.
 function fakeSsh(dir: string): string {
   const program = join(dir, "ssh");
@@ -58,6 +60,11 @@ if (destination.startsWith("_")) {
   process.exit(0);
 }
 appendFileSync(${JSON.stringify(join(dir, "destinations"))}, destination + "\\n");
+appendFileSync(${JSON.stringify(join(dir, "ssh-pids"))}, process.pid + "\\n");
+// Each sandbox a machine of its own: the bridge there keeps its runtimes' groups in its runtime directory.
+const own = ${JSON.stringify(dir)} + "/run-" + destination;
+require("node:fs").mkdirSync(own, { recursive: true });
+process.env.XDG_RUNTIME_DIR = own;
 const far = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["pipe", "pipe", "inherit"] });
 process.stdin.pipe(far.stdin);
 far.stdin.on("error", () => {});
@@ -68,6 +75,18 @@ far.on("exit", (code) => process.exit(code ?? 1));
   chmodSync(program, 0o755);
   return program;
 }
+
+/// The stand-in ssh's processes, in the order they started: killing one is the connection breaking.
+const sshPids = (dir: string) => (existsSync(join(dir, "ssh-pids")) ? readFileSync(join(dir, "ssh-pids"), "utf8").trim().split("\n").map(Number) : []);
+
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const destinations = (dir: string) => (existsSync(join(dir, "destinations")) ? readFileSync(join(dir, "destinations"), "utf8").trim().split("\n") : []);
 
@@ -192,6 +211,59 @@ describe("the bridge", () => {
   });
 });
 
+describe("a connection lost", () => {
+  test("the bridge says so apart from the program ending, writes its file, and the program there is ended", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const pidFile = join(dir, "pid");
+    const lostFile = join(dir, "lost");
+    const spec = { ssh: [join(dir, "ssh"), "s-x.ws@host"], program: "/bin/sh", args: ["-c", `echo $$ > ${pidFile}; exec tail -f /dev/null`], cwd: dir, ports: [], lostFile };
+    const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "ignore", "pipe"] });
+    let err = "";
+    child.stderr.on("data", (b) => (err += b));
+    const ended = new Promise<number | null>((r) => child.on("close", (code) => r(code)));
+    await until("the program runs", () => existsSync(pidFile) && readFileSync(pidFile, "utf8").trim() !== "");
+    const pid = Number(readFileSync(pidFile, "utf8"));
+    process.kill(sshPids(dir)[0], "SIGKILL");
+    assert.equal(await ended, LOST_EXIT);
+    assert.ok(err.includes(CONNECTION_LOST), err);
+    assert.ok(existsSync(lostFile));
+    await until("the program in the sandbox ends", () => !alive(pid));
+  });
+
+  test("a sandbox that could not be reached is not a connection lost", async () => {
+    const dir = tempdir();
+    const ran = await bridge({ ssh: ["/usr/bin/false", "s-x.ws@host"], program: "/bin/true", args: [], cwd: dir, ports: [], lostFile: join(dir, "lost") }, "");
+    assert.equal(ran.code, 255);
+    assert.ok(!ran.err.includes(CONNECTION_LOST), ran.err);
+    assert.ok(!existsSync(join(dir, "lost")));
+  });
+
+  test("a runtime started in a sandbox ends the ones started there before, with what they started", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const run = join(dir, "xdg");
+    mkdirSync(run);
+    const start = (name: string) => {
+      const pidFile = join(dir, name);
+      const spec = { ssh: [join(dir, "ssh"), "s-x.ws@host"], program: "/bin/sh", args: ["-c", `sleep 1000 & echo $! > ${pidFile}.child; echo $$ > ${pidFile}; wait`], cwd: dir, ports: [], agent: true };
+      const child = spawn(process.execPath, [BRIDGE, "host", JSON.stringify(spec)], { stdio: ["pipe", "ignore", "ignore"], env: { ...process.env, XDG_RUNTIME_DIR: run } });
+      cleanups.push(() => child.kill("SIGKILL"));
+      return { pid: () => (existsSync(pidFile) && existsSync(`${pidFile}.child`) && readFileSync(`${pidFile}.child`, "utf8").trim() !== "" ? [Number(readFileSync(pidFile, "utf8")), Number(readFileSync(`${pidFile}.child`, "utf8"))] : null) };
+    };
+    const first = start("first");
+    await until("the first runs", () => first.pid() !== null);
+    const [shell, sleeper] = first.pid()!;
+    // Its connection gone without the sandbox being told (no end of input): it would run on beside the next.
+    process.kill(sshPids(dir)[0], "SIGSTOP");
+    cleanups.push(() => process.kill(sshPids(dir)[0], "SIGKILL"));
+    const second = start("second");
+    await until("the second runs", () => second.pid() !== null);
+    assert.ok(!alive(shell) && !alive(sleeper), "the first and what it started were ended");
+    assert.ok(alive(second.pid()![0]));
+  });
+});
+
 describe("jobs", () => {
   test("a session's job runs in its sandbox; a service stays here", async () => {
     const dir = tempdir();
@@ -220,6 +292,30 @@ describe("jobs", () => {
     assert.equal(destinations(dir).length, 1);
   });
 
+  test("a job whose connection to its sandbox was lost starts again there once", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    const store = Store.open(":memory:");
+    cleanups.push(() => store.close());
+    const told: string[] = [];
+    const jobs = new Jobs({ store, data: dir, notify: (_s, t) => void told.push(t), link: () => null });
+    cleanups.push(() => jobs.shutdown().catch(() => undefined));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    const work = join(dir, "work");
+    mkdirSync(work);
+    const runs = join(dir, "runs");
+    const job = jobs.start("s1", "build", `echo run >> ${runs}; [ "$(wc -l < ${runs})" -ge 2 ] || exec tail -f /dev/null`, work, null, false);
+    await until("it runs", () => existsSync(runs));
+    process.kill(sshPids(dir)[0], "SIGKILL");
+    await until("it ends the second time", () => store.getJob(job.id)!.state === "exited" && store.getJob(job.id)!.restarts === 1);
+    assert.equal(store.getJob(job.id)!.exitCode, 0);
+    assert.equal(readFileSync(runs, "utf8"), "run\nrun\n");
+    assert.ok(told.some((t) => t.includes("lost the connection to the sandbox")), told.join("\n"));
+  });
+
   test("a job that asks for a size gets a sandbox of its own of that size, made first", async () => {
     const dir = tempdir();
     fakeSsh(dir);
@@ -233,16 +329,16 @@ describe("jobs", () => {
     const work = join(dir, "work");
     mkdirSync(work);
     // Not while the station runs its jobs here.
-    assert.throws(() => jobs.start("s1", "build", "true", work, null, false, false, { cpus: 8 }), /only a job this station runs in a sandbox/);
+    assert.throws(() => jobs.start("s1", "build", "true", work, null, false, false, "large"), /only a job this station runs in a sandbox/);
     cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
-    assert.throws(() => jobs.start("s1", "web", "true", work, 45998, false, false, { cpus: 8 }), /not a service/);
+    assert.throws(() => jobs.start("s1", "web", "true", work, 45998, false, false, "large"), /not a service/);
 
-    const job = jobs.start("s1", "build", "echo big", work, null, false, false, { cpus: 8, memoryGib: 32 });
+    const job = jobs.start("s1", "build", "echo big", work, null, false, false, "large");
     await until("it ends", () => store.getJob(job.id)!.state === "exited");
-    assert.deepEqual(store.getJob(job.id)!.size, { cpus: 8, memoryGib: 32 });
-    const name = sandboxName(`${keyOfRunner(runnerId("claude", "s1"))}|c8m32`);
+    assert.equal(store.getJob(job.id)!.size, "large");
+    const name = sandboxName(`${keyOfRunner(runnerId("claude", "s1"))}|large`);
     assert.notEqual(name, sandboxName(keyOfRunner(runnerId("claude", "s1"))));
-    assert.deepEqual(readFileSync(join(dir, "made"), "utf8").trim().split("\n"), [`_.ws@host create ${name} --cpus 8 --mem 32`]);
+    assert.deepEqual(readFileSync(join(dir, "made"), "utf8").trim().split("\n"), [`_.ws@host create ${name} --size large`]);
     assert.deepEqual(destinations(dir), [`${name}.ws@host`]);
     assert.equal(readFileSync(store.getJob(job.id)!.log, "utf8").trim(), "big");
   });
@@ -280,5 +376,38 @@ describe("a runtime's process", () => {
     assert.deepEqual(events.find((e) => e.type === "turnEnded"), { type: "turnEnded", outcome: { kind: "completed" } });
     assert.deepEqual(events.flatMap((e) => (e.type === "live" && e.event.kind === "delta" ? [e.event.text] : [])), ["hello"]);
     assert.deepEqual(destinations(dir), [`${sandboxName(keyOfRunner(runnerId("claude", key)))}.ws@host`]);
+  });
+});
+
+describe("Codex", () => {
+  test("in sandboxes each session has an app-server of its own, in its sandbox, ended with its thread", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const fake = join(dirname(fileURLToPath(import.meta.url)), "fake");
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${fake}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    writeFileSync(join(dir, "cert.pem"), "");
+    const driver = new CodexDriver({ data: dir, hostSkills: join(dir, "skills"), caBundle: join(dir, "cert.pem") });
+    cleanups.push(() => driver.shutdown());
+    const dump = join(dir, "dump");
+    const profile = { id: "cx", runtime: "codex" as const, home: join(dir, "home"), access: { kind: "opencode-go", key: "k" }, env: { FAKE_DUMP: dump } };
+    const open = (key: string, events: RuntimeEvent[]) =>
+      driver.open({ key, profile, cwd: dir, instructions: "", mcpToken: "tok", mcpUrl: "http://127.0.0.1:4750/mcp", route: "r" }, (e) => void events.push(e));
+    const a: RuntimeEvent[] = [];
+    const b: RuntimeEvent[] = [];
+    const one = await open("EMBER/1.1", a);
+    await open("EMBER/2.2", b);
+    const started = () => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.equal(started().length, 2, "an app-server each");
+    assert.deepEqual(new Set(destinations(dir)), new Set(["EMBER/1.1", "EMBER/2.2"].map((k) => `${sandboxName(keyOfRunner(runnerId("codex", k)))}.ws@host`)));
+    await one.prompt("say:hi");
+    await until("its turn ends", () => a.some((e) => e.type === "turnEnded"));
+    assert.deepEqual(a.find((e) => e.type === "turnEnded"), { type: "turnEnded", outcome: { kind: "completed" } });
+    const pid = started()[0].pid;
+    await one.dispose();
+    await until("its app-server ends", () => !alive(pid));
+    assert.ok(alive(started()[1].pid), "the other session's goes on");
   });
 });

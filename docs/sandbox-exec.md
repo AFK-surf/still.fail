@@ -33,19 +33,35 @@ exit files are unchanged: the bridge stands in for the program here.
 - One exec channel carries everything, because the front door forwards no ports: the program's stdin, stdout, stderr
   and exit, and each TCP connection it makes to the station's door (`127.0.0.1:<port>`, MCP and job notices), which the
   far side listens for at the same port in the sandbox.
-- The connection gone (the station ended the process, the network broke), the far side ends the program's process
-  group. A turn in flight then fails as a runtime that exited; its session starts again with `--resume`.
 - A session's processes and its jobs share one sandbox, named from the session's key (`sandboxName`, at most 31
-  characters, `s-…-<hash>`). Codex's host is shared by a profile's sessions and so runs in the profile's.
+  characters, `s-…-<hash>`). Codex too: in sandboxes each session has an app-server of its own (codex.ts `hostKey`),
+  ended with its thread, instead of one shared by a profile's sessions.
+
+## A connection lost
+
+- Each side pings the other every 10 s and takes the connection as lost after 30 s without a frame. The front door does
+  not notice a station gone without a word (a half-open connection), and the sandbox's sshd only watches the front door;
+  without this, the far side could run on until TCP gives up.
+- The connection gone (the station ended the process, the network broke, the sandbox died), the far side ends the
+  program's process group. Before it starts a runtime's process, it ends every runtime process group an earlier bridge
+  started in that sandbox (one sandbox, one runtime: a session's), so that one left by a lost connection never runs
+  beside the new one on the same transcript.
+- Here the bridge tells a connection lost after the program started (`CONNECTION_LOST` on stderr, exit code 75) apart
+  from the program ending and from a sandbox that could not be reached. A turn that fails so goes on once, its runtime
+  started again with `--resume` and told what happened (`GO_ON_AFTER_LOST`, as after an authentication error); lost
+  again, it is said in the chat. A job is started again once (its `.lost` file beside its exit file).
+- The station's own machine is not looked after: if its sandbox goes, the station goes with it until it is started
+  again. Its data is on NFS.
 
 Not sent: a job with a port (a web service, reached here through the station) and a task that uses the screen.
 
 ## Sizes
 
-`job_start` takes `cpus`, `memory_gib` and `disk_gib`. Such a job runs in a sandbox of its own of that size, named from
-the session's key and the size, which the bridge first asks the front door to make (`create NAME --cpus N --mem GIB
---disk GIB`; l4es refuses more than its operator allows). A running sandbox cannot grow: l4h reserves a guest's memory in
-full when it is made. Agents are told to ask a person in the chat before asking for one.
+`job_start` takes a `size`: one of the sizes the sandboxes' operator names (l4es `SBX_SANDBOX_SIZES`, listed by
+`ssh _@host help`). Such a job runs in a sandbox of its own of that size, named from the session's key and the size,
+which the bridge first asks the front door to make (`create NAME --size SIZE`; l4es refuses a name it does not have). A
+running sandbox cannot grow: l4h reserves a guest's memory in full when it is made. Agents are told to ask a person in
+the chat before asking for one.
 
 ## Other stations' tasks
 
@@ -65,4 +81,5 @@ in the station's queue (jobs/admit.ts), which measures this machine: l4es places
 
 - The setting has no page in the clients: it is config.json and the admin API.
 - Services (jobs with a port) and screen tasks stay on the station's machine.
-- The station's machine is still one place: if its sandbox goes, the station goes with it until it is started again.
+- The station's own machine has no recovery: a sandbox of the station's that goes takes the station with it until it
+  is started again.
