@@ -159,7 +159,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   // Its first message here, with its files, unless it has come already.
   const sendHere = async (child: string, thread: SessionThread) => {
     if (hub.store.messagesBefore(thread.thread.id, null, 200).some((m) => m.authorKind === "agent" && m.author === key)) return;
-    const kept = files.length > 0 ? attach(hub, key, files.map((f) => f.path), child) : [];
+    const kept = files.length > 0 ? await attach(hub, key, files.map((f) => f.path), child) : [];
     await postFrom(hub, thread, key, from, fromLink, text, [child], kept, true);
   };
 

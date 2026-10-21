@@ -12,7 +12,7 @@ import { agentEnv } from "../ops/agent-env.ts";
 import { log } from "../ops/log.ts";
 import { LiveFromCodex, chars, type CodexLiveState } from "./live.ts";
 import { linkCodexAuth, type Env } from "./machine-logins.ts";
-import { sandboxed } from "./sandbox.ts";
+import { keyOfRunner, lentFile, sandboxed, syncNow } from "./sandbox.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
 import { accessKind, codexOverrides, expandRoute, isMachine, profileEnv, profileFast, profileModel, profileVia } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, type AgentDriver, type AgentSession, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
@@ -215,7 +215,9 @@ class Host {
   /// When the login it was started with runs out, if it was lent by another station.
   lentUntil: number | null = null;
 
-  static async start(profile: Profile, key: string, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"]): Promise<Host> {
+  /// `cwd`: where it runs, its profile's home; a session's own app-server in the session's workspace (in its sandbox,
+  /// made there with it).
+  static async start(profile: Profile, key: string, command: string, data: string, env: Env, caBundle: string, lent?: CodexDriverOptions["lent"], cwd = profile.home): Promise<Host> {
     mkdirSync(profile.home, { recursive: true });
     if (isMachine(profile)) linkCodexAuth(profile.home, env);
     const until = lent?.borrowed(profile) ? await lent.write(profile) : null;
@@ -225,7 +227,7 @@ class Host {
     const host = new Host(profile.id, hostSignature(profile), 1, false, key);
     host.lentUntil = until;
     const label = `codex app-server ${key}`;
-    host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, profile.home, host.processOptions(label));
+    host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, host.processOptions(label));
     return host;
   }
 
@@ -542,7 +544,7 @@ export class CodexDriver implements AgentDriver {
     return next;
   }
 
-  private async host(profile: Profile, session?: string): Promise<Host> {
+  private async host(profile: Profile, session?: string, cwd?: string): Promise<Host> {
     const installed = await this.installedVersion();
     const key = this.hostKey(profile.id, session);
     const host = await this.serial(async () => {
@@ -567,7 +569,7 @@ export class CodexDriver implements AgentDriver {
       if (alive) await alive.proc.released();
       // One an earlier station left running (its threads may be taken up yet) is taken up rather than replaced.
       const left = findRunner(this.data, runnerId("codex", key));
-      const host = left ? await this.takeUp(profile, left, key) : await Host.start(profile, key, this.command, this.data, this.env, this.caBundle, this.options.lent);
+      const host = left ? await this.takeUp(profile, left, key) : await Host.start(profile, key, this.command, this.data, this.env, this.caBundle, this.options.lent, key === profile.id ? profile.home : cwd);
       // Taken up on a borrowed login: when that one runs out, as its auth.json says.
       if (left && this.options.lent?.borrowed(profile)) host.lentUntil = lentExpiry(profile.home);
       this.hosts.set(key, host);
@@ -641,7 +643,7 @@ export class CodexDriver implements AgentDriver {
   }
 
   async open(options: OpenOptions, events: (event: RuntimeEvent) => void): Promise<AgentSession> {
-    const host = await this.host(options.profile, options.key);
+    const host = await this.host(options.profile, options.key, options.cwd);
     const model = options.model ?? profileModel(options.profile);
     const skillsOff = hostSkillsOff(this.hostSkills);
     const config: Json = {
@@ -719,6 +721,10 @@ export class CodexDriver implements AgentDriver {
     if (host.lentUntil === null || host.lentUntil - wall.now() >= LENT_RENEW_MS || !lent?.borrowed(profile)) return;
     try {
       host.lentUntil = await lent.write(profile);
+      // In a sandbox, its app-server reads the login there: the new one goes there too.
+      if (sandboxed(this.data)) {
+        await syncNow(this.data, keyOfRunner(host.proc.info.id), [{ path: lentFile(this.data, profile.home), to: join(profile.home, "auth.json"), mode: "whole", back: false }]);
+      }
       log.info("agents::codex", "its borrowed login runs out; a new one is lent under its app-server", { profile: profile.id });
     } catch (error) {
       // It goes on with the one it has: asked again at its next turn.

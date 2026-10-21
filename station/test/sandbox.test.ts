@@ -3,13 +3,13 @@
 // connection unless the bridge there ends it.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, test } from "node:test";
-import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
+import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, fetchFiles, keyPart, sessionSync, syncChanged, syncFor, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
 import { runnerId } from "../src/agents/process.ts";
 import { ClaudeDriver } from "../src/agents/claude.ts";
 import { CodexDriver } from "../src/agents/codex.ts";
@@ -24,7 +24,14 @@ const dirs: string[] = [];
 const cleanups: (() => unknown)[] = [];
 after(async () => {
   for (const c of cleanups.reverse()) await c();
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  // What the stand-in sandboxes still run (a far side copying what its program left, after the test): ended, and
+  // waited for, before their files go.
+  for (const d of dirs) {
+    const far = existsSync(join(d, "far-pids")) ? readFileSync(join(d, "far-pids"), "utf8").trim().split("\n").map(Number) : [];
+    for (const pid of far) signalGroup(pid, "SIGKILL");
+    await until("the stand-in sandboxes' processes end", () => far.every((pid) => !alive(pid)));
+    rmSync(d, { recursive: true, force: true });
+  }
 });
 
 function tempdir(): string {
@@ -65,7 +72,10 @@ appendFileSync(${JSON.stringify(join(dir, "ssh-pids"))}, process.pid + "\\n");
 const own = ${JSON.stringify(dir)} + "/run-" + destination;
 require("node:fs").mkdirSync(own, { recursive: true });
 process.env.XDG_RUNTIME_DIR = own;
+// And its files apart from the station's: the station's paths under a directory of its own.
+process.env.STILLFAIL_SANDBOX_PREFIX = own + "/fs";
 const far = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["pipe", "pipe", "inherit"] });
+appendFileSync(${JSON.stringify(join(dir, "far-pids"))}, far.pid + "\\n");
 process.stdin.pipe(far.stdin);
 far.stdin.on("error", () => {});
 far.stdout.pipe(process.stdout);
@@ -182,11 +192,12 @@ describe("the bridge", () => {
     assert.deepEqual(destinations(dir), ["s-x.ws@host"]);
   });
 
-  test("a working directory the sandbox does not have is said, not run elsewhere", async () => {
+  test("a working directory the sandbox does not have is made there, at the same path", async () => {
     const dir = tempdir();
-    const ran = await bridge({ ssh: [fakeSsh(dir), "s-x.ws@host"], program: "/bin/pwd", args: [], cwd: join(dir, "nowhere"), ports: [] }, "");
-    assert.equal(ran.code, 127);
-    assert.match(ran.err, /is not in the sandbox/);
+    const ran = await bridge({ ssh: [fakeSsh(dir), "s-x.ws@host"], program: "/bin/pwd", args: [], cwd: join(dir, "nowhere", "yet"), ports: [] }, "");
+    assert.equal(ran.code, 0);
+    assert.ok(ran.out.trim().endsWith(`/run-s-x.ws@host/fs${join(dir, "nowhere", "yet")}`), ran.out);
+    assert.ok(!existsSync(join(dir, "nowhere")), "not here");
   });
 
   test("the connection gone, the program in the sandbox is ended", async () => {
@@ -397,6 +408,7 @@ describe("Codex", () => {
       driver.open({ key, profile, cwd: dir, instructions: "", mcpToken: "tok", mcpUrl: "http://127.0.0.1:4750/mcp", route: "r" }, (e) => void events.push(e));
     const a: RuntimeEvent[] = [];
     const b: RuntimeEvent[] = [];
+
     const one = await open("EMBER/1.1", a);
     await open("EMBER/2.2", b);
     const started = () => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
@@ -409,5 +421,82 @@ describe("Codex", () => {
     await one.dispose();
     await until("its app-server ends", () => !alive(pid));
     assert.ok(alive(started()[1].pid), "the other session's goes on");
+  });
+});
+
+describe("files, never shared", () => {
+  /// Where the stand-in sandbox for destination `dest` has the station's path `path`.
+  const there = (dir: string, dest: string, path: string) => `${dir}/run-${dest}/fs${path}`;
+
+  test("a runtime's home and the agent home go there, credentials do not; transcripts and what the agent writes come back", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    const agentHome = join(dir, "agent");
+    mkdirSync(join(agentHome, "skills", "ours"), { recursive: true });
+    writeFileSync(join(agentHome, "MEMORY.md"), "remember\n");
+    writeFileSync(join(agentHome, "skills", "ours", "SKILL.md"), "ours\n");
+    const home = join(dir, "homes", "cc");
+    mkdirSync(join(home, "projects", "p"), { recursive: true });
+    writeFileSync(join(home, "settings.json"), "{}");
+    writeFileSync(join(home, ".credentials.json"), "secret");
+    symlinkSync(join(agentHome, "MEMORY.md"), join(home, "CLAUDE.md"));
+    symlinkSync(join(agentHome, "skills"), join(home, "skills"));
+    writeFileSync(join(home, "projects", "p", "t.jsonl"), "{\"a\":1}\n");
+    const cwd = join(dir, "sessions", "s1", "workspace");
+    mkdirSync(join(cwd, "uploads"), { recursive: true });
+    writeFileSync(join(cwd, "uploads", "in.txt"), "from a person");
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => [], agentHome));
+    const placed = inSandbox(dir, "s1", "/bin/sh", ["-c", [
+      // What it was given (relative: the sandbox has the station's paths at its own place).
+      "cat ../../../homes/cc/settings.json uploads/in.txt; [ -e ../../../homes/cc/.credentials.json ] && echo LEAKED; readlink ../../../homes/cc/CLAUDE.md",
+      // What it writes: its transcript grows, a skill and its memory change, a file of its own in the workspace.
+      "printf '{\"b\":2}\\n' >> ../../../homes/cc/projects/p/t.jsonl; echo mine > ../../../agent/skills/ours/new.md; echo more >> ../../../homes/cc/CLAUDE.md; echo work > out.txt",
+    ].join("; ")], cwd, { sync: syncFor(dir, "claude", { CLAUDE_CONFIG_DIR: home }, cwd) })!;
+    const ran = await new Promise<{ out: string; code: number | null }>((resolve) => {
+      const child = spawn(placed.program, placed.args, { stdio: ["ignore", "pipe", "inherit"] });
+      let out = "";
+      child.stdout.on("data", (b) => (out += b));
+      child.on("close", (code) => resolve({ out, code }));
+    });
+    assert.equal(ran.code, 0);
+    assert.equal(ran.out, `{}from a person${join(agentHome, "MEMORY.md")}\n`.replace(join(agentHome, "MEMORY.md"), there(dir, `${sandboxName("s1")}.ws@host`, join(agentHome, "MEMORY.md"))));
+    // Back here: the transcript as it grew, the new skill, the memory through its link; the credentials untouched.
+    assert.equal(readFileSync(join(home, "projects", "p", "t.jsonl"), "utf8"), '{"a":1}\n{"b":2}\n');
+    assert.equal(readFileSync(join(agentHome, "skills", "ours", "new.md"), "utf8"), "mine\n");
+    assert.equal(readFileSync(join(agentHome, "MEMORY.md"), "utf8"), "remember\nmore\n");
+    assert.equal(readFileSync(join(home, ".credentials.json"), "utf8"), "secret");
+    // What it made in the workspace stays there.
+    assert.ok(!existsSync(join(cwd, "out.txt")));
+    assert.ok(existsSync(there(dir, `${sandboxName("s1")}.ws@host`, join(cwd, "out.txt"))));
+  });
+
+  test("what the station puts in a workspace goes there before the agent's input, only when it changed; what the agent attaches comes here", async () => {
+    const dir = tempdir();
+    fakeSsh(dir);
+    const path = process.env.PATH;
+    process.env.PATH = `${dir}:${path}`;
+    cleanups.push(() => (process.env.PATH = path));
+    cleanups.push(placeIn(dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host" } }), () => []));
+    const cwd = join(dir, "sessions", "s2", "workspace");
+    mkdirSync(join(cwd, "uploads"), { recursive: true });
+    writeFileSync(join(cwd, "uploads", "a.png"), "png");
+    const key = keyPart("s2");
+    const dest = `${sandboxName(key)}.ws@host`;
+    await syncChanged(dir, key, sessionSync(dir, cwd));
+    assert.equal(readFileSync(there(dir, dest, join(cwd, "uploads", "a.png")), "utf8"), "png");
+    const connections = sshPids(dir).length;
+    await syncChanged(dir, key, sessionSync(dir, cwd));
+    assert.equal(sshPids(dir).length, connections, "nothing new: no connection");
+    appendFileSync(join(cwd, "uploads", "a.png"), "!");
+    await syncChanged(dir, key, sessionSync(dir, cwd));
+    assert.equal(readFileSync(there(dir, dest, join(cwd, "uploads", "a.png")), "utf8"), "png!");
+    // A file only the sandbox has, attached: brought here at its path.
+    mkdirSync(there(dir, dest, cwd), { recursive: true });
+    writeFileSync(there(dir, dest, join(cwd, "chart.svg")), "<svg/>");
+    await fetchFiles(dir, key, [join(cwd, "chart.svg")]);
+    assert.equal(readFileSync(join(cwd, "chart.svg"), "utf8"), "<svg/>");
   });
 });

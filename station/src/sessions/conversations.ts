@@ -1,6 +1,7 @@
 // What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
+import { fetchFiles, keyPart, sandboxed } from "../agents/sandbox.ts";
 import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
@@ -126,12 +127,16 @@ export async function staged(hub: Hub, key: string, args: Args, links: boolean):
 }
 
 /// Copies files the agent attaches into the session's uploads (`into`'s, when it sends them to that session), so the
-/// message keeps them even if the originals change, and measures images so pages can hold their place.
-export function attach(hub: Hub, key: string, paths: string[], into: string = key): Attachment[] {
+/// message keeps them even if the originals change, and measures images so pages can hold their place. Ones that are
+/// only in the session's sandbox (its agent runs there, agents/sandbox.ts) are brought here first.
+export async function attach(hub: Hub, key: string, paths: string[], into: string = key): Promise<Attachment[]> {
   const row = hub.store.getSession(key);
   const target = into === key ? row : hub.store.getSession(into);
   if (!row || !target) throw new Error("unknown session");
   if (paths.length > 10) throw new Error("at most 10 files per message");
+  if (sandboxed(hub.config().dataDir)) {
+    await fetchFiles(hub.config().dataDir, keyPart(key), paths.map((given) => (isAbsolute(given) ? given : join(row.workspace, given))));
+  }
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
   return paths.map((given) => {
@@ -219,7 +224,7 @@ export async function chatPost(hub: Hub, key: string, args: Args): Promise<strin
     if (link === undefined) throw new Error("files cannot be shown from Slack until this station is in a still.fail workspace; mention their paths in the text instead");
     return link;
   };
-  const files = await keep(paths.length === 0 ? [] : attach(hub, key, paths), thumbsDir(hub.config().dataDir));
+  const files = await keep(paths.length === 0 ? [] : await attach(hub, key, paths), thumbsDir(hub.config().dataDir));
   const here = { channel: thread.thread.channel, threadTs: thread.thread.threadTs };
   let posted: string;
   if (slack) {

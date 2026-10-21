@@ -6,10 +6,10 @@
 // `freeze` stops handling lines (none more is acknowledged): what a snapshot says then matches where the next station
 // begins. After a crash there is no snapshot; `ackedOffset` and `linesBefore` let a driver read what the dead station
 // had handled (silently) to know where things stand before the rest comes.
-import { createHash } from "node:crypto";
 import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { createConnection } from "node:net";
 import { join } from "node:path";
+import { keyPart } from "./sandbox.ts";
 import { log } from "../ops/log.ts";
 import { RunnerConnection, existingRunners, leave, listening, runnersDir, startRunner, type Exit, type RunnerInfo } from "./runner.ts";
 import { wall } from "../ops/fibers.ts";
@@ -26,9 +26,7 @@ export const debug = (at: string, message: string, fields?: Record<string, unkno
 /// A runner id from something of the station's (a session key, a profile id): safe as a file name and short enough for
 /// the socket's path (104 bytes on macOS); a hash keeps two keys that clean up the same apart.
 export function runnerId(kind: RuntimeKind, key: string): string {
-  const clean = key.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 24);
-  if (clean === key) return `${kind}-${clean}`;
-  return `${kind}-${clean}-${createHash("sha256").update(key).digest("hex").slice(0, 10)}`;
+  return `${kind}-${keyPart(key)}`;
 }
 
 /// How Rust's process.rs `describe` says an exit: its code, or the signal's name.

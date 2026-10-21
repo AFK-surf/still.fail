@@ -91,6 +91,9 @@ export type SessionDeps = {
   /// When session `key`'s profile, its allowance run out, is expected to run again (absent: in an hour).
   refillsAt?(key: string): number;
   mcpUrl(): string;
+  /// Before input is handed to the agent: what the station put in the session's workspace since (its uploads, its
+  /// instructions) copied to the agent's sandbox, when it runs in one (agents/sandbox.ts).
+  toSandbox?(key: string): Promise<void>;
   reposDir(): string;
   /// Session `key`'s MEMORY.md: its workspace's (agent-home.ts `workspaceAgentHome`).
   memoryPath(key: string): string;
@@ -738,6 +741,7 @@ export class SessionActor {
         store.setToldNotes(this.key, latestNote());
         prompt = `${untold(told, full)}\n\n${prompt}`;
       }
+      await this.deps.toSandbox?.(this.key).catch((error) => log.warn("session", "files not copied to its sandbox", { session: this.key, error: (error as Error).message }));
       // The runtime may have started a turn on its own (late input became a turn); join it.
       if (agent.busy() && (await agent.steer(prompt))) return;
       this.steered = [];

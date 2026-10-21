@@ -1,6 +1,6 @@
 // Execution in sandboxes (src/agents/sandbox.ts): GET says the setting to any member; PUT `{enabled, ssh, identity?,
-// knownHosts?}` is for the workspace's owners and admins. Switching on is refused unless a sandbox sees the station's
-// data directory at the same path. Kept in config.json (`sandbox`).
+// knownHosts?, persist?}` is for the workspace's owners and admins. Switching on is refused unless a sandbox can be had
+// and the station's data directory made there at its path. Kept in config.json (`sandbox`).
 import { type Answer, type Request, error, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { managesStation } from "../../mesh/credential.ts";
@@ -11,8 +11,8 @@ export type SandboxDeps = { config: ConfigFile; changed?: () => void; reach?: ty
 
 const view = (raw: any) => {
   const s = raw?.sandbox;
-  if (s === null || typeof s !== "object") return { enabled: false, ssh: null, identity: null, knownHosts: null };
-  return { enabled: sandboxConfig(raw) !== null, ssh: s.ssh ?? null, identity: s.identity ?? null, knownHosts: s.knownHosts ?? null };
+  if (s === null || typeof s !== "object") return { enabled: false, ssh: null, identity: null, knownHosts: null, persist: null };
+  return { enabled: sandboxConfig(raw) !== null, ssh: s.ssh ?? null, identity: s.identity ?? null, knownHosts: s.knownHosts ?? null, persist: s.persist ?? null };
 };
 
 export const routes = ({ config, changed, reach = checkReach }: SandboxDeps): Route[] => [

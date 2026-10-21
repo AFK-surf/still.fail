@@ -107,7 +107,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
   }
   if (hub.store.manuallyArchived(thread.thread.id)) throw new Error(`not sent to ${to}: that chat was archived by hand: it takes no messages until someone restores it`);
   // Kept in the uploads of the session the chat's files are read from (its first agent's).
-  const files = paths.length > 0 ? attach(hub, key, paths, targets[0] ?? key) : [];
+  const files = paths.length > 0 ? await attach(hub, key, paths, targets[0] ?? key) : [];
   const place = await postFrom(hub, thread, key, title, link, text, targets, files);
   return `Sent to ${place} (agents there: ${targets.join(", ")}). They answer with session_send to your chat.`;
 }

@@ -843,6 +843,21 @@ export class Sharing {
     return Number(got.expiresAt ?? 0);
   }
 
+  /// This station's own Codex login lent to its sandboxes (agents/sandbox.ts `lentFile`): written to `file` as a borrowed
+  /// one is, its refresh token kept here. When it runs out.
+  async lendOwnCodex(profile: Json, file: string): Promise<number> {
+    const got = await this.lend(profile);
+    const auth = {
+      auth_mode: "chatgpt",
+      OPENAI_API_KEY: null,
+      tokens: { ...got.tokens, refresh_token: "lent-to-a-sandbox" },
+      last_refresh: new Date(this.time.now()).toISOString(),
+    };
+    mkdirSync(dirname(file), { recursive: true });
+    writePrivate(file, JSON.stringify(auth, null, 2));
+    return Number(got.expiresAt ?? 0);
+  }
+
   /// A borrowed profile's check and allowance, as its host has them.
   async status(profile: Json): Promise<{ check: Json; quota: Json }> {
     const host = this.hostOf(profile);
