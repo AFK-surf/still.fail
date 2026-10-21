@@ -263,6 +263,11 @@ test "home" {
 }
 
 ///|
+test "settings-run-models" {
+  check("settings-run-models", @ui.nav_push_ms)
+}
+
+///|
 test "landing" {
   check("landing", @ui.nav_push_ms)
 }

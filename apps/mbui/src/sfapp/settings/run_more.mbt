@@ -65,30 +65,11 @@ fn run_settings_page(c : @ui.Ctx, core : Core, station : String, key : String) -
       return
     }
     if list == "model" {
-      scroll_page(c, "run-session-models/" + key, [
-        fn() {
-          for m in items(v, "options") {
-            let mv = Some(m)
-            let from = field(mv, "fromStation")
-            if pick_row(
-                c,
-                "session-model/" + text(mv, "model"),
-                text(mv, "name"),
-                sub=text(mv, "fromText"),
-                checked=text(v, "option") == text(mv, "model"),
-                mark=fn() {
-                  @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore
-                  if @sf.has_station_mark(text(from, "emoji"), text(from, "icon")) {
-                    @sf.station_mark(c, text(from, "emoji"), text(from, "icon"), 14.0, t.p.muted)
-                  }
-                },
-              ) {
-              pick([("model", str(text(mv, "model")))])
-              run_list.remove(of)
-            }
-          }
-        },
-      ])
+      // every model it can move to (SettingParts.kt ModelList)
+      model_list(c, "run-session-models/" + key, items(v, "options"), runtime, text(v, "option"), fn(m) {
+        pick([("model", str(m))])
+        run_list.remove(of)
+      })
       return
     }
     if list == "account" {

@@ -475,6 +475,10 @@ priv struct Viewer {
   mut page : @ui.NativeView?
   mut pdf : @ui.Pdf?
   mut text : String?
+  /// its words highlighted, a line each (code, or Markdown's source), read once: None until then, Some([]) when not
+  mut colored : Array[Array[@ui.Run]]?
+  /// whether they were coloured for the dark theme
+  mut colored_dark : Bool
   /// the image's key once its bytes are given
   mut image : String
   /// drawn once (its way in set going), closed (only drawn going), how far it has faded in (0 … 1, a motion)
@@ -675,6 +679,8 @@ fn new_viewer(station : String, key : String, a : Attachment, drive : DriveFile?
     page: None,
     pdf: None,
     text: None,
+    colored: None,
+    colored_dark: false,
     image: "",
     started: false,
     closing: false,
@@ -2611,6 +2617,25 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
   }
   // in rows of 60 lines, so a long file lays out only what is in view
   let lines = words.split("\n").map(fn(s) { s.to_owned() }).to_array()
+  // code highlighted (Markdown's source as Markdown), as a whole, then by its lines; past HIGHLIGHT_LIMIT as it is
+  let colored = match v.colored {
+    Some(cl) if v.colored_dark == t.dark => cl
+    _ => {
+      let (_, _, language) = preview_kind(v.name)
+      let lang = if kind == KMarkdown { "markdown" } else if kind == KCsv || kind == KText { "" } else { language }
+      let cl = if lang != "" && words.length() <= highlight_limit {
+        match @sf.highlight(words, lang, t.dark) {
+          Some(runs) => runs_by_line(runs)
+          None => []
+        }
+      } else {
+        []
+      }
+      v.colored = Some(cl)
+      v.colored_dark = t.dark
+      cl
+    }
+  }
   let chunks = (lines.length() + 59) / 60
   let markdown = kind == KMarkdown && !v.source
   let code = !markdown && (kind != KText && kind != KCsv)
@@ -2639,15 +2664,21 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
       let from = (i - 1) * 60
       let to = if from + 60 < lines.length() { from + 60 } else { lines.length() }
       let sb = StringBuilder()
+      let runs : Array[@ui.Run] = []
       for k in from..<to {
         if k > from {
           sb.write_char('\n')
+          runs.push(@ui.span("\n", mono=true))
         }
         sb.write_string(lines[k])
+        match colored.get(k) {
+          Some(line) => runs.push_iter(line.iter())
+          None => ()
+        }
       }
       c.box(w=Fill(1.0), pl=if code { 32.0 } else { 16.0 }, pr=if code { 32.0 } else { 16.0 }, clip=code, fn() {
         c.rich(
-          [@ui.span(sb.to_string(), mono=true)],
+          if colored.length() > 0 { runs } else { [@ui.span(sb.to_string(), mono=true)] },
           size=12.5,
           color=t.p.text,
           line=if code { 20.0 } else { 20.6 },
@@ -2659,6 +2690,28 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
     }
   })
   |> ignore
+}
+
+///|
+/// Past this a file shows as plain text, unhighlighted (FilePreview.kt HIGHLIGHT_LIMIT: 256 KB).
+let highlight_limit : Int = 256 * 1024
+
+///|
+/// Highlighted runs cut at their line ends: a line's runs each (none for an empty line), in the code face.
+fn runs_by_line(runs : Array[@ui.Run]) -> Array[Array[@ui.Run]] {
+  let out : Array[Array[@ui.Run]] = [[]]
+  for r in runs {
+    let parts = r.text.split("\n").map(fn(p) { p.to_owned() }).to_array()
+    for k, part in parts {
+      if k > 0 {
+        out.push([])
+      }
+      if part != "" {
+        out[out.length() - 1].push({ ..r, text: part, mono: true })
+      }
+    }
+  }
+  out
 }
 
 ///|

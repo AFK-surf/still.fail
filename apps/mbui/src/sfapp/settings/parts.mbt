@@ -454,6 +454,11 @@ fn row_title(c : @ui.Ctx, words : String, color? : Int64) -> Unit {
 let row_title_words : @ui.TextStyle = @sf.body.then(@sf.one_line).then(@sf.full_words)
 
 ///|
+/// A row's title with a tag after it: its words' width, on one line.
+// kept across runs: a value (no field of it changes)
+let row_title_tagged : @ui.TextStyle = @sf.body.then(@sf.one_line)
+
+///|
 /// A row's title in lines where it is long.
 // kept across runs: a value (no field of it changes)
 let row_title_lines : @ui.TextStyle = @sf.body.then(@sf.full_words)
@@ -1109,6 +1114,7 @@ pub fn pick_row(
   color? : Int64,
   mark? : () -> Unit,
   busy? : Bool = false,
+  tag? : () -> Unit,
 ) -> Bool {
   let t = @sf.theme()
   let id = c.id(key)
@@ -1127,8 +1133,18 @@ pub fn pick_row(
             None => ()
           }
           // Controls.kt:69, 72 (15sp, in lines where it is long)
-          c.text(label, style=row_title_lines, color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle })
+          // (with a tag after it, as wide as its words, on one line: PickLine's weight(1f, fill = false))
+          c.text(
+            label,
+            style=if tag is Some(_) { row_title_tagged } else { row_title_lines },
+            color=if enabled { color.unwrap_or(t.p.text) } else { t.p.subtle },
+          )
           |> ignore
+          // what follows it on its line (PickLine's tag: where a model comes from)
+          match tag {
+            Some(f) => f()
+            None => ()
+          }
         })
         |> ignore
         if sub != "" {

@@ -616,24 +616,11 @@ fn connect_run_page(c : @ui.Ctx, core : Core, station : String, id : String) -> 
     let models = items(v, "options")
     match list {
       "model" => {
-        scroll_page(c, "run-models/" + of, [
-          fn() {
-            for m in models {
-              let mv = Some(m)
-              if pick_row(
-                  c,
-                  "run-model/" + text(mv, "model"),
-                  text(mv, "name"),
-                  sub=text(mv, "fromText"),
-                  checked=text(draft, "model") == text(mv, "model"),
-                  mark=fn() { @sf.maker_mark(c, text(field(mv, "maker"), "id"), runtime, 18.0) |> ignore },
-                ) {
-                pick([("model", str(text(mv, "model")))])
-                run_list.remove(of)
-              }
-            }
-          },
-        ])
+        // every model it can move to (SettingParts.kt ModelList)
+        model_list(c, "run-models/" + of, models, runtime, text(draft, "model"), fn(m) {
+          pick([("model", str(m))])
+          run_list.remove(of)
+        })
         return
       }
       "account" => {

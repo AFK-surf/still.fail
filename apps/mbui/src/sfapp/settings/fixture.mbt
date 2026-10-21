@@ -57,6 +57,7 @@ let fx_connect_step : Ref[String] = Ref("team")
 /// The made-up settings as a run starts (reset): none changed, no sheet or scroll to put up.
 fn fixture_reset() -> Unit {
   fx.names.clear()
+  fx_many_models.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
   fx.version = 0
@@ -117,6 +118,11 @@ pub fn fixture_page(mode : String) -> String {
     "settings-vault-recover" => up("vault-recover", "", 0)
     "settings-add-people" => up("add-people", "", 0)
     "settings-workspace-mark" => up("workspace-mark", "", 0)
+    // the run's models listed (model_list.mbt): more than 8, by series, one of another station's to borrow
+    "settings-run-models" => {
+      fx_many_models.val = true
+      run_list["session:s-c1"] = "model"
+    }
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
     _ => fx_connect_step.val = "team"
@@ -144,7 +150,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-kept" => "kept"
     "settings-changelog" => "changelog"
     "settings-prices" => "prices:7"
-    "settings-run" => "run:ws1/st1#s-c1"
+    "settings-run" | "settings-run-models" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
     "settings-notify-off" => "home"
     "settings-station" => "station:ws1/st1"
@@ -1358,15 +1364,46 @@ fn fx_profile_flow() -> Json {
 }
 
 ///|
+/// Whether the run's models are many (MBUI_FIXTURE=settings-run-models).
+let fx_many_models : Ref[Bool] = Ref(false)
+
+///|
 /// A chat's agent as it runs and as it is to run (`pick` of `session:<key>`, MBUI_FIXTURE=settings-run): its effort
 /// raised to high, the rest as it was.
 fn fx_session_pick() -> Json {
   let model = obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("maker", obj([("id", str("anthropic"))]))])
+  let m = fn(id : String, name : String, family : String) {
+    obj([("model", str(id)), ("name", str(name)), ("family", str(family)), ("maker", obj([("id", str("anthropic"))]))])
+  }
+  // (MBUI_FIXTURE=settings-run-models: many, by series, one borrowed from MBA)
+  let options : Json = if fx_many_models.val {
+    [
+      obj([("model", str("claude-opus-5-5")), ("name", str("Opus 5.5")), ("family", str("Opus")), ("maker", obj([("id", str("anthropic"))]))]),
+      m("claude-opus-5-1", "Opus 5.1", "Opus"),
+      m("claude-opus-5", "Opus 5", "Opus"),
+      m("claude-sonnet-5-5", "Sonnet 5.5", "Sonnet"),
+      m("claude-sonnet-5", "Sonnet 5", "Sonnet"),
+      m("claude-sonnet-4-5", "Sonnet 4.5", "Sonnet"),
+      m("claude-haiku-4-5", "Haiku 4.5", "Haiku"),
+      m("claude-haiku-4", "Haiku 4", "Haiku"),
+      obj([
+        ("model", str("claude-fable-5-1")),
+        ("name", str("Fable 5.1")),
+        ("family", str("Fable")),
+        ("maker", obj([("id", str("anthropic"))])),
+        ("availability", str("borrowable")),
+        ("fromStation", obj([("name", str("MBA")), ("icon", str("glyph:laptop:teal"))])),
+        ("fromText", str("借自 MBA")),
+      ]),
+    ]
+  } else {
+    [model]
+  }
   obj([
     ("value", obj([("model", str("claude-opus-5-5")), ("runtime", str("claude"))])),
     ("draft", obj([("model", str("claude-opus-5-5")), ("runtime", str("claude")), ("effort", str("high"))])),
     ("option", str("claude-opus-5-5")),
-    ("options", [model]),
+    ("options", options),
     ("maker", obj([("id", str("anthropic"))])),
     ("modelText", str("Opus 5.5")),
     ("efforts", ["low", "medium", "high"]),

@@ -116,7 +116,8 @@ fn filter_menu(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
 
 ///|
 /// The workspaces' sheet (Workspaces.kt WorkspacesSheet, in a draggable sheet of 70%: sheet.mbt): the workspace in use
-/// (checked), the others to switch to (what each has waiting at its end), signing in another account. A workspace
+/// (checked), the invitations waiting, the others to switch to (what each has waiting at its end), signing in another
+/// account, a new one. A workspace
 /// tapped is the one in view from then on (the prefs' `workspace`), Home at its top.
 fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Workspace]) -> Unit {
   let marks = (src.topic)("workspaceMarks", { "workspace": Json::string(w.id) })
@@ -140,6 +141,8 @@ fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Worksp
       |> ignore
     })
     |> ignore
+    // the invitations waiting (new_workspace.mbt)
+    waiting_invitations(c, src)
     let others = all.filter(fn(x) { x.id != w.id })
     if others.length() > 0 {
       sheet_label(c, tr("android-misc.workspace.others"))
@@ -176,8 +179,9 @@ fn workspaces_sheet(c : @ui.Ctx, src : Source, w : Workspace, all : Array[Worksp
       lower_sheet()
       (src.sign_in)()
     }
-    pick_row(c, "ws-new", tr("android-misc.workspace.new"), "", false, None, "plus", Json::null())
-    |> ignore
+    if pick_row(c, "ws-new", tr("android-misc.workspace.new"), "", false, None, "plus", Json::null()) {
+      open_new_workspace()
+    }
   })
   |> ignore
 }
