@@ -119,6 +119,8 @@ fun SettingsScreen(current: WorkspaceEntry) {
             }
             VaultSettingsRow(current.workspace.id)
             GoRow("Station", stations?.let { t("android-settings.home.online", "online" to online, "total" to it.size) }, dot = troubled) { app.push(Screen.Stations) }
+            // A wide screen has no bottom bar (App.kt): 文件 has no other way in there.
+            if (LocalWide.current) GoRow(t("android-misc.bar.place.files")) { app.push(Screen.Files) }
             GoRow(t("android-settings.connects.title"), connects?.let { if (failing > 0) t("android-settings.home.failing", "n" to failing) else t("android-settings.count", "n" to it.items.size) }, bad = failing > 0) { app.push(Screen.Connects()) }
             GoRow("Profile", stations?.let { if (short > 0) t("android-settings.home.short", "n" to short) else t("android-settings.count", "n" to profiles.size) }, bad = short > 0) { app.push(Screen.Profiles()) }
             GoRow(t("web-pages.automaticDecisions.title")) { app.push(Screen.AutomaticDecisions) }
