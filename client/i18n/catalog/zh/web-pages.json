@@ -594,6 +594,7 @@
   "web-pages.profiles.deleted": "已删除 Profile",
   "web-pages.profiles.deviceCodeNote": "在打开的 OpenAI 页面，用 {name} 要使用的 ChatGPT 账号登录并粘贴代码。完成后此处会自动继续，无需返回操作。如果页面提示设备码登录未开启，请先在 ChatGPT 的安全设置中开启。",
   "web-pages.profiles.deviceCodeNoteOpencode": "在打开的 OpenCode 页面登录，确认页面上的代码与此处一致，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
+  "web-pages.profiles.deviceCodeNoteKimi": "在打开的 Kimi 页面登录开通了 Kimi Code 会员的账号，确认页面上的代码与此处一致后授权。完成后此处会自动继续，无需返回操作。",
   "web-pages.profiles.deviceCodeNoteGrok": "在打开的 xAI 页面，用订阅了 SuperGrok 或 X Premium+ 的账号登录，输入代码后批准。完成后此处会自动继续，无需返回操作。",
   "web-pages.profiles.deviceCodeNoteCursor": "在打开的 Cursor 页面登录并确认。完成后此处会自动继续，无需返回操作。",
   "web-pages.profiles.disable": "停用",

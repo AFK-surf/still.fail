@@ -684,7 +684,9 @@ function uses(p: J): [string[], [string, string | null] | null] {
     source = providers.ofKind(kind);
     at = source ? providers.endpoints(source, null, null) : null;
   }
-  const decision = (at !== null && at.chat !== null) || get(get(p.check, "decision"), "state") === "ready";
+  // A Kimi Code sign-in has no key a decision could be asked with (its token is renewed every few minutes).
+  const signedIn = get(p.access, "login") === true;
+  const decision = (at !== null && at.chat !== null && !signedIn) || get(get(p.check, "decision"), "state") === "ready";
   const list = [...format.RUNTIMES.filter(runs), ...(decision ? ["decision"] : [])];
   const provider: [string, string | null] | null = source && kind === "api-provider" ? [source.name, source.mark ?? null] : null;
   return [list, provider];
@@ -713,8 +715,8 @@ export function profileTrouble(p: J): J {
     const machine = get(p, "machine") === true;
     if (machine && state === "login") return issue(title, why, t("core-views.present.trouble.command_next"), "command", t("core-views.present.trouble.command_label"));
     const kind = str(get(get(p, "access"), "kind"));
-    // A subscription, or an OpenCode Go profile signed in to the OpenCode Console: signed in again.
-    const signsIn = kind === "subscription" || (kind === "opencode-go" && get(get(p, "access"), "login") === true);
+    // A subscription, or a profile signed in to an account (OpenCode Go's, Kimi Code's): signed in again.
+    const signsIn = kind === "subscription" || get(get(p, "access"), "login") === true;
     if (signsIn && !machine && state === "login") return issue(title, why, t("core-views.present.trouble.login_next"), "login", t("core-views.present.trouble.login_label"));
     if (kind === "anthropic-api" || kind === "opencode-go" || kind === "api-provider") return issue(title, why, t("core-views.present.trouble.key_next"), "key", t("core-views.present.trouble.key_label"));
     if (kind === "env") return issue(title, why, t("core-views.present.trouble.env_next"), "env", t("core-views.present.trouble.env_label"));

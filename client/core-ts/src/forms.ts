@@ -859,7 +859,8 @@ function planTile(runtime: string): J {
 }
 
 /// The picker's groups: every provider the station can take a key for, those with a plan, the variables by hand (for
-/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan). xAI
+/// each runtime it can run, `runtimes`). `console`: the station signs OpenCode Go in to the OpenCode Console (its plan); one
+/// that lists Kimi Code signs it in to Kimi too (its plan, KIMI_PLAN). xAI
 /// has a plan (SuperGrok) where the station runs Grok Build; Cursor and Devin, last of the makers, where it runs them.
 export function groups(supported: string[] | null, runtimes: string[] = format.RUNTIMES, console = false): J[] {
   const listed = (id: string) => supported !== null && supported.includes(id);
@@ -867,7 +868,7 @@ export function groups(supported: string[] | null, runtimes: string[] = format.R
   for (const group of providers.GROUPS) {
     const tiles = providers.SOURCES.filter((s) => s.group === group && !providers.isChinaVariant(s.id)).flatMap((s) => {
       const hasKey = s.legacy !== undefined || listed(s.id);
-      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "xai" && runtimes.includes("grok"));
+      const hasPlan = s.id === "openai" || s.id === "anthropic" || (s.id === "opencode-go" && console) || (s.id === "kimi-code" && hasKey) || (s.id === "xai" && runtimes.includes("grok"));
       return hasKey || hasPlan ? [tileOf(s, hasKey, hasPlan, runtimes)] : [];
     });
     if (group === "labs") for (const r of PLAN_ALONE) if (runtimes.includes(r)) tiles.push(planTile(r));
@@ -907,13 +908,15 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
   out.title = t("core-views.flow.connect", { name });
   out.hint = "";
   const runtime = str(tile.runtime, "claude");
-  // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does.
+  // OpenCode Go's plan is signed in to with the person's OpenCode account, and runs every runtime its key does; Kimi
+  // Code's with a Kimi account, and runs Claude Code (the only one that reads its token again as it is renewed).
   const opencode = tile.id === "opencode-go";
+  const kimi = tile.id === "kimi-code";
   if (method === null) {
-    const plan = opencode ? "OpenCode Go" : planOf(runtime).plan;
+    const plan = opencode ? "OpenCode Go" : kimi ? "Kimi Code" : planOf(runtime).plan;
     out.step = "method";
     out.choices = [
-      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${opencode ? "opencode" : runtime}`) },
+      { id: "plan", title: t("core-views.flow.plan", { plan }), hint: t(`core-views.flow.plan_hint.${opencode ? "opencode" : kimi ? "kimi" : runtime}`) },
       { id: "key", title: t("core-views.flow.key_card"), hint: t("core-views.flow.key_card_hint", { name }) },
     ];
     return out;
@@ -924,6 +927,11 @@ function profileView(station: string, draft: J, overview: J, manages = false): J
     if (opencode) {
       out.signIn = { runtime: "claude", access: "opencode-go", provider: "OpenCode" };
       out.usesLine = t("core-views.flow.uses", { uses: usesTextOf(arr(tile.uses).filter((u: unknown) => u !== "decision")) });
+      return out;
+    }
+    if (kimi) {
+      out.signIn = { runtime: "claude", access: "kimi-code", provider: "Kimi" };
+      out.usesLine = t("core-views.flow.uses", { uses: runtimeName("claude") });
       return out;
     }
     out.usesLine = t("core-views.flow.uses", { uses: runtimeName(runtime) });

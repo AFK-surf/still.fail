@@ -21,7 +21,7 @@ import { LiveFromClaude, chars, type ClaudeLiveState } from "./live.ts";
 import { CLAUDE_TOKEN_MARGIN_MS, machineClaudeToken, type Env, type MachineToken } from "./machine-logins.ts";
 import { fileCredentials, takeBack } from "./no-keychain.ts";
 import { AgentProcess, ackedOffset, debug, findRunner, linesBefore, outFile, runnerId } from "./process.ts";
-import { bothNames, expandRoute, isMachine, profileEnv, profileModel } from "./profiles.ts";
+import { bothNames, expandRoute, isMachine, keyFile, profileEnv, profileModel } from "./profiles.ts";
 import { TOOL_SERVERS, cleanEnv, unreachable, uuid, type AgentDriver, type AgentSession, type BackgroundTask, type FailureReason, type OpenOptions, type Profile, type RuntimeEvent, type TurnOutcome } from "./runtime.ts";
 import { wall } from "../ops/fibers.ts";
 import { peerHttpBase } from "../tools/http.ts";
@@ -255,8 +255,13 @@ export class ClaudeDriver implements AgentDriver {
     // None for a session continued from a terminal: its system prompt stays as it began, so its cache holds.
     if (options.instructions !== "") args.push("--append-system-prompt", options.instructions);
     args.push("--mcp-config", JSON.stringify(mcpConfig));
+    // A key the station renews in a file (a Kimi sign-in's token, minutes long): Claude Code's key helper reads it,
+    // again every minute and after a 401 (Claude Code runs it in a POSIX shell, Git Bash on Windows).
+    const file = keyFile(options.profile);
+    if (file !== undefined) args.push("--settings", JSON.stringify({ apiKeyHelper: `cat '${file.replaceAll("'", `'\\''`)}'` }));
 
     const env: Record<string, string> = { ...cleanEnv(SCRUBBED), ...expandRoute(profileEnv(options.profile, "claude"), options.route) };
+    if (file !== undefined) env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS = "60000";
     env.CLAUDE_CONFIG_DIR = home;
     env[MCP_TOKEN_VAR] = options.mcpToken;
     // Web services of the workspace's other stations: <this>/<station>/<port>/<path> (mesh/peer-http.ts).
@@ -282,8 +287,9 @@ export class ClaudeDriver implements AgentDriver {
     // ordinary output reaches nobody, so the nudge turned into status posts in the chat; the instructions say when to post.
     env.CLAUDE_CODE_SILENT_TURN_REMINDER ??= "0";
 
-    // Renewed while it runs, it is never started again for its token.
-    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
+    // Renewed while it runs, it is never started again for its token; one read from a file again after a 401 is not
+    // stopped at the first.
+    const session = new ClaudeSession(this, sessionId, { busy: false, aborting: false, authFailure: null, closed: false, renews: machine !== undefined || file !== undefined }, null, new LiveFromClaude(), events, options.effort, renew, machine?.token ?? null);
     const label = `claude ${sessionId}`;
     session.toolsUrl = options.mcpUrl;
     session.attach(await AgentProcess.start(this.data, runnerId("claude", options.key), this.command, args, env, options.cwd, session.processOptions(label)));

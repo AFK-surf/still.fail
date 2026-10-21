@@ -64,6 +64,10 @@ export type Urls = {
   console: string;
   /// Cursor (a Cursor profile signed in to it: cursor.ts); its real one when not given.
   cursor?: CursorUrls;
+  /// Kimi's sign-in server (a Kimi Code profile signed in to it: kimi.ts), and Kimi Code's API (its allowance); the real
+  /// ones when not given.
+  kimi?: string;
+  kimiApi?: string;
 };
 
 export const URLS: Urls = {
@@ -129,7 +133,8 @@ export type CheckOptions = {
   env: Env;
   /// On the machine's own login.
   machine: boolean;
-  /// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console.
+  /// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console, or a Kimi Code one signed in
+  /// to Kimi (its key the current token, none once signed out).
   login?: boolean;
   /// The machine login's current token, renewed when about to run out (oauth.ts).
   machineToken?: (env: Env) => Promise<{ token: string }>;
@@ -202,7 +207,10 @@ async function checkInner(o: CheckOptions, lang: Lang): Promise<ProfileCheck> {
     if (!source) return check("failed", t("station.profile.unknownProvider"), null);
     const at = endpoints(source, o.via.endpoint, o.via.protocol);
     if (!at) return check("failed", t("station.profile.addressNeeded"), null);
-    return checkApi(source, at, o.key, lang);
+    // Signed in to Kimi: a sign-in no longer renewed, or a token refused, is one to sign in again.
+    if (o.login === true && o.key === "") return check("login", t("station.profile.kimiSignedOut"), null);
+    const done = await checkApi(source, at, o.key, lang);
+    return o.login === true && done.state === "failed" ? check("login", t("station.profile.kimiSignedOut"), null) : done;
   }
   if (o.kind === "subscription" && o.runtime === "claude") {
     const env: Env = { ...o.env, CLAUDE_CONFIG_DIR: o.home };

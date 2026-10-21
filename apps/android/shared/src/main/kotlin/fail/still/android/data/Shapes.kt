@@ -24,8 +24,9 @@ data class Access (
 	val endpoint: String? = null,
 	/// At such an address, the protocol it speaks there: chat_completions, responses or anthropic.
 	val protocol: String? = null,
-	/// An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console: signed in again, not given a
-	/// key (false from a station older than it).
+	/// A profile signed in to an account rather than given a key: an OpenCode Go one to the OpenCode Console (its key
+	/// the sign-in's token), a Kimi Code one to Kimi (its token in its home): signed in again, not given a key (false from a
+	/// station older than it).
 	val login: Boolean? = null
 )
 
@@ -1048,7 +1049,8 @@ data class ProfileCheck (
 data class LoginJob (
 	val profile: String,
 	val runtime: RuntimeKind,
-	/// opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); none: the runtime's subscription.
+	/// opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); kimi: to Kimi (a Kimi Code profile); none: the
+	/// runtime's subscription.
 	val provider: String? = null,
 	/// starting | needs_code | needs_approval | verifying | done | failed | cancelled
 	val state: String,
@@ -2634,9 +2636,9 @@ data class FlowOption (
 data class FlowSignIn (
 	/// The runtime whose subscription is signed in to (`login.new` runtime).
 	val runtime: RuntimeKind,
-	/// opencode-go: the OpenCode Console instead (`login.new` access).
+	/// opencode-go: the OpenCode Console instead; kimi-code: Kimi (`login.new` access).
 	val access: String? = null,
-	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok, Cursor, Devin.
+	/// Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Kimi, Grok, Cursor, Devin.
 	val provider: String
 )
 

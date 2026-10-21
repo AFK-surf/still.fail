@@ -441,9 +441,9 @@ fn profile_page(c : @ui.Ctx, core : Core, here : Here, address : String, id : St
           },
         ]
         blocks.append(profile_recovery(c, core, sv, pv))
-        // a subscription, or an OpenCode Go profile on an OpenCode account: signed in (again) here
+        // a subscription, or a profile on an account (OpenCode Go's, Kimi Code's): signed in (again) here
         if !copy &&
-          (kind == "subscription" || (kind == "opencode-go" && flag(field(pv, "access"), "login"))) &&
+          (kind == "subscription" || flag(field(pv, "access"), "login")) &&
           !flag(pv, "machine") {
           blocks.append(profile_sign_in(c, core, address, pv))
         }

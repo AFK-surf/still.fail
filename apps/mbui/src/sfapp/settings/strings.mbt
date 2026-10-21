@@ -700,6 +700,7 @@ let zh : Map[String, String] = {
   "android-settings.login.note": "登录在运行 {app} 的机器上完成，你只需在浏览器中授权。",
   "android-settings.login.openPage": "打开授权页面",
   "android-settings.login.opencodeNote": "在打开的 OpenCode 页面登录，确认页面上的代码与此处一致，选择订阅了 Go 的 workspace 并授权。完成后此处会自动继续，无需返回操作。",
+  "android-settings.login.kimiNote": "在打开的 Kimi 页面登录开通了 Kimi Code 会员的账号，确认页面上的代码与此处一致后授权。完成后此处会自动继续，无需返回操作。",
   "android-settings.login.pasteCode": "粘贴授权码",
   "android-settings.login.reopen": "已复制，重新打开登录页",
   "android-settings.login.restart": "重新开始",

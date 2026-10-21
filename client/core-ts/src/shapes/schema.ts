@@ -437,7 +437,7 @@ export const SHAPES: Record<string, Shape> = {
     ["provider", opt("String"), { doc: "The provider of an `api-provider` (shapes/providers.ts); an older core reads such a profile as `env` and drops this." }],
     ["endpoint", opt("String"), { doc: "Its address, where the provider has none of its own (Azure, Cloudflare, custom)." }],
     ["protocol", opt("String"), { doc: "At such an address, the protocol it speaks there: chat_completions, responses or anthropic." }],
-    ["login", "bool", { default: true, doc: "An OpenCode Go profile whose key is the token of a sign-in to the OpenCode Console: signed in again, not given a\nkey (false from a station older than it)." }],
+    ["login", "bool", { default: true, doc: "A profile signed in to an account rather than given a key: an OpenCode Go one to the OpenCode Console (its key\nthe sign-in's token), a Kimi Code one to Kimi (its token in its home): signed in again, not given a key (false from a\nstation older than it)." }],
   ]),
   ProfileCheck: struct([
     ["decision", opt("DecisionCapability")],
@@ -483,7 +483,7 @@ export const SHAPES: Record<string, Shape> = {
   LoginJob: struct([
     ["profile", "String"],
     ["runtime", "RuntimeKind"],
-    ["provider", opt("String"), { doc: "opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); none: the runtime's subscription." }],
+    ["provider", opt("String"), { doc: "opencode: a sign-in to the OpenCode Console (an OpenCode Go profile); kimi: to Kimi (a Kimi Code profile); none: the\nruntime's subscription." }],
     ["state", "String", { doc: "starting | needs_code | needs_approval | verifying | done | failed | cancelled" }],
     ["url", opt("String")],
     ["userCode", opt("String"), { doc: "needs_approval: the code to enter on `url` (Codex, Grok, OpenCode); none where the page only asks to confirm\n(Cursor)." }],
@@ -706,8 +706,8 @@ export const SHAPES: Record<string, Shape> = {
   ], { doc: "The add-profile pages, as the core keeps them for one device: the picker, how to connect what was picked (a plan or\na key), and the form with what it will be usable for. The views draw it and name what changed (`profile.flow.edit`)." }),
   FlowSignIn: struct([
     ["runtime", "RuntimeKind", { doc: "The runtime whose subscription is signed in to (`login.new` runtime)." }],
-    ["access", opt("String"), { doc: "opencode-go: the OpenCode Console instead (`login.new` access)." }],
-    ["provider", "String", { doc: "Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Grok, Cursor, Devin." }],
+    ["access", opt("String"), { doc: "opencode-go: the OpenCode Console instead; kimi-code: Kimi (`login.new` access)." }],
+    ["provider", "String", { doc: "Who is signed in to, as the steps name it: Claude, ChatGPT, OpenCode, Kimi, Grok, Cursor, Devin." }],
   ], { doc: "A sign-in the add-profile pages start." }),
   FlowChoice: struct([
     ["id", "String"],

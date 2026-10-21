@@ -807,6 +807,9 @@ fn provider_of(p : Json?) -> String {
   if text(field(p, "access"), "kind") == "opencode-go" {
     return "OpenCode"
   }
+  if text(field(p, "access"), "provider") == "kimi-code" {
+    return "Kimi"
+  }
   match text(p, "runtime") {
     "claude" => "Claude"
     "grok" => "Grok"
@@ -950,8 +953,8 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
       mono(c, user_code, size=22.0, line=28.0)
     })
     |> ignore
-    // OpenCode's page has the code in its address: only compared there, not copied
-    let filled = provider == "OpenCode"
+    // OpenCode's and Kimi's pages have the code in their address: only compared there, not copied
+    let filled = provider == "OpenCode" || provider == "Kimi"
     let copied = login_state.copied.get(k).unwrap_or(false)
     if wide_button(
         c,
@@ -976,6 +979,7 @@ fn login_steps(c : @ui.Ctx, core : Core, k : String, job : Json?, provider : Str
     c.text(
       match provider {
         "OpenCode" => tr("android-settings.login.opencodeNote")
+        "Kimi" => tr("android-settings.login.kimiNote")
         "Grok" => tr("android-settings.login.grokNote")
         _ => fill("android-settings.login.codexNote", [("app", "still.fail")])
       },

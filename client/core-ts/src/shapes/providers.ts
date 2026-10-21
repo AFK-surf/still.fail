@@ -90,6 +90,15 @@ export const SOURCES: Source[] = [
   "auth": "bearer"
  },
  {
+  "id": "kimi-code",
+  "name": "Kimi Code",
+  "group": "labs",
+  "mark": "kimi",
+  "anthropic": "https://api.kimi.com/coding",
+  "chat": "https://api.kimi.com/coding/v1",
+  "auth": "bearer"
+ },
+ {
   "id": "zai",
   "name": "Z.ai",
   "group": "labs",
