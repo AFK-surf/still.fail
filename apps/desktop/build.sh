@@ -43,7 +43,7 @@ win=${WIN:-}
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-# The Node the station runs on (.node-version: Electron's), first.
+# The Node the station runs on (.node-version), first.
 PATH="$(sh "$root/scripts/node-here.sh"):$PATH"
 target=darwin-arm64
 [ -z "$win" ] || target=win32-x64
@@ -77,9 +77,16 @@ cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
 # The app runs its station on its own Electron as Node (src/station.ts), and the station is built and checked on
-# .node-version's: the two the same, or the build stops (upgrading Electron, .node-version goes with it).
+# .node-version's: the same Node, or the build stops (upgrading Electron, .node-version goes with it). Only behind it by
+# a security release of the same line is let be: Node's come out before Electron takes them in, and the other stations
+# take them at once (Electron's Node 24.21 while .node-version is 24.22.1, October 2026's).
 electron_node=$(ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -p process.versions.node)
-[ "$electron_node" = "$(cat "$root/.node-version")" ] || { echo "Electron runs Node $electron_node, .node-version says $(cat "$root/.node-version"): make them the same" >&2; exit 1; }
+node_version=$(cat "$root/.node-version")
+if [ "$electron_node" != "$node_version" ]; then
+  [ "${electron_node%%.*}" = "${node_version%%.*}" ] && [ "$(printf '%s\n%s\n' "$electron_node" "$node_version" | sort -V | tail -1)" = "$node_version" ] ||
+    { echo "Electron runs Node $electron_node, .node-version says $node_version: make them the same" >&2; exit 1; }
+  echo "Electron runs Node $electron_node, behind .node-version's $node_version: take an Electron with it when there is one" >&2
+fi
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning \
   ${beta:+--define:process.env.STILLFAIL_CHANNEL='"beta"'}
 # The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.

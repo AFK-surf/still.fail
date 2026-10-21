@@ -1,7 +1,10 @@
 // A web link's preview (src/links/preview.ts): what a page's head says, and which addresses are fetched at all.
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { test } from "node:test";
-import { bodyUpTo, headOf, htmlText, isPublic, linkPreview, oembedOf } from "../src/links/preview.ts";
+import { brotliCompressSync } from "node:zlib";
+import { bodyUpTo, getAt, headOf, htmlText, isPublic, linkPreview, oembedOf } from "../src/links/preview.ts";
 
 test("a page's head: og first, else its title; its icon, else /favicon.ico", () => {
   const base = new URL("https://ex.am/docs/page");
@@ -49,4 +52,33 @@ test("only the internet's addresses are fetched", async () => {
   assert.equal(await linkPreview("http://127.0.0.1:1/"), null);
   assert.equal(await linkPreview("http://localhost:1/x"), null);
   assert.equal(await linkPreview("file:///etc/passwd"), null);
+});
+
+test("a page's body is read as sent, from the address checked; one in any encoding is not read (no decoder reached)", async () => {
+  const asked: { name?: string; encoding?: string }[] = [];
+  const server = createServer((req, res) => {
+    asked.push({ name: req.headers.host, encoding: req.headers["accept-encoding"] });
+    if (req.url === "/br") res.writeHead(200, { "content-type": "text/html", "content-encoding": "br" }).end(brotliCompressSync("<title>T</title>"));
+    else if (req.url === "/moved") res.writeHead(302, { location: "/plain" }).end();
+    else res.writeHead(200, { "content-type": "text/html", "set-cookie": ["a=1", "b=2"] }).end("<title>T</title>");
+  });
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+  const { port } = server.address() as AddressInfo;
+  try {
+    // A name nothing resolves: the address given is the one asked.
+    const at = (path: string) => getAt(new URL(`http://page.invalid:${port}${path}`), "127.0.0.1", "text/html");
+    const plain = await at("/plain");
+    assert.equal(plain?.status, 200);
+    assert.equal(plain?.url, `http://page.invalid:${port}/plain`);
+    assert.equal(plain?.headers.get("set-cookie"), "a=1, b=2");
+    assert.equal((await bodyUpTo(plain!, 1024)).toString("utf8"), "<title>T</title>");
+    assert.equal(await at("/br"), null);
+    const moved = await at("/moved");
+    assert.equal(moved?.status, 302);
+    assert.equal(moved?.headers.get("location"), "/plain");
+    await moved?.body?.cancel();
+    assert.deepEqual(asked, Array(3).fill({ name: `page.invalid:${port}`, encoding: "identity" }));
+  } finally {
+    server.close();
+  }
 });
