@@ -126,6 +126,11 @@ struct Box {
   mut min_h : Double
   mut max_w : Double
   mut max_h : Double
+  // whether any of these is a percentage of the containing block's width,
+  // or of its height: without one, the box (and so the node's size) is the
+  // same in any containing block
+  mut of_cb_w : Bool
+  mut of_cb_h : Bool
 }
 
 ///|
@@ -236,6 +241,24 @@ fn box_of(
     Auto => undef
     Pct(p) => pct(p, cb_h)
   }) + adj_h
+  let of_cb_w = s.padding.left is Pct(_) ||
+    s.padding.right is Pct(_) ||
+    s.padding.top is Pct(_) ||
+    s.padding.bottom is Pct(_) ||
+    s.border.left is Pct(_) ||
+    s.border.right is Pct(_) ||
+    s.border.top is Pct(_) ||
+    s.border.bottom is Pct(_) ||
+    s.margin.left is Pct(_) ||
+    s.margin.right is Pct(_) ||
+    s.margin.top is Pct(_) ||
+    s.margin.bottom is Pct(_) ||
+    s.width is Pct(_) ||
+    s.min_width is Pct(_) ||
+    s.max_width is Pct(_)
+  let of_cb_h = s.height is Pct(_) ||
+    s.min_height is Pct(_) ||
+    s.max_height is Pct(_)
   match into {
     Some(o) => {
       o.pad_l = pad_l
@@ -256,6 +279,8 @@ fn box_of(
       o.min_h = min_h
       o.max_w = max_w
       o.max_h = max_h
+      o.of_cb_w = of_cb_w
+      o.of_cb_h = of_cb_h
       o
     }
     None => {
@@ -277,6 +302,8 @@ fn box_of(
       min_h,
       max_w,
       max_h,
+      of_cb_w,
+      of_cb_h,
     }
   }
 }
@@ -547,10 +574,30 @@ fn size_node(
   } else {
     let c = node.cache
     let n = node.cache_n
+    // a size found in another containing block holds in this one when the
+    // node's box takes nothing from it (what is inside it is laid out in
+    // the node's own content box), and the node was asked for the same
+    // known sizes: not when it is now asked for the size it came out at,
+    // which its content (percentages of it) may not have had then
+    let mut any_w = false
+    let mut any_h = false
+    if n > 0 {
+      let bx = box_for(node, cb_w, cb_h)
+      any_w = !bx.of_cb_w
+      any_h = !bx.of_cb_h
+    }
     let mut k = 0
     while k < n {
-      if same(c[k + 4], cb_w) &&
-        same(c[k + 5], cb_h) &&
+      let same_cb = same(c[k + 4], cb_w) && same(c[k + 5], cb_h)
+      if (
+          same_cb ||
+          (
+            (any_w || same(c[k + 4], cb_w)) &&
+            (any_h || same(c[k + 5], cb_h)) &&
+            same(c[k], kw) &&
+            same(c[k + 1], kh)
+          )
+        ) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
         reusable(kh, ah, c[k + 1], c[k + 3], c[k + 7]) {
         counters[1] = counters[1] + 1
