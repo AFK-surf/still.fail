@@ -679,3 +679,8 @@ test "share-in-files" {
     nothing_opens,
   )
 }
+
+///|
+test "chat-login" {
+  check("chat-login", @ui.nav_push_ms)
+}

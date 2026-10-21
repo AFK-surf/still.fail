@@ -1306,52 +1306,9 @@ fn decision_options(
 }
 
 ///|
-/// A login as its card shows it (LoginCards.kt LoginCard): its title and how it stands while under way, with what the
-/// person does now for one who may finish it (decide.mbt login_active); ended, a line saying how (failed in red). A
-/// login the core does not know draws nothing.
-fn login_card(c : @ui.Ctx, src : Source, station : String, id : String) -> Unit {
-  let t = @sf.theme()
-  let topic = (src.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
-  let l = match topic.value {
-    Some(Object(_)) as v => v
-    _ => return
-  }
-  if !flag(l, "active") {
-    let words = match text(l, "endedText") {
-      "" => text(l, "title") + " · " + text(l, "statusText")
-      s => s
-    }
-    c.box(pt=2.0, fn() {
-      c.text(
-        words,
-        size=13.0,
-        color=if text(l, "state") == "failed" { t.p.red } else { ink().subtle },
-        line=19.0,
-      )
-      |> ignore
-    })
-    |> ignore
-    return
-  }
-  let all = (src.topic)("machineLogins", { "station": Json::string(station) })
-  c.box(pt=6.0, fn() {
-    c.box(min_w=280.0, radius=17.6, bg=t.p.chip, pad=8.0, gap=2.0, fn() {
-      c.box(pl=10.0, pr=10.0, pt=10.0, fn() {
-        c.text(text(l, "title"), size=15.0, weight=500, color=t.p.text, line=21.0) |> ignore
-      })
-      |> ignore
-      if flag(all.value, "canLogin") {
-        login_active(c, src, station, l, flag(all.value, "canRelay"))
-      } else {
-        c.box(padx=10.0, pb=10.0, fn() {
-          c.text(text(l, "statusText"), size=13.0, color=t.p.muted, line=19.0) |> ignore
-        })
-        |> ignore
-      }
-    })
-    |> ignore
-  })
-  |> ignore
+/// An ended login's line (LoginCards.kt LoginCard, ended: 13 on 19), in the chat's subtle ink, failed in red.
+fn login_ended_line(c : @ui.Ctx, words : String, failed : Bool) -> Unit {
+  c.text(words, size=13.0, color=if failed { @sf.theme().p.red } else { ink().subtle }, line=19.0) |> ignore
 }
 
 ///|

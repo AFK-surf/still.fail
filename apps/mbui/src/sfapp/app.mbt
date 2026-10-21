@@ -195,6 +195,7 @@ fn reset() -> Unit {
   app.held = 0
   app.held_long = false
   reset_row_menu()
+  login_cards_reset()
   update_anchor_reset()
   landing_reset()
   new_ws_reset()
