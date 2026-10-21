@@ -27,8 +27,8 @@
 # between runs the Actions cache's (MBC_STORE, MBC_LTO_CACHE, HBC_CACHE, the core's parts in out/core), the release in
 # MBUI_CACHE ($RUNNER_TEMP's).
 # Warm between runs on a machine of its own (WORK, MBUI_CACHE): the build runs in a copy of apps/mbui kept outside the job's checkout (which the
-# other jobs' clean takes), so moonc's and the compiler's outputs, the link and Gradle's build stay; core.hbc is kept
-# by its inputs (HBC_CACHE); Gradle's daemon lives on between builds for its idle timeout (android/gradle.properties).
+# other jobs' clean takes), so moonc's and the compiler's outputs and the link stay; core.hbc is kept by its inputs
+# (HBC_CACHE), the APK's dex by its own (mbui's scripts/apk.py: APK_CACHE).
 set -eo pipefail
 A=$(cd "$(dirname "$0")/.." && pwd)
 REPO=$(cd "$A/../.." && pwd)
@@ -105,14 +105,14 @@ tools() {
 }
 
 # apps/mbui into WORK as git has it (a file gone goes there too), by content: a file that did not change keeps its time,
-# and moon and Gradle see it as it was; the build's outputs (ignored by git) stay. Its own link to mbui made there.
+# and moon sees it as it was; the build's outputs (ignored by git) stay. Its own link to mbui made there.
 copy() {
   [ "$WORK" != "$A" ] || return 0
   mkdir -p "$WORK"
   (cd "$A" && git ls-files -z) | python3 -c '
 import os, shutil, sys
 src, dst = sys.argv[1:3]
-keep = {"out", "_build", "mbui", ".mooncakes", "android/app/build", "android/.gradle", "android/app/src/main/jniLibs"}
+keep = {"out", "_build", "mbui", ".mooncakes", "android/app/build", "android/app/src/main/jniLibs"}
 files = [f for f in sys.stdin.buffer.read().decode().split("\0") if f]
 for f in files:
     a, b = os.path.join(src, f), os.path.join(dst, f)
@@ -157,12 +157,13 @@ build() {
   n=$(build_number)
   copy
   rm -rf "$RELEASE_DIR/android" && mkdir -p "$RELEASE_DIR/android/android/mbui"
-  # every still.fail Android release's key (the Android Gradle plugin's signingConfigs.debug: $ANDROID_USER_HOME's)
+  # every still.fail Android release's key (the debug keystore $ANDROID_USER_HOME holds, as the Android Gradle plugin's
+  # signingConfigs.debug had it: mbui's scripts/apk.py signs with it)
   if [ -n "${ANDROID_DEBUG_KEYSTORE_B64:-}" ]; then
     export ANDROID_USER_HOME=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mbui-key.XXXXXX")
     printf '%s' "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"
   fi
-  # PostHog's key the app reports its crashes with (build.gradle.kts, Crashes.java), as still.fail's Android release
+  # PostHog's key the app reports its crashes with (android/apk.json's strings, Crashes.java), as still.fail's Android release
   # has it (.github/release.sh): the file STILLFAIL_POSTHOG names, written from POSTHOG_JSON, removed after
   local posthog=
   if [ -n "${POSTHOG_JSON:-}" ]; then
@@ -171,11 +172,7 @@ build() {
     export STILLFAIL_POSTHOG="$posthog/posthog.json"
   fi
   local r=0
-  # MBUI_KEEP_DAEMON=1 (main's beta): the run's process tracking off for Gradle's daemon, which lives on to the next
-  # build for its idle timeout (~2 GB resident); a branch's build leaves it to the runner, which ends it with the job
-  local keep=
-  [ "${MBUI_KEEP_DAEMON:-}" != 1 ] || keep="-u RUNNER_TRACKING_ID"
-  env $keep APP=stillfail VARIANT=release HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
+  env APP=stillfail VARIANT=release HBC_CACHE="${HBC_CACHE:-$C/hbc}" EMBER="$REPO" ORG_GRADLE_PROJECT_stillfailBuild=$n \
     bash "$WORK/scripts/android.sh" build 2>&1 | tee "$C/build.log" || r=$?
   [ -z "${ANDROID_DEBUG_KEYSTORE_B64:-}" ] || rm -rf "$ANDROID_USER_HOME"
   [ -z "$posthog" ] || rm -rf "$posthog"
@@ -191,8 +188,6 @@ build() {
   feed android "$n" "$name" "$apk"
   summary "- APK 0.1.$n: $size bytes, SHA-256 $sum, signed by $cert"
   summary "- $(grep '^android.sh: APP=' "$C/build.log" | sed 's/^android.sh: //'); $(grep '^core.hbc ' "$C/build.log" | head -1); build in $(secs $t0) s"
-  # what this app's Gradle daemon (android/gradle.properties: -Xmx2048m, 30 minutes idle) holds of the machine's memory
-  summary "- its Gradle daemon: $(ps -eo rss,args | grep '[G]radleDaemon' | grep -e '-Xmx2048m' | awk '{s += $1} END {printf "%d MB resident", s / 1024}')"
 }
 
 # The macOS app, built in WORK (warm as the APK's: moon's outputs, the compiler's, the Rust shell's target kept in

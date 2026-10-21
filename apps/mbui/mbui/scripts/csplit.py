@@ -55,6 +55,38 @@ class SplitError(Exception):
     pass
 
 
+# The per-function and per-unit work of split_stable over several processes, forked (each sees this one's state as it
+# is: the function a closure of it), the results in order, so the same files come out as from one: 16 s of the app's
+# 76 MB alone on Studio, 21 s on CI's 4 cores (2026-10-22). CSPLIT_JOBS=1, or no fork (Windows): in this process.
+_PAR = None
+
+
+def _par_one(i):
+    fn, items = _PAR
+    return fn(items[i])
+
+
+def par_map(fn, items):
+    global _PAR
+    import multiprocessing as mp
+    jobs = min(int(os.environ.get('CSPLIT_JOBS', os.cpu_count() or 1)), 8)
+    if jobs <= 1 or len(items) < 32 or 'fork' not in mp.get_all_start_methods():
+        return [fn(x) for x in items]
+    _PAR = (fn, items)
+    pool = mp.get_context('fork').Pool(jobs)
+    try:
+        out = pool.map(_par_one, range(len(items)), chunksize=max(1, len(items) // (jobs * 8)))
+        # (closed and joined: the context manager's terminate waited a second on each pool)
+        pool.close()
+        pool.join()
+        return out
+    except BaseException:
+        pool.terminate()
+        raise
+    finally:
+        _PAR = None
+
+
 def fail(msg):
     raise SplitError(msg)
 
@@ -885,8 +917,7 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     # the declarations (and the externs) renamed, each with what it declares and what it uses
     file_ids = set(prelude_ids)
     ditems = []  # (text, declares, uses, always)
-    for d, (kind, info) in zip(decls, decl_kinds):
-        t, used = rename(d, names)
+    for d, (kind, info), (t, used) in zip(decls, decl_kinds, par_map(lambda d: rename(d, names), decls)):
         file_ids |= used
         if kind == 'pp':
             ditems.append((t, set(), used, True))
@@ -907,14 +938,17 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
         if not always and t.lstrip().startswith('typedef'):
             typedef_names |= declares
     eitems = []
-    for e, n in zip(externs, data_names):
-        t, used = rename(e, names)
+    for e, n, (t, used) in zip(externs, data_names, par_map(lambda e: rename(e, names), externs)):
         file_ids |= used
         n = names.get(n, n)
         eitems.append((t, {n}, used - {n}))
-    data_r = [rename(d, names)[0] for d in data]
-    for d in data_r:
-        file_ids |= idents(d)
+    def one_data(d):
+        t = rename(d, names)[0]
+        return t, idents(t)
+    data_ri = par_map(one_data, data)
+    data_r = [t for t, _ in data_ri]
+    for _, ids in data_ri:
+        file_ids |= ids
     by_name = {}
     for k, (_, declares, _, _) in enumerate(ditems):
         for n in declares:
@@ -1032,11 +1066,11 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
         while k * target < v:
             k *= 2
         return k
-    for p, (name, text, line) in zip(pk, rest):
-        t, used = rename(text, names, file_ids, body_scan)
+    def one_function(f):
+        t, used = rename(f[1], names, file_ids, body_scan)
         t, lused = name_layouts(t)
-        t = flatten(t)
-        used |= lused
+        return flatten(t), used | lused
+    for p, (name, text, line), (t, used) in zip(pk, rest, par_map(one_function, rest)):
         new = names.get(name, name)
         if sizes[p] < target // 2:
             unit = f's{zlib.crc32(p.encode()) % nsmall}'
@@ -1257,15 +1291,19 @@ def split_stable(prelude, decls, decl_kinds, externs, data, data_names, funcs, i
     if pieces:
         files['init.c'] = unit_text(set(), ''.join(f'CSPLIT_INTERNAL void {f}(void);\n' for f in init_calls)
                                     + 'void moonbit_init() {\n' + ''.join(f'{f}();\n' for f in init_calls) + '}\n', [])
-        for unit in sorted(init_units):
+        def one_init(unit):
             texts, used = init_units[unit]
-            files[f'{unit}.c'] = unit_text(used, '\n'.join(t for _, t in texts), [t for _, t in texts])
+            return unit_text(used, '\n'.join(t for _, t in texts), [t for _, t in texts])
+        for unit, text in zip(sorted(init_units), par_map(one_init, sorted(init_units))):
+            files[f'{unit}.c'] = text
     else:
         files['init.c'] = unit_text(init_used, init_text)
-    for unit in sorted(units):
+    def one_unit(unit):
         texts, used = units[unit]
-        files[f'{unit}.c'] = unit_text(used, '\n'.join(t for _, t in sorted(texts)), [t for _, t in texts])
-        loads.append(sum(len(t) for _, t in texts))
+        return unit_text(used, '\n'.join(t for _, t in sorted(texts)), [t for _, t in texts])
+    for unit, text in zip(sorted(units), par_map(one_unit, sorted(units))):
+        files[f'{unit}.c'] = text
+        loads.append(sum(len(t) for _, t in units[unit][0]))
     accounted = len(data) + len(funcs) + (len(decls) - stats['pp'] - stats['prototypes_added'])
     if accounted != len(items) - stats['pp']:
         fail(f'{len(items) - stats["pp"]} items, {accounted} placed')

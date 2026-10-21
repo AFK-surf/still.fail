@@ -10,7 +10,8 @@
 # only once its file is fetched back from where it is served, the same bytes.
 # What stays between runs, by content, in the Actions cache: MoonBit (by its release's ETags), mbc's compiled units
 # (MBC_STORE) and ThinLTO's (MBC_LTO_CACHE), core.hbc by its inputs (HBC_CACHE), the core's Rust shell and engine for
-# Apple (out/core, by the shell's sources), Gradle's (gradle/actions/setup-gradle: main writes it, a branch reads it).
+# Apple (out/core, by the shell's sources), the APK's dependencies, its dex (R8's: by its classes, dependencies and
+# rules) and its stripped native libraries (APK_CACHE: mbui's scripts/apk.py, the APK built without Gradle).
 name: mbui
 on:
   push:
@@ -74,13 +75,12 @@ jobs:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       MBC_LTO_CACHE: ${{ github.workspace }}/.ci/lto
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc
+      APK_CACHE: ${{ github.workspace }}/.ci/apk
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 } # versionCode is the commits in the history
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
-      - uses: gradle/actions/setup-gradle@v4
-        with: { cache-read-only: "${{ github.ref != 'refs/heads/main' }}" }
       - uses: ./.github/actions/setup
       - uses: ./.github/actions/mbui-moonbit
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
@@ -92,6 +92,12 @@ jobs:
             .ci/hbc
           key: mbui-android-${{ github.sha }}
           restore-keys: mbui-android-
+      # (the APK's own, apart: a cache's paths are part of what it is, and the one above stays the one main has)
+      - uses: actions/cache/restore@v4
+        with:
+          path: .ci/apk
+          key: mbui-apk-${{ github.sha }}
+          restore-keys: mbui-apk-
       - name: Tools (the Android engine and shell prebuilt, the core's packages)
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null
@@ -101,7 +107,7 @@ jobs:
       - name: Build (and sign, on main)
         env:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
-          # PostHog's key, the app's crash reports' (apps/mbui/android/app/build.gradle.kts)
+          # PostHog's key, the app's crash reports' (apps/mbui/android/apk.json's strings)
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
         run: bash apps/mbui/scripts/beta.sh build
       - name: Put it, check it, then its feed
@@ -117,6 +123,11 @@ jobs:
             .ci/lto
             .ci/hbc
           key: mbui-android-${{ github.sha }}
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .ci/apk
+          key: mbui-apk-${{ github.sha }}
 
   mac:
     needs: what
