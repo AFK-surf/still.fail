@@ -27,14 +27,16 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  # 10 minutes at most. What is slow cold is cached, read by every run and written by main's (also a run that timed
+  # Allow cold hosted runners to finish: building took 7 minutes and the first simulator boot 425 seconds
+  # on branch runs, leaving no time for the flows under the old 10-minute limit. Keep a bounded 25-minute budget.
+  # What is slow cold is cached, read by every run and written by main's (also a run that timed
   # out: what it got through is kept, so the next one starts from there): Hermes for Apple, the Rust shell's target,
   # MoonBit with the app's build (moon's _build, mbc's objects, the core's engine: scripts/core.sh engine makes it again
   # when its sources are newer).
   smoke:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: macos-26
-    timeout-minutes: 10
+    timeout-minutes: 25
     env:
       # (the scripts' own places: actions/cache takes no path with ..)
       MBUI_CACHE: /Users/runner/stillfail-ci/mbui
@@ -177,7 +179,7 @@ jobs:
       # the flows' logs and shots, the app's, and the local still.fail's own (its station, relay, cloud: whether what
       # the app asked of a station reached it)
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: mbui-ios-${{ github.sha }}-${{ github.run_attempt }}
           path: |
@@ -185,6 +187,7 @@ jobs:
             apps/mbui/out/e2e/ios.txt
             apps/mbui/out/ios/app.log
             ${{ env.MBUI_CACHE }}/e2e-ios/run/*.log
+            ${{ env.MBUI_CACHE }}/ios-smoke/*.log
           if-no-files-found: ignore
           retention-days: 7
       # what this run added to each cache (a file newer than its start), kept
