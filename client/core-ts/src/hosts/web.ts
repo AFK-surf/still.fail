@@ -63,10 +63,15 @@ export class WasmSql implements Sql {
     this.#db = db;
   }
 
+  /// A statement prepared (reading the schema, so a damaged file fails here first): fails as SqlError.
   #prepare(sql: string): WasmStmt {
     let s = this.#statements.get(sql);
     if (!s) {
-      s = this.#db.prepare(sql);
+      try {
+        s = this.#db.prepare(sql);
+      } catch (e) {
+        throw webSqlError(e);
+      }
       this.#statements.set(sql, s);
     }
     return s;
@@ -208,11 +213,13 @@ export class WebHost implements Host {
   #loaded: WasmSqlite | null = null;
   #loading: Promise<WasmSqlite> | null = null;
   readonly #open = new Map<string, WasmSql>();
+  readonly report?: (error: Error) => void;
 
-  constructor(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, sqlite: () => Promise<WasmSqlite>) {
+  constructor(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, sqlite: () => Promise<WasmSqlite>, report?: (error: Error) => void) {
     this.#emit = emit;
     this.#testChannel = testChannel;
     this.#sqlite = sqlite;
+    if (report) this.report = report;
   }
 
   cloudOrigin(): string {
@@ -433,14 +440,15 @@ export type WebCore = { connect(): number; disconnect(client: number): void; rec
 
 /// A core in this worker (as the Rust core's wasm `start` was): `emit(client, message)` gets what it says to each client;
 /// `testChannel` the page is the test channel's. A bug that ends a fiber ends it as a panic ended the Rust core's:
-/// `onFatal` is told, with the error itself (its stack is the only clue where), and the worker tells the pages and closes.
-/// `modules`: what the app adds to the core (module.ts).
-export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, modules: readonly CoreModule[] = []): Promise<WebCore> {
+/// `onFatal` is told, with the error itself (its stack is the only clue where), and the worker tells the pages and closes;
+/// a database found damaged on the way is marked first, to be made again by the core that follows (data.ts). `modules`:
+/// what the app adds to the core (module.ts); `onReport`: errors the core goes on after, for error tracking.
+export function startWeb(emit: (client: ClientId, message: unknown) => void, testChannel: boolean, loadIroh: () => Promise<IrohModule>, onFatal: (reason: string, error: unknown) => void, loadSqlite: () => Promise<WasmSqlite>, modules: readonly CoreModule[] = [], onReport?: (error: Error) => void): Promise<WebCore> {
   service.name = "stillfail-web";
   service.os = "browser";
-  const host = new WebHost(emit, testChannel, loadSqlite);
+  const host = new WebHost(emit, testChannel, loadSqlite, onReport);
   return Core.create(host, { iroh: webIroh(loadIroh), modules }).then((core) => {
-    core.inner.runner.onDefect = (error) => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }), error);
+    core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }), error));
     core.keepTime();
     return {
       connect: (): number => core.connect(),

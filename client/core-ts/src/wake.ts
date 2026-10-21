@@ -153,6 +153,7 @@ export class WakingHost implements Host {
   readonly openDb?: Host["openDb"];
   readonly memoryDb?: Host["memoryDb"];
   readonly deleteDb?: Host["deleteDb"];
+  readonly report?: Host["report"];
   readonly legacyRead?: Host["legacyRead"];
   readonly secureGet?: Host["secureGet"];
   readonly secureSet?: Host["secureSet"];
@@ -168,6 +169,7 @@ export class WakingHost implements Host {
     if (inner.openDb) this.openDb = (name) => inner.openDb!(name);
     if (inner.memoryDb) this.memoryDb = () => inner.memoryDb!();
     if (inner.deleteDb) this.deleteDb = (name) => inner.deleteDb!(name);
+    if (inner.report) this.report = (error) => inner.report!(error);
     if (inner.legacyRead) this.legacyRead = (range) => inner.legacyRead!(range);
     // So is what the system keeps sealed; a read may wait on the person, never on a UI coming back.
     if (inner.secureGet) this.secureGet = (key, opts) => inner.secureGet!(key, opts);

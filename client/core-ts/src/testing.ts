@@ -126,6 +126,8 @@ export class FakeHost implements Host {
   openDbHook: ((name: string) => Sql | Error | null) | null = null;
   /// A database in memory, where a test gives one.
   memoryDb?: () => Sql | undefined;
+  /// What the core reported to error tracking (Host.report).
+  readonly reported: Error[] = [];
   #responder: Responder | null = null;
   #streamResponder: ((request: HttpRequest) => Effect.Effect<StreamResponse, HostError, Scope.Scope>) | null = null;
   readonly sockets: FakeSocket[] = [];
@@ -324,6 +326,10 @@ export class FakeHost implements Host {
       }
       return Effect.succeed(sql as Sql);
     });
+  }
+
+  report(error: Error): void {
+    this.reported.push(error);
   }
 
   deleteDb(name: string): Effect.Effect<void, HostError> {

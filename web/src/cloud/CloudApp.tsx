@@ -21,7 +21,7 @@ import { MobileWorkspace } from "../mobile/index.tsx";
 import { MobileSignIn } from "../mobile/SignIn.tsx";
 import { cloud, errorText, inviteCode, needsInviteCode, useAction, useWorkspaces } from "./api.ts";
 import { Illustration } from "../brand.tsx";
-import { PageViews, track } from "../telemetry.ts";
+import { PageViews, track, workspaceShown } from "../telemetry.ts";
 import { useNotices } from "../notify.ts";
 import { useDoingFailed } from "../doing.ts";
 import { prefs, setPrefs, usePrefs } from "../prefs.ts";
@@ -268,7 +268,11 @@ function WorkspaceRoute() {
   const found = owner?.workspaces.find((w) => w.id === ws);
   // Shown, it is the one last open on this device: where the app opens next time (Landing).
   const shown = found !== undefined;
+  const kept = workspaces !== undefined && !workspaces.every((a) => a.loaded);
+  const accounts = workspaces?.length ?? 0;
   useEffect(() => { if (shown && prefs().workspace !== ws) setPrefs({ workspace: ws }); }, [shown, ws]);
+  // Told once a page load, as it is first shown.
+  useEffect(() => { if (shown) workspaceShown(kept, accounts); }, [shown, kept, accounts]);
   if (!workspaces) return <Splash label={t("web-pages.cloud.opening")}><StatusLine /></Splash>;
   // One just joined (or kept from before) may not be in what was kept yet: until every account has answered (or failed),
   // it is waited for, not said to be out of reach.

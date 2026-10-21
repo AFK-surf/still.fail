@@ -114,6 +114,16 @@ There is one writer by construction:
 A database that cannot be opened (another process holds it) is one in memory for this run, said by `status`
 (`core-logic.status.db.busy`).
 
+**A damaged file** (SQLITE_CORRUPT, SQLITE_NOTADB; seen on iOS Safari's OPFS, 2026-10) is made again: what this device
+did itself (`outbox`, `pending`, `first`, `changing`, `draft`, `workspace_pref`) is read from it as far as it reads,
+the file is removed and a new one made with that in it (`meta.imported` set, so what the device kept before is not
+brought in again); the rest comes again from the stations and the cloud. Found as it is opened, that happens at once.
+Found as the core runs (a read fails, which ends the core), every statement goes through `Watched` (data.ts), which
+marks it in the host's storage (`db-damaged/<name>`); the hosts' `onDefect` waits for the mark (`damageKept`) before
+the core ends, and the core that follows makes it again as it opens it. Each is reported to error tracking
+(`LocalDbMadeAgain`; one that cannot be opened at all `LocalDbFailed`, docs/telemetry.md). Before this a damaged file
+stayed: the core crashed on it again and again, or could not open it, and every start waited for the network.
+
 **No room left**: when a commit (or a statement) fails for want of room — SQLITE_FULL, or on the web a write OPFS
 refuses (the origin's quota) — the burst is rolled back, the caches dropped, and what this device did itself (the
 outbox, chats asked for, first messages, changes, drafts, workspace picks) is written again on its own; if even that
@@ -163,7 +173,8 @@ transaction told once committed; a list read again writes only the rows that cha
 row); places; a list loaded when read and kept current (unchanged rows the same objects); a restart; read positions
 updated in place, the rows and the session's detail following; a session's detail holding its threads as their rows
 are; session events; chat rows before and after; the first screen, the marked rows; logs by range, written once,
-cut; a full disk said and what was done here kept; retain; model edits; drafts; the device's values; the former
+cut; a full disk said and what was done here kept; a damaged file made again with what was done here, found as it
+is opened or marked as the core ran; one that cannot be opened reported; retain; model edits; drafts; the device's values; the former
 records and the Rust core's chunks imported once, each account taking its own; the first view from the database with
 no network. `client/shell` (`cargo test -p stillfail-shell`) and `test/bridge.test.ts` test the shell's `sql.*`.
 

@@ -115,12 +115,27 @@ export function telemetrySettled(): Promise<void> {
 const MASKED_ATTRIBUTES = new Set(["title", "alt", "aria-label", "aria-description", "aria-valuetext", "placeholder", "value", "label", "href", "src", "srcset", "download", "data-author", "data-ts"]);
 
 /** Path segments that follow these are ids. */
-const IDS: Record<string, string> = { w: ":workspace", s: ":station", chats: ":thread", connects: ":connect", bots: ":connect", accounts: ":profile" };
+const IDS: Record<string, string> = { w: ":workspace", s: ":station", chats: ":thread", connects: ":connect", bots: ":connect", accounts: ":profile", account: ":profile", stations: ":station" };
 
-/** A path with its ids replaced by what they are: /w/:workspace/s/:station/chats/:thread. */
+/** The words the app's routes are made of: any other segment is an id, a name or a key (a profile's holds an email,
+ *  a skill's a customer's name), sent as `:id`. */
+const WORDS = new Set([
+  "about", "account", "accounts", "adb", "add", "admin", "agents", "appearance", "archive", "auth", "automatic-decisions",
+  "bar", "bots", "callback", "changelog", "chats", "codes", "completion", "connects", "decisions", "feedback", "files",
+  "fonts", "footprint", "general", "global", "history", "installed", "invite", "language", "leave", "local-station",
+  "login", "members", "memory", "messages", "models", "new", "notifications", "o", "open", "overview", "permissions",
+  "play", "prices", "profiles", "read", "relays", "run", "s", "screen", "security", "services", "sessions", "settings",
+  "share", "shortcuts", "skill", "slack", "stations", "usage", "users", "vault", "version", "w", "workspace", "workspaces",
+]);
+
+/** A path with its ids replaced by what they are: /w/:workspace/s/:station/chats/:thread; any other segment that is no
+ *  word of the routes as `:id`. */
 export function pathTemplate(path: string): string {
   const parts = path.split("/");
-  return parts.map((part, i) => (part && i > 0 && IDS[parts[i - 1]!] ? IDS[parts[i - 1]!]! : part)).join("/");
+  return parts.map((part, i) => {
+    if (!part || i === 0) return part;
+    return IDS[parts[i - 1]!] ?? (WORDS.has(part) ? part : ":id");
+  }).join("/");
 }
 
 /** This origin's URLs as templates, without query or hash; other origins' as the origin alone. */
@@ -202,6 +217,19 @@ export function PageViews(): null {
   const path = useLocation().pathname;
   useEffect(() => use((ph) => ph.capture("$pageview")), [path]);
   return null;
+}
+
+let workspaceOpened = false;
+
+/**
+ * The first workspace this page load shows (its pages instead of the splash), how long after the page began: `kept`
+ * when what it was opened from is what the device kept (some account's `/v1/me` not answered yet), else it waited for
+ * still.fail cloud; `accounts` signed in.
+ */
+export function workspaceShown(kept: boolean, accounts: number): void {
+  if (workspaceOpened) return;
+  workspaceOpened = true;
+  track("workspace_opened", { ms: Math.round(performance.now()), kept, accounts });
 }
 
 /** Performance.now() of the last click on a chat in the list, for how long it took to open. */
