@@ -61,6 +61,34 @@ export function target(hub: Hub, key: string, to: Json): SessionThread {
 /// The most a file an agent attaches is (attach, peer-files.ts MAX_SENT).
 const MOST_ATTACHED = 50 * 1024 * 1024;
 
+/// While the station runs things in sandboxes (agents/sandbox.ts): a message's files (`files`, and with `links` the
+/// local links in `text`) named as the station names them (not by where the data directory's link leads in the
+/// sandbox), and brought here from the session's sandbox when only it has them, before anything here looks for them.
+export async function fromSandbox(hub: Hub, key: string, args: Args, links: boolean): Promise<Args> {
+  const data = hub.config().dataDir;
+  const row = hub.store.getSession(key);
+  if (!row || !sandboxed(data)) return args;
+  const full = (given: string) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given));
+  let next = args;
+  const wanted: string[] = [];
+  if (Array.isArray(args.files)) {
+    const files = args.files.map((f) => full(jsString(f)));
+    wanted.push(...files);
+    next = { ...next, files };
+  }
+  if (links && typeof args.text === "string") {
+    let text = args.text;
+    for (const { destination, path } of namedLocalPaths(text)) {
+      const station = stationPath(data, path);
+      wanted.push(station);
+      if (station !== path) text = text.split(`](<${destination}>`).join(`](<${station}>`).split(`](${destination}`).join(`](${station.includes(" ") ? `<${station}>` : station}`);
+    }
+    next = { ...next, text };
+  }
+  await fetchFiles(data, keyPart(key), wanted);
+  return next;
+}
+
 /// Whether `staged` may have something to copy: files named, or (with `links`) a local link into a folder macOS
 /// protects, on a Mac.
 export function mayStage(hub: Hub, args: Args, links: boolean): boolean {
