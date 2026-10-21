@@ -46,6 +46,14 @@ export const tile = style({
   display: "flex", flexDirection: "column", gap: "1px", minWidth: "0", padding: "7px 9px",
   borderRadius: `calc(8px * ${vars.cornerScale})`, cornerShape: vars.cornerShape, background: vars.hover,
 });
+/** Its context's tile when something can be done to it: pressed as a button is, its name ending in ›. */
+export const tileButton = style({
+  border: "0", textAlign: "left", font: "inherit", cursor: "pointer",
+  selectors: { "&:hover": { background: vars.selected }, "&[data-state=open]": { background: vars.selected } },
+});
+export const tileName = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
+globalStyle(`${tileName} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+globalStyle(`${tileName} > svg`, { flex: "none" });
 globalStyle(`${tile}[data-level=amber] b`, { color: vars.amber });
 globalStyle(`${tile}[data-level=red] b`, { color: vars.red });
 globalStyle(`${tile} b`, { color: vars.text, fontSize: vars.textTitle, lineHeight: vars.leadingTitle, fontWeight: "600", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" });

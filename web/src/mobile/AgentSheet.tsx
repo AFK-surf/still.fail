@@ -14,7 +14,7 @@ import { useDoing, useDoingFailed } from "../doing.ts";
 import { confirm } from "./sheets.tsx";
 import { t } from "../i18n.ts";
 import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
-import { InfoList, InfoRow, ModelMark, PickRow, QuotaRings, stateOf } from "./parts.tsx";
+import { FailedMark, InfoList, InfoRow, ModelMark, PickRow, QuotaRings, stateOf } from "./parts.tsx";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -29,7 +29,7 @@ const working = (agent: ChatAgent) => agent.status === "running" || agent.status
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
 function tall(agent: ChatAgent, go: AgentGo): number {
-  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0) + (agent.session.canCompact || agent.session.canClear ? 1 : 0);
+  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -74,7 +74,7 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
           )}
         </div>
         <AgentLines card={card} />
-        <AgentTiles card={card} />
+        <AgentTiles card={card} context={s.canCompact || s.canClear ? { open: () => openContext(app, at), busy: handling, failed: handlingFailed, compacts: s.canCompact === true } : undefined} />
         <AgentNotes card={card} />
         <div className={css.mAgentRows}>
           <InfoList>
@@ -103,13 +103,6 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
                 <span className={css.mAgentRowLabel}>{t("web-mobile.agent.jobs")}</span>
                 <span className={css.mAgentRowValue}>{card?.jobs ?? t("web-mobile.agent.jobsIdle")}</span>
                 <ChevronRight size={14} className={partsCss.mSubtle} />
-              </InfoRow>
-            )}
-            {(s.canCompact || s.canClear) && (
-              <InfoRow busy={handling} failed={handlingFailed} onClick={() => openContext(app, at)}>
-                <span className={css.mAgentRowLabel}>{t("web-pages.chat.context")}</span>
-                <span className={css.mAgentRowValue}>{card?.context?.text ?? ""}</span>
-                {!handling && handlingFailed === undefined && <ChevronRight size={14} className={partsCss.mSubtle} />}
               </InfoRow>
             )}
           </InfoList>
@@ -178,18 +171,38 @@ function AgentLines({ card }: { card: AgentCardView | undefined }) {
 const LONG = 6;
 
 /** The figures that say most: what it cost, the cache's hit rate, how full its context is. */
-export function AgentTiles({ card }: { card: AgentCardView | undefined }) {
+/**
+ * What can be done to its context from its tile (the card's): opens it; under way or failed, said where the tile's ›
+ * is; `compacts`: it can be compacted, which the tile says once the context is filling up (amber or red), not before.
+ */
+export interface ContextEntry { open(): void; busy: boolean; failed: string | undefined; compacts: boolean }
+
+export function AgentTiles({ card, context: entry }: { card: AgentCardView | undefined; context?: ContextEntry | undefined }) {
   const context = card?.context;
-  if (!card?.cost && !card?.cache && !context) return null;
+  if (!card?.cost && !card?.cache && !context && !entry) return null;
   const tile = (figure: string, name: string, level?: string) => (
     <span className={css.mAgentTile} data-level={level} data-long={figure.length > LONG ? "" : undefined}><b>{figure}</b><small>{name}</small></span>
   );
+  /** Its context's tile: one to press when something can be done to it, its name then ending in ›. */
+  const contextTile = (figure: string, level?: string) => {
+    if (!entry) return tile(figure, t("web-main.chat.agentCard.context"), level);
+    const filling = entry.compacts && (level === "amber" || level === "red");
+    return (
+      <button type="button" className={`${css.mAgentTile} ${css.mAgentTileButton}`} data-level={level} data-long={figure.length > LONG ? "" : undefined} disabled={entry.busy} onClick={entry.open}>
+        <b>{figure}</b>
+        <small className={css.mAgentTileName}>
+          <span>{filling ? t("web-mobile.agent.contextCompactable") : t("web-main.chat.agentCard.context")}</span>
+          {entry.busy ? <Spinner inline /> : entry.failed !== undefined ? <FailedMark error={entry.failed} size={11} /> : <ChevronRight size={11} />}
+        </small>
+      </button>
+    );
+  };
   return (
     <div className={css.mAgentTiles}>
-      {card.cost && tile(card.cost, t("web-main.chat.agentCard.cost"))}
-      {card.cache && tile(card.cache.text, t("web-main.chat.agentCard.cache"))}
-      {/* How full, of a window that is known; else how much it holds. */}
-      {context && (context.unknown ? tile(context.text, t("web-main.chat.agentCard.context")) : tile(`${Math.round(context.percent)}%`, t("web-main.chat.agentCard.context"), context.level))}
+      {card?.cost && tile(card.cost, t("web-main.chat.agentCard.cost"))}
+      {card?.cache && tile(card.cache.text, t("web-main.chat.agentCard.cache"))}
+      {/* How full, of a window that is known; else how much it holds; not said yet, a dash (its entry all the same). */}
+      {context ? (context.unknown ? contextTile(context.text) : contextTile(`${Math.round(context.percent)}%`, context.level)) : entry && contextTile("—")}
     </div>
   );
 }

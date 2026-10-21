@@ -48,6 +48,14 @@ globalStyle(`${mAgentTile} b`, { fontSize: vars.textHeading, lineHeight: vars.le
 // A long one (a cost in the hundreds, a context whose window is not known) a size down, so it is not cut short.
 globalStyle(`${mAgentTile}[data-long] b`, { fontSize: vars.textTitle });
 globalStyle(`${mAgentTile} small`, { fontSize: vars.textCaption, color: "var(--m-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+/** Its context's tile when something can be done to it: pressed as the rows are, its name ending in ›. */
+export const mAgentTileButton = style({
+  border: "0", textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer",
+  selectors: { "&:active:not(:disabled)": { background: "color-mix(in srgb, var(--m-ink) 10%, transparent)" } },
+});
+export const mAgentTileName = style({ display: "flex", alignItems: "center", gap: "2px", minWidth: "0" });
+globalStyle(`${mAgentTileName} > span`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+globalStyle(`${mAgentTileName} > svg`, { flex: "none" });
 globalStyle(`${mAgentTile}[data-level=amber] b`, { color: "var(--m-warn)" });
 globalStyle(`${mAgentTile}[data-level=red] b`, { color: "var(--m-red)" });
 /** What is wrong, a line each in its level's colour. */

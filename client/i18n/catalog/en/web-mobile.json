@@ -727,5 +727,6 @@
   "web-mobile.agent.compactFailed": "Couldn't compact the context: {error}",
   "web-mobile.agent.clearFailed": "Couldn't clear the context: {error}",
   "web-mobile.agent.compactSub": "Keeps a summary and frees up context",
-  "web-mobile.agent.clearSub": "Ends the process; the next message starts a new session"
+  "web-mobile.agent.clearSub": "Ends the process; the next message starts a new session",
+  "web-mobile.agent.contextCompactable": "Compact"
 }

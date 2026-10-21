@@ -7,8 +7,9 @@ import { useAgentCard, useApi, type ChatAgent } from "./api.ts";
 import type { AgentCardView } from "./core/shapes.ts";
 import { useStation } from "./station.tsx";
 import { Hover } from "./Peeks.tsx";
-import { AgentMark, Tip } from "./ui.tsx";
-import { Stop } from "@stillfail/ui/icons.tsx";
+import { AgentMark, Menu, Tip, type MenuItem } from "./ui.tsx";
+import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
+import { Spinner } from "@stillfail/ui/waiting.tsx";
 import { useAct } from "@stillfail/ui/toast.tsx";
 import { play } from "@stillfail/ui/motion.ts";
 import { QuotaChip } from "./components.tsx";
@@ -169,13 +170,37 @@ export function AgentCard({ agent }: { agent: ChatAgent }) {
   );
 }
 
+/** What can be done to its context from its tile (its execution history's details): the menu's items, under way. */
+export interface ContextEntry { items: MenuItem[]; busy: boolean; compacts: boolean }
+
 /**
  * The figures that say most of what an agent used (cost, the cache's hit rate, how full its context is), large, side
  * by side: in its card, and in its execution history's details (ChatPage.tsx). None before it has made a call.
  */
-export function UsageTiles({ card }: { card: AgentCardView }) {
+export function UsageTiles({ card, context: entry }: { card: AgentCardView; context?: ContextEntry | undefined }) {
   const context = card.context;
   if (!card.cost && !card.cache && !context) return null;
+  if (context && entry && entry.items.length > 0) {
+    // What can be done to its context from its tile, its name ending in ›; that it can be compacted said once it is
+    // filling up (amber or red), not before.
+    const filling = entry.compacts && (context.level === "amber" || context.level === "red");
+    const tile = (
+      <button type="button" className={`${css.tile} ${css.tileButton}`} data-level={context.unknown ? undefined : context.level} aria-label={t("web-pages.chat.contextActions")}>
+        <b>{context.unknown ? context.text : `${Math.round(context.percent)}%`}</b>
+        <small className={css.tileName}>
+          <span>{filling ? t("web-mobile.agent.contextCompactable") : t("web-main.chat.agentCard.context")}</span>
+          {entry.busy ? <Spinner inline /> : <ChevronRight size={11} />}
+        </small>
+      </button>
+    );
+    return (
+      <div className={css.tiles}>
+        {card.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}
+        {card.cache && <span className={css.tile}><b>{card.cache.text}</b><small>{t("web-main.chat.agentCard.cache")}</small></span>}
+        <Menu label={t("web-pages.chat.contextActions")} items={entry.items} trigger={tile} />
+      </div>
+    );
+  }
   return (
     <div className={css.tiles}>
       {card.cost && <span className={css.tile}><b>{card.cost}</b><small>{t("web-main.chat.agentCard.cost")}</small></span>}

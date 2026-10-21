@@ -1,6 +1,6 @@
-// An agent's context by hand, between turns (ember apps/android chat/screens/AgentSheet.kt ContextRow, openContext): one
-// row in the agent's card, how full it is, opening a sheet that compacts it (its chat is told when it is done) or clears
-// it (asked first in a sheet of its own, PageParts.kt confirm): its next message starts a new session.
+// An agent's context by hand, between turns (ember apps/android chat/screens/AgentSheet.kt ContextEntry, openContext):
+// its context's tile in the agent's card opens a sheet that compacts it (its chat is told when it is done) or clears it
+// (asked first in a sheet of its own, PageParts.kt confirm): its next message starts a new session.
 
 ///|
 /// What is under way or failed of `call` on `key`'s session (the core's doing, as AppState.isDoing has it).
@@ -9,26 +9,56 @@ fn context_key(call : String, station : String, key : String) -> String {
 }
 
 ///|
-/// The card's row for its context (canCompact, canClear; AgentSheet.kt ContextRow): how full it is (`used`), and a tap
-/// opens what can be done to it; under way a spinner, failed its mark.
-fn context_row(c : @ui.Ctx, r : ChatRef, key : String, s : Json?, used : String) -> Unit {
+/// What can be done to its context from its tile (AgentSheet.kt ContextEntry): opens it; under way or failed, said
+/// where the tile's › is; `compacts`: it can be compacted.
+priv struct ContextTile {
+  open : () -> Unit
+  busy : Bool
+  failed : Bool
+  compacts : Bool
+}
+
+///|
+/// The card's entry for its context (canCompact, canClear), none when nothing can be done to it.
+fn context_entry(c : @ui.Ctx, r : ChatRef, key : String, s : Json?) -> ContextTile? {
   if !flag(s, "canCompact") && !flag(s, "canClear") {
-    return
+    return None
   }
   let compacting = context_key("session.compact", r.station, key)
   let clearing = context_key("session.clear", r.station, key)
-  let busy = doing(compacting) || doing(clearing)
-  let failed = failed_lately(c, compacting) || failed_lately(c, clearing)
-  if info_row(c, if busy { "" } else { "agent/context" }, fn() {
-      c.text(tr("web-pages.chat.context"), style=context_label) |> ignore
-      c.box(style=context_used_box, fn() { c.text(used, style=context_used) |> ignore }) |> ignore
-      if busy || failed {
-        @settings.doing_mark(c, busy, if failed { Some("") } else { None })
-      } else {
-        chevron(c)
-      }
-    }) {
-    open_sheet(c, ContextOf(r, key))
+  Some({
+    open: fn() { open_sheet(c, ContextOf(r, key)) },
+    busy: doing(compacting) || doing(clearing),
+    failed: failed_lately(c, compacting) || failed_lately(c, clearing),
+    compacts: flag(s, "canCompact"),
+  })
+}
+
+///|
+/// Its tile's name: that it can be compacted said once the context is filling up (amber or red), not before.
+fn context_tile_label(entry : ContextTile?, level : String) -> String {
+  match entry {
+    Some(e) if e.compacts && (level == "amber" || level == "red") => tr("web-mobile.agent.contextCompactable")
+    _ => tr("android-chat.agent.context")
+  }
+}
+
+///|
+/// A tile's name under its figure (12/16, muted); its context's ending in › when something can be done to it, or a
+/// spinner, or the failure's mark.
+fn context_tile_name(c : @ui.Ctx, name : String, open : ContextTile?) -> Unit {
+  match open {
+    None => c.text(name, style=tile_name) |> ignore
+    Some(o) =>
+      c.box(style=tile_name_row, fn() {
+        c.text(name, style=tile_name) |> ignore
+        if o.busy || o.failed {
+          @settings.doing_mark(c, o.busy, if o.failed { Some("") } else { None })
+        } else {
+          @sf.icon(c, "chevron-right", size=11.0, color=@sf.theme().p.muted) |> ignore
+        }
+      })
+      |> ignore
   }
 }
 
@@ -87,17 +117,13 @@ fn clear_context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> 
 }
 
 ///|
-/// The row's name (muted) and how full it is (the ink), the rest of the row the latter's (AgentSheet.kt ContextRow: 14).
+/// A tile's name (AgentSheet.kt AgentTiles: 12/16, muted), and its name with its › side by side.
 // kept across runs: a value (no field of it changes)
-let context_label : @ui.TextStyle = @ui.text_style(size=Base, color=Muted, wrap=false)
+let tile_name : @ui.TextStyle = @ui.text_style(size=Xs, leading=L4, color=Muted, wrap=false)
 
 ///|
 // kept across runs: a value (no field of it changes)
-let context_used : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, wrap=false)
-
-///|
-// kept across runs: a value (no field of it changes)
-let context_used_box : @ui.Style = @ui.style(w=Full)
+let tile_name_row : @ui.Style = @ui.style(row=true, gap=S0_5, align=ACenter)
 
 ///|
 /// The sheet that asks (PageParts.kt confirm): 20 in from its sides, its words muted (14/20), its buttons at the end.

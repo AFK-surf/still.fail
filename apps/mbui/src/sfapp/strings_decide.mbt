@@ -10,6 +10,7 @@ let zh_decide : Map[String, String] = {
   "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的会话。agent 会重新读取对话消息，执行历史只在需要时读取。",
   "web-pages.chat.context": "上下文",
   "web-mobile.agent.compactSub": "保留摘要，释放上下文空间",
+  "web-mobile.agent.contextCompactable": "压缩上下文",
   "web-mobile.agent.clearSub": "结束当前进程，下一条消息开始新的会话",
   "web-mobile.agent.compacting": "正在压缩上下文，完成后会在对话中提示",
   "android-chat.agent.account.auto": "{name} · 自动",
