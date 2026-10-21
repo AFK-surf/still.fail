@@ -27,14 +27,16 @@ concurrency:
 permissions:
   contents: read
 jobs:
-  # 10 minutes at most. What is slow cold is cached, read by every run and written by main's (also a run that timed
-  # out: what it got through is kept, so the next one starts from there): Hermes for Apple, the Rust shell's target,
-  # MoonBit with the app's build (moon's _build, mbc's objects, the core's engine: scripts/core.sh engine makes it again
-  # when its sources are newer).
+  # What is slow cold is cached, read by every run and written by main's (also a run that timed out: what it got
+  # through is kept, so the next one starts from there): Hermes for Apple, the Rust shell's target, MoonBit with the
+  # app's build (moon's _build, mbc's objects, the core's engine: scripts/core.sh engine makes it again when its sources
+  # are newer), the simulator's data after its first boot. A warm run is well under 10 minutes; 20 at most, for a run
+  # with no simulator kept (its first boot alone 7 to 8 minutes on macos-26): kept by none, every run timed out before
+  # it got to keeping one (no mbui-ios-sim cache from 2026-10-21, every branch's smoke cancelled at 10 minutes).
   smoke:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: macos-26
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       # (the scripts' own places: actions/cache takes no path with ..)
       MBUI_CACHE: /Users/runner/stillfail-ci/mbui
@@ -167,7 +169,9 @@ jobs:
       - name: The simulator shut down, its lock given back
         if: always()
         env:
-          SIM_SAVE: ${{ env.SAVE == 'true' && job.status == 'success' && steps.sim.outputs.cache-hit != 'true' && '1' || '' }}
+          # (once its first boot is over (ios-smoke.sh's booted-ok), whether or not the flows passed: the boot is what is
+          # kept)
+          SIM_SAVE: ${{ env.SAVE == 'true' && steps.sim.outputs.cache-hit != 'true' && '1' || '' }}
         run: bash apps/mbui/scripts/ios-smoke.sh done
       - if: env.SIM_KEPT == '1'
         uses: actions/cache/save@v4

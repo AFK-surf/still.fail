@@ -168,7 +168,9 @@ case "${1:-}" in
         rm -rf "$dir/data" && mv "$SIM_DATA/data" "$dir/data" && echo "ios-smoke: $MBUI_IOS_DEVICE with an earlier run's data ($(du -sh "$dir/data" | cut -f1))"
       fi
     fi
-    (bash "$D/ios.sh" device && read -r id _ <<< "$(device)" && quiet "$id") > "$STATE/boot.log" 2>&1 &
+    # (booted-ok: its first boot over, what `done` may keep (SIM_SAVE) even when the run went no further)
+    rm -f "$STATE/booted-ok"
+    (bash "$D/ios.sh" device && touch "$STATE/booted-ok" && read -r id _ <<< "$(device)" && quiet "$id") > "$STATE/boot.log" 2>&1 &
     echo $! > "$STATE/boot.pid"
     echo "ios-smoke: $MBUI_IOS_DEVICE booting ($STATE/boot.log)" ;;
   prepare)
@@ -206,7 +208,7 @@ case "${1:-}" in
       xcrun simctl shutdown "$id" 2>/dev/null || true
       echo "ios-smoke: $MBUI_IOS_DEVICE ($id) shut down"
       # (SIM_SAVE: its data kept for the next run's `boot`, the app gone from it; a copy by APFS's clone)
-      if [ -n "${SIM_SAVE:-}" ] && [ -n "${SIM_DATA:-}" ] && [ -f "$STATE/sim-kind" ]; then
+      if [ -n "${SIM_SAVE:-}" ] && [ -n "${SIM_DATA:-}" ] && [ -f "$STATE/sim-kind" ] && [ -f "$STATE/booted-ok" ]; then
         rm -rf "$SIM_DATA" && mkdir -p "$SIM_DATA" && cp -cR "$HOME/Library/Developer/CoreSimulator/Devices/$id/data" "$SIM_DATA/data" \
           && cp "$STATE/sim-kind" "$SIM_DATA/kind" && echo "ios-smoke: its data kept ($(du -sh "$SIM_DATA" | cut -f1))" \
           && { [ -z "${GITHUB_ENV:-}" ] || echo SIM_KEPT=1 >> "$GITHUB_ENV"; }
