@@ -3,7 +3,7 @@
 // of one station or two, to drag from one to the other. The side in front (its bar underlined) is what the page's
 // address says and what the keys work on; a press in the other one puts it in front. Each side is a folder's page as
 // before (Drive.tsx `FolderView`), under its own station.
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { StationContext, useStationList, type Station } from "../station.tsx";
@@ -99,12 +99,14 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
                   {x.panes.map((p, i) => {
                     const parts = paneParts(p, views);
                     return (
-                      <span key={i} className={css.tabPart}>
+                      <Fragment key={i}>
                         {i > 0 && <span className={css.tabSplit} aria-hidden="true" />}
-                        <StationDot station={p.station} stations={stations} />
-                        <span className={css.tabFolder}>{parts.folder}</span>
-                        <span className={css.tabStation}>{parts.station}</span>
-                      </span>
+                        <span className={css.tabPart}>
+                          <StationDot station={p.station} stations={stations} />
+                          <span className={css.tabFolder}>{parts.folder}</span>
+                          <span className={css.tabStation}>{parts.station}</span>
+                        </span>
+                      </Fragment>
                     );
                   })}
                 </button>

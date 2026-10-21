@@ -21,27 +21,28 @@ export const tabsNone = style({ flex: "1" });
 export const tab = style({
   position: "relative", flex: "1 1 0", minWidth: "0", maxWidth: "280px", height: "28px", display: "flex", alignItems: "center",
   borderRadius: `calc(${vars.rField} - 2px)`, color: vars.muted, transition: `background ${vars.dur} ${vars.easeOut}`,
+  // Its × sits 6 in from its corner: concentric with it (align.ts `inner`).
+  vars: { [IN]: `calc(${vars.rField} - 8px)` },
   selectors: {
     "&[data-on]": { background: vars.canvas, color: vars.text, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}` },
     "&:not([data-on]):hover": { background: vars.hover },
-    // A line between two tabs not shown, as Safari draws it.
-    "&:not([data-on]) + &:not([data-on])::before": { content: "''", position: "absolute", left: "-1px", top: "7px", bottom: "7px", width: "1px", background: vars.line },
   },
 });
 export const tabName = style({
   flex: "1", minWidth: "0", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", padding: "0 26px",
   border: "0", background: "none", color: "inherit", font: "inherit", fontSize: vars.textMeta, cursor: "default",
 });
-export const tabPart = style({ minWidth: "0", display: "inline-flex", alignItems: "center", gap: "6px" });
+/** A side's folder and its station on one baseline, its dot centred on them. */
+export const tabPart = style({ minWidth: "0", display: "inline-flex", alignItems: "baseline", gap: "6px" });
 export const tabFolder = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "500" });
 globalStyle(`${tab}:not([data-on]) ${tabFolder}`, { fontWeight: "400" });
 export const tabStation = style({ flex: "none", color: vars.subtle, fontSize: vars.textCaption });
-/** Between the two sides of a split tab. */
-export const tabSplit = style({ flex: "none", width: "1px", height: "12px", marginRight: "4px", background: vars.lineStrong });
+/** Between the two sides of a split tab: as far from each as the tab's parts are from each other (its gap). */
+export const tabSplit = style({ flex: "none", alignSelf: "center", width: "1px", height: "10px", background: vars.line });
 /** Closes a tab: at its left, shown as it is pointed at. */
 export const tabClose = style({
   position: "absolute", left: "6px", top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: "16px", height: "16px",
-  padding: "0", border: "0", borderRadius: "4px", background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
+  padding: "0", border: "0", borderRadius: inner, background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
   selectors: { [`${tab}:hover &`]: { opacity: "1" }, "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "4px" });
@@ -53,7 +54,7 @@ globalStyle(`${toggle}[data-on] button`, { color: vars.accent });
 
 /** A station's colour: one of six, by its place among the workspace's. */
 export const dot = style({
-  flex: "none", width: "7px", height: "7px", borderRadius: "50%", background: vars.muted,
+  flex: "none", alignSelf: "center", width: "7px", height: "7px", borderRadius: "50%", background: vars.muted,
   selectors: {
     "&[data-tone='0']": { background: vars.accent },
     "&[data-tone='1']": { background: vars.blue },
