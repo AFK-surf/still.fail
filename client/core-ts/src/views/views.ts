@@ -222,7 +222,7 @@ export function shownMessage(message: J, agents: J[], viewer: J, slackUsers: str
     const picture = get(member, "picture");
     m.by = { name, picture: typeof picture === "string" && picture !== "" ? picture : null };
   }
-  if (kind === "person") m.text = present.mentions(str(m.text) ?? "", bots, members_);
+  if (kind === "person" || kind === "agent") m.text = present.mentions(str(m.text) ?? "", bots, members_);
   return m;
 }
 
@@ -1306,7 +1306,7 @@ export class Views implements Owner {
     const bots = agents.flatMap((a) => {
       const b = a.connect !== undefined ? present.botOf(a.connect) : null;
       return b === null ? [] : [b];
-    });
+    }).concat(this.#core.data.slackNames(station));
     const waiting = agents.reduce((max, a) => Math.max(max, u64(get(a.session, "pending")) ?? 0), 0);
     const peopleSeqs = messages.filter((m) => m.authorKind === "person").flatMap((m) => (u64(m.seq) !== null ? [m.seq as number] : []));
     const waits = peopleSeqs.slice(Math.max(peopleSeqs.length - waiting, 0));
@@ -1478,7 +1478,7 @@ export class Views implements Owner {
             : { name: s.to.startsWith("D") ? t("core-views.direct_message") : `#${named?.channelName ?? s.to}`, surface: "slack" };
         }
         const by = s.out ? structuredClone(agent) : { name: s.who || s.user || "Slack" };
-        const text = s.out ? s.text : present.mentions(s.text, people.bots, people.members);
+        const text = present.mentions(s.text, people.bots, people.members);
         const item: J = { key: `${key}/${s.i}/${s.k}`, after, createdAt: s.at, text, place, failed: s.failed, by };
         if (!s.out) item.received = true;
         out.push(item);
@@ -1600,7 +1600,7 @@ export class Views implements Owner {
     // An agent that has only been in Slack: what was said there is all it has to show.
     const members_ = arr(get(this.ok({ topic: "workspace", workspace: ofAddress(station) }), "members"));
     const bot = agent.connect !== undefined ? present.botOf(agent.connect) : null;
-    const elsewhere = this.#sentElsewhere(station, null, [agent], [], false, false, { members: members_, bots: bot === null ? [] : [bot] });
+    const elsewhere = this.#sentElsewhere(station, null, [agent], [], false, false, { members: members_, bots: (bot === null ? [] : [bot]).concat(this.#core.data.slackNames(station)) });
     // No chat at all, as its detail says: none here, none in Slack (a Slack thread has no chat here either), not archived.
     const detail = this.value({ topic: "session", station, key });
     const noChat = !archived && detail !== undefined && "ok" in detail && arr(get(detail.ok, "threads")).length === 0;
@@ -1650,6 +1650,7 @@ export class Views implements Owner {
         slackUsers,
         botUserId,
         botName,
+        slackNames: this.#core.data.slackNames(station),
         runtime: str(get(session, "runtime")) ?? "claude",
         started: typeof get(session, "runtimeSessionId") === "string",
         offsetMin: this.#core.host.utcOffsetMin(now),

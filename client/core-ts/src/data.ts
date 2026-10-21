@@ -896,6 +896,11 @@ export class Data {
     return this.of(station)?.slackSaid(station, session) ?? [];
   }
 
+  /// The Slack people a station's agents heard from, by Slack id: their names, for mentions (`<@U…>`).
+  slackNames(station: string): [string, string][] {
+    return this.of(station)?.slackNames(station) ?? [];
+  }
+
   logSpan(table: "entry" | "transcript", station: string, id: string): { min: number; max: number; count: number } | null {
     return this.of(station)?.logSpan(table, station, id) ?? null;
   }

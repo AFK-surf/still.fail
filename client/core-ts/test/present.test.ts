@@ -422,6 +422,7 @@ test("what_the_clients_show_is_put_in_here", () => {
   assert.deepEqual([w[0].mark, w[1].mark, w[1].level, w[1].refills], ["5H", "W", "red", "1 小时 5 分钟后刷新"]);
   const members = [{ email: "a@x.com", name: "阿一", picture: "https://p/a" }];
   assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"]], members), "@ds-ember 和 @U9 看下");
+  assert.equal(p.mentions("<@UBOT> 和 <@U9> 看下", [["UBOT", "ds-ember"], ["U9", "Mia"]], members), "@ds-ember 和 @Mia 看下");
   let me: J = { id: "a@x.com", email: "a@x.com", name: "A" };
   me = p.person(me, { id: "a@x.com", email: "a@x.com" }, members);
   assert.deepEqual(me.shown, { name: "阿一", display: "你", picture: "https://p/a", mine: true });

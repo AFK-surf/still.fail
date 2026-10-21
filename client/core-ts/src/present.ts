@@ -423,8 +423,8 @@ export function memberName(members: J[], email: string): string | null {
   return name ? name : null;
 }
 
-/// Slack's `<@U…>` mentions by name.
-export function mentions(text: string, bots: [string, string][], members: J[]): string {
+/// Slack's `<@U…>` mentions by name: the names known by Slack id (connects' bots, Slack people), else a member's.
+export function mentions(text: string, named: [string, string][], members: J[]): string {
   let out = "";
   let rest = text;
   for (;;) {
@@ -436,7 +436,7 @@ export function mentions(text: string, bots: [string, string][], members: J[]): 
     while (len < tail.length && /[A-Z0-9]/.test(tail[len])) len++;
     if (len > 0 && tail[len] === ">") {
       const id = tail.slice(0, len);
-      const name = bots.find(([b]) => b === id)?.[1] ?? memberName(members, id) ?? id;
+      const name = named.find(([b]) => b === id)?.[1] ?? memberName(members, id) ?? id;
       out += `@${name}`;
       rest = tail.slice(len + 1);
     } else {

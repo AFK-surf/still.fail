@@ -5,6 +5,7 @@ import * as format from "../src/format.ts";
 import { args, doing } from "../src/activity.ts";
 import { hint, parsePrompt, parseTasks, presentHistory, type Context } from "../src/history.ts";
 import { holdLanguage } from "../src/i18n.ts";
+import { markdown } from "../src/markdown.ts";
 
 holdLanguage();
 // deno-lint-ignore no-explicit-any
@@ -23,6 +24,7 @@ const cx = (threads: J[], members: J[], slack: string[]): Context => ({
   slackUsers: slack,
   botUserId: "UBOT",
   botName: "ds-ember",
+  slackNames: [["U1", "Ada"]],
   runtime: "codex",
   started: true,
   offsetMin: 480,
@@ -152,7 +154,7 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
       { kind: "tool_call", tool: "Read", text: '{"file_path":"/a.ts"}', callId: "b" },
       { kind: "tool_call", tool: "Bash", text: '{"command":"ls","description":"看看目录"}', callId: "c" },
       { kind: "tool_result", callId: "c", ok: false, text: "no" },
-      { kind: "tool_call", tool: "mcp__ember__chat_post", text: '{"to":"C1/1.0","text":"done","kind":"block"}', callId: "d" },
+      { kind: "tool_call", tool: "mcp__ember__chat_post", text: '{"to":"C1/1.0","text":"<@U1> done","kind":"block"}', callId: "d" },
       { kind: "tool_call", tool: "mcp__ember__chat_state", text: '{"kind":"final"}' },
       { kind: "assistant", text: "ok" },
     ],
@@ -177,6 +179,8 @@ test("boundaries_stand_alone_and_the_work_between_folds_into_a_group", () => {
   assert.equal(g.rows[2].content.meta, "进行中");
   assert.deepEqual(items[1].entries, [1, 6]);
   assert.deepEqual([items[2].body.content.block, items[2].body.content.place.name, items[2].body.content.ends], [true, "#ops", "human"]);
+  // A Slack person it mentions, by the name the station's agents heard them by.
+  assert.deepEqual([items[2].body.content.text, items[2].body.content.md], ["@Ada done", markdown("@Ada done")]);
   assert.deepEqual([items[3].body.content.text, items[3].body.content.ends], ["标记为已完成", "done"]);
   assert.deepEqual(items[0].turn, { text: "3 步 · 发出 1 条" });
   const waits = (a: string, next: string | null) => {

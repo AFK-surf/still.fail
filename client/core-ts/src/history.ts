@@ -19,6 +19,8 @@ export type Context = {
   slackUsers: string[];
   botUserId: string | null;
   botName: string;
+  /// The Slack people the station's agents heard from, by Slack id: what their mentions are shown as.
+  slackNames?: [string, string][];
   runtime: string;
   started: boolean;
   offsetMin: number;
@@ -256,7 +258,7 @@ function taskText(task: Task): string {
 
 function mentions(text: string, cx: Context): string {
   const bots: [string, string][] = cx.botUserId !== null ? [[cx.botUserId, cx.botName]] : [];
-  return present.mentions(text, bots, cx.members);
+  return present.mentions(text, bots.concat(cx.slackNames ?? []), cx.members);
 }
 
 type Step = { call: number; result: number | null };
@@ -382,7 +384,8 @@ export function presentHistory(live: J, cx: Context): J {
         const a = args(s(timeline[steps[item.step].call], "text")) ?? {};
         const text = (k: string): string | null => (typeof a[k] === "string" ? a[k] : null);
         const kind = text("kind");
-        v = { kind: "post", text: text("text") ?? "", md: markdown(text("text") ?? ""), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
+        const said = mentions(text("text") ?? "", cx);
+        v = { kind: "post", text: said, md: markdown(said), place: place(text("to")), block: kind === "block" || kind === "need_help" || kind === "need_decision", failed: failedOf(steps[item.step]) };
         const ends = endsOf(kind);
         if (ends !== null && ends !== "waiting") v.ends = ends;
         break;

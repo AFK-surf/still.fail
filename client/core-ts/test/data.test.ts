@@ -788,3 +788,20 @@ test("what_agents_said_in_slack_is_read_as_their_transcripts_are_written_kept_pa
   assert.deepEqual(d.slackSaid("w/a", "k1"), []);
   runner.shutdown();
 });
+
+test("the_slack_people_a_stations_agents_heard_from_are_named_by_their_slack_id_as_last_heard", async () => {
+  const { data, open, runner } = fresh();
+  await open();
+  assert.deepEqual(data.slackNames("w/a"), []);
+  const heard = (i: number, from: string, at: string) => [i, { at, kind: "user", text: `<message via="slack" thread="C0OPS/1.2" from="${from}" ts="${i}">hi</message>` }] as [number, J];
+  data.putItems("transcript", "w/a", "k1", [heard(3, "Mia (U9)", "1970-01-01T00:00:03Z")]);
+  await flush();
+  assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
+  data.putItems("transcript", "w/a", "k2", [heard(4, "Mia Wu (U9)", "1970-01-01T00:00:04Z"), heard(5, "Bo (U8)", "1970-01-01T00:00:05Z")]);
+  await flush();
+  assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia Wu"], ["U8", "Bo"]]);
+  data.putItems("transcript", "w/a", "k2", [], 3);
+  await flush();
+  assert.deepEqual(data.slackNames("w/a"), [["U9", "Mia"]]);
+  runner.shutdown();
+});
