@@ -840,6 +840,7 @@ fn Ctx::paint_rich(self : Ctx, i : Int, n : Node, alpha : Double) -> Unit {
   let cy0 = clip_stack[k + 1]
   let cx1 = clip_stack[k + 2]
   let cy1 = clip_stack[k + 3]
+  keep_rich_runs(lay, ox, oy, cy0, cy1)
   // its words picked with the pointer: where it is for the next press, what of it is picked under its words
   if r.select {
     selectable_painted(r.base, lay, n.text, ox, oy, dmax(n.x, cx0), dmax(n.y, cy0), dmin(n.x + n.fw, cx1), dmin(n.y + n.fh, cy1))

@@ -2,7 +2,10 @@
 # The emulator booted (action.yml): KVM for the runner's user, an AVD over the cached system image, the cached
 # emulator started in the background (its log in $RUNNER_TEMP/emulator.log), and until it says the boot completed or
 # it ends first (said, with its log): as they come; BOOT_MOST the most a boot that hangs is given, said where it stood.
+# PHASE: all (default); start (started, its pid in $RUNNER_TEMP/emulator.pid: the job builds meanwhile), wait (a
+# started one's boot followed to its end, as all does).
 set -euo pipefail
+PHASE=${PHASE:-all}
 SDK=${ANDROID_HOME:-/usr/local/lib/android/sdk}
 EMU=$HOME/android-emu/emulator/emulator
 API=${API:-34}
@@ -26,6 +29,7 @@ export ANDROID_AVD_HOME=$HOME/.android/avd
 AVD=ci-$TARGET-$PROFILE; [ "$API" = 34 ] || AVD=ci-$API-$TARGET-$PROFILE
 [ -f "$ANDROID_AVD_HOME/$AVD.ini" ] || { echo "::error::no AVD $AVD in the Actions cache: run the android-sdk workflow"; exit 1; }
 ADB=$SDK/platform-tools/adb
+if [ "$PHASE" != wait ]; then
 # adb's server up before the emulator: the emulator starts one itself as its boot completes, and an adb command of ours
 # at that moment started a second, the two racing for port 5037 ("could not install *smartsocket* listener: Address
 # already in use", 39530737354): one server, ours, which the emulator then finds
@@ -34,6 +38,16 @@ ANDROID_SDK_ROOT=$SDK "$EMU" -avd "$AVD" -port 5554 -no-window -gpu swiftshader_
   -no-boot-anim > "$RUNNER_TEMP/emulator.log" 2>&1 &
 E=$!
 echo "emulator pid $E"
+echo $E > "$RUNNER_TEMP/emulator.pid"
+[ "$PHASE" = start ] && exit 0
+fi
+if [ "$PHASE" = wait ]; then
+  # (started by an earlier step: not this shell's child, its end followed as tail follows a pid's)
+  P=$(cat "$RUNNER_TEMP/emulator.pid")
+  tail --pid="$P" -f /dev/null &
+  E=$!
+  echo "emulator pid $P"
+fi
 # up: the emulator's own word, "Boot completed in N ms" on its log (it says so as the system sets sys.boot_completed;
 # the system's events buffer is no witness: the emulator resizes it then, which empties it), followed as the log is
 # written (tail -f: inotify); or the emulator's end first, which fails saying its log, never left waiting

@@ -112,10 +112,22 @@ runs:
       uses: gradle/actions/setup-gradle@v4
       with:
         cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+    # The NDK is a gigabyte from Google's servers: fetched once, then from the Actions cache (a download cut short failed
+    # a lint job on main, 2026-10-19, and check-android, 2026-10-21: "Error on ZipFile unknown archive")
+    - if: inputs.android == 'true' && inputs.ndk == 'true' && runner.os == 'Linux'
+      id: ndk
+      uses: actions/cache/restore@v4
+      with:
+        path: /usr/local/lib/android/sdk/ndk/28.2.13676358
+        key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
     - if: inputs.android == 'true'
       shell: bash
-      # The NDK is a gigabyte from Google's servers each run; a download cut short failed a lint job on main (2026-10-19).
-      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' ${{ inputs.ndk == 'true' && '''ndk;28.2.13676358''' || '' }}
+      run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0' ${{ inputs.ndk == 'true' && steps.ndk.outputs.cache-hit != 'true' && '''ndk;28.2.13676358''' || '' }}
+    - if: inputs.android == 'true' && inputs.ndk == 'true' && runner.os == 'Linux' && steps.ndk.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: /usr/local/lib/android/sdk/ndk/28.2.13676358
+        key: android-ndk-28.2.13676358-${{ runner.os }}-${{ runner.arch }}
     - if: inputs.cross == 'true'
       shell: bash
       run: |

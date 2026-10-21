@@ -34,6 +34,8 @@ pub let frame_period_default : Double = 1000.0 / 60.0
 /// forgotten here fails the next Tester at once rather than a test somewhere else.
 fn reset_globals() -> Unit {
   the_ctx.val = Ctx::new()
+  text_runs.on = false
+  text_runs.runs.clear()
   desk_reset()
   tester_size.val = None
   env_kept.val = ""
@@ -266,6 +268,8 @@ pub fn Tester::new(
   }
   fake.val = Some(f)
   reset_globals()
+  // (the words drawn kept a line at a time, for Tester::text_runs)
+  text_runs.on = true
   match text {
     Some(lines) => text_table.val = Some(text_table_of(lines))
     None => ()
