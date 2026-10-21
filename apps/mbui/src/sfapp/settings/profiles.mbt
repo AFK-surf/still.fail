@@ -657,17 +657,35 @@ fn quota_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arra
         None => ()
       }
       if has(q, "resetCount") {
-        list_row(c, fn() {
-          row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"))
-          c.text(
-            tr("android-settings.quota.reset"),
-            size=14.0,
-            color=if count(q, "resetCount") > 0 { t.p.accent } else { t.p.muted },
-            wrap=false,
+        // a reset used, asked first (the subscription's own: so many left, `resetText` what it does)
+        let resetting = is_doing(core, ["profile.resetQuota"], on)
+        let left = count(q, "resetCount")
+        let reset = list_row(
+          c,
+          fn() {
+            row_lines(c, tr("android-settings.quota.resets"), text(q, "resetText"))
+            doing_mark(c, resetting, failed_of(core, ["profile.resetQuota"], on))
+            c.text(tr("android-settings.quota.reset"), style=if left > 0 { @sf.value.then(@sf.link) } else { @sf.value })
+            |> ignore
+          },
+          key=if left <= 0 || resetting { "" } else { "quota-reset" },
+        )
+        if reset {
+          confirm(
+            tr("android-settings.quota.resetTitle"),
+            fill("android-settings.quota.resetText", [("name", text(pv, "name")), ("text", text(q, "resetText"))]),
+            tr("android-settings.quota.resetUse"),
+            fn() {
+              act(
+                core,
+                tr("android-settings.quota.resetWhat"),
+                "profile.resetQuota",
+                obj([("station", str(station)), ("id", str(id))]),
+                done=tr("android-settings.quota.resetDone"),
+              )
+            },
           )
-          |> ignore
-        })
-        |> ignore
+        }
       }
     })
   })
@@ -767,6 +785,16 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
     }
   }
   let checking = is_doing(core, ["profile.check"], on)
+  let add_key = "models-add/" + station + "/" + id
+  let filter_key = "models-filter/" + station + "/" + id
+  // what the filter leaves: a model whose id or name has the words its field holds
+  let typed_filter = field_of(filter_key).text().trim(chars=" \t\n").to_string().to_lower()
+  let filtered = typed_filter != ""
+  let shown = all.filter(fn(m) {
+    !filtered ||
+    m.to_lower().contains(typed_filter) ||
+    text(field(pv, "names"), m).to_lower().contains(typed_filter)
+  })
   let save = fn(next : Array[String]) {
     let uniq : Array[String] = []
     for x in next {
@@ -831,19 +859,70 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
         |> ignore
         c.spacer()
         if all.length() > 0 {
-          if tap_text(c, "models-all", tr("android-settings.all"), size=14.0) && !saving {
-            save(models.copy()..append(all))
+          // all / none of what is shown (of what the filter leaves, while one is typed)
+          if tap_text(
+              c,
+              "models-all",
+              tr(if filtered { "android-settings.models.allFiltered" } else { "android-settings.all" }),
+              size=14.0,
+            ) &&
+            !saving {
+            save(models.copy()..append(shown))
           }
-          if tap_text(c, "models-none", tr("android-settings.none"), size=14.0) && !saving {
-            save([])
+          if tap_text(
+              c,
+              "models-none",
+              tr(if filtered { "android-settings.models.noneFiltered" } else { "android-settings.none" }),
+              size=14.0,
+            ) &&
+            !saving {
+            save(models.filter(fn(m) { !shown.contains(m) }))
           }
         }
       })
       |> ignore
     },
   ]
+  // a provider that does not list its models: one named by hand (`profile.addModel`)
+  if flag(pv, "canAddModel") {
+    blocks.push(fn() {
+      let adding = is_doing(core, ["profile.addModel"], on)
+      c.box(style=models_add_row, fn() {
+        let typed = field_box(c, add_key, tr("web-mobile.profiles.addModelPlaceholder"), mono=true)
+          .trim(chars=" \t\n")
+          .to_string()
+        if adding {
+          spinner(c)
+        } else if tap_text(
+            c,
+            "models-add",
+            tr("web-mobile.profiles.addModel"),
+            size=14.0,
+            color?=if typed == "" { Some(t.p.muted) } else { None },
+          ) &&
+          typed != "" {
+          let model = typed
+          field_of(add_key).set("")
+          act(
+            core,
+            tr("android-settings.models.refreshWhat"),
+            "profile.addModel",
+            obj([("station", str(station)), ("id", str(id)), ("model", str(model))]),
+          )
+        }
+      })
+      |> ignore
+    })
+  }
+  // a filter, where there are many
+  if all.length() > models_filter_from {
+    blocks.push(fn() {
+      c.box(style=models_filter_room, fn() { field_box(c, filter_key, tr("android-settings.models.filter")) |> ignore })
+      |> ignore
+    })
+  }
   for series in items(pv, "series") {
-    let list = strings(Some(series), "models").filter(fn(m) { all.contains(m) })
+    let list = strings(Some(series), "models").filter(fn(m) { shown.contains(m) })
     if list.length() == 0 {
       continue
     }
@@ -888,3 +967,17 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
   }
   blocks
 }
+
+///|
+/// A filter over the models once there are more than ten of them (Profiles.kt ModelsSection).
+let models_filter_from : Int = 10
+
+///|
+/// The filter's room: at the rows' words (24 in), 8 under it.
+// kept across runs: a value (no field of it changes)
+let models_filter_room : @ui.Style = @ui.style(w=Full, px=S6, pb=S2)
+
+///|
+/// A model named by hand: its field and 添加 beside it, 12 apart, at the rows' words, 8 under them.
+// kept across runs: a value (no field of it changes)
+let models_add_row : @ui.Style = @ui.style(row=true, w=Full, px=S6, pb=S2, gap=S3, align=ACenter)
