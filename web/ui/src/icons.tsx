@@ -445,6 +445,10 @@ export function Square(props: IconProps) {
   return <Svg {...props}><path d="M8 4.5H16Q19.5 4.5 19.5 8V16Q19.5 19.5 16 19.5H8Q4.5 19.5 4.5 16V8Q4.5 4.5 8 4.5Z" /></Svg>;
 }
 
+export function Star(props: IconProps) {
+  return <Svg {...props}><path d="M12 3.5L14.6 8.8L20.4 9.6L16.2 13.7L17.2 19.5L12 16.8L6.8 19.5L7.8 13.7L3.6 9.6L9.4 8.8Z" /></Svg>;
+}
+
 export function Stop(props: IconProps) {
   return <Svg {...props}><path d="M8.5 4.5H15.5Q19.5 4.5 19.5 8.5V15.5Q19.5 19.5 15.5 19.5H8.5Q4.5 19.5 4.5 15.5V8.5Q4.5 4.5 8.5 4.5Z" /></Svg>;
 }
@@ -639,6 +643,7 @@ export const ICONS: Record<string, (props: IconProps) => React.JSX.Element> = {
   "sliders": Sliders,
   "sparks": Sparks,
   "square": Square,
+  "star": Star,
   "stop": Stop,
   "sun": Sun,
   "text": Text,

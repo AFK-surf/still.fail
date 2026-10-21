@@ -17,11 +17,11 @@ export const crumbs = style({
   display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap", minWidth: "0", color: vars.muted, fontSize: vars.textMeta,
 });
 export const crumb = style({ display: "inline-flex", alignItems: "center", gap: "4px" });
-globalStyle(`${crumbs} button`, {
+globalStyle(`${crumbs} ${crumb} button`, {
   padding: "0", border: "0", background: "none", color: vars.muted, font: "inherit", cursor: "pointer",
   textDecoration: "underline", textDecorationColor: "transparent", textUnderlineOffset: "3px",
 });
-globalStyle(`${crumbs} button:hover`, { color: vars.text, textDecorationColor: "currentColor" });
+globalStyle(`${crumbs} ${crumb} button:hover`, { color: vars.text, textDecorationColor: "currentColor" });
 /** Under the folder's name: whose it is, what is in it. */
 export const headMeta = style({ margin: "0", color: vars.muted, fontSize: vars.textMeta });
 export const actions = style({ flex: "none", display: "flex", alignItems: "center", gap: "6px" });
@@ -214,3 +214,7 @@ globalStyle(`${listHead} button:hover, ${listHead} button[data-on]`, { color: va
 // On the files' page, columns as tall as the window leaves them: each scrolls on its own.
 globalStyle(`${list}[data-view="columns"]`, { display: "block", height: "calc(100dvh - 150px)", minHeight: "240px" });
 globalStyle(`${list}[data-view="columns"] > ${columns}`, { height: "100%" });
+
+/** The list, and the preview beside it when it shows (DrivePane.tsx). */
+export const withPane = style({ display: "flex", alignItems: "flex-start", gap: "0", minWidth: "0" });
+globalStyle(`${withPane} > :first-child`, { flex: "1", minWidth: "0" });

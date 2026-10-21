@@ -35,7 +35,8 @@ export const endDrag = () => { dragging = null; };
 /** Puts what is dragged on the drag. */
 export function startDrag(e: { dataTransfer: DataTransfer }, items: Dragged[]): void {
   dragging = items;
-  e.dataTransfer.effectAllowed = "copy";
+  // Copied or moved where it is dropped (a folder: drive/browse.ts effectOf), copied into a message.
+  e.dataTransfer.effectAllowed = "copyMove";
   e.dataTransfer.setData(DRIVE_DRAG, JSON.stringify(items));
   e.dataTransfer.setData("text/plain", items.map((i) => i.abs).join("\n"));
 }

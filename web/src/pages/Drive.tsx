@@ -10,7 +10,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Navigate, useLocation, useSearchParams } from "react-router";
 import { ContextMenu } from "radix-ui";
-import { stationBase, useStation } from "../station.tsx";
+import { scopeOf, stationBase, useStation } from "../station.tsx";
+import { FilesShell } from "./Files.tsx";
 import { useStations } from "../api.ts";
 import { useWorkspace } from "../cloud/api.ts";
 import { useGo } from "../go.ts";
@@ -20,18 +21,28 @@ import type { DriveEntry, DriveRoot, StationView } from "../core/shapes.ts";
 import { useTopicSelect } from "../core/react.ts";
 import { CoreError } from "../core/client.ts";
 import { Button, Confirm, Dialog, ICON, IconButton, Menu, Tip, type MenuItem, Spinner, Waiting, WaitLine } from "../ui.tsx";
-import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Pin, Plus, Refresh, Retry, Trash, Upload } from "@stillfail/ui/icons.tsx";
+import { Check, ChevronLeft, ChevronRight, Close, Copy, Disk, Server, Download, Edit, Folder, FolderPlus, Move, PanelClose, PanelOpen, Pin, Plus, Refresh, Retry, Search, Star, Trash, Upload } from "@stillfail/ui/icons.tsx";
 import { KindIcon } from "../drive/KindIcon.tsx";
 import { Reader } from "@stillfail/ui/viewer/Reader.tsx";
 import { Player } from "@stillfail/ui/viewer/Player.tsx";
 import { cancel, download, joinPath, nameOf, openerOf, parentOf, refresh, retry, rootLabel, settle, sizeOf, upload, useFolder, useUploads, type At, type Upload as Up } from "../drive/model.ts";
 import { useDriveFile } from "../drive/viewerFile.ts";
 import { absoluteOf, childOf, drive, drivePath, filtered, folderName, rootTrouble, trailOf, useDrive, type DriveState, type PickFolder } from "../drive/useDrive.ts";
-import { carriesDrive, draggedNow, draggedOf, endDrag, startDrag } from "../drive/drag.ts";
+import { carriesDrive, draggedNow, draggedOf, droppedOf, endDrag, startDrag } from "../drive/drag.ts";
 import { keepFilesPage, keepOpened, lastFilesPage, useKeptScroll } from "../drive/kept.ts";
-import { dropInto, rowKey, takes, useBrowse } from "../drive/browse.ts";
+import { dropInto, effectOf, rowKey, takes, useBrowse } from "../drive/browse.ts";
+import { transfer } from "../drive/transfer.ts";
+import { useFavorites } from "../drive/favorites.ts";
+import { useFilesActions } from "./Files.tsx";
+import { StationSwitch } from "./FilesGo.tsx";
+import { CopyTo } from "./Transfers.tsx";
+import { DrivePane, type Previewed } from "./DrivePane.tsx";
+import { setPrefs, usePrefs } from "../prefs.ts";
+import { keptFront, paneUrl } from "../drive/tabs.ts";
+import { useThisMachineAddress } from "../thisMachine.ts";
+import type { Dragged } from "../drive/drag.ts";
 import type { Arrangement, SortBy } from "../drive/order.ts";
-import { ColumnsView, TreeView, useDriveView, useDropZone, ViewSwitch, type DropTarget, type RowOf, type RowProps, type Shown } from "./DriveViews.tsx";
+import { ColumnsView, modsOf, TreeView, useDriveView, useDropZone, ViewSwitch, type DropTarget, type RowOf, type RowProps, type Shown } from "./DriveViews.tsx";
 import { useToast } from "@stillfail/ui/toast.tsx";
 import { DrivePreview, FilterField, useFolders } from "../mobile/Drive.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
@@ -49,19 +60,28 @@ export function DrivePage() {
   const only = d.roots.length === 1 && d.roots[0]!.state === "ok" ? d.roots[0]!.path : null;
   // Where nothing is asked: the one folder pinned, else the home for a member who browses every folder.
   const root = asked ?? only ?? (d.anywhere ? d.home : null);
+  // A folder: among the files' page's tabs (Files.tsx), in front.
+  if (!d.loading && d.offered && root !== null) return <FilesShell scope={scopeOf(station.address)} here={{ station: station.address, root, path }} />;
   return (
     <div className={`${pagesCss.page} ${css.page}`}>
-      {d.loading || !d.offered || root === null ? <Roots d={d} /> : <FolderView d={d} root={root} path={path} />}
+      <Roots d={d} />
     </div>
   );
 }
 
-/** 文件 in the rail (`/w/<ws>/files`): the folder last open there, else the first folder pinned on any station (the
- * sidebar lists them all), else the first station's home; none, says so. */
+/** 文件 in the rail (`/w/<ws>/files`): the folder in front of the tabs as they were left (else the folder last open on
+ * this page), else this machine's home (the desktop app on a station of the workspace), else the first folder pinned on
+ * any station (the sidebar lists them all), else the first station's home; none, says so. */
 export function DriveHome({ scope }: { scope: string }) {
   const stations = useStations(scope).value;
   const add = useAddFolder(scope);
-  const first = lastFilesPage(scope) ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
+  const kept = usePrefs((p) => p.filesTabs[scope]);
+  const here = useThisMachineAddress();
+  const front = keptFront(kept);
+  const mine = (stations ?? []).find((s) => s.station === here)?.overview?.drive;
+  const first = (front ? paneUrl(front) : null) ?? lastFilesPage(scope)
+    ?? (here && mine?.anywhere && mine.home ? drivePath(stationBase(here), mine.home) : null)
+    ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.roots ?? []).map((r) => drivePath(stationBase(s.station), r.path)))[0]
     ?? (stations ?? []).flatMap((s) => (s.overview?.drive?.anywhere && s.overview.drive.home ? [drivePath(stationBase(s.station), s.overview.drive.home)] : []))[0];
   if (first) return <Navigate to={first} replace />;
   return (
@@ -164,7 +184,11 @@ function RootRow({ root, onOpen }: { root: DriveRoot; onOpen: () => void }) {
   );
 }
 
-function FolderView({ d, root, path }: { d: DriveState; root: string; path: string }) {
+/**
+ * A folder's page: its trail, its name, what can be done to it, its entries. `front`: the side of the files' page in
+ * front (Files.tsx), where the keys go and what the rail's 文件 comes back to.
+ */
+export function FolderView({ d, root, path, front = true }: { d: DriveState; root: string; path: string; front?: boolean }) {
   const station = useStation();
   const { pathname, search } = useLocation();
   const go = useGo();
@@ -194,12 +218,18 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   // Back where it was, as each folder was left (the page scrolls, the list in it); the folder kept for the rail's 文件
   // to come back to.
   const list = useKeptScroll<HTMLDivElement>("page", at, view, folder.value !== undefined || folder.error !== null, (el) => el.parentElement);
-  useEffect(() => keepFilesPage(station.address.split("/")[0] ?? "", pathname + search), [station.address, pathname, search]);
-  const [dragging, setDragging] = useState(false);
+  useEffect(() => { if (front) keepFilesPage(station.address.split("/")[0] ?? "", pathname + search); }, [front, station.address, pathname, search]);
+  // Something dragged over the list (not over one of its folders): what a drop does there.
+  const [dragging, setDragging] = useState<false | "copy" | "move" | "upload">(false);
   const stationName = useStationName(station.address);
   const here = absoluteOf(root, path);
   const name = path ? nameOf(path) : d.anywhere && !d.roots.some((r) => r.path === root) ? (here === d.home ? t("web-pages.drive.home") : folderName(here)) : rootLabel(d.roots, root);
   const pinned = d.roots.some((r) => r.path === here);
+  const fav = useFavorites(scopeOf(station.address));
+  const kept = fav.has({ station: station.address, root, path });
+  const keepHere = (on: boolean) => (on ? fav.add({ station: station.address, root, path, name }) : fav.remove({ station: station.address, root, path }));
+  const filesPage = useFilesActions();
+  const [copying, setCopying] = useState<{ items: Dragged[]; move: boolean } | null>(null);
   const toast = useToast();
   const copyPath = (abs: string) => void navigator.clipboard.writeText(abs).then(() => toast(t("web-pages.drive.pathCopied")), (e: unknown) => toast(t("web-main.copyFailed", { error: e instanceof Error ? e.message : String(e) })));
   const pin = (abs: string, on: boolean) => act(drive.pin(station.address, d.roots, abs, on), t("web-pages.drive.rootsWhat"), t(on ? "web-pages.drive.shared" : "web-pages.drive.unpinned", { name: folderName(abs) }));
@@ -230,10 +260,34 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     remove,
   });
   const shownEntries = browse.arranged(entries);
-  // What goes into a folder dropped on it: this station's files moved, the computer's put up.
+  // The preview beside the list (⌘⇧P): the one file chosen, as the folder it is in has it.
+  const [previewing, setPreviewing] = usePreviewShown();
+  const chosenIn = useFolder(station.address, previewing && browse.chosen.names.length === 1 ? root : null, browse.chosen.folder).value;
+  const chosenEntry = chosenIn?.entries.find((e) => e.name === browse.chosen.names[0]);
+  const previewed: Previewed = browse.chosen.names.length > 1 ? { many: browse.chosen.names.length }
+    : chosenEntry ? { at: { station: station.address, root, path: browse.chosen.folder }, entry: chosenEntry } : null;
+  // What goes into a folder dropped on it: a station's files moved or copied (this one's or another's), the computer's
+  // put up.
   const into = (folder: At): DropTarget | undefined => d.write
-    ? { takes: (dt) => takes(dt, station.address, draggedNow()), drop: (dt) => act(dropInto(dt, folder, d.anywhere), t(carriesDrive(dt) ? "web-pages.drive.moveWhat" : "web-pages.drive.uploadWhat")) }
+    ? {
+        takes: (dt) => takes(dt, station.address, draggedNow(), d.transfers),
+        effect: (dt, mods) => effectOf(dt, station.address, draggedNow(), mods),
+        drop: (dt, mods) => {
+          if (!carriesDrive(dt)) return act(dropInto(dt, folder, d.anywhere), t("web-pages.drive.uploadWhat"));
+          const move = effectOf(dt, station.address, draggedNow(), mods) === "move";
+          const named = folder.path ? nameOf(folder.path) : name;
+          act(transfer(droppedOf(dt), folder, move, named, d.anywhere), t(move ? "web-pages.drive.moveWhat" : "web-pages.files.copyWhat"));
+        },
+      }
     : undefined;
+  // 复制到… and 移动到… (a member who may write moves): where to, picked in a dialog of every station's folders.
+  const copyItems = (all: { at: At; entry: DriveEntry }[]): MenuItem[] => {
+    const items = () => all.map((x) => draggedOf(x.at, x.entry, stationName));
+    return [
+      { label: t("web-pages.files.copyTo"), icon: Copy, onSelect: () => setCopying({ items: items(), move: false }) },
+      ...(d.write ? [{ label: t("web-pages.files.moveTo"), icon: Move, onSelect: () => setCopying({ items: items(), move: true }) }] : []),
+    ];
+  };
   const itemsIn = (in_: At, e: DriveEntry): MenuItem[] => {
     const all = browse.chosenWith(in_, e);
     return all.length > 1 ? manyItems(all) : oneItems(in_, e);
@@ -244,6 +298,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     return [
       ...(files.length ? [{ label: t("web-pages.drive.downloadMany", { n: files.length }), icon: Download, onSelect: () => { for (const x of files) save(x.at, x.entry); } }] : []),
       { label: t("web-pages.drive.copyPaths"), icon: Copy, onSelect: () => copyPath(all.map((x) => absoluteOf(root, joinPath(x.at.path, x.entry.name))).join("\n")) },
+      ...copyItems(all),
       ...(d.write ? [{ label: t(d.trash ? "web-pages.drive.toTrashMany" : "web-pages.drive.deleteMany", { n: all.length }), icon: Trash, danger: true, onSelect: () => remove(all) }] : []),
     ];
   };
@@ -253,6 +308,12 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
       : d.zip ? [{ label: t("web-pages.drive.downloadZip"), icon: Download, onSelect: () => act(drive.zip(in_, e).then((z) => download({ station: in_.station, root: z.root, path: z.path }, { name: z.name, size: z.size, type: "application/zip" })), t("web-pages.drive.downloadWhat")) }]
       : []),
     { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(absoluteOf(root, joinPath(in_.path, e.name))) },
+    ...(e.dir && filesPage ? [
+      { label: t("web-pages.files.openInTab"), onSelect: () => filesPage.open({ station: station.address, root, path: joinPath(in_.path, e.name) }, "tab") },
+      { label: t("web-pages.files.openBeside"), onSelect: () => filesPage.open({ station: station.address, root, path: joinPath(in_.path, e.name) }, "side") },
+    ] : []),
+    ...(e.dir ? [{ label: t("web-pages.files.favoriteIt"), icon: Star, onSelect: () => fav.add({ station: station.address, root, path: joinPath(in_.path, e.name), name: e.name }) }] : []),
+    ...copyItems([{ at: in_, entry: e }]),
     ...(e.dir && d.anywhere ? [(() => {
       const abs = absoluteOf(root, joinPath(in_.path, e.name));
       const on = d.roots.some((r) => r.path === abs);
@@ -277,6 +338,8 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const shown: Shown = { rowOf, arranged: browse.arranged, dropOn: into, clear: browse.clear };
   const newFolder = () => act(browse.newFolder(at, entries), t("web-pages.drive.mkdirWhat"));
   const empty = <Empty text={t("web-pages.drive.emptyFolder")} action={d.write ? <Button icon={Upload} onClick={() => files.current?.click()}>{t("web-pages.drive.upload")}</Button> : undefined} />;
+  const togglePreview = useRef(() => {});
+  togglePreview.current = () => setPreviewing(!previewing);
   const newFolderRef = useRef(newFolder);
   newFolderRef.current = newFolder;
   // The keys are the rows' wherever on the page they are pressed (a folder gone into leaves nothing focused), but in a
@@ -284,6 +347,7 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
   const keysRef = useRef(browse.onKeyDown);
   keysRef.current = browse.onKeyDown;
   useEffect(() => {
+    if (!front) return;
     const onKey = (e: KeyboardEvent) => {
       const at = document.activeElement;
       if (e.defaultPrevented || !(at === document.body || at === null || list.current?.contains(at))) return;
@@ -291,23 +355,25 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [list]);
+  }, [list, front]);
   // A folder gone into (the row pressed gone with the one left): the list keeps the focus, as Finder's window does.
   useEffect(() => {
-    if (document.activeElement === document.body || document.activeElement === null) list.current?.focus({ preventScroll: true });
-  }, [path, view, list]);
+    if (front && (document.activeElement === document.body || document.activeElement === null)) list.current?.focus({ preventScroll: true });
+  }, [path, view, list, front]);
   // ⌘/Ctrl+U puts files up into the folder shown.
   useEffect(() => {
-    if (!d.write) return;
+    if (!d.write || !front) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key.toLowerCase() === "u") { e.preventDefault(); files.current?.click(); }
       // ⌘⇧N: a new folder, as Finder makes one.
       if (e.shiftKey && e.key.toLowerCase() === "n") { e.preventDefault(); newFolderRef.current(); }
+      // ⌘⇧P: the preview beside the list, shown or not.
+      if (e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); togglePreview.current(); }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [d.write]);
+  }, [d.write, front]);
   const trail = path.split("/").filter(Boolean);
   // For a member who browses every folder: the whole way from the home (or the disk's top), each step a folder to go to
   // (those within the root by their path under it, so a pinned folder stays the one marked in the sidebar).
@@ -320,22 +386,22 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
     <>
       <header className={pagesCss.pageHead}>
         <div className={css.headText}>
-          {way && way.length > 1 && (
-            <span className={css.crumbs}>
-              {way.slice(0, -1).map((c, i) => (
-                <span key={c.path} className={css.crumb}>{i > 0 && <ChevronRight size={12} />}<button type="button" onClick={() => goTo(c.path)}>{c.name}</button></span>
-              ))}
-            </span>
-          )}
-          {/* Inside a folder lent: the way back up to it (the folder lent itself, and whose it is, are the sidebar's). */}
-          {!way && trail.length > 0 && (
-            <span className={css.crumbs}>
-              <button type="button" onClick={() => go(drivePath(station.base, root))}>{rootLabel(d.roots, root)}</button>
-              {trail.slice(0, -1).map((p, i) => (
-                <span key={i} className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root, trail.slice(0, i + 1).join("/")))}>{p}</button></span>
-              ))}
-            </span>
-          )}
+          {/* Its station (another one picked from there), then the way back up: from the home or the disk's top for a
+              member who browses every folder, else from the folder lent. */}
+          <span className={css.crumbs}>
+            <StationSwitch station={station.address} abs={here} />
+            {way && way.slice(0, -1).map((c) => (
+              <span key={c.path} className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => goTo(c.path)}>{c.name}</button></span>
+            ))}
+            {!way && trail.length > 0 && (
+              <>
+                <span className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root))}>{rootLabel(d.roots, root)}</button></span>
+                {trail.slice(0, -1).map((p, i) => (
+                  <span key={i} className={css.crumb}><ChevronRight size={12} /><button type="button" onClick={() => go(drivePath(station.base, root, trail.slice(0, i + 1).join("/")))}>{p}</button></span>
+                ))}
+              </>
+            )}
+          </span>
           <h1>{name}</h1>
           <p className={css.headMeta}>
             {station.name}
@@ -344,25 +410,36 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         </div>
         <div className={css.actions}>
           <ViewSwitch value={view} onChange={setView} />
+          <span className={css.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
           {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
           {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={newFolder} />}
           <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
+          <span className={css.pin} data-on={kept || undefined}><IconButton label={t(kept ? "web-pages.files.unfavorite" : "web-pages.files.favorite", { name })} icon={Star} onClick={() => keepHere(!kept)} /></span>
           {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
           <Menu items={[
             { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(here) },
+            ...(filesPage ? [{ label: t("web-pages.files.goTo"), icon: Search, onSelect: filesPage.goTo }] : []),
             ...(d.manage || d.anywhere ? [{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }] : []),
           ]} />
         </div>
       </header>
+      <div className={css.withPane} data-pane={previewing || undefined}>
       <ContextMenu.Root modal={false}>
       <ContextMenu.Trigger asChild>
       <div ref={list} className={css.list} data-dragging={dragging || undefined} data-view={view} tabIndex={-1}
         onKeyUp={(e) => { if (e.key === " ") e.preventDefault(); }}
         onClick={(e) => { if (e.target === e.currentTarget) browse.clear(); }}
         // Dropped where no folder takes it (not on a folder's row or a column): into the folder shown.
-        onDragOver={(e) => { const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); setDragging(!(e.target as Element).closest("[data-drop-into]")); }}
+        onDragOver={(e) => {
+          const here = into(at);
+          if (!here?.takes(e.dataTransfer)) return;
+          e.preventDefault();
+          const effect = here.effect?.(e.dataTransfer, modsOf(e)) ?? "copy";
+          e.dataTransfer.dropEffect = effect;
+          setDragging((e.target as Element).closest("[data-drop-into]") ? false : carriesDrive(e.dataTransfer) ? effect : "upload");
+        }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
-        onDrop={(e) => { setDragging(false); const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); here.drop(e.dataTransfer); }}>
+        onDrop={(e) => { setDragging(false); const here = into(at); if (!here?.takes(e.dataTransfer)) return; e.preventDefault(); here.drop(e.dataTransfer, modsOf(e)); }}>
         {/* Columns stay while the folder opened is read (each column says its own reading or trouble), not redrawn whole. */}
         {view === "columns" ? (
           <>
@@ -382,7 +459,12 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
               </>}
           </>
         )}
-        {dragging && <div className={css.drop}><Upload size={22} /><span>{t("web-pages.drive.dropHere", { name })}</span></div>}
+        {dragging && (
+          <div className={css.drop}>
+            {dragging === "upload" ? <Upload size={22} /> : <Move size={22} />}
+            <span>{dragging === "copy" ? t("web-pages.files.copyHere", { name }) : dragging === "move" ? t("web-pages.files.moveHere", { name }) : t("web-pages.drive.dropHere", { name })}</span>
+          </div>
+        )}
       </div>
       </ContextMenu.Trigger>
       <MenuContent items={[
@@ -392,15 +474,31 @@ function FolderView({ d, root, path }: { d: DriveState; root: string; path: stri
         { label: t("web-pages.drive.refresh"), icon: Refresh, onSelect: reload },
       ]} />
       </ContextMenu.Root>
+      {previewing && (
+        <DrivePane shown={previewed} stationName={station.name}
+          onOpen={() => { if (previewed && "entry" in previewed) openIn(previewed.at, previewed.entry); }}
+          onSave={() => { if (previewed && "entry" in previewed) save(previewed.at, previewed.entry); }}
+          onCopyPath={copyPath} />
+      )}
+      </div>
       <input ref={files} type="file" multiple hidden onChange={(e) => { const list = [...(e.target.files ?? [])]; e.target.value = ""; if (list.length) upload(station.address, root, path, list); }} />
       <Confirm open={removing !== null} onClose={() => setRemoving(null)}
         title={!removing ? "" : removing.length > 1 ? t("web-pages.drive.deleteManyAsk", { n: removing.length }) : t(removing[0]!.entry.dir ? "web-pages.drive.deleteFolderAsk" : "web-pages.drive.deleteAsk", { name: removing[0]!.entry.name })}
         description={removing?.some((r) => r.entry.dir) ? t("web-pages.drive.deleteFolderText") : t("web-pages.drive.deleteText")} action={t("web-pages.drive.delete")}
         onConfirm={() => { const r = removing; setRemoving(null); if (r) act(Promise.all(r.map((x) => drive.remove(x.at, x.entry, true))), t("web-pages.drive.deleteWhat")); }} />
       {preview && <DrivePreview at={preview.at} entries={preview.entries} entry={preview.entry} onClose={() => setPreview(null)} />}
+      {copying && <CopyTo items={copying.items} move={copying.move} from={station.address} onClose={() => setCopying(null)} />}
       {manage.dialogs}
     </>
   );
+}
+
+/** Whether the preview shows beside a folder's list (the files' page's, a chat's 文件 tab's), on this device (prefs'
+ * `driveViews`: `preview`, `tabPreview`: shown). */
+export function usePreviewShown(place: "page" | "tab" = "page"): [boolean, (on: boolean) => void] {
+  const key = place === "page" ? "preview" : "tabPreview";
+  const on = usePrefs((p) => p.driveViews[key] === "shown");
+  return [on, (next) => setPrefs({ driveViews: { [key]: next ? "shown" : null } })];
 }
 
 /** A station's name, as the workspace's stations list has it (its address while not known). */

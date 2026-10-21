@@ -143,6 +143,7 @@ export type Topic =
   // them; a vault's items. A core from before has neither.
   | { topic: "vaults"; workspace: string }
   | { topic: "vaultItems"; workspace: string; vault: string }
+  | { topic: "driveTransfers"; workspace: string }
   | { topic: "vaultUses"; workspace: string; vault: string; item: string };
 
 /** A chat as a page shows it (`client.focus`): by its thread, or its key before it has one; `end`: its end in view. */

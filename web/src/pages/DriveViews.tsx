@@ -22,7 +22,13 @@ import { t } from "../i18n.ts";
 export type DriveView = "columns" | "tree" | "list";
 
 /** What can go into a folder dragged over it, and what dropping there does. */
-export interface DropTarget { takes: (dt: DataTransfer) => boolean; drop: (dt: DataTransfer) => void }
+/** Keys held as something is dropped: across stations ⌘ moves (else a copy), within one ⌥ copies (else a move), as
+ * Finder has them across disks and within one. */
+export interface Mods { alt: boolean; meta: boolean }
+export const modsOf = (e: { altKey: boolean; metaKey: boolean; ctrlKey: boolean }): Mods => ({ alt: e.altKey, meta: e.metaKey || e.ctrlKey });
+/** What a folder takes dropped on it, what a drop there does (`effect`: its files copied or moved, the computer's put up
+ * as a copy), and the drop. */
+export interface DropTarget { takes: (dt: DataTransfer) => boolean; effect?: (dt: DataTransfer, mods: Mods) => "copy" | "move"; drop: (dt: DataTransfer, mods: Mods) => void }
 
 /** What a row of a folder does, as its place says. */
 export interface RowProps {
@@ -63,9 +69,15 @@ export function useDropZone(target: DropTarget | undefined): { over: boolean; pr
   return {
     over,
     props: {
-      onDragOver: (e) => { if (!target.takes(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = e.dataTransfer.types.includes("Files") ? "copy" : "move"; setOver(true); },
+      onDragOver: (e) => {
+        if (!target.takes(e.dataTransfer)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = target.effect?.(e.dataTransfer, modsOf(e)) ?? (e.dataTransfer.types.includes("Files") ? "copy" : "move");
+        setOver(true);
+      },
       onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false); },
-      onDrop: (e) => { setOver(false); if (!target.takes(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); target.drop(e.dataTransfer); },
+      onDrop: (e) => { setOver(false); if (!target.takes(e.dataTransfer)) return; e.preventDefault(); e.stopPropagation(); target.drop(e.dataTransfer, modsOf(e)); },
     },
   };
 }

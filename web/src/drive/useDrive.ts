@@ -27,6 +27,9 @@ export interface DriveState {
   trash: boolean;
   /** A folder can be zipped to download. */
   zip: boolean;
+  /** Files can be copied and moved into it from its own folders and other stations' (docs/drive.md "Copying between
+   * stations"); a station from before does not. */
+  transfers: boolean;
   error: string | null;
 }
 
@@ -49,6 +52,7 @@ export function useDrive(station: string): DriveState {
     write: picked.viewer !== "viewer",
     trash: picked.drive?.trash === true,
     zip: picked.drive?.zip === true,
+    transfers: picked.drive?.transfers === true,
     error: picked.error,
   }), [picked, role]);
 }

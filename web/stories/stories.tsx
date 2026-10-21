@@ -36,6 +36,7 @@ import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
 import { LONG_COMMAND, libraryDemo, vaultDemo } from "./vault.ts";
+import { filesDemo, TRANSFERS } from "./files.ts";
 import { cursorPickDemo, installDemo, installFlowDemo } from "./install.ts";
 import { ADD, pickModelsDemo } from "./pickModels.ts";
 import { permissionsDemo } from "./permissions.ts";
@@ -681,6 +682,10 @@ export const stories: Story[] = [
   { id: "app-files-tree", group: "应用", title: "文件 · 文件树", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowDown" }, { key: "ArrowRight" }] },
   { id: "app-files-list", group: "应用", title: "文件 · 列表", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { click: '[aria-label="列表"]' }] },
   { id: "app-files-row-menu", group: "应用", title: "文件 · 文件夹右键", app: true, steps: [{ click: '[aria-label="文件"]' }, { text: "主目录" }, { rightClick: "button:has-text(\"Movies\")" }] },
+  { id: "app-files-stations", group: "应用", title: "文件 · 两台 station", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: '[aria-label="展开 MBA"]' }] },
+  { id: "app-files-tabs", group: "应用", title: "文件 · 多标签", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: '[aria-label="新标签"]' }, { text: "MBA" }] },
+  { id: "app-files-split", group: "应用", title: "文件 · 左右分栏", app: true, demo: filesDemo(), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { text: "Downloads" }, { click: '[aria-label="左右分栏"]' }, { text: "MBA" }, { text: "项目" }] },
+  { id: "app-files-transfers", group: "应用", title: "文件 · 传输", app: true, demo: filesDemo(TRANSFERS), steps: [{ click: '[aria-label="文件"]' }, { text: "Studio" }, { click: 'button:has-text("个传输")' }] },
   { id: "app-chat-files", group: "应用", title: "对话 · Station 文件", app: true, steps: [{ click: '[aria-label="Station 文件"]' }] },
   { id: "app-chat-files-folder", group: "应用", title: "对话 · Station 文件 · 文件夹", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { text: "Downloads" }] },
   { id: "app-chat-files-tree", group: "应用", title: "对话 · Station 文件 · 文件树", app: true, steps: [{ click: '[aria-label="Station 文件"]' }, { click: '[aria-label="文件树"]' }, { text: "code" }, { key: "ArrowRight" }, { key: "ArrowRight" }, { key: "ArrowRight" }] },

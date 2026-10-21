@@ -336,10 +336,22 @@ export function useBrowse(o: BrowseOptions): Browse {
 
 // ── dropped onto a folder ──
 
-/** Whether a drag can go into a folder of `station` here: the computer's files (put up), or this station's own (moved). */
-export function takes(dt: DataTransfer, station: string, dragged: readonly Dragged[] | null): boolean {
-  if (carriesDrive(dt)) return !!dragged?.length && dragged.every((d) => d.station === station);
+/**
+ * Whether a drag can go into a folder of `station` here: the computer's files (put up), this station's own (moved, or
+ * copied), or another station's (copied, or moved) where `station` takes copies (`transfers`: one from before does not).
+ * A drag from another window of the app says what it carries only once it is dropped (`dragged` null).
+ */
+export function takes(dt: DataTransfer, station: string, dragged: readonly Dragged[] | null, transfers = false): boolean {
+  if (carriesDrive(dt)) return dragged === null ? transfers : dragged.length > 0 && (transfers || dragged.every((d) => d.station === station));
   return dt.types.includes("Files");
+}
+
+/** What a drop of a station's files into a folder of `station` does: across stations a copy (⌘: a move), within one a
+ * move (⌥: a copy), as Finder does across disks and within one. The computer's files are put up (a copy). */
+export function effectOf(dt: DataTransfer, station: string, dragged: readonly Dragged[] | null, mods: { alt: boolean; meta: boolean }): "copy" | "move" {
+  if (!carriesDrive(dt)) return "copy";
+  const across = (dragged ?? droppedOf(dt)).some((d) => d.station !== station) || (dragged === null && droppedOf(dt).length === 0);
+  return across ? (mods.meta ? "move" : "copy") : mods.alt ? "copy" : "move";
 }
 
 /**
