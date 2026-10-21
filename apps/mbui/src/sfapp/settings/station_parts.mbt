@@ -689,16 +689,106 @@ fn version_row(c : @ui.Ctx, v : Json?, manager : Bool, busy : Bool, update : () 
 // 共享调试: this device's adb lent to a station's agents (app/screens/AdbShare.kt)
 
 ///|
-/// Whether this device can lend its adb (AdbShare.supported): Android 11 and on, with the host finding Wireless
-/// debugging's ports, which this app's hosts do not do yet: none can.
-fn adb_supported() -> Bool {
-  false
+/// What this device's host says it has for 共享调试 (the app's Android's AdbShare.java, as `adb.phone` answers and
+/// "native:adb.phone" says again: supported, developer, wireless, wifi, canSwitch, reads); None until it has said. The
+/// native call asking it, and those taps made (adb.switch, adb.open, adb.start), while they are under way.
+priv struct AdbHost {
+  mut phone : Json?
+  mut asking : @ui.NativeCall?
+  doing : Array[@ui.NativeCall]
+}
+
+///|
+let adb_host : AdbHost = { phone: None, asking: None, doing: [] }
+
+///|
+fn adb_reset() -> Unit {
+  adb_host.phone = None
+  adb_host.asking = None
+  adb_host.doing.clear()
+}
+
+///|
+/// The host said what the phone has now (its message on "native:adb.phone": Wireless debugging switched, the app back
+/// from Settings): src/sfapp/app.mbt hands it here.
+pub fn adb_phone_said(json : String) -> Unit {
+  adb_host.phone = Some(@json.parse(json) catch { _ => return })
+}
+
+///|
+/// The phone as its host last said it, asked once (as the page shows) and taken as it comes; what a tap asked of the
+/// host taken too (an answer that changed the phone: asked again).
+fn adb_phone(c : @ui.Ctx) -> Json? {
+  match adb_host.asking {
+    Some(k) =>
+      match k.got() {
+        Some(Ok(j)) => {
+          adb_host.phone = Some(j)
+          adb_host.asking = None
+        }
+        // a host without 共享调试: nothing it can lend
+        Some(Err(_)) => {
+          adb_host.phone = Some(obj([("supported", Json::boolean(false))]))
+          adb_host.asking = None
+        }
+        None => ()
+      }
+    None => ()
+  }
+  let left = []
+  for k in adb_host.doing {
+    match k.got() {
+      Some(r) =>
+        if r is Ok(Object(m)) && m.contains("on") {
+          adb_host.phone = None
+        }
+      None => left.push(k)
+    }
+  }
+  adb_host.doing.clear()
+  adb_host.doing.append(left)
+  if adb_host.phone is None && adb_host.asking is None {
+    c.tell("adb-phone", fn() { adb_host.asking = Some(@ui.native_call("adb.phone", obj([]))) })
+  }
+  adb_host.phone
+}
+
+///|
+/// What the phone lacks for it, at a row's end (AdbShare.kt Need: 14sp, C.red).
+// kept across runs: a value (no field of it changes)
+let adb_lacks : @ui.TextStyle = @sf.value.then(@sf.bad)
+
+///|
+/// Where a row goes to turn something on, at its end (AdbShare.kt: 14sp, C.link).
+// kept across runs: a value (no field of it changes)
+let adb_go : @ui.TextStyle = @sf.value.then(@sf.link)
+
+///|
+/// What a tap asks of the host (adb.switch, adb.open, adb.start), its answer taken as the page builds (adb_phone).
+fn adb_ask(name : String, params : Json) -> Unit {
+  adb_host.doing.push(@ui.native_call(name, params))
+}
+
+///|
+/// The notifications' words, the app's own (AdbShare.java fills `{name}`, `{n}`, `{error}`).
+fn adb_texts() -> Json {
+  let m : Map[String, Json] = {}
+  for k in [
+      "title", "notify.title", "stop", "pair.channel", "code", "pair.ask", "pair.auto", "typeCode", "enterCode", "connecting",
+      "connected", "connected.left", "notPaired", "pair.popped", "off", "attaching", "pairing", "paired", "pairFailed",
+      "shareFailed",
+    ] {
+    let key = "android-misc.adb." + k
+    m[key] = Json::string(tr(key))
+  }
+  Json::object(m)
 }
 
 ///|
 /// A station's 共享调试 page (AdbShareScreen): this device's adb lent to the station's agents, how it stands (the
-/// core's `adbShare`), what the phone needs for it, pairing the first time. The lending itself is the core's and the
-/// host's; this page shows and asks (`adb.stop`, `adb.pair`, `adb.grant`).
+/// core's `adbShare`), what the phone needs for it (as its host says: adb_phone), pairing the first time, and the app
+/// turning Wireless debugging on itself from then on. The lending itself is the core's and the host's (AdbShare.java);
+/// this page shows and asks (`adb.stop`, `adb.pair`, `adb.grant`; the host's adb.start, adb.switch, adb.open).
 fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let t = @sf.theme()
   let name = match station_of(core, here, address) {
@@ -709,6 +799,7 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
   let sharing = flag(view, "sharing")
   let there = sharing && text(view, "station") == address
   let elsewhere = sharing && text(view, "station") != address
+  let phone = adb_phone(c)
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     nav_bar(c, core, "Station", tr("android-misc.adb.title"), sub=fn() {
       c.text(name, size=11.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
@@ -723,7 +814,10 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
         |> ignore
       },
     ]
-    if !adb_supported() && !there {
+    if phone is None {
+      // (until the host has said what the phone has: the rest as it comes)
+      ()
+    } else if !flag(phone, "supported") && !there {
       blocks.push(fn() {
         list_card(c, fn() {
           list_row(c, fn() {
@@ -767,7 +861,14 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
             if there {
               act(core, tr("android-misc.adb.stopWhat"), "adb.stop", obj([]))
             } else {
-              (core.say)(tr("android-misc.adb.unsupported"))
+              // the pairing code is typed into a notification: they are asked for once, as the lending starts
+              if @ui.notice_permission() != "granted" {
+                @ui.notice_ask() |> ignore
+              }
+              adb_ask(
+                "adb.start",
+                obj([("station", str(address)), ("name", str(name)), ("texts", adb_texts())]),
+              )
             }
           }
           if there {
@@ -792,12 +893,101 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
           }
         })
       })
+      // what the phone needs, and whether it has it
+      blocks.push(fn() { section_header(c, tr("android-misc.adb.phone"), start=S6) })
+      blocks.push(fn() {
+        list_card(c, fn() {
+          let need = fn(title : String, ok : Bool, value : String) {
+            list_row(c, fn() {
+              row_title(c, title)
+              c.text(value, style=if ok { @sf.value } else { adb_lacks }) |> ignore
+            })
+            |> ignore
+          }
+          let developer = flag(phone, "developer")
+          need(
+            tr("android-misc.adb.developer"),
+            developer,
+            if developer {
+              tr("android-misc.adb.on")
+            } else {
+              tr("android-misc.adb.developer.how")
+            },
+          )
+          let wifi = flag(phone, "wifi")
+          need(
+            tr("android-misc.adb.wifi"),
+            wifi,
+            if wifi {
+              tr("android-misc.adb.wifi.on")
+            } else {
+              tr("android-misc.adb.wifi.needed")
+            },
+          )
+          let wireless = flag(phone, "wireless")
+          let can_switch = flag(phone, "canSwitch")
+          if list_row(c, key="adb-wireless", fn() {
+              row_title(c, tr("android-misc.adb.wireless"))
+              c.text(
+                if wireless {
+                  tr("android-misc.adb.on")
+                } else if can_switch {
+                  tr("android-misc.adb.wireless.turnOn")
+                } else {
+                  tr("android-misc.adb.wireless.settings")
+                },
+                style=if wireless { @sf.value } else { adb_go },
+              )
+              |> ignore
+            }) {
+            if !wireless && can_switch {
+              adb_ask("adb.switch", obj([]))
+            } else {
+              adb_ask("adb.open", obj([("what", str("wireless"))]))
+            }
+          }
+        })
+      })
       if there && text(view, "adb") == "unpaired" {
         let busy = is_doing(core, ["adb.pair"], [])
         let open = has(view, "pairPort")
+        let reads = flag(phone, "reads")
         blocks.push(fn() { section_header(c, tr("android-misc.adb.pair.title"), start=S6) })
         blocks.push(fn() {
           list_card(c, fn() {
+            // the code read off the dialog by itself, where the person turns that on (AdbCodeReader)
+            if list_row(c, key="adb-reader", fn() {
+                row_lines(c, tr("android-misc.adb.reader.title"), tr("android-misc.adb.reader.note"), wrap_sub=true)
+                c.text(
+                  if reads {
+                    tr("android-misc.adb.on")
+                  } else {
+                    tr("android-misc.adb.reader.turnOn")
+                  },
+                  style=if reads { @sf.value } else { adb_go },
+                )
+                |> ignore
+              }) {
+              adb_ask("adb.open", obj([("what", str("reader"))]))
+            }
+            // the pairing dialog, beside the app where the screen splits
+            if list_row(c, key="adb-pair-open", fn() {
+                row_lines(
+                  c,
+                  tr("android-misc.adb.pair.open"),
+                  tr(
+                    if reads {
+                      "android-misc.adb.pair.open.auto"
+                    } else {
+                      "android-misc.adb.pair.open.note"
+                    },
+                  ),
+                  wrap_sub=true,
+                )
+                c.text(tr("android-misc.adb.pair.go"), style=adb_go) |> ignore
+              }) {
+              adb_ask("adb.open", obj([("what", str("wireless")), ("beside", Json::boolean(true))]))
+            }
             // split screen: the code typed here
             if list_row(c, key=if open && !busy { "adb-pair-here" } else { "" }, fn() {
                 row_lines(
@@ -830,6 +1020,29 @@ fn adb_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit {
                     done=tr("android-misc.adb.paired"),
                   )
                 },
+              )
+            }
+          })
+        })
+      }
+      // from then on: the app turns Wireless debugging on itself, once the station's adb grants it
+      if there && text(view, "adb") == "connected" && !flag(phone, "canSwitch") {
+        let busy = is_doing(core, ["adb.grant"], [])
+        blocks.push(fn() { section_header(c, tr("android-misc.adb.later"), start=S6) })
+        blocks.push(fn() {
+          list_card(c, fn() {
+            if list_row(c, key=if busy { "" } else { "adb-grant" }, fn() {
+                row_lines(c, tr("android-misc.adb.grant.title"), tr("android-misc.adb.grant.note"), wrap_sub=true)
+                doing_mark(c, busy, failed_of(core, ["adb.grant"], []))
+                switch(c, false)
+              }) {
+              act(
+                core,
+                tr("android-misc.adb.grantWhat"),
+                "adb.grant",
+                obj([]),
+                done=tr("android-misc.adb.granted"),
+                then=fn(_) { adb_host.phone = None },
               )
             }
           })

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What Accessibility says of AdbCodeReader (res/xml/adb_code_reader.xml): client/i18n's android-misc.adb.reader.about,
+     as still.fail's Android app has it. -->
+<resources>
+    <string name="adb_reader_about">仅在共享调试配对时，读取设置中无线调试「使用配对码配对设备」窗口的 6 位配对码，交给与你共享调试的 station 完成配对。不读取其他 app 或设置中的其他内容，不在屏幕上执行任何操作。</string>
+</resources>
