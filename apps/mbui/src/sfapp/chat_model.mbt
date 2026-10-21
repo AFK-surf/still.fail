@@ -186,6 +186,8 @@ fn elsewhere_of(e : Json) -> Elsewhere {
 ///|
 /// A runtime a notice says the station lacks, or a message of the viewer's waits for (RuntimeInstall).
 pub(all) struct Install {
+  /// the runtime it is (`software.update`'s id)
+  runtime : String
   state : String
   title : String
   note : String
@@ -198,6 +200,7 @@ fn install_of(v : Json?, key : String) -> Install? {
   match field(v, key) {
     Some(Object(_)) as i =>
       Some({
+        runtime: text(i, "runtime"),
         state: text(i, "state"),
         title: text(i, "title"),
         note: text(i, "note"),
@@ -242,6 +245,8 @@ pub(all) struct Message {
   said : Bool
   /// the outbox entry it was sent from here as (its row goes on being that one)
   outgoing : String
+  /// a failure still.fail says that the viewer may send to the still.fail team (`chat.report`)
+  reportable : Bool
 }
 
 ///|
@@ -301,6 +306,7 @@ fn message_of(m : Json) -> Message {
     }),
     said: flag(s, "said"),
     outgoing: text(s, "outgoing"),
+    reportable: flag(s, "reportable"),
   }
 }
 
@@ -385,6 +391,8 @@ pub(all) struct ChatView {
   key : String
   /// what waits to be decided in it (the core's `asks`), by the post each is about
   asks : Array[Double]
+  /// its station's update, as the bar says it (StationUpdateNotice)
+  station_update : Json?
 }
 
 ///|
@@ -424,6 +432,7 @@ pub fn chat_view(v : Json) -> ChatView {
     archived: flag(s, "archived"),
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),
+    station_update: field(s, "stationUpdate"),
     pending: flag(s, "pending"),
     key: text(s, "key"),
   }

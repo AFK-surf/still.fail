@@ -616,7 +616,14 @@ let sheet_fitted : @ui.Style = @ui.style(w=Full)
 /// 90%; its top corners 26 round, frosted over the page and the scrim (@sf.sheet_look); it rises and sinks on the
 /// sheet's spring, drawn only as it goes (a tap meanwhile is what is under it's). The decisions' sheets are one sheet:
 /// one asked in place of another goes to its height.
-fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit, fit? : Bool = false) -> Unit {
+fn sheet_frame(
+  c : @ui.Ctx,
+  key : String,
+  tall : Double,
+  body : () -> Unit,
+  fit? : Bool = false,
+  draggable? : Bool = false,
+) -> Unit {
   let leaving = dui.sheet is None
   // fitted: what it shows as laid out (the frame before); `tall`, its share, until that is known
   let fit_key = "sheet-fit/" + key
@@ -629,6 +636,8 @@ fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit, fit?
     "decide-sheet",
     !leaving,
     h=dmin(h, c.height * 0.9),
+    // a draggable one between half (55%) and nearly all (94%) of the screen, a tap on its grabber to the other (Sheet.kt)
+    detents=if draggable { sheet_detents } else { [] },
     scrim=@sf.sheet_scrim,
     look=@sf.sheet_look(),
     fn() {
@@ -653,6 +662,11 @@ fn sheet_frame(c : @ui.Ctx, key : String, tall : Double, body : () -> Unit, fit?
     dui.leaving = None
   }
 }
+
+///|
+/// Where a draggable sheet settles: half the screen and nearly all of it (Sheet.kt SheetHost: 0.55, 0.94).
+// kept across runs: a table, never written
+let sheet_detents : Array[Double] = [0.55, 0.94]
 
 ///|
 /// The sheet's grabber (Sheet.kt SheetGrab): 38 × 5 in the line's colour, 16 above it and 8 under.

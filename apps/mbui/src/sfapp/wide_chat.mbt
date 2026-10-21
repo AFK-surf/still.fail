@@ -107,7 +107,7 @@ fn wide_chat_bar(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, v : Chat
         Some(view) => {
           if view.agents.length() == 0 {
             match station {
-              Some(s) => station_tag(c, s)
+              Some(s) => station_chip(c, r.station, s)
               None => ()
             }
           }
