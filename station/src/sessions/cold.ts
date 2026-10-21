@@ -96,9 +96,10 @@ export class ColdRooms implements ColdStorage {
     const row = hub.store.getSession(key);
     if (!row) throw new Error(`unknown session ${key}`);
     const id = row.runtimeSessionId;
-    if (!id) return [];
+    if (hub.store.runtimeSessions(key).length === 0) return [];
     if (
       packing &&
+      id !== null &&
       hub.store.listSessions().some((s) => s.key !== key && s.runtime === row.runtime && s.runtimeSessionId === id && (s.archivedAt === null || s.running))
     )
       return [];

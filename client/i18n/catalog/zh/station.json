@@ -477,5 +477,12 @@
   "station.profile.devinSubscription": "Devin 账号",
   "station.quota.devinUnsupported": "Devin 不向 station 提供套餐用量，请在 app.devin.ai 的 Usage 页查看",
   "station.updates.devinElsewhere": "安装在 {path}，不是用 Devin 的安装脚本装的，需在该机器上手动更新",
-  "station.login.devinNoTerminal": "Devin 登录需要终端，这台机器提供不了，请在别的 station 上登录"
+  "station.login.devinNoTerminal": "Devin 登录需要终端，这台机器提供不了，请在别的 station 上登录",
+  "station.context.busy": "当前任务运行中，停止后再试",
+  "station.context.held": "此 station 当前无法运行 agent",
+  "station.context.empty": "暂无上下文",
+  "station.context.cannotCompact": "{name} 不支持压缩上下文",
+  "station.notice.compacted": "已压缩上下文",
+  "station.notice.compactFailed": "无法压缩上下文：{error}",
+  "station.notice.cleared": "已清空上下文，下一条消息将开始新的对话"
 }

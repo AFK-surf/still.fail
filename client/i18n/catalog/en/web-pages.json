@@ -1912,5 +1912,12 @@
   "web-pages.files.size": "Size",
   "web-pages.files.modified": "Modified",
   "web-pages.files.where": "Where",
-  "web-pages.files.goToKeys": "↑↓ choose · Tab completes · ⏎ goes"
+  "web-pages.files.goToKeys": "↑↓ choose · Tab completes · ⏎ goes",
+  "web-pages.chat.context": "Context",
+  "web-pages.chat.compact": "Compact context",
+  "web-pages.chat.clear": "Clear context",
+  "web-pages.chat.clearConfirm": "Clear this agent's context?",
+  "web-pages.chat.clearBody": "Its process ends, and the next message starts a new session. The agent reads the chat's messages again and reads its run history only when needed.",
+  "web-pages.chat.contextActions": "Context actions",
+  "web-pages.chat.contextManage": "Manage"
 }

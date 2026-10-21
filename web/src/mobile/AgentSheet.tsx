@@ -2,7 +2,7 @@
 // mark in the chat's bar (the wide screen's card over its avatar, ../AgentCard.tsx; the Android app's AgentSheet.kt).
 // What it runs and where it stands (with a stop while it works), its latest lines, the figures that say most (the
 // `agentCard` view, views/brief.ts), then where to go on: the station it runs on, its account (how it runs), its history,
-// its jobs. Only what
+// its jobs, and its context by hand (compacted, cleared). Only what
 // is worth a look is coloured. The same parts head its history's details (History.tsx).
 import { stationApi, useAgentCard, useChat, useStationCall, useStationLook, type ChatAgent } from "../api.ts";
 import type { AgentCardView } from "../core/shapes.ts";
@@ -10,10 +10,11 @@ import { Elapsed, Waited } from "../Chat.tsx";
 import { ChevronRight, Stop } from "@stillfail/ui/icons.tsx";
 import { stationBase } from "../station.tsx";
 import { StationMark } from "../StationMark.tsx";
-import { useDoing } from "../doing.ts";
+import { useDoing, useDoingFailed } from "../doing.ts";
+import { confirm } from "./sheets.tsx";
 import { t } from "../i18n.ts";
-import { SheetGrab, useApp, type MobileApp } from "./app.tsx";
-import { InfoList, InfoRow, ModelMark, QuotaRings, stateOf } from "./parts.tsx";
+import { SheetGrab, SheetHead, useApp, type MobileApp } from "./app.tsx";
+import { InfoList, InfoRow, ModelMark, PickRow, QuotaRings, stateOf } from "./parts.tsx";
 import { Spinner } from "@stillfail/ui/waiting.tsx";
 import * as partsCss from "./styles/parts.css.ts";
 import * as sheetsCss from "./styles/sheets.css.ts";
@@ -28,7 +29,7 @@ const working = (agent: ChatAgent) => agent.status === "running" || agent.status
 
 /** As tall as what it shows: its head, its lines, its figures and its rows (their room kept while they are read). */
 function tall(agent: ChatAgent, go: AgentGo): number {
-  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0);
+  const rows = 2 + (go.station ? 1 : 0) + (agent.jobs.length > 0 ? 1 : 0) + (agent.session.canCompact || agent.session.canClear ? 1 : 0);
   // What is wrong, a line each but a quota's (its account's windows say that).
   const notes = agent.attention.filter((a) => a.kind !== "quota").length;
   const px = 25 + 44 + (agent.turns.length > 0 ? 75 + 76 : 0) + (notes > 0 ? 10 + notes * 20 : 0) + 12 + rows * 41 + 28;
@@ -47,6 +48,8 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
   // A sheet lies over the page, outside its station's context: the API by the station's address.
   const call = useStationCall(at.station);
   const stopping = useDoing("session.stop", { station: at.station, key: at.key });
+  const handling = useDoing(CONTEXT_CALLS, { station: at.station, key: at.key });
+  const handlingFailed = useDoingFailed(CONTEXT_CALLS, { station: at.station, key: at.key });
   const station = useStationLook(at.station);
   if (!agent) return <SheetGrab />;
   const s = agent.session;
@@ -102,8 +105,49 @@ function AgentSheet({ at, go }: { at: AgentAt; go: AgentGo }) {
                 <ChevronRight size={14} className={partsCss.mSubtle} />
               </InfoRow>
             )}
+            {(s.canCompact || s.canClear) && (
+              <InfoRow busy={handling} failed={handlingFailed} onClick={() => openContext(app, at)}>
+                <span className={css.mAgentRowLabel}>{t("web-pages.chat.context")}</span>
+                <span className={css.mAgentRowValue}>{card?.context?.text ?? ""}</span>
+                {!handling && handlingFailed === undefined && <ChevronRight size={14} className={partsCss.mSubtle} />}
+              </InfoRow>
+            )}
           </InfoList>
         </div>
+      </div>
+    </>
+  );
+}
+
+const CONTEXT_CALLS = ["session.compact", "session.clear"] as const;
+
+/** What can be done to its context by hand, in a sheet of its own in the card's place: compacted, or cleared (asked first). */
+function openContext(app: MobileApp, at: AgentAt) {
+  app.sheet({ height: 0.34, content: () => <ContextSheet at={at} /> });
+}
+
+function ContextSheet({ at }: { at: AgentAt }) {
+  const app = useApp();
+  const call = useStationCall(at.station);
+  const s = useChat(at.station, { session: at.chat }).value?.agents.find((a) => a.session.key === at.key)?.session;
+  const said = (error: unknown) => (error instanceof Error ? error.message : String(error));
+  return (
+    <>
+      <SheetGrab />
+      <SheetHead title={t("web-pages.chat.context")} />
+      <div className={sheetsCss.mSheetScroll}>
+        {s?.canCompact && (
+          <PickRow label={t("web-pages.chat.compact")} sub={t("web-mobile.agent.compactSub")} onClick={() => {
+            app.sheet(null);
+            stationApi(call).compact(at.key).then(() => app.toast(t("web-mobile.agent.compacting")), (error) => app.toast(t("web-mobile.agent.compactFailed", { error: said(error) })));
+          }} />
+        )}
+        {s?.canClear && (
+          <PickRow label={t("web-pages.chat.clear")} sub={t("web-mobile.agent.clearSub")} accent onClick={() => confirm(app, {
+            title: t("web-pages.chat.clearConfirm"), text: t("web-pages.chat.clearBody"), action: t("web-pages.chat.clear"), danger: true,
+            atOnce: "web-mobile.agent.clearFailed", run: () => stationApi(call).clear(at.key),
+          })} />
+        )}
       </div>
     </>
   );

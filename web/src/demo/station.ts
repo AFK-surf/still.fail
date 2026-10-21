@@ -133,8 +133,9 @@ export class NeedsReal extends Error {
   }
 }
 
-/** What the demo's station does itself, changing nothing: a chat's agent woken, stopped or moved to another model. */
-const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.settings"]);
+/** What the demo's station does itself, changing nothing: a chat's agent woken, stopped, its context compacted or cleared,
+ *  or moved to another model. */
+const OWN = new Set(["session.warm", "session.stop", "session.evict", "session.compact", "session.clear", "session.settings"]);
 
 /** The station's operations (client/core-ts/src/ops.ts), by name: what is read answers; what would reach out needs a real
  *  ember; what stays in the station answers the overview (what most writes answer with) and changes nothing. */

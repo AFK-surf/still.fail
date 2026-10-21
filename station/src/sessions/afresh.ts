@@ -5,7 +5,7 @@
 // reads them as one (live.ts ChainTail).
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { afresh, threadAddress } from "../agents/instructions.ts";
+import { afresh, cleared, threadAddress } from "../agents/instructions.ts";
 import type { Profile } from "../agents/runtime.ts";
 import { log } from "../ops/log.ts";
 import { transcriptPath } from "../read/transcript.ts";
@@ -17,6 +17,11 @@ export function startsAfresh(hub: Hub, key: string, id: string, to: Profile, was
   const from = hub.store.ranOn(key, id) ?? was;
   if (from === null || from === to.id) return null;
   return afresh(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
+}
+
+/// What a session whose context was cleared by hand is told as its new runtime session starts: its chats to read back.
+export function toldCleared(hub: Hub, key: string): string {
+  return cleared(key, hub.store.sessionThreads(key).map((t) => threadAddress(t.thread.channel, t.thread.threadTs)));
 }
 
 /// Claude's subagents `ids` of runtime session `from`, stopped with its process, copied to session `to` (just started on

@@ -152,6 +152,14 @@ export class FakeSession implements AgentSession {
   async abort() {
     this.aborts++;
   }
+  /// Times its context was compacted (a turn of its own the test ends).
+  compactions = 0;
+  async compact() {
+    if (this.disposed) throw new Error("disposed");
+    if (this.busyNow) throw new Error("busy");
+    this.busyNow = true;
+    this.compactions++;
+  }
   retune(options: OpenOptions) {
     if (!this.retunable || this.busyNow) return false;
     this.retuned.push([options.model, options.effort]);

@@ -1837,5 +1837,12 @@
   "web-pages.files.size": "大小",
   "web-pages.files.modified": "修改",
   "web-pages.files.where": "位置",
-  "web-pages.files.goToKeys": "↑↓ 选择 · Tab 补全 · ⏎ 前往"
+  "web-pages.files.goToKeys": "↑↓ 选择 · Tab 补全 · ⏎ 前往",
+  "web-pages.chat.context": "上下文",
+  "web-pages.chat.compact": "压缩上下文",
+  "web-pages.chat.clear": "清空上下文",
+  "web-pages.chat.clearConfirm": "清空此 agent 的上下文？",
+  "web-pages.chat.clearBody": "当前进程将结束，下一条消息开始新的会话。agent 会重新读取对话消息，执行历史只在需要时读取。",
+  "web-pages.chat.contextActions": "上下文操作",
+  "web-pages.chat.contextManage": "管理"
 }

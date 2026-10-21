@@ -5,7 +5,7 @@ import { StationUpdate } from "../StationUpdate.tsx";
 import { closePreview, PreviewSlot, previewKey } from "../Previews.tsx";
 import { scopeOf, useLink, useStation } from "../station.tsx";
 import { CreatorText, QuotaChip, MeterChips, PeopleStack } from "../components.tsx";
-import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Users, Web } from "@stillfail/ui/icons.tsx";
+import { Archive, Boxes, Close, File, Folder, Info, PanelClose, PanelOpen, Refresh, Shrink, Users, Web } from "@stillfail/ui/icons.tsx";
 import { DriveTab } from "./DriveTab.tsx";
 import { DropHint, FILES, FilesTab, keepFocus, PANEL_MAX, PANEL_MIN, SidePane, paneId, tabId, useChatDrop, useSidePanel, useStationDrive } from "./ChatSide.tsx";
 import { JobDot, JobsPopover, JobsTab, NO_JOBS } from "../Jobs.tsx";
@@ -39,7 +39,7 @@ import { chatPage, useChatPageActions } from "../chatPage.ts";
 import { failure, useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { useDoing, useDoingFailed } from "../doing.ts";
 import { DoingShown, useDoingState } from "../DoingMark.tsx";
-import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
+import { AgentMark, Button, Confirm, ConnectKindIcon, Dialog, ElsewhereLogo, Empty, FeishuLogo, ICON, IconButton, Menu, MobileBack, ModelLogo, PanelRow, ResizeHandle, SlackLogo, SwitchRow, Time, Tip, Waiting } from "../ui.tsx";
 import { useRenaming } from "../Rename.tsx";
 import * as sessionCss from "../styles/session.css.ts";
 import * as jobsCss from "../styles/jobs.css.ts";
@@ -814,7 +814,36 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
           </span>
         )}
       </div>
+      {(session.canCompact || session.canClear) && <ContextLine session={session.key} compact={session.canCompact === true} clear={session.canClear === true} used={card?.context?.text} />}
       <TranscriptLine session={session.key} />
+    </div>
+  );
+}
+
+/**
+ * Its context by hand, between turns, behind one menu: compacted (the chat is told when it is done), or cleared so its
+ * next message starts a new conversation (asked first: what it knew is gone for it). How full it is beside its name.
+ * Under way, a turning ring; failed, a red mark.
+ */
+function ContextLine({ session, compact, clear, used }: { session: string; compact: boolean; clear: boolean; used: string | undefined }) {
+  const api = useApi();
+  const act = useAct();
+  const station = useStation().address;
+  const calls = ["session.compact", "session.clear"] as const;
+  const busy = useDoing(calls, { station, key: session });
+  const failed = useDoingFailed(calls, { station, key: session });
+  const [asking, setAsking] = useState(false);
+  return (
+    <div className={css.sessionLine}>
+      <span className={css.sessionLineMark}><Shrink size={16} /></span>
+      <span className={css.sessionLineText}>{t("web-pages.chat.context")}{used ? ` · ${used}` : ""}</span>
+      <DoingShown state={{ running: busy, error: failed }} inline />
+      <Menu label={t("web-pages.chat.contextActions")} trigger={<button type="button" className={`${css.detailLink} ${css.detailButton}`} aria-label={t("web-pages.chat.contextActions")}>{t("web-pages.chat.contextManage")}</button>} items={[
+        ...(compact ? [{ label: t("web-pages.chat.compact"), icon: Shrink, disabled: busy, onSelect: () => act(api.compact(session), t("web-pages.chat.compact")) }] : []),
+        ...(clear ? [{ label: t("web-pages.chat.clear"), icon: Refresh, danger: true, disabled: busy, onSelect: () => setAsking(true) }] : []),
+      ]} />
+      <Confirm open={asking} title={t("web-pages.chat.clearConfirm")} description={t("web-pages.chat.clearBody")} action={t("web-pages.chat.clear")}
+        onConfirm={() => { setAsking(false); act(api.clear(session), t("web-pages.chat.clear")); }} onClose={() => setAsking(false)} />
     </div>
   );
 }

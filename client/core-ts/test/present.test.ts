@@ -169,6 +169,18 @@ test("a_session_stands_where_its_process_and_last_turn_say", () => {
   assert.equal(st({}), "idle");
 });
 
+test("a_sessions_context_is_compacted_or_cleared_by_hand_between_turns_once_it_has_one", () => {
+  const can = (s: J) => { const v = p.session(s); return [v.canCompact, v.canClear]; };
+  const both = ["compact", "clear"];
+  assert.deepEqual(can({ process: "warm", runtimeSessionId: "r1", contextActions: both }), [true, true]);
+  assert.deepEqual(can({ process: "cold", runtimeSessionId: "r1", contextActions: ["clear"] }), [false, true]);
+  assert.deepEqual(can({ process: "running", runtimeSessionId: "r1", contextActions: both }), [false, false]);
+  assert.deepEqual(can({ process: "warm", running: true, runtimeSessionId: "r1", contextActions: both }), [false, false]);
+  // None yet (a new chat, one just cleared), or a station from before that can do neither.
+  assert.deepEqual(can({ process: "cold", runtimeSessionId: null, contextActions: both }), [false, false]);
+  assert.deepEqual(can({ process: "warm", runtimeSessionId: "r1" }), [false, false]);
+});
+
 test("an_account_its_provider_refuses_says_so_whatever_its_check_found", () => {
   let q: J = { check: { state: "ok" }, quota: { state: "blocked", windows: [] } };
   q = p.profile(q);

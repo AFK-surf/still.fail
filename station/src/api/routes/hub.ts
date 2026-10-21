@@ -435,7 +435,7 @@ export const routes = (tools: Tools): Route[] => {
     ),
     {
       method: "POST",
-      pattern: /^\/*sessions\/+([^/]+)\/+(stop|evict|warm|settings)(?:\/.*)?$/,
+      pattern: /^\/*sessions\/+([^/]+)\/+(stop|evict|warm|compact|clear|settings)(?:\/.*)?$/,
       handle: (r, [k, action]) =>
         write(async (s, a) => {
           const key = segment(k!);
@@ -446,6 +446,15 @@ export const routes = (tools: Tools): Route[] => {
             case "evict":
               await a.hub.evict(key);
               return ok({ ok: true });
+            // Its context compacted (begun: its end is said in its chat), or cleared; refused while it runs.
+            case "compact":
+            case "clear": {
+              session(s, key, r);
+              const refused = await (action === "compact" ? a.hub.compact(key) : a.hub.clear(key));
+              if (refused !== null) throw new Refused(409, refused);
+              log.info("admin", `session ${action === "compact" ? "compacted" : "cleared"} from the admin page`, { session: key, by: r.viewer.email });
+              return ok({ ok: true });
+            }
             case "warm":
               session(s, key, r);
               a.hub.warm(key).catch((e) => log.warn("admin", "warming failed", { session: key, error: (e as Error).message }));

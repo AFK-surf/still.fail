@@ -2,7 +2,8 @@
 // chat's bar or its row in the chat's own sheet (web mobile/AgentSheet.tsx; the wide screen's card over its avatar,
 // web AgentCard.tsx). What it runs and where it stands (with a stop while it works), its latest lines, the figures
 // that say most (the core's `agentCard` view, client/core-ts/src/views/brief.ts), then where to go on: the station it
-// runs on, its account (how it runs), its history, its jobs. Only what is worth a look is coloured. The same parts head its history's
+// runs on, its account (how it runs), its history, its jobs, and its context by hand (compacted, cleared). Only what is
+// worth a look is coloured. The same parts head its history's
 // details (History.kt).
 package fail.still.android.screens
 
@@ -53,11 +54,14 @@ import fail.still.android.data.rememberTopic
 import fail.still.android.data.state
 import fail.still.android.data.t
 import fail.still.android.ui.C
+import fail.still.android.ui.DoingMark
 import fail.still.android.ui.IconIn
 import fail.still.android.ui.Icons
 import fail.still.android.ui.ModelMark
+import fail.still.android.ui.PickRow
 import fail.still.android.ui.QuotaRings
 import fail.still.android.ui.SheetGrab
+import fail.still.android.ui.SheetHead
 import fail.still.android.ui.SheetSpec
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.StationMark
@@ -70,7 +74,7 @@ private val ChatAgent.working get() = status == "running" || status == "queued"
 /** Opens `agent`'s card over its chat, as tall as what it shows (its lines' and figures' room kept while they are read). */
 fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
     val key = agent.session.key
-    val rows = 3 + if (agent.jobs.isNotEmpty()) 1 else 0
+    val rows = 3 + (if (agent.jobs.isNotEmpty()) 1 else 0) + (if (agent.session.canCompact == true || agent.session.canClear == true) 1 else 0)
     // What is wrong, a line each but a quota's (its account's windows say that).
     val notes = agent.attention.count { it.kind != "quota" }
     val tall = 22 + 52 + (if (agent.turns.isNotEmpty()) 72 + 76 else 0) + (if (notes > 0) 8 + notes * 20 else 0) + 12 + rows * 40 + 24
@@ -115,6 +119,7 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
                     app.sheet = null; openHistory(app, station, of, key)
                 }
                 if (a.jobs.isNotEmpty()) AgentRow(t("android-chat.agent.jobs"), card.value?.jobs ?: t("android-chat.agent.jobs.idle")) { openJobs(app, station, of) }
+                if (s.canCompact == true || s.canClear == true) ContextRow(app, station, key, card.value?.context?.text ?: "") { openContext(app, station, of, key) }
             }
         }
     }
@@ -132,6 +137,39 @@ private fun StopButton(app: AppState, station: String, key: String, modifier: Mo
     ) {
         if (busy) Spinner(inline = true) else IconIn(Icons.Stop, 11.dp, C.red)
         Text(t("android-chat.agent.stop"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = C.red)
+    }
+}
+
+private val CONTEXT_CALLS = setOf("session.compact", "session.clear")
+
+/** The card's row for its context, how full it is (`used`): a tap opens what can be done to it; under way a spinner, failed a mark. */
+@Composable
+private fun ContextRow(app: AppState, station: String, key: String, used: String, onClick: () -> Unit) {
+    val busy = app.isDoing(CONTEXT_CALLS, "station" to station, "key" to key)
+    val failed = app.failedOf(CONTEXT_CALLS, "station" to station, "key" to key)
+    InfoRow(onClick = if (busy) null else onClick) {
+        Text(t("web-pages.chat.context"), fontSize = 14.sp, color = C.muted)
+        Text(used, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (busy || failed != null) DoingMark(busy, failed) else IconIn(Icons.ChevronRight, 14.dp, C.subtle)
+    }
+}
+
+/** What can be done to its context by hand, in a sheet in the card's place: compacted, or cleared (asked first). */
+private fun openContext(app: AppState, station: String, of: ChatOf, key: String) {
+    app.sheet = SheetSpec(0.34f) {
+        val chat by rememberTopic<ChatView>(app.core, Topics.chat(station, of))
+        val s = chat.value?.agents?.firstOrNull { it.session.key == key }?.session
+        SheetGrab()
+        SheetHead(t("web-pages.chat.context"))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
+            if (s?.canCompact == true) PickRow(t("web-pages.chat.compact"), t("web-mobile.agent.compactSub")) {
+                app.sheet = null
+                app.act(t("web-pages.chat.compact"), done = t("web-mobile.agent.compacting")) { app.api(station).compact(key) }
+            }
+            if (s?.canClear == true) PickRow(t("web-pages.chat.clear"), t("web-mobile.agent.clearSub"), color = C.red) {
+                confirm(app, t("web-pages.chat.clearConfirm"), t("web-pages.chat.clearBody"), t("web-pages.chat.clear"), danger = true, what = t("web-pages.chat.clear")) { app.api(station).clear(key) }
+            }
+        }
     }
 }
 

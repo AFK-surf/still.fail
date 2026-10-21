@@ -882,6 +882,23 @@ export class CodexSession implements AgentSession {
     }
   }
 
+  /// thread/compact/start: the app-server runs it as a turn of its own (turn/started, a contextCompaction item,
+  /// turn/completed; 0.160).
+  async compact() {
+    await this.driver.renewLent(this.host, this.profile);
+    if (this.state.closed) throw new Error("codex session is closed");
+    if (this.state.busy) throw new Error("a turn is already running");
+    this.state.busy = true;
+    this.host.turns.add(this.threadId);
+    try {
+      await this.host.request("thread/compact/start", { threadId: this.threadId });
+    } catch (error) {
+      this.state.busy = false;
+      this.host.turns.delete(this.threadId);
+      throw error;
+    }
+  }
+
   async steer(text: string) {
     if (this.state.closed || !this.state.busy || this.state.turnId === null) return false;
     try {

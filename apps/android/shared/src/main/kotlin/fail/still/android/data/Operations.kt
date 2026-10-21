@@ -67,6 +67,16 @@ class StationOperations(private val call: suspend (String, JsonObject) -> JsonEl
         values["key"] = JsonPrimitive(key)
         return call("session.evict", JsonObject(values))
     }
+    suspend fun sessionCompact(key: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["key"] = JsonPrimitive(key)
+        return call("session.compact", JsonObject(values))
+    }
+    suspend fun sessionClear(key: String): JsonElement {
+        val values = mutableMapOf<String, JsonElement>()
+        values["key"] = JsonPrimitive(key)
+        return call("session.clear", JsonObject(values))
+    }
     suspend fun sessionDelete(key: String): JsonElement {
         val values = mutableMapOf<String, JsonElement>()
         values["key"] = JsonPrimitive(key)

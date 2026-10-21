@@ -161,6 +161,9 @@ function summaryWith(s: Store, key: string, l: Lists): Json {
   v.lastTurn = stat?.lastTurn ?? null;
   v.creator = creator(s, row.createdBy);
   v.participants = people(s, l.participants.get(key) ?? []);
+  // What can be done to its context by hand (POST /sessions/:key/compact, /clear): its runtime's (agents/runtime.ts
+  // `compact`). None from a station from before.
+  v.contextActions = row.runtime === "claude" || row.runtime === "codex" ? ["compact", "clear"] : ["clear"];
   // Keeping watch (jobs::watching): the pages say so.
   const watch = l.watches.get(key);
   if (watch !== undefined) v.watch = watch;
@@ -279,7 +282,8 @@ export function timeline(s: Store, key: string, beforeParam: string | undefined,
   const limit = Math.min(Math.max(parseUsize(limitParam) ?? 200, 1), 1000);
   const profile = configOf(s).profiles.find((p) => p.id === row.profile);
   const runtime = runtimeKind(row.runtime) ?? null;
-  if (!profile || runtime === null || row.runtimeSessionId === null) return { start: 0, entries: [] };
+  // None now (its context cleared) still reads those it ran in.
+  if (!profile || runtime === null || store.runtimeSessions(s, key).length === 0) return { start: 0, entries: [] };
   // Those of the runtime sessions it ran in before come first (sessions/afresh.ts).
   const homes = [profile.home, ...configOf(s).profiles.map((p) => p.home).filter((h) => h !== profile.home)];
   const { paths } = transcriptPaths(runtime, homes, store.runtimeSessions(s, key));

@@ -888,6 +888,8 @@ data class Session (
 	val effort: String? = null,
 	val fast: Boolean? = null,
 	val runtimeSessionId: String? = null,
+	/// What its station can do to its context by hand: compact, clear (one from before says none).
+	val contextActions: List<String>? = null,
 	val workspace: String? = null,
 	val running: Boolean? = null,
 	val createdAt: Long? = null,
@@ -914,6 +916,10 @@ data class Session (
 	val processText: String? = null,
 	/// How hard its runtime can think, lowest first.
 	val efforts: List<String>,
+	/// Its context can be compacted by hand now (`session.compact`): between turns, once it has one.
+	val canCompact: Boolean? = null,
+	/// Its context can be cleared by hand now (`session.clear`): between turns, once it has one.
+	val canClear: Boolean? = null,
 	/// Its times in words, by field (`createdAt`, `lastActiveAt`, …).
 	val time: Map<String, Stamp>? = null,
 	/// On a connect's page: the chat it was last talked in; as a candidate to deliver into, described, and whether it

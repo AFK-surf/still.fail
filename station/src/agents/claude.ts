@@ -118,7 +118,8 @@ export function classifyResult(text: string): FailureReason {
 /// `renews`: its token is handed over and renewed while it runs (RENEWED): a first 401 is left to that.
 /// `renewed`: a new token was given it in this turn, so another 401 is not the old token's.
 /// `tasks`: the commands and subagents it runs that have not ended, by id (`background` once moved there).
-export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean; tasks?: Record<string, Task> };
+/// `compacting`: the turn is a `/compact` asked for by hand, and `compactError` why it compacted nothing.
+export type Turn = { busy: boolean; aborting: boolean; authFailure: string | null; closed: boolean; renews?: boolean; renewed?: boolean; tasks?: Record<string, Task>; compacting?: boolean; compactError?: string | null };
 export type Task = BackgroundTask & { background: boolean };
 
 /// A task's statuses once it has ended.
@@ -140,7 +141,7 @@ export type ClaudeSnapshot = {
   runtime: "claude";
   id: string;
   runner: string;
-  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean; tasks?: Record<string, Task> };
+  turn: { busy: boolean; aborting: boolean; authFailure: string | null; renews?: boolean; tasks?: Record<string, Task>; compacting?: boolean; compactError?: string | null };
   machineExpires: number | null;
   live: ClaudeLiveState;
 };
@@ -191,17 +192,23 @@ export function onFrame(frame: Json, turn: Turn, emit: (event: RuntimeEvent) => 
     const { [frame.task_id]: task, ...rest } = turn.tasks;
     if (subtype === "task_notification" || ENDED.has(status)) turn.tasks = rest;
     else if (frame.patch?.is_backgrounded === true) turn.tasks = { ...rest, [frame.task_id]: { ...task!, background: true } };
+  } else if (kind === "system" && subtype === "status" && turn.compacting === true && frame.compact_result === "failed") {
+    // `/compact` that compacted nothing still ends in a result of success: only this says so (2.1.289).
+    turn.compactError = typeof frame.compact_error === "string" && frame.compact_error !== "" ? frame.compact_error : "compaction failed";
   } else if (kind === "result") {
     const text = typeof frame.result === "string" ? frame.result : subtype;
     let outcome: TurnOutcome;
     if (turn.authFailure !== null) outcome = { kind: "failed", reason: refused(turn.authFailure) ? "refused" : "auth", message: turn.authFailure };
     else if (turn.aborting) outcome = { kind: "aborted" };
     else if (frame.is_error === true) outcome = { kind: "failed", reason: classifyResult(text), message: chars(text, 1000) };
+    else if (turn.compactError) outcome = { kind: "failed", reason: "other", message: chars(turn.compactError, 1000) };
     else outcome = { kind: "completed" };
     turn.busy = false;
     turn.aborting = false;
     turn.authFailure = null;
     turn.renewed = false;
+    turn.compacting = false;
+    turn.compactError = null;
     // What it waited on in the turn has ended with it; what goes on is in the background.
     if (turn.tasks) turn.tasks = Object.fromEntries(Object.entries(turn.tasks).filter(([, t]) => t.background));
     emit({ type: "turnEnded", outcome });
@@ -461,6 +468,19 @@ export class ClaudeSession implements AgentSession {
   }
 
   async prompt(text: string) {
+    this.begin();
+    this.proc.write(userMessage(text));
+  }
+
+  /// Its `/compact`, as in a terminal: the CLI says `status: compacting`, then how it went, then the turn's result.
+  async compact() {
+    this.begin();
+    this.turn.compacting = true;
+    this.turn.compactError = null;
+    this.proc.write(userMessage("/compact"));
+  }
+
+  private begin() {
     if (this.turn.closed) throw new Error("claude session is closed");
     if (this.turn.busy) throw new Error("a turn is already running");
     // Taken up without knowing whether it renews its token (RENEWED): about to run out, it is started again (resuming)
@@ -468,7 +488,6 @@ export class ClaudeSession implements AgentSession {
     if (this.machineExpires !== null && this.machineExpires - wall.now() < CLAUDE_TOKEN_MARGIN_MS) throw new Error("the machine login's token runs out");
     this.turn.renewed = false;
     this.turn.busy = true;
-    this.proc.write(userMessage(text));
   }
 
   async steer(text: string) {
@@ -512,7 +531,7 @@ export class ClaudeSession implements AgentSession {
       runtime: "claude",
       id: this.sessionId,
       runner: this.proc.info.id,
-      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews, tasks: this.turn.tasks },
+      turn: { busy: this.turn.busy, aborting: this.turn.aborting, authFailure: this.turn.authFailure, renews: this.turn.renews, tasks: this.turn.tasks, compacting: this.turn.compacting, compactError: this.turn.compactError },
       machineExpires: this.machineExpires,
       live: this.live.state(),
     };

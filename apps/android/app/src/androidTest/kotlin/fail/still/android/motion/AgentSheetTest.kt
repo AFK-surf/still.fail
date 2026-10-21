@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -61,12 +62,13 @@ class AgentSheetTest {
         ),
     )
 
-    private fun agent(running: Boolean, left: Long = 72, notes: List<AgentCardNote> = emptyList()) = ChatAgent(
+    private fun agent(running: Boolean, left: Long = 72, notes: List<AgentCardNote> = emptyList(), context: Boolean = false) = ChatAgent(
         session = Session(
             key = key, runtime = "claude", process = if (running) "running" else "warm", pending = 0,
             statusText = if (running) "进行中" else "已完成", tone = if (running) "accent" else "green", mark = if (running) "run" else null,
             titleText = "修一下登录", agentText = name, model = "opus", modelName = "Opus 5.5", effort = "high", maker = Fixtures.anthropic, runtimeText = "Claude Code",
             processText = if (running) "运行中" else "保温中", efforts = listOf("high"),
+            canCompact = context && !running, canClear = context && !running,
             time = mapOf("lastActiveAt" to Stamp(Fixtures.NOW.toDouble(), "12 分钟前", "9月30日 10:00", "", true)),
         ),
         status = if (running) "running" else "final", badge = if (running) "run" else null, profiles = emptyList(), choices = emptyList(),
@@ -91,7 +93,7 @@ class AgentSheetTest {
 
     private val chatPage = listOf(Screen.Home, Screen.Chat(Fixtures.STATION, of))
 
-    private fun open(running: Boolean, dark: Boolean = false, left: Long = 72, context: Double = 61.0, notes: List<AgentCardNote> = emptyList(), pinned: Boolean? = false, stack: List<Screen> = chatPage, xshare: ChatShare? = null): Harness {
+    private fun open(running: Boolean, dark: Boolean = false, left: Long = 72, context: Double = 61.0, notes: List<AgentCardNote> = emptyList(), pinned: Boolean? = false, stack: List<Screen> = chatPage, xshare: ChatShare? = null, byHand: Boolean = false): Harness {
         val h = Harness(rule)
         h.fake.put(Topics.live(Fixtures.STATION, key), Live(loaded = true, timeline = emptyList(), steps = emptyList(), activity = if (running) Activity(ActivityNow("now", "编辑 AgentSheet.kt")) else null))
         h.fake.put(Topics.agentCard(Fixtures.STATION, key), card(running, context, notes))
@@ -100,7 +102,7 @@ class AgentSheetTest {
             creator = Creator(id = "alice", name = "Alice", via = "ember", shown = people[0].shown),
             time = mapOf("createdAt" to Stamp(Fixtures.NOW.toDouble(), "3 小时前", "9月30日 07:00", "", true)),
         )
-        h.fake.put(topic, Fixtures.chat(talk, thread = thread).copy(agents = listOf(agent(running, left, notes)), people = people, pinned = pinned, xshare = xshare))
+        h.fake.put(topic, Fixtures.chat(talk, thread = thread).copy(agents = listOf(agent(running, left, notes, byHand)), people = people, pinned = pinned, xshare = xshare))
         h.fake.put(Topics.history(Fixtures.STATION, key), HistoryView(
             items = emptyList(), live = emptyList(), edge = "已到会话开头", empty = false, loaded = true,
             usage = listOf(UsageLine("模型调用", "142 次"), UsageLine("输入", "1.2M"), UsageLine("其中缓存", "1.1M"), UsageLine("输出", "34K"), UsageLine("缓存命中率", "92%"), UsageLine("上下文", "122K / 200K（61%）"), UsageLine("费用估算", "$4.20")),
@@ -131,6 +133,35 @@ class AgentSheetTest {
         h.settle()
         rule.runOnIdle { assertEquals(Screen.History(Fixtures.STATION, of, key), h.app.stack.last()) }
         rule.runOnIdle { assertEquals(null, h.app.sheet) }
+    }
+
+    @Test
+    fun betweenTurnsItsContextIsCompactedOrClearedByHand() {
+        val h = open(running = false, byHand = true)
+        rule.onAllNodesWithText(name)[0].performClick()
+        h.settle()
+        // One row, how full it is; what can be done behind it.
+        rule.onNodeWithText("压缩上下文").assertDoesNotExist()
+        rule.onNodeWithText("122K / 200K").assertIsDisplayed()
+        picture(h, "agent-card-context")
+        rule.onNodeWithText("122K / 200K").performClick()
+        h.settle()
+        rule.onNodeWithText("清空上下文").assertIsDisplayed()
+        picture(h, "context-sheet")
+        rule.onNodeWithText("压缩上下文").performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "session.compact" && it.second["key"]?.jsonPrimitive?.content == key }) }
+        // Cleared only once asked.
+        rule.onNodeWithText("122K / 200K").performClick()
+        h.settle()
+        rule.onNodeWithText("清空上下文").performClick()
+        h.settle()
+        rule.onNodeWithText("清空此 agent 的上下文？").assertIsDisplayed()
+        rule.runOnIdle { assertTrue(h.fake.calls.none { it.first == "session.clear" }) }
+        picture(h, "clear-context-ask")
+        rule.onAllNodesWithText("清空上下文").onLast().performClick()
+        h.settle()
+        rule.runOnIdle { assertTrue(h.fake.calls.any { it.first == "session.clear" }) }
     }
 
     @Test

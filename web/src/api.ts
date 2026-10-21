@@ -416,6 +416,10 @@ export function stationApi(t: StationCall) {
     unpublish: (thread: number, id: string) => t.op<unknown>("chat.unpublish", { thread, id }),
     deleteSession: (key: string) => ops.sessionDelete<{ ok: true }>({ key }),
     evict: (key: string) => ops.sessionEvict<{ ok: true }>({ key }),
+    /** Its context compacted by hand, between turns (its chat is told when it is done). */
+    compact: (key: string) => ops.sessionCompact<{ ok: true }>({ key }),
+    /** Its context cleared by hand, between turns: its next message starts a new conversation. */
+    clear: (key: string) => ops.sessionClear<{ ok: true }>({ key }),
     putConnect: (id: string, input: ConnectInput) => ops.connectPut<Overview>({ id, input }),
     deleteConnect: (id: string) => ops.connectDelete<Overview>({ id }),
     /** A Feishu connect's App Secret replaced: verified by its station first, then it reconnects. */

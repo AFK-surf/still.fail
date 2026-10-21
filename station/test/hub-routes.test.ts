@@ -273,6 +273,11 @@ test("stopping, evicting, warming and changing a session", async () => {
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/evict`), [200, { ok: true }]);
     await until("it is evicted", () => r.claude.last().disposed);
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/stop`), [200, { ok: true }]);
+    // Its context by hand: refused, saying why, before there is one; what its runtime can do is in its summary.
+    assert.deepEqual(await r.ask("POST", "/sessions/nope/compact"), [404, { error: "unknown session nope" }]);
+    r.store.setRuntimeSessionId(made.key, null);
+    assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/clear`), [409, { error: "暂无上下文" }]);
+    assert.deepEqual((await r.ask("GET", `/sessions/${made.key}`))[1].session.contextActions, ["compact", "clear"]);
 
     assert.deepEqual(await r.ask("POST", `/sessions/${made.key}/settings`, { fast: "yes" }), [400, { error: en("station.admin.badFast") }]);
     assert.equal((await r.ask("POST", "/sessions/nope/settings", { model: "opus" }))[0], 400);
