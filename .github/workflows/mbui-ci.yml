@@ -167,12 +167,15 @@ jobs:
       # (configuration change 0x80000000, CONFIG_ASSETS_PATHS), which relaunches every activity whatever its
       # configChanges, the keyboard's case's mid-way, run 39525921089)
       - uses: ./.github/actions/mbui-android-emulator
+        id: emu
         with: { target: default, profile: pixel_6 }
       # (the keyboard's first: its first case is the first launch after the boot, as on an emulator just booted)
       - name: "The soft keyboard (scripts/android-keyboard.sh: up, back, behind, cold)"
         run: APP=devicedemo scripts/android.sh build && APP=devicedemo bash scripts/android-keyboard.sh
+      # (after the keyboard's whatever it said, but only on an emulator that is up: with none, adb waited for one until
+      # the job's 40 minutes ran out, run 39536847578)
       - name: "The streams (scripts/android-streams.sh: plain, reopen, away, anew, thrown)"
-        if: success() || failure()
+        if: (success() || failure()) && steps.emu.outcome == 'success'
         run: APP=streamdemo scripts/android.sh build && APP=streamdemo bash scripts/android-streams.sh
       - uses: actions/upload-artifact@v4
         if: always()
