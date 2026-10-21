@@ -20,7 +20,7 @@
         "onlyWatching": false,
         "onlyDecisions": false,
         "listFilter": {},
-        "appearance": "light",
+        "appearance": "system",
         "rowPicture": "auto",
         "absoluteTime": false,
         "keys": {},

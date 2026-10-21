@@ -58,7 +58,9 @@ def texts(path, top=0):
 
 
 def pair(android, mbui):
-    """The lines paired by their words, in order where words repeat: (Android's, mbui's), and those of each alone."""
+    """The lines paired by their words, in order where words repeat: (Android's, mbui's), and those of each alone.
+    Words one app sets as one line and the other as pieces side by side on one baseline (a name inside a sentence,
+    a Text of its own) are paired as one line: the pieces joined, spaces aside."""
     left = list(mbui)
     pairs, alone_a = [], []
     for a in android:
@@ -67,7 +69,36 @@ def pair(android, mbui):
             alone_a.append(a)
         else:
             pairs.append((a, left.pop(k)))
-    return pairs, alone_a, left
+    joined_a, alone_a = rows(alone_a)
+    joined_m, left = rows(left)
+    flat = lambda t: "".join(t.split())
+    for a in list(joined_a + alone_a):
+        k = next((i for i, m in enumerate(joined_m + left) if flat(m["t"]) == flat(a["t"])), -1)
+        if k < 0:
+            continue
+        m = (joined_m + left)[k]
+        pairs.append((a, m))
+        (joined_a if a in joined_a else alone_a).remove(a)
+        (joined_m if m in joined_m else left).remove(m)
+    # (pieces that paired with nothing joined: alone as the pieces they are)
+    return pairs, alone_a + [p for j in joined_a for p in j["of"]], left + [p for j in joined_m for p in j["of"]]
+
+
+def rows(lines):
+    """Lines on one baseline (within a pixel) joined into one, left to right, where more than one: (the joined, the
+    rest)."""
+    by = {}
+    for l in lines:
+        by.setdefault(round(l["b"]), []).append(l)
+    joined, rest = [], []
+    for _, ls in sorted(by.items()):
+        if len(ls) < 2:
+            rest += ls
+            continue
+        ls.sort(key=lambda l: l["x0"])
+        joined.append({"t": " ".join(l["t"] for l in ls), "x0": ls[0]["x0"], "x1": ls[-1]["x1"], "b": ls[0]["b"],
+                       "top": min(l["top"] for l in ls), "bot": max(l["bot"] for l in ls), "of": ls})
+    return joined, rest
 
 
 def load(path):
