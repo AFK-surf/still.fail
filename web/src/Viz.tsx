@@ -301,7 +301,11 @@ export function VizFile({ sessionKey, file, failed }: { sessionKey: string; file
 
 const MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 
-/** A mermaid chart's document: the source, drawn by mermaid in still.fail's colours, drawn again when the theme changes. */
+/**
+ * A mermaid chart's document: the source, drawn by mermaid in still.fail's colours, drawn again when the theme changes.
+ * Drawn while its frame is not shown (its chat hidden behind another), mermaid measures every label as nothing and the
+ * chart comes out one empty box (2026-10-19): it waits until the frame has a width.
+ */
 function mermaidDocument(code: string): string {
   return `<pre class="mermaid-src" hidden>${code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre><div id="chart" style="display:flex;justify-content:center"></div>
 <script type="module">
@@ -313,9 +317,12 @@ function mermaidDocument(code: string): string {
   const pixel = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const rgb = (color) => { pixel.clearRect(0, 0, 1, 1); pixel.fillStyle = "#000"; pixel.fillStyle = color; pixel.fillRect(0, 0, 1, 1); const [r, g, b] = pixel.getImageData(0, 0, 1, 1).data; return "rgb(" + r + ", " + g + ", " + b + ")"; };
   const v = (name) => { const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); return name === "--font-sans" ? value : rgb(value); };
-  let n = 0;
+  const chart = document.getElementById("chart");
+  let n = 0, waiting = false;
   async function draw() {
     if (!mermaid) return;
+    if (!chart.clientWidth) { waiting = true; return; }
+    waiting = false;
     try {
       mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", fontFamily: v("--font-sans"), themeVariables: {
         darkMode: document.documentElement.dataset.theme === "dark", fontSize: "14px",
@@ -325,10 +332,12 @@ function mermaidDocument(code: string): string {
         actorBkg: v("--card"), actorBorder: v("--border-strong"), actorTextColor: v("--foreground"), signalColor: v("--foreground"), signalTextColor: v("--foreground"),
       } });
       const { svg } = await mermaid.render("chart-" + ++n, source);
-      document.getElementById("chart").innerHTML = svg;
+      chart.innerHTML = svg;
     } catch (e) { post({ type: "failed", message: String(e?.message ?? e) }); }
   }
   addEventListener("ember-viz:theme", draw);
+  // After the observer's turn: drawing in it changes the layout it reports on.
+  new ResizeObserver(() => { if (waiting && chart.clientWidth) setTimeout(draw); }).observe(chart);
   draw();
 </script>`;
 }
