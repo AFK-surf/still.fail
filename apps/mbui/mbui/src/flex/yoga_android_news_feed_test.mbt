@@ -6,7 +6,7 @@ test "android_news_feed" {
   let root = @flex.Node::new()
   root.style.position = Absolute
   root.style.align_content = Stretch
-  root.style.width = Pt(1080.0)
+  root.style.set_width(Pt(1080.0))
   let root_child0 = @flex.Node::new()
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
@@ -19,8 +19,8 @@ test "android_news_feed" {
   root_child0_child0_child0_child0.style.direction = Row
   root_child0_child0_child0_child0.style.align_items = FlexStart
   root_child0_child0_child0_child0.style.align_content = Stretch
-  root_child0_child0_child0_child0.style.margin.top = Pt(24.0)
-  root_child0_child0_child0_child0.style.margin.left = Pt(36.0)
+  root_child0_child0_child0_child0.style.set_margin_top(Pt(24.0))
+  root_child0_child0_child0_child0.style.set_margin_left(Pt(36.0))
   root_child0_child0_child0.add(root_child0_child0_child0_child0)
   let root_child0_child0_child0_child0_child0 = @flex.Node::new()
   root_child0_child0_child0_child0_child0.style.direction = Row
@@ -28,17 +28,17 @@ test "android_news_feed" {
   root_child0_child0_child0_child0.add(root_child0_child0_child0_child0_child0)
   let root_child0_child0_child0_child0_child0_child0 = @flex.Node::new()
   root_child0_child0_child0_child0_child0_child0.style.align_content = Stretch
-  root_child0_child0_child0_child0_child0_child0.style.width = Pt(120.0)
-  root_child0_child0_child0_child0_child0_child0.style.height = Pt(120.0)
+  root_child0_child0_child0_child0_child0_child0.style.set_width(Pt(120.0))
+  root_child0_child0_child0_child0_child0_child0.style.set_height(Pt(120.0))
   root_child0_child0_child0_child0_child0.add(root_child0_child0_child0_child0_child0_child0)
   let root_child0_child0_child0_child0_child1 = @flex.Node::new()
   root_child0_child0_child0_child0_child1.style.align_content = Stretch
   root_child0_child0_child0_child0_child1.style.shrink = 1.0
-  root_child0_child0_child0_child0_child1.style.margin.right = Pt(36.0)
-  root_child0_child0_child0_child0_child1.style.padding.left = Pt(36.0)
-  root_child0_child0_child0_child0_child1.style.padding.top = Pt(21.0)
-  root_child0_child0_child0_child0_child1.style.padding.right = Pt(36.0)
-  root_child0_child0_child0_child0_child1.style.padding.bottom = Pt(18.0)
+  root_child0_child0_child0_child0_child1.style.set_margin_right(Pt(36.0))
+  root_child0_child0_child0_child0_child1.style.set_padding_left(Pt(36.0))
+  root_child0_child0_child0_child0_child1.style.set_padding_top(Pt(21.0))
+  root_child0_child0_child0_child0_child1.style.set_padding_right(Pt(36.0))
+  root_child0_child0_child0_child0_child1.style.set_padding_bottom(Pt(18.0))
   root_child0_child0_child0_child0.add(root_child0_child0_child0_child0_child1)
   let root_child0_child0_child0_child0_child1_child0 = @flex.Node::new()
   root_child0_child0_child0_child0_child1_child0.style.direction = Row
@@ -56,8 +56,8 @@ test "android_news_feed" {
   root_child0_child0_child1_child0.style.direction = Row
   root_child0_child0_child1_child0.style.align_items = FlexStart
   root_child0_child0_child1_child0.style.align_content = Stretch
-  root_child0_child0_child1_child0.style.margin.top = Pt(24.0)
-  root_child0_child0_child1_child0.style.margin.left = Pt(174.0)
+  root_child0_child0_child1_child0.style.set_margin_top(Pt(24.0))
+  root_child0_child0_child1_child0.style.set_margin_left(Pt(174.0))
   root_child0_child0_child1.add(root_child0_child0_child1_child0)
   let root_child0_child0_child1_child0_child0 = @flex.Node::new()
   root_child0_child0_child1_child0_child0.style.direction = Row
@@ -65,17 +65,17 @@ test "android_news_feed" {
   root_child0_child0_child1_child0.add(root_child0_child0_child1_child0_child0)
   let root_child0_child0_child1_child0_child0_child0 = @flex.Node::new()
   root_child0_child0_child1_child0_child0_child0.style.align_content = Stretch
-  root_child0_child0_child1_child0_child0_child0.style.width = Pt(72.0)
-  root_child0_child0_child1_child0_child0_child0.style.height = Pt(72.0)
+  root_child0_child0_child1_child0_child0_child0.style.set_width(Pt(72.0))
+  root_child0_child0_child1_child0_child0_child0.style.set_height(Pt(72.0))
   root_child0_child0_child1_child0_child0.add(root_child0_child0_child1_child0_child0_child0)
   let root_child0_child0_child1_child0_child1 = @flex.Node::new()
   root_child0_child0_child1_child0_child1.style.align_content = Stretch
   root_child0_child0_child1_child0_child1.style.shrink = 1.0
-  root_child0_child0_child1_child0_child1.style.margin.right = Pt(36.0)
-  root_child0_child0_child1_child0_child1.style.padding.left = Pt(36.0)
-  root_child0_child0_child1_child0_child1.style.padding.top = Pt(21.0)
-  root_child0_child0_child1_child0_child1.style.padding.right = Pt(36.0)
-  root_child0_child0_child1_child0_child1.style.padding.bottom = Pt(18.0)
+  root_child0_child0_child1_child0_child1.style.set_margin_right(Pt(36.0))
+  root_child0_child0_child1_child0_child1.style.set_padding_left(Pt(36.0))
+  root_child0_child0_child1_child0_child1.style.set_padding_top(Pt(21.0))
+  root_child0_child0_child1_child0_child1.style.set_padding_right(Pt(36.0))
+  root_child0_child0_child1_child0_child1.style.set_padding_bottom(Pt(18.0))
   root_child0_child0_child1_child0.add(root_child0_child0_child1_child0_child1)
   let root_child0_child0_child1_child0_child1_child0 = @flex.Node::new()
   root_child0_child0_child1_child0_child1_child0.style.direction = Row

@@ -5,10 +5,10 @@
 test "flex_basis_flex_grow_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
@@ -24,17 +24,17 @@ test "flex_basis_flex_grow_column" {
 test "flex_shrink_flex_grow_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(500.0)
-  root.style.height = Pt(500.0)
+  root.style.set_width(Pt(500.0))
+  root.style.set_height(Pt(500.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(500.0)
-  root_child0.style.height = Pt(100.0)
+  root_child0.style.set_width(Pt(500.0))
+  root_child0.style.set_height(Pt(100.0))
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(500.0)
-  root_child1.style.height = Pt(100.0)
+  root_child1.style.set_width(Pt(500.0))
+  root_child1.style.set_height(Pt(100.0))
   root_child1.style.shrink = 1.0
   root.add(root_child1)
   @flex.compute(root)
@@ -47,17 +47,17 @@ test "flex_shrink_flex_grow_row" {
 test "flex_shrink_flex_grow_child_flex_shrink_other_child" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(500.0)
-  root.style.height = Pt(500.0)
+  root.style.set_width(Pt(500.0))
+  root.style.set_height(Pt(500.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(500.0)
-  root_child0.style.height = Pt(100.0)
+  root_child0.style.set_width(Pt(500.0))
+  root_child0.style.set_height(Pt(100.0))
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(500.0)
-  root_child1.style.height = Pt(100.0)
+  root_child1.style.set_width(Pt(500.0))
+  root_child1.style.set_height(Pt(100.0))
   root_child1.style.grow = 1.0
   root_child1.style.shrink = 1.0
   root.add(root_child1)
@@ -71,11 +71,11 @@ test "flex_shrink_flex_grow_child_flex_shrink_other_child" {
 test "flex_basis_flex_grow_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
@@ -91,14 +91,14 @@ test "flex_basis_flex_grow_row" {
 test "flex_basis_flex_shrink_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(100.0)
+  root_child0.style.set_basis(Pt(100.0))
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.basis = Pt(50.0)
+  root_child1.style.set_basis(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -110,15 +110,15 @@ test "flex_basis_flex_shrink_column" {
 test "flex_basis_flex_shrink_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.basis = Pt(100.0)
+  root_child0.style.set_basis(Pt(100.0))
   root_child0.style.shrink = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.basis = Pt(50.0)
+  root_child1.style.set_basis(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -130,19 +130,19 @@ test "flex_basis_flex_shrink_row" {
 test "flex_shrink_to_zero" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(75.0)
+  root.style.set_height(Pt(75.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root_child1.style.shrink = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(50.0)
-  root_child2.style.height = Pt(50.0)
+  root_child2.style.set_width(Pt(50.0))
+  root_child2.style.set_height(Pt(50.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 50.0, 75.0)
@@ -155,19 +155,19 @@ test "flex_shrink_to_zero" {
 test "flex_basis_overrides_main_size" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(100.0)
-  root.style.width = Pt(100.0)
+  root.style.set_height(Pt(100.0))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.grow = 1.0
-  root_child0.style.basis = Pt(50.0)
+  root_child0.style.set_basis(Pt(50.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root_child1.style.grow = 1.0
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root_child2.style.grow = 1.0
   root.add(root_child2)
   @flex.compute(root)
@@ -181,8 +181,8 @@ test "flex_basis_overrides_main_size" {
 test "flex_grow_shrink_at_most" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(100.0)
-  root.style.width = Pt(100.0)
+  root.style.set_height(Pt(100.0))
+  root.style.set_width(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
@@ -199,11 +199,11 @@ test "flex_grow_shrink_at_most" {
 test "flex_grow_less_than_factor_one" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(500.0)
-  root.style.width = Pt(200.0)
+  root.style.set_height(Pt(500.0))
+  root.style.set_width(Pt(200.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 0.2
-  root_child0.style.basis = Pt(40.0)
+  root_child0.style.set_basis(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
   root_child1.style.grow = 0.2

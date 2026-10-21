@@ -5,11 +5,11 @@
 test "zero_aspect_ratio_behaves_like_auto" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(300.0)
-  root.style.height = Pt(300.0)
+  root.style.set_width(Pt(300.0))
+  root.style.set_height(Pt(300.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.aspect = 0.0
-  root_child0.style.width = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 300.0, 300.0)

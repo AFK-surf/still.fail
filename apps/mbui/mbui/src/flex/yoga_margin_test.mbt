@@ -5,12 +5,12 @@
 test "margin_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
-  root_child0.style.margin.left = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
+  root_child0.style.set_margin_left(Pt(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -21,11 +21,11 @@ test "margin_start" {
 test "margin_top" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.margin.top = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_margin_top(Pt(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -36,13 +36,13 @@ test "margin_top" {
 test "margin_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   root.style.justify = FlexEnd
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
-  root_child0.style.margin.right = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
+  root_child0.style.set_margin_right(Pt(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -53,12 +53,12 @@ test "margin_end" {
 test "margin_bottom" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.justify = FlexEnd
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -69,12 +69,12 @@ test "margin_bottom" {
 test "margin_and_flex_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.left = Pt(10.0)
-  root_child0.style.margin.right = Pt(10.0)
+  root_child0.style.set_margin_left(Pt(10.0))
+  root_child0.style.set_margin_right(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   @flex.compute(root)
@@ -86,11 +86,11 @@ test "margin_and_flex_row" {
 test "margin_and_flex_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.top = Pt(10.0)
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_margin_top(Pt(10.0))
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   @flex.compute(root)
@@ -102,12 +102,12 @@ test "margin_and_flex_column" {
 test "margin_and_stretch_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.top = Pt(10.0)
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_margin_top(Pt(10.0))
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   @flex.compute(root)
@@ -119,11 +119,11 @@ test "margin_and_stretch_row" {
 test "margin_and_stretch_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.left = Pt(10.0)
-  root_child0.style.margin.right = Pt(10.0)
+  root_child0.style.set_margin_left(Pt(10.0))
+  root_child0.style.set_margin_right(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   @flex.compute(root)
@@ -135,11 +135,11 @@ test "margin_and_stretch_column" {
 test "margin_with_sibling_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.right = Pt(10.0)
+  root_child0.style.set_margin_right(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
@@ -155,10 +155,10 @@ test "margin_with_sibling_row" {
 test "margin_with_sibling_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
@@ -174,17 +174,17 @@ test "margin_with_sibling_column" {
 test "margin_auto_bottom" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.bottom = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_bottom(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -196,17 +196,17 @@ test "margin_auto_bottom" {
 test "margin_auto_top" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.top = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_top(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -218,18 +218,18 @@ test "margin_auto_top" {
 test "margin_auto_bottom_and_top" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.top = Auto
-  root_child0.style.margin.bottom = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_top(Auto)
+  root_child0.style.set_margin_bottom(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -241,18 +241,18 @@ test "margin_auto_bottom_and_top" {
 test "margin_auto_bottom_and_top_justify_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.top = Auto
-  root_child0.style.margin.bottom = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_top(Auto)
+  root_child0.style.set_margin_bottom(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -264,22 +264,22 @@ test "margin_auto_bottom_and_top_justify_center" {
 test "margin_auto_multiple_children_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.top = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_top(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
-  root_child1.style.margin.top = Auto
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
+  root_child1.style.set_margin_top(Auto)
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(50.0)
-  root_child2.style.height = Pt(50.0)
+  root_child2.style.set_width(Pt(50.0))
+  root_child2.style.set_height(Pt(50.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -292,23 +292,23 @@ test "margin_auto_multiple_children_column" {
 test "margin_auto_multiple_children_row" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.direction = Row
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
-  root_child1.style.margin.right = Auto
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
+  root_child1.style.set_margin_right(Auto)
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(50.0)
-  root_child2.style.height = Pt(50.0)
+  root_child2.style.set_width(Pt(50.0))
+  root_child2.style.set_height(Pt(50.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -321,19 +321,19 @@ test "margin_auto_multiple_children_row" {
 test "margin_auto_left_and_right_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -345,17 +345,17 @@ test "margin_auto_left_and_right_column" {
 test "margin_auto_left_and_right" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -367,19 +367,19 @@ test "margin_auto_left_and_right" {
 test "margin_auto_start_and_end_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -391,17 +391,17 @@ test "margin_auto_start_and_end_column" {
 test "margin_auto_start_and_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -413,18 +413,18 @@ test "margin_auto_start_and_end" {
 test "margin_auto_left_and_right_column_and_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -436,17 +436,17 @@ test "margin_auto_left_and_right_column_and_center" {
 test "margin_auto_left" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -458,17 +458,17 @@ test "margin_auto_left" {
 test "margin_auto_right" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -480,18 +480,18 @@ test "margin_auto_right" {
 test "margin_auto_left_and_right_stretch" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -503,17 +503,17 @@ test "margin_auto_left_and_right_stretch" {
 test "margin_auto_top_and_bottom_stretch" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
-  root_child0.style.margin.top = Auto
-  root_child0.style.margin.bottom = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
+  root_child0.style.set_margin_top(Auto)
+  root_child0.style.set_margin_bottom(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -525,13 +525,13 @@ test "margin_auto_top_and_bottom_stretch" {
 test "margin_should_not_be_part_of_max_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(250.0)
-  root.style.height = Pt(250.0)
+  root.style.set_width(Pt(250.0))
+  root.style.set_height(Pt(250.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(100.0)
-  root_child0.style.height = Pt(100.0)
-  root_child0.style.max_height = Pt(100.0)
-  root_child0.style.margin.top = Pt(20.0)
+  root_child0.style.set_width(Pt(100.0))
+  root_child0.style.set_height(Pt(100.0))
+  root_child0.style.set_max_height(Pt(100.0))
+  root_child0.style.set_margin_top(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 250.0, 250.0)
@@ -542,13 +542,13 @@ test "margin_should_not_be_part_of_max_height" {
 test "margin_should_not_be_part_of_max_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(250.0)
-  root.style.height = Pt(250.0)
+  root.style.set_width(Pt(250.0))
+  root.style.set_height(Pt(250.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(100.0)
-  root_child0.style.height = Pt(100.0)
-  root_child0.style.max_width = Pt(100.0)
-  root_child0.style.margin.left = Pt(20.0)
+  root_child0.style.set_width(Pt(100.0))
+  root_child0.style.set_height(Pt(100.0))
+  root_child0.style.set_max_width(Pt(100.0))
+  root_child0.style.set_margin_left(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 250.0, 250.0)
@@ -559,14 +559,14 @@ test "margin_should_not_be_part_of_max_width" {
 test "margin_auto_left_right_child_bigger_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(52.0)
-  root.style.width = Pt(52.0)
+  root.style.set_height(Pt(52.0))
+  root.style.set_width(Pt(52.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(72.0)
-  root_child0.style.height = Pt(72.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(72.0))
+  root_child0.style.set_height(Pt(72.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 52.0, 52.0)
@@ -577,13 +577,13 @@ test "margin_auto_left_right_child_bigger_than_parent" {
 test "margin_auto_left_child_bigger_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(52.0)
-  root.style.width = Pt(52.0)
+  root.style.set_height(Pt(52.0))
+  root.style.set_width(Pt(52.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(72.0)
-  root_child0.style.height = Pt(72.0)
-  root_child0.style.margin.left = Auto
+  root_child0.style.set_width(Pt(72.0))
+  root_child0.style.set_height(Pt(72.0))
+  root_child0.style.set_margin_left(Auto)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 52.0, 52.0)
@@ -594,14 +594,14 @@ test "margin_auto_left_child_bigger_than_parent" {
 test "margin_fix_left_auto_right_child_bigger_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(52.0)
-  root.style.width = Pt(52.0)
+  root.style.set_height(Pt(52.0))
+  root.style.set_width(Pt(52.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(72.0)
-  root_child0.style.height = Pt(72.0)
-  root_child0.style.margin.left = Pt(10.0)
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(72.0))
+  root_child0.style.set_height(Pt(72.0))
+  root_child0.style.set_margin_left(Pt(10.0))
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 52.0, 52.0)
@@ -612,14 +612,14 @@ test "margin_fix_left_auto_right_child_bigger_than_parent" {
 test "margin_auto_left_fix_right_child_bigger_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(52.0)
-  root.style.width = Pt(52.0)
+  root.style.set_height(Pt(52.0))
+  root.style.set_width(Pt(52.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(72.0)
-  root_child0.style.height = Pt(72.0)
-  root_child0.style.margin.left = Auto
-  root_child0.style.margin.right = Pt(10.0)
+  root_child0.style.set_width(Pt(72.0))
+  root_child0.style.set_height(Pt(72.0))
+  root_child0.style.set_margin_left(Auto)
+  root_child0.style.set_margin_right(Pt(10.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 52.0, 52.0)
@@ -630,18 +630,18 @@ test "margin_auto_left_fix_right_child_bigger_than_parent" {
 test "margin_auto_top_stretching_child" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root_child0.style.shrink = 1.0
-  root_child0.style.basis = Pct(0.0)
-  root_child0.style.margin.top = Auto
+  root_child0.style.set_basis(Pct(0.0))
+  root_child0.style.set_margin_top(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -653,18 +653,18 @@ test "margin_auto_top_stretching_child" {
 test "margin_auto_left_stretching_child" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root_child0.style.shrink = 1.0
-  root_child0.style.basis = Pct(0.0)
-  root_child0.style.margin.left = Auto
+  root_child0.style.set_basis(Pct(0.0))
+  root_child0.style.set_margin_left(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(50.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(50.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)
@@ -676,17 +676,17 @@ test "margin_auto_left_stretching_child" {
 test "margin_auto_overflowing_container" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(200.0)
-  root.style.height = Pt(200.0)
+  root.style.set_width(Pt(200.0))
+  root.style.set_height(Pt(200.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(150.0)
-  root_child0.style.margin.bottom = Auto
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(150.0))
+  root_child0.style.set_margin_bottom(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(50.0)
-  root_child1.style.height = Pt(150.0)
+  root_child1.style.set_width(Pt(50.0))
+  root_child1.style.set_height(Pt(150.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 200.0, 200.0)

@@ -112,27 +112,27 @@ fn node(sp : Spec, parent_is_row : Bool) -> @flex.Node {
     (Expand(v), _) => {
       s.grow = v
       s.shrink = 1.0
-      s.basis = Pt(0.0)
+      s.set_basis(Pt(0.0))
     }
     (_, Expand(v)) => {
       s.grow = v
       s.shrink = 0.0
-      s.basis = Auto
+      s.set_basis(Auto)
     }
     _ => ()
   }
   if !(parent_is_row && sp.min_w.is_expand()) {
-    s.min_width = min_max(sp.min_w)
+    s.set_min_width(min_max(sp.min_w))
   }
   if !(!parent_is_row && sp.min_h.is_expand()) {
-    s.min_height = min_max(sp.min_h)
+    s.set_min_height(min_max(sp.min_h))
   }
   if main.is_expand() {
     if parent_is_row && sp.min_w is NoSize {
-      s.min_width = Pt(0.0)
+      s.set_min_width(Pt(0.0))
     }
     if !parent_is_row && sp.min_h is NoSize {
-      s.min_height = Pt(0.0)
+      s.set_min_height(Pt(0.0))
     }
   }
   match (sp.w, sp.h) {
@@ -142,22 +142,22 @@ fn node(sp : Spec, parent_is_row : Bool) -> @flex.Node {
   }
   s.direction = if sp.row { Row } else { Column }
   s.wrap = if sp.wrap { Wrap } else { NoWrap }
-  s.width = dim(sp.w)
-  s.height = dim(sp.h)
-  s.max_width = min_max(sp.max_w)
-  s.max_height = min_max(sp.max_h)
-  s.gap_row = Pt(sp.gap)
-  s.gap_col = Pt(sp.gap)
+  s.set_width(dim(sp.w))
+  s.set_height(dim(sp.h))
+  s.set_max_width(min_max(sp.max_w))
+  s.set_max_height(min_max(sp.max_h))
+  s.set_gap_row(Pt(sp.gap))
+  s.set_gap_col(Pt(sp.gap))
   let (pl, pt, pr, pb) = sp.pad
-  s.padding.left = Pt(pl)
-  s.padding.top = Pt(pt)
-  s.padding.right = Pt(pr)
-  s.padding.bottom = Pt(pb)
+  s.set_padding_left(Pt(pl))
+  s.set_padding_top(Pt(pt))
+  s.set_padding_right(Pt(pr))
+  s.set_padding_bottom(Pt(pb))
   let (ml, mt, mr, mb) = sp.mar
-  s.margin.left = Pt(ml)
-  s.margin.top = Pt(mt)
-  s.margin.right = Pt(mr)
-  s.margin.bottom = Pt(mb)
+  s.set_margin_left(Pt(ml))
+  s.set_margin_top(Pt(mt))
+  s.set_margin_right(Pt(mr))
+  s.set_margin_bottom(Pt(mb))
   s.align_items = Stretch
   s.justify = FlexStart
   s.align_content = FlexStart

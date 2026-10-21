@@ -5,8 +5,8 @@
 test "display_none" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
@@ -25,15 +25,15 @@ test "display_none" {
 test "display_none_fixed_size" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(20.0)
-  root_child1.style.height = Pt(20.0)
+  root_child1.style.set_width(Pt(20.0))
+  root_child1.style.set_height(Pt(20.0))
   root_child1.style.display = DisplayNone
   root.add(root_child1)
   @flex.compute(root)
@@ -46,17 +46,17 @@ test "display_none_fixed_size" {
 test "display_none_with_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(20.0)
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_width(Pt(20.0))
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.display = DisplayNone
-  root_child0.style.margin.left = Pt(10.0)
-  root_child0.style.margin.top = Pt(10.0)
-  root_child0.style.margin.right = Pt(10.0)
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_margin_left(Pt(10.0))
+  root_child0.style.set_margin_top(Pt(10.0))
+  root_child0.style.set_margin_right(Pt(10.0))
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
   root_child1.style.grow = 1.0
@@ -71,30 +71,30 @@ test "display_none_with_margin" {
 test "display_none_with_child" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root_child0.style.shrink = 1.0
-  root_child0.style.basis = Pct(0.0)
+  root_child0.style.set_basis(Pct(0.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
   root_child1.style.grow = 1.0
   root_child1.style.shrink = 1.0
-  root_child1.style.basis = Pct(0.0)
+  root_child1.style.set_basis(Pct(0.0))
   root_child1.style.display = DisplayNone
   root.add(root_child1)
   let root_child1_child0 = @flex.Node::new()
   root_child1_child0.style.grow = 1.0
   root_child1_child0.style.shrink = 1.0
-  root_child1_child0.style.basis = Pct(0.0)
-  root_child1_child0.style.width = Pt(20.0)
+  root_child1_child0.style.set_basis(Pct(0.0))
+  root_child1_child0.style.set_width(Pt(20.0))
   root_child1.add(root_child1_child0)
   let root_child2 = @flex.Node::new()
   root_child2.style.grow = 1.0
   root_child2.style.shrink = 1.0
-  root_child2.style.basis = Pct(0.0)
+  root_child2.style.set_basis(Pct(0.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -108,8 +108,8 @@ test "display_none_with_child" {
 test "display_none_with_position" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
@@ -117,7 +117,7 @@ test "display_none_with_position" {
   let root_child1 = @flex.Node::new()
   root_child1.style.grow = 1.0
   root_child1.style.display = DisplayNone
-  root_child1.style.inset.top = Pt(10.0)
+  root_child1.style.set_inset_top(Pt(10.0))
   root.add(root_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -129,13 +129,13 @@ test "display_none_with_position" {
 test "display_none_with_position_absolute" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   let root_child0 = @flex.Node::new()
   root_child0.style.display = DisplayNone
   root_child0.style.position = Absolute
-  root_child0.style.width = Pt(100.0)
-  root_child0.style.height = Pt(100.0)
+  root_child0.style.set_width(Pt(100.0))
+  root_child0.style.set_height(Pt(100.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -146,8 +146,8 @@ test "display_none_with_position_absolute" {
 test "display_contents" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
@@ -155,14 +155,14 @@ test "display_contents" {
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -175,25 +175,25 @@ test "display_contents" {
 test "display_contents_fixed_size" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -206,17 +206,17 @@ test "display_contents_fixed_size" {
 test "display_contents_with_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(20.0)
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_width(Pt(20.0))
+  root_child0.style.set_height(Pt(20.0))
   root_child0.style.display = Contents
-  root_child0.style.margin.left = Pt(10.0)
-  root_child0.style.margin.top = Pt(10.0)
-  root_child0.style.margin.right = Pt(10.0)
-  root_child0.style.margin.bottom = Pt(10.0)
+  root_child0.style.set_margin_left(Pt(10.0))
+  root_child0.style.set_margin_top(Pt(10.0))
+  root_child0.style.set_margin_right(Pt(10.0))
+  root_child0.style.set_margin_bottom(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
   root_child1.style.grow = 1.0
@@ -231,27 +231,27 @@ test "display_contents_with_margin" {
 test "display_contents_with_padding" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
-  root_child0.style.padding.left = Pt(10.0)
-  root_child0.style.padding.top = Pt(10.0)
-  root_child0.style.padding.right = Pt(10.0)
-  root_child0.style.padding.bottom = Pt(10.0)
+  root_child0.style.set_padding_left(Pt(10.0))
+  root_child0.style.set_padding_top(Pt(10.0))
+  root_child0.style.set_padding_right(Pt(10.0))
+  root_child0.style.set_padding_bottom(Pt(10.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -264,24 +264,24 @@ test "display_contents_with_padding" {
 test "display_contents_with_position" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
-  root_child0.style.inset.top = Pt(10.0)
+  root_child0.style.set_inset_top(Pt(10.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -294,26 +294,26 @@ test "display_contents_with_position" {
 test "display_contents_with_position_absolute" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
   root_child0.style.position = Absolute
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(50.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(50.0))
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
   root_child0_child0.style.grow = 1.0
   root_child0_child0.style.shrink = 1.0
-  root_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0.style.height = Pt(10.0)
+  root_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0.style.set_height(Pt(10.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
   root_child0_child1.style.grow = 1.0
   root_child0_child1.style.shrink = 1.0
-  root_child0_child1.style.basis = Pct(0.0)
-  root_child0_child1.style.height = Pt(20.0)
+  root_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child1.style.set_height(Pt(20.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -326,8 +326,8 @@ test "display_contents_with_position_absolute" {
 test "display_contents_nested" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.display = Contents
@@ -338,14 +338,14 @@ test "display_contents_nested" {
   let root_child0_child0_child0 = @flex.Node::new()
   root_child0_child0_child0.style.grow = 1.0
   root_child0_child0_child0.style.shrink = 1.0
-  root_child0_child0_child0.style.basis = Pct(0.0)
-  root_child0_child0_child0.style.height = Pt(10.0)
+  root_child0_child0_child0.style.set_basis(Pct(0.0))
+  root_child0_child0_child0.style.set_height(Pt(10.0))
   root_child0_child0.add(root_child0_child0_child0)
   let root_child0_child0_child1 = @flex.Node::new()
   root_child0_child0_child1.style.grow = 1.0
   root_child0_child0_child1.style.shrink = 1.0
-  root_child0_child0_child1.style.basis = Pct(0.0)
-  root_child0_child0_child1.style.height = Pt(20.0)
+  root_child0_child0_child1.style.set_basis(Pct(0.0))
+  root_child0_child0_child1.style.set_height(Pt(20.0))
   root_child0_child0.add(root_child0_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -359,14 +359,14 @@ test "display_contents_nested" {
 test "display_contents_with_siblings" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
   root_child0.style.grow = 1.0
   root_child0.style.shrink = 1.0
-  root_child0.style.basis = Pct(0.0)
-  root_child0.style.height = Pt(30.0)
+  root_child0.style.set_basis(Pct(0.0))
+  root_child0.style.set_height(Pt(30.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
   root_child1.style.display = Contents
@@ -374,20 +374,20 @@ test "display_contents_with_siblings" {
   let root_child1_child0 = @flex.Node::new()
   root_child1_child0.style.grow = 1.0
   root_child1_child0.style.shrink = 1.0
-  root_child1_child0.style.basis = Pct(0.0)
-  root_child1_child0.style.height = Pt(10.0)
+  root_child1_child0.style.set_basis(Pct(0.0))
+  root_child1_child0.style.set_height(Pt(10.0))
   root_child1.add(root_child1_child0)
   let root_child1_child1 = @flex.Node::new()
   root_child1_child1.style.grow = 1.0
   root_child1_child1.style.shrink = 1.0
-  root_child1_child1.style.basis = Pct(0.0)
-  root_child1_child1.style.height = Pt(20.0)
+  root_child1_child1.style.set_basis(Pct(0.0))
+  root_child1_child1.style.set_height(Pt(20.0))
   root_child1.add(root_child1_child1)
   let root_child2 = @flex.Node::new()
   root_child2.style.grow = 1.0
   root_child2.style.shrink = 1.0
-  root_child2.style.basis = Pct(0.0)
-  root_child2.style.height = Pt(30.0)
+  root_child2.style.set_basis(Pct(0.0))
+  root_child2.style.set_height(Pt(30.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)

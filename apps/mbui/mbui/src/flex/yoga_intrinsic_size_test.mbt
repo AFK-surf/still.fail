@@ -5,8 +5,8 @@
 test "contains_inner_text_long_word" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
@@ -21,8 +21,8 @@ test "contains_inner_text_long_word" {
 test "contains_inner_text_no_width_no_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
@@ -37,8 +37,8 @@ test "contains_inner_text_no_width_no_height" {
 test "contains_inner_text_no_width_no_height_long_word_in_paragraph" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
@@ -53,12 +53,12 @@ test "contains_inner_text_no_width_no_height_long_word_in_paragraph" {
 test "contains_inner_text_fixed_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.width = Pt(100.0)
+  root_child0.style.set_width(Pt(100.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)
@@ -70,12 +70,12 @@ test "contains_inner_text_fixed_width" {
 test "contains_inner_text_no_width_fixed_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)
@@ -87,13 +87,13 @@ test "contains_inner_text_no_width_fixed_height" {
 test "contains_inner_text_fixed_width_fixed_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.width = Pt(50.0)
-  root_child0.style.height = Pt(20.0)
+  root_child0.style.set_width(Pt(50.0))
+  root_child0.style.set_height(Pt(20.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)
@@ -105,13 +105,13 @@ test "contains_inner_text_fixed_width_fixed_height" {
 test "contains_inner_text_max_width_max_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.max_width = Pt(50.0)
-  root_child0.style.max_height = Pt(20.0)
+  root_child0.style.set_max_width(Pt(50.0))
+  root_child0.style.set_max_height(Pt(20.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)
@@ -123,10 +123,10 @@ test "contains_inner_text_max_width_max_height" {
 test "contains_inner_text_max_width_max_height_column" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
-  root_child0.style.max_width = Pt(50.0)
+  root_child0.style.set_max_width(Pt(50.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=false))
   @flex.compute(root)
@@ -138,12 +138,12 @@ test "contains_inner_text_max_width_max_height_column" {
 test "contains_inner_text_max_width" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.max_width = Pt(100.0)
+  root_child0.style.set_max_width(Pt(100.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)
@@ -155,12 +155,12 @@ test "contains_inner_text_max_width" {
 test "contains_inner_text_fixed_width_shorter_text" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.width = Pt(100.0)
+  root_child0.style.set_width(Pt(100.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum", row=true))
   @flex.compute(root)
@@ -172,12 +172,12 @@ test "contains_inner_text_fixed_width_shorter_text" {
 test "contains_inner_text_fixed_height_shorter_text" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.height = Pt(100.0)
+  root_child0.style.set_height(Pt(100.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum", row=true))
   @flex.compute(root)
@@ -189,12 +189,12 @@ test "contains_inner_text_fixed_height_shorter_text" {
 test "contains_inner_text_max_height" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(2000.0)
-  root.style.height = Pt(2000.0)
+  root.style.set_width(Pt(2000.0))
+  root.style.set_height(Pt(2000.0))
   root.style.align_items = FlexStart
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.max_height = Pt(20.0)
+  root_child0.style.set_max_height(Pt(20.0))
   root.add(root_child0)
   root_child0.measure = Some(text_measure("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed eleifasd et tortor ac auctor. Integer at volutpat libero, sed elementum dui interdum id. Aliquam consectetur massa vel neque aliquet, quis consequat risus fringilla. Fusce rhoncus ipsum tempor eros aliquam, vel tempus metus ullamcorper. Nam at nulla sed tellus vestibulum fringilla vel sit amet ligula. Proin velit lectus, euismod sit amet quam vel ultricies dolor, vitae finibus lorem ipsum. Pellentesque molestie at mi sit amet dictum. Donec vehicula lacinia felis sit amet consectetur. Praesent sodales enim sapien, sed varius ipsum pellentesque vel. Aenean eu mi eu justo tincidunt finibus vel sit amet ipsum. Sed bibasdum purus vel ipsum sagittis, quis fermentum dolor lobortis. Etiam vulputate eleifasd lectus vel varius. Phasellus imperdiet lectus sit amet ipsum egestas, ut bibasdum ipsum malesuada. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Sed mollis eros sit amet elit porttitor, vel venenatis turpis venenatis. Nulla tempus tortor at eros efficitur, sit amet dapibus ipsum malesuada. Ut at mauris sed nunc malesuada convallis. Duis id sem vel magna varius eleifasd vel at est. Donec eget orci a ipsum tempor lobortis. Sed at consectetur ipsum.", row=true))
   @flex.compute(root)

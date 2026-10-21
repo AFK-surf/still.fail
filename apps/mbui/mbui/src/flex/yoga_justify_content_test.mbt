@@ -5,17 +5,17 @@
 test "justify_content_row_flex_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -28,18 +28,18 @@ test "justify_content_row_flex_start" {
 test "justify_content_row_flex_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = FlexEnd
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -52,18 +52,18 @@ test "justify_content_row_flex_end" {
 test "justify_content_row_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -76,18 +76,18 @@ test "justify_content_row_center" {
 test "justify_content_row_space_between" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceBetween
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -100,18 +100,18 @@ test "justify_content_row_space_between" {
 test "justify_content_row_space_around" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceAround
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(10.0)
+  root_child0.style.set_width(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(10.0)
+  root_child1.style.set_width(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(10.0)
+  root_child2.style.set_width(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -124,16 +124,16 @@ test "justify_content_row_space_around" {
 test "justify_content_column_flex_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -146,17 +146,17 @@ test "justify_content_column_flex_start" {
 test "justify_content_column_flex_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = FlexEnd
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -169,17 +169,17 @@ test "justify_content_column_flex_end" {
 test "justify_content_column_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -192,17 +192,17 @@ test "justify_content_column_center" {
 test "justify_content_column_space_between" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = SpaceBetween
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -215,17 +215,17 @@ test "justify_content_column_space_between" {
 test "justify_content_column_space_around" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = SpaceAround
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -238,13 +238,13 @@ test "justify_content_column_space_around" {
 test "justify_content_row_min_width_and_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_width = Pt(50.0)
-  root.style.margin.left = Pt(100.0)
+  root.style.set_min_width(Pt(50.0))
+  root.style.set_margin_left(Pt(100.0))
   root.style.justify = Center
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 100.0, 0.0, 50.0, 20.0)
@@ -255,14 +255,14 @@ test "justify_content_row_min_width_and_margin" {
 test "justify_content_row_max_width_and_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.max_width = Pt(80.0)
-  root.style.margin.left = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_max_width(Pt(80.0))
+  root.style.set_margin_left(Pt(100.0))
   root.style.justify = Center
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 100.0, 0.0, 80.0, 20.0)
@@ -273,12 +273,12 @@ test "justify_content_row_max_width_and_margin" {
 test "justify_content_column_min_height_and_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.min_height = Pt(50.0)
-  root.style.margin.top = Pt(100.0)
+  root.style.set_min_height(Pt(50.0))
+  root.style.set_margin_top(Pt(100.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 100.0, 20.0, 50.0)
@@ -289,13 +289,13 @@ test "justify_content_column_min_height_and_margin" {
 test "justify_content_column_max_height_and_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.height = Pt(100.0)
-  root.style.max_height = Pt(80.0)
-  root.style.margin.top = Pt(100.0)
+  root.style.set_height(Pt(100.0))
+  root.style.set_max_height(Pt(80.0))
+  root.style.set_margin_top(Pt(100.0))
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(20.0)
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_height(Pt(20.0))
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   @flex.compute(root)
   check("root", root, 0.0, 100.0, 20.0, 80.0)
@@ -306,17 +306,17 @@ test "justify_content_column_max_height_and_margin" {
 test "justify_content_column_space_evenly" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = SpaceEvenly
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -329,18 +329,18 @@ test "justify_content_column_space_evenly" {
 test "justify_content_row_space_evenly" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.justify = SpaceEvenly
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.height = Pt(10.0)
+  root_child0.style.set_height(Pt(10.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.height = Pt(10.0)
+  root_child1.style.set_height(Pt(10.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.height = Pt(10.0)
+  root_child2.style.set_height(Pt(10.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -353,8 +353,8 @@ test "justify_content_row_space_evenly" {
 test "justify_content_min_width_with_padding_child_width_greater_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(1000.0)
-  root.style.height = Pt(1584.0)
+  root.style.set_width(Pt(1000.0))
+  root.style.set_height(Pt(1584.0))
   root.style.align_content = Stretch
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
@@ -364,13 +364,13 @@ test "justify_content_min_width_with_padding_child_width_greater_than_parent" {
   root_child0_child0.style.direction = Row
   root_child0_child0.style.justify = Center
   root_child0_child0.style.align_content = Stretch
-  root_child0_child0.style.min_width = Pt(400.0)
-  root_child0_child0.style.padding.left = Pt(100.0)
-  root_child0_child0.style.padding.right = Pt(100.0)
+  root_child0_child0.style.set_min_width(Pt(400.0))
+  root_child0_child0.style.set_padding_left(Pt(100.0))
+  root_child0_child0.style.set_padding_right(Pt(100.0))
   root_child0.add(root_child0_child0)
   let root_child0_child0_child0 = @flex.Node::new()
-  root_child0_child0_child0.style.height = Pt(100.0)
-  root_child0_child0_child0.style.width = Pt(300.0)
+  root_child0_child0_child0.style.set_height(Pt(100.0))
+  root_child0_child0_child0.style.set_width(Pt(300.0))
   root_child0_child0_child0.style.align_content = Stretch
   root_child0_child0_child0.style.direction = Row
   root_child0_child0.add(root_child0_child0_child0)
@@ -385,8 +385,8 @@ test "justify_content_min_width_with_padding_child_width_greater_than_parent" {
 test "justify_content_min_width_with_padding_child_width_lower_than_parent" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(1080.0)
-  root.style.height = Pt(1584.0)
+  root.style.set_width(Pt(1080.0))
+  root.style.set_height(Pt(1584.0))
   root.style.align_content = Stretch
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
@@ -396,13 +396,13 @@ test "justify_content_min_width_with_padding_child_width_lower_than_parent" {
   root_child0_child0.style.direction = Row
   root_child0_child0.style.justify = Center
   root_child0_child0.style.align_content = Stretch
-  root_child0_child0.style.min_width = Pt(400.0)
-  root_child0_child0.style.padding.left = Pt(100.0)
-  root_child0_child0.style.padding.right = Pt(100.0)
+  root_child0_child0.style.set_min_width(Pt(400.0))
+  root_child0_child0.style.set_padding_left(Pt(100.0))
+  root_child0_child0.style.set_padding_right(Pt(100.0))
   root_child0.add(root_child0_child0)
   let root_child0_child0_child0 = @flex.Node::new()
-  root_child0_child0_child0.style.height = Pt(100.0)
-  root_child0_child0_child0.style.width = Pt(199.0)
+  root_child0_child0_child0.style.set_height(Pt(100.0))
+  root_child0_child0_child0.style.set_width(Pt(199.0))
   root_child0_child0_child0.style.align_content = Stretch
   root_child0_child0_child0.style.direction = Row
   root_child0_child0.add(root_child0_child0_child0)
@@ -417,20 +417,20 @@ test "justify_content_min_width_with_padding_child_width_lower_than_parent" {
 test "justify_content_space_between_indefinite_container_dim_with_free_space" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(300.0)
+  root.style.set_width(Pt(300.0))
   root.style.align_items = Center
   let root_child0 = @flex.Node::new()
   root_child0.style.direction = Row
-  root_child0.style.min_width = Pt(200.0)
+  root_child0.style.set_min_width(Pt(200.0))
   root_child0.style.justify = SpaceBetween
   root.add(root_child0)
   let root_child0_child0 = @flex.Node::new()
-  root_child0_child0.style.width = Pt(50.0)
-  root_child0_child0.style.height = Pt(50.0)
+  root_child0_child0.style.set_width(Pt(50.0))
+  root_child0_child0.style.set_height(Pt(50.0))
   root_child0.add(root_child0_child0)
   let root_child0_child1 = @flex.Node::new()
-  root_child0_child1.style.width = Pt(50.0)
-  root_child0_child1.style.height = Pt(50.0)
+  root_child0_child1.style.set_width(Pt(50.0))
+  root_child0_child1.style.set_height(Pt(50.0))
   root_child0.add(root_child0_child1)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 300.0, 50.0)
@@ -443,17 +443,17 @@ test "justify_content_space_between_indefinite_container_dim_with_free_space" {
 test "justify_content_flex_start_row_reverse" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = RowReverse
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(20.0)
+  root_child1.style.set_width(Pt(20.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(20.0)
+  root_child2.style.set_width(Pt(20.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -466,17 +466,17 @@ test "justify_content_flex_start_row_reverse" {
 test "justify_content_flex_end_row_reverse" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(100.0)
-  root.style.height = Pt(100.0)
+  root.style.set_width(Pt(100.0))
+  root.style.set_height(Pt(100.0))
   root.style.direction = RowReverse
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(20.0)
+  root_child0.style.set_width(Pt(20.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(20.0)
+  root_child1.style.set_width(Pt(20.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(20.0)
+  root_child2.style.set_width(Pt(20.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 100.0, 100.0)
@@ -489,17 +489,17 @@ test "justify_content_flex_end_row_reverse" {
 test "justify_content_overflow_row_flex_start" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -512,18 +512,18 @@ test "justify_content_overflow_row_flex_start" {
 test "justify_content_overflow_row_flex_end" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = FlexEnd
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -536,18 +536,18 @@ test "justify_content_overflow_row_flex_end" {
 test "justify_content_overflow_row_center" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = Center
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -560,18 +560,18 @@ test "justify_content_overflow_row_center" {
 test "justify_content_overflow_row_space_between" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceBetween
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -584,18 +584,18 @@ test "justify_content_overflow_row_space_between" {
 test "justify_content_overflow_row_space_around" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceAround
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -608,18 +608,18 @@ test "justify_content_overflow_row_space_around" {
 test "justify_content_overflow_row_space_evenly" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceEvenly
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
+  root_child0.style.set_width(Pt(40.0))
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
@@ -632,19 +632,19 @@ test "justify_content_overflow_row_space_evenly" {
 test "justify_content_overflow_row_space_evenly_auto_margin" {
   let root = @flex.Node::new()
   root.style.position = Absolute
-  root.style.width = Pt(102.0)
-  root.style.height = Pt(102.0)
+  root.style.set_width(Pt(102.0))
+  root.style.set_height(Pt(102.0))
   root.style.direction = Row
   root.style.justify = SpaceEvenly
   let root_child0 = @flex.Node::new()
-  root_child0.style.width = Pt(40.0)
-  root_child0.style.margin.right = Auto
+  root_child0.style.set_width(Pt(40.0))
+  root_child0.style.set_margin_right(Auto)
   root.add(root_child0)
   let root_child1 = @flex.Node::new()
-  root_child1.style.width = Pt(40.0)
+  root_child1.style.set_width(Pt(40.0))
   root.add(root_child1)
   let root_child2 = @flex.Node::new()
-  root_child2.style.width = Pt(40.0)
+  root_child2.style.set_width(Pt(40.0))
   root.add(root_child2)
   @flex.compute(root)
   check("root", root, 0.0, 0.0, 102.0, 102.0)
