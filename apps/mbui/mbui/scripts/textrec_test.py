@@ -11,7 +11,7 @@ text's contract, src/kitdemo/textcheck.mbt).
 
 W H "-": the window's size at the run's first frame (its DRAWHASH line).
 
-PLATFORM is the host's as @host.platform has it (0 macOS, 1 iOS, 2 Android, 3 Windows, 4 the web; 0 by default).
+PLATFORM is the host's as @hostapi.platform has it (0 macOS, 1 iOS, 2 Android, 3 Windows, 4 the web; 0 by default).
 """
 import glob
 import re

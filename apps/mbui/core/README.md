@@ -214,7 +214,7 @@ it, not in one of ours.
   stop it answering the browser. `scripts/android.sh listen-test` runs it with core/listen-test.js in the core's place
   (a POST from the emulator's shell; then build again without it).
 - **Sign-in**: no browser session on Android (`@core.has_browser_session()` false), so coredemo's 登录 signs in on
-  `@host.browser_login` (`dev.mbui.BrowserLogin`): `auth.begin` with `http://127.0.0.1:<port>/oauth/callback`, the
+  `@hostapi.browser_login` (`dev.mbui.BrowserLogin`): `auth.begin` with `http://127.0.0.1:<port>/oauth/callback`, the
   page in a Custom Tab (the Custom Tabs protocol's own intent extras, no androidx) on the app's task, the one GET to
   that path under that host taken and answered, then the app brought back in front (MainActivity is `singleTask`, as
   still.fail's; starting it again closes the tab above it; the page also links `dev.mbui.demo://back`), and
@@ -246,7 +246,7 @@ memory).
 - **`secure.*`**: sealed with DPAPI for the Windows user (CryptProtectData, never a prompt), a file per value in
   `<data>\secure`. `secure.ask` and `user: true` (Windows Hello) answer `"unsupported"`. `MBUI_SECURE_TEST=1` round-trips
   it once as the core starts (`SECURE_TEST …` on stderr).
-- **`listen.*`** and **sign-in**: on mbui's win_listen.c (Winsock); the app signs in on `@host.browser_login`
+- **`listen.*`** and **sign-in**: on mbui's win_listen.c (Winsock); the app signs in on `@hostapi.browser_login`
   (win_browser_login.c: `$BROWSER`, else the system's browser), the CLI's loopback redirect, as on Android.
 - **Data**: `%LOCALAPPDATA%\fail.still.mbui\core` (`MBUI_CORE_DATA` instead).
 - **End to end**: `apps/mbui/e2e/win.sh` signs the app in against a local cloud (cloud/test/dev.ts) through
@@ -272,7 +272,7 @@ desktop app do (ember docs/client-core.md, "Sign-in"). The cloud accepts exactly
   has signed in through it yet: a real sign-in is the person's to do). Caveat: another installed still.fail app
   (Studio has one) also owns `stillfail://`; ASWebAuthenticationSession avoids that clash, a registered scheme does not.
 - **Loopback** (`http://127.0.0.1:<port>/oauth/callback`, what command-line tools do). Nothing of it is
-  still.fail's: mbui/host's `browser_login` (browser_login.mbt, `src/host/apple_browser_login.m`) listens on
+  still.fail's: mbui/hostapi's `browser_login` (browser_login.mbt, `src/host/apple_browser_login.m`) listens on
   127.0.0.1 at a port the system picks, gives the app the address to come back to, opens the app's login page with
   `$BROWSER`, else `open` (the system on iOS), and gives back the address the browser came back to, any app, any
   service (on Android: `dev.mbui.BrowserLogin`, above). The listener is `src/host/apple_listen.m` (`listen_api.h`: BSD sockets on a dispatch source, a request

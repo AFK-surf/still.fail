@@ -122,7 +122,7 @@ extern "js" fn js_env(name : String) -> String =
   #|(n) => (typeof location !== "undefined" && new URLSearchParams(location.search).get(n)) || ""
 
 ///|
-pub fn run(
+fn run(
   title : String,
   frame : FuncRef[(Double, Double, Double, Double) -> Unit],
   pointer : FuncRef[(Int, Double, Double, Int) -> Unit],
@@ -134,7 +134,7 @@ pub fn run(
 }
 
 ///|
-pub fn now() -> Double {
+fn now() -> Double {
   js_now()
 }
 
@@ -145,36 +145,36 @@ extern "js" fn js_wall_ms() -> Double =
 ///|
 /// The time of day, in ms since 1970 (UTC), as the machine's clock has it: for what is shown of it only (@ui.wall_ms).
 /// A run to a declared moment (a scripted shot) has its own: from a fixed day, on with its frames' clock.
-pub fn wall_ms() -> Double {
+fn wall_ms() -> Double {
   js_wall_ms()
 }
 
 ///|
 /// When the input event being delivered happened, on now()'s clock (ms);
 /// negative when the host doesn't say.
-pub fn event_time() -> Double {
+fn event_time() -> Double {
   js_event_time()
 }
 
 ///|
 /// The system: 0 macOS, 1 iOS, 2 Android, 3 Windows, 4 a browser.
-pub fn platform() -> Int {
+fn platform() -> Int {
   4
 }
 
 ///|
-pub fn request_frame() -> Unit {
+fn request_frame() -> Unit {
   js_request_frame()
 }
 
 ///|
-pub fn wake_after(ms : Double) -> Unit {
+fn wake_after(ms : Double) -> Unit {
   js_wake_after(ms)
 }
 
 ///|
 /// As host_native's: ascent, descent, line height, the Han font's ascent and descent, whole-pixel lines.
-pub fn font_metrics(
+fn font_metrics(
   size : Double,
   weight : Int,
   style : Int,
@@ -184,7 +184,7 @@ pub fn font_metrics(
 }
 
 ///|
-pub fn shape(
+fn shape(
   text : String,
   size : Double,
   weight : Int,
@@ -195,41 +195,41 @@ pub fn shape(
 }
 
 ///|
-pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
+fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
   js_text_key(text, size, weight, style)
 }
 
 ///|
-pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
+fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   js_glyph(key, out)
 }
 
 ///|
 /// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
 /// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
-pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
+fn face_add(face : Int, path : String, weight : Int) -> Bool {
   js_face_add(face, path, weight)
 }
 
 ///|
 /// As face_add, the font's file being `data`.
-pub fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
+fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
   js_face_add_bytes(face, data, weight)
 }
 
 ///|
 /// Face `face` given up.
-pub fn face_clear(face : Int) -> Unit {
+fn face_clear(face : Int) -> Unit {
   js_face_clear(face)
 }
 
 ///|
-pub fn atlas_generation() -> Int {
+fn atlas_generation() -> Int {
   js_atlas_generation()
 }
 
 ///|
-pub fn present(
+fn present(
   buf : FixedArray[Double],
   count : Int,
   r : Double,
@@ -240,7 +240,7 @@ pub fn present(
 }
 
 ///|
-pub fn set_ime(
+fn set_ime(
   active : Bool,
   x : Double,
   y : Double,
@@ -254,38 +254,38 @@ pub fn set_ime(
 }
 
 ///|
-pub fn clipboard_set(s : String) -> Unit {
+fn clipboard_set(s : String) -> Unit {
   js_clipboard_set(s)
 }
 
 ///|
 /// A secret on the clipboard (see host_native.mbt): a page's as any words.
-pub fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
+fn clipboard_set_secret(s : String, clear_ms~ : Double) -> Unit {
   ignore(clear_ms)
   js_clipboard_set(s)
 }
 
 ///|
-pub fn log(s : String) -> Unit {
+fn log(s : String) -> Unit {
   js_log(s)
 }
 
 ///|
-pub fn bench_mode() -> Int {
+fn bench_mode() -> Int {
   js_bench_mode()
 }
 
 ///|
 /// Who is told as what the host does for the app is done (`f(kind, id, state)`, as host_native.mbt's). False where
 /// the host sends no such events.
-pub fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
+fn set_outside(f : FuncRef[(Int, Int, Int) -> Unit]) -> Bool {
   js_set_outside(f)
 }
 
 ///|
 /// As the frame just built left it: how many of the app's asks the host has not answered yet and what they are (""
 /// when none). A run to a declared moment keeps its clock still while any is awaited.
-pub fn frame_awaiting(awaiting : Int, what : String) -> Unit {
+fn frame_awaiting(awaiting : Int, what : String) -> Unit {
   js_frame_awaiting(awaiting, what)
 }
 
@@ -296,86 +296,86 @@ extern "js" fn js_own_clock() -> Bool =
 ///|
 /// Whether the run is on a clock of its own (its frames', 1/60 s a frame from 0, still while the app awaits the host:
 /// web/host.js shot_at), not the machine's.
-pub fn own_clock() -> Bool {
+fn own_clock() -> Bool {
   js_own_clock()
 }
 
 ///|
 /// Whether the system asks for less motion: the web host does not say.
-pub fn reduce_motion() -> Bool {
+fn reduce_motion() -> Bool {
   false
 }
 
 ///|
-pub fn exit(code : Int) -> Unit {
+fn exit(code : Int) -> Unit {
   js_exit(code)
 }
 
 ///|
-pub fn mem_bytes() -> Double {
+fn mem_bytes() -> Double {
   js_mem_bytes()
 }
 
 ///|
 /// Where the system's back goes (host_native.mbt `set_back`); in a browser:
 /// Alt+Left and a mouse's back button.
-pub fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
+fn set_back(back : FuncRef[(Int, Double, Double, Int) -> Unit]) -> Unit {
   js_set_back(back)
 }
 
 ///|
-pub fn back_enabled(on : Bool) -> Unit {
+fn back_enabled(on : Bool) -> Unit {
   js_back_enabled(on)
 }
 
 ///|
 /// Whether the system asks for less transparency (glass drawn solid): the
 /// browser's prefers-reduced-transparency.
-pub fn reduce_transparency() -> Bool {
+fn reduce_transparency() -> Bool {
   js_reduce_transparency()
 }
 
 ///|
 /// The GPU's time for the last frame drawn, in ms (-1: not known here).
-pub fn gpu_ms() -> Double {
+fn gpu_ms() -> Double {
   js_gpu_ms()
 }
 
 ///|
 /// The page's query parameter `name` ("" when there is none).
-pub fn env(name : String) -> String {
+fn env(name : String) -> String {
   js_env(name)
 }
 
 ///|
 /// Who to tell when the app comes to the front or leaves it (host_native.mbt): the browser's page never tells (shown
 /// and in front).
-pub fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
+fn set_app_state(f : FuncRef[(Int) -> Unit]) -> Unit {
   ignore(f)
 }
 
 ///|
 /// Whether the system is set to dark (see host_native.mbt): the browser's prefers-color-scheme.
-pub fn system_dark() -> Bool {
+fn system_dark() -> Bool {
   js_system_dark()
 }
 
 ///|
 /// The app is drawn dark from now on (host_native.mbt): the page has nothing of its own to follow it.
-pub fn set_dark(dark : Bool) -> Unit {
+fn set_dark(dark : Bool) -> Unit {
   ignore(dark)
 }
 
 ///|
 /// Turned sideways for a film (see host_native.mbt): a browser's page does not turn.
-pub fn set_sideways(on : Bool) -> Unit {
+fn set_sideways(on : Bool) -> Unit {
   ignore(on)
 }
 
 
 ///|
 /// Shared out (see host_native.mbt): the browser's page here has no share sheet of its own.
-pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
+fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
   ignore(text)
   ignore(name)
   ignore(mime)
@@ -384,24 +384,24 @@ pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool 
 }
 
 ///|
-pub fn shared_in() -> String {
+fn shared_in() -> String {
   ""
 }
 
 ///|
-pub fn shared_in_file(i : Int) -> Bytes {
+fn shared_in_file(i : Int) -> Bytes {
   ignore(i)
   b""
 }
 
 ///|
 /// This build's version code (see host_native.mbt): a page does not update itself.
-pub fn app_version() -> Int {
+fn app_version() -> Int {
   0
 }
 
 ///|
-pub fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
+fn update_install(url : String, sha256 : String, size : Double, name : String) -> Unit {
   ignore(url)
   ignore(sha256)
   ignore(size)
@@ -409,17 +409,17 @@ pub fn update_install(url : String, sha256 : String, size : Double, name : Strin
 }
 
 ///|
-pub fn update_state() -> String {
+fn update_state() -> String {
   ""
 }
 
 ///|
 /// A package for the system's installer (see host_native.mbt): a page has none, said on the system channel as the
 /// other hosts say it (the page's post queue: web/host.js H.post).
-pub fn install_package(name : String, data : Bytes) -> Unit {
+fn install_package(name : String, data : Bytes) -> Unit {
   ignore(data)
   let said : Json = { "install": { "name": Json::string(name), "error": "unsupported" } }
-  js_post(system_channel, said.stringify())
+  js_post(@hostapi.system_channel, said.stringify())
 }
 
 ///|
@@ -428,7 +428,7 @@ extern "js" fn js_post(channel : String, json : String) -> Unit =
 
 ///|
 /// A scripted run's input given to the host (see host_native.mbt): the browser has none of these paths.
-pub fn drive(kind : Int, text : String) -> Bool {
+fn drive(kind : Int, text : String) -> Bool {
   ignore(kind)
   ignore(text)
   false
@@ -455,28 +455,28 @@ extern "js" fn js_image_pixels(id : Int, out : FixedArray[Byte]) -> Int =
   #|(i, o) => globalThis.__mbhost.imagePixels(i, o)
 
 ///|
-pub fn image_load(src : String, max_px : Int) -> Int {
+fn image_load(src : String, max_px : Int) -> Int {
   js_image_load(src, max_px)
 }
 
 ///|
-pub fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
+fn image_load_bytes(data : Bytes, max_px : Int) -> Int {
   js_image_load_bytes(data, max_px)
 }
 
 ///|
-pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
+fn image_info(id : Int, out : FixedArray[Double]) -> Int {
   js_image_info(id, out)
 }
 
 ///|
-pub fn image_free(id : Int) -> Unit {
+fn image_free(id : Int) -> Unit {
   js_image_free(id)
 }
 
 ///|
 /// A ready image's pixels (as host_native.mbt's).
-pub fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
+fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
   js_image_pixels(id, out) == 1
 }
 
@@ -727,12 +727,12 @@ extern "js" fn js_view_read_answer(id : Int, req : Int, data : Bytes, total : Do
   #|(i, r, d, t) => { const H = globalThis.__mbhost; if (H && H.viewReadAnswer) H.viewReadAnswer(i, r, d, t) }
 
 ///|
-pub fn view_open(kind : Int, arg : String) -> Int {
+fn view_open(kind : Int, arg : String) -> Int {
   js_view_open(kind, arg)
 }
 
 ///|
-pub fn view_place(
+fn view_place(
   id : Int,
   x : Double,
   y : Double,
@@ -749,34 +749,34 @@ pub fn view_place(
 }
 
 ///|
-pub fn view_close(id : Int) -> Unit {
+fn view_close(id : Int) -> Unit {
   js_view_close(id)
 }
 
 ///|
-pub fn view_control(id : Int, op : Int, value : Double) -> Unit {
+fn view_control(id : Int, op : Int, value : Double) -> Unit {
   js_view_control(id, op, value)
 }
 
 ///|
-pub fn view_info(id : Int, out : FixedArray[Double]) -> Int {
+fn view_info(id : Int, out : FixedArray[Double]) -> Int {
   js_view_info(id, out)
 }
 
 ///|
-pub fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
+fn view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   js_view_read_next(id, out)
 }
 
 ///|
-pub fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
+fn view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit {
   js_view_read_answer(id, req, data, total)
 }
 
 ///|
 /// What a view has to say (see host_native.mbt): the browser opens no site (a page cannot answer another's requests
 /// without a service worker of its own), so only what a page's frame posts its host (`{"said":…}`).
-pub fn view_site_next(id : Int) -> String {
+fn view_site_next(id : Int) -> String {
   js_view_site_next(id)
 }
 
@@ -786,7 +786,7 @@ extern "js" fn js_view_site_next(id : Int) -> String =
 
 ///|
 /// What the app tells a view beyond its controls (see host_native.mbt).
-pub fn view_tell(id : Int, what : Int, text : String) -> Unit {
+fn view_tell(id : Int, what : Int, text : String) -> Unit {
   js_view_tell(id, what, text)
 }
 
@@ -795,14 +795,14 @@ extern "js" fn js_view_tell(id : Int, what : Int, text : String) -> Unit =
   #|(i, w, t) => { const H = globalThis.__mbhost; if (H && H.viewTell) H.viewTell(i, w, t) }
 
 ///|
-pub fn view_site_body(id : Int, req : Int) -> Bytes {
+fn view_site_body(id : Int, req : Int) -> Bytes {
   ignore(id)
   ignore(req)
   Bytes::new(0)
 }
 
 ///|
-pub fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
+fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
   ignore(id)
   ignore(req)
   ignore(status)
@@ -810,45 +810,45 @@ pub fn view_site_head(id : Int, req : Int, status : Int, headers : String) -> Un
 }
 
 ///|
-pub fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
+fn view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
   ignore(id)
   ignore(req)
   ignore(data)
 }
 
 ///|
-pub fn view_site_end(id : Int, req : Int, error : String) -> Unit {
+fn view_site_end(id : Int, req : Int, error : String) -> Unit {
   ignore(id)
   ignore(req)
   ignore(error)
 }
 
 ///|
-pub fn view_site_state(id : Int) -> String {
+fn view_site_state(id : Int) -> String {
   ignore(id)
   ""
 }
 
 ///|
-pub fn view_site_load(id : Int, path : String) -> Unit {
+fn view_site_load(id : Int, path : String) -> Unit {
   ignore(id)
   ignore(path)
 }
 
 ///|
-pub fn pdf_open(data : Bytes) -> Int {
+fn pdf_open(data : Bytes) -> Int {
   ignore(data)
   0
 }
 
 ///|
-pub fn pdf_pages(doc : Int) -> Int {
+fn pdf_pages(doc : Int) -> Int {
   ignore(doc)
   -1
 }
 
 ///|
-pub fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
+fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
   ignore(doc)
   ignore(page)
   out[0] = 0.0
@@ -856,7 +856,7 @@ pub fn pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
-pub fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
+fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
   ignore(doc)
   ignore(page)
   ignore(max_px)
@@ -864,12 +864,12 @@ pub fn pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
 }
 
 ///|
-pub fn pdf_close(doc : Int) -> Unit {
+fn pdf_close(doc : Int) -> Unit {
   ignore(doc)
 }
 
 ///|
-pub fn view_text(id : Int, what : Int) -> String? {
+fn view_text(id : Int, what : Int) -> String? {
   match js_view_text(id, what) {
     "" => None
     s => Some(s)
@@ -882,13 +882,13 @@ extern "js" fn js_view_text(id : Int, what : Int) -> String =
   #|(id, what) => (globalThis.__mbhost.viewText ? globalThis.__mbhost.viewText(id, what) : '') || ''
 
 ///|
-pub fn view_still(id : Int) -> Bytes {
+fn view_still(id : Int) -> Bytes {
   ignore(id)
   b""
 }
 
 ///|
-pub fn save_file(name : String, data : Bytes) -> Bool {
+fn save_file(name : String, data : Bytes) -> Bool {
   ignore(name)
   ignore(data)
   false
@@ -900,25 +900,25 @@ extern "js" fn js_set_cursor(kind : Int) -> Unit =
 
 ///|
 /// The desktop's window as the app wants it (see host_native.mbt): a browser's page has no window to size.
-pub fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
+fn window_setup(min_w : Double, min_h : Double, w : Double, h : Double, inset? : Bool = false) -> Unit {
   ignore((min_w, min_h, w, h, inset))
 }
 
 ///|
 /// Whether the window's buttons are in the app's top row (see host_native.mbt): never in a browser.
-pub fn window_inset() -> Bool {
+fn window_inset() -> Bool {
   false
 }
 
 ///|
 /// The window dragged by the app's top row (see host_native.mbt): a browser's page cannot move its window.
-pub fn window_drag() -> Unit {
+fn window_drag() -> Unit {
   ()
 }
 
 ///|
 /// The pointer's shape (see host_native.mbt): the canvas's CSS cursor.
-pub fn set_cursor(kind : Int) -> Unit {
+fn set_cursor(kind : Int) -> Unit {
   js_set_cursor(kind)
 }
 
@@ -932,7 +932,7 @@ extern "js" fn js_open_url(url : String) -> Bool =
 
 ///|
 /// The word around `off` (see host_native.mbt): the browser's Intl.Segmenter.
-pub fn word_at(text : String, off : Int) -> (Int, Int) {
+fn word_at(text : String, off : Int) -> (Int, Int) {
   let v = js_word_at(text, off)
   if v < 0.0 {
     return (-1, -1)
@@ -944,25 +944,25 @@ pub fn word_at(text : String, off : Int) -> (Int, Int) {
 
 ///|
 /// `url` handed to the browser (see host_native.mbt): window.open, in a tab of its own.
-pub fn open_url(url : String) -> Bool {
+fn open_url(url : String) -> Bool {
   js_open_url(url)
 }
 
 ///|
 /// The app over another app done (see host_native.mbt): a page never is.
-pub fn over_done(open_app~ : Bool) -> Unit {
+fn over_done(open_app~ : Bool) -> Unit {
   ignore(open_app)
 }
 
 ///|
 /// A page in a browser's tab (see host_native.mbt): a tab of its own, as open_url.
-pub fn open_tab(url : String) -> Bool {
+fn open_tab(url : String) -> Bool {
   js_open_url(url)
 }
 
 ///|
 /// What holds the app up while it listens for a browser (see host_native.mbt): a page keeps no notice.
-pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
+fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
   ignore(channel)
   ignore(title)
   ignore(body)
@@ -987,14 +987,14 @@ extern "js" fn js_post_bytes() -> Bytes =
 ///|
 /// What was posted from outside the frames since the last take (`__mbhost.post(channel, json, bytes)`: web/host.js),
 /// taken now as a frame begins: how many. They are handed on one at a time (`post_next`), in the order posted.
-pub fn post_take() -> Int {
+fn post_take() -> Int {
   js_post_take()
 }
 
 ///|
 /// The next message taken (`post_take`): its channel, its JSON and the bytes beside it (empty: none). None when all
 /// taken are handed on.
-pub fn post_next() -> (String, String, Bytes)? {
+fn post_next() -> (String, String, Bytes)? {
   let channel = js_post_next()
   if channel == "" {
     None

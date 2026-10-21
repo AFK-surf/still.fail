@@ -57,11 +57,11 @@ fn view_check_run(c : @ui.Ctx) -> Unit {
       // (left as it is, for its picture: the contract ends the app)
       if !view_check_placed.val {
         view_check_placed.val = true
-        @host.log("VIEWCHECK placed")
+        @hostapi.log("VIEWCHECK placed")
       }
       return
     }
-    @host.log("VIEWCHECK done")
-    @host.exit(0)
+    @hostapi.log("VIEWCHECK done")
+    @hostapi.exit(0)
   }
 }

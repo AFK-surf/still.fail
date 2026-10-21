@@ -1,13 +1,13 @@
 // The marks' contract (docs/determinism.md, "What is compared, and where"; scripts/host_contract.sh HOST marks): on a
 // real host, MBUI_MARKS=<the marks' JSON, base64> MBUI_MARKS_IMAGE=<the picture's bytes, base64> (test/marks/): the
-// marks drawn onto the picture by the host (@host.draw_marks), the PNG it made written on the log in base64 (`MARKS
+// marks drawn onto the picture by the host (@hostapi.draw_marks), the PNG it made written on the log in base64 (`MARKS
 // png <part>` lines, then `MARKS done N bytes`), then the app's end. `MARKS none` where the host draws none (Windows,
 // the web), `MARKS failed` where it could not: the app ends with 1. The host asks for a frame once the PNG is made:
 // each frame's build only asks whether it is.
 
 ///|
 /// The drawing asked for (once, in the first frame's build), while the host draws it.
-let marks_job : Ref[@host.MarkedImage?] = Ref(None)
+let marks_job : Ref[@hostapi.MarkedImage?] = Ref(None)
 
 ///|
 let marks_started : Ref[Bool] = Ref(false)
@@ -75,11 +75,11 @@ fn marks_base64(data : Bytes) -> String {
 fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
   if !marks_started.val {
     marks_started.val = true
-    match @host.draw_marks(marks_bytes_of(image), @host.from_base64(marks)) {
+    match @hostapi.draw_marks(marks_bytes_of(image), @hostapi.from_base64(marks)) {
       Some(job) => marks_job.val = Some(job)
       None => {
-        @host.log("MARKS none: this host draws no marks")
-        @host.exit(1)
+        @hostapi.log("MARKS none: this host draws no marks")
+        @hostapi.exit(1)
       }
     }
   }
@@ -89,8 +89,8 @@ fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
         Some(png) => {
           marks_job.val = None
           if png.length() == 0 {
-            @host.log("MARKS failed: the host could not draw them")
-            @host.exit(1)
+            @hostapi.log("MARKS failed: the host could not draw them")
+            @hostapi.exit(1)
           } else {
             // in parts (a log line of a few kB: logcat's, the simulator's stderr)
             let text = marks_base64(png)
@@ -98,11 +98,11 @@ fn marks_run(c : @ui.Ctx, marks : String, image : String) -> Unit {
             let mut at = 0
             while at < text.length() {
               let end = if at + part < text.length() { at + part } else { text.length() }
-              @host.log("MARKS png " + text.view(start_offset=at, end_offset=end).to_owned())
+              @hostapi.log("MARKS png " + text.view(start_offset=at, end_offset=end).to_owned())
               at = end
             }
-            @host.log("MARKS done \{png.length()} bytes")
-            @host.exit(0)
+            @hostapi.log("MARKS done \{png.length()} bytes")
+            @hostapi.exit(0)
           }
         }
         None => ()

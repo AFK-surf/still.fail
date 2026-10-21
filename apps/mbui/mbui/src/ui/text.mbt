@@ -7,7 +7,7 @@
 // What the host draws as one piece: a cluster, or a ligature the shaper made of
 // several (the host gives it to the first, with the advance shared out). A word
 // in a script whose letters take their shapes from their neighbours (Arabic,
-// the Indic scripts…) is made one cluster here (@host.text_key), so the host
+// the Indic scripts…) is made one cluster here (@hostapi.text_key), so the host
 // rasterizes it whole, joined as it is when the system draws it; a caret in it
 // goes before or after the whole word. Right-to-left text is put in its visual
 // order line by line (UAX #9, @text.Bidi): each line's clusters reordered, the
@@ -119,7 +119,7 @@ fn check_atlas() -> Unit {
 
 ///|
 /// Ascent, descent and line height of the system font at this size (its
-/// code face, slanted, its serif face: `style`, @host.style_mono, style_italic, style_serif).
+/// code face, slanted, its serif face: `style`, @hostapi.style_mono, style_italic, style_serif).
 fn font_metrics(
   size : Double,
   weight : Int,
@@ -239,9 +239,9 @@ fn clear_shapes() -> Unit {
 
 ///|
 /// With `spacing` (letter spacing, as Android's: each cluster's advance has it, half before its piece and half
-/// after), shaped with no ligatures (@host.style_no_ligatures): a ligature's letters would not be spaced.
+/// after), shaped with no ligatures (@hostapi.style_no_ligatures): a ligature's letters would not be spaced.
 fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? : Double = 0.0) -> Shaped {
-  let style = if spacing != 0.0 { style | @host.style_no_ligatures } else { style }
+  let style = if spacing != 0.0 { style | @hostapi.style_no_ligatures } else { style }
   let shapes = font_shapes(size, weight, style, spacing)
   match shapes.get(text) {
     Some(s) => s
@@ -822,7 +822,7 @@ fn TextLayout::line_range(self : TextLayout, line : Int) -> (Int, Int) {
 }
 
 ///|
-/// The width `text` advances on one line in that font (style: @host.style_italic, style_mono), as mbui lays it out:
+/// The width `text` advances on one line in that font (style: @hostapi.style_italic, style_mono), as mbui lays it out:
 /// for comparing with the platform's own (src/textdiff).
 pub fn text_advance(
   text : String,

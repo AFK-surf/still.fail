@@ -1,6 +1,6 @@
 // ＋'s recent photos (still.fail's Android app, chat/screens/Attach.kt RecentPhotos, latest): the gallery's latest
 // photos across the top of the sheet after the camera, a tap putting one in the message (most of what goes to an agent
-// is a screenshot just taken); read again as the sheet opens and on each answer of the gallery's (@host.gallery_*).
+// is a screenshot just taken); read again as the sheet opens and on each answer of the gallery's (@hostapi.gallery_*).
 // Without leave to read the gallery the strip's last tile asks for it (显示最近照片); with only the photos chosen for
 // the app (Android 14 on), it chooses more (选择更多照片). A host with no gallery (macOS, iOS, Windows) keeps the
 // tile, which says so. The strip scrolls sideways under the finger (it is no list: a drag area, its offset gliding on
@@ -21,9 +21,9 @@ priv struct Recent {
   mut open : Bool
   /// the gallery's answers when last read
   mut answers : Int
-  mut access : @host.GalleryAccess
+  mut access : @hostapi.GalleryAccess
   mut reading : @ui.GalleryRead?
-  mut photos : Array[@host.GalleryPhoto]
+  mut photos : Array[@hostapi.GalleryPhoto]
 }
 
 ///|
@@ -33,7 +33,7 @@ let recent : Recent = { open: false, answers: -1, access: NoGallery, reading: No
 /// The ids of the `n` photos latest at `now` (seconds), newest first (Attach.kt latest): each by the latest of its times
 /// that can be believed, a time in milliseconds taken as the seconds it means and one still ahead of now (by more than a
 /// day) left out; the gallery's own order (its id) between photos of the same time.
-fn latest_photos(photos : Array[@host.GalleryPhoto], now : Int64, n : Int) -> Array[@host.GalleryPhoto] {
+fn latest_photos(photos : Array[@hostapi.GalleryPhoto], now : Int64, n : Int) -> Array[@hostapi.GalleryPhoto] {
   let believed = fn(t : Int64) -> Int64 {
     let s = if t > 100_000_000_000L { t / 1000L } else { t }
     if s >= 1L && s <= now + 86_400L {
@@ -74,10 +74,10 @@ fn latest_photos(photos : Array[@host.GalleryPhoto], now : Int64, n : Int) -> Ar
 ///|
 /// Each frame ＋'s sheet is drawn: the gallery read again as it opens and on each of the system's answers.
 fn recent_frame(src : Source, open : Bool) -> Unit {
-  let answers = @host.gallery_answers()
+  let answers = @hostapi.gallery_answers()
   if open && (!recent.open || answers != recent.answers) {
     recent.answers = answers
-    recent.access = @host.gallery_access()
+    recent.access = @hostapi.gallery_access()
     recent.reading = match recent.access {
       Whole | Chosen => @ui.gallery_read()
       _ => {
@@ -93,7 +93,7 @@ fn recent_frame(src : Source, open : Bool) -> Unit {
         Some(all) => {
           recent.reading = None
           recent.photos = latest_photos(all, ((src.now)() / 1000.0).to_int64(), recent_most)
-          @host.log("recent photos: \{recent.photos.length()} of \{all.length()}")
+          @hostapi.log("recent photos: \{recent.photos.length()} of \{all.length()}")
         }
         // (read on the host's side: its word that it is done brings the frame that takes it)
         None => ()

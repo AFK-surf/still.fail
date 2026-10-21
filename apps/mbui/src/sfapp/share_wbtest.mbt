@@ -71,7 +71,7 @@ test "a shared link in a draft: a card with its site, sent as words after what i
 ///|
 test "over another app (ShareActivity): only the sheet; a chat tapped opens the app at it, over Home" {
   let t = share_tester("share-in")
-  t.post(@host.system_channel, "{\"over\":true}")
+  t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
   assert_true(share_over.val)
   assert_true(t.find("发到") is Some(_))
@@ -87,7 +87,7 @@ test "over another app (ShareActivity): only the sheet; a chat tapped opens the 
 ///|
 test "over another app, the sheet closed: the app goes once it has sunk away, back to where the person was" {
   let t = share_tester("share-in")
-  t.post(@host.system_channel, "{\"over\":true}")
+  t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
   lower_sheet()
   t.frame()
@@ -106,7 +106,7 @@ test "over another app signed out: to sign in in the app first, 打开 still.fai
   raise_sheet(ShareSheet)
   share_in.raised = true
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
-  t.post(@host.system_channel, "{\"over\":true}")
+  t.post(@hostapi.system_channel, "{\"over\":true}")
   t.frame()
   sheet_rested(t, "sheet")
   assert_true(t.find("先在 still.fail 里登录，再来分享") is Some(_))
@@ -118,7 +118,7 @@ test "over another app signed out: to sign in in the app first, 打开 still.fai
 /// Where a toast's words end over another app with the navigation bar `foot` high under the view (the host's `bars`).
 fn over_toast_foot(foot : Double) -> Double raise {
   let t = share_tester("share-in")
-  t.post(@host.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
+  t.post(@hostapi.system_channel, "{\"over\":true,\"bars\":{\"top\":24,\"bottom\":\{foot},\"left\":0,\"right\":0}}")
   t.frame()
   sheet_rested(t, "sheet")
   app.toast = "发到了"

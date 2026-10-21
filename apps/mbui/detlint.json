@@ -223,7 +223,8 @@
       "src/sf/tokens.mbt": 23
     },
     "build-effect": {},
-    "unsettled-ok": {}
+    "unsettled-ok": {},
+    "host-import": {}
   },
   "excused": {
     "frame-request": {},
@@ -252,6 +253,7 @@
     },
     "style-exact": {},
     "build-effect": {},
-    "unsettled-ok": {}
+    "unsettled-ok": {},
+    "host-import": {}
   }
 }

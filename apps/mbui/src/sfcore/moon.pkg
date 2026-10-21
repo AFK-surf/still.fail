@@ -1,7 +1,7 @@
 import {
   "stillfail/core",
   "mbui/effect",
-  "mbui/host",
+  "mbui/hostapi",
   "mbui/ui",
   "moonbitlang/core/json",
 }

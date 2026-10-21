@@ -19,7 +19,7 @@ Paths: `chat/` is `apps/android/chat/src/main/kotlin/fail/still/android/screens/
 
 | What | Spec | Where | mbui |
 |---|---|---|---|
-| Reduced motion | One clock for every window (MotionDurationScale 0): every animation at its end at once; the prefs' `motion` (`reduce` / `full`) or the system's animator duration scale 0 | ui/Motion.kt:43-80 | `@ui.reduced_motion()`: the host's (macOS/iOS Reduce Motion, Android's animator scale 0, Windows' client-area animations off; `@host.reduce_motion`, read once a second) or MBUI_REDUCE_MOTION=1; every Anim, presence, FLIP, flight at its end at once. Screenshots (`Ctx::stable`) likewise. The prefs' own setting: not yet (Settings is another slice) |
+| Reduced motion | One clock for every window (MotionDurationScale 0): every animation at its end at once; the prefs' `motion` (`reduce` / `full`) or the system's animator duration scale 0 | ui/Motion.kt:43-80 | `@ui.reduced_motion()`: the host's (macOS/iOS Reduce Motion, Android's animator scale 0, Windows' client-area animations off; `@hostapi.reduce_motion`, read once a second) or MBUI_REDUCE_MOTION=1; every Anim, presence, FLIP, flight at its end at once. Screenshots (`Ctx::stable`) likewise. The prefs' own setting: not yet (Settings is another slice) |
 | Loops reduced | A loop holds its rest pose (`still`), a spinner turns slowly (`slowMs`) | ui/Motion.kt:82-97 | spinners and breathing exist (src/sf); not slowed when reduced |
 | Flash reduced | Shown at its peak as long, then gone | ui/Motion.kt:99-112 | — (no quote jumps yet) |
 | Ease.Out | (.2, .7, .2, 1) | ui/Motion.kt:115 | `Curve::Out` |

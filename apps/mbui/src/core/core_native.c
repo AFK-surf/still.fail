@@ -1,5 +1,6 @@
 // mbui/core's native side: the engine's messages, which come on the core's own thread, posted to mbui's queue
-// (mb_post, mbui's src/host/post.h) on the channel "core": the window's next frame takes them as it begins and hands them
+// (mb_post, mbui's src/host/post.h, handed over with the engine: core_client.h) on the channel "core": the window's
+// next frame takes them as it begins and hands them
 // to the app's handler (@ui.on_message("core", @core.receive)); the first since a frame took the last wakes the host.
 // The engine itself is the app's (core_client.h, mbc_use).
 #ifdef _WIN32
@@ -14,17 +15,13 @@
 #include "moonbit.h"
 #include "core_client.h"
 
-// mbui's (src/host/post_api.h): a message for the next frame, from any thread; what is posted and not handed on, gone
-// (mbui/host, imported for it: linked with this package's own tests too)
-void mb_post(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
-void mb_post_drop(const char *channel);
-
 static const mbc_engine *engine;
 
 void mbc_use(const mbc_engine *e) { engine = e; }
 
 static void push_with(const char *json, size_t len, const uint8_t *bytes, size_t blen) {
-  mb_post("core", json, len, bytes, blen);
+  // (mbui's queue, as the engine gives it: mb_post, a message for the next frame from any thread)
+  if (engine && engine->post) engine->post("core", json, len, bytes, blen);
 }
 
 static void push(const char *json, size_t len) { push_with(json, len, NULL, 0); }
@@ -98,7 +95,7 @@ void mbc_stop(void) {
   if (!engine) return;
   engine->stop();
   // What the stopped core said and the UI has not taken is its last words: the next core's ids are the same.
-  mb_post_drop("core");
+  if (engine->post_drop) engine->post_drop("core");
 }
 
 // A browser session's end, queued as a message of ours: {"mbui_auth": token, "url"|"error": "..."}.

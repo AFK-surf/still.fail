@@ -1,6 +1,6 @@
 import {
   "mbui/ui",
-  "mbui/host",
+  "mbui/hostapi",
   "mbui/kit",
   "mbui/md",
   "mbui/motion",

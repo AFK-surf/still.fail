@@ -183,9 +183,9 @@ fn RichLayout::hard_end(self : RichLayout, i : Int) -> Bool {
 
 ///|
 fn run_style(r : Run) -> Int {
-  (if r.italic { @host.style_italic } else { 0 }) |
-  (if r.code || r.mono { @host.style_mono } else { 0 }) |
-  (if r.serif && !r.code && !r.mono { @host.style_serif } else { 0 })
+  (if r.italic { @hostapi.style_italic } else { 0 }) |
+  (if r.code || r.mono { @hostapi.style_mono } else { 0 }) |
+  (if r.serif && !r.code && !r.mono { @hostapi.style_serif } else { 0 })
 }
 
 ///|
@@ -631,7 +631,7 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
 /// `Tracking` in ems of `size`). `max_lines`: wrapped words cut after that many lines, ending in an ellipsis in the
 /// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis). `words`: what people
-/// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @host.face_text) where
+/// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @hostapi.face_text) where
 /// there is one. `face`: every run in that face (4 to 15, face_add), where it is given (a face shown in itself).
 pub fn Ctx::rich(
   self : Ctx,

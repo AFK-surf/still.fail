@@ -124,7 +124,7 @@ fn start() -> Unit {
         @ui.log("STREAM done")
         // (a host's check: the run's own end, MBUI_STREAM_EXIT=1)
         if @ui.env("MBUI_STREAM_EXIT") == "1" {
-          @host.exit(0)
+          @hostapi.exit(0)
         }
       }
       match stream.val {
@@ -166,6 +166,6 @@ fn view(c : @ui.Ctx) -> Unit {
 
 ///|
 fn main {
-  @host.window_setup(480.0, 320.0, 720.0, 480.0)
+  @hostapi.window_setup(480.0, 320.0, 720.0, 480.0)
   @ui.run("mbui streams", view)
 }

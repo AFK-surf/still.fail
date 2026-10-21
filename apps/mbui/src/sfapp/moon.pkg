@@ -10,7 +10,7 @@ import {
   "stillfail/sf",
   "stillfail/gallery",
   "stillfail/player",
-  "mbui/host",
+  "mbui/hostapi",
   "mbui/zip",
   "stillfail/sfapp/settings",
 }

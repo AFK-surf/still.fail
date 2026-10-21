@@ -327,7 +327,7 @@ fn history_steps(c : @ui.Ctx, src : Source, r : ChatRef, key : String, entry : I
                   ],
                 ),
               )
-              @host.log("history: gone to entry \{e}")
+              @hostapi.log("history: gone to entry \{e}")
             }
             // (not there: the newest, followed)
             None => {

@@ -1,4 +1,4 @@
-// An app's own calls of its host (@host's native.mbt): what is the app's alone, by a name it gives (still.fail's
+// An app's own calls of its host (@hostapi's native.mbt): what is the app's alone, by a name it gives (still.fail's
 // 共享调试 on Android: "adb.phone", "adb.open"…), answered by what the app's own host code put there for that name. A
 // call is an outside ticket of kind `native` (hostcall.mbt), asked from an event's handler or Ctx::tell, never while a
 // frame builds (detlint's build-effect), and answered at a frame's boundary: the app reads NativeCall::got as its
@@ -17,7 +17,7 @@
 /// A native call asked (`native_call`): its answer once the host has given it (`got`).
 pub struct NativeCall {
   name : String
-  host : @host.NativeCall?
+  host : @hostapi.NativeCall?
   /// a Tester's: its place among the fake host's calls; -1 a real host's
   fake : Int
   /// a host without native calls: answered so at once
@@ -75,7 +75,7 @@ pub fn native_call(name : String, params : Json) -> NativeCall {
       c
     }
     None =>
-      match @host.native_call(name, params.stringify()) {
+      match @hostapi.native_call(name, params.stringify()) {
         Some(h) => {
           let c : NativeCall = { name, host: Some(h), fake: -1, none: false, taken: Ref::new(false) }
           outside_start(outside_native, h.id(), "the native call \{name} \{h.id()}")

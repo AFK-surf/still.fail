@@ -227,7 +227,7 @@ typedef struct {
 static mb_image *imgs;  // by id; ids are not reused
 static int nimgs, img_cap;
 
-// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/host/stream.mbt), below
+// a stream's texture (Streams.java; its instances' image is MB_STREAM_TEX + its id: src/hostapi/stream.mbt), below
 #define MB_STREAM_TEX 4194304
 static GLuint stream_tex(int id);
 static void streams_lost(JNIEnv *env);
@@ -973,7 +973,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_text(JNIEnv *env, jclass c, jint kin
 
 // The system's back (MainActivity: OnBackAnimationCallback, its predictive back gesture; on older systems
 // onBackPressed): kind 0 started, 1 moved, 2 gone back, 3 called off; x in logical pixels, edge 0 left, 1 right.
-// The app in front or not (@host.set_app_state), as MainActivity tells it (Host.appState), on the GL thread.
+// The app in front or not (@hostapi.set_app_state), as MainActivity tells it (Host.appState), on the GL thread.
 static void (*state_cb)(int32_t);
 void mb_host_set_app_state(void (*f)(int32_t)) { state_cb = f; }
 JNIEXPORT void JNICALL Java_dev_mbui_Native_appState(JNIEnv *env, jclass c, jint state) {
@@ -981,7 +981,7 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_appState(JNIEnv *env, jclass c, jint
 }
 
 // What the system says between frames (MainActivity: the app back on screen after a while, the device's network
-// changed, a link it was opened with), posted on its channel for the app's handler (src/host/system.mbt): the JSON's
+// changed, a link it was opened with), posted on its channel for the app's handler (src/hostapi/system.mbt): the JSON's
 // UTF-8 as Java made it (Native.post), the channel's name ASCII.
 JNIEXPORT void JNICALL Java_dev_mbui_Native_postBytes(JNIEnv *env, jclass c, jstring channel, jbyteArray json) {
   const char *ch = (*env)->GetStringUTFChars(env, channel, NULL);
@@ -1048,26 +1048,26 @@ static void mb_post_wake(void) {
   if (attached) (*vm)->DetachCurrentThread(vm);
 }
 
-// Whether the system is in night mode (@host.system_dark), as MainActivity keeps it (Host.systemDark: the
+// Whether the system is in night mode (@hostapi.system_dark), as MainActivity keeps it (Host.systemDark: the
 // configuration's uiMode, a frame asked for when it changes).
 int32_t mb_host_system_dark(void) {
   JNIEnv *env = env_();
   return (*env)->CallStaticBooleanMethod(env, host_cls, m_system_dark) ? 1 : 0;
 }
 
-// The app drawn dark or light (@host.set_dark): the status and navigation bars' icons light on it or dark (Host.setDark).
+// The app drawn dark or light (@hostapi.set_dark): the status and navigation bars' icons light on it or dark (Host.setDark).
 void mb_host_set_dark(int32_t dark) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_dark, (jboolean)(dark != 0));
 }
 
-// Turned sideways for a film (@host.set_sideways): landscape and the system bars away, or upright (Host.setSideways).
+// Turned sideways for a film (@hostapi.set_sideways): landscape and the system bars away, or upright (Host.setSideways).
 void mb_host_set_sideways(int32_t on) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_set_sideways, (jboolean)(on != 0));
 }
 
-// The word around an offset as ICU finds it (Host.wordAt, @host.word_at): start × 2³² + end, or -1.
+// The word around an offset as ICU finds it (Host.wordAt, @hostapi.word_at): start × 2³² + end, or -1.
 double mb_host_word_at(moonbit_string_t text, int32_t off) {
   JNIEnv *env = env_();
   jstring t = jstr(env, text);
@@ -1076,7 +1076,7 @@ double mb_host_word_at(moonbit_string_t text, int32_t off) {
   return v;
 }
 
-// A URL handed to the system (Host.openUrl, @host.open_url): ACTION_VIEW.
+// A URL handed to the system (Host.openUrl, @hostapi.open_url): ACTION_VIEW.
 int32_t mb_host_open_url(moonbit_string_t url) {
   JNIEnv *env = env_();
   jstring u = jstr(env, url);
@@ -1085,13 +1085,13 @@ int32_t mb_host_open_url(moonbit_string_t url) {
   return ok ? 1 : 0;
 }
 
-// The app over another app done (Host.overDone, @host.over_done): back to it, or on into the app's own activity.
+// The app over another app done (Host.overDone, @hostapi.over_done): back to it, or on into the app's own activity.
 void mb_host_over_done(int32_t open_app) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, host_cls, m_over_done, open_app ? JNI_TRUE : JNI_FALSE);
 }
 
-// A page in a browser's tab over the app (BrowserLogin.openTab, @host.open_tab): a Custom Tab, ACTION_VIEW where no
+// A page in a browser's tab over the app (BrowserLogin.openTab, @hostapi.open_tab): a Custom Tab, ACTION_VIEW where no
 // browser takes one.
 int32_t mb_host_open_tab(moonbit_string_t url) {
   JNIEnv *env = env_();
@@ -1101,7 +1101,7 @@ int32_t mb_host_open_tab(moonbit_string_t url) {
   return ok ? 1 : 0;
 }
 
-// What the notice that holds the app up while it listens for a browser says (LoginService.words, @host.hold_words).
+// What the notice that holds the app up while it listens for a browser says (LoginService.words, @hostapi.hold_words).
 void mb_host_hold_words(moonbit_string_t channel, moonbit_string_t title, moonbit_string_t body) {
   JNIEnv *env = env_();
   jstring c = jstr(env, channel), t = jstr(env, title), b = jstr(env, body);
@@ -1157,7 +1157,7 @@ void mb_host_update_install(moonbit_string_t url, moonbit_string_t sha256, doubl
   (*env)->DeleteLocalRef(env, n);
 }
 
-// A package handed to the system's installer (Updates.installPackage, @host.install_package); what comes of it is
+// A package handed to the system's installer (Updates.installPackage, @hostapi.install_package); what comes of it is
 // posted on the system channel (system.mbt `install`).
 void mb_host_install_package(moonbit_string_t name, moonbit_bytes_t data) {
   JNIEnv *env = env_();
@@ -1956,7 +1956,7 @@ void mb_host_pdf_close(int32_t doc) {
   (*env)->CallStaticVoidMethod(env, pdfs_cls, m_pdf_close, doc);
 }
 
-// The desktop's window and pointer (@host.window_setup, window_inset, window_drag, set_cursor): no window to size
+// The desktop's window and pointer (@hostapi.window_setup, window_inset, window_drag, set_cursor): no window to size
 // or move here, no pointer to shape.
 void mb_host_window_setup(double min_w, double min_h, double w, double h, int32_t inset) {
   (void)min_w; (void)min_h; (void)w; (void)h; (void)inset;
@@ -1966,7 +1966,7 @@ void mb_host_window_drag(void) {}
 void mb_host_set_cursor(int32_t kind) { (void)kind; }
 
 // ---------------------------------------------------------------------------
-// Streams (src/host/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app
+// Streams (src/hostapi/stream.mbt): dev.mbui.Streams decodes (MediaCodec, BitmapFactory) and draws each frame the app
 // shows into a texture of its own on the GL thread, told here (Streams.texture) for the renderer to draw the stream's
 // instances with. What MediaCodec takes of H.264 is made by avc.h, the conversion the hosts share.
 

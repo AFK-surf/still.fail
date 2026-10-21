@@ -778,7 +778,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       }
     },
     pick_picture: fn(done) {
-      match @ui.pick(@host.PickKind::Photos) {
+      match @ui.pick(@hostapi.PickKind::Photos) {
         Some(p) => {
           picture_pick.val = Some((p, done))
           true
@@ -838,7 +838,7 @@ fn place_switch(c : @ui.Ctx) -> @motion.Anim {
 }
 
 ///|
-/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@host.system_dark)
+/// Light or dark, as this device is set (the prefs' `appearance`, Appearance.kt), or as the system is (@hostapi.system_dark)
 /// when it follows it; the host told when it changes (its bars follow).
 fn appearance(src : Source) -> Unit {
   let prefs = (src.topic)("prefs", {}).value
@@ -848,7 +848,7 @@ fn appearance(src : Source) -> Unit {
   if prefs is Some(_) && told_dark.val != Some(dark) {
     told_dark.val = Some(dark)
     // (said on the log for scripted runs: e2e/flows checks the theme was taken)
-    @host.log(if dark { "theme: dark" } else { "theme: light" })
+    @hostapi.log(if dark { "theme: dark" } else { "theme: light" })
   }
   // the system bars follow the page under them: the player's and a picture's or a video's in the viewer are dark
   // whatever the theme, a reader's as dark as its paper
@@ -861,7 +861,7 @@ fn appearance(src : Source) -> Unit {
     @ui.current().after_build("bars", fn() {
       if told_bars.val != Some(bars) {
         told_bars.val = Some(bars)
-        @host.set_dark(bars)
+        @hostapi.set_dark(bars)
       }
     })
   }
@@ -1141,7 +1141,7 @@ fn attend(src : Source, workspace : String) -> Unit {
 }
 
 ///|
-/// What the system said between frames (@host.system_channel; its handler set as the package starts, before the first
+/// What the system said between frames (@hostapi.system_channel; its handler set as the package starts, before the first
 /// frame takes what came with the app's start), to the core: back on screen after `away` ms off it, the
 /// core gives up requests that went out before and reconnects links gone quiet (MainActivity.kt wake: `client.wake
 /// {away}`, client/core-ts src/wake.ts), and a newer build is asked for again (onStart's checkUpdates); the default
@@ -1203,7 +1203,7 @@ fn system_said(json : String) -> Unit {
 /// The system's say has its handler before the first frame (what is posted as the app starts, a link it was opened
 /// with, would be left with none).
 fn init {
-  @ui.on_message(@host.system_channel, fn(json, _) { system_said(json) })
+  @ui.on_message(@hostapi.system_channel, fn(json, _) { system_said(json) })
   // what the phone has for 共享调试, as its host says by itself (the app's Android: AdbShare.java)
   @ui.on_message("native:adb.phone", fn(json, _) { @settings.adb_phone_said(json) })
 }

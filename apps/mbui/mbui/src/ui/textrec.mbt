@@ -36,7 +36,7 @@ let text_said : Map[String, Bool] = Map([])
 ///|
 fn text_recording() -> Bool {
   if text_rec.val < 0 {
-    text_rec.val = if @host.env("MBUI_TEXT_RECORD") == "1" { 1 } else { 0 }
+    text_rec.val = if @hostapi.env("MBUI_TEXT_RECORD") == "1" { 1 } else { 0 }
   }
   text_rec.val == 1
 }
@@ -59,7 +59,7 @@ fn nums(a : FixedArray[Double], n : Int) -> Json {
 fn text_say(key : String, line : Json) -> Unit {
   if !text_said.contains(key) {
     text_said[key] = true
-    @host.log("TEXTREC " + line.stringify())
+    @hostapi.log("TEXTREC " + line.stringify())
   }
 }
 

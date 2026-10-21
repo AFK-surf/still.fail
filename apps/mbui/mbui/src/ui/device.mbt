@@ -1,4 +1,4 @@
-// What an app asks of the device beyond its window (as @host's device.mbt has it), through the framework, so that under
+// What an app asks of the device beyond its window (as @hostapi's device.mbt has it), through the framework, so that under
 // a Tester the device is the test's: a key catcher (an unseen focus that takes the keyboard, the soft one or one
 // plugged in, and keeps no text: what is typed comes to the app as keys and text, as still.fail's Android KeyCatcher
 // sends a remote screen), the soft keyboard's height, the clipboard read (an outside ticket, answered at a frame's
@@ -39,31 +39,31 @@ pub(all) enum Haptic {
 ///|
 fn Haptic::code(self : Haptic) -> Int {
   match self {
-    LongPress => @host.haptic_long_press
-    ContextClick => @host.haptic_context_click
-    TextHandleMove => @host.haptic_text_handle_move
-    Confirm => @host.haptic_confirm
-    Reject => @host.haptic_reject
-    KeyboardTap => @host.haptic_keyboard_tap
+    LongPress => @hostapi.haptic_long_press
+    ContextClick => @hostapi.haptic_context_click
+    TextHandleMove => @hostapi.haptic_text_handle_move
+    Confirm => @hostapi.haptic_confirm
+    Reject => @hostapi.haptic_reject
+    KeyboardTap => @hostapi.haptic_keyboard_tap
   }
 }
 
 ///|
-/// A haptic of `kind` (@host.haptic); a Tester's host keeps it (Tester::haptics).
+/// A haptic of `kind` (@hostapi.haptic); a Tester's host keeps it (Tester::haptics).
 pub fn haptic(kind : Haptic) -> Unit {
   match fake.val {
     Some(f) => f.dev.haptics.push(kind)
-    None => @host.haptic(kind.code())
+    None => @hostapi.haptic(kind.code())
   }
 }
 
 ///|
-/// The screen kept on while the app is in front (`on`), or let sleep again (@host.keep_awake); a Tester's host keeps
+/// The screen kept on while the app is in front (`on`), or let sleep again (@hostapi.keep_awake); a Tester's host keeps
 /// what it was last told (Tester::awake).
 pub fn keep_awake(on : Bool) -> Unit {
   match fake.val {
     Some(f) => f.dev.awake = on
-    None => @host.keep_awake(on)
+    None => @hostapi.keep_awake(on)
   }
 }
 
@@ -77,12 +77,12 @@ pub fn clipboard_set(text : String, label? : String = "") -> Unit {
       f.dev.clip_png = None
       f.dev.clip_label = label
     }
-    None => @host.clip_set_text(text, label)
+    None => @hostapi.clip_set_text(text, label)
   }
 }
 
 ///|
-/// A picture (PNG's bytes) put on the clipboard (@host.clip_set_png), in place of what it held; a Tester's host holds
+/// A picture (PNG's bytes) put on the clipboard (@hostapi.clip_set_png), in place of what it held; a Tester's host holds
 /// it (Tester::clipboard_png).
 pub fn clipboard_set_png(png : Bytes, label? : String = "") -> Unit {
   match fake.val {
@@ -91,7 +91,7 @@ pub fn clipboard_set_png(png : Bytes, label? : String = "") -> Unit {
       f.dev.clip_png = Some(png)
       f.dev.clip_label = label
     }
-    None => @host.clip_set_png(png, label)
+    None => @hostapi.clip_set_png(png, label)
   }
 }
 
@@ -109,7 +109,7 @@ pub fn copy_shown() -> Bool {
     Some(f) => f.dev.copy_shown
     None => {
       if host_copy_shown.val < 0 {
-        host_copy_shown.val = if @host.copy_shown() { 1 } else { 0 }
+        host_copy_shown.val = if @hostapi.copy_shown() { 1 } else { 0 }
       }
       host_copy_shown.val == 1
     }
@@ -121,9 +121,9 @@ pub fn copy_shown() -> Bool {
 pub(all) enum ClipPicture {
   /// none
   NoPicture
-  /// one, as PNG (another kind made one), at most @host.clip_png_max bytes
+  /// one, as PNG (another kind made one), at most @hostapi.clip_png_max bytes
   Png(Bytes)
-  /// one past the bounds (@host.clip_too_large)
+  /// one past the bounds (@hostapi.clip_too_large)
   TooLarge
   /// one that could not be read
   Unreadable
@@ -139,7 +139,7 @@ pub(all) struct Clipboard {
 ///|
 /// A read of the clipboard under way (clipboard_read), waited on (an outside ticket) until it is taken.
 pub struct ClipboardRead {
-  priv host : @host.ClipRead?
+  priv host : @hostapi.ClipRead?
   priv fake : Int
   priv taken : Ref[Bool]
 }
@@ -191,7 +191,7 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
 }
 
 ///|
-/// The clipboard read (@host.clip_read): its words and its picture, from the frame after the host has read it
+/// The clipboard read (@hostapi.clip_read): its words and its picture, from the frame after the host has read it
 /// (ClipboardRead::got). None where the host cannot. Under a Tester, what the test gives (Tester::clipboard_gives…):
 /// until it does, the read is waited on (the app is not at rest).
 pub fn clipboard_read() -> ClipboardRead? {
@@ -208,7 +208,7 @@ pub fn clipboard_read() -> ClipboardRead? {
       Some(r)
     }
     None =>
-      match @host.clip_read() {
+      match @hostapi.clip_read() {
         Some(h) => {
           let r : ClipboardRead = { host: Some(h), fake: -1, taken: Ref::new(false) }
           outside_start(outside_clip, r.outside_id(), "the clipboard read \{r.outside_id()}")
@@ -255,12 +255,12 @@ pub fn ClipboardRead::got(self : ClipboardRead) -> Clipboard? {
 }
 
 ///|
-fn clipboard_of(h : @host.ClipGot) -> Clipboard {
-  let picture = if h.picture == @host.clip_png {
+fn clipboard_of(h : @hostapi.ClipGot) -> Clipboard {
+  let picture = if h.picture == @hostapi.clip_png {
     Png(h.png)
-  } else if h.picture == @host.clip_too_large {
+  } else if h.picture == @hostapi.clip_too_large {
     TooLarge
-  } else if h.picture == @host.clip_unreadable {
+  } else if h.picture == @hostapi.clip_unreadable {
     Unreadable
   } else {
     NoPicture
@@ -411,7 +411,7 @@ let text_delete_around = 4
 fn h_key_catch(on : Bool) -> Unit {
   match fake.val {
     Some(f) => f.dev.key_catch = on
-    None => @host.key_catch(on)
+    None => @hostapi.key_catch(on)
   }
 }
 
@@ -419,7 +419,7 @@ fn h_key_catch(on : Bool) -> Unit {
 fn h_ime_inset() -> Double {
   match fake.val {
     Some(f) => f.dev.ime_inset
-    None => @host.ime_inset()
+    None => @hostapi.ime_inset()
   }
 }
 

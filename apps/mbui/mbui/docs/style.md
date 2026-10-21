@@ -51,7 +51,7 @@ A box: `row`, `w` `h` `min_w` `max_w` `min_h` `max_h`, `p` `px` `py` `pl` `pr` `
 line, cut with an ellipsis), `tracking`, `max_lines` (wrapped words cut after that
 many lines, the last ending in an ellipsis: what follows of its paragraph up to what fits with it, as Android's
 `maxLines`; a count, so no style-literal). Letter spacing is Android's: each cluster's advance has it, its piece drawn
-half of it in; words with it are shaped with no ligatures (`@host.style_no_ligatures`), each cluster spaced on its own.
+half of it in; words with it are shaped with no ligatures (`@hostapi.style_no_ligatures`), each cluster spaced on its own.
 Rich text (`Ctx::rich`) has both: letter spacing in every run, and `max_lines` (the ellipsis in the style of the run it
 follows). Behaviour is not a style (`id`, `glass`, `notch_*`,
 `aspect`, `tx`/`ty`).

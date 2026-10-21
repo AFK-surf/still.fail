@@ -23,6 +23,8 @@ test "decoding: UTF-8, its byte order mark, UTF-16, a character cut at the end" 
 
 ///|
 test "decoding: a file that is not UTF-8 read as GB18030 (第一章 开始)" {
+  // (as a Tester's host decodes it: the system's tables are a host's own)
+  @ui.Tester::new(fn(_) {  }) |> ignore
   // 第 B5DA, 一 D2BB, 章 D5C2, a space, 开 BFAA, 始 CABC
   let gb = Bytes::from_array(
     [b'\xB5', b'\xDA', b'\xD2', b'\xBB', b'\xD5', b'\xC2', b' ', b'\xBF', b'\xAA', b'\xCA', b'\xBC'][:],

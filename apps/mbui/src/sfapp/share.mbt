@@ -11,12 +11,12 @@
 // tiles, a file's mark, name and size; n 个文件) and go into the chat's composer as attachments, up to the station at once
 // as ＋'s files do (composer.mbt add_file); words shared with them go in through `shareIn.open` as before. The sheet
 // shows over the app it came from (Android's OverActivity, as the Android app's ShareActivity: the host says so,
-// @host.system_channel `over`), on the page's paper: nothing of the app's own under it. Closed, the app goes and the
+// @hostapi.system_channel `over`), on the page's paper: nothing of the app's own under it. Closed, the app goes and the
 // person is back where they were; gone into a chat, the app opens at it (@ui.over_done). Signed out, it says to sign in
 // in the app first, with 打开 still.fail.
 //
 // Out: a file of a drive handed to another app (DriveScreen.kt openElsewhere with share): read whole through the core
-// (`drive.read`), then the system's share sheet (@host.share: Android's chooser, a file of the app's own provider;
+// (`drive.read`), then the system's share sheet (@hostapi.share: Android's chooser, a file of the app's own provider;
 // macOS's sharing picker); 本机没有可打开此文件的应用 when nothing takes it.
 
 ///|
@@ -91,11 +91,11 @@ let share_in : ShareIn = {
 }
 
 ///|
-/// Shown over another app (the host's say, @host.system_channel `over`): only the share sheet is drawn.
+/// Shown over another app (the host's say, @hostapi.system_channel `over`): only the share sheet is drawn.
 let share_over : Ref[Bool] = Ref(false)
 
 ///|
-/// Over another app, how far the navigation bar reaches in over the app's foot (@host.system_channel `bars`: the view
+/// Over another app, how far the navigation bar reaches in over the app's foot (@hostapi.system_channel `bars`: the view
 /// under the bars there, as ShareActivity is edge to edge): the sheet's content and the toasts kept above it.
 let share_foot : Ref[Double] = Ref(0.0)
 
@@ -229,7 +229,7 @@ fn share_in_frame(c : @ui.Ctx) -> Unit {
     }
     match got {
       Some((words, title)) if words.trim() != "" || files.length() > 0 => {
-        @host.log("share in: \{words.length()} characters, \{files.length()} files")
+        @hostapi.log("share in: \{words.length()} characters, \{files.length()} files")
         share_in.shared = Some((words, title))
         share_in.files = files
         share_in.raised = false
@@ -647,7 +647,7 @@ fn share_opened(
   share_in.files = []
   share_in.raised = false
   lower_sheet()
-  @host.log("share in: into \{key}, \{files.length()} files")
+  @hostapi.log("share in: into \{key}, \{files.length()} files")
   // over another app: the app opens at the chat (ShareActivity openApp: MainActivity's openItem, over Home)
   if share_over.val {
     home()
@@ -668,7 +668,7 @@ fn share_opened(
 
 ///|
 /// Files shared in waiting for their chat's composer to take them, by its draft's key (composer.mbt).
-let shared_into : Map[String, Array[@host.Picked]] = Map([])
+let shared_into : Map[String, Array[@hostapi.Picked]] = Map([])
 
 ///|
 /// How many pictures shared in have been added as images (their keys' numbers).

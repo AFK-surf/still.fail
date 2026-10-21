@@ -1,6 +1,6 @@
 // A run of the browser build (out/web, scripts/web.sh build) in headless Chromium for the host's and the text's
 // contracts (scripts/host_contract.sh web): the page opened with QUERY (the app's environment: web/host.js reads it
-// as its query), waited on until the app ends itself (@host.exit: window.__done, its named end), its log written to
+// as its query), waited on until the app ends itself (@hostapi.exit: window.__done, its named end), its log written to
 // OUT a line each; the app's end code is this script's.
 //   node scripts/host-web.mjs QUERY OUT [W H]
 // MBUI_WEB_CHANNEL=chrome: the system's Google Chrome in place of Playwright's Chromium (whose build decodes no H.264).

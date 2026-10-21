@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Files picked through the system's own pickers (src/host/pick.mbt, as still.fail's Android app's Attach.kt has
+ * Files picked through the system's own pickers (src/hostapi/pick.mbt, as still.fail's Android app's Attach.kt has
  * them): the photo picker (ACTION_PICK_IMAGES where there is one, else the documents UI on images), the documents UI
  * on any file (ACTION_OPEN_DOCUMENT), a photo taken now (ACTION_IMAGE_CAPTURE's picture, as TakePicturePreview). Read
  * off the main thread once picked; MoonBit asks after them each frame (android_host.c).

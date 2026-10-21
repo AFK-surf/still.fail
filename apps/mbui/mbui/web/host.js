@@ -69,7 +69,7 @@
   H.wakeAfter = (ms) => { if (shotAt < 0) setTimeout(H.requestFrame, ms); };
   H.now = () => (shotAt >= 0 ? clock : performance.now());
   H.ownClock = () => shotAt >= 0;
-  // the time of day (@host.wall_ms): a run to a declared moment's from a fixed day (@ui.tester_wall's), on with its
+  // the time of day (@hostapi.wall_ms): a run to a declared moment's from a fixed day (@ui.tester_wall's), on with its
   // clock, so what it shows of it is the same each run
   H.wallMs = () => (shotAt >= 0 ? 1790000000000 + clock : Date.now());
 
@@ -941,7 +941,7 @@
     images.delete(id);
   };
 
-  // ---- streams (src/host/stream.mbt) ----
+  // ---- streams (src/hostapi/stream.mbt) ----
   // A picture decoded frame by frame: H.264 by WebCodecs' VideoDecoder where the browser has one (AVCC as it is, the
   // avcC its description), JPEG by createImageBitmap. Each frame decoded is kept until the app shows it ("f TS W H",
   // then streamShow: uploaded into the stream's texture), or a later one; frames let go ("d TS": no decoder or not past
@@ -1462,7 +1462,7 @@
     window.addEventListener('resize', H.requestFrame);
   }
 
-  // the pointer's shape (@host.set_cursor)
+  // the pointer's shape (@hostapi.set_cursor)
   const cursors = ['default', 'pointer', 'text', 'ew-resize', 'ns-resize', 'grab'];
   H.setCursor = (k) => { canvas.style.cursor = cursors[k] || 'default'; };
   H.clipboardSet = (s) => { navigator.clipboard?.writeText(s).catch(() => {}); };
@@ -1542,7 +1542,7 @@
     return x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
   };
 
-  // ---- the device beyond the window (src/host/device.mbt) ----
+  // ---- the device beyond the window (src/hostapi/device.mbt) ----
   // A key catcher's focus (keyCatch: the textarea's keys, above); the soft keyboard's height as the visual viewport
   // leaves it (a phone's browser); the clipboard read and written where the page may (navigator.clipboard: a picture
   // of another kind made a PNG through a canvas; refused or absent, read as empty); the screen kept on (a wake lock);

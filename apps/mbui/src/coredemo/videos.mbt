@@ -188,7 +188,7 @@ fn video_poster(t : @videos.Title) -> String {
 
 ///|
 fn video_play(id : String, at : Double) -> Unit {
-  @host.log("VIDEO play \{id} at \{at} (the player is not in yet)")
+  @hostapi.log("VIDEO play \{id} at \{at} (the player is not in yet)")
 }
 
 ///|

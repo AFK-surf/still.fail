@@ -44,7 +44,7 @@ fn ScreenDropItem::path(self : ScreenDropItem) -> String {
 
 ///|
 /// Files picked (`files`), for `to` (the state's `drop` as it was when they were asked for).
-fn ScreenSess::send_files(self : ScreenSess, files : Array[@host.Picked], to : DropTo) -> Unit {
+fn ScreenSess::send_files(self : ScreenSess, files : Array[@hostapi.Picked], to : DropTo) -> Unit {
   for f in files {
     self.drops_serial += 1
     self.drops.push({

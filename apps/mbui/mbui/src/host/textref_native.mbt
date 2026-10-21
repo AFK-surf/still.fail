@@ -30,7 +30,7 @@ extern "C" fn ffi_ref_frame(name : String) -> Int = "mb_host_ref_frame"
 
 ///|
 /// Starts a picture `w`×`h` points at `scale` pixels a point, on a ground of `bg` (0xRRGGBB).
-pub fn ref_begin(w : Double, h : Double, scale : Double, bg : Int) -> Unit {
+fn ref_begin(w : Double, h : Double, scale : Double, bg : Int) -> Unit {
   ffi_ref_begin(w, h, scale, bg)
 }
 
@@ -39,7 +39,7 @@ pub fn ref_begin(w : Double, h : Double, scale : Double, bg : Int) -> Unit {
 /// `weight`, starting at `x` with its baseline at `base`, in `color` (0xRRGGBB), as one line. `out`: the width it
 /// advances, then its ink box (left, top, right, bottom, in points from x and the baseline, y down; all 0 if the host
 /// does not say).
-pub fn ref_text(
+fn ref_text(
   text : String,
   size : Double,
   weight : Int,
@@ -54,13 +54,13 @@ pub fn ref_text(
 
 ///|
 /// The picture written as `name`.png.
-pub fn ref_end(name : String) -> Bool {
+fn ref_end(name : String) -> Bool {
   ffi_ref_end(name) != 0
 }
 
 ///|
 /// The window's picture as `name`.png: the frame last drawn, or (Android, a browser) the one drawn next; the caller
 /// keeps both the same.
-pub fn ref_frame(name : String) -> Bool {
+fn ref_frame(name : String) -> Bool {
   ffi_ref_frame(name) != 0
 }

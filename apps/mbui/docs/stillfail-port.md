@@ -55,7 +55,7 @@ Done (branch fw-richtext-nav, 2026-10-19):
   linkHold over mbui's `on_link_hold`). Selection: slice 5's picking.
 - 2, the page stack: `Nav[P]` and `Ctx::nav` (src/ui/nav.mbt), App.kt's
   Pages: push/pop sliding side by side (300 ms, standard curve), the left
-  edge's swipe and the system's back gesture (`@host.set_back`; Android's
+  edge's swipe and the system's back gesture (`@hostapi.set_back`; Android's
   OnBackAnimationCallback) following the finger, going on or coming back as
   App.kt does; pages under the top keep their widgets' state, forgotten when
   they leave (`on_leave` for what the app keeps, as followed topics). Not
@@ -222,7 +222,7 @@ PastedText.kt; SendText.kt; MessagePick.kt):
   照片, 文件, Station 文件. 照片 is the system's photo picker
   (ACTION_PICK_IMAGES; the documents UI on images where there is none) and
   文件 its documents UI (ACTION_OPEN_DOCUMENT) on Android, the open panel on
-  macOS (`@host.pick`, src/host/pick.mbt; Picks.java); the camera tile takes
+  macOS (`@hostapi.pick`, src/hostapi/pick.mbt; Picks.java); the camera tile takes
   a photo on Android (ACTION_IMAGE_CAPTURE's picture, as the app's
   TakePicturePreview); the recent photos across the top and Station 文件 (both
   branch mbui-media-complete, below). Not yet: any picker on iOS, Windows and
@@ -333,7 +333,7 @@ the core.
   2 / 3), at the foot the time over the timeline (what is buffered lighter on it: the hosts now tell it, and whether it
   played to its end; tapped or dragged along, the time follows the finger and the player goes there once let go), the
   one before, 15 s back, play, 15 s on, the one after, the speed (1× 1.25× 1.5× 2× 0.5× 0.75×), the subtitle's key, fit or
-  fill (sideways), sideways (`@host.set_sideways`: Android asks for landscape and puts the system bars away; back turns it
+  fill (sideways), sideways (`@hostapi.set_sideways`: Android asks for landscape and puts the system bars away; back turns it
   upright first). Left alone while it plays, the controls fade (200 ms) after 2.5 s; a tap brings them back or sends them
   away (waiting out a double tap's 300 ms); a double tap on the left or right third jumps 15 s (快退 / 快进 15 秒 said a
   moment), in the middle it pauses or plays (已暂停 / 继续播放). 正在打开 and 正在缓冲 as a pill in the middle, 播放失败 with
@@ -468,7 +468,7 @@ update button, SettingsHome.kt Version): the app keeping itself current (src/sfa
 - Asked once the app is signed in. Home's top bar offers a build that brings something (its `news`): the download key
   with its accent dot, how far while it downloads (40%); the settings' version row any build (更新到 0.1.1, in the accent;
   检查更新 asks now: 正在检查, then 已是最新 or why it failed). Tapped: asked again now, then the host downloads it
-  (@host.update_install; Android's Updates.java: into the cache, a cut connection picked up by a range, six tries with
+  (@hostapi.update_install; Android's Updates.java: into the cache, a cut connection picked up by a range, six tries with
   growing pauses, 网络中断，正在继续下载 meanwhile; checked against its sha256: 下载的文件不完整 when not), and hands it
   to the system's installer (PackageInstaller, as this app's own newer build; the confirmation the installer asks for
   opened by InstallResult); without leave to install apps the system's page for it opens (允许 still.fail 安装应用后，
@@ -482,7 +482,7 @@ Slice 14's share sheet (branch player-share, 2026-10-19; ember apps/android app/
 drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
 
 - In: another app's share sheet hands still.fail a link or some text (Android's ACTION_SEND of text/plain, taken by
-  MainActivity: @host.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs). One sheet (72%, draggable): what
+  MainActivity: @hostapi.shared_in; MBUI_SHARE_TEXT and MBUI_SHARE_TITLE for scripted runs). One sheet (72%, draggable): what
   is shared (a link's mark or text's, its title bold: the app's subject or its first line, its first line under a
   subject), 发到 the chats it can go to (the core's `shareIn` view: the one a thing from the same site went to last first,
   saying so; 搜索 from six chats, its field 找 chat), 新 chat last (在 Studio 上开; with several stations up, which one). A
@@ -492,7 +492,7 @@ drive/DriveScreen.kt hand; docs/share-in.md): src/sfapp/share.mbt, Shares.java.
   after what is written (its title on a line, then the link), as the core's composer does. 没能打开：… in red when it
   fails.
 - Out: a file of a drive (its sheet's 分享) read whole through the core (`drive.read`), then handed to the system's share
-  sheet (@host.share: Android's chooser, the file in the cache's shared/ read through a provider of the app's own,
+  sheet (@hostapi.share: Android's chooser, the file in the cache's shared/ read through a provider of the app's own,
   Shares.Files, that lets another app read only what was handed to it; macOS's sharing picker over the window); 本机没有
   可打开此文件的应用 when none takes it. Words can go the same way (`share(text, …)`).
 - `APP=sffix MBUI_FIXTURE=share-in|share-in-stations` (src/sfapp/share_fixture.mbt): `scripts/shots.sh share web-share`.
@@ -535,7 +535,7 @@ GLES3 on Android, D3D11 on Windows, WebGL2 on the web), src/ui/glass.mbt:
 - Solid where the system asks for less transparency: macOS's and iOS's Reduce Transparency, Windows' transparency
   effects off, the browser's prefers-reduced-transparency (asked every 30 frames); Android has no such setting.
   MBUI_GLASS=solid (or `@ui.set_glass_solid`) forces it; solid is the glass's `solid` ground (the paper under its tint).
-- `@host.gpu_ms` (Metal's command buffers' times; -1 elsewhere) goes into the in-app bench's lines (MBUI_BENCH=1);
+- `@hostapi.gpu_ms` (Metal's command buffers' times; -1 elsewhere) goes into the in-app bench's lines (MBUI_BENCH=1);
   src/bench has `glass`, `glass-solid` and `liquid` scenes (BENCH_SCENES=…, not in the default set).
 - What it costs (Studio, M2 Max, 2026-10-19, Metal). Offscreen, 900×640 at 2x (src/bench, 300 frames, median): the
   list scene with a top bar, a jump button and a composer of glass (three captures) 0.56 ms of GPU and 0.15 ms of
@@ -699,9 +699,9 @@ the menu from a button):
   this build).
 - 外观: the theme (跟随系统 / 浅色 / 深色), motion, language, when a done chat is offered to archive, each the core's
   prefs (`prefs.set`), shown at once. The theme is applied every frame: the prefs' `appearance`, or the system's when
-  it follows it, which the hosts now tell (`@host.system_dark`: macOS's effective appearance, asked again when the
+  it follows it, which the hosts now tell (`@hostapi.system_dark`: macOS's effective appearance, asked again when the
   system switches; Android's night mode, MainActivity's configuration; iOS's interface style; the browser's
-  prefers-color-scheme; Windows says light), and the host follows the app's (`@host.set_dark`: Android's status and
+  prefers-color-scheme; Windows says light), and the host follows the app's (`@hostapi.set_dark`: Android's status and
   navigation bars' icons and the ground under them, the Mac window's title bar).
 - 账号: the accounts on the device (signing each out: `auth.signOut`, adding another), where the account is signed in
   (`loginSessions`; one not this signed out: `loginSession.revoke`).
@@ -781,7 +781,7 @@ type told to the system's keyboard as a password's; a secret marked sensitive fo
 
 Slice 10, notifications and pushes (branch notify, 2026-10-19; ember apps/android app/Notices.kt, Push.kt, App.kt,
 MainActivity.kt, screens/SettingsHome.kt Notify; docs/notifications.md → Clients): src/sfapp/notices.mbt over the host's
-notifications (src/host/notify.mbt).
+notifications (src/hostapi/notify.mbt).
 
 - While the app is shown it follows the core's `notify {workspace}` (client/core-ts attend.ts decides: none while
   off, none for the chat looked at, only the workspace in view), takes each notice (`notice.claim`) and has the system
@@ -809,7 +809,7 @@ notifications (src/host/notify.mbt).
 - `APP=sffix MBUI_FIXTURE=chat-flash|chat-flash-mine` (a message gone to, its flash held at its peak) and
   `settings-notify-off`: `scripts/shots.sh notify web-notify` (mac-notify-*, web-notify-* pictures).
 
-Hosts (@host.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
+Hosts (@hostapi.notice_show, notice_cancel, notice_permission, notice_ask, notice_answer, notice_opened, push_token,
 push_next): Android is the system's (android/…/Notices.java, POST_NOTIFICATIONS in the manifest, the activity's
 permission answer and the tap's intent). macOS keeps what would be shown and says it on the log (`NOTICE <tag>\t<title>\t
 <body>`, `NOTICE CANCEL`, `NOTICE TAP`): the app there is a bare executable, which UNUserNotificationCenter does not
@@ -831,7 +831,7 @@ when the app is not running (KeptLang: the app's words are the Chinese catalog's
 Files and media, kept on the device (branch mbui-media-complete, 2026-10-19; ember apps/android shared/screens/
 FileKinds.kt download, drive/DriveScreen.kt saveToDownloads, saveZip, DriveFetches, ui/Parts.kt DownloadChip):
 
-- mbui's host keeps a file the app has read (@host.keep_begin / append / finish, src/host/keep.mbt): its bytes put a
+- mbui's host keeps a file the app has read (@hostapi.keep_begin / append / finish, src/hostapi/keep.mbt): its bytes put a
   part at a time into a file of the host's temporary directory (never whole in memory), then moved where the person
   keeps files: Android's MediaStore Downloads (no permission asked; `Choose` the documents UI's ACTION_CREATE_DOCUMENT),
   macOS's ~/Downloads (`Choose` a save panel over the window), iOS's Files sheet either way, Windows' Downloads known
@@ -853,7 +853,7 @@ a big file's download going on while the app is away (it is the app's: Android s
 Files shared in (branch mbui-media-complete): another app's share sheet hands still.fail files, not only words and
 links (the Android app takes text only; its sheet and composer are the reference): ACTION_SEND with a stream and
 ACTION_SEND_MULTIPLE of any type, read whole by mbui's host (Shares.java; 1 GB each at most, as the composer takes)
-and taken by the app (@host.shared_in's `files`, shared_in_file). The sheet heads with them as the composer shows files
+and taken by the app (@hostapi.shared_in's `files`, shared_in_file). The sheet heads with them as the composer shows files
 (pictures as 56 tiles, a file's mark, its name and size, n 个文件 and their names for several), 发到 the chats as for a
 link (the site's last chat not said: files have none); a tap opens that chat (or a new chat on that station, made the
 one new chats start on: `newChat.pick`) with the files in its composer, going up at once as ＋'s do; words shared with
@@ -865,11 +865,11 @@ PDF).
 Recent photos and Station 文件 in ＋'s sheet (branch mbui-media-complete; Attach.kt RecentPhotos, latest; StationFiles.kt
 RefCard, openRefSheet, sendUp):
 
-- The recent photos: across the top of ＋'s sheet after the camera, the gallery's latest 30 (mbui's @host.gallery_*:
+- The recent photos: across the top of ＋'s sheet after the camera, the gallery's latest 30 (mbui's @hostapi.gallery_*:
   MediaStore's images and their times, read off the app's thread; ranked here as Attach.kt `latest` does: each by the
   latest of its times that can be believed, one in milliseconds taken as the seconds it means, one ahead of now left
   out), each its thumbnail as the gallery has it (Images.java loads a content:// source by loadThumbnail), 92 × 122 on
-  14 corners; a tap reads it whole (@host.pick_photo) into the draft, up at once. Without leave to read the gallery
+  14 corners; a tap reads it whole (@hostapi.pick_photo) into the draft, up at once. Without leave to read the gallery
   the last tile asks (显示最近照片: the system's dialog; asked and refused for good, the app's settings), with only the
   photos chosen for the app (Android 14 on) it chooses more (选择更多照片); read again as the sheet opens and as the
   system answers. The strip moves sideways under a finger and glides on once let go (a drag area: it is no list).
@@ -907,7 +907,7 @@ VideoViewer.kt frameStarts, saveFrame, landscape; ImageMarks.kt):
   The marks are in the picture's own pixels, drawn on the screen at its zoom (boxes bordered, lines and arrows as dots
   along them, words with their halo round them); a picked mark moves with the finger, an arrow's end stretches it. 取消
   / 下载标注后的图片 / 添加到对话 in the bar: the host draws the marks on the picture at its own size (mbui's
-  @host.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
+  @hostapi.draw_marks: Android's Canvas, Core Graphics), then it is kept with the downloads or put in the chat's draft with
   a quote per numbered mark (图片 … 标注 n: where it is, on which image, what was said), and the viewer closes to the
   chat (已添加到对话，返回对话发送). Back steps out of a note, the words, the colours, the pick, then marking.
 - A video's frames: their times read from the file as the system reads it (mbui's NativeView::frames: Android's
@@ -927,7 +927,7 @@ The reader, the rest (branch mbui-media-complete; TextModel.kt decodeText, Reade
 web's reader's download):
 
 - GB18030: a text that is neither marked nor UTF-8 is read as GB18030 by the system's own tables (mbui's
-  @host.decode_charset: java.nio's Charset, CoreFoundation's encodings, Windows' code page 54936, the browser's
+  @hostapi.decode_charset: java.nio's Charset, CoreFoundation's encodings, Windows' code page 54936, the browser's
   TextDecoder), a character the end of a cut file halves dropped, as the Android app reads it.
 - The serif face: 字体 宋体 draws the text in the serif face (mbui's run `serif`: Noto Serif and its CJK on Android,
   Songti SC on Apple, SimSun on Windows).
@@ -1151,7 +1151,7 @@ page and restores it.
 Found by it and fixed: the app never told the core it was shown (`client.focus {visible, focused}`), so the core
 never marked a chat read (the station's reads stayed empty: every chat opened at its first unread message however
 often it had been read) and held back no notice for the chat on screen; it now does, as Home shows a workspace and as
-the system says the app came to the front or left it (@host.set_app_state). A scripted run counts as in front: on
+the system says the app came to the front or left it (@hostapi.set_app_state). A scripted run counts as in front: on
 Studio, whose screen is locked, the window is reported covered. Also corrected on Android: while a composition was under way the field
 told the input method its words without it and no composing region (`updateSelection(…, -1, -1)`), against
 InputMethodManager's contract; Host.setIme now gives it the words with the composition in, the selection after it and
@@ -1199,7 +1199,7 @@ page alone in its pane (@ui Ctx::nav_flat), the phone's sliding.
 Not as the web yet: the new chat's composer is at the page's foot (the web's in its middle); the chat's side panel
 (histories, jobs, files), its find bar and the drive's columns are the phone's sheets and pages; ⌘K finds chats by
 their titles only (not messages, actions or settings); the rail is not changed from its menu (its places as the prefs
-keep them); the macOS window has the system's title bar (mbui's @host.window_setup `inset` puts the buttons in the
+keep them); the macOS window has the system's title bar (mbui's @hostapi.window_setup `inset` puts the buttons in the
 app's top row as the desktop app's are, not used yet); 复制 session 文件路径 is not in the row's menu.
 
 Shots: `scripts/shots.sh wide` (mac-wide-<mode>[-dark] at WIDE_WIN 1280x800 over sffix's home, chat,
@@ -1239,7 +1239,7 @@ what is sent (its activity shows) and answers while the chat shows, so sffix pla
 
 ## Opening links outside the app (branch selection-links in mbui, mbui-chat-complete here)
 
-`@host.open_url` (and `Ctx::open_url`, `@ui.open_url`) hands a URL to the system: Android's ACTION_VIEW (a task of its
+`@hostapi.open_url` (and `Ctx::open_url`, `@ui.open_url`) hands a URL to the system: Android's ACTION_VIEW (a task of its
 own, the browser or the app that takes the link), macOS's NSWorkspace, iOS's UIApplication, Windows' ShellExecute
 (http, https and mailto only), the browser's window.open (noopener). A scripted macOS run (MBUI_SCRIPT, MBUI_DRIVE)
 only says it on the log (`open-url: …`). In use: a link tapped in a message (App.kt's UriHandler: a chat's own link
@@ -1257,13 +1257,13 @@ xcframework slice in the app's Frameworks; core/README.md, "iOS"). mbui's script
 (MBUI_APP_MOD, a hook as Android's: scripts/ios-core.sh) and its host (ios_app.m) does what still.fail asks of it:
 
 - The safe areas: the app's view is inside them (as Android's is inside the system bars), what shows round it the
-  page's ground, light or dark (`@host.set_dark`, with the status bar's words to match).
+  page's ground, light or dark (`@hostapi.set_dark`, with the status bar's words to match).
 - The keyboard: the view ends at the keyboard's top (UIKeyboardLayoutGuide), following it as it moves, so the composer
   rides on it and the list keeps its end in view.
 - Back: the left edge's swipe is the app's own (src/ui/nav.mbt), as on every host; iOS has no system back of its own.
 - `secure.*` in the Keychain; the sign-in through ASWebAuthenticationSession (`stillfail` scheme), as on macOS.
 - Pictures and files picked (PHPickerViewController, UIDocumentPickerViewController), the share sheet
-  (UIActivityViewController), the app in front or not (`@host.set_app_state`), the edit menu's paste.
+  (UIActivityViewController), the app in front or not (`@hostapi.set_app_state`), the edit menu's paste.
 - Scripted runs (src/ui/drive.mbt): the keyboard's calls on the view, the paste, the app's picture, notifications
   tapped; the log on stderr (`simctl launch --stderr`).
 

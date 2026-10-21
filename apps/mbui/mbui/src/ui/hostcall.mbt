@@ -21,7 +21,7 @@ struct FakeHost {
   mut clipboard_secret : Double
   // whether the app takes back (a page to go back to), as last told
   mut back_on : Bool
-  // the system it plays (as @host.platform: 0 macOS, 1 iOS, 2 Android)
+  // the system it plays (as @hostapi.platform: 0 macOS, 1 iOS, 2 Android)
   platform : Int
   // the system asks for less transparency (glass drawn solid)
   mut reduce_transparency : Bool
@@ -77,7 +77,7 @@ struct FakeHost {
   /// the PDFs opened, by their ids: their bytes' name and length (what their kept answers are by)
   pdfs : Map[Int, (String, Int)]
   /// what the system's pickers give (Tester::picks), what was asked of them (files.mbt), the files kept on the device
-  picks : Array[@host.Picked]
+  picks : Array[@hostapi.Picked]
   pick_asks : Array[FakePick]
   keeps : Array[FakeKeep]
   /// what its players ask of the app's bytes, not taken yet (Tester::view_reads), and what the app gave (hostmedia.mbt)
@@ -185,7 +185,7 @@ let fake : Ref[FakeHost?] = { val: None }
 fn h_now() -> Double {
   match fake.val {
     Some(f) => f.time
-    None => @host.now()
+    None => @hostapi.now()
   }
 }
 
@@ -193,7 +193,7 @@ fn h_now() -> Double {
 fn h_wall_ms() -> Double {
   match fake.val {
     Some(f) => f.wall + f.time
-    None => @host.wall_ms()
+    None => @hostapi.wall_ms()
   }
 }
 
@@ -203,11 +203,11 @@ fn h_event_time() -> Double {
   match fake.val {
     Some(f) => f.time
     None => {
-      let t = @host.event_time()
+      let t = @hostapi.event_time()
       if t >= 0.0 {
         t
       } else {
-        @host.now()
+        @hostapi.now()
       }
     }
   }
@@ -219,7 +219,7 @@ fn h_platform() -> Int {
     Some(f) => f.platform
     None => {
       if host_platform.val < 0 {
-        host_platform.val = @host.platform()
+        host_platform.val = @hostapi.platform()
       }
       host_platform.val
     }
@@ -235,7 +235,7 @@ let host_platform : Ref[Int] = { val: -1 }
 fn h_request_frame() -> Unit {
   match fake.val {
     Some(f) => f.wants = true
-    None => @host.request_frame()
+    None => @hostapi.request_frame()
   }
 }
 
@@ -245,7 +245,7 @@ fn h_request_frame() -> Unit {
 fn h_request_frame_on() -> Unit {
   match fake.val {
     Some(_) => ()
-    None => @host.request_frame()
+    None => @hostapi.request_frame()
   }
 }
 
@@ -256,7 +256,7 @@ fn h_wake_after(ms : Double) -> Unit {
       if f.wake < 0.0 || f.time + ms < f.wake {
         f.wake = f.time + ms
       }
-    None => @host.wake_after(ms)
+    None => @hostapi.wake_after(ms)
   }
 }
 
@@ -275,7 +275,7 @@ fn h_font_metrics(
       out[2] = (size * 1.42).round()
     }
     None => {
-      @host.font_metrics(size, weight, style, out)
+      @hostapi.font_metrics(size, weight, style, out)
       rec_metrics(size, weight, style, out)
     }
   }
@@ -305,7 +305,7 @@ fn h_shape(
         let adv = if c == 10 {
           0.0
         } else if c < 0x2E80 {
-          if (style & @host.style_mono) != 0 {
+          if (style & @hostapi.style_mono) != 0 {
             size * 0.6
           } else {
             size * 0.5
@@ -321,7 +321,7 @@ fn h_shape(
         // ligatures)
         out[k * 4 + 3] = if c == 32 || c == 10 {
           -1.0
-        } else if c == 0xE000 && k > 0 && (style & @host.style_no_ligatures) == 0 {
+        } else if c == 0xE000 && k > 0 && (style & @hostapi.style_no_ligatures) == 0 {
           -2.0
         } else {
           c.to_double()
@@ -332,7 +332,7 @@ fn h_shape(
       k
     }
     None => {
-      let k = @host.shape(text, size, weight, style, out)
+      let k = @hostapi.shape(text, size, weight, style, out)
       rec_shape(text, size, weight, style, out, k)
       k
     }
@@ -346,7 +346,7 @@ fn h_text_key(text : String, size : Double, weight : Int, style : Int) -> Int {
     Some(_) if kept_key(text, size, weight, style) is Some(k) => k
     Some(_) => text.at(0).to_int()
     None => {
-      let k = @host.text_key(text, size, weight, style)
+      let k = @hostapi.text_key(text, size, weight, style)
       rec_key(text, size, weight, style, k)
       k
     }
@@ -368,7 +368,7 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
       out[6] = if key >= 0x1F000 { 1.0 } else { 0.0 }
     }
     None => {
-      @host.glyph(key, out)
+      @hostapi.glyph(key, out)
       rec_glyph(key, out)
     }
   }
@@ -379,7 +379,7 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
   match fake.val {
     Some(_) => true
-    None => @host.face_add(face, path, weight)
+    None => @hostapi.face_add(face, path, weight)
   }
 }
 
@@ -387,7 +387,7 @@ fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
 fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
   match fake.val {
     Some(_) => data.length() > 0
-    None => @host.face_add_bytes(face, data, weight)
+    None => @hostapi.face_add_bytes(face, data, weight)
   }
 }
 
@@ -395,7 +395,7 @@ fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
 fn h_face_clear(face : Int) -> Unit {
   match fake.val {
     Some(_) => ()
-    None => @host.face_clear(face)
+    None => @hostapi.face_clear(face)
   }
 }
 
@@ -403,7 +403,7 @@ fn h_face_clear(face : Int) -> Unit {
 fn h_atlas_generation() -> Int {
   match fake.val {
     Some(_) => 0
-    None => @host.atlas_generation()
+    None => @hostapi.atlas_generation()
   }
 }
 
@@ -413,7 +413,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
     Some(f) => f.instances = count
     None => {
       let (r, gg, b) = g().clear
-      @host.present(buf, count, r, gg, b)
+      @hostapi.present(buf, count, r, gg, b)
     }
   }
 }
@@ -422,7 +422,7 @@ fn h_present(buf : FixedArray[Double], count : Int) -> Unit {
 fn h_reduce_transparency() -> Bool {
   match fake.val {
     Some(f) => f.reduce_transparency
-    None => @host.reduce_transparency() || h_env("MBUI_GLASS") == "solid"
+    None => @hostapi.reduce_transparency() || h_env("MBUI_GLASS") == "solid"
   }
 }
 
@@ -430,7 +430,7 @@ fn h_reduce_transparency() -> Bool {
 fn h_gpu_ms() -> Double {
   match fake.val {
     Some(_) => -1.0
-    None => @host.gpu_ms()
+    None => @hostapi.gpu_ms()
   }
 }
 
@@ -452,7 +452,7 @@ fn h_set_ime(
       f.ime_sel = (a, b)
       f.ime_rect = (x, y, w, h)
     }
-    None => @host.set_ime(active, x, y, w, h, text, a, b)
+    None => @hostapi.set_ime(active, x, y, w, h, text, a, b)
   }
 }
 
@@ -463,12 +463,12 @@ fn h_clipboard_set(s : String) -> Unit {
       f.clipboard = s
       f.clipboard_secret = -1.0
     }
-    None => @host.clipboard_set(s)
+    None => @hostapi.clipboard_set(s)
   }
 }
 
 ///|
-/// A secret on the clipboard (@host.clipboard_set_secret); the fake host keeps it as any words (Tester::clipboard)
+/// A secret on the clipboard (@hostapi.clipboard_set_secret); the fake host keeps it as any words (Tester::clipboard)
 /// and says it was a secret (Tester::clipboard_secret).
 fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
   match fake.val {
@@ -476,7 +476,7 @@ fn h_clipboard_secret(s : String, clear_ms : Double) -> Unit {
       f.clipboard = s
       f.clipboard_secret = clear_ms
     }
-    None => @host.clipboard_set_secret(s, clear_ms~)
+    None => @hostapi.clipboard_set_secret(s, clear_ms~)
   }
 }
 
@@ -498,7 +498,7 @@ fn h_word_at(text : String, off : Int) -> (Int, Int) {
         None => (-1, -1)
       }
     None => {
-      let (s, e) = @host.word_at(text, off)
+      let (s, e) = @hostapi.word_at(text, off)
       if text_recording() {
         let line : Json = { "wa": head, "r": [Json::number(s.to_double()), Json::number(e.to_double())] }
         text_say("wa|" + head.stringify(), line)
@@ -516,12 +516,12 @@ fn h_open_url(url : String) -> Bool {
       f.opened.push(url)
       true
     }
-    None => @host.open_url(url)
+    None => @hostapi.open_url(url)
   }
 }
 
 ///|
-/// A page in a browser's tab over the app (@host.open_tab); the fake host keeps it as one handed to the system
+/// A page in a browser's tab over the app (@hostapi.open_tab); the fake host keeps it as one handed to the system
 /// (Tester::opened).
 fn h_open_tab(url : String) -> Bool {
   match fake.val {
@@ -529,7 +529,7 @@ fn h_open_tab(url : String) -> Bool {
       f.opened.push(url)
       true
     }
-    None => @host.open_tab(url)
+    None => @hostapi.open_tab(url)
   }
 }
 
@@ -537,16 +537,16 @@ fn h_open_tab(url : String) -> Bool {
 fn h_back_enabled(on : Bool) -> Unit {
   match fake.val {
     Some(f) => f.back_on = on
-    None => @host.back_enabled(on)
+    None => @hostapi.back_enabled(on)
   }
 }
 
 // What the app waits on from the host (effect.mb's outside, src/effect/outside.mbt): an image or a PDF's page
 // decoding, a native view until it is ready (a page loaded, a video's first frame), what the system's pickers give, the
 // gallery read, marks drawn onto an image, a video's frame grabbed, an update downloading (the kinds below, named as
-// the hosts name them). Each is a ticket of the window's runtime, ended by the host's event for it (@host.set_outside:
+// the hosts name them). Each is a ticket of the window's runtime, ended by the host's event for it (@hostapi.set_outside:
 // kind, id, state) or when the app lets it go or takes it; a run to a declared moment keeps its clock still while any
-// is (@host.frame_awaiting). A host that sends no such events (set_outside answers false) gets no tickets. An answer
+// is (@hostapi.frame_awaiting). A host that sends no such events (set_outside answers false) gets no tickets. An answer
 // the host tells (a pick, the gallery read, marks drawn, a frame grabbed, an update's word) asks for a frame: what it
 // brings is read as the next frame builds, not looked for frame after frame. Where a ticket of these ends: on a host,
 // at its event (or as the app takes the answer, if it read it first); under a Tester, whose fake host tells no event,
@@ -562,15 +562,15 @@ let outside_image = 1
 let outside_view = 2
 
 ///|
-/// What the system's pickers give (@host.Pick's id).
+/// What the system's pickers give (@hostapi.Pick's id).
 let outside_pick = 3
 
 ///|
-/// The gallery's photos read (@host.GalleryRead's id).
+/// The gallery's photos read (@hostapi.GalleryRead's id).
 let outside_gallery = 4
 
 ///|
-/// Marks drawn onto an image (@host.MarkedImage's id).
+/// Marks drawn onto an image (@hostapi.MarkedImage's id).
 let outside_marks = 5
 
 ///|
@@ -588,11 +588,11 @@ let outside_update = 7
 let outside_stream = 8
 
 ///|
-/// The clipboard read (@host.ClipRead's id: device.mbt).
+/// The clipboard read (@hostapi.ClipRead's id: device.mbt).
 let outside_clip = 9
 
 ///|
-/// An app's own native call (@host.NativeCall's id: native_call.mbt).
+/// An app's own native call (@hostapi.NativeCall's id: native_call.mbt).
 let outside_native = 10
 
 ///|
@@ -670,7 +670,7 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
   // a picture decoded: its sizes recorded now (hostrec.mbt), drawn or not (one never drawn is still asked of a Tester)
   if kind == outside_image && state == 1 && fake.val is None && text_recording() {
     let out = FixedArray::make(4, 0.0)
-    if @host.image_info(id, out) == 1 {
+    if @hostapi.image_info(id, out) == 1 {
       rec_image_ready(id, out)
     }
   }
@@ -698,7 +698,7 @@ fn outside_answered(id : Int) -> Unit {
 fn h_log(s : String) -> Unit {
   match fake.val {
     Some(f) => f.logs.push(s)
-    None => @host.log(s)
+    None => @hostapi.log(s)
   }
 }
 
@@ -732,7 +732,7 @@ fn h_image_load(src : String, max_px : Int) -> Int {
       id
     }
     None => {
-      let id = @host.image_load(src, max_px)
+      let id = @hostapi.image_load(src, max_px)
       rec_image_asked(id, { "is": head })
       id
     }
@@ -760,7 +760,7 @@ fn h_image_load_bytes(data : Bytes, max_px : Int, src : String) -> Int {
       }
     }
     None => {
-      let id = @host.image_load_bytes(data, max_px)
+      let id = @hostapi.image_load_bytes(data, max_px)
       rec_image_asked(id, { "ib": head })
       id
     }
@@ -786,7 +786,7 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
         None => -1
       }
     None => {
-      let st = @host.image_info(id, out)
+      let st = @hostapi.image_info(id, out)
       if st == 1 {
         rec_image_ready(id, out)
       }
@@ -815,7 +815,7 @@ fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
         }
         _ => false
       }
-    None => @host.image_pixels(id, out)
+    None => @hostapi.image_pixels(id, out)
   }
 }
 
@@ -824,7 +824,7 @@ fn h_image_free(id : Int) -> Unit {
   outside_end(outside_image, id)
   match fake.val {
     Some(f) => f.images.remove(id)
-    None => @host.image_free(id)
+    None => @hostapi.image_free(id)
   }
 }
 
@@ -851,7 +851,7 @@ fn h_view_open(kind : Int, arg : String) -> Int {
       f.view_kinds[f.view_ids] = kind
       f.view_ids
     }
-    None => @host.view_open(kind, arg)
+    None => @hostapi.view_open(kind, arg)
   }
   outside_start(outside_view, id, "view \{id} (kind \{kind}, \{view_kind_name(kind, arg)})")
   id
@@ -880,7 +880,7 @@ fn h_view_place(
       )
       f.view_at[id] = (dmax(x, cx0), dmax(y, cy0), dmin(x + w, cx1), dmin(y + h, cy1), shown)
     }
-    None => @host.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
+    None => @hostapi.view_place(id, x, y, w, h, cx0, cy0, cx1, cy1, radius, shown)
   }
 }
 
@@ -897,7 +897,7 @@ fn h_view_close(id : Int) -> Unit {
         f.touch_view = 0
       }
     }
-    None => @host.view_close(id)
+    None => @hostapi.view_close(id)
   }
 }
 
@@ -905,7 +905,7 @@ fn h_view_close(id : Int) -> Unit {
 fn h_view_control(id : Int, op : Int, value : Double) -> Unit {
   match fake.val {
     Some(f) => f.views.push("control \{id} \{op} \{value}")
-    None => @host.view_control(id, op, value)
+    None => @hostapi.view_control(id, op, value)
   }
 }
 
@@ -958,7 +958,7 @@ fn h_view_info_of(id : Int, out : FixedArray[Double]) -> Int {
       1
     }
     None => {
-      let state = @host.view_info(id, out)
+      let state = @hostapi.view_info(id, out)
       view_info_told(id, state, out)
       state
     }
@@ -981,7 +981,7 @@ fn h_view_site_next(id : Int) -> String {
       e
     }
     None => {
-      let e = @host.view_site_next(id)
+      let e = @hostapi.view_site_next(id)
       // (what the page asked of its host, on a run's record: Tester::view_said gives it again)
       if e != "" {
         site_told(id, e)
@@ -1139,7 +1139,7 @@ fn h_view_tell(id : Int, what : Int, text : String) -> Unit {
         f.views.push("settings \{id} \{text}")
       }
     }
-    None => @host.view_tell(id, what, text)
+    None => @hostapi.view_tell(id, what, text)
   }
 }
 
@@ -1193,7 +1193,7 @@ fn h_view_site_body(id : Int, req : Int) -> Bytes {
     // as the run recorded it (Tester::view_said); else none
     Some(f) => f.site_bodies.get((id, req)).unwrap_or(Bytes::new(0))
     None => {
-      let b = @host.view_site_body(id, req)
+      let b = @hostapi.view_site_body(id, req)
       if views_tracer.val is Some(_) || taping() {
         view_say({
           "sitebody": Json::object({ "view": Json::number(id.to_double()), "req": Json::number(req.to_double()) }),
@@ -1209,7 +1209,7 @@ fn h_view_site_body(id : Int, req : Int) -> Bytes {
 fn h_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit {
   match fake.val {
     Some(f) => f.views.push("site head \{id} \{req} \{status} \{headers}")
-    None => @host.view_site_head(id, req, status, headers)
+    None => @hostapi.view_site_head(id, req, status, headers)
   }
 }
 
@@ -1217,7 +1217,7 @@ fn h_view_site_head(id : Int, req : Int, status : Int, headers : String) -> Unit
 fn h_view_site_chunk(id : Int, req : Int, data : Bytes) -> Unit {
   match fake.val {
     Some(f) => f.views.push("site chunk \{id} \{req} \{data.length()}")
-    None => @host.view_site_chunk(id, req, data)
+    None => @hostapi.view_site_chunk(id, req, data)
   }
 }
 
@@ -1226,7 +1226,7 @@ fn h_view_site_end(id : Int, req : Int, error : String) -> Unit {
   outside_answered(id)
   match fake.val {
     Some(f) => f.views.push("site end \{id} \{req} \{error}")
-    None => @host.view_site_end(id, req, error)
+    None => @hostapi.view_site_end(id, req, error)
   }
 }
 
@@ -1242,7 +1242,7 @@ fn h_view_site_state(id : Int) -> String {
       st
     }
     None => {
-      let st = @host.view_site_state(id)
+      let st = @hostapi.view_site_state(id)
       if st != "" && (views_tracer.val is Some(_) || taping()) && sites_told_state.get(id) != Some(st) {
         sites_told_state[id] = st
         let j : Json = @json.parse(st) catch { _ => Json::string(st) }
@@ -1266,7 +1266,7 @@ fn h_view_text(id : Int, what : Int) -> String? {
         None => if what == 2 { Some("0") } else { None }
       }
     None => {
-      let t = @host.view_text(id, what)
+      let t = @hostapi.view_text(id, what)
       match t {
         Some(text) => view_told(id, what, text)
         None => ()
@@ -1291,7 +1291,7 @@ fn h_view_still(id : Int) -> Bytes {
       b
     }
     None => {
-      let b = @host.view_still(id)
+      let b = @hostapi.view_still(id)
       if views_tracer.val is Some(_) || taping() {
         view_say({ "still": Json::object({ "view": Json::number(id.to_double()) }), "b": Json::string(hex_of(b)) })
       }
@@ -1388,7 +1388,7 @@ fn hex_of(b : Bytes) -> String {
 fn h_view_site_load(id : Int, path : String) -> Unit {
   match fake.val {
     Some(f) => f.views.push("site load \{id} \{path}")
-    None => @host.view_site_load(id, path)
+    None => @hostapi.view_site_load(id, path)
   }
 }
 
@@ -1396,7 +1396,7 @@ fn h_view_site_load(id : Int, path : String) -> Unit {
 fn h_view_read_next(id : Int, out : FixedArray[Double]) -> Int {
   match fake.val {
     Some(f) => fake_read_next(f, id, out)
-    None => @host.view_read_next(id, out)
+    None => @hostapi.view_read_next(id, out)
   }
 }
 
@@ -1405,7 +1405,7 @@ fn h_view_read_answer(id : Int, req : Int, data : Bytes, total : Double) -> Unit
   outside_answered(id)
   match fake.val {
     Some(f) => f.read_answers.push((id, req, data.length(), total))
-    None => @host.view_read_answer(id, req, data, total)
+    None => @hostapi.view_read_answer(id, req, data, total)
   }
 }
 
@@ -1423,7 +1423,7 @@ fn h_pdf_open(data : Bytes) -> Int {
       doc
     }
     None => {
-      let doc = @host.pdf_open(data)
+      let doc = @hostapi.pdf_open(data)
       if text_recording() {
         g().host_rec.pdfs[doc] = named
       }
@@ -1457,7 +1457,7 @@ fn h_pdf_pages(doc : Int) -> Int {
         None => -1
       }
     None => {
-      let n = @host.pdf_pages(doc)
+      let n = @hostapi.pdf_pages(doc)
       match g().host_rec.pdfs.get(doc) {
         Some(named) if text_recording() => {
           let line : Json = { "pn": pdf_head(named, []), "r": Json::number(n.to_double()) }
@@ -1489,7 +1489,7 @@ fn h_pdf_page_size(doc : Int, page : Int, out : FixedArray[Double]) -> Unit {
       }
     }
     None => {
-      @host.pdf_page_size(doc, page, out)
+      @hostapi.pdf_page_size(doc, page, out)
       match g().host_rec.pdfs.get(doc) {
         Some(named) if text_recording() => {
           let line : Json = { "ps": pdf_head(named, [page]), "r": nums(out, 2) }
@@ -1519,7 +1519,7 @@ fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
         }
       }
     None => {
-      let id = @host.pdf_page_load(doc, page, max_px)
+      let id = @hostapi.pdf_page_load(doc, page, max_px)
       match g().host_rec.pdfs.get(doc) {
         Some(named) if text_recording() => rec_image_asked(id, { "pi": pdf_head(named, [page, max_px]) })
         _ => ()
@@ -1535,7 +1535,7 @@ fn h_pdf_page_load(doc : Int, page : Int, max_px : Int) -> Int {
 fn h_pdf_close(doc : Int) -> Unit {
   match fake.val {
     Some(f) => f.views.push("pdf close \{doc}")
-    None => @host.pdf_close(doc)
+    None => @hostapi.pdf_close(doc)
   }
 }
 
@@ -1544,7 +1544,7 @@ fn h_pdf_close(doc : Int) -> Unit {
 fn h_set_cursor(kind : Int) -> Unit {
   match fake.val {
     Some(f) => f.cursor = kind
-    None => @host.set_cursor(kind)
+    None => @hostapi.set_cursor(kind)
   }
 }
 
@@ -1553,6 +1553,6 @@ fn h_set_cursor(kind : Int) -> Unit {
 fn h_window_drag() -> Unit {
   match fake.val {
     Some(f) => f.window_drags = f.window_drags + 1
-    None => @host.window_drag()
+    None => @hostapi.window_drag()
   }
 }

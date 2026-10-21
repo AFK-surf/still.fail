@@ -7,7 +7,7 @@
 // once its fate is known: drawn, or let go. Which frame shows is said by events, never by what the host happens to
 // have decoded: the host says "decoded, W × H" or "let go" of each frame (or that its decoder broke) as it comes, the
 // framework takes those as a frame begins (frame_body, before the view builds) and the stream shows from that frame
-// on the last one said decoded (the host told to latch it: @host.stream_show). So what frame N draws depends only on
+// on the last one said decoded (the host told to latch it: @hostapi.stream_show). So what frame N draws depends only on
 // the events taken by then, and a run's tape (VIEWSAID {"stream":…} lines, the host's words as they were taken)
 // replays it exactly. `shown(ts)` is called once that frame is painted, for each frame taken in it, drawn or not (a
 // page not showing the stream that frame let its frame go all the same); `broken()` as the event is taken, the app
@@ -19,7 +19,7 @@
 // is at rest: nothing of it moves by the clock.
 //
 // The rules of Android's decoder (Decoders.kt), kept here where the host would only repeat them: until a key frame
-// after a config or a broken decoder, frames are let go unseen; where nothing decodes H.264 (@host.h264_here false,
+// after a config or a broken decoder, frames are let go unseen; where nothing decodes H.264 (@hostapi.h264_here false,
 // or no config yet) they are let go too. Those it lets go itself are said at the next frame's start, as a host's are.
 //
 // Under a Tester the host is the test's (Tester::new's `h264`; Tester::stream_fed, stream_shows, stream_drops,
@@ -360,7 +360,7 @@ pub fn Ctx::stream(
 }
 
 ///|
-/// Node `i`'s stream drawn (paint_image): an instance of kind 4 whose image is the stream's (@host.stream_tex_base +
+/// Node `i`'s stream drawn (paint_image): an instance of kind 4 whose image is the stream's (@hostapi.stream_tex_base +
 /// its id), as an image's is placed.
 fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
   let (s, at) = match stream_nodes.get(i) {
@@ -394,17 +394,17 @@ fn Ctx::paint_stream(self : Ctx, i : Int, n : Node, alpha : Double) -> Bool {
     }
   }
   self.push_inst(x, y, w, h, n.radius, 4.0, 0.0, 0.0, 0xFFFFFFFFL, alpha, u0, v0, du, dv)
-  self.inst[(self.ninst - 1) * inst_size + 20] = (@host.stream_tex_base + s.id).to_double()
+  self.inst[(self.ninst - 1) * inst_size + 20] = (@hostapi.stream_tex_base + s.id).to_double()
   true
 }
 
 ///|
 /// The stream an instance's image is, if it is one's.
 fn stream_of_image(image : Int) -> Stream? {
-  if image <= @host.stream_tex_base {
+  if image <= @hostapi.stream_tex_base {
     return None
   }
-  let id = image - @host.stream_tex_base
+  let id = image - @hostapi.stream_tex_base
   for s in open_streams {
     if s.id == id {
       return Some(s)
@@ -438,7 +438,7 @@ fn h_stream_open() -> Int {
       f.stream_said[f.stream_ids] = []
       f.stream_ids
     }
-    None => @host.stream_open()
+    None => @hostapi.stream_open()
   }
 }
 
@@ -454,7 +454,7 @@ fn fake_fed(f : FakeHost, id : Int, line : String) -> Unit {
 fn h_stream_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "h264 \{w}x\{h} avcc=\{avcc.length()}")
-    None => @host.stream_h264(id, avcc, w, h)
+    None => @hostapi.stream_h264(id, avcc, w, h)
   }
 }
 
@@ -462,7 +462,7 @@ fn h_stream_h264(id : Int, avcc : Bytes, w : Int, h : Int) -> Unit {
 fn h_stream_frame(id : Int, data : Bytes, key : Bool, ts : Double) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "frame key=\{key} ts=\{ts} bytes=\{data.length()}")
-    None => @host.stream_frame(id, data, key, ts)
+    None => @hostapi.stream_frame(id, data, key, ts)
   }
 }
 
@@ -470,7 +470,7 @@ fn h_stream_frame(id : Int, data : Bytes, key : Bool, ts : Double) -> Unit {
 fn h_stream_jpeg(id : Int, data : Bytes, ts : Double) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "jpeg ts=\{ts} bytes=\{data.length()}")
-    None => @host.stream_jpeg(id, data, ts)
+    None => @hostapi.stream_jpeg(id, data, ts)
   }
 }
 
@@ -478,7 +478,7 @@ fn h_stream_jpeg(id : Int, data : Bytes, ts : Double) -> Unit {
 fn h_stream_show(id : Int, ts : Double) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "show ts=\{ts}")
-    None => @host.stream_show(id, ts)
+    None => @hostapi.stream_show(id, ts)
   }
 }
 
@@ -486,7 +486,7 @@ fn h_stream_show(id : Int, ts : Double) -> Unit {
 fn h_stream_close(id : Int) -> Unit {
   match fake.val {
     Some(f) => fake_fed(f, id, "close")
-    None => @host.stream_close(id)
+    None => @hostapi.stream_close(id)
   }
 }
 
@@ -501,7 +501,7 @@ fn h_stream_next(id : Int) -> String {
         _ => ""
       }
     None => {
-      let e = @host.stream_next(id)
+      let e = @hostapi.stream_next(id)
       if e != "" && (views_tracer.val is Some(_) || taping()) {
         view_say({ "stream": Json::object({ "id": Json::number(id.to_double()), "e": Json::string(e) }) })
       }
@@ -516,7 +516,7 @@ fn h_h264_here() -> Bool {
     Some(f) => f.h264
     None => {
       if h264_known.val < 0 {
-        h264_known.val = if @host.h264_here() { 1 } else { 0 }
+        h264_known.val = if @hostapi.h264_here() { 1 } else { 0 }
       }
       h264_known.val == 1
     }

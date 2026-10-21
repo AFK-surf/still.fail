@@ -594,5 +594,5 @@ fn wide_place(c : @ui.Ctx, src : Source, w : Workspace, place : String) -> Unit 
 /// (apps/desktop main.ts), its size not kept (the desktop app keeps none either); at least 360 by 560, a phone's page
 /// below the breakpoint. Its title bar the system's (macOS, Windows).
 pub fn desktop_window() -> Unit {
-  @host.window_setup(360.0, 560.0, 1280.0, 820.0)
+  @hostapi.window_setup(360.0, 560.0, 1280.0, 820.0)
 }

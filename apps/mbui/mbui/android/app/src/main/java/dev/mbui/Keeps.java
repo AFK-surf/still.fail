@@ -19,7 +19,7 @@ import java.io.OutputStream;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Files the app has read kept on the phone (src/host/keep.mbt): its bytes put a part at a time into a file of the
+ * Files the app has read kept on the phone (src/hostapi/keep.mbt): its bytes put a part at a time into a file of the
  * cache (keeping/), then, once all there, copied into Downloads through MediaStore, nothing asked, as still.fail's
  * Android app's download() does (FileKinds.kt: a file of its DriveCache copied there); or where the person chooses,
  * the documents UI's ACTION_CREATE_DOCUMENT. Copied off the main thread; MoonBit asks after each keep every frame

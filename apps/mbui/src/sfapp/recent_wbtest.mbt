@@ -4,12 +4,12 @@
 let recent_now : Int64 = 1_792_245_000L
 
 ///|
-fn photo(id : Int64, added : Int64, modified : Int64, taken : Int64) -> @host.GalleryPhoto {
+fn photo(id : Int64, added : Int64, modified : Int64, taken : Int64) -> @hostapi.GalleryPhoto {
   { id, src: "content://media/external/images/media/\{id}", added, modified, taken }
 }
 
 ///|
-fn ranked(photos : Array[@host.GalleryPhoto], n? : Int = 30) -> Array[Int64] {
+fn ranked(photos : Array[@hostapi.GalleryPhoto], n? : Int = 30) -> Array[Int64] {
   latest_photos(photos, recent_now, n).map(fn(p) { p.id })
 }
 
@@ -46,7 +46,7 @@ test "recent photos: the latest of its times ranks it" {
 ///|
 test "recent photos: the same time by id, and no more than asked" {
   let now = recent_now
-  let photos : Array[@host.GalleryPhoto] = []
+  let photos : Array[@hostapi.GalleryPhoto] = []
   for i in 1..=40 {
     photos.push(photo(i.to_int64(), now - 5, -1, -1))
   }

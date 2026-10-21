@@ -83,14 +83,17 @@ jobs:
     defaults:
       run:
         working-directory: apps/mbui/mbui
-    # the same tests on native, on macOS (Mini1, mbui's runner: the hosts' Objective-C linked in by scripts/cc_apple.sh)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, mbui-render]
+    # the same tests on native, on Linux: a test's program links no host's code (its host the Tester's fake,
+    # mbui/hostapi), so it builds anywhere
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
+        shell: bash
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: ./.github/actions/mbui-moonbit
-      - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
+      - name: ui, motion, the components, Markdown and effect.mb's tests on native (scripts/test_native.sh)
         # (with no network: scripts/offline.sh)
         shell: bash scripts/offline.sh {0}
         run: scripts/test_native.sh

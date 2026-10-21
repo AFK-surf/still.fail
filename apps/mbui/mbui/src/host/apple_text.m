@@ -695,7 +695,7 @@ int32_t mb_host_ref_frame(moonbit_string_t name) {
   }
 }
 
-// The word around a UTF-16 offset as the system finds words (@host.word_at): CFStringTokenizer's word boundaries (a
+// The word around a UTF-16 offset as the system finds words (@hostapi.word_at): CFStringTokenizer's word boundaries (a
 // dictionary's words in Chinese and Japanese); start × 2^32 + end, or -1 when there is none there.
 double mb_host_word_at(moonbit_string_t text, int32_t off) {
   NSString *s = mb_ns_from_string(text);

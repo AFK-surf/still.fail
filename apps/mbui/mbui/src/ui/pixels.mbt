@@ -1,6 +1,6 @@
 // An image's pixels, to make another picture from (an icon drawn from a picture, say): decoded by the host as Ctx::image
 // has it (by its source, at most so many pixels on its long side) and read back from it once, kept while the run lasts.
-// Not on a host that cannot read its images back (false from @host.image_pixels): failed.
+// Not on a host that cannot read its images back (false from @hostapi.image_pixels): failed.
 
 ///|
 /// What an image's pixels are so far.

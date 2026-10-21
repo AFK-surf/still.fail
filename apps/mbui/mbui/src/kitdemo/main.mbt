@@ -5,7 +5,7 @@
 
 ///|
 fn main {
-  @host.window_setup(720.0, 520.0, 960.0, 720.0)
+  @hostapi.window_setup(720.0, 520.0, 960.0, 720.0)
   let page = @ui.env("MBUI_SCREEN")
   // MBUI_TEXTCHECK=NAME: the kept run NAME's text asked of this host again (textcheck.mbt), in place of the gallery
   let check = @ui.env("MBUI_TEXTCHECK")

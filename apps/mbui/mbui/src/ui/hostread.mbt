@@ -18,7 +18,7 @@ pub fn now() -> Double {
 pub fn own_clock() -> Bool {
   match fake.val {
     Some(_) => true
-    None => @host.own_clock()
+    None => @hostapi.own_clock()
   }
 }
 
@@ -45,16 +45,16 @@ pub fn platform() -> Int {
 pub fn system_dark() -> Bool {
   match fake.val {
     Some(f) => f.dark
-    None => @host.system_dark()
+    None => @hostapi.system_dark()
   }
 }
 
 ///|
-/// Whether the window's buttons are in the app's top row now (@host.window_inset; a Tester's `window_inset`).
+/// Whether the window's buttons are in the app's top row now (@hostapi.window_inset; a Tester's `window_inset`).
 pub fn window_inset() -> Bool {
   match fake.val {
     Some(f) => f.inset
-    None => @host.window_inset()
+    None => @hostapi.window_inset()
   }
 }
 
@@ -68,7 +68,7 @@ pub fn env(name : String) -> String {
 fn h_env(name : String) -> String {
   match fake.val {
     Some(f) => f.env.get(name).unwrap_or("")
-    None => @host.env(name)
+    None => @hostapi.env(name)
   }
 }
 
@@ -77,7 +77,7 @@ fn h_env(name : String) -> String {
 pub fn app_version() -> Int {
   match fake.val {
     Some(f) => f.app_version
-    None => @host.app_version()
+    None => @hostapi.app_version()
   }
 }
 

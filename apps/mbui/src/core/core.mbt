@@ -278,7 +278,7 @@ pub fn sign_in(on_done : (Result[Json, Json]) -> Unit) -> Unit {
 
 ///|
 /// Whether this build has the system's browser session `sign_in` needs (ASWebAuthenticationSession on Apple's
-/// systems); where it has not (Android), an app signs in on `@host.browser_login` (a loopback address) instead.
+/// systems); where it has not (Android), an app signs in on `@hostapi.browser_login` (a loopback address) instead.
 pub fn has_browser_session() -> Bool {
   ffi_has_web_auth() != 0
 }

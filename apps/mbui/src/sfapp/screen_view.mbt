@@ -122,7 +122,7 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
     let on = u.full
     c.after_build("screen-sideways/" + key, fn() {
       u.sideways_told = on
-      @host.set_sideways(on)
+      @hostapi.set_sideways(on)
     })
   }
   // back in 全屏 leaves it first
@@ -216,7 +216,7 @@ fn screen_left(src : Source, station : String, screen : String) -> Unit {
   match screen_uis.get(key) {
     Some(u) => {
       if u.sideways_told {
-        @host.set_sideways(false)
+        @hostapi.set_sideways(false)
       }
       if u.awake {
         @ui.keep_awake(false)

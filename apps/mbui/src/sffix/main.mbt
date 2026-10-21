@@ -19,7 +19,7 @@ fn main {
   // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: client/fixtures/screens, the file still.fail's
   // Android app draws it from too; scripts/android-ref.sh), its pages opened as it says
   let src = if mode == "json" {
-    @sfapp.fixture_json(@host.env_text("MBUI_FIXTURE_JSON"))
+    @sfapp.fixture_json(@hostapi.env_text("MBUI_FIXTURE_JSON"))
   } else {
     let src = @sfapp.fixture(mode)
     // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)

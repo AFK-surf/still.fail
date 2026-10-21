@@ -16,7 +16,7 @@ import android.provider.Settings;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The phone's gallery for a picker's recent photos (src/host/gallery.mbt; still.fail's Android app,
+ * The phone's gallery for a picker's recent photos (src/hostapi/gallery.mbt; still.fail's Android app,
  * chat/screens/Attach.kt photoAccess, AttachLaunchers.askPhotos, recentPhotos): how much of it the app may read, asking
  * for it (asked and turned down for good, the app's page of the system's settings), and its photos with their times,
  * read off the main thread (the view ranks them: Attach.kt latest). A photo is drawn by its content:// address

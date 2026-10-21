@@ -23,6 +23,12 @@ particular to this app:
   pictures are for people, not compared. detlint's `device-shot` counts each picture taken off a device: a new one
   fails.
 
+## The host is asked through mbui/hostapi
+
+- App code asks its host through `@hostapi` (or `@ui`), never imports `mbui/host`: only a main (`src/stillfail`,
+  the demos) does, for the platform's host. A test's program links no host's code, so the native tests run on Linux
+  (`TARGETS=native scripts/test.sh`, CI's check-mbui native). detlint's `host-import` holds it.
+
 ## Time is declared, nothing is waited for, nothing is flaky
 
 > 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到

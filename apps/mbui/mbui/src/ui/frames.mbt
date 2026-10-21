@@ -122,9 +122,9 @@ fn log_drawn(w : Double, h : Double, scale : Double, t : Double) -> Unit {
     let stable = if bench.mode < 0 { 1 } else { 0 }
     tape_line("DRAWHASH \{draw_frames.val} \{t} \{w} \{h} \{scale} \{drawn_hash()} \{stable}")
     // MBUI_DRAW_DUMP=N: frame N drawn as text (drawn_text), a line each
-    if draw_logging() && @host.env("MBUI_DRAW_DUMP") == draw_frames.val.to_string() {
+    if draw_logging() && @hostapi.env("MBUI_DRAW_DUMP") == draw_frames.val.to_string() {
       for line in drawn_text().split("\n") {
-        @host.log("DRAWDUMP " + line.to_owned())
+        @hostapi.log("DRAWDUMP " + line.to_owned())
       }
     }
   }

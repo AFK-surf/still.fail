@@ -1,11 +1,11 @@
-// The device beyond the window on Windows (src/host/device.mbt): a key catcher's keys, the clipboard read and written
+// The device beyond the window on Windows (src/hostapi/device.mbt): a key catcher's keys, the clipboard read and written
 // (words; a picture under the registered "PNG" format, as browsers and Office put it there: a bitmap alone is said
 // unreadable, not converted), the display kept on. No soft keyboard's height (0), no haptics. Included by win_app.c
 // before its keys (its hwnd, ime_active, marked_len, mods_now, outside_cb above).
 
 void mb_host_clipboard_set(moonbit_string_t s);
 
-// ---- a key catcher (@host.key_catch) ----
+// ---- a key catcher (@hostapi.key_catch) ----
 
 static int key_catching;
 
@@ -158,7 +158,7 @@ moonbit_bytes_t mb_host_clip_png(int32_t id) {
   return b;
 }
 
-// ---- the clipboard written: words (as @host.clipboard_set), or a PNG under "PNG" (no label on Windows) ----
+// ---- the clipboard written: words (as @hostapi.clipboard_set), or a PNG under "PNG" (no label on Windows) ----
 
 void mb_host_clip_set(moonbit_string_t text, moonbit_bytes_t png, moonbit_string_t label) {
   (void)label;
@@ -188,7 +188,7 @@ void mb_host_keep_awake(int32_t on) {
 
 void mb_host_haptic(int32_t kind) { (void)kind; }
 
-// An app's own native calls (src/host/native.mbt): none on this host yet.
+// An app's own native calls (src/hostapi/native.mbt): none on this host yet.
 int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) { return 0; }
 int32_t mb_host_native_state(int32_t id) { return -1; }
 moonbit_string_t mb_host_native_result(int32_t id) { return moonbit_make_string_raw(0); }

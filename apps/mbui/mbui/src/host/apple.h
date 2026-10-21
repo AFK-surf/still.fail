@@ -41,7 +41,7 @@ extern int mb_atlas_size;
 // images (apple_image.m): the texture of a decoded image, nil if not ready
 id<MTLTexture> mb_image_texture(int iid);
 // streams (apple_stream.m): what stream sid is drawn with now, nil before a frame shows; an instance's image
-// MB_STREAM_TEX + sid is it (src/host/stream.mbt)
+// MB_STREAM_TEX + sid is it (src/hostapi/stream.mbt)
 #define MB_STREAM_TEX 4194304
 id<MTLTexture> mb_stream_texture(int sid);
 

@@ -113,7 +113,7 @@ struct EditorState {
   mut sel_color : Int64
   /// what it holds is a secret (a key, a token, a password): drawn as dots, never copied or cut out of it
   mut secret : Bool
-  /// what people wrote (a message being written): set in the face given for it (faces.mbt, @host.face_text)
+  /// what people wrote (a message being written): set in the face given for it (faces.mbt, @hostapi.face_text)
   mut words : Bool
   /// how its words are drawn, as the app says (Ctx::editor's `look`): the same number of letters in the same places,
   /// and ranges of them in colours of their own
@@ -1220,7 +1220,7 @@ pub fn open_url(url : String) -> Bool {
 
 ///|
 /// A package (an APK a chat has) handed to the system's installer, which asks the person to confirm
-/// (@host.install_package); what comes of it when it is not installed comes on @host.system_channel. Under a Tester:
+/// (@hostapi.install_package); what comes of it when it is not installed comes on @hostapi.system_channel. Under a Tester:
 /// kept (Tester::installs); the test posts what the system says (Tester::post).
 pub fn install_package(name : String, data : Bytes) -> Unit {
   match fake.val {
@@ -1228,27 +1228,27 @@ pub fn install_package(name : String, data : Bytes) -> Unit {
       ignore(data)
       f.installs.push(name)
     }
-    None => @host.install_package(name, data)
+    None => @hostapi.install_package(name, data)
   }
 }
 
 ///|
-/// The app over another app (@host.system_channel `over`) done (@host.over_done): back to the app it was over, or on
+/// The app over another app (@hostapi.system_channel `over`) done (@hostapi.over_done): back to the app it was over, or on
 /// into the app's own window (`open_app`). Under a Tester: kept (Tester::overs_done).
 pub fn over_done(open_app~ : Bool) -> Unit {
   match fake.val {
     Some(f) => f.overs_done.push(open_app)
-    None => @host.over_done(open_app~)
+    None => @hostapi.over_done(open_app~)
   }
 }
 
 ///|
-/// What the notice says that holds the app up while it listens for a browser coming back (@host.hold_words), said
+/// What the notice says that holds the app up while it listens for a browser coming back (@hostapi.hold_words), said
 /// before the browser opens. Under a Tester: kept (Tester::hold_words).
 pub fn hold_words(channel~ : String, title~ : String, body~ : String) -> Unit {
   match fake.val {
     Some(f) => f.hold_words = Some((channel, title, body))
-    None => @host.hold_words(channel~, title~, body~)
+    None => @hostapi.hold_words(channel~, title~, body~)
   }
 }
 

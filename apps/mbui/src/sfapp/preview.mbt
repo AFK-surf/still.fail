@@ -806,7 +806,7 @@ fn leaving_done() -> Unit {
 /// What a viewer holds of the host's, let go.
 fn Viewer::let_go(self : Viewer) -> Unit {
   if self.turned {
-    @host.set_sideways(false)
+    @hostapi.set_sideways(false)
   }
   match self.video {
     Some(n) => n.close()
@@ -2398,7 +2398,7 @@ fn Viewer::video_controls(self : Viewer, c : @ui.Ctx, shown : Double) -> Unit {
           // 横屏: the phone turned for it (and back as the viewer closes)
           if picture_button(c, "preview/landscape", "landscape", if v.turned { dark_text } else { dark_muted }, on) {
             v.turned = !v.turned
-            @host.set_sideways(v.turned)
+            @hostapi.set_sideways(v.turned)
             v.wake(tap_rest_ms)
           }
         })

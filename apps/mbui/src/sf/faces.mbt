@@ -5,7 +5,7 @@
 ///|
 /// The faces the app carries, given to the hosts (@ui.face_add_bytes): the code face. Once, before the first frame.
 pub fn give_faces() -> Unit {
-  ignore(@ui.face_add_bytes(@host.face_code, code_face()))
+  ignore(@ui.face_add_bytes(@hostapi.face_code, code_face()))
 }
 
 ///|

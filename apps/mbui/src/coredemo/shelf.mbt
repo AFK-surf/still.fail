@@ -257,11 +257,11 @@ fn import_books() -> Unit {
     "root": Json::string(root),
     "path": Json::string(path),
   }
-  @host.log("IMPORT station \{station}")
+  @hostapi.log("IMPORT station \{station}")
   @core.call("media.import", params=Json::object(params), on_done=fn(r) {
     match r {
-      Ok(v) => @host.log("IMPORT ok " + v.stringify())
-      Err(e) => @host.log("IMPORT failed " + e.stringify())
+      Ok(v) => @hostapi.log("IMPORT ok " + v.stringify())
+      Err(e) => @hostapi.log("IMPORT failed " + e.stringify())
     }
   })
 }

@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A sign-in in the browser that comes back to this app (mbui/host {@code browser_login}, src/host/browser_login.mbt),
+ * A sign-in in the browser that comes back to this app (mbui/hostapi {@code browser_login}, src/hostapi/browser_login.mbt),
  * Android's twin of src/host/apple_browser_login.m, on the {@link Loopback} listener: the way command-line tools sign
  * in (OAuth's loopback redirect, RFC 8252 §7.3). Listen on 127.0.0.1 at a port the system picks, let the app make its
  * login page with http://127.0.0.1:&lt;port&gt;&lt;path&gt; as where to come back, open it in a Custom Tab (the browser's,
@@ -91,7 +91,7 @@ final class BrowserLogin {
     }
 
     /**
-     * A page in a Custom Tab over the app (@host.open_tab: a login's page, as still.fail's LoginCards.kt openLoginPage),
+     * A page in a Custom Tab over the app (@hostapi.open_tab: a login's page, as still.fail's LoginCards.kt openLoginPage),
      * or in the system's browser where none takes a tab; false when nothing takes it at all.
      */
     static boolean openTab(String url) {

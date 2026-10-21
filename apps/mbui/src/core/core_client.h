@@ -20,7 +20,15 @@ typedef struct {
   /// Opens `url` in the system's browser session and calls `done` (on any thread) with the URL it is sent to on
   /// `scheme`; NULL when the platform has none.
   void (*web_auth)(const char *url, const char *scheme, mbc_auth_done done, void *ctx);
+  /// mbui's queue for the next frame (its host's: mb_post, mb_post_drop below), which the core's messages are posted
+  /// to: given with the engine, as the app links both, so mbui/core's own tests link no host.
+  void (*post)(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
+  void (*post_drop)(const char *channel);
 } mbc_engine;
+
+// mbui's (its src/host/post_api.h, the host's own file): for an engine to hand over (`post`, `post_drop`)
+void mb_post(const char *channel, const char *json, size_t len, const uint8_t *bytes, size_t blen);
+void mb_post_drop(const char *channel);
 
 void mbc_use(const mbc_engine *engine);
 

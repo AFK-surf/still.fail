@@ -114,7 +114,7 @@ fn open_listed(view : ChatsView) -> Unit {
       }
       if (nth > 0 && rows == nth) || (nth == 0 && item.title.contains(words)) {
         open_titled.val = ""
-        @host.log("OPEN found among \{rows}+ rows")
+        @hostapi.log("OPEN found among \{rows}+ rows")
         app.nav.push(
           Chat({
             station: item.station,
@@ -134,7 +134,7 @@ fn open_listed(view : ChatsView) -> Unit {
   // (said of the rows as the core lists them: the same in each build of the frame)
   if !reading && rows > 0 {
     open_titled.val = ""
-    @host.log("OPEN not found among \{rows} rows")
+    @hostapi.log("OPEN not found among \{rows} rows")
   }
 }
 

@@ -1,4 +1,4 @@
-// The system's notifications, through the framework (as @host's notify.mbt has them), so that a test's fake host keeps
+// The system's notifications, through the framework (as @hostapi's notify.mbt has them), so that a test's fake host keeps
 // what the app shows (Tester::notices) and taps one (Tester::tap_notice) as the system would.
 
 ///|
@@ -13,7 +13,7 @@ pub(all) struct Notice {
 } derive(Eq, Debug)
 
 ///|
-/// Shows a notification (@host.notice_show): one of the same tag is replaced.
+/// Shows a notification (@hostapi.notice_show): one of the same tag is replaced.
 pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : String, opens~ : String) -> Unit {
   match fake.val {
     Some(f) => {
@@ -22,12 +22,12 @@ pub fn notice_show(channel~ : String, tag~ : String, title~ : String, body~ : St
       f.notices.append(kept)
       f.notices.push({ channel, tag, title, body, opens })
     }
-    None => @host.notice_show(channel~, tag~, title~, body~, opens~)
+    None => @hostapi.notice_show(channel~, tag~, title~, body~, opens~)
   }
 }
 
 ///|
-/// Takes back the notification of `tag` (@host.notice_cancel).
+/// Takes back the notification of `tag` (@hostapi.notice_cancel).
 pub fn notice_cancel(tag : String) -> Unit {
   match fake.val {
     Some(f) => {
@@ -35,12 +35,12 @@ pub fn notice_cancel(tag : String) -> Unit {
       f.notices.clear()
       f.notices.append(kept)
     }
-    None => @host.notice_cancel(tag)
+    None => @hostapi.notice_cancel(tag)
   }
 }
 
 ///|
-/// What the notification tapped opens, once ("" none since the last ask: @host.notice_opened).
+/// What the notification tapped opens, once ("" none since the last ask: @hostapi.notice_opened).
 pub fn notice_opened() -> String {
   match fake.val {
     Some(f) => {
@@ -48,22 +48,22 @@ pub fn notice_opened() -> String {
       f.notice_opened = ""
       o
     }
-    None => @host.notice_opened()
+    None => @hostapi.notice_opened()
   }
 }
 
 ///|
-/// What the system lets the app show (@host.notice_permission): "granted", "denied", "ask", "unknown". A Tester's
+/// What the system lets the app show (@hostapi.notice_permission): "granted", "denied", "ask", "unknown". A Tester's
 /// host lets it unless the test says otherwise (Tester::set_notice_permission).
 pub fn notice_permission() -> String {
   match fake.val {
     Some(f) => f.notice_perm
-    None => @host.notice_permission()
+    None => @hostapi.notice_permission()
   }
 }
 
 ///|
-/// Asks the system to let the app show notifications (@host.notice_ask): false when nothing was asked (allowed
+/// Asks the system to let the app show notifications (@hostapi.notice_ask): false when nothing was asked (allowed
 /// already, or a host that cannot tell has no way to ask: "unknown", as macOS, Windows and the web say). Under a
 /// Tester the person answers as the test said (Tester::set_notice_reply), from the next frame.
 pub fn notice_ask() -> Bool {
@@ -80,12 +80,12 @@ pub fn notice_ask() -> Bool {
       f.wants = true
       true
     }
-    None => @host.notice_ask()
+    None => @hostapi.notice_ask()
   }
 }
 
 ///|
-/// The system's answer to the last `notice_ask`, once (@host.notice_answer): Some(true) allowed, Some(false) refused,
+/// The system's answer to the last `notice_ask`, once (@hostapi.notice_answer): Some(true) allowed, Some(false) refused,
 /// None not yet.
 pub fn notice_answer() -> Bool? {
   match fake.val {
@@ -98,7 +98,7 @@ pub fn notice_answer() -> Bool? {
         }
         _ => None
       }
-    None => @host.notice_answer()
+    None => @hostapi.notice_answer()
   }
 }
 

@@ -2,6 +2,7 @@ import {
   "moonbitlang/core/string",
   "stillfail/core",
   "mbui/host",
+  "mbui/hostapi",
   "mbui/ui",
   "stillfail/sfcore",
   "stillfail/sfapp",

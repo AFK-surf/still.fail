@@ -1,4 +1,4 @@
-// The faces the app's words are set in (@host.face_add): its own words, what people wrote and code each in a face of
+// The faces the app's words are set in (@hostapi.face_add): its own words, what people wrote and code each in a face of
 // its own, chosen and given here (a file the app has, or fetched), else the system's. A face given (or given up)
 // changes how words already shaped measure: what was kept of them is forgotten at once, and they are shaped again
 // in it.
@@ -6,14 +6,14 @@
 ///|
 /// Which faces are given, 1 to 15 (index 0 unused): only a face given changes a style (style_words is set only with
 /// a face for it, so what people wrote stays in the app's words' style, the same text records, until one is).
-let faces_given : FixedArray[Bool] = FixedArray::make(@host.faces_most, false)
+let faces_given : FixedArray[Bool] = FixedArray::make(@hostapi.faces_most, false)
 
 ///|
-/// A font file (at `path`) made part of face `face` (@host.face_ui, face_text, face_code, or 4 to 15 for words that
+/// A font file (at `path`) made part of face `face` (@hostapi.face_ui, face_text, face_code, or 4 to 15 for words that
 /// name it: Ctx::rich's `face`), for `weight` (0: a variable file, every weight from it). False when the host could not
 /// take it (the face as it was). Every word shaped before is shaped again.
 pub fn face_add(face : Int, path : String, weight? : Int = 0) -> Bool {
-  if face <= 0 || face >= @host.faces_most {
+  if face <= 0 || face >= @hostapi.faces_most {
     return false
   }
   let ok = h_face_add(face, path, weight)
@@ -27,7 +27,7 @@ pub fn face_add(face : Int, path : String, weight? : Int = 0) -> Bool {
 ///|
 /// As face_add, the font's file being `data`: one the app carries in itself, or fetched and kept.
 pub fn face_add_bytes(face : Int, data : Bytes, weight? : Int = 0) -> Bool {
-  if face <= 0 || face >= @host.faces_most {
+  if face <= 0 || face >= @hostapi.faces_most {
     return false
   }
   let ok = h_face_add_bytes(face, data, weight)
@@ -41,7 +41,7 @@ pub fn face_add_bytes(face : Int, data : Bytes, weight? : Int = 0) -> Bool {
 ///|
 /// Face `face` given up: its words in the system's face again.
 pub fn face_clear(face : Int) -> Unit {
-  if face <= 0 || face >= @host.faces_most {
+  if face <= 0 || face >= @hostapi.faces_most {
     return
   }
   h_face_clear(face)
@@ -54,15 +54,15 @@ pub fn face_clear(face : Int) -> Unit {
 ///|
 /// Whether face `face` is given (face_add).
 pub fn face_given(face : Int) -> Bool {
-  face > 0 && face < @host.faces_most && faces_given[face]
+  face > 0 && face < @hostapi.faces_most && faces_given[face]
 }
 
 ///|
 /// What words in a paragraph said to be `words` (what people wrote) and in `face` (0: none named) add to each run's
 /// style: the face named where it is given; what people wrote marked so where a face is given for it.
 fn faces_style(words : Bool, face : Int) -> Int {
-  (if face_given(face) { @host.style_face(face) } else { 0 }) |
-  (if words && face_given(@host.face_text) { @host.style_words } else { 0 })
+  (if face_given(face) { @hostapi.style_face(face) } else { 0 }) |
+  (if words && face_given(@hostapi.face_text) { @hostapi.style_words } else { 0 })
 }
 
 ///|

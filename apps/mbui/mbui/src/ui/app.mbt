@@ -49,14 +49,14 @@ struct Bench {
 /// Opens the window and runs `view` for every frame until it closes.
 pub fn run(title : String, view : (Ctx) -> Unit) -> Unit {
   g_view.val = view
-  bench.host = @host.bench_mode()
+  bench.host = @hostapi.bench_mode()
   // (the app's own bench, bench_app: the framework's does not run beside it)
   bench.mode = if bench.host == bench_app { 0 } else { bench.host }
   drive_init()
-  @host.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
-  @host.set_app_state(fn(s) { on_app_state(s) })
-  outside_told.val = @host.set_outside(fn(k, id, st) { on_outside(k, id, st) })
-  @host.run(
+  @hostapi.set_back(fn(k, x, p, e) { on_back(k, x, p, e) })
+  @hostapi.set_app_state(fn(s) { on_app_state(s) })
+  outside_told.val = @hostapi.set_outside(fn(k, id, st) { on_outside(k, id, st) })
+  @hostapi.run(
     title,
     fn(w, h, s, t) { on_frame(w, h, s, t) },
     fn(k, x, y, b) { on_pointer(k, x, y, b) },
@@ -119,7 +119,7 @@ fn on_frame(w : Double, h : Double, scale : Double, t : Double) -> Unit {
   if outside_told.val {
     let rt = runtime()
     let what = rt.awaited().map(fn(a) { a.0 }).join(", ")
-    @host.frame_awaiting(rt.awaiting(), what)
+    @hostapi.frame_awaiting(rt.awaiting(), what)
   }
 }
 
@@ -437,7 +437,7 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
       "BENCH frames=\{n} wall_ms=\{wall} fps=\{n.to_double() * 1000.0 / wall} " +
       "cpu_avg=\{sum / n.to_double()} cpu_p50=\{p(cs, 0.5)} cpu_p99=\{p(cs, 0.99)} cpu_max=\{cs[n - 1]} " +
       "present_avg=\{psum / n.to_double()} present_p99=\{p(ps, 0.99)} present_max=\{ps[n - 1]} " +
-      "nodes=\{c.count} instances=\{c.ninst} rss_mb=\{@host.mem_bytes() / 1048576.0}",
+      "nodes=\{c.count} instances=\{c.ninst} rss_mb=\{@hostapi.mem_bytes() / 1048576.0}",
     )
     if bench.gpu.length() > 0 {
       let gs = bench.gpu.copy()
@@ -452,7 +452,7 @@ fn bench_step(c : Ctx, cpu : Double, present : Double) -> Unit {
       )
     }
     if bench.mode == 1 {
-      @host.exit(0)
+      @hostapi.exit(0)
     } else {
       bench.mode = 0
     }

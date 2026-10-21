@@ -142,7 +142,7 @@ fn leaked_state() -> Array[String] {
 /// `dark`, `window_inset`, `env`, `app_version`: what the app reads of where
 /// it runs (hostread.mbt): the system dark, the window's buttons in its top
 /// row, environment variables, the build's version code.
-/// `platform`: the system it plays, as @host.platform has them (0 macOS,
+/// `platform`: the system it plays, as @hostapi.platform has them (0 macOS,
 /// 1 iOS, 2 Android: how lists scroll). `seed`: the order the runtime's ready
 /// fibers run in is drawn from it (fx.mbt; without, the order they became ready).
 /// `text`: a real host's text as it kept it (MBUI_TEXT_RECORD's lines, textrec.mbt): its metrics, shaping and glyphs
@@ -267,6 +267,8 @@ pub fn Tester::new(
     env_before_frames(f, r)
   }
   fake.val = Some(f)
+  // (what the app asks of its host directly, the fake's too: fake_host.mbt)
+  @hostapi.set_host(f)
   reset_globals()
   // (the words drawn kept a line at a time, for Tester::text_runs)
   text_runs.on = true
@@ -385,7 +387,7 @@ pub fn Tester::finish_all(self : Tester) -> Unit {
 /// default frame_period_default and none (run_for goes straight to its end); MBUI_TEST_FPS (frames a second) that
 /// rate's, each drawn: a run of the tests at a frame rate, which must come out the same (scripts/fps_check.sh).
 fn test_frame_period() -> (Double, Bool) {
-  let fps = @host.env("MBUI_TEST_FPS")
+  let fps = @hostapi.env("MBUI_TEST_FPS")
   match (try Some(@json.parse(fps)) catch { _ => None }) {
     Some(Number(n, ..)) if n > 0.0 => (1000.0 / n, true)
     _ => (frame_period_default, false)

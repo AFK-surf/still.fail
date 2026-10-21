@@ -1,4 +1,4 @@
-// What the system's media and sharing do for the app (as @host's views, share-in and marks have them), through the
+// What the system's media and sharing do for the app (as @hostapi's views, share-in and marks have them), through the
 // framework, so that under a Tester they are the test's: a player's reads of the app's bytes and its state
 // (Tester::view_reads, set_player), what another app shares in (Tester::share_in) and what the app shares out
 // (Tester::shared_out), the marks drawn onto an image (Tester::marks_drawn), each at the next frame, as a host's event
@@ -160,7 +160,7 @@ pub fn Tester::share_in(
 }
 
 ///|
-/// What another app shared into this one since last asked (@host.shared_in: JSON text `{"text","title","files"}`, each
+/// What another app shared into this one since last asked (@hostapi.shared_in: JSON text `{"text","title","files"}`, each
 /// file `{"name","type","size"}`), "" when nothing was. Under a Tester, what the test shared in (Tester::share_in).
 pub fn shared_in() -> String {
   match fake.val {
@@ -172,7 +172,7 @@ pub fn shared_in() -> String {
         }
         _ => ""
       }
-    None => @host.shared_in()
+    None => @hostapi.shared_in()
   }
 }
 
@@ -188,14 +188,14 @@ pub fn shared_in_file(i : Int) -> Bytes {
       } else {
         b""
       }
-    None => @host.shared_in_file(i)
+    None => @hostapi.shared_in_file(i)
   }
 }
 
 ///|
-/// Marks being drawn onto an image (@host.MarkedImage).
+/// Marks being drawn onto an image (@hostapi.MarkedImage).
 pub struct MarkedImage {
-  priv host : @host.MarkedImage?
+  priv host : @hostapi.MarkedImage?
   priv fake : Int
 }
 
@@ -204,7 +204,7 @@ pub struct MarkedImage {
 let marked_png : Bytes = b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A\x00\x00\x00\x0D\x49\x48\x44\x52\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1F\x15\xC4\x89\x00\x00\x00\x0A\x49\x44\x41\x54\x78\x9C\x63\x00\x01\x00\x00\x05\x00\x01\x0D\x0A\x2D\xB4\x00\x00\x00\x00\x49\x45\x4E\x44\xAE\x42\x60\x82"
 
 ///|
-/// `image` with `marks` drawn on it (@host.draw_marks: their JSON as marks.mbt says it), None where the host cannot.
+/// `image` with `marks` drawn on it (@hostapi.draw_marks: their JSON as marks.mbt says it), None where the host cannot.
 /// Under a Tester the marks are kept (Tester::marks_drawn) and a PNG is made by the next frame.
 pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
   match fake.val {
@@ -219,7 +219,7 @@ pub fn draw_marks(image : Bytes, marks : String) -> MarkedImage? {
       Some(m)
     }
     None =>
-      match @host.draw_marks(image, marks) {
+      match @hostapi.draw_marks(image, marks) {
         Some(h) => {
           let m : MarkedImage = { host: Some(h), fake: -1 }
           outside_start(outside_marks, m.outside_id(), "marks drawn \{m.outside_id()}")
@@ -282,14 +282,14 @@ pub fn Tester::marks_drawn(self : Tester) -> Array[String] {
 
 ///|
 /// Words (`text`), or a file of `data` named `name` (`mime`), handed to another app through the system's share sheet
-/// (@host.share): false where there is none. Under a Tester the sheet takes it, kept for the test (Tester::shared_out).
+/// (@hostapi.share): false where there is none. Under a Tester the sheet takes it, kept for the test (Tester::shared_out).
 pub fn share(text : String, name : String, mime : String, data : Bytes) -> Bool {
   match fake.val {
     Some(f) => {
       f.shares.push((text, name, mime, data))
       true
     }
-    None => @host.share(text, name, mime, data)
+    None => @hostapi.share(text, name, mime, data)
   }
 }
 

@@ -1,4 +1,4 @@
-// Streams on Windows (src/host/stream.mbt, @ui's Stream): JPEG frames decoded by WIC on the thread pool, a stream's
+// Streams on Windows (src/hostapi/stream.mbt, @ui's Stream): JPEG frames decoded by WIC on the thread pool, a stream's
 // one after another in the order they came, each into a Direct3D 11 texture kept until the app shows it ("f TS W H",
 // then mb_host_stream_show: what the renderer draws the stream's instances with, win_render.cpp) or a later one; one
 // that does not decode is let go ("d TS"). No H.264 here (h264_here is false: the sender is asked for JPEG only); an

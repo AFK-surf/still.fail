@@ -125,7 +125,7 @@ class Rules(unittest.TestCase):
         bad = {"src/app/view.mbt": """
             fn view(c : @ui.Ctx) -> Unit {
               if c.pressed(1) { c.request_frame() }
-              @host.request_frame()
+              @hostapi.request_frame()
             }
             """}
         found(self, bad, "frame-request", 2)
@@ -320,6 +320,13 @@ class Rules(unittest.TestCase):
                                   "MBUI_SCRIPT=shot MBUI_SHOT_DIR=out ./app\n"}
         found(self, good, "device-shot", 0)
 
+    def test_host_import(self):
+        bad = {"src/kit/moon.pkg": 'import {\n  "mbui/host",\n  "mbui/ui",\n}\n'}
+        found(self, bad, "host-import", 1)
+        good = {"src/kit/moon.pkg": 'import {\n  "mbui/hostapi",\n  "mbui/ui",\n}\n',
+                "src/demo/moon.pkg": 'import {\n  "mbui/host",\n}\n\noptions(\n  "is-main": true,\n)\n'}
+        found(self, good, "host-import", 0)
+
     def test_page_settle(self):
         bad = {"scripts/web.mjs": "await page.waitForFunction(() => __mbhost.settled(), null, { timeout: 30000 });\n"
                                   "console.log(await page.evaluate(() => __mbhost.unsettled()));\n"}
@@ -407,7 +414,7 @@ class Rules(unittest.TestCase):
     def test_poll(self):
         bad = {"src/app/view.mbt": """
             fn ready() -> Bool {
-              @host.update_state() != ""
+              @hostapi.update_state() != ""
             }
 
             fn v(c : @ui.Ctx, j : Job) -> Unit {
@@ -440,11 +447,11 @@ class Rules(unittest.TestCase):
         found(self, good, "poll", 0)
 
     def test_host_read(self):
-        bad = {"src/app/view.mbt": "fn v() -> Unit {\n  let p = @host.platform()\n  let d = @host.system_dark()\n}\n"}
+        bad = {"src/app/view.mbt": "fn v() -> Unit {\n  let p = @hostapi.platform()\n  let d = @hostapi.system_dark()\n}\n"}
         found(self, bad, "host-read", 2)
         good = {
-            "src/app/view.mbt": "fn v() -> Unit {\n  let p = @ui.platform()\n  @host.open_url(u)\n}\n",
-            "src/ui/hostread.mbt": "pub fn platform() -> Int {\n  @host.platform()\n}\n",
+            "src/app/view.mbt": "fn v() -> Unit {\n  let p = @ui.platform()\n  @hostapi.open_url(u)\n}\n",
+            "src/ui/hostread.mbt": "pub fn platform() -> Int {\n  @hostapi.platform()\n}\n",
         }
         found(self, good, "host-read", 0)
 
@@ -516,7 +523,7 @@ class BuildEffect(unittest.TestCase):
                   (src.call)("seen", Json::null(), fn(_) {  })
                   keep(src, 1)
                   n.reload()
-                  @host.set_dark(true)
+                  @hostapi.set_dark(true)
                   c.after_build("seen", fn() { (src.call)("seen", Json::null(), fn(_) {  }); n.seek(1.0) })
                   if c.clicked(7) {
                     send(src)

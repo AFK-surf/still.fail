@@ -14,7 +14,7 @@
 // - Pushes (Push.kt): this device's registration held as the core's `notify` says (`push.register` with the host's
 //   token, `push.unregister` while off); a push delivered while the app runs shown unless the core says not
 //   (`notice.pushed`), then what it is about brought onto the device (`notice.bring`). No push service is linked in
-//   this build (src/host/notify.mbt): there is no token, and nothing is delivered.
+//   this build (src/hostapi/notify.mbt): there is no token, and nothing is delivered.
 //
 // Nothing of it with Source.read_only (a run on a real account changes nothing in it).
 
@@ -42,8 +42,8 @@ fn host_notices() -> NoticeHost {
     ask: fn() { @ui.notice_ask() },
     answer: fn() { @ui.notice_answer() },
     opened: fn() { @ui.notice_opened() },
-    token: fn() { @host.push_token() },
-    pushed: fn() { @host.push_next() },
+    token: fn() { @hostapi.push_token() },
+    pushed: fn() { @hostapi.push_next() },
   }
 }
 
@@ -298,9 +298,9 @@ fn open_notice(src : Source, opens : String) -> Unit {
     n if n > 0.0 => Some(n)
     _ => None
   }
-  @host.log("notice tapped \{url} at \{seq}")
+  @hostapi.log("notice tapped \{url} at \{seq}")
   open_link_in(src, trim_slash(cloud_origin()) + url, outside=true, at~, or_else=fn() {
-    @host.log("notice: the link opens nothing here: " + url)
+    @hostapi.log("notice: the link opens nothing here: " + url)
   })
 }
 

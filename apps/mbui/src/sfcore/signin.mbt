@@ -3,7 +3,7 @@
 // this is what the app's MoonBit does with it.
 //
 // Signing in: where the host has a browser session (Apple's ASWebAuthenticationSession), through it
-// (@core.sign_in); elsewhere (Android) as a command-line tool does (@host.browser_login, which knows nothing of
+// (@core.sign_in); elsewhere (Android) as a command-line tool does (@hostapi.browser_login, which knows nothing of
 // still.fail): auth.begin with a loopback address, the page in the browser (a Custom Tab), auth.complete with what
 // comes back.
 //
@@ -57,7 +57,7 @@ pub fn start() -> Bool {
   @core.track(what => @ui.runtime().outside_start(what), t => @ui.runtime().outside_end(t))
   let cloud = @ui.env("MBUI_CLOUD")
   let started = if cloud != "" {
-    @host.log("still.fail cloud at " + cloud)
+    @hostapi.log("still.fail cloud at " + cloud)
     @core.start(cloud~)
   } else {
     @core.start()
@@ -150,15 +150,15 @@ pub fn frame(accounts : @core.Sub) -> Unit {
 fn take_account(account : String) -> Unit {
   let parsed = @json.parse(account) catch {
     _ => {
-      @host.log("MBUI_CORE_ACCOUNT is not JSON")
+      @hostapi.log("MBUI_CORE_ACCOUNT is not JSON")
       return
     }
   }
   let params : Map[String, Json] = { "accounts": Json::array([parsed]) }
   @core.call("migrate", params=Json::object(params), on_done=fn(r) {
     match r {
-      Ok(_) => @host.log("SIGN_IN taken in: " + str(Some(parsed), "email"))
-      Err(e) => @host.log("SIGN_IN migrate failed: " + e.stringify())
+      Ok(_) => @hostapi.log("SIGN_IN taken in: " + str(Some(parsed), "email"))
+      Err(e) => @hostapi.log("SIGN_IN migrate failed: " + e.stringify())
     }
   })
 }
@@ -190,8 +190,8 @@ fn by_hand(step : String) -> Unit {
     }
     @core.call("auth.begin", params=Json::object(params), on_done=fn(r) {
       match r {
-        Ok(ok) => @host.log("AUTH_URL " + str(Some(ok), "url"))
-        Err(e) => @host.log("AUTH_FAILED " + e.stringify())
+        Ok(ok) => @hostapi.log("AUTH_URL " + str(Some(ok), "url"))
+        Err(e) => @hostapi.log("AUTH_FAILED " + e.stringify())
       }
     })
   } else {
@@ -200,10 +200,10 @@ fn by_hand(step : String) -> Unit {
       match r {
         Ok(Object(m)) => {
           state.status = "已登录：\{str(m.get("account"), "email")}"
-          @host.log("AUTH_DONE " + str(m.get("account"), "email"))
+          @hostapi.log("AUTH_DONE " + str(m.get("account"), "email"))
         }
-        Ok(_) => @host.log("AUTH_DONE")
-        Err(e) => @host.log("AUTH_FAILED " + e.stringify())
+        Ok(_) => @hostapi.log("AUTH_DONE")
+        Err(e) => @hostapi.log("AUTH_FAILED " + e.stringify())
       }
     })
   }
@@ -211,14 +211,14 @@ fn by_hand(step : String) -> Unit {
 
 ///|
 /// The browser login waiting to come back, and who to tell.
-let login : Ref[(@host.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
+let login : Ref[(@hostapi.BrowserLogin, (Result[String, String]) -> Unit)?] = Ref::new(
   None,
 )
 
 ///|
 /// A sign-in on the host's browser login: `done` gets the account's email, or why not.
 fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
-  guard @host.browser_login(path="/oauth/callback") is Some(l) else {
+  guard @hostapi.browser_login(path="/oauth/callback") is Some(l) else {
     done(Err("this host cannot take a browser coming back"))
     return
   }
@@ -231,7 +231,7 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
     let url = match r {
       Ok(ok) => str(Some(ok), "url")
       Err(e) => {
-        @host.log("auth.begin failed: " + e.stringify())
+        @hostapi.log("auth.begin failed: " + e.stringify())
         ""
       }
     }
@@ -240,9 +240,9 @@ fn loopback_sign_in(done : (Result[String, String]) -> Unit) -> Unit {
       done(Err("auth.begin gave no page"))
       return
     }
-    @host.log("Sign in to still.fail in a browser: " + url)
+    @hostapi.log("Sign in to still.fail in a browser: " + url)
     if !l.open(url) {
-      @host.log("No browser opened: open the address above")
+      @hostapi.log("No browser opened: open the address above")
     }
     login.val = Some((l, done))
   })
@@ -256,7 +256,7 @@ fn login_back() -> Unit {
   login.val = None
   l.end()
   // (not the query: its code is the sign-in's)
-  @host.log("Back from the browser at " + l.redirect + ": auth.complete")
+  @hostapi.log("Back from the browser at " + l.redirect + ": auth.complete")
   let params : Map[String, Json] = { "query": Json::string(@core.query_of(back)) }
   @core.call("auth.complete", params=Json::object(params), on_done=fn(r) {
     match r {
@@ -268,7 +268,7 @@ fn login_back() -> Unit {
         done(Ok(email))
       }
       Err(e) => {
-        @host.log("auth.complete failed: " + e.stringify())
+        @hostapi.log("auth.complete failed: " + e.stringify())
         done(Err(str(Some(e), "message")))
       }
     }
@@ -283,12 +283,12 @@ fn login_command() -> Unit {
   loopback_sign_in(fn(r) {
     match r {
       Ok(email) => {
-        @host.log("Signed in to still.fail as " + email)
-        @host.exit(0)
+        @hostapi.log("Signed in to still.fail as " + email)
+        @hostapi.exit(0)
       }
       Err(why) => {
-        @host.log("Sign-in failed: " + why)
-        @host.exit(1)
+        @hostapi.log("Sign-in failed: " + why)
+        @hostapi.exit(1)
       }
     }
   })
@@ -311,7 +311,7 @@ pub fn sign_in() -> Unit {
         Ok(email) => "已登录：\{email}"
         Err(why) => "没有登录：\{why}"
       }
-      @host.log("SIGN_IN " + state.status)
+      @hostapi.log("SIGN_IN " + state.status)
     })
     return
   }
@@ -339,12 +339,12 @@ pub let started_by : Array[String] = [
 
 ///|
 /// An environment variable (a Tester's, as its test gives it, the host's else), or the same name with `_B64` given as
-/// base64 ("" when neither is set): @host.env_text, through @ui.env.
+/// base64 ("" when neither is set): @hostapi.env_text, through @ui.env.
 pub fn env_text(name : String) -> String {
   let plain = @ui.env(name)
   if plain != "" {
     plain
   } else {
-    @host.from_base64(@ui.env(name + "_B64"))
+    @hostapi.from_base64(@ui.env(name + "_B64"))
   }
 }
