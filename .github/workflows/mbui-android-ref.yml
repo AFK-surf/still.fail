@@ -1,0 +1,94 @@
+# The mbui app held to still.fail's Android app, screen by screen (apps/mbui/scripts/android-ref.sh): both draw each
+# screen of client/fixtures/screens (the core's JSON) on one emulator, and the mbui app's pictures are compared with
+# Android's pixel by pixel: the regions client/fixtures/screens/allowed.json lets differ left out, the pixels it says
+# are still to do (`left`) at most. Android's pictures are kept in the repository (client/fixtures/screens/android,
+# with the emulator's system they were taken on): taken anew only where its app or the screens changed, a change to
+# them committed in the PR from this run's artifact.
+# A free runner: ubuntu with KVM, the emulator's system image named here (x86_64): the mbui app built for it (its
+# fixture app needs no core), Android's (arm64 alone: its core's engine) run through the image's ARM translation.
+name: mbui-android-ref
+on:
+  pull_request:
+    paths:
+      - "apps/mbui/**"
+      - "apps/android/**"
+      - "client/fixtures/screens/**"
+      - "client/core-ts/src/shapes/**"
+      - ".github/workflows/mbui-android-ref.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/mbui/**"
+      - "apps/android/**"
+      - "client/fixtures/screens/**"
+      - "client/core-ts/src/shapes/**"
+      - ".github/workflows/mbui-android-ref.yml"
+concurrency:
+  group: mbui-android-ref-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+permissions:
+  contents: read
+jobs:
+  screens:
+    if: github.repository == 'AFK-surf/still.fail'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      MBUI_FRESH: 1
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      # Android's pictures taken anew: its app, the screens or this workflow changed since main (on main: in the push)
+      - id: what
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then base=${{ github.event.before }}; else base=$(git merge-base origin/main HEAD); fi
+          # (allowed.json the mbui app's, not Android's)
+          if git diff --name-only "$base" HEAD | grep -v -x client/fixtures/screens/allowed.json \
+            | grep -qE '^(apps/android/|client/fixtures/screens/|\.github/workflows/mbui-android-ref\.yml)'; then
+            echo "refs=1" >> "$GITHUB_OUTPUT"; echo "Android's pictures taken anew"
+          else echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept"; fi
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { cache-read-only: "${{ github.ref != 'refs/heads/main' }}" }
+      - uses: ./.github/actions/setup
+        with:
+          android: 'true'
+      - uses: ./.github/actions/moonbit
+      - name: The mbui app (APP=sffix, debug, for the x86_64 emulator)
+        run: |
+          sh apps/mbui/scripts/mbui.sh > /dev/null
+          ABI=x86_64 APP=sffix bash apps/mbui/scripts/android.sh build
+      - name: Android's app and its tests (ScreensRefTest)
+        if: steps.what.outputs.refs == '1'
+        env:
+          ORG_GRADLE_PROJECT_motionTest: 1
+        run: python3 apps/android/build.py --tasks :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The screens, Android's and the mbui app's, compared
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          REFS: ${{ steps.what.outputs.refs }}
+          ANDROID_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
+          ANDROID_TEST_APK: ${{ steps.what.outputs.refs == '1' && format('{0}/apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk', github.workspace) || '' }}
+          MBUI_APK: ${{ github.workspace }}/apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash apps/mbui/scripts/android-ref.sh ci
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mbui-android-ref
+          path: |
+            apps/mbui/out/android-ref/
+            client/fixtures/screens/android/
+          if-no-files-found: ignore

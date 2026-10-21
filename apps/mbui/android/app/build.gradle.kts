@@ -23,7 +23,9 @@ android {
         targetSdk = 36
         versionCode = build
         versionName = "0.1.$build"
-        ndk { abiFilters += "arm64-v8a" }
+        // a phone's; x86_64 where scripts/android.sh builds for an x86 machine's emulator (ABI=x86_64: CI's
+        // mbui-android-ref, the fixture app with no core, whose engine is a phone's alone)
+        ndk { abiFilters += (System.getenv("MBUI_ABI") ?: "arm64-v8a") }
         manifestPlaceholders["appLabel"] = "still.fail mbui"
         manifestPlaceholders["mbuiEnv"] = ""
         // PostHog's project (docs/telemetry.md → 安卓), where the app's crashes and bar timings go (Crashes.java,
