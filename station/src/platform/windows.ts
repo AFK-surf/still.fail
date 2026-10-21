@@ -348,6 +348,12 @@ export const windows: Platform = {
     out.PATH = `${dir}${delimiter}${rest}`;
     return out;
   },
+  appendPath(env, dir) {
+    const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
+    const path = env[key] ?? "";
+    if (path.split(delimiter).some((d) => d.toLowerCase() === dir.toLowerCase())) return;
+    env[key] = path === "" ? dir : `${path}${delimiter}${dir}`;
+  },
   findCommand,
   /// A bare name is found with PATHEXT (libuv adds .exe and .com only), and a .cmd or .bat (npm's shims) runs through
   /// cmd, which Node refuses to do by itself: each argument quoted, and one cmd would read into (a quote, a %) refused.
@@ -484,7 +490,14 @@ export const windows: Platform = {
   linkCommand: () => false,
   // Its installer is a shell script (install.sh).
   codexStandalone: false,
-  linksNode: false,
+  /// nodejs.org's zip (node.exe and npm.cmd at its top, where npm's shims go with --prefix it), unpacked by Windows' own
+  /// tar (bsdtar, which reads zips; Git's, which may come first on PATH, does not).
+  nodeBuild(version) {
+    const arch = process.arch === "arm64" || process.arch === "x64" ? process.arch : null;
+    if (arch === null) return null;
+    const dist = `node-v${version}-win-${arch}`;
+    return { dist, archive: `${dist}.zip`, bin: "", npm: "npm.cmd", tar: join(process.env.SystemRoot ?? "C:\\Windows", "System32", "tar.exe") };
+  },
 
   /// A PowerShell that asks SetThreadExecutionState for the system (ES_CONTINUOUS | ES_SYSTEM_REQUIRED: the screen may
   /// still go off) and holds it while it reads its stdin, which ends with the station. Windows names no reason here

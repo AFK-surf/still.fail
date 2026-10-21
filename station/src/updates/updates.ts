@@ -37,7 +37,7 @@
 //   `answerChannelAsk`.
 
 import { createHash } from "node:crypto";
-import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, watch, writeFileSync } from "node:fs";
+import { type FSWatcher, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Clock, Effect, Fiber } from "effect";
@@ -51,7 +51,8 @@ import { planUpdate, readFeed, verifiedOrNull, type Plan } from "./release.ts";
 import { SDK_PACKAGE, sdkPrefix, sdkVersion } from "../agents/cursor.ts";
 import {
   DEVIN_MANIFEST, type Env, type How, type Kind, KINDS, NotFinished, type OwnNode, RUNTIMES, Unable, findCommand, howToInstall, howToUpdate, isNpmInstall,
-  kindCommand, kindName, kindPackage, linkBesideNpm, npmInstall, ownNode, pinNpmVersion, run, runLines,
+  kindCommand, kindName, kindPackage, linkBesideNpm, npmInstall, ownNode, ownNodeHome, pinNpmVersion, putOwnNodes, removeOwnNodeLinks, run,
+  runLines,
 } from "./runtimes.ts";
 import {
   type Channel, type Words, INSTALLING, channelOf, downloading, newer, offer, platform, releaseChannel, sameWords, say, stationDownloadPercent,
@@ -266,6 +267,9 @@ export class Updates {
     this.config = o.config;
     this.origin = o.origin;
     this.env = o.env ?? process.env;
+    // The Nodes it installed for npm, on its PATH (and what it starts): what they installed is found there.
+    removeOwnNodeLinks(this.env, this.data);
+    putOwnNodes(this.env, this.data);
     this.registry = o.registry ?? "https://registry.npmjs.org";
     this.devinManifest = o.devinManifest ?? DEVIN_MANIFEST;
     this.claudeReleases = o.claudeReleases ?? "https://downloads.claude.ai/claude-code-releases";
@@ -540,7 +544,7 @@ export class Updates {
     try {
       version = readFileSync(join(this.app, "NODE_VERSION"), "utf8").trim() || version;
     } catch {}
-    return ownNode(this.env, this.data, version);
+    return ownNode(this.data, version);
   }
 
   /// Cursor's SDK, a package npm keeps in the station's own prefix (agents/cursor.ts): installed and updated by the same
@@ -706,12 +710,14 @@ export class Updates {
       // That version, as npm's cache has its build (`latest` from a cached list could be an older one).
       if (version !== null) how = pinNpmVersion(how, kindPackage(kind), version);
     }
+    // npm of the station's own Node runs on it (its #! takes the node PATH finds first).
+    const env = how.node ? machine.prependPath(this.env, how.node.bin) : this.env;
     const installing = { now: false };
     // Claude Code's own installer (not `claude update`, nor Homebrew).
     const own = how.program === "/bin/sh" || how === machine.claudeInstall;
     const stop = kind === "claude" && own ? this.watchClaudeDownload(installing) : () => {};
     try {
-      return await runLines(how.program, how.args, this.env, this.timing.runtimeLimit, (line) => {
+      return await runLines(how.program, how.args, env, this.timing.runtimeLimit, (line) => {
         const step = stepOf(line);
         if (step === null) return;
         if (sameWords(step, INSTALLING)) installing.now = true;
@@ -724,8 +730,7 @@ export class Updates {
 
   /// The Node an npm install runs on where the machine had none (runtimes.ts OwnNode): nodejs.org's build for this
   /// machine, its download measured and checked against the release's SHASUMS256, unpacked in <data>/node once (kept
-  /// for the next install, and for npm to update what it installed), its node, npm and npx linked into ~/.local/bin
-  /// where nothing of that name is (a link that leads nowhere is replaced).
+  /// for the next install, and for npm to update what it installed), and put last on the station's PATH.
   private async installNode(kind: Kind, node: OwnNode) {
     // Two runtimes installed at once: one Node, put there by the first.
     while (this.nodeInstalling) await this.nodeInstalling.catch(() => {});
@@ -736,40 +741,34 @@ export class Updates {
     } finally {
       this.nodeInstalling = null;
     }
+    putOwnNodes(this.env, this.data);
   }
 
   private async placeNode(kind: Kind, node: OwnNode) {
-    const at = join(node.home, node.dist);
-    if (!existsSync(join(at, "bin", "npm"))) {
-      mkdirSync(node.home, { recursive: true });
-      const file = join(node.home, `${node.dist}.tar.gz`);
-      const unpacked = join(node.home, `.unpacking-${node.dist}`);
-      try {
-        const base = `${this.nodeDist}/v${node.version}`;
-        const sums = await fetchText(`${base}/SHASUMS256.txt`);
-        const want = sums.split("\n").map((l) => l.trim().split(/\s+/)).find(([, f]) => f === `${node.dist}.tar.gz`)?.[0];
-        if (want === undefined) throw new Failed({ key: "station.updates.nodeUnverified" });
-        await this.download(kind, `Node ${node.version}`, `${base}/${node.dist}.tar.gz`, file);
-        if ((await sha256(file)) !== want) throw new Failed({ key: "station.updates.nodeUnverified" });
-        this.say(kind, INSTALLING, null);
-        rmSync(unpacked, { recursive: true, force: true });
-        mkdirSync(unpacked);
-        const [ok, said] = await run("tar", ["-xzf", file, "-C", unpacked], this.env, 120_000);
-        if (!ok) throw new Error(tail(said, stationLang()));
-        rmSync(at, { recursive: true, force: true });
-        renameSync(join(unpacked, node.dist), at);
-        log.info("updates", "Node installed for npm", { runtime: kind, at });
-      } finally {
-        rmSync(file, { force: true });
-        rmSync(unpacked, { recursive: true, force: true });
-      }
-    }
-    mkdirSync(node.bin, { recursive: true });
-    for (const name of ["node", "npm", "npx"]) {
-      const link = join(node.bin, name);
-      if (existsSync(link)) continue;
-      rmSync(link, { force: true });
-      symlinkSync(join(at, "bin", name), link);
+    if (existsSync(join(node.bin, node.build.npm))) return;
+    const home = ownNodeHome(this.data);
+    mkdirSync(home, { recursive: true });
+    const { dist, archive } = node.build;
+    const file = join(home, archive);
+    const unpacked = join(home, `.unpacking-${dist}`);
+    try {
+      const base = `${this.nodeDist}/v${node.version}`;
+      const sums = await fetchText(`${base}/SHASUMS256.txt`);
+      const want = sums.split("\n").map((l) => l.trim().split(/\s+/)).find(([, f]) => f === archive)?.[0];
+      if (want === undefined) throw new Failed({ key: "station.updates.nodeUnverified" });
+      await this.download(kind, `Node ${node.version}`, `${base}/${archive}`, file);
+      if ((await sha256(file)) !== want) throw new Failed({ key: "station.updates.nodeUnverified" });
+      this.say(kind, INSTALLING, null);
+      rmSync(unpacked, { recursive: true, force: true });
+      mkdirSync(unpacked);
+      const [ok, said] = await run(node.build.tar, ["-xf", file, "-C", unpacked], this.env, 120_000);
+      if (!ok) throw new Error(tail(said, stationLang()));
+      rmSync(node.at, { recursive: true, force: true });
+      renameSync(join(unpacked, dist), node.at);
+      log.info("updates", "Node installed for npm", { runtime: kind, at: node.at });
+    } finally {
+      rmSync(file, { force: true });
+      rmSync(unpacked, { recursive: true, force: true });
     }
   }
 

@@ -268,6 +268,11 @@ export const unix: Platform = {
     const rest = env.PATH ?? "";
     return { ...env, PATH: `${dir}${delimiter}${rest}` };
   },
+  appendPath(env, dir) {
+    const path = env.PATH ?? "";
+    if (path.split(delimiter).includes(dir)) return;
+    env.PATH = path === "" ? dir : `${path}${delimiter}${dir}`;
+  },
   findCommand(name: string, env: Env): Found | null {
     const path = env.PATH;
     if (path === undefined) return null;
@@ -423,7 +428,13 @@ export const unix: Platform = {
     }
   },
   codexStandalone: true,
-  linksNode: true,
+  nodeBuild(version) {
+    const os = process.platform === "darwin" || process.platform === "linux" ? process.platform : null;
+    const arch = process.arch === "arm64" || process.arch === "x64" ? process.arch : null;
+    if (os === null || arch === null) return null;
+    const dist = `node-v${version}-${os}-${arch}`;
+    return { dist, archive: `${dist}.tar.gz`, bin: "bin", npm: "npm", tar: "tar" };
+  },
 
   /// macOS: caffeinate against idle sleep, for as long as the station's process is there (-w). Linux: systemd-inhibit
   /// around a `cat` of the station's pipe (none without systemd).
