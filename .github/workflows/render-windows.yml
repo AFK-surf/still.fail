@@ -23,6 +23,7 @@ on:
       - "scripts/render_dl.sh"
       - "scripts/render_windows.sh"
       - ".github/workflows/render-windows.yml"
+      - ".github/actions/warp/**"
   push:
     branches: [main]
     paths: *paths
@@ -44,6 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/warp
       - name: Drawn offscreen, twice (scripts/render_windows.sh)
         run: scripts/render_windows.sh
       - uses: actions/upload-artifact@v4

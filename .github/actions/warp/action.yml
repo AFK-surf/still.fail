@@ -1,0 +1,18 @@
+# WARP pinned for a Windows job: Microsoft.Direct3D.WARP 1.0.21's x64 d3d10warp.dll, as the warp workflow put it in the
+# Actions cache (once: the version is the key), never downloaded here; not there, the job fails saying so. WARP_DLL its
+# path, for scripts/render_windows.sh to put beside the program it runs.
+name: WARP
+description: The pinned WARP, from the cache the warp workflow fills
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v4
+      with:
+        path: ~/warp
+        key: warp-1.0.21
+    - shell: bash
+      run: |
+        dll=$(cd ~ && pwd)/warp/build/native/bin/x64/d3d10warp.dll
+        [ -f "$dll" ] || { echo "::error::no WARP 1.0.21 in the Actions cache: run the warp workflow"; exit 1; }
+        echo "WARP_DLL=$dll" >> "$GITHUB_ENV"
+        echo "WARP: $dll"

@@ -1,0 +1,46 @@
+# WARP 1.0.21 (Microsoft.Direct3D.WARP, NuGet) put in the Actions cache once: what render-windows draws with
+# (.github/actions/warp), the runner image's own WARP aside. A new version is a new key here and the references made
+# again with it in the same PR.
+name: warp
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 4 * * 1"
+  push:
+    branches: [main]
+    paths: &paths
+      - ".github/workflows/warp.yml"
+      - ".github/actions/warp/**"
+  # (a change to it tried on its pull request: what it puts in is that pull request's own)
+  pull_request:
+    paths: *paths
+
+jobs:
+  put:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/cache/restore@v4
+        id: had
+        with:
+          path: ~/warp
+          key: warp-1.0.21
+          lookup-only: true
+      - name: Microsoft.Direct3D.WARP 1.0.21
+        if: steps.had.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/warp && cd ~/warp
+          curl -fsSL --retry 3 -o warp.nupkg https://api.nuget.org/v3-flatcontainer/microsoft.direct3d.warp/1.0.21/microsoft.direct3d.warp.1.0.21.nupkg
+          7z x -y warp.nupkg 'build/native/bin/x64/*' LICENSE.TXT > /dev/null && rm warp.nupkg
+          ls -la build/native/bin/x64
+      - if: steps.had.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/warp
+          key: warp-1.0.21
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: .github/actions }
+      - uses: ./.github/actions/warp
