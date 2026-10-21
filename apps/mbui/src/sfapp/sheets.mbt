@@ -805,8 +805,9 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
                 |> ignore
                 chevron(c)
               }) {
-              // the station's card is a later slice's
+              // the station's card in place of this one
               close_sheet(c)
+              @settings.open_station_peek(r.station)
             }
           None => ()
         }
@@ -822,11 +823,13 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
         } else {
           fill("android-chat.agent.account.auto", [("name", name)])
         }
-        // changing how it runs (History.kt RunSettingsScreen) is not here yet: the row says it
-        agent_row(c, "", tr("android-chat.agent.account"), value, fn() {
-          quota_chips(c, field(account, "quota"))
-        })
-        |> ignore
+        // changing how it runs is a page of its own (History.kt RunSettingsScreen)
+        if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {
+            quota_chips(c, field(account, "quota"))
+          }) {
+          close_sheet(c)
+          app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
+        }
         if agent_row(
             c,
             "agent/history",
