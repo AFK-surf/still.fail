@@ -798,7 +798,7 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
       })
       |> ignore
       agent_lines(c, card)
-      agent_tiles(c, card, 14.0)
+      agent_tiles(c, card, 14.0, entry=context_entry(c, r, key, s))
       agent_notes(c, card, 10.0)
       c.box(h=Px(12.0), fn() {  }) |> ignore
       info_list(c, fn() {
@@ -867,7 +867,6 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
           dui.jobs_all = false
           open_sheet(c, JobsOf(r))
         }
-        context_row(c, r, key, s, text(field(card, "context"), "text"))
       })
     })
     |> ignore
@@ -953,16 +952,19 @@ fn agent_lines(c : @ui.Ctx, card : Json?) -> Unit {
 ///|
 /// The figures that say most (AgentTiles): what it cost, the cache's hit rate, how full its context is, each large over
 /// its name, side by side; a context worth a look in its level's colour.
-fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
+fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = None) -> Unit {
   let t = @sf.theme()
   let context = field(card, "context")
   let cost = text(card, "cost")
   let cache = field(card, "cache")
-  if cost == "" && cache is None && context is None {
+  if cost == "" && cache is None && context is None && entry is None {
     return
   }
-  let tile = fn(figure : String, name : String, color : Int64) {
+  let tile = fn(figure : String, name : String, color : Int64, open? : ContextTile? = None) {
+    // its context's, when something can be done to it (context.mbt): a tap opens it
+    let id = if open is Some(_) { c.id("agent/context-tile") } else { 0 }
     c.box(
+      id~,
       w=Fill(1.0),
       radius=14.0,
       bg=@sf.alpha(t.p.text, 0.05),
@@ -982,10 +984,14 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
           |> ignore
         })
         |> ignore
-        c.text(name, size=12.0, color=t.p.muted, wrap=false, line=16.0) |> ignore
+        context_tile_name(c, name, open)
       },
     )
     |> ignore
+    match open {
+      Some(o) => if c.clicked(id) && !o.busy { (o.open)() }
+      None => ()
+    }
   }
   c.box(dir=Row, w=Fill(1.0), pt=top, gap=8.0, fn() {
     if cost != "" {
@@ -994,22 +1000,25 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double) -> Unit {
     if cache is Some(Object(_)) {
       tile(text(cache, "text"), tr("android-chat.agent.cache"), t.p.text)
     }
+    let name = context_tile_label(entry, text(context, "level"))
     match context {
       Some(Object(_)) =>
         if flag(context, "unknown") {
-          tile(text(context, "text"), tr("android-chat.agent.context"), t.p.text)
+          tile(text(context, "text"), name, t.p.text, open=entry)
         } else {
           tile(
             "\{number(context, "percent").round().to_int()}%",
-            tr("android-chat.agent.context"),
+            name,
             match text(context, "level") {
               "red" => t.p.red
               "amber" => 0xD9962BFFL
               _ => t.p.text
             },
+            open=entry,
           )
         }
-      _ => ()
+      // not said yet: a dash, its entry all the same
+      _ => if entry is Some(_) { tile("—", name, t.p.text, open=entry) }
     }
   })
   |> ignore

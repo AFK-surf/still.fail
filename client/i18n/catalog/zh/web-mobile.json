@@ -691,5 +691,6 @@
   "web-mobile.agent.compactFailed": "无法压缩上下文：{error}",
   "web-mobile.agent.clearFailed": "无法清空上下文：{error}",
   "web-mobile.agent.compactSub": "保留摘要，释放上下文空间",
-  "web-mobile.agent.clearSub": "结束当前进程，下一条消息开始新的会话"
+  "web-mobile.agent.clearSub": "结束当前进程，下一条消息开始新的会话",
+  "web-mobile.agent.contextCompactable": "压缩上下文"
 }

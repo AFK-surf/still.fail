@@ -790,9 +790,10 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
   const usage = useHistory(station.address, session.key).value?.usageLine;
   const tiles = card && (card.cost || card.cache || card.context);
   const quiet = tiles ? [card.work, card.tokens].filter(Boolean).join(" · ") : usage;
+  const context = useContextActions(session.key, session.canCompact === true, session.canClear === true);
   return (
     <div className={css.sessionDetails}>
-      {tiles && <UsageTiles card={card} />}
+      {tiles && <UsageTiles card={card} context={context} />}
       {quiet && <p className={css.sessionQuiet}>{quiet}</p>}
       <div className={css.sessionLine}>
         <span className={css.sessionLineMark}><AgentMark maker={session.maker} runtime={session.runtime} badge={undefined} size={16} /></span>
@@ -814,18 +815,19 @@ function SessionDetails({ agent }: { agent: ChatAgent }) {
           </span>
         )}
       </div>
-      {(session.canCompact || session.canClear) && <ContextLine session={session.key} compact={session.canCompact === true} clear={session.canClear === true} used={card?.context?.text} />}
+      {context.items.length > 0 && <ContextLine actions={context} used={card?.context?.text} />}
+      {context.dialog}
       <TranscriptLine session={session.key} />
     </div>
   );
 }
 
 /**
- * Its context by hand, between turns, behind one menu: compacted (the chat is told when it is done), or cleared so its
- * next message starts a new conversation (asked first: what it knew is gone for it). How full it is beside its name.
- * Under way, a turning ring; failed, a red mark.
+ * Its context by hand, between turns: compacted (the chat is told when it is done), or cleared so its next message
+ * starts a new conversation (asked first). The menu's items, whether one is under way or failed, and the dialog that
+ * asks, for its context's tile and its line.
  */
-function ContextLine({ session, compact, clear, used }: { session: string; compact: boolean; clear: boolean; used: string | undefined }) {
+function useContextActions(session: string, compact: boolean, clear: boolean) {
   const api = useApi();
   const act = useAct();
   const station = useStation().address;
@@ -833,17 +835,25 @@ function ContextLine({ session, compact, clear, used }: { session: string; compa
   const busy = useDoing(calls, { station, key: session });
   const failed = useDoingFailed(calls, { station, key: session });
   const [asking, setAsking] = useState(false);
+  const items = [
+    ...(compact ? [{ label: t("web-pages.chat.compact"), icon: Shrink, disabled: busy, onSelect: () => act(api.compact(session), t("web-pages.chat.compact")) }] : []),
+    ...(clear ? [{ label: t("web-pages.chat.clear"), icon: Refresh, danger: true, disabled: busy, onSelect: () => setAsking(true) }] : []),
+  ];
+  const dialog = (
+    <Confirm open={asking} title={t("web-pages.chat.clearConfirm")} description={t("web-pages.chat.clearBody")} action={t("web-pages.chat.clear")}
+      onConfirm={() => { setAsking(false); act(api.clear(session), t("web-pages.chat.clear")); }} onClose={() => setAsking(false)} />
+  );
+  return { items, busy, failed, compacts: compact, dialog };
+}
+
+/** Its context's line: how full it is, and the same menu as its tile's, behind 管理. */
+function ContextLine({ actions, used }: { actions: ReturnType<typeof useContextActions>; used: string | undefined }) {
   return (
     <div className={css.sessionLine}>
       <span className={css.sessionLineMark}><Shrink size={16} /></span>
       <span className={css.sessionLineText}>{t("web-pages.chat.context")}{used ? ` · ${used}` : ""}</span>
-      <DoingShown state={{ running: busy, error: failed }} inline />
-      <Menu label={t("web-pages.chat.contextActions")} trigger={<button type="button" className={`${css.detailLink} ${css.detailButton}`} aria-label={t("web-pages.chat.contextActions")}>{t("web-pages.chat.contextManage")}</button>} items={[
-        ...(compact ? [{ label: t("web-pages.chat.compact"), icon: Shrink, disabled: busy, onSelect: () => act(api.compact(session), t("web-pages.chat.compact")) }] : []),
-        ...(clear ? [{ label: t("web-pages.chat.clear"), icon: Refresh, danger: true, disabled: busy, onSelect: () => setAsking(true) }] : []),
-      ]} />
-      <Confirm open={asking} title={t("web-pages.chat.clearConfirm")} description={t("web-pages.chat.clearBody")} action={t("web-pages.chat.clear")}
-        onConfirm={() => { setAsking(false); act(api.clear(session), t("web-pages.chat.clear")); }} onClose={() => setAsking(false)} />
+      <DoingShown state={{ running: actions.busy, error: actions.failed }} inline />
+      <Menu label={t("web-pages.chat.contextActions")} trigger={<button type="button" className={`${css.detailLink} ${css.detailButton}`} aria-label={t("web-pages.chat.contextActions")}>{t("web-pages.chat.contextManage")}</button>} items={actions.items} />
     </div>
   );
 }

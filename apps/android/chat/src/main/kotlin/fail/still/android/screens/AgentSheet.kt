@@ -74,7 +74,7 @@ private val ChatAgent.working get() = status == "running" || status == "queued"
 /** Opens `agent`'s card over its chat, as tall as what it shows (its lines' and figures' room kept while they are read). */
 fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
     val key = agent.session.key
-    val rows = 3 + (if (agent.jobs.isNotEmpty()) 1 else 0) + (if (agent.session.canCompact == true || agent.session.canClear == true) 1 else 0)
+    val rows = 3 + if (agent.jobs.isNotEmpty()) 1 else 0
     // What is wrong, a line each but a quota's (its account's windows say that).
     val notes = agent.attention.count { it.kind != "quota" }
     val tall = 22 + 52 + (if (agent.turns.isNotEmpty()) 72 + 76 else 0) + (if (notes > 0) 8 + notes * 20 else 0) + 12 + rows * 40 + 24
@@ -98,7 +98,9 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
                 if (a.working) StopButton(app, station, key)
             }
             AgentLines(card.value)
-            AgentTiles(card.value)
+            val handling = app.isDoing(CONTEXT_CALLS, "station" to station, "key" to key)
+            val handlingFailed = app.failedOf(CONTEXT_CALLS, "station" to station, "key" to key)
+            AgentTiles(card.value, entry = if (s.canCompact == true || s.canClear == true) ContextEntry({ openContext(app, station, of, key) }, handling, handlingFailed, s.canCompact == true) else null)
             AgentNotes(card.value)
             Box(Modifier.height(12.dp))
             // Each row leaves the sheet for where it leads.
@@ -119,7 +121,6 @@ fun openAgent(app: AppState, station: String, of: ChatOf, agent: ChatAgent) {
                     app.sheet = null; openHistory(app, station, of, key)
                 }
                 if (a.jobs.isNotEmpty()) AgentRow(t("android-chat.agent.jobs"), card.value?.jobs ?: t("android-chat.agent.jobs.idle")) { openJobs(app, station, of) }
-                if (s.canCompact == true || s.canClear == true) ContextRow(app, station, key, card.value?.context?.text ?: "") { openContext(app, station, of, key) }
             }
         }
     }
@@ -141,18 +142,6 @@ private fun StopButton(app: AppState, station: String, key: String, modifier: Mo
 }
 
 private val CONTEXT_CALLS = setOf("session.compact", "session.clear")
-
-/** The card's row for its context, how full it is (`used`): a tap opens what can be done to it; under way a spinner, failed a mark. */
-@Composable
-private fun ContextRow(app: AppState, station: String, key: String, used: String, onClick: () -> Unit) {
-    val busy = app.isDoing(CONTEXT_CALLS, "station" to station, "key" to key)
-    val failed = app.failedOf(CONTEXT_CALLS, "station" to station, "key" to key)
-    InfoRow(onClick = if (busy) null else onClick) {
-        Text(t("web-pages.chat.context"), fontSize = 14.sp, color = C.muted)
-        Text(used, fontSize = 14.sp, color = C.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (busy || failed != null) DoingMark(busy, failed) else IconIn(Icons.ChevronRight, 14.dp, C.subtle)
-    }
-}
 
 /** What can be done to its context by hand, in a sheet in the card's place: compacted, or cleared (asked first). */
 private fun openContext(app: AppState, station: String, of: ChatOf, key: String) {
@@ -240,31 +229,44 @@ private const val LONG = 6
  * context is. In the ink, but a context worth a look in its level's colour.
  */
 @Composable
-internal fun AgentTiles(card: AgentCardView?, modifier: Modifier = Modifier.padding(top = 14.dp)) {
+internal fun AgentTiles(card: AgentCardView?, modifier: Modifier = Modifier.padding(top = 14.dp), entry: ContextEntry? = null) {
     val context = card?.context
-    if (card?.cost == null && card?.cache == null && context == null) return
+    if (card?.cost == null && card?.cache == null && context == null && entry == null) return
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         @Composable
-        fun tile(figure: String, name: String, color: Color = C.ink) {
+        fun tile(figure: String, name: String, color: Color = C.ink, open: ContextEntry? = null) {
             Column(
-                Modifier.weight(1f).clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f)).padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 8.dp)
+                Modifier.weight(1f).clip(Smooth(14.dp)).background(C.ink.copy(alpha = 0.05f))
+                    .let { if (open != null) it.clickable(enabled = !open.busy, onClick = open.open) else it }
+                    .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 8.dp)
                     .semantics(mergeDescendants = true) { contentDescription = "$name $figure" },
             ) {
                 Box(Modifier.height(26.dp), contentAlignment = Alignment.CenterStart) {
                     Text(figure, fontSize = if (figure.length > LONG) 16.sp else 20.sp, fontWeight = FontWeight.SemiBold, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, style = androidx.compose.ui.text.TextStyle(fontFamily = UiFont, fontFeatureSettings = "tnum"))
                 }
-                Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(name, fontSize = 12.sp, lineHeight = 16.sp, color = C.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    // Something can be done to it: its name ends in › (as the rows below), or says it is under way or failed.
+                    if (open != null) {
+                        if (open.busy || open.failed != null) DoingMark(open.busy, open.failed, inline = true) else IconIn(Icons.ChevronRight, 11.dp, C.muted)
+                    }
+                }
             }
         }
         card?.cost?.let { tile(it, t("android-chat.agent.cost")) }
         card?.cache?.let { tile(it.text, t("android-chat.agent.cache")) }
-        // How full, of a window that is known; else how much it holds.
+        // That it can be compacted, said once the context is filling up (amber or red), not before.
+        val name = if (entry?.compacts == true && (context?.level == "amber" || context?.level == "red")) t("web-mobile.agent.contextCompactable") else t("android-chat.agent.context")
+        // How full, of a window that is known; else how much it holds; not said yet, a dash (its entry all the same).
         if (context != null) {
-            if (context.unknown == true) tile(context.text, t("android-chat.agent.context"))
-            else tile("${Math.round(context.percent)}%", t("android-chat.agent.context"), when (context.level) { "red" -> C.red; "amber" -> C.warn; else -> C.ink })
-        }
+            if (context.unknown == true) tile(context.text, name, open = entry)
+            else tile("${Math.round(context.percent)}%", name, when (context.level) { "red" -> C.red; "amber" -> C.warn; else -> C.ink }, entry)
+        } else if (entry != null) tile("—", name, open = entry)
     }
 }
+
+/** What can be done to its context from its tile (the card's): opens it; `compacts`: it can be compacted. */
+internal class ContextEntry(val open: () -> Unit, val busy: Boolean, val failed: String?, val compacts: Boolean)
 
 /** What is wrong (an account that cannot run, the disk filling up), a line each in its level's colour. */
 @Composable
