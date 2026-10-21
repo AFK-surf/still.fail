@@ -107,23 +107,29 @@ export const LEVELS = ["none", "minimal", "low", "medium", "high", "xhigh", "max
 /// default level).
 export const variant = (model: string, effort: string | undefined) => (effort !== undefined && LEVELS.includes(effort) ? `${model}-${effort}` : model);
 
-/// The models `devin models list --format json` lists, as the station offers them: a family at its thinking levels
-/// (swe-2: medium, high, max), each variant that is not one at a level a model of its own; not the faster or
-/// prioritised ones of a variant (-fast, -priority, -lightning: billed apart).
+/// The models `devin models list --format json` lists, as the station offers them: each family a model at its thinking
+/// levels (swe-2: medium, high, max), the name most of its variants are a level of. Not its variants of another kind
+/// (glm-5-2-1m, claude-opus-4-6-thinking), the faster or prioritised ones (-fast, -priority, -lightning: billed apart),
+/// nor Fusion's pairs of a model and a sidekick (fusion-gpt-6-sol-low-sidekick-gpt-5-6-luna-high: hundreds, each at
+/// two levels, not a model at one).
 export function devinCatalog(listed: Json): { models: string[]; efforts: Record<string, string[]> } {
   const models: string[] = [];
   const efforts: Record<string, string[]> = {};
   for (const family of Array.isArray(listed?.families) ? listed.families : []) {
+    const seen: { model: string; level: string | undefined }[] = [];
     for (const v of Array.isArray(family?.variants) ? family.variants : []) {
       const uid = typeof v?.model_uid === "string" ? v.model_uid : "";
-      if (uid === "" || /-(fast|priority|lightning)$/.test(uid)) continue;
+      if (uid === "" || /-(fast|priority|lightning)$/.test(uid) || uid.includes("-sidekick-")) continue;
       const level = LEVELS.find((l) => uid.endsWith(`-${l}`));
-      const model = level === undefined ? uid : uid.slice(0, -level.length - 1);
-      if (!models.includes(model)) models.push(model);
-      if (level !== undefined) (efforts[model] ??= []).push(level);
+      seen.push({ model: level === undefined ? uid : uid.slice(0, -level.length - 1), level });
     }
+    const count = (m: string) => seen.filter((s) => s.model === m).length;
+    const model = seen.reduce<string | undefined>((best, s) => (best === undefined || count(s.model) > count(best) ? s.model : best), undefined);
+    if (model === undefined || models.includes(model)) continue;
+    models.push(model);
+    const levels = LEVELS.filter((l) => seen.some((s) => s.model === model && s.level === l));
+    if (levels.length > 0) efforts[model] = levels;
   }
-  for (const levels of Object.values(efforts)) levels.sort((a, b) => LEVELS.indexOf(a) - LEVELS.indexOf(b));
   return { models, efforts };
 }
 

@@ -57,9 +57,13 @@ const LISTED = {
     { slug: "claude-opus-5.5", variants: [{ model_uid: "claude-opus-5-5-medium" }, { model_uid: "claude-opus-5-5-low" }, { model_uid: "claude-opus-5-5-high-fast" }] },
     { slug: "kimi-k2.6", variants: [{ model_uid: "kimi-k2-6" }] },
     { slug: "glm-5.2", variants: [{ model_uid: "glm-5-2" }, { model_uid: "glm-5-2-max" }, { model_uid: "glm-5-2-1m" }] },
+    {
+      slug: "fusion",
+      variants: [{ model_uid: "fusion-gpt-6-sol-low-sidekick-gpt-5-6-luna-high" }, { model_uid: "fusion-gpt-6-sol-max-sidekick-swe-2-medium" }, { model_uid: "fusion-gpt-6-sol-low-fast-sidekick-gpt-5-6-luna-high-priority" }],
+    },
   ],
 };
-const MODELS = ["swe-2", "claude-opus-5-5", "kimi-k2-6", "glm-5-2", "glm-5-2-1m"];
+const MODELS = ["swe-2", "claude-opus-5-5", "kimi-k2-6", "glm-5-2"];
 const EFFORTS = { "swe-2": ["medium", "high", "max"], "claude-opus-5-5": ["low", "medium"], "glm-5-2": ["max"] };
 
 let n = 0;
