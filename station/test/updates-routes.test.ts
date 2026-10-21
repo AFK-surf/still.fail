@@ -95,8 +95,8 @@ test("an update asked for is refused with what is wrong", async (t) => {
   await ask("POST", "/updates/check");
   assert.deepEqual(await ask("POST", "/updates", { id: "nope" }), [400, { error: "不存在 nope" }]);
   assert.deepEqual(await ask("POST", "/updates", {}), [400, { error: "不存在 " }]);
-  // Codex is not there and there is neither npm nor Homebrew to install it with.
-  assert.deepEqual(await ask("POST", "/updates", { id: "codex" }), [400, { error: "Codex：本机既没有 npm 也没有 Homebrew：请先安装 Node（含 npm），再安装 Codex" }]);
+  // DeepSeek Harness is not there, and there is no npm to install it with (nor a home to put a Node of the station's in).
+  assert.deepEqual(await ask("POST", "/updates", { id: "dsh" }), [400, { error: "DeepSeek Harness：安装 DeepSeek Harness 需要 npm：请先在本机安装 Node（含 npm）" }]);
 });
 
 test("a station with nothing to update has no channel to set", async () => {

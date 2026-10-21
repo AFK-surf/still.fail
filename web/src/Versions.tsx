@@ -105,16 +105,17 @@ export function useSoftware(station: string) {
 }
 
 /**
- * How a piece of software is said: its version as shown, what updating it is called, what is said about it on hover,
+ * How a piece of software is said: its version as shown, what updating it is called, what is said about it on hover
+ * (why it cannot be updated from here too, unless `noteTip` is false: the station page says that under it),
  * whether it is the test channel's (a 测试版 tag beside its version), and while it updates where that is (the station
  * says; one older than that, nothing more than 正在更新).
  */
-export function describe(v: SoftwareVersion): { shown: string; verb: string; failed: string; tip: string; updating: string; beta: boolean } {
+export function describe(v: SoftwareVersion, noteTip = true): { shown: string; verb: string; failed: string; tip: string; updating: string; beta: boolean } {
   return {
     shown: v.installed ? (v.version ?? (v.id === "station" ? t("web-main.versions.dev") : t("web-main.versions.unknown"))) : t("web-main.versions.notInstalled"),
     verb: v.installed ? t("web-main.versions.update") : t("web-main.versions.install"),
     failed: v.installed ? t("web-main.versions.updateFailed") : t("web-main.versions.installFailed"),
-    tip: [v.note, v.installed && !v.newer && !v.downgrade && v.latest ? t("web-main.versions.latest") : null, v.installed && !v.latest && v.checkedAt ? t("web-main.versions.checkFailedRetry") : null].filter(Boolean).join(t("web-main.list.semicolon")),
+    tip: [noteTip ? v.note : null, v.installed && !v.newer && !v.downgrade && v.latest ? t("web-main.versions.latest") : null, v.installed && !v.latest && v.checkedAt ? t("web-main.versions.checkFailedRetry") : null].filter(Boolean).join(t("web-main.list.semicolon")),
     beta: v.channel === "beta",
     updating: v.progress ?? (v.installed ? t("web-main.versions.updating") : t("web-main.versions.installing")),
   };
@@ -204,7 +205,8 @@ export function SoftwareList({ station, updates, manager, beta = false }: { stat
 
 /** `children`: what is set of it, under its version (the station's channel and updating by itself). */
 function SoftwareRow({ v, manager, busy, onUpdate, children }: { v: SoftwareVersion; manager: boolean; busy: boolean; onUpdate(): void; children?: ReactNode }) {
-  const { shown, failed, tip, updating, beta } = describe(v);
+  // Why it cannot be installed or updated from here is said under its version, not only on hover.
+  const { shown, failed, tip, updating, beta } = describe(v, false);
   const button = (label: string, primary: boolean) => manager && v.updatable && (
     <Button variant={primary ? "primary" : "secondary"} disabled={busy} onClick={onUpdate}>{label}</Button>
   );
@@ -221,6 +223,7 @@ function SoftwareRow({ v, manager, busy, onUpdate, children }: { v: SoftwareVers
       <span className={pagesCss.cardRowText}>
         <strong className={css.softName}>{v.name}{beta && !children && <span className={css.betaTag}>{t("web-main.versions.beta")}</span>}</strong>
         <Tip label={tip}><span className={css.softVersion}>{shown}</span></Tip>
+        {v.note && <span className={css.softNote}>{v.note}</span>}
         {children}
       </span>
       {rest && <span className={css.softRest}>{rest}</span>}

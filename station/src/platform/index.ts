@@ -145,8 +145,12 @@ export type Platform = {
   /// `command` (a command npm installed in its global prefix) linked into `dir` under its name, where nothing of that
   /// name is: whether it now is (not on Windows: npm's .cmd finds its package beside itself, and its prefix is on PATH).
   linkCommand(command: string, dir: string): boolean;
-  /// Whether Codex's standalone install updates by its installer here (a shell script: not on Windows).
+  /// Whether Codex's standalone install updates by its installer here, and installs by it (a shell script: not on
+  /// Windows).
   codexStandalone: boolean;
+  /// Whether a Node is installed for npm where the machine has none, its commands linked into ~/.local/bin
+  /// (updates/runtimes.ts ownNode; not on Windows, which links nothing).
+  linksNode: boolean;
 
   // Sleep (ops/awake.ts).
   /// Keeps the machine from going to sleep for want of use, `why` said where the system shows it: a process of its own

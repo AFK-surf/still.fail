@@ -1,20 +1,22 @@
 // The station's and its runtimes' versions and updating them (the Rust station's updates.rs's tests), with fake release
 // servers, fake installers and fake npm/vp/curl commands in temporary directories: nothing real is installed or read.
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import { ConfigFile } from "../src/ops/config.ts";
-import { type Env, type Found, howToInstall, howToUpdate, findCommand, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
+import { type Env, type Found, howToInstall, howToUpdate, findCommand, ownNode, pinNpmVersion, run, runLines, Unable, kindCommand, kindPackage } from "../src/updates/runtimes.ts";
 import { Updates, type UpdatesOptions } from "../src/updates/updates.ts";
 import { WINDOWS, platform as machine } from "../src/platform/index.ts";
 import { windowsUpdateScript } from "../src/platform/windows.ts";
 import {
-  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail, versionIn,
+  channelOf, curlPercent, downloading, feed, INSTALLING, newer, offer, platform as buildOf, releaseChannel, say, stationDownloadPercent, stationVersion, stepOf, tail,
+  versionIn,
 } from "../src/updates/versions.ts";
 import { setChannelIn } from "../src/updates/channel.ts";
 import { exe, launcher, script as stand_in } from "./accounts-fakes.ts";
@@ -603,6 +605,88 @@ esac
     assert.equal(readlinkSync(join(bin, "grok")), join(node, "bin", "grok"));
   });
 
+  /// nodejs.org as the station reads it: Node `version`'s build for this machine (its node, and an npm that installs
+  /// Grok Build in its own prefix and says where that is), and its SHASUMS256 (`sum`: the build's, unless given); and
+  /// the registry's latest Grok Build.
+  async function nodeWorld(version: string, sum?: string): Promise<[string, Server, string]> {
+    const dir = temp();
+    const dist = `node-v${version}-${buildOf()}`;
+    const bin = join(dir, dist, "bin");
+    mkdirSync(bin, { recursive: true });
+    const sh = (name: string, text: string) => {
+      writeFileSync(join(bin, name), `#!/bin/sh\n${text}\n`);
+      chmodSync(join(bin, name), 0o755);
+    };
+    sh("node", `echo v${version}`);
+    sh("npx", "exit 0");
+    sh("npm", `prefix=$(cd "$(dirname "$(/bin/realpath "$0")")/.." && pwd)
+case "$1" in
+  prefix) echo "$prefix" ;;
+  install)
+    pkg="$prefix/lib/node_modules/@xai-official/grok"
+    mkdir -p "$pkg/bin"
+    printf '#!/bin/sh\\necho "grok 1.0.62 (1474f9cb)"\\n' > "$pkg/bin/grok"
+    chmod +x "$pkg/bin/grok"
+    ln -s ../lib/node_modules/@xai-official/grok/bin/grok "$prefix/bin/grok"
+    echo "added 1 package" ;;
+esac`);
+    execFileSync("tar", ["-czf", join(dir, "node.tar.gz"), "-C", dir, dist]);
+    const tarball = readFileSync(join(dir, "node.tar.gz"));
+    const sums = `${"0".repeat(64)}  node-v${version}-aix-ppc64.tar.gz\n${sum ?? createHash("sha256").update(tarball).digest("hex")}  ${dist}.tar.gz\n`;
+    const [base, server] = await serve((path) =>
+      path === "/@xai-official/grok/latest" ? { body: JSON.stringify({ version: "1.0.62" }) }
+      : path === `/dist/v${version}/SHASUMS256.txt` ? { type: "text/plain", body: sums }
+      : path === `/dist/v${version}/${dist}.tar.gz` ? { type: "application/gzip", body: tarball }
+      : null);
+    return [base, server, dist];
+  }
+
+  test("where the machine has no npm, a runtime npm installs is installed with nodejs.org's Node: put in the station's data, linked into ~/.local/bin", { skip: WINDOWS && "nothing linked on Windows" }, async (t) => {
+    const [base, server, dist] = await nodeWorld("24.22.1");
+    t.after(() => server.close());
+    const dir = temp();
+    const [data, home] = [join(dir, "data"), join(dir, "home")];
+    const bin = join(home, ".local", "bin");
+    mkdirSync(home);
+    const env: Env = { PATH: withSystem(bin), HOME: home };
+    assert.equal(findCommand("npm", env), null, "no npm on the system's PATH");
+    const updates = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env });
+    writeFileSync(join(data, "app", "NODE_VERSION"), "24.22.1\n");
+    t.after(() => updates.close());
+    await updates.check();
+    const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
+    assert.deepEqual([grok().installed, grok().updatable, grok().note], [false, true, undefined]);
+    await updates.update("grok", "zh");
+    await until("installed", () => grok().state !== "updating");
+    assert.deepEqual([grok().installed, grok().version, grok().state, grok().message], [true, "1.0.62", "idle", undefined]);
+    const at = join(data, "node", dist);
+    for (const name of ["node", "npm", "npx", "grok"]) assert.equal(readlinkSync(join(bin, name)), join(at, "bin", name));
+    // Nothing of the download left beside it.
+    assert.deepEqual(readdirSync(join(data, "node")), [dist]);
+    // npm on PATH now, and Grok Build updated with its own Node's.
+    assert.equal(findCommand("npm", env)!.onPath, join(bin, "npm"));
+    assert.deepEqual(howToUpdate("grok", findCommand("grok", env)!, env), { program: join(at, "bin", "npm"), args: ["install", "-g", "@xai-official/grok@latest", "--prefix", at] });
+  });
+
+  test("a Node whose download does not match nodejs.org's checksum is not installed, nor anything with it", { skip: WINDOWS && "nothing linked on Windows" }, async (t) => {
+    const [base, server] = await nodeWorld("24.22.1", "f".repeat(64));
+    t.after(() => server.close());
+    const dir = temp();
+    const [data, home] = [join(dir, "data"), join(dir, "home")];
+    mkdirSync(home);
+    const updates = installed(data, "1300", null, { registry: base, nodeDist: `${base}/dist`, env: { PATH: withSystem(join(home, ".local", "bin")), HOME: home } });
+    writeFileSync(join(data, "app", "NODE_VERSION"), "24.22.1\n");
+    t.after(() => updates.close());
+    await updates.check();
+    const grok = () => updates.get("zh").find((v) => v.id === "grok")!;
+    await updates.update("grok", "zh");
+    await until("failed", () => grok().state !== "updating");
+    assert.deepEqual([grok().installed, grok().state, grok().message], [false, "failed", "下载的 Node 校验失败"]);
+    assert.equal(updates.get("en").find((v) => v.id === "grok")!.message, "The downloaded Node failed verification");
+    assert.deepEqual(readdirSync(join(data, "node")), []);
+    assert.equal(existsSync(join(home, ".local", "bin")), false);
+  });
+
   test("Devin's latest is its installer's manifest's, and Devin as its installer put it is updated by its installer again, without the `devin setup` it ends with", { skip: WINDOWS && "a link to the version the installer keeps" }, async (t) => {
     const [manifest, server] = await serve((path) => (path === "/cli/current/manifest.json" ? { body: JSON.stringify({ version: "3000.12.0", platforms: {} }) } : null));
     t.after(() => server.close());
@@ -722,8 +806,26 @@ INSTALLER
     // Codex's standalone installer is a shell script: on Windows not run.
     if (WINDOWS) assert.ok(say_(howToUpdate("codex", found("C:/Users/a/.codex/packages/standalone/releases/0.1.0-x86_64-pc-windows-msvc/bin/codex.exe"), env)).includes("手动更新"));
     assert.deepEqual(howToInstall("codex", env), { program: npm, args: ["install", "-g", "@openai/codex@latest"] });
-    const bare: Env = { PATH: "/nowhere" };
-    assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
+    const bare: Env = { PATH: "/nowhere", HOME: "/Users/a" };
+    // Without npm: Codex by its own installer (a shell script: on Windows, Node wanted first).
+    if (WINDOWS) assert.ok(say_(howToInstall("codex", bare)).includes("Node"));
+    else assert.equal((howToInstall("codex", bare) as any).args[2], "stillfail-codex-install");
+    // DeepSeek Harness and Grok Build by npm, a Node of the station's put in place first (none on Windows: Node wanted).
+    const own = ownNode(bare, "/data", "24.22.1");
+    for (const kind of ["dsh", "grok"] as const) {
+      const pkg = `${kindPackage(kind)}@latest`;
+      assert.deepEqual(howToInstall(kind, env, own), { program: npm, args: ["install", "-g", pkg] });
+      if (WINDOWS) {
+        assert.equal(own, null);
+        assert.ok(say_(howToInstall(kind, bare, own)).startsWith("安装 "));
+      } else {
+        assert.deepEqual(howToInstall(kind, bare, own), {
+          program: "/Users/a/.local/bin/npm", args: ["install", "-g", pkg],
+          node: { version: "24.22.1", dist: `node-v24.22.1-${buildOf()}`, home: "/data/node", bin: "/Users/a/.local/bin" },
+        });
+      }
+      assert.equal(say_(howToInstall(kind, bare)), `安装 ${kind === "dsh" ? "DeepSeek Harness" : "Grok Build"} 需要 npm：请先在本机安装 Node（含 npm）`);
+    }
     assert.equal((howToInstall("claude", bare) as any).program, WINDOWS ? "powershell" : "/bin/sh");
     // Devin by its own installer: run again where it put it (`devin update` wants a terminal), by hand anywhere else;
     // installed by its installer.

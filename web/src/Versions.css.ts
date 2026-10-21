@@ -33,6 +33,8 @@ export const softRow = style({ selectors: { "&:hover": { background: "none" } } 
 export const softMark = style({ width: "36px", height: "36px" });
 export const softName = style({ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: "500", color: vars.text });
 export const softVersion = style({ color: vars.muted, fontVariantNumeric: "tabular-nums" });
+/** Why it cannot be installed or updated from here, under its version. */
+export const softNote = style({ fontSize: vars.textMeta, color: vars.muted });
 /** The station's switches under its version, side by side. */
 export const softSwitches = style({ display: "flex", flexWrap: "wrap", gap: "4px 16px", marginTop: "4px", fontSize: vars.textMeta, color: vars.muted });
 export const softRest = style({ display: "inline-flex", alignItems: "center", gap: "10px", flex: "none", fontSize: vars.textUi });
