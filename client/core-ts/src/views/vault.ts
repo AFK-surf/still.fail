@@ -36,6 +36,7 @@ import type { Owner } from "../core/routing.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { t } from "../i18n.ts";
 import { type Entry, Signer } from "../lock.ts";
+import { signerOf } from "./lock.ts";
 import type { Topic } from "../protocol.ts";
 import { StationAddr } from "../station/addr.ts";
 import { Priority } from "../sync/scheduler.ts";
@@ -81,13 +82,13 @@ type Use = { item: string; at: number; session: string; chatTitle: string | null
 /// The id the plain library goes by where a vault's would.
 export const PLAIN = "plain";
 
-/// This core's unsealed vault keys (by `<vault>/<epoch>`, until when), the lock as checked, the signer's id and the
-/// box key's public half once known.
-type Mem = { keys: Map<string, { key: Uint8Array; until: number }>; checked: Map<string, { at: string; lock: Checked | CoreError }>; signer: string | null | undefined; box: string | null | undefined };
+/// This core's unsealed vault keys (by `<vault>/<epoch>`, until when), the lock as checked and the box key's public
+/// half once known. The signing key's id is the lock's (`signerOf`), told as it is made, not read here once.
+type Mem = { keys: Map<string, { key: Uint8Array; until: number }>; checked: Map<string, { at: string; lock: Checked | CoreError }>; box: string | null | undefined };
 const mems = new WeakMap<Inner, Mem>();
 const mem = (inner: Inner): Mem => {
   let m = mems.get(inner);
-  if (!m) mems.set(inner, (m = { keys: new Map(), checked: new Map(), signer: undefined, box: undefined }));
+  if (!m) mems.set(inner, (m = { keys: new Map(), checked: new Map(), box: undefined }));
   return m;
 };
 
@@ -183,11 +184,10 @@ export function install(inner: Inner): void {
   handlers.vault = (core, call, _progress, _at, ctx) => run(core, call as Of, ctx);
   inner.stations.also.push({ read: (address) => readStation(inner, address), event: (address, name, data) => heard(inner, address, name, data) });
   inner.router.owners.push(owner(inner));
-  // What this app keeps (no person asked): its signing key's id, its box key's public half.
+  // What this app keeps (no person asked): its box key's public half.
   inner.runner.fork(
     Effect.gen(function* () {
       const m = mem(inner);
-      m.signer = (yield* Effect.orElseSucceed(Signer.load(inner.host), () => null))?.id ?? null;
       const pub = yield* Effect.orElseSucceed(inner.host.storageGet(BOX_PUB), () => null);
       m.box = pub ? new TextDecoder().decode(pub) : null;
       inner.store.invalidateAll((t) => t.topic === "vaults" || t.topic === "vaultItems");
@@ -400,7 +400,7 @@ export function vaultsView(inner: Inner, ws: string): J {
       .map((r) => requestRow(r, h.plain[r.item]?.name ?? null, personal));
     return { ...base, plain: true, vaults: row, requests };
   }
-  const self = me(lock, m.signer);
+  const self = me(lock, signerOf(inner));
   const vouched = certs(inner, ws, lock);
   const mine = self ? vouched.find((c) => c.device === self.device) : undefined;
   const vaults = Object.values(h.vaults)
@@ -603,7 +603,6 @@ class Vaults {
       const signer = yield* Signer.load(inner.host);
       const who = signer ? me(lock, signer.id) : null;
       if (!signer || !who) return yield* fail("vault_not_signer", t("core-misc.vault.notSigner"));
-      mem(inner).signer = signer.id;
       return { lock, signer, self: who };
     });
   }
