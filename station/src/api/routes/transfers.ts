@@ -7,7 +7,7 @@ import { type Request, json } from "../request.ts";
 import type { Route } from "../admin.ts";
 import { readOnly } from "../../mesh/credential.ts";
 import { type Drive, DriveError } from "../../drive/drive.ts";
-import { type Conflict, type Transfers, shown, walkDrive } from "../../drive/transfers.ts";
+import { type Conflict, type Transfers, shown } from "../../drive/transfers.ts";
 import { GRANT_MS, type Granted, sign } from "../../drive/grants.ts";
 import { driveOf, refused } from "./drive.ts";
 
@@ -77,8 +77,9 @@ export function routes({ drive, transfers, key, self, nameOf, now }: TransferRou
         const move = b.move === true;
         // Moving lets the originals go: a member who may write here.
         if (move && !anywhere(r)) throw new DriveError("permission", "a read-only member copies, and does not move");
-        // Each name read as this member reads it, so what they may not read is refused here and now.
-        await walkDrive(driveOf(drive, r), root, path, names, anywhere(r));
+        // Each name looked at as this member reads it, so what they may not read is refused here and now (what is under
+        // the names is read as they would when it is copied: drive/module.ts driveForPeer).
+        for (const name of names) await driveOf(drive, r).stat(root, path === "" ? name : `${path}/${name}`, anywhere(r));
         const expires = now() + GRANT_MS;
         const g: Granted = { v: 1, workspace: r.viewer.workspace, home: r.viewer.home !== false, by: r.viewer.email, anywhere: anywhere(r), root, path, names, move, expires };
         return { grant: sign(key, g), expires };

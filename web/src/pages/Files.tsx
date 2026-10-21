@@ -59,7 +59,8 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
   const [going, setGoing] = useState(false);
   const actions: FilesActions = { open: (p, where) => show(where === "tab" ? opened(tabs, p) : besides(tabs, p)), goTo: () => setGoing(true) };
   const splitAt = tab.panes.length === 2;
-  // ⌘T a new tab where the front is, ⌘W closes the tab shown, ⌃Tab / ⌘⇧] and ⌘⇧[ go along them, ⌘⌥D splits.
+  // ⌘T a new tab where the front is (⌘W stays the window's: the desktop app's menu closes it), ⌃Tab / ⌘⇧] and ⌘⇧[ go
+  // along them, ⌘⌥D splits.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const field = e.target instanceof HTMLElement && (e.target.closest("input, textarea, [contenteditable=true], [role=dialog]") !== null);
@@ -68,7 +69,6 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
       const at = tabs.tabs.findIndex((x) => x.id === tabs.current);
       const along = (step: number) => show(shown(tabs, tabs.tabs[(at + step + tabs.tabs.length) % tabs.tabs.length]!.id));
       if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "t") { e.preventDefault(); show(opened(tabs, frontOf(tabs))); }
-      else if (mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "w" && tabs.tabs.length > 1) { e.preventDefault(); show(closed(tabs, tabs.current)); }
       else if ((e.ctrlKey && e.key === "Tab") || (mod && e.shiftKey && (e.code === "BracketRight" || e.code === "BracketLeft"))) {
         e.preventDefault();
         along(e.code === "BracketLeft" || (e.key === "Tab" && e.shiftKey) ? -1 : 1);

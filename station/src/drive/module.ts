@@ -2,6 +2,7 @@
 // (parts.ts): the transfers into it, run here and kept in its data directory, told to the asker's streams as they
 // change (`drive-transfers`); its routes (api/routes/transfers.ts); and what another station of the workspace reads of
 // this one's drive with a grant of its own (`drive.walk`, `drive.part`, `drive.release` on the bus).
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Layer } from "effect";
 import { routes } from "../api/routes/transfers.ts";
@@ -9,7 +10,6 @@ import { Refused } from "../mesh/bus.ts";
 import { nameOf } from "../mesh/peer-http.ts";
 import { wall } from "../ops/fibers.ts";
 import { ControlPlane, Events, Parts, Paths, Peers, StationDrive } from "../services.ts";
-import { Agents } from "../sessions/agents.ts";
 import { CHUNK } from "../jobs/remote.ts";
 import { type Drive, DriveError } from "./drive.ts";
 import { covers, grantKey, verify, type Granted } from "./grants.ts";
@@ -74,6 +74,16 @@ export function peerSource(ask: (station: string, request: Json) => Promise<Json
   };
 }
 
+/// This station's id (mesh/cloud.json, as the remote tasks read it); null when it has none.
+function ownId(data: string): string | null {
+  try {
+    const id = JSON.parse(readFileSync(join(data, "mesh", "cloud.json"), "utf8"))?.station;
+    return typeof id === "string" && id !== "" ? id : null;
+  } catch {
+    return null;
+  }
+}
+
 export const DriveTransfersLive = Layer.effectDiscard(
   Effect.gen(function* () {
     const { data } = yield* Paths;
@@ -82,7 +92,6 @@ export const DriveTransfersLive = Layer.effectDiscard(
     const events = yield* Events;
     const parts = yield* Parts;
     const cloud = (yield* ControlPlane).state;
-    const { place } = yield* Agents;
     const key = grantKey(data);
     const now = () => wall.now();
     const transfers = yield* Effect.acquireRelease(
@@ -100,6 +109,6 @@ export const DriveTransfersLive = Layer.effectDiscard(
       (t) => Effect.sync(() => t.close()),
     );
     bus.on("drive.", (_peer, request, workspace) => driveForPeer(drive, key, request, workspace ?? null, now()));
-    parts.routes(routes({ drive, transfers, key, self: () => place()?.station ?? null, nameOf: (station) => nameOf(cloud, station), now }));
+    parts.routes(routes({ drive, transfers, key, self: () => ownId(data), nameOf: (station) => nameOf(cloud, station), now }));
   }),
 );

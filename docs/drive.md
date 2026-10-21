@@ -283,7 +283,7 @@ On a wide screen the files' page is a window of Finder's over every station of t
 
 - **Tabs** (drive/tabs.ts): each a folder of a station, or two side by side (⌘⌥D, the bar's button), to work between
   stations or folders; the side in front (underlined) is what the page's address says, where the keys go, and what a
-  link, the sidebar or going back in history moves. ⌘T opens a tab where the front is, ⌘W closes the one shown, ⌘⇧[ and
+  link, the sidebar or going back in history moves. ⌘T opens a tab where the front is (its × closes it: ⌘W is the window's), ⌘⇧[ and
   ⌘⇧] go along them; a folder's menu opens it in a new tab or on the other side. Kept on the device (prefs
   `filesTabs`, by workspace): 文件 in the rail comes back to the folder in front as it was left; the first time, to this
   machine's home (the desktop app on a station of the workspace).
