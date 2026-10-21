@@ -418,7 +418,9 @@ fn a_handover_whose_new_node_does_not_take_over_fails_and_a_node_is_started_agai
     let why = until("handoff-failed", || station.file("handoff-failed"));
     assert!(why.contains("did not take over") && why.contains("a test's"), "{why}");
     let new = *station.started().last().unwrap();
-    assert!(station.said(old, "got handover") && station.said(new, "take failed"));
+    assert!(station.said(new, "take failed"));
+    // (the old one is told over its pipe and says so once it reads it, which can be after the new one failed: 39621137177)
+    until("the old Node told to hand over", || station.said(old, "got handover").then_some(()));
     until("the new Node ended", || (!alive(new)).then_some(()));
     assert_eq!(station.station_json().unwrap(), first, "not said handed over");
     // The installer puts the release before back meanwhile; the Node started again is that one, and serves.
