@@ -138,6 +138,8 @@ pub struct Ctx {
   mut width : Double
   mut height : Double
   mut scale : Double
+  /// whether the host sets things on whole device pixels (whole_px_layout), as the frame began
+  mut whole_px : Bool
   mut now : Double
   mut dt : Double
   mut last_now : Double
@@ -336,6 +338,7 @@ fn Ctx::new() -> Ctx {
     width: 800.0,
     height: 600.0,
     scale: 2.0,
+    whole_px: false,
     now: 0.0,
     dt: 16.0,
     last_now: -1.0,

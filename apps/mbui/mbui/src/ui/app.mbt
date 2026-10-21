@@ -157,6 +157,12 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
     c.epoch = c.epoch + 1
   }
   c.scale = scale
+  // (lengths laid out on whole pixels or not: every layout made anew when that changes)
+  let whole = whole_px_layout()
+  if whole != c.whole_px {
+    c.whole_px = whole
+    c.epoch = c.epoch + 1
+  }
   c.now = t
   c.dt = if c.last_now < 0.0 { 16.67 } else { dclamp(t - c.last_now, 0.0, 100.0) }
   c.last_now = t

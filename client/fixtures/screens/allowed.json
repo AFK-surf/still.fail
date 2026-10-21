@@ -1,14 +1,14 @@
 {
   "chat-cards": {
-    "left": 324294,
+    "left": 299729,
     "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line"
   },
   "history": {
-    "left": 191952,
+    "left": 186550,
     "why": "not yet as Android's: the steps lie closer together (each block some 10 to 15 px higher than Android's, more down the page); words a pixel apart along every line"
   },
   "settings": {
-    "left": 128765,
+    "left": 56485,
     "why": "not yet as Android's: each row some 2 px shorter, so the rows drift up the page; 外观's value 浅色 where Android says 跟随系统; words a pixel apart"
   }
 }

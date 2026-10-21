@@ -119,6 +119,34 @@ fn leaf_size(
 }
 
 ///|
+/// `v` points on the device's whole pixels when `whole` (Compose's Dp.roundToPx: the pixels rounded, half up), else as
+/// it is: a padding, a gap, a size said in points is laid out as Android's layout lays it out, each on its own, so what
+/// is placed after several of them falls where Android's does (still.fail's share sheet: its grabber's 25 points 66
+/// pixels there at 2.625, not 65.625).
+fn Ctx::on_px(self : Ctx, v : Double, whole : Bool) -> Double {
+  if !whole || v == 0.0 || v >= 1.0e9 {
+    v
+  } else {
+    (v * self.scale + 0.5).floor() / self.scale
+  }
+}
+
+///|
+/// Whether the host sets things on whole device pixels, its lengths as its lines (Android's: Compose rounds each
+/// length to pixels, StaticLayout each line; whole_pixel_lines, as the host says of its fonts).
+fn whole_px_layout() -> Bool {
+  match fake.val {
+    // a Tester over a host's kept text: as that host said of its fonts (any of them), asked of nothing new
+    Some(_) =>
+      match text_table.val {
+        Some(t) => t.metrics.values().any(fn(r) { r.length() > 5 && r[5] == 1.0 })
+        None => false
+      }
+    None => whole_pixel_lines(15.0, 400)
+  }
+}
+
+///|
 /// A length for the flex engine; zero, the most common, is not made anew.
 fn pt(v : Double) -> @flex.Dim {
   if v == 0.0 {
@@ -210,6 +238,9 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
   let n = self.nodes[i]
   let f = n.fl
   let s = f.style
+  // (each length said in points on whole device pixels where the host sets things on them: whole_px_layout)
+  let whole = self.whole_px
+  let len = fn(v : Double) { self.on_px(v, whole) }
   let mut ch = n.lk_epoch != self.epoch || n.lk_kind != n.kind
   if !layout_reuse.val {
     n.full = None
@@ -230,35 +261,35 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     s.direction = dir
     ch = true
   }
-  match pt_change(s.padding.left, n.pad_l) {
+  match pt_change(s.padding.left, len(n.pad_l)) {
     Some(d) => {
       s.padding.left = d
       ch = true
     }
     None => ()
   }
-  match pt_change(s.padding.top, n.pad_t) {
+  match pt_change(s.padding.top, len(n.pad_t)) {
     Some(d) => {
       s.padding.top = d
       ch = true
     }
     None => ()
   }
-  match pt_change(s.padding.right, n.pad_r) {
+  match pt_change(s.padding.right, len(n.pad_r)) {
     Some(d) => {
       s.padding.right = d
       ch = true
     }
     None => ()
   }
-  match pt_change(s.padding.bottom, n.pad_b) {
+  match pt_change(s.padding.bottom, len(n.pad_b)) {
     Some(d) => {
       s.padding.bottom = d
       ch = true
     }
     None => ()
   }
-  match pt_change(s.gap_row, n.gap) {
+  match pt_change(s.gap_row, len(n.gap)) {
     Some(d) => {
       s.gap_row = d
       s.gap_col = d
@@ -291,28 +322,28 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
     ch = true
   }
   // 0 and 1e9: none (Auto)
-  match opt_change(s.min_height, n.min_h > 0.0, n.min_h) {
+  match opt_change(s.min_height, n.min_h > 0.0, len(n.min_h)) {
     Some(d) => {
       s.min_height = d
       ch = true
     }
     None => ()
   }
-  match opt_change(s.max_height, n.max_h < 1.0e9, n.max_h) {
+  match opt_change(s.max_height, n.max_h < 1.0e9, len(n.max_h)) {
     Some(d) => {
       s.max_height = d
       ch = true
     }
     None => ()
   }
-  match opt_change(s.min_width, n.min_w > 0.0, n.min_w) {
+  match opt_change(s.min_width, n.min_w > 0.0, len(n.min_w)) {
     Some(d) => {
       s.min_width = d
       ch = true
     }
     None => ()
   }
-  match opt_change(s.max_width, n.max_w < 1.0e9, n.max_w) {
+  match opt_change(s.max_width, n.max_w < 1.0e9, len(n.max_w)) {
     Some(d) => {
       s.max_width = d
       ch = true
@@ -405,7 +436,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       s.width = Pct(100.0)
     }
   } else {
-    match opt_change(s.width, has_w, wpx) {
+    match opt_change(s.width, has_w, len(wpx)) {
       Some(d) => {
         s.width = d
         ch = true
@@ -419,7 +450,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
       ch = true
     }
   } else {
-    match opt_change(s.height, has_h, hpx) {
+    match opt_change(s.height, has_h, len(hpx)) {
       Some(d) => {
         s.height = d
         ch = true
