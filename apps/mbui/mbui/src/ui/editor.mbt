@@ -171,6 +171,7 @@ fn EditorState::move_to(self : EditorState, off : Int, ext : Bool) -> Unit {
 fn EditorState::key(self : EditorState, code : Int, mods : Int, now : Double) -> Unit {
   let shift = (mods & mod_shift) != 0
   self.blink0 = now
+  self.handle = false
   let t = self.text
   if code == key_backspace {
     if !self.delete_selection() && self.caret > 0 {
@@ -263,6 +264,10 @@ fn EditorState::text_input(
 ) -> Unit {
   self.blink0 = now
   self.pref_x = -1.0
+  // what is typed lets the handle go (Compose: shown again by the next tap)
+  if kind != text_composing {
+    self.handle = false
+  }
   if kind == 0 {
     if self.limit > 0 && s.length() >= self.limit {
       self.pasted = Some(s)
@@ -446,6 +451,24 @@ fn caret_blink() -> Double {
 }
 
 ///|
+/// The caret's handle's radius (Compose's cursor handle: 25 dp across, HandleWidth).
+let handle_r : Double = 12.5
+
+///|
+/// Whether (`x`, `y`) is on the caret's handle of `st` (its circle, and a little round it: a finger's).
+fn EditorState::on_handle(self : EditorState, x : Double, y : Double) -> Bool {
+  if !self.handle_on {
+    return false
+  }
+  // the circle's middle: its radius √2 under the tip, straight down
+  let mx = self.handle_x
+  let my = self.handle_y + handle_r * 1.4142135623730951
+  let dx = x - mx
+  let dy = y - my
+  (dx * dx + dy * dy).sqrt() <= handle_r + 8.0
+}
+
+///|
 /// The caret's width (Compose's DefaultCursorThickness, 2 dp; 2 elsewhere too).
 let caret_w : Double = 2.0
 
@@ -542,6 +565,29 @@ fn Ctx::paint_editor(self : Ctx, n : Node, alpha : Double) -> Unit {
     }
   }
   pop_clip()
+  // Android's handle under the caret (Compose's cursor handle, TextFieldSelectionManager): a drop in the caret's colour
+  // hanging from it, a circle 25 across under a corner turned to point up, over everything (a popup's: no box cuts it)
+  if focused && st.handle && h_platform() == 2 && a == b && ml == 0 && st.text.length() > 0 {
+    let (cx, cl) = tl.caret(st.caret)
+    let x = st.ox + cx
+    let y = st.oy + (cl + 1).to_double() * tl.line_h
+    st.handle_on = true
+    st.handle_x = x
+    st.handle_y = y
+    let r = handle_r
+    push_clip(-1.0e9, -1.0e9, 1.0e9, 1.0e9)
+    let (outer, _, _) = clip_at(clip_top())
+    let i0 = self.ninst
+    self.emit_rect(x, y, 2.0 * r, 2.0 * r, r, st.caret_color, 0.0, 0L, alpha)
+    self.emit_rect(x, y, r, r, 0.0, st.caret_color, 0.0, 0L, alpha)
+    turn_insts(self.inst, i0, self.ninst, 3.141592653589793 / 4.0, x, y, outer)
+    pop_clip()
+  } else {
+    st.handle_on = false
+    if !focused {
+      st.handle = false
+    }
+  }
 }
 
 ///|
@@ -599,6 +645,10 @@ fn EditorState::fresh(text : String, now : Double) -> EditorState {
     marked: "",
     msel_a: 0,
     msel_b: 0,
+    handle: false,
+    handle_on: false,
+    handle_x: 0.0,
+    handle_y: 0.0,
     comp_a: -1,
     comp_b: -1,
     blink0: now,

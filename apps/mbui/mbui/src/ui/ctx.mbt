@@ -91,6 +91,12 @@ struct EditorState {
   mut marked : String
   mut msel_a : Int
   mut msel_b : Int
+  /// Android's: the handle under the caret is shown (a tap put the caret there, nothing typed since), and where its
+  /// tip was drawn last (in the window; `handle_on` false: not drawn)
+  mut handle : Bool
+  mut handle_on : Bool
+  mut handle_x : Double
+  mut handle_y : Double
   /// the composing region the input method said with the field's state it sends next (on_text kinds 6 and 5,
   /// Android's): -1 none
   mut comp_a : Int
@@ -212,6 +218,11 @@ pub struct Ctx {
   mut last_t : Double
   mut vel : Double
   mut editor_drag : Bool
+  /// the field whose caret handle a finger drags (0 none), and how far under the handle's tip the finger came down
+  mut handle_drag : Int
+  /// Android's: the field a finger came down on, which a tap gives the focus as it lifts (0 none)
+  mut editor_tap : Int
+  mut handle_dy : Double
   // persistent widget state
   lists : Map[Int, ListState]
   editors : Map[Int, EditorState]
@@ -392,6 +403,9 @@ fn Ctx::new() -> Ctx {
     last_t: 0.0,
     vel: 0.0,
     editor_drag: false,
+    handle_drag: 0,
+    editor_tap: 0,
+    handle_dy: 0.0,
     lists: Map::new(),
     editors: Map::new(),
     dev: DeviceState::new(),
