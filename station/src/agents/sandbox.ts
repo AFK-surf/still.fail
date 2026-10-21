@@ -267,6 +267,15 @@ export function syncNow(data: string, key: string, sync: SyncEntry[], timeoutMs 
   });
 }
 
+/// A path in a sandbox as the station names it: one under `persist` (where the data directory's link leads there, as
+/// an agent may see it) is the same file under the data directory.
+export function stationPath(data: string, path: string): string {
+  const persist = placed.get(data)?.config()?.persist;
+  if (!persist) return path;
+  const base = persist.replace(/\/+$/, "");
+  return path === base ? data : path.startsWith(`${base}/`) ? join(data, path.slice(base.length + 1)) : path;
+}
+
 /// Brings files of `key`'s sandbox here, at the same paths: ones the agent attaches that only it has. A path here
 /// already is left as it is.
 export function fetchFiles(data: string, key: string, paths: string[]): Promise<void> {

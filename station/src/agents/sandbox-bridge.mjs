@@ -592,6 +592,9 @@ function remote() {
     const program = spec.program.includes("/") && !existsSync(spec.program) ? basename(spec.program) : spec.program;
     const cwd = L(spec.cwd);
     if (!existsSync(cwd)) mkdirSync(cwd, { recursive: true });
+    // Where it runs as the station names it: the data directory there is a link (into `persist`), and a shell's `pwd`
+    // says the path it was given, not where the link leads, when PWD is that path.
+    env.PWD = cwd;
     for (const port of spec.ports ?? []) listen(typeof port === "number" ? port : port.sandbox);
     child = spawn(program, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"], detached: true });
     if (spec.agent) keep(child.pid);

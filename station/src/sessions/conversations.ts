@@ -1,7 +1,7 @@
 // What agents do in their own conversations (the Rust station's hub.rs: chat_post, chat_state, chat_history, slack_api and
 // what they rest on): post (with files and a card, ending the turn or not), record how the turn ends, read a thread,
 // and call Slack as their bot. What a tool says of the turn reaches its session's actor, in turn with the rest.
-import { fetchFiles, keyPart, sandboxed } from "../agents/sandbox.ts";
+import { fetchFiles, keyPart, sandboxed, stationPath } from "../agents/sandbox.ts";
 import { copyFileSync, mkdirSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import { PlaceRefused } from "../ops/places.ts";
@@ -134,8 +134,11 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
   const target = into === key ? row : hub.store.getSession(into);
   if (!row || !target) throw new Error("unknown session");
   if (paths.length > 10) throw new Error("at most 10 files per message");
-  if (sandboxed(hub.config().dataDir)) {
-    await fetchFiles(hub.config().dataDir, keyPart(key), paths.map((given) => (isAbsolute(given) ? given : join(row.workspace, given))));
+  const data = hub.config().dataDir;
+  if (sandboxed(data)) {
+    // Named as the agent sees them there, and brought here from there when only it has them.
+    paths = paths.map((given) => stationPath(data, isAbsolute(given) ? given : join(row.workspace, given)));
+    await fetchFiles(data, keyPart(key), paths);
   }
   const dir = join(target.workspace, "uploads");
   mkdirSync(dir, { recursive: true });
@@ -145,7 +148,7 @@ export async function attach(hub: Hub, key: string, paths: string[], into: strin
     try {
       meta = statSync(path);
     } catch {
-      throw new Error(`no such file: ${given}`);
+      throw new Error(sandboxed(hub.config().dataDir) ? `no such file, here or in this session's sandbox: ${given}` : `no such file: ${given}`);
     }
     if (!meta.isFile()) throw new Error(`not a file: ${given}`);
     if (meta.size > 50 * 1024 * 1024) throw new Error(`too large (over 50 MB): ${given}`);
