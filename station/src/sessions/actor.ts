@@ -158,6 +158,9 @@ export type Snapshot = {
   /// Its allowance ran out with no account to move to: how long until it goes on (optional: a station from before
   /// it does not say).
   refillMs?: number | null;
+  /// How long its process had been idle (optional: a station from before it does not say): taken up, it has been idle
+  /// that long already, so a station updated often still ends idle processes (hub.ts `evictIdle`).
+  idleMs?: number;
   /// Changed while busy (optional: a station from before it does not say).
   stale?: boolean;
   /// What it was changed in needs a new process, not one retuned (optional: a station from before it does not say).
@@ -507,6 +510,7 @@ export class SessionActor {
       nudges: this.nudges,
       stopRequested: this.stopRequested,
       refillMs: this.refill !== null ? Math.max(0, this.refillAt - this.now()) : null,
+      idleMs: Math.max(0, this.now() - this.idleSince),
       stale: this.stale,
       restart: this.restart,
     };
@@ -535,7 +539,7 @@ export class SessionActor {
     this.stopRequested = snap.stopRequested;
     this.stale = snap.stale ?? false;
     this.restart = snap.restart ?? false;
-    this.idleSince = this.now();
+    this.idleSince = this.now() - (typeof snap.idleMs === "number" ? snap.idleMs : 0);
     if (snap.waitingMs !== null) this.waitMs(snap.waitingSeconds, snap.waitingMs);
     if (typeof snap.refillMs === "number") this.awaitRefill(this.now() + snap.refillMs);
   }

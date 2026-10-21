@@ -66,7 +66,9 @@ process has been idle (no turn, no wait) for `sandbox.idleMinutes` (10 by defaul
 runtime (no warm limit, Codex's too), and the sandbox deleted through the front door (`rm NAME`). The front door
 refuses while anything still has a connection to it (a job of the session, a process started since): it stays then,
 and goes after the agent's next idle spell (a job's end wakes the agent). A sandbox of a job's own size goes when that
-job ends. What the sandbox had on its own disk goes with it; the session's files in `persist` stay, and the next
+job ends. A process's idle time goes with it to the next station at a handover (the station updates often), and
+every 3 minutes the station stops the sandboxes of its sessions that nothing runs in (a process that ended some other
+way than idling, as the front door's `ls` shows them with no connection). What the sandbox had on its own disk goes with it; the session's files in `persist` stay, and the next
 message resumes the conversation in a new one (`--resume`). A profile's own Codex app-server (its account's limits and
 models) runs on the station's machine.
 

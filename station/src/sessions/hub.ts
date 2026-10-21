@@ -19,7 +19,7 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
-import { keyPart, sandboxIdleMs, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
+import { idleSandboxes, keyPart, sandboxIdleMs, sandboxName, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -633,6 +633,23 @@ export class Hub {
     if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
   }
 
+  /// Stops the sandboxes of this station's sessions that nothing runs in: a session whose process ended some other way
+  /// than going idle (it exited, the station restarted without it), left with its sandbox. Every `SWEEP_MS` while the
+  /// station runs things in sandboxes (agents.ts).
+  async sweepSandboxes() {
+    const data = this.config().dataDir;
+    if (sandboxIdleMs(data) === null) return;
+    const idle = await idleSandboxes(data);
+    if (idle.length === 0) return;
+    const sessions = new Map(this.store.listSessions().map((row) => [sandboxName(keyPart(row.key)), row.key]));
+    for (const name of idle) {
+      const key = sessions.get(name);
+      if (key === undefined) continue;
+      if ((this.actors.get(key)?.processState() ?? "cold") !== "cold") continue;
+      if (await stopSandbox(data, keyPart(key))) log.info("hub", "a sandbox nothing ran in stopped", { session: key });
+    }
+  }
+
   /// A process went idle: look again when it has idled past warmMs.
   idleNow(key: string) {
     // A manual archive may have arrived during the last turn. Finish that archive when the turn ends; never sweep old
@@ -644,8 +661,12 @@ export class Hub {
     }
     const old = this.deadlines.get(key);
     if (old) this.interrupt(old);
+    // When it will have idled long enough: from when it went idle (one taken up from the previous station may have been
+    // idle a while already).
+    const limit = Math.min(this.config().warmMs, sandboxIdleMs(this.config().dataDir) ?? Infinity);
+    const idleFor = this.actors.get(key)?.idleMs(this.now()) ?? 0;
     const fiber = this.runFork(
-      Effect.sleep(Math.min(this.config().warmMs, sandboxIdleMs(this.config().dataDir) ?? Infinity)).pipe(
+      Effect.sleep(Math.max(0, limit - idleFor)).pipe(
         Effect.andThen(
           Effect.sync(() => {
             this.deadlines.delete(key);

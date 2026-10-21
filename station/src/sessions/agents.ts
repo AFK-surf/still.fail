@@ -7,7 +7,7 @@
 // which process holds the sessions), and opens the agents' door only then, so no call reaches a hub without its session.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Context, Effect, Layer, Stream, SubscriptionRef } from "effect";
+import { Context, Effect, Layer, Schedule, Stream, SubscriptionRef } from "effect";
 import { Fibers, wall } from "../ops/fibers.ts";
 import { ClaudeDriver } from "../agents/claude.ts";
 import { CodexDriver } from "../agents/codex.ts";
@@ -70,6 +70,9 @@ import { readAgentEnvFrom } from "../ops/agent-env.ts";
 
 /// server.rs `encode` (encodeURIComponent).
 const encode = encodeURIComponent;
+
+/// How often the sandboxes nothing runs in are looked for (hub.ts `sweepSandboxes`).
+const SWEEP_MS = 3 * 60_000;
 
 export type AgentsParts = {
   /// The agents' predecessor-exit wait, also used before binding the mesh socket.
@@ -514,6 +517,12 @@ export const AgentsLive = (control: Control) =>
       };
       yield* plane.changes.pipe(
         Stream.runForEach(() => Effect.promise(follow)),
+        Effect.forkScoped,
+      );
+
+      // Sandboxes of sessions nothing runs in, left by a process that ended some other way than going idle: stopped.
+      yield* Effect.promise(() => hub.sweepSandboxes().catch(() => {})).pipe(
+        Effect.repeat(Schedule.spaced(SWEEP_MS)),
         Effect.forkScoped,
       );
 
