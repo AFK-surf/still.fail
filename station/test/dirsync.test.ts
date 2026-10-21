@@ -14,7 +14,7 @@ import { Cloud } from "../src/cloud/state.ts";
 import { signalGroup } from "../src/ops/group.ts";
 import { Jobs } from "../src/jobs/jobs.ts";
 import { blobId, listLocal } from "../src/jobs/dirsync.ts";
-import { type PeerCall, Refused, Remote } from "../src/jobs/remote.ts";
+import { DISK_LOW_BYTES, MIRROR_IDLE_MS, MIRROR_RECENT_MS, type PeerCall, Refused, Remote, readJson, writeJson } from "../src/jobs/remote.ts";
 import { PEER_ALPN, peerCall, servePeer } from "../src/mesh/peer.ts";
 import { type Json, Store } from "../src/store/store.ts";
 import { remoteTools } from "../src/tools/remote.ts";
@@ -75,11 +75,13 @@ async function pair() {
   const bind = () => mesh.bind({ secretKey: randomBytes(32), alpns: [PEER_ALPN], relayUrls: [], discovery: false, bindAddr: "127.0.0.1:0" });
   const [source, target] = await Promise.all([bind(), bind()]);
   cleanup.push(() => Promise.all([source.close(), target.close()]).then(() => undefined));
-  const make = (dir: string, options: { clock?: Clock.Clock } = {}) => {
+  /// What the target's disk has free (`disk.free`; plenty unless a test says otherwise).
+  const disk = { free: () => 500 * 1024 ** 3 };
+  const make = (dir: string, options: { clock?: Clock.Clock; diskFree?: (path: string) => number } = {}) => {
     const store = Store.open(":memory:");
     const told: [string, string][] = [];
     const jobs = new Jobs({ store, data: dir, notify: () => {}, link: () => null });
-    const remote = new Remote({ data: dir, store, jobs, clock: options.clock, notify: (session, text) => void told.push([session, text]) });
+    const remote = new Remote({ data: dir, store, jobs, clock: options.clock, diskFree: options.diskFree, notify: (session, text) => void told.push([session, text]) });
     cleanup.push(async () => {
       await remote.close();
       for (const job of store.listJobs(null)) if (job.pgid !== null) signalGroup(job.pgid, "SIGKILL");
@@ -89,7 +91,7 @@ async function pair() {
     return { dir, store, jobs, remote, told };
   };
   const a = make(tempdir(), { clock });
-  const b = make(tempdir());
+  const b = make(tempdir(), { diskFree: () => disk.free() });
   const B = target.id();
   mkdirSync(join(a.dir, "mesh"), { recursive: true });
   writeFileSync(join(a.dir, "mesh", "cloud.json"), JSON.stringify({ workspace: "ws", station: source.id() }));
@@ -142,7 +144,7 @@ async function pair() {
     return { prepared, started, sync: started.sync };
   };
   const mirror = (name: string) => join(b.remote.room("ws", source.id(), "s1"), "work", name);
-  return { a, b, A: source.id(), B, home, clock, use, run, mirror, state, release };
+  return { a, b, A: source.id(), B, home, clock, use, run, mirror, state, release, disk };
 }
 
 const stamp = (path: string) => {
@@ -402,5 +404,67 @@ describe("dirsync", { concurrency: true }, () => {
     git(repo, "apply", result.back.changed.patch);
     assert.equal(readFileSync(join(repo, "src", "a.txt"), "utf8"), "one\ntwo\n");
     assert.ok(!existsSync(join(repo, "src", "gone.txt")));
+  });
+
+  /// A directory of `files` (name → contents) under a new temporary one.
+  const dirOf = (name: string, files: Record<string, string>) => {
+    const dir = join(tempdir(), name);
+    mkdirSync(dir);
+    for (const [file, contents] of Object.entries(files)) writeFileSync(join(dir, file), contents);
+    return dir;
+  };
+  /// Says when a mirror of the session was last used, as the target's record keeps it.
+  const usedAt = (p: Awaited<ReturnType<typeof pair>>, at: Record<string, number>) => {
+    const record = join(p.b.remote.room("ws", p.A, "s1"), "mirrors-used.json");
+    writeJson(record, { ...readJson(record), ...at });
+  };
+
+  test("a mirror no task has used for a day goes with what its tasks made; the session's other files stay, the next start syncs it anew", async () => {
+    const p = await pair();
+    const old = dirOf("old", { "a.txt": "a\n", "b.txt": "b\n" });
+    const fresh = dirOf("fresh", { "c.txt": "c\n" });
+    await p.run("o1", old, "echo built > made.txt");
+    await p.run("f1", fresh, "true");
+    // Something a task made beside the mirrors, in the session's own directory.
+    const own = join(p.b.remote.room("ws", p.A, "s1"), "work", "ember-src");
+    mkdirSync(own);
+    writeFileSync(join(own, "keep"), "x\n");
+    const later = Date.now() + MIRROR_IDLE_MS + 60_000;
+    usedAt(p, { fresh: later - 1000 });
+    await p.b.remote.sweep(later);
+    assert.ok(!existsSync(p.mirror("old")), "the unused mirror went");
+    assert.ok(existsSync(join(p.mirror("fresh"), "c.txt")), "the one used within the day stays");
+    assert.ok(existsSync(join(own, "keep")), "what is not a mirror stays");
+    assert.ok(existsSync(p.b.remote.room("ws", p.A, "s1")), "the session's directory stays");
+    // Started again, it is synced from nothing: every file goes.
+    const again = await p.run("o2", old, "cat a.txt b.txt > both.txt; test ! -e made.txt");
+    assert.equal(p.b.store.getJob(again.started.job.id)!.exitCode, 0);
+    assert.deepEqual([again.sync.sent.files, again.sync.written], [2, 2]);
+    assert.equal(readFileSync(join(p.mirror("old"), "both.txt"), "utf8"), "a\nb\n");
+  });
+
+  test("on a disk running low the longest unused mirrors go first, until there is enough free; one in use or used within the hour stays", async () => {
+    const p = await pair();
+    const names = ["oldest", "older", "recent", "busy"];
+    const dirs = Object.fromEntries(names.map((name) => [name, dirOf(name, { "f.txt": `${name}\n` })]));
+    // One after another: an ended task counts as a use, so these were used in this order.
+    for (const name of names) await p.run(`${name}-1`, dirs[name]!, "true");
+    await p.use("station_task", { key: "busy-2", action: "prepare", command: FOREVER, dir: dirs.busy });
+    await p.use("station_task", { key: "busy-2", action: "start" });
+    const now = Date.now() + 3 * MIRROR_RECENT_MS;
+    const left = () => names.filter((n) => existsSync(p.mirror(n)));
+    // Plenty free: nothing goes.
+    await p.b.remote.relieve(now);
+    assert.deepEqual(left(), names);
+    // Low until the first has gone.
+    p.disk.free = () => (existsSync(p.mirror("oldest")) ? DISK_LOW_BYTES - 1 : DISK_LOW_BYTES);
+    await p.b.remote.relieve(now);
+    assert.deepEqual(left(), ["older", "recent", "busy"], "the longest unused went, and only it");
+    // Still low: the rest go, but the one used within the hour and the one a task runs in.
+    usedAt(p, { recent: now - 60_000 });
+    p.disk.free = () => DISK_LOW_BYTES - 1;
+    await p.b.remote.relieve(now);
+    assert.deepEqual(left(), ["recent", "busy"]);
+    await p.use("station_task", { key: "busy-2", action: "stop" });
   });
 });

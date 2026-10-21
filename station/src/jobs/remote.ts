@@ -3,7 +3,8 @@
 // admin API proxy. Any station of the workspace may run them (the transport checks the roster), as its agents may open a
 // chat here whose agent runs the same commands: shell execution as the station's OS user, not a sandbox. A source session's
 // tasks share one working directory on the target (remote/sessions/<id>/work). The source asks for it to be removed
-// when the session is archived or deleted; the target removes it itself after IDLE_MS unused.
+// when the session is archived or deleted; the target removes it itself after IDLE_MS unused, and a directory mirrored
+// in it (a task's `dir`) after MIRROR_IDLE_MS without a task, or sooner when its disk runs low (DISK_LOW_BYTES).
 //
 // The records are the Rust's files, written the same way (remote/incoming/<id>/task.json, sessions/<id>/session.json,
 // outgoing/<id>.json, used/<id>.json), so either station reads what the other wrote. What asks other machines (a
@@ -12,7 +13,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, linkSync, lstatSync, mkdirSync, openSync, readFileSync,
-  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync, writeSync,
+  readSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, statfsSync, writeFileSync, writeSync,
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { relativeParts } from "../ops/paths.ts";
@@ -51,6 +52,16 @@ const CLOSE_EVERY = "60 seconds";
 const SWEEP_EVERY = "1 hour";
 /// A task its station does not know, or has not started, this long after its start was asked for is no longer followed.
 export const GIVE_UP_MS = 10 * 60_000;
+/// A mirror (a task's `dir` on the target) no task of its session has run in or synced for this long goes, with what
+/// its tasks made there; the next start syncs it anew. Chats made one for each worktree and kept them all: 204 of
+/// one session's on Studio, a session's 78 holding 112G, the stations' disks full in hours (2026-10-20).
+export const MIRROR_IDLE_MS = 24 * 3600 * 1000;
+/// Less free than this on the disk of the station's data, mirrors go sooner: the longest unused first, until there is
+/// this much again; never one a task runs in or one used within MIRROR_RECENT_MS.
+export const DISK_LOW_BYTES = 20 * 1024 ** 3;
+export const MIRROR_RECENT_MS = 3600 * 1000;
+/// How often a target looks at its free space.
+const DISK_EVERY = "5 minutes";
 
 export type RemoteOptions = {
   /// The data directory: remote/ and mesh/cloud.json in it.
@@ -67,6 +78,8 @@ export type RemoteOptions = {
   /// How a task's `dir` is looked at (ops/places.ts): the station syncs it itself, so in a folder macOS protects it
   /// must reach it itself, looked at off its thread. Default: without still.fail Helper.
   places?: Places;
+  /// The bytes free on the disk holding `path` (tests say how full it is). Default: statfs.
+  diskFree?: (path: string) => number;
 };
 
 /// A start that syncs a directory answers within this, synced or not (the sync goes on): an agent's tool call is given
@@ -201,6 +214,7 @@ export class Remote {
   private syncs = new Map<string, Syncing>();
   private scope: Scope.Closeable;
   private run: (effect: Effect.Effect<void>) => Promise<void>;
+  private diskFree: (path: string) => number;
 
   constructor(options: RemoteOptions) {
     this.data = options.data;
@@ -208,6 +222,10 @@ export class Remote {
     this.jobs = options.jobs;
     this.notify = options.notify;
     this.places = options.places ?? new Places();
+    this.diskFree = options.diskFree ?? ((path) => {
+      const st = statfsSync(path);
+      return st.bavail * st.bsize;
+    });
     this.root = join(options.data, "remote");
     for (const name of ["incoming", "outgoing", "sessions", "used", "prepared"]) mkdirSync(join(this.root, name), { recursive: true });
     this.scope = Effect.runSync(Scope.make());
@@ -241,6 +259,9 @@ export class Remote {
     }
     void this.run(
       Effect.promise(() => this.sweep(this.store.now())).pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.asVoid),
+    ).catch(() => undefined);
+    void this.run(
+      Effect.promise(() => this.relieve(this.store.now())).pipe(Effect.repeat(Schedule.spaced(DISK_EVERY)), Effect.asVoid),
     ).catch(() => undefined);
   }
 
@@ -373,20 +394,25 @@ export class Remote {
       } catch {
         continue;
       }
-      if (now - (asI64(field(meta, "seen")) ?? now) < IDLE_MS) continue;
       const [workspace, peer, session] = [text(meta, "workspace"), text(meta, "station"), text(meta, "session")];
       await this.inLane(this.room(workspace, peer, session), async () => {
         // Asked again in its lane: used meanwhile, it stays.
+        let seen: number;
         try {
-          if (now - (asI64(field(readJson(join(sessions, name, "session.json")), "seen")) ?? now) < IDLE_MS) return;
+          seen = asI64(field(readJson(join(sessions, name, "session.json")), "seen")) ?? now;
         } catch {
           return;
         }
-        if (this.tasksOf(workspace, peer, session).some((t) => this.running(t))) return;
-        try {
-          await this.closeHere(workspace, peer, session);
-        } catch (error) {
-          log.warn("remote", "idle remote session directory not removed", { error: (error as Error).message });
+        if (now - seen >= IDLE_MS && !this.tasksOf(workspace, peer, session).some((t) => this.running(t))) {
+          try {
+            await this.closeHere(workspace, peer, session);
+          } catch (error) {
+            log.warn("remote", "idle remote session directory not removed", { error: (error as Error).message });
+          }
+          return;
+        }
+        for (const m of this.mirrorsOf(workspace, peer, session, now)) {
+          if (!m.busy && now - m.used >= MIRROR_IDLE_MS) this.dropMirror(workspace, peer, session, m.name, "unused");
         }
       });
     }
@@ -406,6 +432,135 @@ export class Remote {
       } catch {}
       if (field(meta, "layout") === "session" || now - modified < IDLE_MS || this.running(dir)) continue;
       rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  /// A session's mirrors on this station: when a task last ran in or synced each (one from before this is taken as
+  /// used now), and whether one runs there or syncs to it now (those are marked used now).
+  private mirrorsOf(workspace: string, peer: string, session: string, now: number): { name: string; used: number; busy: boolean }[] {
+    const room = this.room(workspace, peer, session);
+    const record = join(room, "mirrors-used.json");
+    let used: Json = {};
+    try {
+      used = readJson(record);
+    } catch {}
+    // A task that ended counts as a use then: what it made is brought back after.
+    const running = new Set<string>();
+    const ended = new Map<string, number>();
+    for (const task of this.tasksOf(workspace, peer, session)) {
+      let mirror: Json = null;
+      try {
+        mirror = field(readJson(join(task, "task.json")), "mirror");
+      } catch {}
+      if (typeof mirror !== "string") continue;
+      const job = this.store.getJob(this.jobOf(task));
+      if (job?.state === "running") running.add(mirror);
+      else if (job?.endedAt) ended.set(mirror, Math.max(ended.get(mirror) ?? 0, job.endedAt));
+    }
+    const found: { name: string; used: number; busy: boolean }[] = [];
+    let changed = false;
+    for (const file of this.list(join(room, "mirrors"))) {
+      if (!file.endsWith(".json")) continue;
+      const name = file.slice(0, -".json".length);
+      const busy = running.has(name) || this.syncing(join(room, "sync", name), now);
+      let at = asI64(field(used, name));
+      if (at === null || busy) {
+        at = now;
+        used[name] = now;
+        changed = true;
+      }
+      found.push({ name, used: Math.max(at, ended.get(name) ?? 0), busy });
+    }
+    if (changed) writeJson(record, used);
+    return found;
+  }
+
+  /// A sync to a mirror is under way: its directory there, it or what is in it touched within MIRROR_RECENT_MS (one
+  /// given up on is not).
+  private syncing(dir: string, now: number): boolean {
+    let latest = 0;
+    for (const path of [dir, ...this.list(dir).map((name) => join(dir, name))]) {
+      try {
+        latest = Math.max(latest, statSync(path).mtimeMs);
+      } catch {}
+    }
+    return now - latest < MIRROR_RECENT_MS;
+  }
+
+  /// A task ran in or synced `mirror` now. Callers are in the session's lane.
+  private usedMirror(workspace: string, peer: string, session: string, mirror: string): void {
+    const record = join(this.room(workspace, peer, session), "mirrors-used.json");
+    let used: Json = {};
+    try {
+      used = readJson(record);
+    } catch {}
+    used[mirror] = this.store.now();
+    writeJson(record, used);
+  }
+
+  /// Removes a mirror and what its tasks made in it; its tasks that have not started sync again first. Callers are
+  /// in the session's lane.
+  private dropMirror(workspace: string, peer: string, session: string, mirror: string, why: string): void {
+    const room = this.room(workspace, peer, session);
+    try {
+      rmSync(join(room, "work", mirror), { recursive: true, force: true });
+      rmSync(join(room, "sync", mirror), { recursive: true, force: true });
+      rmSync(join(room, "mirrors", `${mirror}.json`), { force: true });
+      const record = join(room, "mirrors-used.json");
+      try {
+        const used = readJson(record);
+        delete used[mirror];
+        writeJson(record, used);
+      } catch {}
+      for (const task of this.tasksOf(workspace, peer, session)) {
+        const path = join(task, "task.json");
+        const meta = readJson(path);
+        if (meta.mirror === mirror && meta.synced === true) {
+          meta.synced = false;
+          writeJson(path, meta);
+        }
+      }
+      log.info("remote", "remote mirror removed", { workspace, station: peer, session, mirror, why });
+    } catch (error) {
+      log.warn("remote", "remote mirror not removed", { mirror, error: (error as Error).message });
+    }
+  }
+
+  /// The disk of the station's data has less than DISK_LOW_BYTES free: mirrors go, the longest unused first, until
+  /// there is that much again. One a task runs in or syncs to, or used within MIRROR_RECENT_MS, stays.
+  async relieve(now: number): Promise<void> {
+    const free = () => {
+      try {
+        return this.diskFree(this.root);
+      } catch {
+        return Number.POSITIVE_INFINITY;
+      }
+    };
+    if (free() >= DISK_LOW_BYTES) return;
+    const sessions = join(this.root, "sessions");
+    const candidates: { workspace: string; peer: string; session: string; name: string; used: number }[] = [];
+    for (const name of this.list(sessions)) {
+      let meta: Json;
+      try {
+        meta = readJson(join(sessions, name, "session.json"));
+      } catch {
+        continue;
+      }
+      const [workspace, peer, session] = [text(meta, "workspace"), text(meta, "station"), text(meta, "session")];
+      await this.inLane(this.room(workspace, peer, session), async () => {
+        for (const m of this.mirrorsOf(workspace, peer, session, now)) {
+          if (!m.busy && now - m.used >= MIRROR_RECENT_MS) candidates.push({ workspace, peer, session, name: m.name, used: m.used });
+        }
+      });
+    }
+    candidates.sort((a, b) => a.used - b.used);
+    for (const c of candidates) {
+      if (free() >= DISK_LOW_BYTES) return;
+      // Asked again in its lane: used since, it stays.
+      await this.inLane(this.room(c.workspace, c.peer, c.session), async () => {
+        const m = this.mirrorsOf(c.workspace, c.peer, c.session, now).find((x) => x.name === c.name);
+        if (m && !m.busy && now - m.used >= MIRROR_RECENT_MS) this.dropMirror(c.workspace, c.peer, c.session, c.name, "disk low");
+      });
     }
   }
 
@@ -735,7 +890,10 @@ export class Remote {
           if (meta.synced !== true) throw new Error("this task's directory has not been synced; start it from a station that syncs directories");
           refuseBusy();
         }
-        if (mirror !== null) cwd = filePath(work, mirror, false);
+        if (mirror !== null) {
+          cwd = filePath(work, mirror, false);
+          this.usedMirror(workspace, peer, session, mirror);
+        }
         const spec = field(meta, "spec");
         // Through the station's queue (jobs/admit.ts): started now if there is room, else when there is.
         const started = this.jobs.startId(owner, text(spec, "name"), text(spec, "command"), cwd, null, false, jobId, false, { screen: field(spec, "screen") === true });
@@ -747,6 +905,7 @@ export class Remote {
         rmSync(syncing, { recursive: true, force: true });
         mkdirSync(syncing, { recursive: true });
         mkdirSync(join(room, "mirrors"), { recursive: true });
+        this.usedMirror(workspace, peer, session, mirror!);
         const manifest = readManifest(manifestPath);
         const files = manifest === null ? {} : await actual(join(work, mirror!), manifest.files);
         const id = randomBytes(12).toString("hex");
@@ -789,6 +948,7 @@ export class Remote {
         meta.synced = true;
         writeJson(record, meta);
         rmSync(syncing, { recursive: true, force: true });
+        this.usedMirror(workspace, peer, session, mirror!);
         return { key, ...done, version: version + 1 };
       }
       case "sync.changes": {
