@@ -1,7 +1,7 @@
 // Made-up decisions, an execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
-// with a sheet open over it: "chat-info", "chat-agent", "chat-jobs", "chat-job"; "home-jobs" (Home with the jobs left
+// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-jobs", "chat-job"; "home-jobs" (Home with the jobs left
 // up a long while at its top); "history-link" (Home, the history there for a link to open at an entry: what apps/android's
 // MbuiCompareTest pictures beside it). Every word here is made up.
 
@@ -10,7 +10,7 @@
 fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
-    "chat-info", "chat-agent", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-info", "chat-publish", "chat-agent", "chat-jobs", "chat-job", "home-jobs", "history-link",
   ].contains(mode)
 }
 
@@ -124,6 +124,31 @@ fn fix_detailed_chat(base : Json) -> Json {
         "lastMessage": { "time": { "createdAt": { "ago": "5 分钟前" } } },
       }
       o["agents"] = [fix_agent()]
+      // made public twice (apps/android PublishSheetTest's `two`): the viewer's own, which they may revoke, and Bob's
+      let link = "https://share.still.fail/#B5CrvEZwwZq7oct4Vs0Ld90SJHgZO4uOwQdhtJsLRNE.Qm9vSzVnUkN2dUdS.k3Yq"
+      let published = fn(id : String, by : String, mine : Bool, ago : String) -> Json {
+        {
+          "id": Json::string(id),
+          "link": Json::string(link + "-" + id),
+          "createdAt": 0,
+          "byName": Json::string(by),
+          "mayRevoke": Json::boolean(mine),
+          "time": { "createdAt": { "ago": Json::string(ago), "full": "10月15日 10:00" } },
+        }
+      }
+      o["publish"] = { "may": true, "links": [published("p2", "Alice", true, "10 分钟前"), published("p1", "Bob", false, "2 天前")] }
+      // shared with one of the viewer's other workspaces, read only (ChatInfo.kt ShareRow)
+      o["xshare"] = {
+        "session": "s-c1",
+        "text": "开源 · 只读",
+        "to": [],
+        "write": false,
+        "may": true,
+        "places": [
+          { "workspace": "ws2", "name": "日常", "on": false },
+          { "workspace": "ws3", "name": "开源", "on": true },
+        ],
+      }
       Json::object(o)
     }
     _ => base
@@ -462,11 +487,75 @@ fn long_job() -> Json {
 }
 
 ///|
+/// What the fixture's core says a snapshot would hold (apps/android PublishSheetTest's `preview`, the same words, so
+/// the two are pictured alike): a person's message with a key hidden, an agent's reply, three attachments.
+fn fix_preview() -> Json {
+  let file = fn(k : String, name : String, size : Int, size_text : String, kind : String) -> Json {
+    {
+      "k": Json::string(k),
+      "name": Json::string(name),
+      "size": Json::number(size.to_double()),
+      "sizeText": Json::string(size_text),
+      "type": Json::string(kind),
+      "n": 9,
+      "file": { "name": Json::string(name), "path": Json::string("/w/uploads/" + name), "size": Json::number(size.to_double()) },
+    }
+  }
+  let files = [
+    file("f0", "login-page.png", 665, "665 B", "image/png"),
+    file("f1", "deploy.log", 2048, "2.0 KB", "text/plain"),
+    file("f2", "build-cache.tar", 12582912, "12 MB", "application/x-tar"),
+  ]
+  let ago = fn(words : String) -> Json { { "createdAt": { "ago": Json::string(words), "full": "10月15日 10:00" } } }
+  {
+    "upto": 9,
+    "title": "部署登录页",
+    "messages": [
+      {
+        "n": 4,
+        "author": "Alice",
+        "agent": false,
+        "text": "帮我把登录页部署到预发，token 是 [已隐藏]",
+        "files": [],
+        "hidden": 1,
+        "hiddenText": "已隐藏 1 处",
+        "createdAt": 0,
+        "time": ago("12 分钟前"),
+      },
+      {
+        "n": 6,
+        "author": "Opus 5.5",
+        "agent": true,
+        "text": "部署好了：**登录后跳回原页面**，`npm run deploy:staging` 跑了 42 秒。",
+        "files": [],
+        "hidden": 0,
+        "createdAt": 0,
+        "time": ago("10 分钟前"),
+      },
+      {
+        "n": 9,
+        "author": "Alice",
+        "agent": false,
+        "text": "截图、日志和构建缓存都附上了",
+        "files": Json::array(files),
+        "hidden": 0,
+        "createdAt": 0,
+        "time": ago("8 分钟前"),
+      },
+    ],
+    "files": Json::array(files),
+    "hidden": 1,
+    "hiddenText": "共隐藏 1 处疑似机密",
+  }
+}
+
+///|
 /// This slice's calls in the fixture: taken as a station would.
 fn decide_fixture_call(name : String) -> Result[Json, Json]? {
   match name {
-    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" =>
+    "decision.answer" | "decision.dismiss" | "decision.defer" | "decision.reply" | "chat.keep" | "chat.pin" | "chat.rename" | "session.stop" | "session.evict" | "job.stop" | "job.clearEnded" | "history.detail" | "history.older" | "machineLogin.cancel" | "chat.unpublish" =>
       Some(Ok(Json::object({})))
+    "chat.publishPreview" => Some(Ok(fix_preview()))
     _ => None
   }
 }
@@ -490,6 +579,13 @@ pub fn open_fixture(mode : String) -> Unit {
       }
     }
     "chat-info" => dui.sheet = Some(Info(r))
+    // the sheet that publishes the chat, what a snapshot would hold read (Publish.kt openPublish)
+    "chat-publish" => {
+      publish_reset()
+      publishing.of = publish_key(r.station, 7.0)
+      publishing.preview = Some(fix_preview())
+      dui.sheet = Some(Publish(r.station, 7.0))
+    }
     "chat-agent" => dui.sheet = Some(AgentOf(r, "s-c1"))
     "chat-jobs" => dui.sheet = Some(JobsOf(r))
     "chat-job" => {

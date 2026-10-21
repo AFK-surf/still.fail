@@ -19,7 +19,8 @@ test "26-history" {
     // the chat's sheet risen
     f.run_to(@kit.sheet_rest("decide-sheet"))
     f.see("复制会话链接")
-    f.tap("icon:chevron-right")
+    // (its first row's: under it, the public links' and the sharing's have one too)
+    f.tap("icon:chevron-right", top=true)
     // the agent's card in the sheet's place, the sheet at its height
     f.run_to(@kit.sheet_rest("decide-sheet"))
     f.see("=历史")

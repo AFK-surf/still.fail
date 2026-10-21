@@ -17,6 +17,10 @@ priv enum Sheet {
   JobOf(ChatRef, String)
   /// renaming the chat (ChatInfo.kt askTitle): its thread and its name as it was
   Rename(ChatRef, Double?, String)
+  /// publishing the chat (Publish.kt openPublish): its station and thread
+  Publish(String, Double)
+  /// sharing the chat with the viewer's other workspaces (ChatInfo.kt openShare): its thread
+  XShare(ChatRef, Double?)
 }
 
 ///|
@@ -123,6 +127,8 @@ fn decide_reset() -> Unit {
   dui.out = None
   dui.out_dir = 0
   dui.out_from = 0.0
+  publish_reset()
+  xsharing_reset()
 }
 
 ///|
@@ -682,5 +688,7 @@ fn sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
     JobsOf(r) => jobs_sheet(c, src, r)
     JobOf(r, id) => job_sheet(c, src, r, id)
     Rename(r, thread, was) => rename_sheet(c, src, r, thread, was)
+    Publish(station, thread) => publish_sheet(c, src, station, thread)
+    XShare(r, thread) => xshare_sheet(c, src, r, thread)
   }
 }

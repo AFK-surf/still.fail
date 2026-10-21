@@ -4,9 +4,8 @@
 // openJob, JobBody), and the jobs left up a long while at the top of Home (OpenJobs.kt). What they show is the core's
 // (the `chat`, `agentCard`, `stations`, `chatJobs`, `jobLog` and `longJobs` views); what is done goes through its calls.
 //
-// Not here yet, against the Android app: sharing the chat with other workspaces (its row is shown, not opened), making
-// it public (Publish.kt), a watched chat's question before archiving, the station's card (its row closes the sheet),
-// the run settings page (its row is shown), dragging a sheet by its grabber.
+// Not here yet, against the Android app: the station's card (its row closes the sheet), the run settings page (its row
+// is shown), dragging a sheet by its grabber.
 
 // ── parts ───────────────────────────────────────────────────────────────
 
@@ -601,16 +600,7 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
             copy_chat_link(c, title, link)
           }
           match xshare {
-            Some(Object(_)) =>
-              info_row(c, "", fn() {
-                @sf.icon(c, "users", size=16.0, color=t.p.text) |> ignore
-                c.text(tr("web-pages.chat.xshare"), size=14.0, color=t.p.text, wrap=false) |> ignore
-                c.box(w=Fill(1.0), align=AEnd, fn() {
-                  c.text(text(xshare, "text"), size=13.0, color=t.p.muted, wrap=false) |> ignore
-                })
-                |> ignore
-              })
-              |> ignore
+            Some(Object(_)) => xshare_row(c, r, opt_number(thread, "id"), xshare)
             _ => ()
           }
           if slack != "" {
@@ -633,12 +623,24 @@ fn chat_info_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef) -> Uni
               })
               |> ignore
             }) {
-            match view {
-              Some(v) => archive_chat(src, r, v)
-              None => ()
+            // a chat keeping watch is archived only once asked: its watch runs on in the archive (the core's words)
+            match (view, text(field(chat, "watch"), "ask")) {
+              (Some(v), "") => archive_chat(src, r, v)
+              (Some(v), ask) => {
+                close_sheet(c)
+                @settings.confirm(fill("android-chat.archive.ask", [("title", title)]), ask, tr("android-chat.archive"), fn() {
+                  archive_chat(src, r, v)
+                })
+              }
+              (None, _) => ()
             }
           }
         })
+      }
+      // making it public, a card of its own (publish.mbt)
+      match shown_publish(chat) {
+        Some(_) as p => publish_list(c, src, r.station, number(thread, "id"), p)
+        None => ()
       }
     })
     |> ignore

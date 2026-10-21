@@ -223,21 +223,13 @@ fn said(
   let em = emits_of(ek)
   c.box(w=Fill(1.0), fn() {
     let col = c.box(w=Fill(1.0), gap=4.0, align=AStart, fn() {
-      c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
-        // an agent of the chat's name opens its card (AgentSheet.kt)
-        let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
-        let name = c.id("name/" + m.ts)
-        if mine && c.clicked(name) {
-          open_sheet(c, AgentOf(ref_of(here), m.by.agent))
-        }
-        c.box(max_w=240.0, id=if mine { name } else { 0 }, fn() {
-          c.text(m.by.name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0)
-          |> ignore
-        })
-        |> ignore
-        message_time(c, m.ts, m.time)
-      })
-      |> ignore
+      // an agent of the chat's name opens its card (AgentSheet.kt)
+      let mine = m.by.agent != "" && here.view.agents.iter().any(fn(a) { a.key == m.by.agent })
+      let name = c.id("name/" + m.ts)
+      if mine && c.clicked(name) {
+        open_sheet(c, AgentOf(ref_of(here), m.by.agent))
+      }
+      said_head(c, m.by.name, if mine { name } else { 0 }, m.ts, m.time)
       quote_cards(c, m.quotes, false)
       if m.author_kind == "person" {
         if m.text != "" {
@@ -263,7 +255,7 @@ fn said(
     // the picture over the name's start (where a message out of an avatar lands: hidden while the flying one is
     // over it)
     c.layer(fn() {
-      let av = c.box(pt=3.0, fn() { message_avatar(c, src, m) })
+      let av = said_avatar(c, fn() { message_avatar(c, src, m) })
       if emit_goes(em, m.seq) {
         @motion.measure(c, av, "emit-landing/" + ek + "/" + seq_s(m.seq))
         if emit_emitting(em, m.seq) {
@@ -274,6 +266,27 @@ fn said(
     |> ignore
   })
   |> ignore
+}
+
+///|
+/// A message's head (Chat.kt SaidRow): in from the picture over its start (said_avatar), its name (15, 650, in the
+/// chat's name colour, one line up to 240; `id` taps it) and when it was said.
+fn said_head(c : @ui.Ctx, name : String, id : Int, key : String, time : Stamp?) -> Unit {
+  let k = ink()
+  c.box(dir=Row, w=Fill(1.0), pl=25.0, min_h=24.0, gap=6.0, align=ACenter, fn() {
+    c.box(max_w=240.0, id~, fn() {
+      c.text(name, size=15.0, weight=650, color=k.name, wrap=false, line=21.0) |> ignore
+    })
+    |> ignore
+    message_time(c, key, time)
+  })
+  |> ignore
+}
+
+///|
+/// Where a message's picture goes, over its head's start (Chat.kt SaidRow: 3 down, centred on the name's line).
+fn said_avatar(c : @ui.Ctx, body : () -> Unit) -> Int {
+  c.box(pt=3.0, body)
 }
 
 ///|
