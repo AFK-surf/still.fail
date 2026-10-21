@@ -679,5 +679,11 @@
   "web-mobile.profiles.step1ShortDevin": "在打开的页面用 {name} 要使用的 Devin 账号登录",
   "web-mobile.profiles.step2Short": "把页面上显示的授权码粘贴到这里",
   "web-mobile.profiles.finishShort": "完成",
-  "web-mobile.profiles.manualShort": "在机器上手动登录"
+  "web-mobile.profiles.manualShort": "在机器上手动登录",
+  "web-mobile.profiles.pickModels.title": "选择模型",
+  "web-mobile.profiles.pickModels.lead": "已添加 {name}。只有已启用的模型可在新对话和连接中选择，之后也可在 Profile 页修改。",
+  "web-mobile.profiles.pickModels.reading": "正在读取可用模型",
+  "web-mobile.profiles.pickModels.selected": "已选 {n} 项",
+  "web-mobile.profiles.pickModels.skip": "跳过",
+  "web-mobile.profiles.pickModels.none": "此 Profile 未列出模型，可稍后在 Profile 页添加"
 }

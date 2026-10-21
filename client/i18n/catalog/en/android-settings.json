@@ -729,5 +729,11 @@
   "android-settings.fonts.download": "Download {size}",
   "android-settings.fonts.downloading": "Downloading {percent}%",
   "android-settings.fonts.failed": "Couldn't download: {error}",
-  "android-settings.fonts.damaged": "The file is damaged"
+  "android-settings.fonts.damaged": "The file is damaged",
+  "android-settings.profile.pickModels.title": "Select models",
+  "android-settings.profile.pickModels.lead": "{name} was added. Only enabled models can be selected for new chats and connects; you can change them later on the profile's page.",
+  "android-settings.profile.pickModels.reading": "Reading available models",
+  "android-settings.profile.pickModels.selected": "{n} selected",
+  "android-settings.profile.pickModels.skip": "Skip",
+  "android-settings.profile.pickModels.none": "This profile lists no models; you can add them later on its page"
 }

@@ -664,6 +664,7 @@ export function profile(p: J): J {
   o.series = bySeries;
   o.modelsText = modelsText;
   o.available = available;
+  o.modelsReading = !isObject(o.check) && !decisionOnly;
   return o;
 }
 

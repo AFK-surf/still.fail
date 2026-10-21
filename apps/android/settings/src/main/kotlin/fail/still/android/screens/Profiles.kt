@@ -761,9 +761,49 @@ internal fun TonePill(text: String, tone: String, size: androidx.compose.ui.unit
     Text(text, fontSize = size, color = color, maxLines = 1, modifier = Modifier.clip(Smooth(6.dp)).background(bg).padding(horizontal = 6.dp, vertical = 1.dp))
 }
 
+/**
+ * The step right after a profile is added: its models chosen on a screen of their own, since chats use only those
+ * enabled, or skipped; either way on to its page. Its models are read by the check the station runs once it is added (a
+ * few seconds): until then, that.
+ */
+@Composable
+fun PickModelsScreen(current: WorkspaceEntry, address: String, id: String) {
+    val app = LocalApp.current
+    val stations by rememberTopic<List<StationView>>(app.core, Topics.stations(current.workspace.id))
+    val s = stations.value?.firstOrNull { it.station == address }
+    val p = s?.overview?.profiles?.firstOrNull { it.id == id }
+    val title = t("android-settings.profile.pickModels.title")
+    val leave: () -> Unit = { app.replace(Screen.Profile(address, id)) }
+    if (s == null || p == null) return Column(Modifier.fillMaxSize()) {
+        NavBar("Profile", app::pop, title)
+        if (s?.overview != null && stations.error == null) PlaceEmpty(t("android-settings.profile.none"))
+        else Waiting(WaitShape.Cards, text = t("common.reading"), error = stations.error?.message)
+    }
+    val api = app.api(address)
+    val listed = !p.available.isNullOrEmpty()
+    Column(Modifier.fillMaxSize()) {
+        NavBar("Profile", leave, title, sub = if (p.models.isEmpty()) null else ({ Text(t("android-settings.profile.pickModels.selected", "n" to p.models.size), fontSize = 11.sp, color = C.muted) }))
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+            Text(t("android-settings.profile.pickModels.lead", "name" to p.name), fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp))
+            when {
+                p.modelsReading == true -> WaitLine(t("android-settings.profile.pickModels.reading"), modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                !listed && p.canAddModel != true -> Text(
+                    if (p.check?.state == "ok") t("android-settings.profile.pickModels.none") else p.check?.detail?.ifEmpty { null } ?: p.checkText,
+                    fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                else -> ModelsSection(address, p, p.models, p.modelsSaving != null, bare = true) { models -> app.act(t("android-settings.profile.saveModels")) { api.setModels(p.id, models) } }
+            }
+        }
+        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(t("android-settings.profile.pickModels.skip"), primary = false, modifier = Modifier.weight(1f), onClick = leave)
+            Button(t("common.done"), primary = true, enabled = p.models.isNotEmpty(), modifier = Modifier.weight(1f), onClick = leave)
+        }
+    }
+}
+
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
 @Composable
-internal fun ModelsSection(station: String, p: Profile, models: List<String>, saving: Boolean, onSave: (List<String>) -> Unit) {
+internal fun ModelsSection(station: String, p: Profile, models: List<String>, saving: Boolean, bare: Boolean = false, onSave: (List<String>) -> Unit) {
     val app = LocalApp.current
     val checking = app.isDoing("profile.check", "station" to station, "id" to p.id)
     val checkFailed = app.failedOf("profile.check", "station" to station, "id" to p.id)
@@ -779,11 +819,14 @@ internal fun ModelsSection(station: String, p: Profile, models: List<String>, sa
         p.decisionText?.let { Text(it, fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp)) }
         return
     }
-    SectionHeader(t(if (saving) "android-settings.models.headerSaving" else "android-settings.models.header", "on" to models.size, "n" to all.size), start = 24.dp)
-    Text(
-        if (all.isEmpty()) t("android-settings.models.empty") else t("android-settings.models.note"),
-        fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
-    )
+    // On the step after it is added (PickModelsScreen) the screen says what these are.
+    if (!bare) {
+        SectionHeader(t(if (saving) "android-settings.models.headerSaving" else "android-settings.models.header", "on" to models.size, "n" to all.size), start = 24.dp)
+        Text(
+            if (all.isEmpty()) t("android-settings.models.empty") else t("android-settings.models.note"),
+            fontSize = 13.sp, color = C.muted, modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 6.dp),
+        )
+    }
     Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.pressText(enabled = !checking) { app.act(t("android-settings.models.refreshWhat"), t("android-settings.models.refreshed")) { app.api(station).checkProfile(p.id) } },
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1048,7 +1091,8 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
     var login by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val pending = login?.let { l -> s?.overview?.logins?.firstOrNull { it.id == l } }
-    val go = { id: String, message: String -> app.toast = message; app.replace(Screen.Profile(address, id)) }
+    // Added: on to choosing its models (PickModelsScreen), the step chats need.
+    val go = { id: String, message: String -> app.toast = message; app.replace(Screen.PickModels(address, id)) }
     // The sign-in made its profile: on to it.
     LaunchedEffect(pending?.created) { pending?.created?.let { go(it, t("android-settings.profile.addedLogin")) } }
     // What the plan signs in to (the core's): a runtime's subscription, or OpenCode's account for OpenCode Go.
@@ -1178,7 +1222,7 @@ fun MachineLoginOffers(station: String, overview: Overview, inset: androidx.comp
                     try {
                         val id = app.api(station).useMachineLogin(l.runtime)
                         app.toast = t("android-settings.machine.added")
-                        if (onLogin != null) app.replace(Screen.Profile(station, id)) else app.push(Screen.Profile(station, id))
+                        if (onLogin != null) app.replace(Screen.PickModels(station, id)) else app.push(Screen.PickModels(station, id))
                     } catch (e: CoreException) { app.toast = e.message }
                 }
             } else if (onLogin != null) onLogin(l.runtime) else app.push(Screen.NewProfile(station))

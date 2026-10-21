@@ -1817,5 +1817,10 @@
   "web-pages.admin.ws.addStationLead": "Creates an install command. Run it on the machine that is to be the station and it joins this workspace; you don't need to be a member.",
   "web-pages.admin.ws.commandLead": "Valid for 1 hour, single use. The station appears in the list once it joins.",
   "web-pages.admin.ws.stationName": "Station name",
-  "web-pages.admin.ws.makeCommand": "Create command"
+  "web-pages.admin.ws.makeCommand": "Create command",
+  "web-pages.profiles.pickModels.title": "Select models",
+  "web-pages.profiles.pickModels.lead": "{name} was added. Only enabled models can be selected for new chats and connects; you can change them later on the profile's page.",
+  "web-pages.profiles.pickModels.reading": "Reading available models",
+  "web-pages.profiles.pickModels.skip": "Skip",
+  "web-pages.profiles.pickModels.none": "This profile lists no models; you can add them later on its page"
 }

@@ -12,6 +12,7 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { BackLink, Button, Field, ProviderLogo, Segmented, Select, Waiting } from "../ui.tsx";
 import type { ApiProvider, ProfileFlowView } from "../core/shapes.ts";
 import { InstallStep, MachineLoginOffers, LoginSteps } from "./Accounts.tsx";
+import { pickModelsPath } from "../ProfilesNav.tsx";
 import * as pagesCss from "../styles/pages.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import * as shellCss from "../styles/shell.css.ts";
@@ -83,9 +84,11 @@ function Flow({ workspace, address, stations, onStation }: { workspace: string; 
     if (planning && !started.current) { started.current = true; void start.run(); }
     if (!planning && started.current) { started.current = false; if (login && !pending?.created) void api.dropLogin(login).catch(() => undefined); setLogin(null); setCode(""); }
   }, [planning]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (pending?.created) { toast(t("web-pages.profiles.signedInAdded")); navigate(list); } }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Added: on to choosing its models (PickModelsPage), the step chats need.
+  const pick = (id: string) => navigate(pickModelsPath(address, id), { replace: true });
+  useEffect(() => { if (pending?.created) { toast(t("web-pages.profiles.signedInAdded")); pick(pending.created); } }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const added = () => { toast(t("web-pages.profiles.verifiedAdded")); navigate(list); };
+  const added = ({ id }: { id: string }) => { toast(t("web-pages.profiles.verifiedAdded")); pick(id); };
 
   if (!d) return <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" /></div>;
   const picking = d.step === "pick";

@@ -1742,5 +1742,10 @@
   "web-pages.admin.ws.addStationLead": "生成一条安装命令。在要作为 station 的机器上执行后，它即加入此 workspace，你无需成为成员。",
   "web-pages.admin.ws.commandLead": "命令 1 小时内有效，仅可使用一次。station 加入后出现在列表中。",
   "web-pages.admin.ws.stationName": "station 名称",
-  "web-pages.admin.ws.makeCommand": "生成命令"
+  "web-pages.admin.ws.makeCommand": "生成命令",
+  "web-pages.profiles.pickModels.title": "选择模型",
+  "web-pages.profiles.pickModels.lead": "已添加 {name}。只有已启用的模型可在新对话和连接中选择，之后也可在 Profile 页修改。",
+  "web-pages.profiles.pickModels.reading": "正在读取可用模型",
+  "web-pages.profiles.pickModels.skip": "跳过",
+  "web-pages.profiles.pickModels.none": "此 Profile 未列出模型，可稍后在 Profile 页添加"
 }

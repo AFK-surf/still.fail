@@ -15,7 +15,7 @@ import { useGo } from "../go.ts";
 import type { Topic } from "../core/client.ts";
 import { useReady, useTopics } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
-import { AccountPage } from "../pages/Accounts.tsx";
+import { AccountPage, PickModelsPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
 import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
@@ -275,6 +275,7 @@ function StationPages({ stations }: { stations: Station[] | undefined }) {
         {/* One Profile page for the workspace: a station's own list is it. */}
         <Route path="settings/accounts" element={<Navigate to={profilesPage(station)} replace />} />
         <Route path="settings/accounts/:id" element={<AccountPage />} />
+        <Route path="settings/accounts/:id/models" element={<PickModelsPage />} />
         <Route path="*" element={<Navigate to="chats" replace />} />
       </Routes>
     </StationContext.Provider>

@@ -120,6 +120,8 @@ sealed interface Screen {
     data class RunSettings(val station: String, val of: ChatOf, val key: String) : Screen { override val id = "run/$station/$key" }
     /** A profile's models, to pick which may be used. */
     data class Profile(val address: String, val profile: String) : Screen { override val id = "profile/$address/$profile" }
+    /** The step right after a profile is added: its models chosen, or skipped (screens/Profiles.kt PickModelsScreen). */
+    data class PickModels(val address: String, val profile: String) : Screen { override val id = "pick-models/$address/$profile" }
     /** Settings, one page from the gear on Home (screens/SettingsHome.kt); it comes from the left. */
     data object Settings : Screen { override val id = "settings" }
     /** The account: who is signed in, where, and the other accounts on this device. */

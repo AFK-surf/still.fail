@@ -41,6 +41,8 @@ export function useProfilesSidebar(): boolean {
 
 /** A profile's page: the station's copy the row shows (the one signed in, up), where what is shared is set too. */
 export const profilePath = (e: WorkspaceProfile) => `${stationBase(e.station)}/settings/accounts/${encodeURIComponent(e.profile.id)}`;
+/** Where a profile just added has its models chosen (pages/Accounts.tsx PickModelsPage). */
+export const pickModelsPath = (station: string, id: string) => `${stationBase(station)}/settings/accounts/${encodeURIComponent(id)}/models`;
 
 export function ProfilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
   const profiles = useProfiles(scope).value;
@@ -144,7 +146,7 @@ function MachineLoginRow({ login, scope, station }: { login: MachineLogin; scope
   const toast = useToast();
   const use = useAction(() => api.useMachineLogin(login.runtime), ({ id }) => {
     toast(t("web-pages.profiles.machineAdded"));
-    navigate(`${stationBase(station)}/settings/accounts/${encodeURIComponent(id)}`);
+    navigate(pickModelsPath(station, id));
   });
   const signIn = () => navigate(addProfilePath(scope, station, login.runtime === "claude" ? "anthropic" : "openai", "plan"));
   return (

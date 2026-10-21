@@ -522,6 +522,7 @@ export const SHAPES: Record<string, Shape> = {
     ["series", vec("ModelSeries"), { doc: "Its models and those its check found, by series (Claude's biggest first, the rest by name; 其他 last), newest\nfirst: how the list to enable them from is laid out." }],
     ["modelsText", "String", { doc: "How many of the models it could run are enabled, in words." }],
     ["available", vec("String"), { default: true, doc: "What can be enabled on it: what its provider lists, then whatever is enabled already, each once." }],
+    ["modelsReading", "bool", { default: true, doc: "Its models are still being read: never checked yet (one just added is checked at once, a few seconds)." }],
     ["uses", vec("String"), { default: true, doc: "What it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision` (the automatic decisions). The core works it out from where its\nprovider speaks and what its check found." }],
     ["usesText", "String", { default: true, doc: "What it can do, in words (Claude Code · Codex · DeepSeek Harness · 自动决策)." }],
     ["providerName", opt("String"), { doc: "The provider of a key from the list of API providers, and the mark of its maker (none: the generic one)." }],
