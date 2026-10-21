@@ -21,9 +21,12 @@ import { log } from "../ops/log.ts";
 import { niced } from "../ops/nice.ts";
 import { startLasting } from "../ops/processes.ts";
 import { platform } from "../platform/index.ts";
+import { inSandbox, keyOfRunner, sandboxed } from "../agents/sandbox.ts";
+import { runnerId } from "../agents/process.ts";
 import { linkSync } from "../ops/links.ts";
 import { outputAt, tail } from "../read/jobs.ts";
 import { type JobRow, type Json, type ProcessRow, type Store } from "../store/store.ts";
+import type { JobSize } from "../store/rows.ts";
 import { endGroup, groupAlive, pidAlive, signalGroup, stillOurs } from "../ops/group.ts";
 import { Busy, LOOK_MS, type Pressure, type Started, type Waiting, type Why, cpusFor, pick, place } from "./admit.ts";
 import type { Ticks } from "../read/host.ts";
@@ -181,6 +184,7 @@ export function restartPause(restarts: number, ranMs: number): number {
 export class Jobs {
   readonly store: Store;
   readonly dir: string;
+  private readonly data: string;
   private notify: Notify;
   private link: Link;
   /// Where `stillfail-job notify` posts (the MCP endpoint's /jobs/notify).
@@ -214,6 +218,7 @@ export class Jobs {
     this.link = options.link;
     const dir = join(options.data, "jobs");
     this.dir = dir;
+    this.data = options.data;
     for (const sub of ["logs", "bin", "exit"]) mkdirSync(join(dir, sub), { recursive: true });
     // Runnable by name from any shell (on Windows from cmd or PowerShell, Codex's shell there, too).
     const script = join(dir, "bin", JOB_COMMAND_NAME);
@@ -264,21 +269,24 @@ export class Jobs {
   /// Starts a job for `session`: `command` run by sh in `cwd`; a web service when it has a port. `checked`: its caller
   /// looked at `cwd` already (ops/places.ts), which is not looked at again here (in a folder macOS protects, that would
   /// hold the station's thread).
-  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false): JobRow {
-    return this.startId(session, name, command, cwd, port, watch, null, checked);
+  start(session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, checked = false, size: JobSize | null = null): JobRow {
+    return this.startId(session, name, command, cwd, port, watch, null, checked, null, size);
   }
 
   /// A remote task supplies a stable id. Its caller serializes starts; an existing record is never spawned again.
   /// `queue`: it waits in the station's queue (jobs/admit.ts) when there is no room for it now; `screen`: it uses the
-  /// screen, one such at a time.
+  /// screen, one such at a time. `size`: it runs in a sandbox of its own of that size (agents/sandbox.ts).
   startId(
     session: string, name: string, command: string, cwd: string, port: number | null, watch: boolean, id: string | null, checked = false,
-    queue: { screen: boolean } | null = null,
+    queue: { screen: boolean } | null = null, size: JobSize | null = null,
   ): JobRow {
     if (id !== null) {
       const job = this.store.getJob(id);
       if (job) return job;
     }
+    // A task that runs in a sandbox takes nothing of this machine: the sandboxes' scheduler finds it room, not the
+    // queue. One that uses the screen runs here, as before.
+    if (queue !== null && !queue.screen && port === null && sandboxed(this.data)) queue = null;
     if (command.trim() === "") throw new Error("command is empty");
     let isDir = checked;
     try {
@@ -287,6 +295,9 @@ export class Jobs {
     if (!isDir) throw new Error(`no such directory: ${cwd}`);
     if (port !== null && port < 1024) throw new Error("a service's port is 1024 or above");
     if (watch && port !== null) throw new Error("a watch is a job, not a web service: give it no port");
+    if (size !== null && (port !== null || queue?.screen === true || !sandboxed(this.data))) {
+      throw new Error("only a job this station runs in a sandbox has a size: not a service, not one that uses the screen, and only while the station runs jobs in sandboxes");
+    }
     if (this.store.listJobs(session).filter((j) => j.state === "running").length >= MAX_RUNNING) {
       throw new Error(`this session runs ${MAX_RUNNING} jobs already; stop some first`);
     }
@@ -314,6 +325,7 @@ export class Jobs {
       restarts: 0,
       watch,
       ...(queue !== null ? { queued: true, screen: queue.screen } : {}),
+      ...(size !== null ? { size } : {}),
     };
     this.store.insertJob(job);
     if (queue !== null) {
@@ -458,7 +470,11 @@ export class Jobs {
     // station. The shell appends to the log itself: Git's sh on Windows cannot write to a file Node opened for
     // appending (its handle may only append). Lower than the station (ops/nice.ts): nice runs the shell in its own
     // process, the pid the same.
-    const child = startLasting(...niced(platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]), {
+    const shell: [string, string[]] = [platform.posixShell(env), ["-c", `exec >>"$3" 2>&1; ${WRAPPER}`, JOB_COMMAND_NAME, job.command, exit, job.log]];
+    // In its session's sandbox when the station runs things there (agents/sandbox.ts), but a service (its port is
+    // served here) or a task that uses the screen. The log and the exit file are on the storage both see.
+    const placed = job.port === null && job.screen !== true ? inSandbox(this.data, keyOfRunner(runnerId("claude", job.sessionKey)), "/bin/sh", shell[1], job.cwd, process.execPath, job.size) : null;
+    const child = startLasting(...niced(...(placed === null ? shell : ([placed.program, placed.args] as [string, string[]]))), {
       cwd: job.cwd, env, stdio: "ignore",
     });
     child.on("error", () => {});

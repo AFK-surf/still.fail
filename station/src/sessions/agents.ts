@@ -19,6 +19,7 @@ import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
+import { placeIn, sandboxConfig } from "../agents/sandbox.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
@@ -540,6 +541,8 @@ export const AgentsLive = (control: Control) =>
         }
         const opened = door!;
         jobs.setNotifyUrl(opened.url.replace(/\/mcp$/, "/jobs/notify"));
+        // What it starts runs in sandboxes while config.json says so; their programs reach the door at its port there.
+        placeIn(data, () => sandboxConfig(config.raw()), () => [opened.port]);
         // Taken over and serving: the launcher's entrance comes here now (not before: launcher/src/lifecycle.rs).
         control.serving("mcp", opened.port);
         log.info("station", "agents' door open", { url: opened.url });

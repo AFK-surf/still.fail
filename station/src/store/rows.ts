@@ -143,7 +143,12 @@ export type JobRow = {
   queued?: boolean;
   /// It uses the screen (windows, a simulator): one such job at a time.
   screen?: boolean;
+  /// The sandbox size it asked for (agents/sandbox.ts): a sandbox of its own, of that size.
+  size?: JobSize;
 };
+
+/// A job's sandbox size: vCPUs and GiB of memory and disk; what is not given is the sandboxes' default.
+export type JobSize = { cpus?: number; memoryGib?: number; diskGib?: number };
 
 export type JobNotice = { at: number; text: string };
 
@@ -398,6 +403,7 @@ export function toJob(r: Json): JobRow {
     id: r.id, sessionKey: r.session_key, name: r.name, command: r.command, cwd: r.cwd, port: r.port, token: r.token,
     state: r.state, pgid: r.pgid, exitCode: r.exit_code, startedAt: r.started_at, endedAt: r.ended_at,
     restarts: r.restarts, log: r.log, watch: r.watch !== 0, ...(r.queued === 1 ? { queued: true } : {}), ...(r.screen === 1 ? { screen: true } : {}),
+    ...(typeof r.size === "string" ? { size: JSON.parse(r.size) } : {}),
   };
 }
 

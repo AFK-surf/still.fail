@@ -170,7 +170,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   log TEXT NOT NULL,
   watch INTEGER NOT NULL DEFAULT 0,
   queued INTEGER,
-  screen INTEGER
+  screen INTEGER,
+  size TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_by_session ON jobs (session_key);
 CREATE TABLE IF NOT EXISTS job_notices (
@@ -414,6 +415,11 @@ export function addWatchColumn(db: DatabaseSync): void {
 export function addQueueColumns(db: DatabaseSync): void {
   if (!has(db, "jobs", "queued")) db.exec("ALTER TABLE jobs ADD COLUMN queued INTEGER");
   if (!has(db, "jobs", "screen")) db.exec("ALTER TABLE jobs ADD COLUMN screen INTEGER");
+}
+
+/// The column a job's sandbox size came with (jobs.size, agents/sandbox.ts).
+export function addSizeColumn(db: DatabaseSync): void {
+  if (!has(db, "jobs", "size")) db.exec("ALTER TABLE jobs ADD COLUMN size TEXT");
 }
 
 /// The columns a station in several workspaces came with (docs/multi-workspace.md): which workspace a session's chat

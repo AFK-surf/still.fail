@@ -6,6 +6,7 @@ import { cleanEndpoint, endpoints, find } from "../agents/providers.ts";
 import { fallbackEfforts } from "../sessions/pool.ts";
 import { RUNTIME_KINDS } from "../agents/runtime.ts";
 import { checkAgentEnv } from "../ops/agent-env.ts";
+import { checkSandbox } from "../agents/sandbox.ts";
 
 const ACCESS_KINDS = ["subscription", "opencode-go", "anthropic-api", "env", "api-provider"];
 const RUNTIMES: string[] = RUNTIME_KINDS;
@@ -48,6 +49,8 @@ export function checkConfig(raw: any, _data: string): void {
   }
   // The variables for what it starts for its agents (src/ops/agent-env.ts).
   checkAgentEnv(raw.agentEnv);
+  // Execution in sandboxes (src/agents/sandbox.ts).
+  checkSandbox(raw);
   // The drive's folders (src/drive/drive.ts).
   if (raw.drive !== undefined && raw.drive !== null) {
     if (!isObject(raw.drive)) throw new Error(`invalid type: ${describe(raw.drive)}, expected struct RawDrive`);

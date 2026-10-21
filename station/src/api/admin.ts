@@ -18,6 +18,7 @@ import { routes as accounts } from "./routes/accounts.ts";
 import { routes as xshare } from "./routes/xshare.ts";
 import { routes as hub, uploadPath } from "./routes/hub.ts";
 import { routes as deviceTools } from "./routes/tools.ts";
+import { routes as sandboxRoutes } from "./routes/sandbox.ts";
 import { routes as agentEnv } from "./routes/agent-env.ts";
 import { routes as drive } from "./routes/drive.ts";
 import { routes as workspaces } from "./routes/workspaces.ts";
@@ -145,6 +146,7 @@ export class Admin {
     this.tools = tools;
     this.routes = [...chats(tools), ...usage(tools), ...sessions(tools), ...events(tools), ...marks(tools), ...hub(tools),
       ...(config ? deviceTools({ config, changed: () => deps.events?.overviewChanged() }) : []),
+      ...(config ? sandboxRoutes({ config, changed: () => deps.events?.overviewChanged() }) : []),
       ...(cloud && data !== undefined ? workspaces({ cloud, data, changed: () => deps.events?.overviewChanged() }) : []),
       ...(config && data !== undefined
         ? drive({
