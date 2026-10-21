@@ -427,10 +427,10 @@ function ItemDialog({ opened, row, onClose, onEdit }: { opened: Opened; row: Vau
   );
 }
 
-/** A field of an item: masked until shown (a while), copied as it is. */
-export function Secret({ label, value, secret, mono }: { label: string; value: string; secret: boolean; mono: boolean }) {
+/** A field of an item: masked until shown (a while), copied as it is. `revealed`: opened to be seen, shown at once. */
+export function Secret({ label, value, secret, mono, revealed = false }: { label: string; value: string; secret: boolean; mono: boolean; revealed?: boolean }) {
   const toast = useToast();
-  const [shown, setShown] = useState(!secret);
+  const [shown, setShown] = useState(!secret || revealed);
   return (
     <div className={css.secret}>
       <span className={css.fieldLabel}>{label}</span>

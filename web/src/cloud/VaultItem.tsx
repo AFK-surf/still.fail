@@ -5,7 +5,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 import { Edit, Eye } from "@stillfail/ui/icons.tsx";
 import { useDoing } from "../doing.ts";
-import { BackLink, Button, Pill, Section, Time, Waiting } from "../ui.tsx";
+import { BackLink, Button, IconButton, Pill, Section, Spinner, Time, Waiting } from "../ui.tsx";
 import { stationBase } from "../station.tsx";
 import { Editor, KindIcon, Secret } from "./Vault.tsx";
 import { fieldsOf, formOf, howLine, kindName, masked, modeName, useVaultCall, useVaultItems, useVaultUses, useVaults, type Kind, type Opened, type VaultUse } from "../vault.ts";
@@ -21,6 +21,8 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
   const uses = useVaultUses(entry.id, vault, item);
   const run = useVaultCall();
   const [opened, setOpened] = useState<Opened | null>(null);
+  // The field whose eye opened it: shown as it opens, not masked again for a second press.
+  const [reveal, setReveal] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const opening = useDoing("vault.open", { workspace: entry.id, item });
   const v = view?.vaults.find((x) => x.id === vault);
@@ -56,15 +58,18 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
         </div>
       )}
 
-      <Section title={t("web-pages.vault.content")}
-        actions={!opened && <Button variant="ghost" icon={Eye} busy={opening && !editing} onClick={() => open()}>{t("web-pages.vault.show")}</Button>}>
+      {/* Each field's eye where its value is, before it is opened as after: pressed, it opens and shows that field. */}
+      <Section title={t("web-pages.vault.content")}>
         <div className={css.fields}>
           {opened
-            ? fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)
+            ? fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} revealed={f.key === reveal} />)
             : shut.map((f) => (
               <div key={f.key} className={css.secret}>
                 <span className={css.fieldLabel}>{f.label}</span>
-                <span className={`${css.secretValue} ${css.mono}`}>{masked(f.value)}</span>
+                <div className={css.secretLine}>
+                  <span className={`${css.secretValue} ${css.mono}`}>{masked(f.value)}</span>
+                  {opening && !editing ? <Spinner inline /> : <IconButton label={t("web-pages.vault.show")} icon={Eye} onClick={() => open(() => setReveal(f.key))} />}
+                </div>
               </div>
             ))}
         </div>
@@ -86,7 +91,7 @@ export function VaultItemPage({ entry }: { entry: WorkspaceEntry }) {
       </Section>
 
       {editing && opened && <Editor workspace={entry.id} vault={vault} first={formOf(opened, row)} id={opened.id} plain={plain}
-        onClose={() => { setEditing(false); setOpened(null); }} />}
+        onClose={() => { setEditing(false); setOpened(null); setReveal(null); }} />}
     </div>
   );
 }

@@ -269,9 +269,10 @@ function ItemSheet({ vault, opened, row }: { vault: string; opened: Opened; row:
   );
 }
 
-function Secret({ label, value, secret, mono }: { label: string; value: string; secret: boolean; mono: boolean }) {
+/** `revealed`: opened to be seen (its 显示), shown at once rather than masked for a second press. */
+function Secret({ label, value, secret, mono, revealed = false }: { label: string; value: string; secret: boolean; mono: boolean; revealed?: boolean }) {
   const toast = useToast();
-  const [shown, setShown] = useState(!secret);
+  const [shown, setShown] = useState(!secret || revealed);
   return (
     <div className={css.mSecret}>
       <span className={css.mLabel}>{label}</span>
@@ -532,6 +533,7 @@ export function VaultItemScreen() {
   const uses = useVaultUses(ws, vault, item);
   const run = useVaultCall();
   const [opened, setOpened] = useState<Opened | null>(null);
+  const [revealed, setRevealed] = useState(false);
   const opening = useDoing("vault.open", { workspace: ws, item });
   const v = view?.vaults.find((x) => x.id === vault);
   const row = items?.items.find((i) => i.id === item);
@@ -554,10 +556,10 @@ export function VaultItemScreen() {
       <SectionHeader title={t("web-pages.vault.content")} start={24} />
       <ListCard>
         {opened
-          ? <div className={securityCss.mBody}>{fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} />)}</div>
+          ? <div className={securityCss.mBody}>{fieldsOf(opened.plain).map((f) => <Secret key={f.key} label={f.label} value={f.value} secret={f.secret} mono={f.mono} revealed={revealed} />)}</div>
           : <div className={securityCss.mBody}><div className={css.mSecretLine}>
               <span className={`${css.mSecretValue} ${css.mMono}`}>{masked("x".repeat(20))}</span>
-              <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={() => open()} />
+              <LinkButton label={t("web-pages.vault.show")} busy={opening} onClick={() => open(() => setRevealed(true))} />
             </div></div>}
       </ListCard>
       <SectionHeader title={t("web-pages.vault.forAgents")} start={24} />
