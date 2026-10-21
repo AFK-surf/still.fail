@@ -121,8 +121,10 @@ def notarize(app):
     if verdict.get('status') != 'Accepted':
         subprocess.run(['xcrun', 'notarytool', 'log', verdict.get('id', ''), *auth])
         raise SystemExit(f'mac_signing: Apple did not notarize {app}: {verdict.get("status")}')
+    # (staple validates what it stapled: "The staple and validate action worked!". Validating again asked Apple's
+    # CloudKit once more, and a connection it dropped failed main's beta with the app notarized and stapled, run
+    # 39682975188)
     run(['xcrun', 'stapler', 'staple', app])
-    run(['xcrun', 'stapler', 'validate', app])
     run(['spctl', '--assess', '--type', 'execute', '-vv', app])
 
 
