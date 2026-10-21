@@ -413,6 +413,9 @@ describe("Codex", () => {
     await open("EMBER/2.2", b);
     const started = () => readFileSync(dump, "utf8").trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(started().length, 2, "an app-server each");
+    // Its state database on the sandbox's own disk, not in its home (on NFS there).
+    const sqlite = started()[0].env.CODEX_SQLITE_HOME;
+    assert.ok(typeof sqlite === "string" && sqlite.includes("/.cache/stillfail/codex-sqlite/") && !sqlite.startsWith(profile.home), sqlite);
     assert.deepEqual(new Set(destinations(dir)), new Set(["EMBER/1.1", "EMBER/2.2"].map((k) => `${sandboxName(keyOfRunner(runnerId("codex", k)))}.ws@host`)));
     await one.prompt("say:hi");
     await until("its turn ends", () => a.some((e) => e.type === "turnEnded"));

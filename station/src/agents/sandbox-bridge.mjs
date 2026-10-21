@@ -37,6 +37,7 @@ import {
   closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, readlinkSync, realpathSync,
   renameSync, rmSync, statSync, symlinkSync, utimesSync, watch, writeFileSync, writeSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { createConnection, createServer } from "node:net";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -575,6 +576,13 @@ function remote() {
     }
     // The station's directories first (a job's bin), then the sandbox's own.
     env.PATH = [spec.env.PATH, process.env.PATH].filter(Boolean).join(":");
+    // Codex's state database (SQLite) on the sandbox's own disk: the home it is in may be on NFS (`persist`), where
+    // Codex cannot open it ("failed to initialize sqlite state runtime"). It goes with the sandbox; the transcripts
+    // stay in the home.
+    if (env.CODEX_HOME && !env.CODEX_SQLITE_HOME) {
+      env.CODEX_SQLITE_HOME = join(process.env.HOME || "/tmp", ".cache", "stillfail", "codex-sqlite", createHash("sha256").update(env.CODEX_HOME).digest("hex").slice(0, 16));
+      mkdirSync(env.CODEX_SQLITE_HOME, { recursive: true });
+    }
     // The station's path to the program, or the sandbox's program of that name where that path is not here.
     const program = spec.program.includes("/") && !existsSync(spec.program) ? basename(spec.program) : spec.program;
     const cwd = L(spec.cwd);
