@@ -38,23 +38,46 @@ fn fmin(a : Double, b : Double) -> Double {
 }
 
 ///|
+/// `p` percent of a reference length (NaN when it can't be resolved).
+fn pct(p : Double, base : Double) -> Double {
+  if known(base) {
+    base * p / 100.0
+  } else {
+    undef
+  }
+}
+
+///|
+/// `p` percent of a reference length as an edge: 0 when unresolved.
+fn edge_pct(p : Double, base : Double) -> Double {
+  let v = pct(p, base)
+  if known(v) {
+    v
+  } else {
+    0.0
+  }
+}
+
+///|
 /// A dimension against a reference length (NaN when it can't be resolved).
+/// (Where it is done for every node, the match is written out in place: a
+/// call takes a reference to the Dim and gives it back, a match on the
+/// field reads its tag.)
 fn resolve(d : Dim, base : Double) -> Double {
   match d {
     Auto => undef
     Pt(v) => v
-    Pct(p) => if known(base) { base * p / 100.0 } else { undef }
+    Pct(p) => pct(p, base)
   }
 }
 
 ///|
 /// An edge length (margin, padding, border): auto and unresolved are 0.
 fn edge(d : Dim, base : Double) -> Double {
-  let v = resolve(d, base)
-  if known(v) {
-    v
-  } else {
-    0.0
+  match d {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, base)
   }
 }
 
@@ -84,68 +107,177 @@ fn is_reverse(d : FlexDirection) -> Bool {
 /// What a node's own style says about its box, against its containing
 /// block (cb_w, cb_h: the parent's content box).
 struct Box {
-  pad_l : Double
-  pad_t : Double
-  pad_r : Double
-  pad_b : Double
-  bor_l : Double
-  bor_t : Double
-  bor_r : Double
-  bor_b : Double
-  mar_l : Double
-  mar_t : Double
-  mar_r : Double
-  mar_b : Double
+  mut pad_l : Double
+  mut pad_t : Double
+  mut pad_r : Double
+  mut pad_b : Double
+  mut bor_l : Double
+  mut bor_t : Double
+  mut bor_r : Double
+  mut bor_b : Double
+  mut mar_l : Double
+  mut mar_t : Double
+  mut mar_r : Double
+  mut mar_b : Double
   // size from style, border-box, NaN when auto
-  w : Double
-  h : Double
-  min_w : Double
-  min_h : Double
-  max_w : Double
-  max_h : Double
+  mut w : Double
+  mut h : Double
+  mut min_w : Double
+  mut min_h : Double
+  mut max_w : Double
+  mut max_h : Double
 }
 
 ///|
-fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
+/// With `into`, fills that box in instead of making one.
+fn box_of(
+  s : Style,
+  cb_w : Double,
+  cb_h : Double,
+  into? : Box? = None,
+) -> Box {
   ignore(cb_h)
-  let pad_l = edge(s.padding.left, cb_w)
-  let pad_r = edge(s.padding.right, cb_w)
-  let pad_t = edge(s.padding.top, cb_w)
-  let pad_b = edge(s.padding.bottom, cb_w)
-  let bor_l = edge(s.border.left, cb_w)
-  let bor_r = edge(s.border.right, cb_w)
-  let bor_t = edge(s.border.top, cb_w)
-  let bor_b = edge(s.border.bottom, cb_w)
+  let pad_l = match s.padding.left {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let pad_r = match s.padding.right {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let pad_t = match s.padding.top {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let pad_b = match s.padding.bottom {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let bor_l = match s.border.left {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let bor_r = match s.border.right {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let bor_t = match s.border.top {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let bor_b = match s.border.bottom {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
   let pbw = pad_l + pad_r + bor_l + bor_r
   let pbh = pad_t + pad_b + bor_t + bor_b
   // content-box sizes grow by the padding and border (NaN stays NaN)
   let content_box = s.box_sizing == ContentBox
   let adj_w = if content_box { pbw } else { 0.0 }
   let adj_h = if content_box { pbh } else { 0.0 }
-  let mut min_w = resolve(s.min_width, cb_w) + adj_w
-  let mut min_h = resolve(s.min_height, cb_h) + adj_h
+  let mut min_w = (match s.min_width {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_w)
+  }) + adj_w
+  let mut min_h = (match s.min_height {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_h)
+  }) + adj_h
   // a box is never smaller than its padding and border
   min_w = if known(min_w) { fmax(min_w, pbw) } else { pbw }
   min_h = if known(min_h) { fmax(min_h, pbh) } else { pbh }
-  {
-    pad_l,
-    pad_t,
-    pad_r,
-    pad_b,
-    bor_l,
-    bor_t,
-    bor_r,
-    bor_b,
-    mar_l: edge(s.margin.left, cb_w),
-    mar_t: edge(s.margin.top, cb_w),
-    mar_r: edge(s.margin.right, cb_w),
-    mar_b: edge(s.margin.bottom, cb_w),
-    w: resolve(s.width, cb_w) + adj_w,
-    h: resolve(s.height, cb_h) + adj_h,
-    min_w,
-    min_h,
-    max_w: resolve(s.max_width, cb_w) + adj_w,
-    max_h: resolve(s.max_height, cb_h) + adj_h,
+  let mar_l = match s.margin.left {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let mar_t = match s.margin.top {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let mar_r = match s.margin.right {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let mar_b = match s.margin.bottom {
+    Pt(v) => if known(v) { v } else { 0.0 }
+    Auto => 0.0
+    Pct(p) => edge_pct(p, cb_w)
+  }
+  let w = (match s.width {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_w)
+  }) + adj_w
+  let h = (match s.height {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_h)
+  }) + adj_h
+  let max_w = (match s.max_width {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_w)
+  }) + adj_w
+  let max_h = (match s.max_height {
+    Pt(v) => v
+    Auto => undef
+    Pct(p) => pct(p, cb_h)
+  }) + adj_h
+  match into {
+    Some(o) => {
+      o.pad_l = pad_l
+      o.pad_t = pad_t
+      o.pad_r = pad_r
+      o.pad_b = pad_b
+      o.bor_l = bor_l
+      o.bor_t = bor_t
+      o.bor_r = bor_r
+      o.bor_b = bor_b
+      o.mar_l = mar_l
+      o.mar_t = mar_t
+      o.mar_r = mar_r
+      o.mar_b = mar_b
+      o.w = w
+      o.h = h
+      o.min_w = min_w
+      o.min_h = min_h
+      o.max_w = max_w
+      o.max_h = max_h
+      o
+    }
+    None => {
+      pad_l,
+      pad_t,
+      pad_r,
+      pad_b,
+      bor_l,
+      bor_t,
+      bor_r,
+      bor_b,
+      mar_l,
+      mar_t,
+      mar_r,
+      mar_b,
+      w,
+      h,
+      min_w,
+      min_h,
+      max_w,
+      max_h,
+    }
   }
 }
 
@@ -153,18 +285,23 @@ fn box_of(s : Style, cb_w : Double, cb_h : Double) -> Box {
 /// box_of for a node, kept on it while its caches hold (touch): a node is
 /// sized several times (its basis, its cross size, for real), each time
 /// against the same containing block.
+///
+/// The box is the node's own, made once and filled in again when it no
+/// longer holds: a node is sized against one containing block, its
+/// parent's, so an item holding it sees no other.
 fn box_for(node : Node, cb_w : Double, cb_h : Double) -> Box {
   touch(node)
-  if same(node.box_cbw, cb_w) && same(node.box_cbh, cb_h) {
+  if node.box_ok && same(node.box_cbw, cb_w) && same(node.box_cbh, cb_h) {
     match node.box_memo {
       Some(b) => return b
       None => ()
     }
   }
-  let b = box_of(node.style, cb_w, cb_h)
+  let b = box_of(node.style, cb_w, cb_h, into=node.box_memo)
   node.box_cbw = cb_w
   node.box_cbh = cb_h
   node.box_memo = Some(b)
+  node.box_ok = true
   b
 }
 
@@ -175,8 +312,8 @@ fn touch(node : Node) -> Unit {
   if node.cache_gen != generation.val {
     node.cache_gen = generation.val
     if !reusing.val || node.dirty {
-      node.cache.clear()
-      node.box_memo = None
+      node.cache_n = 0
+      node.box_ok = false
       node.p_ok = false
       node.dirty = false
     }
@@ -280,23 +417,40 @@ fn inset_offset(s : Style, cb_w : Double, cb_h : Double, horizontal : Bool) -> D
   if s.position != Relative {
     return 0.0
   }
+  // (resolve written out: see resolve)
   if horizontal {
-    let l = resolve(s.inset.left, cb_w)
+    let l = match s.inset.left {
+      Pt(v) => v
+      Auto => undef
+      Pct(p) => pct(p, cb_w)
+    }
     if known(l) {
       return l
     }
-    let r = resolve(s.inset.right, cb_w)
+    let r = match s.inset.right {
+      Pt(v) => v
+      Auto => undef
+      Pct(p) => pct(p, cb_w)
+    }
     if known(r) {
       -r
     } else {
       0.0
     }
   } else {
-    let t = resolve(s.inset.top, cb_h)
+    let t = match s.inset.top {
+      Pt(v) => v
+      Auto => undef
+      Pct(p) => pct(p, cb_h)
+    }
     if known(t) {
       return t
     }
-    let b = resolve(s.inset.bottom, cb_h)
+    let b = match s.inset.bottom {
+      Pt(v) => v
+      Auto => undef
+      Pct(p) => pct(p, cb_h)
+    }
     if known(b) {
       -b
     } else {
@@ -367,7 +521,6 @@ fn size_node(
   perform : Bool,
 ) -> Double {
   touch(node)
-  let c = node.cache
   if perform {
     // laid out before as now asked, nothing under it changed since: it
     // stands as it is. (A layout is always asked with the space available
@@ -385,8 +538,10 @@ fn size_node(
       return node.p_w
     }
   } else {
+    let c = node.cache
+    let n = node.cache_n
     let mut k = 0
-    while k < c.length() {
+    while k < n {
       if same(c[k + 4], cb_w) &&
         same(c[k + 5], cb_h) &&
         reusable(kw, aw, c[k], c[k + 2], c[k + 6]) &&
@@ -411,17 +566,28 @@ fn size_node(
     node.p_h = h
     node.laid_gen = generation.val
   }
-  if c.length() >= 8 * 16 {
-    c.clear()
+  let mut n = node.cache_n
+  if n >= 8 * 16 {
+    n = 0
   }
-  c.push(kw)
-  c.push(kh)
-  c.push(aw)
-  c.push(ah)
-  c.push(cb_w)
-  c.push(cb_h)
-  c.push(w)
-  c.push(h)
+  let mut c = node.cache
+  if n + 8 > c.length() {
+    let more = FixedArray::make(if n == 0 { 16 } else { n * 2 }, 0.0)
+    for i in 0..<n {
+      more[i] = c[i]
+    }
+    node.cache = more
+    c = more
+  }
+  c[n] = kw
+  c[n + 1] = kh
+  c[n + 2] = aw
+  c[n + 3] = ah
+  c[n + 4] = cb_w
+  c[n + 5] = cb_h
+  c[n + 6] = w
+  c[n + 7] = h
+  node.cache_n = n + 8
   out_h.val = h
   w
 }
@@ -512,7 +678,22 @@ fn size_uncached(
         out_h.val = fh
         return fw
       }
-    None => ()
+    None =>
+      // a box with nothing in it: what layout_flex comes to with no items
+      // (its padding and border, its own size where it has one), without
+      // setting up a line for nothing
+      if node.children.length() == 0 {
+        out_h.val = if known(h) {
+          fmax(h - pbh, 0.0) + pbh
+        } else {
+          clamp_size(pbh, b.min_h, b.max_h) - pbh + pbh
+        }
+        return if known(w) {
+          fmax(w - pbw, 0.0) + pbw
+        } else {
+          clamp_size(pbw, b.min_w, b.max_w) - pbw + pbw
+        }
+      }
   }
   layout_flex(node, b, w, h, aw, ah, perform)
 }
@@ -712,15 +893,15 @@ fn layout_flex(
     let margin_cross = if row { cb.mar_t + cb.mar_b } else { cb.mar_l + cb.mar_r }
     let cross_style = if row { cb.h } else { cb.w }
     let auto_cross_margin = if row {
-      cs.margin.top == Auto || cs.margin.bottom == Auto
+      cs.margin.top is Auto || cs.margin.bottom is Auto
     } else {
-      cs.margin.left == Auto || cs.margin.right == Auto
+      cs.margin.left is Auto || cs.margin.right is Auto
     }
     let item = pool.item(c, cb)
-    item.auto_l = cs.margin.left == Auto
-    item.auto_t = cs.margin.top == Auto
-    item.auto_r = cs.margin.right == Auto
-    item.auto_b = cs.margin.bottom == Auto
+    item.auto_l = cs.margin.left is Auto
+    item.auto_t = cs.margin.top is Auto
+    item.auto_r = cs.margin.right is Auto
+    item.auto_b = cs.margin.bottom is Auto
     item.basis = 0.0
     item.hyp = 0.0
     item.main = 0.0
@@ -742,9 +923,13 @@ fn layout_flex(
     item.ascent = 0.0
     item.clamped = 0.0
     // flex base size
-    let basis_style = resolve(cs.basis, inner_main)
+    let basis_style = match cs.basis {
+      Pt(v) => v
+      Auto => undef
+      Pct(p) => pct(p, inner_main)
+    }
     let main_style = if row { cb.w } else { cb.h }
-    let mut basis = if known(basis_style) && cs.basis != Auto {
+    let mut basis = if known(basis_style) && !(cs.basis is Auto) {
       if cs.box_sizing == ContentBox {
         basis_style + (if row { cb.pbw() } else { cb.pbh() })
       } else {
@@ -1180,10 +1365,14 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
     sum_hyp = sum_hyp + items[k].hyp + items[k].margin_main
   }
   let grow = sum_hyp < space
-  // freeze inflexible items
+  // freeze inflexible items, at the size they are to have unless some are
+  // flexible after all
+  let mut initial_free = space
+  let mut flexible = false
   for k in a..<b {
     let it = items[k]
     it.target = it.hyp
+    it.main = it.hyp
     let factor = if grow { it.node.style.grow } else { it.node.style.shrink }
     if factor == 0.0 ||
       (grow && it.basis > it.hyp) ||
@@ -1191,14 +1380,14 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
       it.frozen = true
     } else {
       it.frozen = false
+      flexible = true
     }
-  }
-  let mut initial_free = space
-  for k in a..<b {
-    let it = items[k]
     initial_free = initial_free -
       it.margin_main -
       (if it.frozen { it.target } else { it.basis })
+  }
+  if !flexible {
+    return
   }
   let mut rounds = 0
   while rounds < 64 {
@@ -1300,11 +1489,14 @@ fn layout_static_absolute(cb : Node, node : Node, ox : Double, oy : Double) -> U
       continue
     }
     // a box whose layout was reused holds its absolute boxes as they were
+    // (and one with no children has none to place)
     if cs.position == Absolute {
       place_absolute(cb, node, c, ox, oy)
-      if !kept(c) {
+      if !kept(c) && c.children.length() > 0 {
         layout_static_absolute(c, c, 0.0, 0.0)
       }
+    } else if c.children.length() == 0 {
+      ()
     } else if cs.position == Static {
       layout_static_absolute(cb, c, ox + c.left, oy + c.top)
     } else if !kept(c) {

@@ -207,13 +207,16 @@ pub(all) struct Node {
   // which flex line it was placed on, for baselines
   mut line : Int
   // sizes found during the current compute(), 8 numbers each
-  cache : Array[Double]
+  mut cache : FixedArray[Double]
+  // how many of them hold sizes
+  mut cache_n : Int
   mut cache_gen : Int
   // what its style says about its box, and the containing block that was
   // for (box_for), while its caches hold
   mut box_cbw : Double
   mut box_cbh : Double
   mut box_memo : Box?
+  mut box_ok : Bool
   // Kept from one compute(reuse=true) to the next (see compute): set it
   // when the node's style, measure function or children change, and on
   // every node above it; its sizes are then found again.
@@ -245,10 +248,12 @@ pub fn Node::new() -> Node {
     height: 0.0,
     line: 0,
     cache: [],
+    cache_n: 0,
     cache_gen: -1,
     box_cbw: 0.0,
     box_cbh: 0.0,
     box_memo: None,
+    box_ok: false,
     dirty: true,
     p_ok: false,
     p_kw: 0.0,
