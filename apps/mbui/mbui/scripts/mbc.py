@@ -739,6 +739,12 @@ def cmd_shim(a):
                                                                           shlex.quote(os.path.abspath(__file__)),
                                                                           shlex.quote(real)))
         os.chmod(sh, 0o755)
+        # (Linux: moon takes its archiver from beside the C compiler it finds, as it does MSVC's lib.exe)
+        if sys.platform.startswith('linux'):
+            ar = shutil.which('ar', path=os.pathsep.join(path))
+            t = os.path.join(d, 'ar')
+            if ar and not os.path.exists(t):
+                os.symlink(ar, t)
     print(d)
 
 
