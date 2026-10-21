@@ -126,14 +126,13 @@ jobs:
           # to mbui (apps/mbui/mbui).
           mbui=false
           if has '^apps/mbui/' || has '^\.github/workflows/mbui-check\.yml$'; then mbui=true; fi
-          # The same tests on native (check-mbui's native): only where native can differ from js, a change to the hosts,
-          # the FFI (*_native.mbt, C and Objective-C), the packages' link options (moon.pkg) or mbui's, or to
-          # how they are run (on main, mbui-check.yml's own run has them for any change to the app).
+          # The same tests on native (check-mbui's native): main's alone (mbui-check.yml's own run has them for any
+          # change to the app). A branch's js tests and its native type-check are the evidence: of 300 runs (2026-10-20
+          # to 22) the native tests failed twice, both times beside the js tests failing too, and each branch run
+          # spent 3-5 minutes of a macOS runner on them, the run's longest job.
           mbui_native=false
           if [ "$GITHUB_REF" = refs/heads/main ]; then
             mbui_native=$mbui
-          elif has '^apps/mbui/(mbui/|src/host/|scripts/test\.sh$|(.*/)?moon\.pkg$|.*_native\.mbt$|.*\.(c|h|m|mm|cpp)$)' || has '^\.github/workflows/(pipeline|mbui-check)\.yml$'; then
-            mbui_native=true
           fi
           {
             echo "range=$range"
