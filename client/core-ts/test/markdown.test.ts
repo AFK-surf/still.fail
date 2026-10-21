@@ -9,7 +9,7 @@ test("markdown_reads_blocks_as_html_names_them", () => {
     ["hr"],
     ["quote", [["p", ["引用"]]]],
   ]);
-  assert.deepEqual(parse("```ts\nconst a = 1;\n```\n\n```\nplain\n```"), [["pre", { code: "const a = 1;", lang: "ts" }], ["pre", { code: "plain" }]]);
+  assert.deepEqual(parse("```ts\nconst a = 1;\n```\n\n```\nplain\n```"), [["pre", { code: "const a = 1;", lang: "ts", ink: "h6j2c2fc" }], ["pre", { code: "plain" }]]);
 });
 
 test("markdown_a_tight_list_holds_its_words_a_loose_one_its_paragraphs", () => {

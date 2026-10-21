@@ -7,7 +7,7 @@
 // The tree (the same shape as Cue's, clients/packages/core/src/markdown/tree.ts there): text is itself; any other node
 // is `[kind, children?, attributes?]`, children told from attributes by being an array, attributes only what tells a
 // node apart (no source text, no defaults). Kinds are HTML's names where it has one:
-//   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?}] · quote · ["list", [li…], {ordered?, start?}] ·
+//   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?, ink?}] (`ink`: its colours, highlight.ts) · quote · ["list", [li…], {ordered?, start?}] ·
 //           ["li", […], {checked?}] (a tight list's item holds its words, a loose one's its paragraphs) ·
 //           ["table", [tr…], {align}] · tr · th · td · hr
 //   inline  b · i · s · ["code", {content}] · ["a", […], {href, title?}] · ["img", {src, alt?, title?}] · br
@@ -20,6 +20,7 @@ import { gfmStrikethrough } from "micromark-extension-gfm-strikethrough";
 import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { bareLinks } from "./bareLinks.ts";
+import { ink } from "./highlight.ts";
 
 export type MdNode = string | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
 export type Md = MdNode[];
@@ -83,8 +84,12 @@ function block(n: Node, cx: Cx): MdNode[] {
     }
     case "heading":
       return [["h", inlines(n.children ?? [], cx), { depth: n.depth ?? 1 }]];
-    case "code":
-      return [["pre", n.lang ? { code: n.value ?? "", lang: n.lang } : { code: n.value ?? "" }]];
+    case "code": {
+      const code = n.value ?? "";
+      if (!n.lang) return [["pre", { code }]];
+      const colours = ink(code, n.lang);
+      return [["pre", colours === null ? { code, lang: n.lang } : { code, lang: n.lang, ink: colours }]];
+    }
     case "blockquote":
       return [["quote", blocks(n.children ?? [], cx)]];
     case "list": {

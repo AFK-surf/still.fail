@@ -1,6 +1,7 @@
 // The beginning of an agent's words, for a view that shows only their first lines (a history's fold): what is past
 // them is neither made nor laid out until a reader unfolds it. Nothing here reads Markdown: a client's page takes this
 // file alone (markdown.ts brings the parser).
+import { inkUpTo } from "./highlight.ts";
 import type { Md, MdNode } from "./markdown.ts";
 
 // The widest a line is taken to be, in Latin letters (a wide character, CJK, counts two): no narrower than any view
@@ -56,7 +57,13 @@ function block(node: MdNode, room: number, per: number): Taken {
     // A chart is drawn from all of its words or not at all.
     if (rows.length <= room || String(a.lang ?? "").toLowerCase() === "mermaid") return { node, lines: rows.length, cut: false };
     const n = Math.ceil(room);
-    return { node: ["pre", { ...a, code: rows.slice(0, n).join("\n") }], lines: n, cut: true };
+    const head = rows.slice(0, n).join("\n");
+    // Its colours as far as it goes.
+    const ink = typeof a.ink === "string" ? inkUpTo(a.ink, head.length) : null;
+    const cut: Record<string, unknown> = { ...a, code: head };
+    if (ink === null) delete cut.ink;
+    else cut.ink = ink;
+    return { node: ["pre", cut], lines: n, cut: true };
   }
   // A row of a table is whole or not there.
   if (kind === "tr" || kind === "hr") return { node, lines: kind === "tr" ? 1 : 0, cut: false };

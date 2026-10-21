@@ -4,7 +4,7 @@ import { fadeInKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { btn } from "@stillfail/ui/styles/controls.css.ts";
 import { enrollWait } from "./cloud/settings.css.ts";
 import { avatarTile, tokenGuide } from "./pages/SlackApp.css.ts";
-import { codeBar, codeBlock, codeShiki } from "./Prose.css.ts";
+import { codeBar, codeBlock } from "./Prose.css.ts";
 import { iconBtn } from "@stillfail/ui/styles/page.css.ts";
 import { segmented, segmentedOption } from "@stillfail/ui/parts.css.ts";
 import { pictureGlass } from "@stillfail/ui/styles/glass.ts";
@@ -224,7 +224,7 @@ globalStyle(`${fpZoom} ${iconBtn}:disabled`, { opacity: ".35", cursor: "default"
 globalStyle(`${fpAudio} audio`, { width: "100%" });
 globalStyle(`${fpCode} ${codeBlock}`, { margin: "0", border: "0", borderRadius: "0", background: "none" });
 globalStyle(`${fpCode} ${codeBar}`, { display: "none" });
-globalStyle(`${fpCode} pre, ${fpCode} ${codeShiki} pre.shiki`, { padding: "16px 20px", overflow: "visible" });
+globalStyle(`${fpCode} pre`, { padding: "16px 20px", overflow: "visible" });
 globalStyle(`${fpTable} th, ${fpTable} td`, {
   padding: "8px 16px", textAlign: "left", whiteSpace: "nowrap", maxWidth: "420px", overflow: "hidden",
   textOverflow: "ellipsis",

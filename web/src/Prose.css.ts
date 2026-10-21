@@ -1,5 +1,5 @@
 // Markdown's own parts.
-import { globalStyle, style } from "@vanilla-extract/css";
+import { globalStyle, style, styleVariants } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { markdown } from "./styles/conversation.css.ts";
 
@@ -56,7 +56,6 @@ export const codeCopy = style({
     "&:hover": { background: vars.hover, color: vars.text },
   },
 });
-export const codeShiki = style({});
 /**
  * A table in its own sideways scroll: the message's `overflow-wrap: anywhere` would else break its cells' words to fit.
  * Framed as a card (its corners, a faint ground), the rows ruled between them only.
@@ -71,15 +70,30 @@ globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", mi
 globalStyle(`${markdown} ${codeBlock} pre`, {
   margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textMeta, lineHeight: "1.55",
 });
-globalStyle(`${codeShiki} pre.shiki`, {
-  margin: "0", padding: "10px 12px", background: "none !important", overflow: "auto", fontSize: vars.textMeta,
-  lineHeight: "1.55",
-});
-// Dark: vitesse-dark's colours, which Shiki puts in `--shiki-dark` beside the light ones it writes inline.
-const shikiDark = { color: "var(--shiki-dark) !important" };
-globalStyle(`:root[data-theme="dark"] ${codeShiki} .shiki, :root[data-theme="dark"] ${codeShiki} .shiki span`, shikiDark);
-globalStyle(`:root:not([data-theme="light"]) ${codeShiki} .shiki, :root:not([data-theme="light"]) ${codeShiki} .shiki span`, {
-  "@media": { "(prefers-color-scheme: dark)": shikiDark },
-});
-globalStyle(`${codeShiki} pre.shiki code`, { fontFamily: vars.fontMono, padding: "0", background: "none" });
-globalStyle(`${markdown} ${codeBlock} pre, ${codeShiki} pre.shiki`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });
+/** Code's colours by what each piece is (the letters of the core's `ink`, client/core-ts/src/highlight.ts SCOPES):
+ * vitesse-light's, and vitesse-dark's on a dark page, as Shiki gave them. */
+const INK: Record<string, [light: string, dark: string]> = {
+  a: ["#393A34", "#DBD7CAEE"], // text
+  b: ["#A0ADA0", "#758575DD"], // comment
+  c: ["#999999", "#666666"], // punctuation
+  d: ["#B56959", "#C98A7D"], // string
+  e: ["#B5695977", "#C98A7D77"], // a string's quotes
+  f: ["#2F798A", "#4C9A91"], // number
+  g: ["#1E754F", "#4D9375"], // keyword, constant.language, a tag
+  h: ["#AB5959", "#CB7676"], // storage, keyword.operator, null
+  i: ["#59873A", "#80A665"], // function
+  j: ["#B07D48", "#BD976A"], // variable
+  k: ["#A65E2B", "#C99076"], // constant, this, an option
+  l: ["#2E8F82", "#5DA994"], // type
+  m: ["#998418", "#B8A965"], // property, support
+  n: ["#99841877", "#B8A96577"], // a property's quotes
+  o: ["#22863A", "#85E89D"], // a diff's line added
+  p: ["#B31D28", "#FDAEB7"], // a diff's line removed
+  q: ["#6F42C1", "#B392F0"], // a hunk's range
+};
+export const ink = styleVariants(INK, ([light, dark]) => ({
+  color: light,
+  selectors: { ':root[data-theme="dark"] &': { color: dark } },
+  "@media": { "(prefers-color-scheme: dark)": { selectors: { ':root:not([data-theme="light"]) &': { color: dark } } } },
+}));
+globalStyle(`${markdown} ${codeBlock} pre`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });

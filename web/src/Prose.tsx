@@ -1,12 +1,11 @@
-// Markdown as ember shows it: GitHub-flavoured, code blocks highlighted by
-// Shiki (VS Code's grammars) with their language named and a copy button.
-// Grammars load on demand, one chunk per language, with Shiki's JavaScript
-// regex engine so no wasm is fetched.
+// Markdown as ember shows it: GitHub-flavoured, code blocks in the colours the
+// core says (`code.ink`, client/core-ts/src/highlight.ts: vitesse light and
+// dark, as every client paints them) with their language named and a copy
+// button.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
 import { Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { HighlighterCore } from "shiki/core";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -17,6 +16,8 @@ import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
 import { nameOf, placeFiles } from "../../client/core-ts/src/placed.ts";
+import { runsOf } from "../../client/core-ts/src/highlight.ts";
+import { core } from "./core/react.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
@@ -44,35 +45,16 @@ function linkBare() {
   };
 }
 
-let highlighter: Promise<HighlighterCore> | null = null;
-/** Light and dark at once (Shiki's dual themes): light inline, dark as `--shiki-dark` vars the dark page picks (Prose.css.ts). */
-const THEMES = { light: "vitesse-light", dark: "vitesse-dark" } as const;
+const inks = new Map<string, string | null>();
 
-function getHighlighter(): Promise<HighlighterCore> {
-  highlighter ??= (async () => {
-    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
-    return createHighlighterCore({ themes: [import("shiki/themes/vitesse-light.mjs"), import("shiki/themes/vitesse-dark.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
-  })();
-  return highlighter;
-}
-
-const cache = new Map<string, string>();
-
-/** Highlighted HTML for a block, or null when the language is unknown to Shiki. */
-async function highlight(code: string, language: string): Promise<string | null> {
+/** The colours of a block of code (its `ink`), the core's: null when it shows as it is. */
+async function inkOf(code: string, language: string): Promise<string | null> {
   const key = `${language}\n${code}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const { bundledLanguages } = await import("shiki/langs");
-  const lang = language.toLowerCase();
-  const load = bundledLanguages[lang as keyof typeof bundledLanguages];
-  if (!load) return null;
-  const h = await getHighlighter();
-  if (!h.getLoadedLanguages().includes(lang)) await h.loadLanguage(load);
-  const html = h.codeToHtml(code, { lang, themes: THEMES });
-  if (cache.size > 300) cache.delete(cache.keys().next().value!);
-  cache.set(key, html);
-  return html;
+  if (inks.has(key)) return inks.get(key)!;
+  const { ink } = (await core().call("code.ink", { code, lang: language })) as { ink: string | null };
+  if (inks.size > 300) inks.delete(inks.keys().next().value!);
+  inks.set(key, ink);
+  return ink;
 }
 
 /** The plain text of rendered children. */
@@ -92,25 +74,27 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   return <Code text={text} language={language} />;
 }
 
-/** A block of code as markdown shows one: highlighted when its language is known (a name or a file extension Shiki knows), with a copy button. */
-export function Code({ text, language }: { text: string; language?: string | undefined }) {
+/** A block of code as markdown shows one: in the colours the core says of its language (`ink`, the core's Markdown's own
+ * where it read it, else asked of it), with a copy button. */
+export function Code({ text, language, ink }: { text: string; language?: string | undefined; ink?: string | null | undefined }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
-  const [html, setHtml] = useState<string | null>(null);
+  const [asked, setAsked] = useState<{ key: string; ink: string | null } | null>(null);
+  const key = `${language}\n${text}`;
   useEffect(() => {
-    if (!language) return;
+    if (!language || ink !== undefined) return;
     let live = true;
-    // While a reply streams the block keeps changing; highlight once it settles.
-    const timer = setTimeout(() => void highlight(text, language).then((h) => { if (live) setHtml(h); }, () => {}), cache.has(`${language}\n${text}`) ? 0 : 120);
+    // While a reply streams the block keeps changing; asked of once it settles.
+    const timer = setTimeout(() => void inkOf(text, language).then((i) => { if (live) setAsked({ key: `${language}\n${text}`, ink: i }); }, () => {}), inks.has(key) ? 0 : 120);
     return () => { live = false; clearTimeout(timer); };
-  }, [language, text]);
+  }, [language, text, ink, key]);
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   };
-  const current = html && cache.get(`${language}\n${text}`) === html ? html : null;
+  const current = ink !== undefined ? ink : asked?.key === key ? asked.ink : (inks.get(key) ?? null);
   return (
     <div className={css.codeBlock}>
       <div className={css.codeBar}>
@@ -119,7 +103,7 @@ export function Code({ text, language }: { text: string; language?: string | und
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
-      {current ? <div className={css.codeShiki} dangerouslySetInnerHTML={{ __html: current }} /> : <pre><code>{text}</code></pre>}
+      <pre><code>{current ? runsOf(text, current).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
     </div>
   );
 }
@@ -285,7 +269,7 @@ function drawMd(node: MdNode, key: number): ReactNode {
       const code = str(a.code) ?? "";
       const language = str(a.lang);
       // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
-      return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} />;
+      return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} ink={str(a.ink) ?? null} />;
     }
     case "quote": return <blockquote key={key}>{kids()}</blockquote>;
     case "list": {

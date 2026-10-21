@@ -21,7 +21,7 @@ test("mdHead_cuts_within_a_long_paragraph_a_list_a_code_block_and_a_table", () =
   assert.deepEqual(mdHead(parse("字".repeat(5000)), 8), [["p", ["字".repeat(8 * 80)]]]);
   const list = mdHead(parse(Array.from({ length: 30 }, (_, i) => `- 项 ${i}`).join("\n")), 8)!;
   assert.equal((list[0] as [string, unknown[]])[1].length, 8);
-  assert.deepEqual(mdHead(parse("```ts\n" + Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") + "\n```"), 3), [["pre", { code: "line 0\nline 1\nline 2", lang: "ts" }]]);
+  assert.deepEqual(mdHead(parse("```ts\n" + Array.from({ length: 40 }, (_, i) => `line ${i}`).join("\n") + "\n```"), 3), [["pre", { code: "line 0\nline 1\nline 2", lang: "ts", ink: "j5f2j5f2j5f" }]]);
   const table = mdHead(parse("| a |\n|--|\n" + Array.from({ length: 30 }, (_, i) => `| ${i} |`).join("\n")), 8)!;
   assert.equal((table[0] as [string, unknown[], unknown])[1].length, 8);
   assert.deepEqual((table[0] as [string, unknown[], unknown])[2], { align: [null] });

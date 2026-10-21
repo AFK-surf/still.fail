@@ -17,6 +17,8 @@ import { useToast } from "@stillfail/ui/toast.tsx";
 import { ComposerExtras, FileCard, MineBubble, MineMessage } from "../src/Chat.tsx";
 import type { Draft, Pending } from "../src/draft.ts";
 import * as composerCss from "../src/styles/composer.css.ts";
+import * as conversationCss from "../src/styles/conversation.css.ts";
+import { MdView } from "../src/Prose.tsx";
 import {
   AgentMark, Button, Choices, Confirm, CopyCommand, Dialog, Empty, Field, IconButton, Menu, ModelLogo, PanelButton, PanelGroup,
   PanelHead, PanelIconButton, PanelRow, PanelText, Pill, Progress, RuntimeTags, Section, Segmented, Select, Spinner, StatusDot, StatusText,
@@ -25,7 +27,7 @@ import {
 import { Archive, Bell, Close, Copy, Download, Edit, Folder, Plus, Refresh, Search, Trash } from "@stillfail/ui/icons.tsx";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
-import { AT, apk, clips, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, loginsView, MEMBERSHIPS, note, NOTE, novel, picture, SCREENS, VIEWER_LOGIN } from "./data.ts";
+import { AT, apk, clips, CODE_COLOURS, folder, HISTORY, JOIN_REFUSED, JOINABLE, LOGINS, loginsView, MEMBERSHIPS, note, NOTE, novel, picture, SCREENS, VIEWER_LOGIN } from "./data.ts";
 import { LoginCard, LoginsSection } from "../src/MachineLogins.tsx";
 import * as pagesCss from "../src/styles/pages.css.ts";
 import type { DemoExtension } from "../src/demo/mount.tsx";
@@ -660,6 +662,7 @@ export const stories: Story[] = [
   },
 
   { id: "composer-cards", group: "对话", title: "输入框里的附件", render: () => stage(<ComposerCards />) },
+  { id: "code-colours", group: "对话", title: "代码块 · 各语言的颜色", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, padding: 24 }}><MdView md={CODE_COLOURS} /></div>) },
   { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
   { id: "runtime-missing", group: "对话", title: "缺少运行时 · 安装", app: true, demo: installDemo("missing") },
   { id: "runtime-installing", group: "对话", title: "缺少运行时 · 正在安装", app: true, demo: installDemo("installing") },
