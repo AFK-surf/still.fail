@@ -375,8 +375,9 @@ if [ $full = 1 ]; then
     prep station deps station
     step "typecheck: station" after station sh -c 'cd station && pnpm exec tsgo --noEmit'
     # The station's time is its Clock's (docs/station-ts.md, 写法): the machine's only through ops/fibers.ts' wall. Cursor's
-    # driver (agents/cursor-bridge.mjs) runs in the agent's own process, not the station's.
-    step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs"'
+    # driver (agents/cursor-bridge.mjs) and the sandbox bridge (agents/sandbox-bridge.mjs) run in processes of their own,
+    # not the station's.
+    step "station: time through its clock" sh -c '! git grep -nE "Date\.now\(|new Date\(\)|setTimeout\(|setInterval\(" -- station/src ":!station/src/ops/fibers.ts" ":!station/src/agents/cursor-bridge.mjs" ":!station/src/agents/sandbox-bridge.mjs"'
     remembered "tests: station" "station client/i18n vendor scripts/native.ts" after station sh -c 'cd station && pnpm test'
   fi
   # The media app's (media/): its service's tests, its core module's, and the two end to end beside the station's module

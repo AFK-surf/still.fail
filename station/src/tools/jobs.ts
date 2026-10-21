@@ -5,6 +5,7 @@ import { type Jobs, LOG_LINES, named, tail } from "../jobs/jobs.ts";
 import { joinPath } from "../ops/paths.ts";
 import type { Places } from "../ops/places.ts";
 import type { JobRow } from "../store/store.ts";
+import { sizeName } from "../agents/sandbox.ts";
 import type { Tool } from "./mcp.ts";
 
 export const JOB_START_DESCRIPTION =
@@ -26,6 +27,10 @@ function owned(jobs: Jobs, key: string, args: Record<string, unknown>): JobRow {
 }
 
 
+/// What a job's size is for, as its agent reads it.
+export const SIZE_DESCRIPTION =
+  "Only on a station that runs its jobs in sandboxes: one of the sizes the sandboxes' operator offers, by name (`ssh _@HOST help` there lists them, e.g. large), for a sandbox of this job's own of that size, made for it and deleted after it has been idle. For a build or test too large for the session's sandbox. It sees the same files. Ask a person in the chat first (a card with the size and why), and start it only once they agree: a larger sandbox takes capacity others need.";
+
 /// `workspace`: a session's workspace directory (its record's), null for a session there is not. `places`: how a cwd
 /// given is looked at (ops/places.ts: never on the station's thread in a folder macOS protects).
 export function jobTools(jobs: Jobs, workspace: (session: string) => string | null, places?: Places): Tool[] {
@@ -41,6 +46,7 @@ export function jobTools(jobs: Jobs, workspace: (session: string) => string | nu
           cwd: { type: "string", description: "Where it runs; default this session's workspace." },
           port: { type: "integer", minimum: 1024, maximum: 65535, description: "For a web service: the port it listens on (127.0.0.1 is enough)." },
           watch: { type: "boolean", description: "It keeps watch for a long while (see above). Not with a port." },
+          size: { type: "string", description: SIZE_DESCRIPTION },
         },
         required: ["command"],
         additionalProperties: false,
@@ -57,10 +63,12 @@ export function jobTools(jobs: Jobs, workspace: (session: string) => string | nu
           port = p;
         }
         const watch = args.watch === true;
+        const size = text(args, "size").trim();
+        if (size !== "" && !sizeName(size)) throw new Error("size is the name of one of the sandboxes' sizes (lowercase letters, digits and -)");
         // A directory given is looked at first, as ops/places.ts does; the job itself runs there as the station's
         // launcher does (macOS may keep it out of a protected folder, as any of the agent's commands).
         if (places && given !== "") await places.directory(cwd, { lang: "en", agent: true });
-        const job = jobs.start(key, text(args, "name"), text(args, "command"), cwd, port, watch, places !== undefined && given !== "");
+        const job = jobs.start(key, text(args, "name"), text(args, "command"), cwd, port, watch, places !== undefined && given !== "", size === "" ? null : size);
         return pretty(jobs.view(job));
       },
     },
