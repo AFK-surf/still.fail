@@ -225,7 +225,8 @@ fn home_page(
   c.box(w=Fill(1.0), h=Fill(1.0), fn() {
     let li = c.list(key, list.length(), 66.0, fn(i) {
       match list[i] {
-        Top => c.box(h=Px(bar_h + 8.0), fn() {  }) |> ignore
+        // under the top bar, the status bar's height and its own (Home.kt padding: topBar + 8)
+        Top => c.box(h=Px(status_top() + bar_h + 8.0), fn() {  }) |> ignore
         Search => search_field(c)
         News => changelog_news(c, src)
         Wait(n, note, error) => waiting(c, n, note, error)
@@ -238,8 +239,8 @@ fn home_page(
         Header(label) => moving(c, lid, key, keys[i], section_header(c, label))
         Row(item) =>
           moving(c, lid, key, keys[i], chat_row(c, src, item, lead, lifted=@motion.lifted(c, lid, key + "\u{1}" + keys[i])))
-        // room for the bottom bar (Home.kt: LocalBarRoom)
-        Foot => c.box(h=Px(bar_room), fn() {  }) |> ignore
+        // room for the bottom bar over the navigation bar (Home.kt: navigationBars + LocalBarRoom)
+        Foot => c.box(h=Px(nav_foot() + bar_room), fn() {  }) |> ignore
       }
     })
     // the list's first time with its rows: at its first row, the search above it out of view, there once scrolled to
@@ -247,7 +248,7 @@ fn home_page(
     if !home_placed.contains(key) {
       home_placed[key] = true
       if list.search_by(fn(it) { it is Search }) is Some(at) {
-        c.list_scroll_to(key, at + 1, offset=-(bar_h + 8.0))
+        c.list_scroll_to(key, at + 1, offset=-(status_top() + bar_h + 8.0))
       }
     }
     if away > 0.0 {
@@ -278,7 +279,8 @@ fn top_bar(
   let t = @sf.theme()
   // frosted glass over the list (the page's paper at 70% over a 24px blur), a hairline under it
   c.box(w=Fill(1.0), glass=@sf.glass_bar(), fn() {
-    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
+    // under the status bar (PlacePage.kt TopGlassBar: windowInsetsPadding(statusBars), then 8)
+    c.box(dir=Row, w=Fill(1.0), pl=16.0, pr=16.0, pt=status_top() + 8.0, pb=8.0, gap=10.0, align=ACenter, fn() {
       if nav_button(c, "settings", 22.0, key="home-settings") {
         app.nav.push(Settings)
       }

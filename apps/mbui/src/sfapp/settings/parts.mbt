@@ -38,7 +38,18 @@ fn scroll_page(c : @ui.Ctx, key : String, blocks : Array[() -> Unit]) -> Unit {
     |> ignore
     return
   }
-  c.list("settings/" + key, blocks.length(), 80.0, fn(i) { (blocks[i])() }) |> ignore
+  // what it shows ends over the navigation bar (SettingParts.kt pages: windowInsetsPadding(navigationBars)), and at a
+  // place's top, over the bottom bar too (Stations.kt BarRoom)
+  let foot = nav_foot.val + (if at_root.val { bar_room.val } else { 0.0 })
+  let n = blocks.length() + (if foot > 0.0 { 1 } else { 0 })
+  c.list("settings/" + key, n, 80.0, fn(i) {
+    if i == blocks.length() {
+      gap(c, foot)
+    } else {
+      (blocks[i])()
+    }
+  })
+  |> ignore
   fixture_scroll(c, "settings/" + key)
 }
 
@@ -124,6 +135,10 @@ fn top_back(c : @ui.Ctx, core : Core, label : String, trailing? : () -> Unit) ->
     top_label.val = label
     return
   }
+  // under the status bar (TopBack: windowInsetsPadding(statusBars))
+  if status_top.val > 0.0 {
+    gap(c, status_top.val)
+  }
   c.box(style=top_back_line, fn() {
     if nav_back(c, label) {
       (core.pop)()
@@ -179,13 +194,33 @@ fn nav_bar(
     }
     return
   }
-  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg) {
+  if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg, top=status_top.val) {
     match on_back {
       Some(f) => f()
       None => (core.pop)()
     }
   }
 }
+
+///|
+/// How far the status bar and the navigation bar reach in over the view (the app's, src/sfapp/bars.mbt, said each frame):
+/// what a page's bar and its foot are padded by.
+pub let status_top : Ref[Double] = Ref(0.0)
+
+///|
+pub let nav_foot : Ref[Double] = Ref(0.0)
+
+///|
+/// A bar's room, `h` high (none when it is 0): the status bar's over a page, the navigation bar's under it.
+fn bar_room_gap(c : @ui.Ctx, h : Double) -> Unit {
+  if h > 0.0 {
+    c.box(style=@ui.style(w=Full, h=Fixed(h)), fn() {  }) |> ignore
+  }
+}
+
+///|
+/// The room a place's top page keeps at its foot for the bottom bar (App.kt LocalBarRoom: none on a wide screen).
+pub let bar_room : Ref[Double] = Ref(0.0)
 
 ///|
 /// Whether the page being drawn is a place of the bottom bar's at the stack's root (`page`'s `root`).

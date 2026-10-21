@@ -249,7 +249,8 @@ pub fn service_page(c : @ui.Ctx, src : Source, station : String, job : String) -
   }
   let port = number(j, "port").to_int()
   let up = j is Some(Object(_)) && port > 0 && flag(j, "open")
-  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
+  // over the navigation bar (Preview.kt: windowInsetsPadding(keyboard.union(navigationBars)))
+  c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, pb=nav_foot(), fn() {
     service_bar(c, name, station_name(src, station))
     match (j, found.error) {
       (None, Some(e)) | (Some(Null), Some(e)) =>
@@ -295,11 +296,11 @@ let note_words : @ui.TextStyle = @ui.text_style(size=Sm, color=Muted, center=tru
 fn service_bar(c : @ui.Ctx, title : String, station : String) -> Unit {
   let t = @sf.theme()
   let went = if station != "" {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, sub=fn() {
+    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top(), sub=fn() {
       c.text(station, size=11.0, color=t.p.muted, wrap=false) |> ignore
     })
   } else {
-    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title)
+    @sf.nav_bar(c, "service/back", svc("android-chat.preview.back"), title, top=status_top())
   }
   if went {
     app.nav.pop() |> ignore
@@ -1907,7 +1908,8 @@ priv struct FilePage {
 /// `file:` service): the file served to the preview's page from here, with what its widget kept (and keeps from now
 /// on); its bar has only its name.
 fn preview_file_page(c : @ui.Ctx, src : Source, station : String, key : String, path : String, name : String) -> Unit {
-  c.box(style=file_view_page, fn() {
+  // over the navigation bar (Preview.kt: windowInsetsPadding(keyboard.union(navigationBars)))
+  within_bars(c, top=false, ground=file_view_page, fn() { c.box(style=bars_fill, fn() {
     service_bar(c, name, station_name(src, station))
     match viz_load(c, src, station, key, path) {
       Some(Err(_)) => service_note(c, viz_tr("android-chat.preview.unreadable", args=[("name", name)]))
@@ -1927,7 +1929,7 @@ fn preview_file_page(c : @ui.Ctx, src : Source, station : String, key : String, 
       }
     }
   })
-  |> ignore
+  |> ignore })
 }
 
 ///|

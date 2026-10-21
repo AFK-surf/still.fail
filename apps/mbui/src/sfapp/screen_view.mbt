@@ -143,7 +143,8 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
   screen_keys_in(c, s, u, kc.keys)
   let (ww, wh) = c.window_size()
   let sideways = ww > wh
-  c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
+  // inside the bars unless full (ScreenViewer.kt: windowInsetsPadding(safeDrawing); full, edge to edge)
+  within_bars(c, top=!u.full, foot=!u.full, ground=if u.full { bars_fill } else { screen_page_box }, fn() { c.box(style=if u.full { screen_page_full } else { screen_page_box }, fn() {
     if u.full {
       c.box(style=screen_fill, fn() {
         screen_stage(c, s, u, key)
@@ -202,7 +203,7 @@ fn screen_page(c : @ui.Ctx, src : Source, station : String, screen : String, tit
       }
     }
   })
-  |> ignore
+  |> ignore })
 }
 
 ///|

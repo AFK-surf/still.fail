@@ -232,7 +232,8 @@ fn reset() -> Unit {
   share_in.query = ""
   share_in.find.set("")
   share_over.val = false
-  share_foot.val = 0.0
+  bars_top.val = 0.0
+  bars_foot.val = 0.0
   share_closing.val = false
   update.available = None
   update.asked = false
@@ -399,6 +400,9 @@ pub fn view(c : @ui.Ctx, src : Source) -> Unit {
   // a desktop's width: the web app's wide frame (wide.mbt); below it the phone's pages
   wide_on.val = is_wide(c)
   @settings.wide.val = wide_on.val
+  @settings.status_top.val = status_top()
+  @settings.nav_foot.val = nav_foot()
+  @settings.bar_room.val = if wide_on.val { 0.0 } else { bar_room }
   track_press(c)
   linger_tick(c, src)
   // the screens live in their cards (screen_links.mbt): which are on the screen, their frames acknowledged
@@ -627,6 +631,19 @@ fn page_view(
         History(r, key, entry) => history_page(c, src, r, key, entry)
         Words(head, words) => words_page(c, src, head, words)
         Screen(at) => screen_page(c, src, at.station, at.screen, at.title)
+      }
+      // the page runs under the status bar; it keeps the paper behind its icons, moving with it (App.kt: the list, a
+      // place's top page with the bar and a chat have frosted bars there instead; a book and a film their own)
+      let own_top = match page {
+        Home | Chat(_) | NewChat | DriveRead(_) | DrivePlay(_) => true
+        Place(_) | Files | Decisions => root
+        _ => false
+      }
+      if !own_top && status_top() > 0.0 {
+        c.layer(fn() {
+          c.box(style=@ui.style(w=Full, h=Fixed(status_top()), bg=Bg), fn() {  }) |> ignore
+        })
+        |> ignore
       }
     },
   )
@@ -879,8 +896,8 @@ let told_dark : Ref[Bool?] = Ref(None)
 fn toast(c : @ui.Ctx) -> Unit {
   let t = @sf.theme()
   let said = if app.toast != "" { [@kit.toast("t\{app.toast_n}", app.toast)] } else { [] }
-  // (over another app, above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
-  let foot = if share_over.val { share_foot.val } else { 0.0 }
+  // (above the navigation bar the view reaches under: Sheet.kt's navigationBars padding)
+  let foot = nav_foot()
   let r = @kit.toaster(c, "toast", said, duration=toast_ms, bottom=90.0 + foot, look=fn(c, s, _action, _close) {
     let k = if s.t > 1.0 { 1.0 } else if s.t < 0.0 { 0.0 } else { s.t }
     c.box(padx=16.0, pady=10.0, bg=t.p.text, radius=18.0, opacity=k, tx=s.dx, fn() {
@@ -971,6 +988,12 @@ let splash_waited : Ref[Bool] = { val: false }
 ///|
 /// Signed out (SignIn.kt SignInScreen): the illustration, what still.fail is for, and 登录或注册.
 fn sign_in_page(c : @ui.Ctx, src : Source) -> Unit {
+  // inside the bars (SignIn.kt: windowInsetsPadding(systemBars))
+  within_bars(c, fn() { sign_in_body(c, src) })
+}
+
+///|
+fn sign_in_body(c : @ui.Ctx, src : Source) -> Unit {
   let t = @sf.theme()
   let busy = (src.signing_in)()
   c.box(
@@ -1159,10 +1182,11 @@ fn system_said(json : String) -> Unit {
     Some(False) => share_over.val = false
     _ => ()
   }
-  // over another app, how far the bars reach in over the view (share.mbt share_foot)
+  // how far the bars reach in over the view (bars.mbt): edge to edge, or over another app
   let bars = field(Some(v), "bars")
   if bars is Some(Object(_)) {
-    share_foot.val = number(bars, "bottom")
+    bars_top.val = number(bars, "top")
+    bars_foot.val = number(bars, "bottom")
   }
   let src = match attention.src {
     Some(s) => s

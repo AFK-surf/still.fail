@@ -106,6 +106,7 @@
         <meta-data android:name="dev.mbui.env" android:value="${mbuiEnv}" />
         <!-- what shows under the system bars, light and dark (mbui's MainActivity): the page's paper (src/sf tokens) -->
         <meta-data android:name="dev.mbui.ground" android:value="#F5F3EF,#1B1C1F" />
+        <meta-data android:name="dev.mbui.edge" android:value="true" />
         <!-- The core's JS sampled for a while, asked from adb (CoreProfileReceiver.java): the shell holds DUMP, apps do not. -->
         <receiver android:name=".CoreProfileReceiver" android:exported="true" android:permission="android.permission.DUMP" />
         <service android:name=".LoginService" android:exported="false" android:foregroundServiceType="specialUse">

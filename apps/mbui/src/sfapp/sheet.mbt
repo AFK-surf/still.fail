@@ -118,10 +118,10 @@ fn sheet_layer(c : @ui.Ctx, content : (SheetKind) -> Unit) -> Unit {
     look=if share_over.val { @sf.sheet_look(ground=@sf.theme().p.bg) } else { @sf.sheet_look() },
     fn() {
       content(kind)
-      // over another app the view reaches under the navigation bar: what the sheet shows kept above it, the sheet's
-      // ground going on down to the screen's foot (Sheet.kt: windowInsetsPadding(navigationBars) inside the sheet)
-      if share_over.val && share_foot.val > 0.0 {
-        c.box(style=@ui.style(w=Full, h=Fixed(share_foot.val)), fn() {  }) |> ignore
+      // the view reaches under the navigation bar: what the sheet shows kept above it, the sheet's ground going on down
+      // to the screen's foot (Sheet.kt: windowInsetsPadding(keyboard.union(navigationBars)) inside the sheet)
+      if nav_foot() > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(nav_foot())), fn() {  }) |> ignore
       }
     },
   )

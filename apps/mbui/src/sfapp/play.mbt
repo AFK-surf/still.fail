@@ -176,7 +176,7 @@ pub fn play_page(c : @ui.Ctx, src : Source, at : DriveAt) -> Unit {
     .map(fn(e) { e.name }),
     fn(_) { true },
   )
-  pl.player.view(c, list~, fn() { app.nav.pop() |> ignore }, fn(other) {
+  pl.player.view(c, list~, top=status_top(), foot=nav_foot(), fn() { app.nav.pop() |> ignore }, fn(other) {
     app.nav.replace(DrivePlay({ station: at.station, root: at.root, path: dv_join(dir, other) }))
   })
 }

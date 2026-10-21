@@ -323,7 +323,7 @@ fn pick_layer(c : @ui.Ctx, src : Source, r : ChatRef) -> Unit {
   }
   // over the passage; under it (clear of the end's knob) when the bar over the list is too near; on the screen when
   // the passage runs past it
-  let top = chat_bar_h + 8.0
+  let top = status_top() + chat_bar_h + 8.0
   let over = first.1 - 52.0
   let y = if over < top { last.1 + last.3 + 28.0 } else { over }
   let y = dmax(top, dmin(y, dmax(c.height - composer_room_of(c) - 48.0, top)))

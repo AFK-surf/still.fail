@@ -369,12 +369,14 @@ fn Player::seek_by(self : Player, s : Status, delta : Double) -> Unit {
 
 ///|
 /// The player over the whole page: the picture (or a song's mark), what is said over it, its bars. `list`: the
-/// folder's playable names in order (empty: it alone), the one playing among them; `on_back` leaves, `on_open(name)`
-/// plays another of them.
+/// folder's playable names in order (empty: it alone), the one playing among them; `top` and `foot` how far the system
+/// bars reach in over the page (its bars kept off them); `on_back` leaves, `on_open(name)` plays another of them.
 pub fn Player::view(
   self : Player,
   c : @ui.Ctx,
   list? : Array[String] = [],
+  top? : Double = 0.0,
+  foot? : Double = 0.0,
   on_back : () -> Unit,
   on_open : (String) -> Unit,
 ) -> Unit {
@@ -592,6 +594,10 @@ pub fn Player::view(
     }
     // the bar at the top: back, the name, which of the folder's it is
     c.layer(fn() {
+      // under the status bar, `top` (Player.kt: windowInsetsPadding(statusBars), then 6)
+      if top > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(top)), fn() {  }) |> ignore
+      }
       c.box(w=Fill(1.0), padx=8.0, pady=6.0, opacity=shown, fn() {
         c.box(dir=Row, w=Fill(1.0), h=Px(48.0), radius=16.0, bg=glass, pl=4.0, pr=14.0, align=ACenter, fn() {
           if key_button(c, p.key + "/back", "chevron-left", on) {
@@ -621,10 +627,14 @@ pub fn Player::view(
     // the controls at the foot
     c.layer(fn() {
       c.spacer()
+      // over the navigation bar, `foot` (Player.kt: windowInsetsPadding(navigationBars), then 8)
       c.box(w=Fill(1.0), padx=8.0, pady=8.0, align=ACenter, opacity=shown, fn() {
         p.controls(c, s, phase, audio, on, glass, list, prev, next, on_open)
       })
       |> ignore
+      if foot > 0.0 {
+        c.box(style=@ui.style(w=Full, h=Fixed(foot)), fn() {  }) |> ignore
+      }
     })
     |> ignore
   })
