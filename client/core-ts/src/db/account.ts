@@ -407,6 +407,7 @@ export class AccountDb {
 
   #tellLog(table: string, station: string, id: string): void {
     this.#changes.logs.set(K(table, station, id), [table, station, id]);
+    if (table === "slack") this.#slackNames.delete(station);
   }
 
   close(): void {
@@ -1537,6 +1538,20 @@ export class AccountDb {
       }));
   }
 
+  /// The Slack people a station's agents were given messages from, by Slack id: their names as last heard. Kept until
+  /// `slack_said` changes.
+  #slackNames = new Map<string, [string, string][]>();
+  slackNames(station: string): [string, string][] {
+    if (!this.#hasSlackSaid()) return [];
+    let names = this.#slackNames.get(station);
+    if (names === undefined) {
+      const rows = this.sql.all("SELECT user, who FROM slack_said WHERE station = ? AND out = 0 AND user IS NOT NULL AND who IS NOT NULL AND who != '' ORDER BY at", [station]);
+      names = [...new Map(rows.map((r) => [String(r[0]), String(r[1])])).entries()];
+      this.#slackNames.set(station, names);
+    }
+    return names;
+  }
+
   #forgetEntries(station: string, thread: number): void {
     if (this.sql.run("DELETE FROM entry WHERE station = ? AND thread = ?", [station, thread]) > 0) this.#tellLog("entry", station, String(thread));
   }
@@ -1660,6 +1675,7 @@ export class AccountDb {
       }
       if (this.sql.all("SELECT 1 FROM sqlite_master WHERE name = 'log_use'").length > 0) this.sql.run("DELETE FROM log_use WHERE station = ?", [station]);
       if (this.#hasSlackSaid()) this.sql.run("DELETE FROM slack_said WHERE station = ?", [station]);
+      this.#slackNames.delete(station);
       if (this.#filesKept) this.sql.run("DELETE FROM file_kept WHERE station = ?", [station]);
       for (const key of [...this.#evicted]) if (key.split("\u0001")[1] === station) this.#evicted.delete(key);
       this.#cache.clear();

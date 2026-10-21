@@ -1517,14 +1517,14 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   t.set(sessions("ws/a"), [fullSession("k", { connect: "ember" })]);
   t.set(threads("ws/a"), [thread(7, ["k"], now)]);
   const said = (n: number, at: number, text: string) => ({ ...entry(n, text), at });
-  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [said(1, 1000, "发到 ops 说一声"), { ...said(2, 3000, "发了"), authorKind: "agent", author: "k" }], thread: null });
+  t.set(pageOf("ws/a", 7), { first: 1, last: 2, entries: [said(1, 1000, "发到 ops 说一声"), { ...said(2, 3000, "<@U9> 发了"), authorKind: "agent", author: "k" }], thread: null });
   const call = (tool: string, args: J, at: string, callId: string) => ({ at, kind: "tool_call", tool, text: JSON.stringify(args), callId });
   t.data.putItems("transcript", "ws/a", "k", [
     [0, call("mcp__stillfail__chat_post", { to: "C0OPS/1727.0001", text: "*部署* 好了 <https://x.y|看这里>" }, "1970-01-01T00:00:02Z", "c1")],
     [1, { at: "1970-01-01T00:00:02Z", kind: "tool_result", text: "posted", ok: true, callId: "c1" }],
     // Its own chat's words are its messages already; what goes to a still.fail chat is not Slack's.
     [2, call("mcp__stillfail__chat_post", { to: "EMBER/1.0", text: "这里" }, "1970-01-01T00:00:02.5Z", "c2")],
-    [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "新话题" } }, "1970-01-01T00:00:04Z", "c3")],
+    [3, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", text: "<@U9> 新话题" } }, "1970-01-01T00:00:04Z", "c3")],
     // What someone said in Slack, given to it.
     [4, { at: "1970-01-01T00:00:05Z", kind: "user", text: '<message via="slack" thread="C0OPS/1727.0001" from="Mia (U9)" ts="2.5">*收到*，<@U9> 看一下</message>' }],
   ]);
@@ -1537,25 +1537,28 @@ test("what_a_chats_agent_sent_to_slack_shows_after_the_message_it_followed_witho
   const agent = sent(v)[0].by.name;
   assert.deepEqual(sent(v).map((s: J) => [s.after, s.text, s.place.name, s.failed, s.received ?? false, s.by.name, s.by.here ?? false]), [
     [1, "**部署** 好了 [看这里](https://x.y)", "#C0OPS", false, false, agent, true],
-    [1, "**收到**，@U9 看一下", "#C0OPS", false, true, "Mia", false],
-    [2, "新话题", "#C0DEV", false, false, agent, true],
+    [1, "**收到**，@Mia 看一下", "#C0OPS", false, true, "Mia", false],
+    [2, "@Mia 新话题", "#C0DEV", false, false, agent, true],
   ]);
   assert.equal(v.messages.length, 2);
+  // Slack people the station's agents heard from are named in what agents say too.
+  assert.equal(v.messages[1].text, "@Mia 发了");
   // The agent's own message: its name opens its history (one of the chat's).
   assert.equal(v.messages[1].by.here, true);
   // Slack's answer gives the new message its thread; one Slack refused failed.
   t.data.putItems("transcript", "ws/a", "k", [
     [5, { at: "1970-01-01T00:00:04Z", kind: "tool_result", text: JSON.stringify({ ok: true, ts: "1727.0002" }), callId: "c3" }],
-    [6, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", thread_ts: "1727.0002", text: "补一句" } }, "1970-01-01T00:00:05Z", "c4")],
+    [6, call("mcp__stillfail__slack_api", { method: "chat.postMessage", params: { channel: "C0DEV", thread_ts: "1727.0002", text: "<@U7> 补一句" } }, "1970-01-01T00:00:05Z", "c4")],
     [7, { at: "1970-01-01T00:00:05Z", kind: "tool_result", text: JSON.stringify({ ok: false, error: "not_in_channel" }), callId: "c4" }],
   ]);
   await t.read(u, 1);
   v = u.value;
   assert.deepEqual(sent(v).map((s: J) => [s.after, s.text, s.failed]), [
     [1, "**部署** 好了 [看这里](https://x.y)", false],
-    [1, "**收到**，@U9 看一下", false],
-    [2, "新话题", false],
-    [2, "补一句", true],
+    [1, "**收到**，@Mia 看一下", false],
+    [2, "@Mia 新话题", false],
+    // Someone none of the station's agents heard from: by their Slack id.
+    [2, "@U7 补一句", true],
   ]);
 });
 
