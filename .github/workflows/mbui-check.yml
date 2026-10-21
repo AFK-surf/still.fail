@@ -148,7 +148,10 @@ jobs:
           [ ! -d $S ] || { find $S -name '*.lock' -delete; find $S -mindepth 2 -maxdepth 2 -type d ! -newer "$RUNNER_TEMP/mbui-native.start" -exec rm -rf {} +; du -sh $S; }
           c=$( (cd $S 2>/dev/null && find . -mindepth 2 -maxdepth 2 -type d | sort) | shasum | cut -c1-16)
           echo "BUILD_KEY=$CACHE_PREFIX$c" >> "$GITHUB_ENV"
-      - if: github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
+      # (also when the run failed or ran out of its time: each object is kept by what it was made of, so what it compiled
+      # is right for the next; a change to every package's C (#1003) otherwise took ThinLTO's run past its 10 minutes
+      # each time, with nothing kept for the next)
+      - if: always() && github.ref == 'refs/heads/main' && env.BUILD_KEY != steps.build-cache.outputs.cache-matched-key
         uses: actions/cache/save@v4
         with:
           path: apps/mbui/_build/native/release/mbc-store
