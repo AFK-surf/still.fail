@@ -118,6 +118,8 @@ struct Node {
   mut center : Bool
   // a line's height (0: the font's own)
   mut line_h : Double
+  // a font taller than its line not padded beyond itself (set_line `trim`)
+  mut line_trim : Bool
   // added to each cluster's advance, half before and half after it (Android's letter spacing), in pixels
   mut spacing : Double
   // wrapped words cut after this many lines, the last ending in an ellipsis (0: no limit)
@@ -182,6 +184,7 @@ struct Node {
   mut lk_size : Double
   mut lk_weight : Int
   mut lk_line : Double
+  mut lk_trim : Bool
   mut lk_wrap : Bool
   mut lk_spacing : Double
   mut lk_max_lines : Int
@@ -247,6 +250,7 @@ fn Node::new() -> Node {
     wrap: true,
     center: false,
     line_h: 0.0,
+    line_trim: false,
     spacing: 0.0,
     max_lines: 0,
     fit: FitCover,
@@ -282,6 +286,7 @@ fn Node::new() -> Node {
     lk_size: 0.0,
     lk_weight: 0,
     lk_line: 0.0,
+    lk_trim: false,
     lk_wrap: false,
     lk_spacing: 0.0,
     lk_max_lines: 0,
@@ -372,6 +377,7 @@ fn Node::reset_words(self : Node) -> Unit {
   self.wrap = true
   self.center = false
   self.line_h = 0.0
+  self.line_trim = false
   self.spacing = 0.0
   self.max_lines = 0
 }

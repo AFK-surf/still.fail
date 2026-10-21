@@ -34,6 +34,7 @@ struct Shaped {
   mut lay : TextLayout?
   mut lay_max : Double
   mut lay_line : Double
+  mut lay_trim : Bool
   mut lay_wrap : Bool
 }
 
@@ -196,16 +197,34 @@ fn words_cjk(text : String) -> Bool {
 /// Android sets it (Compose's line height: LineHeightStyle Center, Trim.None, Mode.Tight): the room over the font
 /// shared out above and below; a font taller than its line not cut (the first line keeps the font's top, the last its
 /// bottom). On a host that sets lines on whole pixels (`px`: Android's, whole_pixel_lines) the line is rounded up to
-/// one and the room shared in them, below the bigger half; elsewhere the line is as asked and the room halved.
+/// one and the room shared in them, below the bigger half; elsewhere the line is as asked and the room halved. A font
+/// taller than its line there is padded as Compose pads a theme's words (Material's Text: LineHeightStyle Center,
+/// Trim.None, Mode.Fixed) unless `trim` (words in a TextStyle of their own, with no LineHeightStyle, or Trim.Both:
+/// SendText.kt's): the first line over by what its ascent lost, the last under by as much or what its descent lost,
+/// whichever more (TextLayout getLineHeightPaddings), where `trim` keeps the font's own reach and no more.
 /// (pitch: from a line to the next; the first line's baseline from the top; how much more than the lines' pitch
 /// the words are high.)
-fn set_line(line : Double, asc : Double, desc : Double, sc : Double, px : Bool) -> (Double, Double, Double) {
+fn set_line(
+  line : Double,
+  asc : Double,
+  desc : Double,
+  sc : Double,
+  px : Bool,
+  trim? : Bool = false,
+) -> (Double, Double, Double) {
   let sc = if sc > 0.0 { sc } else { 1.0 }
   let pitch = if px { (line * sc - 1.0e-6).ceil() / sc } else { line }
   let room = pitch - asc - desc
   if room >= 0.0 {
     let below = if px { (room * sc / 2.0 - 1.0e-6).ceil() / sc } else { room / 2.0 }
     (pitch, pitch - desc - below, 0.0)
+  } else if px && !trim {
+    // (a 32 px bold Chinese line in 118 pixels: 97 + 25 high, its font's 97 + 24; Compose on an emulator, 2026-10-22)
+    let missing = (-room * sc).round()
+    let lost = (missing / 2.0).floor()
+    let over = missing - lost
+    let under = if lost > 0.0 { dmax(over, lost) } else { 0.0 }
+    (pitch, asc, (over + under) / sc)
   } else {
     (pitch, asc, -room)
   }
@@ -418,6 +437,7 @@ fn shape(text : String, size : Double, weight : Int, style? : Int = 0, spacing? 
         lay: None,
         lay_max: 0.0,
         lay_line: 0.0,
+        lay_trim: false,
         lay_wrap: false,
       }
       shapes[text] = s
@@ -621,6 +641,7 @@ fn layout_text(
   wrap : Bool,
   indent? : Double = 0.0,
   line? : Double = 0.0,
+  trim? : Bool = false,
   spacing? : Double = 0.0,
   style? : Int = 0,
 ) -> TextLayout {
@@ -630,6 +651,7 @@ fn layout_text(
   if indent == 0.0 {
     match s.lay {
       Some(tl) if s.lay_line == line &&
+        s.lay_trim == trim &&
         s.lay_wrap == wrap &&
         (!wrap || (tl.w <= max_w + 0.01 && max_w <= s.lay_max)) => return tl
       _ => ()
@@ -714,7 +736,18 @@ fn layout_text(
   } else {
     (asc, desc)
   }
-  let (line_h, ascent, extra) = set_line(if line > 0.0 { line } else { own_h }, asc, desc, g().scale, whole_pixel_lines(size, weight))
+  let (line_h, ascent, extra) = set_line(
+    if line > 0.0 {
+      line
+    } else {
+      own_h
+    },
+    asc,
+    desc,
+    g().scale,
+    whole_pixel_lines(size, weight),
+    trim~,
+  )
   // right to left: each line's clusters in their visual order
   let lv = match s.bidi {
     Some(b) => {
@@ -753,6 +786,7 @@ fn layout_text(
     s.lay = Some(tl)
     s.lay_max = max_w
     s.lay_line = line
+    s.lay_trim = trim
     s.lay_wrap = wrap
   }
   tl

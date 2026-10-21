@@ -1,17 +1,17 @@
 {
   "chat-cards": {
     "left": 142940,
-    "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels)",
-    "texts_left": 20
+    "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels); the title's avatars' letters a pixel high: Compose sets a line a font taller than it as its font (and a pixel more where they differ by an odd number), which mbui now does too, and places what it centres on whole pixels (rounding half up), which mbui does not yet (the letter's box is centred to half a pixel), so the A that was half a pixel off is one",
+    "texts_left": 21
   },
   "history": {
-    "left": 7548,
-    "why": "not yet as Android's: the steps lie closer together (each block some 10 to 15 px higher than Android's, more down the page); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels)",
-    "texts_left": 18
+    "left": 5950,
+    "why": "not yet as Android's: the title 执行历史 stands left of Android's (centred there); the steps' lines a few px higher than Android's; words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 12
   },
   "settings": {
-    "left": 8895,
-    "why": "not yet as Android's: each row some 2 px shorter, so the rows drift up the page; 外观's value 浅色 where Android says 跟随系统; words a pixel apart; words compared by where they stand since #989 (their boxes out of the pixels)",
-    "texts_left": 28
+    "left": 2400,
+    "why": "not yet as Android's: a few words a fraction of a pixel apart (设置, the avatars' 林); words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 3
   }
 }

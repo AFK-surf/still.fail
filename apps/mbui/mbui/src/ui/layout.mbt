@@ -29,6 +29,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
     max_w,
     self.wrap,
     line=self.line_h,
+    trim=self.line_trim,
     spacing=self.spacing,
   )
   let tl = if self.wrap && self.max_lines > 0 && tl.line_start.length() > self.max_lines {
@@ -45,7 +46,7 @@ fn Node::text_layout(self : Node, max_w : Double) -> TextLayout {
 /// One-line text cut to fit `w`, ending in an ellipsis.
 fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
   let room = w - dots.w
   let mut end = 0
   while end < s.starts.length() && tl.xs[end] + s.adv[end] <= room {
@@ -57,7 +58,7 @@ fn ellipsized(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < s.starts.length() { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
 }
 
 ///|
@@ -70,7 +71,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   let s = tl.shaped
   let count = s.starts.length()
   let a = tl.line_start[n.max_lines - 1]
-  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, spacing=n.spacing)
+  let dots = layout_text("…", n.font_size, n.weight, 1.0e9, false, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
   let room = w - dots.w
   let mut x = 0.0
   let mut end = a
@@ -84,7 +85,7 @@ fn cut_to_lines(n : Node, tl : TextLayout, w : Double) -> TextLayout {
   }
   let cut = if end < count { s.starts[end] } else { s.len }
   let text = n.text.view(end_offset=cut).to_string() + "…"
-  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, spacing=n.spacing)
+  layout_text(text, n.font_size, n.weight, w, true, line=n.line_h, trim=n.line_trim, spacing=n.spacing)
 }
 
 ///|
@@ -108,7 +109,7 @@ fn leaf_size(
   } else if n.kind == kind_editor {
     // an editor takes the width it is offered
     let s = g().editor_display(n)
-    let tl = layout_text(s, n.font_size, n.weight, max_w, true, line=n.line_h)
+    let tl = layout_text(s, n.font_size, n.weight, max_w, true, line=n.line_h, trim=n.line_trim)
     (if wm == Undefined { tl.w } else { w }, tl.h)
   } else if n.kind == kind_image {
     image_leaf_size(n, w, wm, h, hm)
@@ -435,6 +436,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_size != n.font_size ||
         n.lk_weight != n.weight ||
         n.lk_line != n.line_h ||
+        n.lk_trim != n.line_trim ||
         n.lk_wrap != n.wrap ||
         n.lk_spacing != n.spacing ||
         n.lk_max_lines != n.max_lines {
@@ -442,6 +444,7 @@ fn Ctx::flex_tree(self : Ctx, i : Int, pdir : Int) -> Int {
         n.lk_size = n.font_size
         n.lk_weight = n.weight
         n.lk_line = n.line_h
+        n.lk_trim = n.line_trim
         n.lk_wrap = n.wrap
         n.lk_spacing = n.spacing
         n.lk_max_lines = n.max_lines
@@ -633,7 +636,7 @@ fn Ctx::commit(self : Ctx, i : Int, px : Double, py : Double, gen : Int) -> Unit
   } else if n.kind == kind_editor {
     match self.editors.get(n.id) {
       Some(st) => {
-        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, style=faces_style(st.words, 0))
+        let tl = layout_text(st.shown(), n.font_size, n.weight, iw, true, line=n.line_h, trim=n.line_trim, style=faces_style(st.words, 0))
         st.tl = Some(tl)
         // taller than the field: scrolled so that the caret's line shows
         let (_, cl) = tl.caret(st.caret + st.marked.length())

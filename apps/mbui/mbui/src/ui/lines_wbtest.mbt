@@ -34,6 +34,9 @@ test "a font taller than its line is not cut" {
   assert_eq(probe_line(17.0 * 1.4, 51, 13), (63, 51, 1))
   // 15 Chinese in lines of 15, two lines: Compose's baselines 45 and 85, 96 high (2 × 40 + 16)
   assert_eq(probe_line(15.0, 45, 11), (40, 45, 16))
+  // 32 bold Chinese in 1.4 lines (117.6, 118 pixels): its baseline 97, 122 high, 25 under it where its font says 24
+  // (still.fail's settings title; Compose laid it out on the emulator, 2026-10-22)
+  assert_eq(probe_line(32.0 * 1.4, 97, 24), (118, 97, 4))
 }
 
 ///|
@@ -46,8 +49,8 @@ test "every line set by the first line's fonts" {
   assert_eq((first, pitch + first), (41, 97))
   let (pitch, first, _) = probe_line(28.0, 45, 11)
   assert_eq((first, pitch + first), (54, 128))
-  // the Latin first line in lines of 15 (40 px): baselines 37 and 77 (88 high in Compose, its last line's bottom a
-  // pixel lower than the first line's font says: 2 × 40 + 7 here)
+  // the Latin first line in lines of 15 (40 px): baselines 37 and 77, 88 high (2 × 40, 4 over the first line and as
+  // much under the last: Compose's paddings for a font taller than its line)
   let (pitch, first, extra) = probe_line(15.0, 37, 10)
-  assert_eq((first, pitch + first, 2 * pitch + extra), (37, 77, 87))
+  assert_eq((first, pitch + first, 2 * pitch + extra), (37, 77, 88))
 }

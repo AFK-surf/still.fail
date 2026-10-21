@@ -18,7 +18,8 @@
 // With MBUI_READONLY=1 (Source.read_only) nothing leaves: no send, no draft kept, no file put up (said in a toast).
 
 ///|
-/// The field's words: 16 on 21 lines, as the viewer's bubbles (SendText.kt).
+/// The field's words: 16 on 21 lines, as the viewer's bubbles (SendText.kt); set as its SendTextStyle sets them,
+/// a style of their own with no LineHeightStyle (`trim`).
 let send_size : Double = 16.0
 
 ///|
@@ -1413,6 +1414,8 @@ fn composer_bar(
           words=true,
           font_size=send_size,
           line=send_line,
+          // (SendTextStyle: a TextStyle of its own, no LineHeightStyle)
+          trim=true,
           max_lines=6,
           plain=true,
           color=t.p.text,
