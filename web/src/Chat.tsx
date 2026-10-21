@@ -63,6 +63,7 @@ import { useChatFind } from "./ChatFind.tsx";
 import { placeStrokes, strokeLayer } from "@stillfail/ui/strokes.ts";
 import { jumped, jumpTo, jumpWords, useJump } from "./jumpTo.ts";
 import { t } from "./i18n.ts";
+import { VaultAsk } from "./VaultAsk.tsx";
 
 /** Over the composer (dock.css.ts): where what a new chat's first message is drawn by on its way (madeChat.ts). */
 export const OVER_DOCK = "4";
@@ -1014,6 +1015,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
   if (m.system) return <SystemNotice vk={`m:${m.seq}`} text={m.text} profile={m.profile} install={m.install} report={m.reportable ? { thread: m.thread, seq: m.seq } : undefined} time={m.time?.createdAt} ts={m.ts} enter={enter} caught={caught} />;
   const who = m.by.name;
   const agent = m.by.here ? m.by.agent : undefined;
+  const ask = m.card?.vaultAsk;
   return (
     <OthersMessage data-vk={`m:${m.seq}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
@@ -1024,12 +1026,15 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} />
-      {m.authorKind === "person"
+      {/* An agent's request for a vault item, as its card says it (VaultAsk.tsx): the card in place of its words. */}
+      {ask
+        ? <VaultAsk message={m} ask={ask} rows={options}>{options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</VaultAsk>
+        : m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
         : <ProseWithFiles text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {/* It asks what no one has decided (the core's `asked`): letting it go, right under it, closing with its options. */}
-      {options && (m.card || m.options?.length) && !(m.card?.type === "login" && m.card.login)
+      {ask ? null : options && (m.card || m.options?.length) && !(m.card?.type === "login" && m.card.login)
         ? <MessageDecision message={m} thread={thread}>{thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</MessageDecision>
         : <>
           {options && (m.card || m.options) && <MessageDecision message={m} thread={thread} />}

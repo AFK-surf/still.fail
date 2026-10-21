@@ -253,7 +253,7 @@ agent → station（MCP 工具，在 `stillfail` 服务器里）：
 
 先不做命令行（`stillfail-secret run`）：要往 agent 的 PATH 里放东西、还要让 Codex 的进程也能证明自己是哪个 session，MCP 工具这两件都现成。以后需要在管道里用再加。
 
-申请卡片就是普通的 options 卡片（「批准这一次 / 这个 chat 一小时内都行 / 拒绝」，assignee 是库 owner），多一个字段 `vault: {request}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准或拒绝后 station 收回这张卡片。
+申请卡片就是普通的 options 卡片（「批准这一次 / 这个 chat 一小时内都行 / 拒绝」，assignee 是库 owner），多一个字段 `vault: {request, name, reason, command?, mode, hosts}`。新客户端看到这个字段就换成批准界面（选项 → 指纹 → `vault.approve`/`vault.deny`），网页和桌面把这条消息画成一张申请卡（web/src/VaultAsk.tsx：条目名、方式、理由、命令，下面是批准行）；老客户端照普通卡片显示，点了只是发一句话，agent 不会因此拿到授权（工具说明里写了只认授权）。批准、拒绝或过期后 station 收回这张卡片，并往这条消息追加一条文字不变的 edit，卡片里加上 `vault.outcome: {status, scope?}`，申请卡底部就换成「已批准 · 仅本次」「已拒绝」「已过期」。
 
 ### keeper
 

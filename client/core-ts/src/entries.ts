@@ -42,6 +42,11 @@ export function merge(entries: unknown[]): Record<string, unknown>[] {
       const target = entry.target;
       const message = typeof target === "number" ? messages.get(target) : undefined;
       if (!message) continue;
+      // Its card restated by its author (a vault request's outcome): the card alone when the words are the same.
+      if (isObject(entry.card)) {
+        message.card = entry.card;
+        if ((entry.text ?? "") === message.text) continue;
+      }
       message.text = entry.text === undefined ? "" : entry.text;
       message.attachments = entry.attachments === undefined ? [] : entry.attachments;
       message.quotes = entry.quotes === undefined ? [] : entry.quotes;

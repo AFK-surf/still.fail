@@ -35,7 +35,7 @@ import { stamp } from "../src/demo/fixtures.ts";
 import type { Shared } from "../src/shareIn.ts";
 import { ScreenViewer } from "../src/screen/ScreenViewer.tsx";
 import { OUTDATED, SCREENS_LACKING, adbLinksDemo, screenLinksDemo, screensDemo, type ViewStory } from "./screens.ts";
-import { libraryDemo, vaultDemo } from "./vault.ts";
+import { LONG_COMMAND, libraryDemo, vaultDemo } from "./vault.ts";
 import { cursorPickDemo, installDemo, installFlowDemo } from "./install.ts";
 import { permissionsDemo } from "./permissions.ts";
 import { agentEnvDemo } from "./agent-env.ts";
@@ -869,6 +869,9 @@ export const stories: Story[] = [
   { id: "vault-editor-agent", group: "密钥", title: "编辑 · agent 可申请", app: true, demo: vaultDemo("on"), steps: [...toVault, { text: "GitHub token" }, { text: "编辑" }] },
   { id: "vault-card", group: "密钥", title: "对话里的申请", app: true, demo: vaultDemo("waiting", true) },
   { id: "vault-card-web", group: "密钥", title: "对话里的申请 · 网页", app: true, demo: vaultDemo("web", true) },
+  { id: "vault-card-granted", group: "密钥", title: "对话里的申请 · 已批准", app: true, demo: vaultDemo("on", { status: "granted", scope: "once" }) },
+  { id: "vault-card-denied", group: "密钥", title: "对话里的申请 · 长命令 · 已拒绝", app: true, demo: vaultDemo("on", { status: "denied", command: LONG_COMMAND }) },
+  { id: "vault-card-long", group: "密钥", title: "对话里的申请 · 长命令", app: true, demo: vaultDemo("waiting", { command: LONG_COMMAND }) },
   { id: "phone-vault-web", group: "密钥", title: "手机 · 网页只看名字", app: true, phone: true, demo: vaultDemo("web"), steps: toPhoneVault },
   { id: "phone-vault-no-lock", group: "密钥", title: "手机 · 先打开安全模式", app: true, phone: true, demo: vaultDemo("noLock"), steps: toPhoneVault },
   { id: "phone-vault-off", group: "密钥", title: "手机 · 尚未开启", app: true, phone: true, demo: vaultDemo("off"), steps: toPhoneVault },

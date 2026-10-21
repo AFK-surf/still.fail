@@ -42,6 +42,14 @@ test("a_block_post_keeps_its_options", () => {
   assert.deepEqual((merge([typed]) as J[])[0].card, { type: "text" });
 });
 
+test("a_card_restated_by_an_edit_replaces_the_posts_unedited", () => {
+  const asked = { ...message(1, "申请使用「GitHub」"), card: { type: "options", vault: { request: "r_1" } } };
+  const restated = { ...change(2, "edit", 1, "申请使用「GitHub」"), attachments: [], card: { type: "options", vault: { request: "r_1", outcome: { status: "denied" } } } };
+  const [m] = merge([asked, restated]) as J[];
+  assert.deepEqual(m.card.vault.outcome, { status: "denied" });
+  assert.equal(m.editedAt, null, "the same words: not an edit of them");
+});
+
 test("a_notice_about_a_profile_says_which", () => {
   const notice = { ...message(1, "⚠️ 认证失败"), authorKind: "ember", profile: "cc" };
   const merged = merge([notice, message(2, "二")]) as J[];

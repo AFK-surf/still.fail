@@ -119,6 +119,17 @@ test("a_rows_card_is_read_from_its_card_else_its_decision", () => {
   shape("MessageCard", d.cardShown(d.ofMessage({ options: [{ label: "A" }] })));
 });
 
+test("a_vault_requests_card_says_the_request_and_how_it_ended", () => {
+  const vault = { request: "r_1", name: "GitHub token", reason: "重跑 CI", command: "gh run rerun 1", mode: "proxy", hosts: ["api.github.com"] };
+  const waiting = d.cardShown({ type: "options", options: [{ label: "仅本次" }], vault });
+  assert.equal(waiting.vault, "r_1");
+  assert.deepEqual(waiting.vaultAsk, { name: "GitHub token", reason: "重跑 CI", command: "gh run rerun 1", mode: "proxy", hosts: ["api.github.com"] });
+  shape("MessageCard", waiting);
+  const granted = d.cardShown({ type: "options", vault: { ...vault, outcome: { status: "granted", scope: "hour" } } });
+  assert.deepEqual([granted.vaultAsk.status, granted.vaultAsk.scope], ["granted", "hour"]);
+  assert.equal(d.cardShown({ type: "options", vault: { request: "r_1" } }).vaultAsk, undefined, "a card from before: its words say it");
+});
+
 test("a_row_with_a_card_says_so_and_is_marked_wait_until_dismissed", () => {
   let row: J = { state: "run", unread: true, decision: decision(4, false) };
   row = d.presentRow(row);
