@@ -243,26 +243,29 @@ fn box_of(
 }
 
 ///|
-/// box_of for a node, kept on it while its caches hold (touch): a node is
-/// sized several times (its basis, its cross size, for real), each time
-/// against the same containing block.
+/// box_of for a node, kept on it while its style says the same (Style's
+/// ver, which every setter of a length or the box sizing bumps) and so does
+/// the containing block, as far as the box takes anything from it (of_cb_w,
+/// of_cb_h): from one compute to the next too, reusing or not, as the box
+/// is the style's and that alone. A node is sized several times (its basis,
+/// its cross size, for real), each time against the same containing block.
 ///
 /// The box is the node's own, made once and filled in again when it no
 /// longer holds: a node is sized against one containing block, its
 /// parent's, so an item holding it sees no other.
 fn box_for(node : Node, cb_w : Double, cb_h : Double) -> Box {
   touch(node)
-  if node.box_ok && same(node.box_cbw, cb_w) && same(node.box_cbh, cb_h) {
-    match node.box_memo {
-      Some(b) => return b
-      None => ()
-    }
+  match node.box_memo {
+    Some(b) if node.box_ver == node.style.ver &&
+      (!b.of_cb_w || same(node.box_cbw, cb_w)) &&
+      (!b.of_cb_h || same(node.box_cbh, cb_h)) => return b
+    _ => ()
   }
   let b = box_of(node.style, cb_w, cb_h, into=node.box_memo)
   node.box_cbw = cb_w
   node.box_cbh = cb_h
   node.box_memo = Some(b)
-  node.box_ok = true
+  node.box_ver = node.style.ver
   b
 }
 
@@ -275,7 +278,6 @@ fn touch(node : Node) -> Unit {
     node.cache_gen = generation.val
     if !reusing.val || node.dirty {
       node.cache_n = 0
-      node.box_ok = false
       node.p_ok = false
       node.dirty = false
     }
@@ -975,20 +977,21 @@ fn layout_flex(
       c.cache_gen = generation.val
       if !reusing.val || c.dirty {
         c.cache_n = 0
-        c.box_ok = false
         c.p_ok = false
         c.dirty = false
       }
     }
     let cb = match c.box_memo {
-      Some(memo) if c.box_ok && same(c.box_cbw, cb_w) && same(c.box_cbh, cb_h) =>
+      Some(memo) if c.box_ver == cs.ver &&
+        (!memo.of_cb_w || same(c.box_cbw, cb_w)) &&
+        (!memo.of_cb_h || same(c.box_cbh, cb_h)) =>
         memo
       _ => {
         let nb = box_of(cs, cb_w, cb_h, into=c.box_memo)
         c.box_cbw = cb_w
         c.box_cbh = cb_h
         c.box_memo = Some(nb)
-        c.box_ok = true
+        c.box_ver = cs.ver
         nb
       }
     }

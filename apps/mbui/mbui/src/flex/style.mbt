@@ -115,8 +115,9 @@ fn dim_of(k : Int, v : Double) -> Dim {
 }
 
 ///|
-/// Style of a flex node. Each length is two fields, `<name>_k` (LEN_AUTO, LEN_PT, LEN_PCT) and `<name>_v` (its points
-/// or percent), set with `set_<name>(Dim)` and read with `get_<name>()`.
+/// Style of a flex node. Each length is two fields of its own, its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number (its
+/// points or percent), set only with `set_<name>(Dim)` (the box sizing with `set_box_sizing`), which keeps a node's
+/// box while they are the same (`ver`); read with `get_<name>()`, or `<name>_kind()` and `<name>_value()`.
 pub(all) struct Style {
   mut display : Display
   mut position : PositionType
@@ -129,58 +130,61 @@ pub(all) struct Style {
   mut grow : Double
   mut shrink : Double
   mut aspect : Double
-  mut box_sizing : BoxSizing
+  priv mut box_sizing : BoxSizing
   mut overflow : Overflow
-  mut basis_v : Double
-  mut basis_k : Int
-  mut width_v : Double
-  mut width_k : Int
-  mut height_v : Double
-  mut height_k : Int
-  mut min_width_v : Double
-  mut min_width_k : Int
-  mut min_height_v : Double
-  mut min_height_k : Int
-  mut max_width_v : Double
-  mut max_width_k : Int
-  mut max_height_v : Double
-  mut max_height_k : Int
-  mut margin_left_v : Double
-  mut margin_left_k : Int
-  mut margin_top_v : Double
-  mut margin_top_k : Int
-  mut margin_right_v : Double
-  mut margin_right_k : Int
-  mut margin_bottom_v : Double
-  mut margin_bottom_k : Int
-  mut padding_left_v : Double
-  mut padding_left_k : Int
-  mut padding_top_v : Double
-  mut padding_top_k : Int
-  mut padding_right_v : Double
-  mut padding_right_k : Int
-  mut padding_bottom_v : Double
-  mut padding_bottom_k : Int
-  mut border_left_v : Double
-  mut border_left_k : Int
-  mut border_top_v : Double
-  mut border_top_k : Int
-  mut border_right_v : Double
-  mut border_right_k : Int
-  mut border_bottom_v : Double
-  mut border_bottom_k : Int
-  mut inset_left_v : Double
-  mut inset_left_k : Int
-  mut inset_top_v : Double
-  mut inset_top_k : Int
-  mut inset_right_v : Double
-  mut inset_right_k : Int
-  mut inset_bottom_v : Double
-  mut inset_bottom_k : Int
-  mut gap_row_v : Double
-  mut gap_row_k : Int
-  mut gap_col_v : Double
-  mut gap_col_k : Int
+  // bumped by every change to what the box comes from (its lengths and box
+  // sizing): a node's box stands while it is the same (Node's box_ver)
+  priv mut ver : Int
+  priv mut basis_v : Double
+  priv mut basis_k : Int
+  priv mut width_v : Double
+  priv mut width_k : Int
+  priv mut height_v : Double
+  priv mut height_k : Int
+  priv mut min_width_v : Double
+  priv mut min_width_k : Int
+  priv mut min_height_v : Double
+  priv mut min_height_k : Int
+  priv mut max_width_v : Double
+  priv mut max_width_k : Int
+  priv mut max_height_v : Double
+  priv mut max_height_k : Int
+  priv mut margin_left_v : Double
+  priv mut margin_left_k : Int
+  priv mut margin_top_v : Double
+  priv mut margin_top_k : Int
+  priv mut margin_right_v : Double
+  priv mut margin_right_k : Int
+  priv mut margin_bottom_v : Double
+  priv mut margin_bottom_k : Int
+  priv mut padding_left_v : Double
+  priv mut padding_left_k : Int
+  priv mut padding_top_v : Double
+  priv mut padding_top_k : Int
+  priv mut padding_right_v : Double
+  priv mut padding_right_k : Int
+  priv mut padding_bottom_v : Double
+  priv mut padding_bottom_k : Int
+  priv mut border_left_v : Double
+  priv mut border_left_k : Int
+  priv mut border_top_v : Double
+  priv mut border_top_k : Int
+  priv mut border_right_v : Double
+  priv mut border_right_k : Int
+  priv mut border_bottom_v : Double
+  priv mut border_bottom_k : Int
+  priv mut inset_left_v : Double
+  priv mut inset_left_k : Int
+  priv mut inset_top_v : Double
+  priv mut inset_top_k : Int
+  priv mut inset_right_v : Double
+  priv mut inset_right_k : Int
+  priv mut inset_bottom_v : Double
+  priv mut inset_bottom_k : Int
+  priv mut gap_row_v : Double
+  priv mut gap_row_k : Int
+  priv mut gap_col_v : Double
+  priv mut gap_col_k : Int
 }
 
 ///|
@@ -199,6 +203,7 @@ pub fn Style::new() -> Style {
     aspect: 0.0,
     box_sizing: BorderBox,
     overflow: Visible,
+    ver: 0,
     basis_v: 0.0,
     basis_k: LEN_AUTO,
     width_v: 0.0,
@@ -268,6 +273,7 @@ pub fn Style::reset(self : Style) -> Unit {
   self.aspect = 0.0
   self.box_sizing = BorderBox
   self.overflow = Visible
+  self.ver = self.ver + 1
   self.basis_v = 0.0
   self.basis_k = LEN_AUTO
   self.width_v = 0.0
@@ -324,6 +330,18 @@ pub fn Style::reset(self : Style) -> Unit {
 pub fn Style::set_basis(self : Style, d : Dim) -> Unit {
   self.basis_k = dim_k(d)
   self.basis_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::basis_kind(self : Style) -> Int {
+  self.basis_k
+}
+
+///|
+pub fn Style::basis_value(self : Style) -> Double {
+  self.basis_v
 }
 
 ///|
@@ -335,6 +353,18 @@ pub fn Style::get_basis(self : Style) -> Dim {
 pub fn Style::set_width(self : Style, d : Dim) -> Unit {
   self.width_k = dim_k(d)
   self.width_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::width_kind(self : Style) -> Int {
+  self.width_k
+}
+
+///|
+pub fn Style::width_value(self : Style) -> Double {
+  self.width_v
 }
 
 ///|
@@ -346,6 +376,18 @@ pub fn Style::get_width(self : Style) -> Dim {
 pub fn Style::set_height(self : Style, d : Dim) -> Unit {
   self.height_k = dim_k(d)
   self.height_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::height_kind(self : Style) -> Int {
+  self.height_k
+}
+
+///|
+pub fn Style::height_value(self : Style) -> Double {
+  self.height_v
 }
 
 ///|
@@ -357,6 +399,18 @@ pub fn Style::get_height(self : Style) -> Dim {
 pub fn Style::set_min_width(self : Style, d : Dim) -> Unit {
   self.min_width_k = dim_k(d)
   self.min_width_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::min_width_kind(self : Style) -> Int {
+  self.min_width_k
+}
+
+///|
+pub fn Style::min_width_value(self : Style) -> Double {
+  self.min_width_v
 }
 
 ///|
@@ -368,6 +422,18 @@ pub fn Style::get_min_width(self : Style) -> Dim {
 pub fn Style::set_min_height(self : Style, d : Dim) -> Unit {
   self.min_height_k = dim_k(d)
   self.min_height_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::min_height_kind(self : Style) -> Int {
+  self.min_height_k
+}
+
+///|
+pub fn Style::min_height_value(self : Style) -> Double {
+  self.min_height_v
 }
 
 ///|
@@ -379,6 +445,18 @@ pub fn Style::get_min_height(self : Style) -> Dim {
 pub fn Style::set_max_width(self : Style, d : Dim) -> Unit {
   self.max_width_k = dim_k(d)
   self.max_width_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::max_width_kind(self : Style) -> Int {
+  self.max_width_k
+}
+
+///|
+pub fn Style::max_width_value(self : Style) -> Double {
+  self.max_width_v
 }
 
 ///|
@@ -390,6 +468,18 @@ pub fn Style::get_max_width(self : Style) -> Dim {
 pub fn Style::set_max_height(self : Style, d : Dim) -> Unit {
   self.max_height_k = dim_k(d)
   self.max_height_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::max_height_kind(self : Style) -> Int {
+  self.max_height_k
+}
+
+///|
+pub fn Style::max_height_value(self : Style) -> Double {
+  self.max_height_v
 }
 
 ///|
@@ -401,6 +491,18 @@ pub fn Style::get_max_height(self : Style) -> Dim {
 pub fn Style::set_margin_left(self : Style, d : Dim) -> Unit {
   self.margin_left_k = dim_k(d)
   self.margin_left_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::margin_left_kind(self : Style) -> Int {
+  self.margin_left_k
+}
+
+///|
+pub fn Style::margin_left_value(self : Style) -> Double {
+  self.margin_left_v
 }
 
 ///|
@@ -412,6 +514,18 @@ pub fn Style::get_margin_left(self : Style) -> Dim {
 pub fn Style::set_margin_top(self : Style, d : Dim) -> Unit {
   self.margin_top_k = dim_k(d)
   self.margin_top_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::margin_top_kind(self : Style) -> Int {
+  self.margin_top_k
+}
+
+///|
+pub fn Style::margin_top_value(self : Style) -> Double {
+  self.margin_top_v
 }
 
 ///|
@@ -423,6 +537,18 @@ pub fn Style::get_margin_top(self : Style) -> Dim {
 pub fn Style::set_margin_right(self : Style, d : Dim) -> Unit {
   self.margin_right_k = dim_k(d)
   self.margin_right_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::margin_right_kind(self : Style) -> Int {
+  self.margin_right_k
+}
+
+///|
+pub fn Style::margin_right_value(self : Style) -> Double {
+  self.margin_right_v
 }
 
 ///|
@@ -434,6 +560,18 @@ pub fn Style::get_margin_right(self : Style) -> Dim {
 pub fn Style::set_margin_bottom(self : Style, d : Dim) -> Unit {
   self.margin_bottom_k = dim_k(d)
   self.margin_bottom_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::margin_bottom_kind(self : Style) -> Int {
+  self.margin_bottom_k
+}
+
+///|
+pub fn Style::margin_bottom_value(self : Style) -> Double {
+  self.margin_bottom_v
 }
 
 ///|
@@ -445,6 +583,18 @@ pub fn Style::get_margin_bottom(self : Style) -> Dim {
 pub fn Style::set_padding_left(self : Style, d : Dim) -> Unit {
   self.padding_left_k = dim_k(d)
   self.padding_left_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::padding_left_kind(self : Style) -> Int {
+  self.padding_left_k
+}
+
+///|
+pub fn Style::padding_left_value(self : Style) -> Double {
+  self.padding_left_v
 }
 
 ///|
@@ -456,6 +606,18 @@ pub fn Style::get_padding_left(self : Style) -> Dim {
 pub fn Style::set_padding_top(self : Style, d : Dim) -> Unit {
   self.padding_top_k = dim_k(d)
   self.padding_top_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::padding_top_kind(self : Style) -> Int {
+  self.padding_top_k
+}
+
+///|
+pub fn Style::padding_top_value(self : Style) -> Double {
+  self.padding_top_v
 }
 
 ///|
@@ -467,6 +629,18 @@ pub fn Style::get_padding_top(self : Style) -> Dim {
 pub fn Style::set_padding_right(self : Style, d : Dim) -> Unit {
   self.padding_right_k = dim_k(d)
   self.padding_right_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::padding_right_kind(self : Style) -> Int {
+  self.padding_right_k
+}
+
+///|
+pub fn Style::padding_right_value(self : Style) -> Double {
+  self.padding_right_v
 }
 
 ///|
@@ -478,6 +652,18 @@ pub fn Style::get_padding_right(self : Style) -> Dim {
 pub fn Style::set_padding_bottom(self : Style, d : Dim) -> Unit {
   self.padding_bottom_k = dim_k(d)
   self.padding_bottom_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::padding_bottom_kind(self : Style) -> Int {
+  self.padding_bottom_k
+}
+
+///|
+pub fn Style::padding_bottom_value(self : Style) -> Double {
+  self.padding_bottom_v
 }
 
 ///|
@@ -489,6 +675,18 @@ pub fn Style::get_padding_bottom(self : Style) -> Dim {
 pub fn Style::set_border_left(self : Style, d : Dim) -> Unit {
   self.border_left_k = dim_k(d)
   self.border_left_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::border_left_kind(self : Style) -> Int {
+  self.border_left_k
+}
+
+///|
+pub fn Style::border_left_value(self : Style) -> Double {
+  self.border_left_v
 }
 
 ///|
@@ -500,6 +698,18 @@ pub fn Style::get_border_left(self : Style) -> Dim {
 pub fn Style::set_border_top(self : Style, d : Dim) -> Unit {
   self.border_top_k = dim_k(d)
   self.border_top_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::border_top_kind(self : Style) -> Int {
+  self.border_top_k
+}
+
+///|
+pub fn Style::border_top_value(self : Style) -> Double {
+  self.border_top_v
 }
 
 ///|
@@ -511,6 +721,18 @@ pub fn Style::get_border_top(self : Style) -> Dim {
 pub fn Style::set_border_right(self : Style, d : Dim) -> Unit {
   self.border_right_k = dim_k(d)
   self.border_right_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::border_right_kind(self : Style) -> Int {
+  self.border_right_k
+}
+
+///|
+pub fn Style::border_right_value(self : Style) -> Double {
+  self.border_right_v
 }
 
 ///|
@@ -522,6 +744,18 @@ pub fn Style::get_border_right(self : Style) -> Dim {
 pub fn Style::set_border_bottom(self : Style, d : Dim) -> Unit {
   self.border_bottom_k = dim_k(d)
   self.border_bottom_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::border_bottom_kind(self : Style) -> Int {
+  self.border_bottom_k
+}
+
+///|
+pub fn Style::border_bottom_value(self : Style) -> Double {
+  self.border_bottom_v
 }
 
 ///|
@@ -533,6 +767,18 @@ pub fn Style::get_border_bottom(self : Style) -> Dim {
 pub fn Style::set_inset_left(self : Style, d : Dim) -> Unit {
   self.inset_left_k = dim_k(d)
   self.inset_left_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::inset_left_kind(self : Style) -> Int {
+  self.inset_left_k
+}
+
+///|
+pub fn Style::inset_left_value(self : Style) -> Double {
+  self.inset_left_v
 }
 
 ///|
@@ -544,6 +790,18 @@ pub fn Style::get_inset_left(self : Style) -> Dim {
 pub fn Style::set_inset_top(self : Style, d : Dim) -> Unit {
   self.inset_top_k = dim_k(d)
   self.inset_top_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::inset_top_kind(self : Style) -> Int {
+  self.inset_top_k
+}
+
+///|
+pub fn Style::inset_top_value(self : Style) -> Double {
+  self.inset_top_v
 }
 
 ///|
@@ -555,6 +813,18 @@ pub fn Style::get_inset_top(self : Style) -> Dim {
 pub fn Style::set_inset_right(self : Style, d : Dim) -> Unit {
   self.inset_right_k = dim_k(d)
   self.inset_right_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::inset_right_kind(self : Style) -> Int {
+  self.inset_right_k
+}
+
+///|
+pub fn Style::inset_right_value(self : Style) -> Double {
+  self.inset_right_v
 }
 
 ///|
@@ -566,6 +836,18 @@ pub fn Style::get_inset_right(self : Style) -> Dim {
 pub fn Style::set_inset_bottom(self : Style, d : Dim) -> Unit {
   self.inset_bottom_k = dim_k(d)
   self.inset_bottom_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::inset_bottom_kind(self : Style) -> Int {
+  self.inset_bottom_k
+}
+
+///|
+pub fn Style::inset_bottom_value(self : Style) -> Double {
+  self.inset_bottom_v
 }
 
 ///|
@@ -577,6 +859,18 @@ pub fn Style::get_inset_bottom(self : Style) -> Dim {
 pub fn Style::set_gap_row(self : Style, d : Dim) -> Unit {
   self.gap_row_k = dim_k(d)
   self.gap_row_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::gap_row_kind(self : Style) -> Int {
+  self.gap_row_k
+}
+
+///|
+pub fn Style::gap_row_value(self : Style) -> Double {
+  self.gap_row_v
 }
 
 ///|
@@ -588,11 +882,34 @@ pub fn Style::get_gap_row(self : Style) -> Dim {
 pub fn Style::set_gap_col(self : Style, d : Dim) -> Unit {
   self.gap_col_k = dim_k(d)
   self.gap_col_v = dim_v(d)
+  self.ver = self.ver + 1
+}
+
+///|
+/// Its kind (LEN_AUTO, LEN_PT, LEN_PCT) and number, as set.
+pub fn Style::gap_col_kind(self : Style) -> Int {
+  self.gap_col_k
+}
+
+///|
+pub fn Style::gap_col_value(self : Style) -> Double {
+  self.gap_col_v
 }
 
 ///|
 pub fn Style::get_gap_col(self : Style) -> Dim {
   dim_of(self.gap_col_k, self.gap_col_v)
+}
+
+///|
+pub fn Style::set_box_sizing(self : Style, b : BoxSizing) -> Unit {
+  self.box_sizing = b
+  self.ver = self.ver + 1
+}
+
+///|
+pub fn Style::get_box_sizing(self : Style) -> BoxSizing {
+  self.box_sizing
 }
 
 ///|
@@ -640,7 +957,8 @@ pub(all) struct Node {
   mut box_cbw : Double
   mut box_cbh : Double
   mut box_memo : Box?
-  mut box_ok : Bool
+  // the style's ver the box was made from (-1: none yet)
+  mut box_ver : Int
   // Kept from one compute(reuse=true) to the next (see compute): set it
   // when the node's style, measure function or children change, and on
   // every node above it; its sizes are then found again.
@@ -677,7 +995,7 @@ pub fn Node::new() -> Node {
     box_cbw: 0.0,
     box_cbh: 0.0,
     box_memo: None,
-    box_ok: false,
+    box_ver: -1,
     dirty: true,
     p_ok: false,
     p_kw: 0.0,
