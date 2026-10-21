@@ -1,9 +1,9 @@
 # A smoke run: a chat opened from Home, words typed and sent, the message's row in the list (`sent row in the list KEY`,
 # said by the app as the row comes: the row by its key, its outbox entry's id or the message's, not words found on
-# screen), and the station has it once (the check). What the screen does as it goes (the field given up at once, the
-# rows above the words not moved across) is the Tester's: sfreplay's 03-send-text. (The test agent answers words
-# without `post:` in its output, not in the chat: each message here is followed by 本轮 agent 未在对话中回复, as it
-# should be.)
+# screen), the station's answer to the send (its seq: it has the message, not only the outbox), and the station has it
+# once (the check). What the screen does as it goes (the field given up at once, the rows above the words not moved
+# across) is the Tester's: sfreplay's 03-send-text. (The test agent answers words without `post:` in its output, not in
+# the chat: each message here is followed by 本轮 agent 未在对话中回复, as it should be.)
 timeout 60000
 tap 端到端测试
 until =studio
@@ -14,4 +14,5 @@ tap 发消息
 type 第一条来自 mbui 的消息 {T}
 tap icon:arrow-up
 said sent row in the list
+answered chat.send
 shot 2-sent
