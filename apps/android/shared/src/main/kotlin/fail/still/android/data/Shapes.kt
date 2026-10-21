@@ -2613,7 +2613,65 @@ data class DriveRoots (
 	/// The station says when something in a folder shown changes (GET /drive/watch).
 	val watch: Boolean? = null,
 	/// A folder can be zipped to download (`drive.zip`).
-	val zip: Boolean? = null
+	val zip: Boolean? = null,
+	/// Files can be copied and moved into it, from its own folders or another station's, and it grants another
+	/// station reads of its own (`drive.transfer`; docs/drive.md "Copying between stations"); absent from a station from before.
+	val transfers: Boolean? = null
+)
+
+/// Where a copy into a drive is: waiting its turn, finding what
+/// it copies, copying, or ended.
+typealias DriveTransferState = String
+
+/// A copy (or move) into a station's drive, as the transfers' list shows it.
+@Serializable
+data class DriveTransferShown (
+	val id: String,
+	/// The station the files go to (its address), which runs it.
+	val station: String,
+	val stationName: String,
+	/// The station the files are on (its address; the same as `station` for a copy within one).
+	val fromStation: String,
+	val fromStationName: String,
+	val fromRoot: String,
+	/// The folder the names are in, relative to `fromRoot`.
+	val fromPath: String,
+	val names: List<String>,
+	val toRoot: String,
+	val toPath: String,
+	/// Where they go, in words: MBA › 照片.
+	val toText: String,
+	/// What is copied, in words: 首页截图.png, or 首页截图.png 等 2 项.
+	val title: String,
+	val move: Boolean,
+	val state: DriveTransferState,
+	/// Not ended: waiting, finding what it copies, or copying.
+	val active: Boolean,
+	/// How much is copied, 0 to 1 (bytes; by files for files without bytes).
+	val progress: Double,
+	val total: Long,
+	val copied: Long,
+	/// Folders and files it copies, once found.
+	val count: Long,
+	val files: Long,
+	/// The file being copied, relative to the folder the names are in.
+	val current: String? = null,
+	/// How it stands, in a line: 17.5 / 46.0 MB · 排队中 · 已完成 · 失败：… .
+	val statusText: String,
+	val error: String? = null,
+	val createdAt: Long,
+	val endedAt: Long? = null
+)
+
+/// The copies into a station's drive the viewer asked (the `driveTransfers` topic).
+@Serializable
+data class DriveTransfersView (
+	/// False for a station from before copies (it answers 404).
+	val supported: Boolean,
+	/// What the station has was read (or told) at least once.
+	val loaded: Boolean,
+	/// The viewer's own, newest first.
+	val transfers: List<DriveTransferShown>
 )
 
 @Serializable
@@ -4114,6 +4172,12 @@ data class PrefsView (
 	/// after it for the other way; none: name), whether hidden files show (`hidden`: shown) and how wide columns are
 	/// (`column`: in pixels; none: 240).
 	val driveViews: Map<String, String>? = null,
+	/// The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which
+	/// is in front, kept as the page writes it (JSON).
+	val filesTabs: Map<String, String>? = null,
+	/// Folders this person keeps at hand on the files' page, by workspace, on this device: each a station's folder
+	/// (JSON: [{station, path, name}]), whoever else browses there.
+	val driveFavorites: Map<String, String>? = null,
 	/// How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path.
 	val dropAs: String? = null,
 	/// When a done chat is offered to archive (drawn faded, below the rest of its day): `off`, never;

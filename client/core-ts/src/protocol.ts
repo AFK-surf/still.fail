@@ -128,6 +128,7 @@ export const TOPICS: Record<string, Spec> = {
   lockPrompts: {},
   vaults: { workspace: S },
   vaultItems: { workspace: S, vault: S },
+  driveTransfers: { workspace: S },
   vaultUses: { workspace: S, vault: S, item: S },
 };
 
