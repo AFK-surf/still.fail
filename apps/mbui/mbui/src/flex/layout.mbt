@@ -334,6 +334,12 @@ let out_b : Ref[Double] = { val: 0.0 }
 let reusing : Ref[Bool] = { val: false }
 
 ///|
+/// Whether a container laid out in the current compute() has an absolutely
+/// positioned child: without one, layout_static_absolute has nothing to
+/// place.
+let absolute_seen : Ref[Bool] = { val: false }
+
+///|
 /// Whether `n`'s layout in this compute() is the one it had (its subtree
 /// untouched). (A node is laid out at most once in a compute but for
 /// baselines, which reuse does not take.)
@@ -376,6 +382,7 @@ pub fn compute(
 ) -> Unit {
   generation.val = generation.val + 1
   reusing.val = reuse && !round
+  absolute_seen.val = false
   let b = box_of(root.style, width, height)
   let w = or_else(b.w, if root.style.position == Absolute { undef } else { width })
   let h = or_else(b.h, if root.style.position == Absolute { undef } else { height })
@@ -403,7 +410,7 @@ pub fn compute(
   }
   root.left = b.mar_l + dx
   root.top = b.mar_t + dy
-  if !(kept(root) && s.position != Static) {
+  if absolute_seen.val && !(kept(root) && s.position != Static) {
     layout_static_absolute(root, root, 0.0, 0.0)
   }
   if round {
@@ -699,43 +706,113 @@ fn size_uncached(
 }
 
 ///|
-/// A flex item while its container is laid out. Items (and lines) are kept
-/// for the next container laid out at the same depth (item_pool), not made
-/// anew for each.
-priv struct Item {
-  mut node : Node
-  mut b : Box
-  mut auto_l : Bool
-  mut auto_t : Bool
-  mut auto_r : Bool
-  mut auto_b : Bool
-  mut basis : Double
-  mut hyp : Double // hypothetical main size (clamped basis)
-  mut main : Double
-  mut cross : Double
-  mut frozen : Bool
-  mut target : Double
-  mut line : Int
-  mut main_pos : Double
-  mut cross_pos : Double
-  mut min_main : Double
-  mut max_main : Double
-  mut min_cross : Double
-  mut max_cross : Double
-  mut margin_main : Double
-  mut margin_cross : Double
-  mut stretch : Bool
-  mut align : Align
-  mut row : Bool
-  mut ascent : Double
-  // how far resolve_flexible's clamping moved it this round
-  mut clamped : Double
-}
+/// A flex item's numbers while its container is laid out, ITEM of them per
+/// item side by side in its pool's `f` (item k's at k * ITEM): read pass
+/// after pass over the items, they are kept together, not as an object
+/// each, which its node and box would also be reached through.
+const ITEM : Int = 21
+
+///|
+const BASIS : Int = 0
+
+///|
+/// the hypothetical main size (the basis, clamped)
+const HYP : Int = 1
+
+///|
+const MAIN : Int = 2
+
+///|
+const CROSS : Int = 3
+
+///|
+const TARGET : Int = 4
+
+///|
+const MAIN_POS : Int = 5
+
+///|
+const CROSS_POS : Int = 6
+
+///|
+const MIN_MAIN : Int = 7
+
+///|
+const MAX_MAIN : Int = 8
+
+///|
+const MIN_CROSS : Int = 9
+
+///|
+const MAX_CROSS : Int = 10
+
+///|
+const MARGIN_MAIN : Int = 11
+
+///|
+const MARGIN_CROSS : Int = 12
+
+///|
+const ASCENT : Int = 13
+
+///|
+/// how far resolve_flexible's clamping moved it this round
+const CLAMPED : Int = 14
+
+///|
+/// resolve_flexible's: its flex factor (grow or shrink, as the line goes),
+/// and the least it may come to
+const FACTOR : Int = 15
+
+///|
+const LO_MAIN : Int = 16
+
+///|
+/// its cross size from its style (border-box, NaN when auto)
+const CROSS_STYLE : Int = 17
+
+///|
+/// its style's flex-grow and flex-shrink, and its padding and border along
+/// the main axis
+const GROW : Int = 18
+
+///|
+const SHRINK : Int = 19
+
+///|
+const PB_MAIN : Int = 20
+
+///|
+/// An item's flags, in its pool's `flags`: its auto margins,
+const AUTO_L : Int = 1
+
+///|
+const AUTO_T : Int = 2
+
+///|
+const AUTO_R : Int = 4
+
+///|
+const AUTO_B : Int = 8
+
+///|
+/// whether resolve_flexible has frozen it,
+const FROZEN : Int = 16
+
+///|
+/// whether it is stretched across its line,
+const STRETCH : Int = 32
+
+///|
+/// and whether its insets move it (inset_offset), relatively positioned.
+const INSET : Int = 64
 
 ///|
 priv struct Line {
   mut start : Int
   mut end : Int
+  // its items' main sizes, margins and gaps
+  mut used : Double
   mut cross : Double
   mut pos : Double
   mut ascent : Double
@@ -743,11 +820,16 @@ priv struct Line {
 
 ///|
 /// Per depth of containers being laid out (each lays out its children,
-/// one level down, before it is done): the items and lines in use, and
-/// the ones made so far to take them from.
+/// one level down, before it is done): its items (node, box, alignment, and
+/// their numbers, flags and lines), and the lines in use and made so far to
+/// take them from.
 priv struct Pool {
-  items : Array[Item]
-  item_store : Array[Item]
+  nodes : Array[Node]
+  boxes : Array[Box]
+  aligns : Array[Align]
+  mut f : FixedArray[Double]
+  mut flags : FixedArray[Int]
+  mut line_of : FixedArray[Int]
   lines : Array[Line]
   line_store : Array[Line]
 }
@@ -759,48 +841,30 @@ let pools : Array[Pool] = []
 let depth : Ref[Int] = { val: 0 }
 
 ///|
-/// Item `k` of pool `p` (from the store, or made), for `node` and its box.
-fn Pool::item(self : Pool, node : Node, b : Box) -> Item {
-  let k = self.items.length()
-  let it = if k < self.item_store.length() {
-    let it = self.item_store[k]
-    it.node = node
-    it.b = b
-    it
-  } else {
-    let it = {
-      node,
-      b,
-      auto_l: false,
-      auto_t: false,
-      auto_r: false,
-      auto_b: false,
-      basis: 0.0,
-      hyp: 0.0,
-      main: 0.0,
-      cross: 0.0,
-      frozen: false,
-      target: 0.0,
-      line: 0,
-      main_pos: 0.0,
-      cross_pos: 0.0,
-      min_main: 0.0,
-      max_main: 0.0,
-      min_cross: 0.0,
-      max_cross: 0.0,
-      margin_main: 0.0,
-      margin_cross: 0.0,
-      stretch: false,
-      align: Auto,
-      row: false,
-      ascent: 0.0,
-      clamped: 0.0,
+/// The next item of pool `p`, for `node`, its box and alignment: its index.
+/// (Its numbers are not cleared: each is set before it is read.)
+fn Pool::add(self : Pool, node : Node, b : Box, al : Align) -> Int {
+  let k = self.nodes.length()
+  self.nodes.push(node)
+  self.boxes.push(b)
+  self.aligns.push(al)
+  if k >= self.flags.length() {
+    let n = if k < 8 { 16 } else { k * 2 }
+    let f = FixedArray::make(n * ITEM, 0.0)
+    for i in 0..<(k * ITEM) {
+      f[i] = self.f[i]
     }
-    self.item_store.push(it)
-    it
+    let flags = FixedArray::make(n, 0)
+    let line_of = FixedArray::make(n, 0)
+    for i in 0..<k {
+      flags[i] = self.flags[i]
+      line_of[i] = self.line_of[i]
+    }
+    self.f = f
+    self.flags = flags
+    self.line_of = line_of
   }
-  self.items.push(it)
-  it
+  k
 }
 
 ///|
@@ -809,12 +873,13 @@ fn Pool::line(self : Pool, start : Int, end : Int) -> Unit {
   let ln = if k < self.line_store.length() {
     self.line_store[k]
   } else {
-    let ln = { start: 0, end: 0, cross: 0.0, pos: 0.0, ascent: 0.0 }
+    let ln = { start: 0, end: 0, used: 0.0, cross: 0.0, pos: 0.0, ascent: 0.0 }
     self.line_store.push(ln)
     ln
   }
   ln.start = start
   ln.end = end
+  ln.used = 0.0
   ln.cross = 0.0
   ln.pos = 0.0
   ln.ascent = 0.0
@@ -875,16 +940,34 @@ fn layout_flex(
   let d = depth.val
   depth.val = d + 1
   if d >= pools.length() {
-    pools.push({ items: [], item_store: [], lines: [], line_store: [] })
+    pools.push({
+      nodes: [],
+      boxes: [],
+      aligns: [],
+      f: [],
+      flags: [],
+      line_of: [],
+      lines: [],
+      line_store: [],
+    })
   }
   let pool = pools[d]
-  let items = pool.items
-  items.clear()
+  let nodes = pool.nodes
+  let boxes = pool.boxes
+  let aligns = pool.aligns
+  nodes.clear()
+  boxes.clear()
+  aligns.clear()
   pool.lines.clear()
   let flow = flow_children(node)
+  // what some item has, for the passes below that only it needs
+  let mut any_auto = false
+  let mut any_stretch = false
+  let mut any_baseline = false
   for c in flow {
     let cs = c.style
     if cs.position == Absolute {
+      absolute_seen.val = true
       continue
     }
     let cb = box_for(c, cb_w, cb_h)
@@ -897,31 +980,54 @@ fn layout_flex(
     } else {
       cs.margin.left is Auto || cs.margin.right is Auto
     }
-    let item = pool.item(c, cb)
-    item.auto_l = cs.margin.left is Auto
-    item.auto_t = cs.margin.top is Auto
-    item.auto_r = cs.margin.right is Auto
-    item.auto_b = cs.margin.bottom is Auto
-    item.basis = 0.0
-    item.hyp = 0.0
-    item.main = 0.0
-    item.cross = 0.0
-    item.frozen = false
-    item.target = 0.0
-    item.line = 0
-    item.main_pos = 0.0
-    item.cross_pos = 0.0
-    item.min_main = if row { cb.min_w } else { cb.min_h }
-    item.max_main = if row { cb.max_w } else { cb.max_h }
-    item.min_cross = if row { cb.min_h } else { cb.min_w }
-    item.max_cross = if row { cb.max_h } else { cb.max_w }
-    item.margin_main = margin_main
-    item.margin_cross = margin_cross
-    item.stretch = al == Stretch && !known(cross_style) && !auto_cross_margin
-    item.align = al
-    item.row = row
-    item.ascent = 0.0
-    item.clamped = 0.0
+    let k = pool.add(c, cb, al)
+    let f = pool.f
+    let i = k * ITEM
+    let stretch = al == Stretch && !known(cross_style) && !auto_cross_margin
+    let mut fl = 0
+    if cs.margin.left is Auto {
+      fl = fl | AUTO_L
+    }
+    if cs.margin.top is Auto {
+      fl = fl | AUTO_T
+    }
+    if cs.margin.right is Auto {
+      fl = fl | AUTO_R
+    }
+    if cs.margin.bottom is Auto {
+      fl = fl | AUTO_B
+    }
+    if fl != 0 {
+      any_auto = true
+    }
+    if stretch {
+      fl = fl | STRETCH
+      any_stretch = true
+    }
+    if cs.position == Relative &&
+      !(cs.inset.left is Auto &&
+      cs.inset.right is Auto &&
+      cs.inset.top is Auto &&
+      cs.inset.bottom is Auto) {
+      fl = fl | INSET
+    }
+    pool.flags[k] = fl
+    pool.line_of[k] = 0
+    if al == Baseline {
+      any_baseline = true
+    }
+    let min_main = if row { cb.min_w } else { cb.min_h }
+    let max_main = if row { cb.max_w } else { cb.max_h }
+    f[i + MIN_MAIN] = min_main
+    f[i + MAX_MAIN] = max_main
+    f[i + MIN_CROSS] = if row { cb.min_h } else { cb.min_w }
+    f[i + MAX_CROSS] = if row { cb.max_h } else { cb.max_w }
+    f[i + MARGIN_MAIN] = margin_main
+    f[i + MARGIN_CROSS] = margin_cross
+    f[i + CROSS_STYLE] = cross_style
+    f[i + ASCENT] = 0.0
+    f[i + GROW] = cs.grow
+    f[i + SHRINK] = cs.shrink
     // flex base size
     let basis_style = match cs.basis {
       Pt(v) => v
@@ -943,7 +1049,7 @@ fn layout_flex(
     if !known(basis) {
       // size from content: cross known if fixed or stretched in a known line
       let mut kc = cross_style
-      if !known(kc) && item.stretch && known(inner_cross) && s.wrap == NoWrap {
+      if !known(kc) && stretch && known(inner_cross) && s.wrap == NoWrap {
         kc = fmax(inner_cross - margin_cross, 0.0)
       }
       let cw = if row {
@@ -973,31 +1079,38 @@ fn layout_flex(
       basis = if row { cw } else { ch }
     }
     let pb_main = if row { cb.pbw() } else { cb.pbh() }
+    f[i + PB_MAIN] = pb_main
     basis = fmax(basis, pb_main)
-    item.basis = basis
-    item.hyp = clamp_size(basis, item.min_main, item.max_main)
+    f[i + BASIS] = basis
+    f[i + HYP] = clamp_size(basis, min_main, max_main)
   }
+  // (no more items: their numbers stay where they are)
+  let f = pool.f
+  let flags = pool.flags
+  let count = nodes.length()
   // lines
   let lines = pool.lines
   let wrap = s.wrap != NoWrap
   let line_limit = if known(inner_main) { inner_main } else { avail_main }
   let mut start = 0
   let mut sum = 0.0
-  for i, it in items {
-    let outer = it.hyp + it.margin_main
-    if wrap &&
-      i > start &&
-      known(line_limit) &&
-      sum + gap_main + outer > line_limit + 0.0001 {
-      pool.line(start, i)
-      start = i
-      sum = outer
-    } else {
-      sum = if i == start { outer } else { sum + gap_main + outer }
+  // (without wrapping, all are on one line)
+  if wrap {
+    for k in 0..<count {
+      let outer = f[k * ITEM + HYP] + f[k * ITEM + MARGIN_MAIN]
+      if k > start &&
+        known(line_limit) &&
+        sum + gap_main + outer > line_limit + 0.0001 {
+        pool.line(start, k)
+        start = k
+        sum = outer
+      } else {
+        sum = if k == start { outer } else { sum + gap_main + outer }
+      }
     }
   }
-  if items.length() > 0 || lines.length() == 0 {
-    pool.line(start, items.length())
+  if count > 0 || lines.length() == 0 {
+    pool.line(start, count)
   }
   // resolve flexible lengths, line by line
   let mut max_line_main = 0.0
@@ -1005,8 +1118,13 @@ fn layout_flex(
     let n = ln.end - ln.start
     let gaps = if n > 1 { gap_main * (n - 1).to_double() } else { 0.0 }
     let mut sum_hyp = gaps
+    // (and without them, for resolve_flexible)
+    let mut items_hyp = 0.0
     for k in ln.start..<ln.end {
-      sum_hyp = sum_hyp + items[k].hyp + items[k].margin_main
+      let hyp = f[k * ITEM + HYP]
+      let margin = f[k * ITEM + MARGIN_MAIN]
+      sum_hyp = sum_hyp + hyp + margin
+      items_hyp = items_hyp + hyp + margin
     }
     // the main size to fill: the container's, or the space available when
     // the content would overflow it
@@ -1023,16 +1141,17 @@ fn layout_flex(
       }
     }
     if known(space) {
-      resolve_flexible(items, ln.start, ln.end, space - gaps)
+      resolve_flexible(pool, ln.start, ln.end, items_hyp, space - gaps)
     } else {
       for k in ln.start..<ln.end {
-        items[k].main = items[k].hyp
+        f[k * ITEM + MAIN] = f[k * ITEM + HYP]
       }
     }
     let mut used = gaps
     for k in ln.start..<ln.end {
-      used = used + items[k].main + items[k].margin_main
+      used = used + f[k * ITEM + MAIN] + f[k * ITEM + MARGIN_MAIN]
     }
+    ln.used = used
     max_line_main = fmax(max_line_main, used)
   }
   // container main size
@@ -1048,65 +1167,80 @@ fn layout_flex(
     clamp_size(max_line_main + pb, lo, hi) - pb
   }
   // hypothetical cross sizes
-  for it in items {
-    let cs = it.node.style
-    let cross_style = if row { it.b.h } else { it.b.w }
+  for k in 0..<count {
+    let i = k * ITEM
+    let cross_style = f[i + CROSS_STYLE]
     if known(cross_style) {
-      it.cross = clamp_size(cross_style, it.min_cross, it.max_cross)
+      f[i + CROSS] = clamp_size(cross_style, f[i + MIN_CROSS], f[i + MAX_CROSS])
     } else {
       // stretched items in a single line of known cross size take it
-      let kc = if it.stretch && known(inner_cross) && !wrap {
-        fmax(inner_cross - it.margin_cross, 0.0)
+      let kc = if (flags[k] & STRETCH) != 0 && known(inner_cross) && !wrap {
+        fmax(inner_cross - f[i + MARGIN_CROSS], 0.0)
       } else {
         undef
       }
       if known(kc) {
         // what sizing it would return, without laying out its subtree
-        it.cross = clamp_size(kc, it.min_cross, it.max_cross)
+        f[i + CROSS] = clamp_size(kc, f[i + MIN_CROSS], f[i + MAX_CROSS])
         continue
       }
-      let ac = if known(avail_cross) { avail_cross - it.margin_cross } else { undef }
-      let cw = if row {
-        size_node(it.node, it.main, kc, it.main, ac, cb_w, cb_h, false)
+      let ac = if known(avail_cross) {
+        avail_cross - f[i + MARGIN_CROSS]
       } else {
-        size_node(it.node, kc, it.main, ac, it.main, cb_w, cb_h, false)
+        undef
+      }
+      let main = f[i + MAIN]
+      let cw = if row {
+        size_node(nodes[k], main, kc, main, ac, cb_w, cb_h, false)
+      } else {
+        size_node(nodes[k], kc, main, ac, main, cb_w, cb_h, false)
       }
       let ch = out_h.val
-      ignore(cs)
-      it.cross = clamp_size(if row { ch } else { cw }, it.min_cross, it.max_cross)
+      f[i + CROSS] = clamp_size(
+        if row { ch } else { cw },
+        f[i + MIN_CROSS],
+        f[i + MAX_CROSS],
+      )
     }
   }
   // line cross sizes; items aligned by baseline share the line's baseline
+  // (one line of a known cross size is that size: below)
+  let one_known_line = !wrap && known(inner_cross) && lines.length() == 1
   for li, ln in lines {
+    if one_known_line && !(any_baseline && row) {
+      break
+    }
     let mut c = 0.0
     let mut asc = 0.0
     let mut desc = 0.0
     for k in ln.start..<ln.end {
-      let it = items[k]
-      it.line = li
-      if it.align == Baseline && row {
+      let i = k * ITEM
+      pool.line_of[k] = li
+      if aligns[k] == Baseline && row {
         // its baseline is found by laying it out, while this one may be
         // only measured: a layout kept above it could hold that one
         if reusing.val {
           abort("flex: compute(reuse=true) with an item aligned by baseline")
         }
-        let iw = it.main
-        let ih = it.cross
-        let rw = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+        let iw = f[i + MAIN]
+        let ih = f[i + CROSS]
+        let n = nodes[k]
+        let rw = size_node(n, iw, ih, iw, ih, cb_w, cb_h, true)
         let rh = out_h.val
-        it.node.width = rw
-        it.node.height = rh
-        it.ascent = node_baseline(it.node) + it.b.mar_t
-        asc = fmax(asc, it.ascent)
-        desc = fmax(desc, it.cross + it.margin_cross - it.ascent)
+        n.width = rw
+        n.height = rh
+        let ascent = node_baseline(n) + boxes[k].mar_t
+        f[i + ASCENT] = ascent
+        asc = fmax(asc, ascent)
+        desc = fmax(desc, f[i + CROSS] + f[i + MARGIN_CROSS] - ascent)
       } else {
-        c = fmax(c, it.cross + it.margin_cross)
+        c = fmax(c, f[i + CROSS] + f[i + MARGIN_CROSS])
       }
     }
     ln.ascent = asc
     ln.cross = fmax(c, asc + desc)
   }
-  if !wrap && known(inner_cross) && lines.length() == 1 {
+  if one_known_line {
     lines[0].cross = inner_cross
   }
   // container cross size
@@ -1137,13 +1271,16 @@ fn layout_flex(
   }
   // stretch items to their line
   for ln in lines {
+    if !any_stretch {
+      break
+    }
     for k in ln.start..<ln.end {
-      let it = items[k]
-      if it.stretch {
-        it.cross = clamp_size(
-          fmax(ln.cross - it.margin_cross, 0.0),
-          it.min_cross,
-          it.max_cross,
+      if (flags[k] & STRETCH) != 0 {
+        let i = k * ITEM
+        f[i + CROSS] = clamp_size(
+          fmax(ln.cross - f[i + MARGIN_CROSS], 0.0),
+          f[i + MIN_CROSS],
+          f[i + MAX_CROSS],
         )
       }
     }
@@ -1168,28 +1305,26 @@ fn layout_flex(
   }
   // place items in each line
   let reverse = is_reverse(s.direction)
+  let wrap_reverse = s.wrap == WrapReverse
+  // the flags of an item's auto margins at the start and end of each axis
+  let a_start_bit = if row { AUTO_L } else { AUTO_T }
+  let a_end_bit = if row { AUTO_R } else { AUTO_B }
+  let ca_start_bit = if row { AUTO_T } else { AUTO_L }
+  let ca_end_bit = if row { AUTO_B } else { AUTO_R }
   for ln in lines {
     let n = ln.end - ln.start
-    let gaps = if n > 1 { gap_main * (n - 1).to_double() } else { 0.0 }
-    let mut used = gaps
+    // (what its items take, found with their main sizes)
+    let used = ln.used
     let mut auto_margins = 0
     for k in ln.start..<ln.end {
-      let it = items[k]
-      used = used + it.main + it.margin_main
-      if row {
-        if it.auto_l {
-          auto_margins = auto_margins + 1
-        }
-        if it.auto_r {
-          auto_margins = auto_margins + 1
-        }
-      } else {
-        if it.auto_t {
-          auto_margins = auto_margins + 1
-        }
-        if it.auto_b {
-          auto_margins = auto_margins + 1
-        }
+      if !any_auto {
+        break
+      }
+      if (flags[k] & a_start_bit) != 0 {
+        auto_margins = auto_margins + 1
+      }
+      if (flags[k] & a_end_bit) != 0 {
+        auto_margins = auto_margins + 1
       }
     }
     let free = main_size - used
@@ -1207,25 +1342,28 @@ fn layout_flex(
     let between = out_b.val
     let mut p = lead
     for k in ln.start..<ln.end {
-      let it = items[k]
-      let m_start = if row { it.b.mar_l } else { it.b.mar_t }
-      let m_end = if row { it.b.mar_r } else { it.b.mar_b }
-      let a_start = if row { it.auto_l } else { it.auto_t }
-      let a_end = if row { it.auto_r } else { it.auto_b }
-      let ms = m_start + (if a_start { per_auto } else { 0.0 })
-      let me = m_end + (if a_end { per_auto } else { 0.0 })
+      let i = k * ITEM
+      let ib = boxes[k]
+      let fl = flags[k]
+      let m_start = if row { ib.mar_l } else { ib.mar_t }
+      let m_end = if row { ib.mar_r } else { ib.mar_b }
+      let ms = m_start + (if (fl & a_start_bit) != 0 { per_auto } else { 0.0 })
+      let me = m_end + (if (fl & a_end_bit) != 0 { per_auto } else { 0.0 })
+      let main = f[i + MAIN]
       if reverse {
-        it.main_pos = main_size - (p + ms) - it.main
+        f[i + MAIN_POS] = main_size - (p + ms) - main
       } else {
-        it.main_pos = p + ms
+        f[i + MAIN_POS] = p + ms
       }
-      p = p + ms + it.main + me + gap_main + between
+      p = p + ms + main + me + gap_main + between
       // cross axis within the line
-      let c_start = if row { it.b.mar_t } else { it.b.mar_l }
-      let c_end = if row { it.b.mar_b } else { it.b.mar_r }
-      let ca_start = if row { it.auto_t } else { it.auto_l }
-      let ca_end = if row { it.auto_b } else { it.auto_r }
-      let free_c = ln.cross - it.cross - c_start - c_end
+      let c_start = if row { ib.mar_t } else { ib.mar_l }
+      let c_end = if row { ib.mar_b } else { ib.mar_r }
+      let ca_start = (fl & ca_start_bit) != 0
+      let ca_end = (fl & ca_end_bit) != 0
+      let cross = f[i + CROSS]
+      let free_c = ln.cross - cross - c_start - c_end
+      let al = aligns[k]
       let off = if ca_start && ca_end {
         fmax(free_c, 0.0) / 2.0
       } else if ca_start {
@@ -1233,22 +1371,23 @@ fn layout_flex(
       } else if ca_end {
         0.0
       } else {
-        match it.align {
+        match al {
           FlexEnd => free_c
           Center => free_c / 2.0
           _ => 0.0
         }
       }
-      it.cross_pos = ln.pos + c_start + off
-      if it.align == Baseline && row && !(ca_start || ca_end) {
-        it.cross_pos = ln.pos + ln.ascent - it.ascent + c_start
+      let mut cross_pos = ln.pos + c_start + off
+      if al == Baseline && row && !(ca_start || ca_end) {
+        cross_pos = ln.pos + ln.ascent - f[i + ASCENT] + c_start
       }
-      if s.wrap == WrapReverse {
-        it.cross_pos = cross_size - it.cross_pos - it.cross
+      if wrap_reverse {
+        cross_pos = cross_size - cross_pos - cross
       }
+      f[i + CROSS_POS] = cross_pos
       // (for baselines only, which reuse does not take: measuring may
       // write them too)
-      it.node.line = it.line
+      nodes[k].line = pool.line_of[k]
     }
   }
   let fw = if row { main_size + pbw } else { cross_size + pbw }
@@ -1256,17 +1395,31 @@ fn layout_flex(
   if perform {
     let ox = b.bor_l + b.pad_l
     let oy = b.bor_t + b.pad_t
-    for it in items {
-      let iw = if row { it.main } else { it.cross }
-      let ih = if row { it.cross } else { it.main }
-      let rw = size_node(it.node, iw, ih, iw, ih, cb_w, cb_h, true)
+    for k in 0..<count {
+      let i = k * ITEM
+      let n = nodes[k]
+      let iw = if row { f[i + MAIN] } else { f[i + CROSS] }
+      let ih = if row { f[i + CROSS] } else { f[i + MAIN] }
+      let rw = size_node(n, iw, ih, iw, ih, cb_w, cb_h, true)
       let rh = out_h.val
-      it.node.width = rw
-      it.node.height = rh
-      let x = if row { it.main_pos } else { it.cross_pos }
-      let y = if row { it.cross_pos } else { it.main_pos }
-      it.node.left = ox + x + inset_offset(it.node.style, fw - pbw, fh - pbh, true)
-      it.node.top = oy + y + inset_offset(it.node.style, fw - pbw, fh - pbh, false)
+      n.width = rw
+      n.height = rh
+      let x = if row { f[i + MAIN_POS] } else { f[i + CROSS_POS] }
+      let y = if row { f[i + CROSS_POS] } else { f[i + MAIN_POS] }
+      // (insets that are all auto move it by 0)
+      let inset = (flags[k] & INSET) != 0
+      let dx = if inset {
+        inset_offset(n.style, fw - pbw, fh - pbh, true)
+      } else {
+        0.0
+      }
+      let dy = if inset {
+        inset_offset(n.style, fw - pbw, fh - pbh, false)
+      } else {
+        0.0
+      }
+      n.left = ox + x + dx
+      n.top = oy + y + dy
     }
     ignore(flow)
     for c in node.children {
@@ -1359,53 +1512,64 @@ fn distribute(a : Align, free : Double, n : Int, content : Bool) -> Double {
 
 ///|
 /// CSS flexbox §9.7: grow or shrink the items of one line to fill `space`.
-fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Unit {
-  let mut sum_hyp = 0.0
-  for k in a..<b {
-    sum_hyp = sum_hyp + items[k].hyp + items[k].margin_main
-  }
+fn resolve_flexible(
+  pool : Pool,
+  a : Int,
+  b : Int,
+  sum_hyp : Double,
+  space : Double,
+) -> Unit {
+  let f = pool.f
+  let flags = pool.flags
   let grow = sum_hyp < space
   // freeze inflexible items, at the size they are to have unless some are
-  // flexible after all
+  // flexible after all. A frozen item's main size is its target from then
+  // on.
   let mut initial_free = space
   let mut flexible = false
+  let factor_at = if grow { GROW } else { SHRINK }
   for k in a..<b {
-    let it = items[k]
-    it.target = it.hyp
-    it.main = it.hyp
-    let factor = if grow { it.node.style.grow } else { it.node.style.shrink }
-    if factor == 0.0 ||
-      (grow && it.basis > it.hyp) ||
-      (!grow && it.basis < it.hyp) {
-      it.frozen = true
+    let i = k * ITEM
+    let hyp = f[i + HYP]
+    let basis = f[i + BASIS]
+    f[i + TARGET] = hyp
+    f[i + MAIN] = hyp
+    let factor = f[i + factor_at]
+    let frozen = factor == 0.0 ||
+      (grow && basis > hyp) ||
+      (!grow && basis < hyp)
+    if frozen {
+      flags[k] = flags[k] | FROZEN
     } else {
-      it.frozen = false
+      flags[k] = flags[k] & FROZEN.lnot()
+      f[i + FACTOR] = factor
+      f[i + LO_MAIN] = fmax(or_else(f[i + MIN_MAIN], 0.0), f[i + PB_MAIN])
       flexible = true
     }
     initial_free = initial_free -
-      it.margin_main -
-      (if it.frozen { it.target } else { it.basis })
+      f[i + MARGIN_MAIN] -
+      (if frozen { hyp } else { basis })
   }
   if !flexible {
     return
   }
   let mut rounds = 0
-  while rounds < 64 {
+  let mut left = true
+  while rounds < 64 && left {
     rounds = rounds + 1
-    let mut unfrozen = 0
     let mut sum_factors = 0.0
     let mut free = space
+    let mut sum_scaled = 0.0
     for k in a..<b {
-      let it = items[k]
-      free = free - it.margin_main - (if it.frozen { it.target } else { it.basis })
-      if !it.frozen {
-        unfrozen = unfrozen + 1
-        sum_factors = sum_factors +
-          (if grow { it.node.style.grow } else { it.node.style.shrink })
+      let i = k * ITEM
+      let frozen = (flags[k] & FROZEN) != 0
+      free = free -
+        f[i + MARGIN_MAIN] -
+        (if frozen { f[i + TARGET] } else { f[i + BASIS] })
+      if !frozen {
+        sum_factors = sum_factors + f[i + FACTOR]
+        sum_scaled = sum_scaled + f[i + FACTOR] * f[i + BASIS]
       }
-    }
-    if unfrozen == 0 {
-      break
     }
     if sum_factors < 1.0 {
       let scaled = initial_free * sum_factors
@@ -1413,62 +1577,51 @@ fn resolve_flexible(items : Array[Item], a : Int, b : Int, space : Double) -> Un
         free = scaled
       }
     }
-    if grow {
-      for k in a..<b {
-        let it = items[k]
-        if !it.frozen {
-          it.target = it.basis + free * it.node.style.grow / sum_factors
-        }
-      }
-    } else {
-      let mut sum_scaled = 0.0
-      for k in a..<b {
-        let it = items[k]
-        if !it.frozen {
-          sum_scaled = sum_scaled + it.node.style.shrink * it.basis
-        }
-      }
-      for k in a..<b {
-        let it = items[k]
-        if !it.frozen {
-          let scaled = it.node.style.shrink * it.basis
-          it.target = if sum_scaled > 0.0 {
-            it.basis + free * scaled / sum_scaled
-          } else {
-            it.basis
-          }
-        }
-      }
-    }
-    // clamp and freeze violators
+    // each unfrozen item's share, clamped
     let mut total = 0.0
     for k in a..<b {
-      let it = items[k]
-      if it.frozen {
+      if (flags[k] & FROZEN) != 0 {
         continue
       }
-      let pb = if it.row { it.b.pbw() } else { it.b.pbh() }
-      let lo = fmax(or_else(it.min_main, 0.0), pb)
-      let c = clamp_size(it.target, lo, it.max_main)
-      it.clamped = c - it.target
-      total = total + (c - it.target)
-      it.target = c
+      let i = k * ITEM
+      let basis = f[i + BASIS]
+      let t = if grow {
+        basis + free * f[i + FACTOR] / sum_factors
+      } else {
+        let scaled = f[i + FACTOR] * basis
+        if sum_scaled > 0.0 {
+          basis + free * scaled / sum_scaled
+        } else {
+          basis
+        }
+      }
+      let c = clamp_size(t, f[i + LO_MAIN], f[i + MAX_MAIN])
+      f[i + CLAMPED] = c - t
+      total = total + (c - t)
+      f[i + TARGET] = c
     }
+    // freeze the violators (all, when none)
+    left = false
     for k in a..<b {
-      let it = items[k]
-      if it.frozen {
+      if (flags[k] & FROZEN) != 0 {
         continue
       }
-      let v = it.clamped
+      let i = k * ITEM
+      let v = f[i + CLAMPED]
       if total == 0.0 ||
         (total > 0.0 && v > 0.0) ||
         (total < 0.0 && v < 0.0) {
-        it.frozen = true
+        flags[k] = flags[k] | FROZEN
+        f[i + MAIN] = f[i + TARGET]
+      } else {
+        left = true
       }
     }
   }
-  for k in a..<b {
-    items[k].main = items[k].target
+  if left {
+    for k in a..<b {
+      f[k * ITEM + MAIN] = f[k * ITEM + TARGET]
+    }
   }
 }
 
