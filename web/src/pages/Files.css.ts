@@ -12,17 +12,15 @@ export const bar = style({
   borderBottom: `1px solid ${vars.line}`,
 });
 /** The groove the tabs share, each an equal part of it (as Safari's compact tabs), drawn as the app's own segmented
- * controls are (Drive.css.ts views): the one shown on the page's ground in it. */
+ * controls are (Drive.css.ts views): capsules in a capsule, 2 apart, the one shown on the page's ground in it. */
 export const tabs = style({
-  flex: "1", minWidth: "0", display: "flex", gap: "2px", padding: "2px", borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  flex: "1", minWidth: "0", display: "flex", gap: "2px", padding: "2px", borderRadius: "999px",
   background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
 });
 export const tabsNone = style({ flex: "1" });
 export const tab = style({
   position: "relative", flex: "1 1 0", minWidth: "0", maxWidth: "280px", height: "28px", display: "flex", alignItems: "center",
-  borderRadius: `calc(${vars.rField} - 2px)`, color: vars.muted, transition: `background ${vars.dur} ${vars.easeOut}`,
-  // Its × sits 6 in from its corner: concentric with it (align.ts `inner`).
-  vars: { [IN]: `calc(${vars.rField} - 8px)` },
+  borderRadius: "999px", color: vars.muted, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
     "&[data-on]": { background: vars.canvas, color: vars.text, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}` },
     "&:not([data-on]):hover": { background: vars.hover },
@@ -39,10 +37,10 @@ globalStyle(`${tab}:not([data-on]) ${tabFolder}`, { fontWeight: "400" });
 export const tabStation = style({ flex: "none", color: vars.subtle, fontSize: vars.textCaption });
 /** Between the two sides of a split tab: as far from each as the tab's parts are from each other (its gap). */
 export const tabSplit = style({ flex: "none", alignSelf: "center", width: "1px", height: "10px", background: vars.line });
-/** Closes a tab: at its left, shown as it is pointed at. */
+/** Closes a tab: at its left, shown as it is pointed at; a circle 6 in from the tab's ends (8 + 6 = its 14: concentric). */
 export const tabClose = style({
   position: "absolute", left: "6px", top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: "16px", height: "16px",
-  padding: "0", border: "0", borderRadius: inner, background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
+  padding: "0", border: "0", borderRadius: "50%", background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
   selectors: { [`${tab}:hover &`]: { opacity: "1" }, "&:hover": { background: vars.hover, color: vars.text } },
 });
 export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "4px" });
