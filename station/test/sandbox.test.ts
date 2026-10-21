@@ -139,14 +139,15 @@ describe("the setting", () => {
     assert.equal(sandboxConfig({}), null);
     assert.equal(sandboxConfig({ sandbox: { ssh: "dev@host" } }), null);
     assert.equal(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", enabled: false } }), null);
-    assert.deepEqual(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", identity: "/k" } }), { enabled: true, ssh: "{name}.ws@host", identity: "/k" });
+    assert.deepEqual(sandboxConfig({ sandbox: { ssh: "{name}.ws@host", identity: "/k" } }), { enabled: true, ssh: "{name}.ws@host", identity: "/k", idleMinutes: 10 });
+    assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}@host", idleMinutes: 0 } }), /idleMinutes/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "host" } }), /\{name\}/);
     assert.throws(() => checkSandbox({ sandbox: { ssh: "{name}@host", enabled: "yes" } }), /enabled/);
     checkSandbox({ sandbox: { ssh: "{name}.ws@l4es.afk.surf", enabled: false } });
   });
 
   test("ssh is asked for the sandbox by name, with the key and host keys given", () => {
-    const args = sshArgs({ enabled: true, ssh: "{name}.ws@host", identity: "/id", knownHosts: "/kh" }, "s-a-1");
+    const args = sshArgs({ enabled: true, ssh: "{name}.ws@host", identity: "/id", knownHosts: "/kh", idleMinutes: 10 }, "s-a-1");
     assert.equal(args[0], "ssh");
     assert.equal(args.at(-1), "s-a-1.ws@host");
     assert.ok(args.includes("BatchMode=yes") && args.includes("/id") && args.includes("UserKnownHostsFile=/kh"));

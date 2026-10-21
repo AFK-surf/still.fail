@@ -227,7 +227,9 @@ class Host {
     const host = new Host(profile.id, hostSignature(profile), 1, false, key);
     host.lentUntil = until;
     const label = `codex app-server ${key}`;
-    host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, host.processOptions(label));
+    // A profile's own app-server (its account's limits and models, no session's work) runs here; a session's in its
+    // sandbox when the station runs things there.
+    host.proc = await AgentProcess.start(data, runnerId("codex", key), command, hostArgs(profile), childEnv, cwd, { ...host.processOptions(label), local: key === profile.id });
     return host;
   }
 

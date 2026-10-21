@@ -31,7 +31,13 @@ export type SandboxConfig = {
   /// A directory in the sandboxes, on storage they keep (an NFS mount), where the station's data directory there is:
   /// a session's files outlive its sandbox. None: each sandbox has them on its own disk, gone with it.
   persist?: string;
+  /// How long a session's runtime process may be idle (no turn) before it is ended and its sandbox stopped (once no job
+  /// of the session runs there): `stopIdle`.
+  idleMinutes: number;
 };
+
+/// A session's sandbox is stopped this long after its last turn when config.json says nothing else.
+export const IDLE_MINUTES = 10;
 
 /// What the bridge copies between here and a sandbox (sandbox-bridge.mjs `sync`).
 export type SyncEntry = { path: string; to?: string; mode: "whole" | "append"; skip?: string[]; push?: boolean; back?: boolean; dir?: boolean };
@@ -47,6 +53,7 @@ export function sandboxConfig(raw: any): SandboxConfig | null {
     ...(typeof s.identity === "string" ? { identity: s.identity } : {}),
     ...(typeof s.knownHosts === "string" ? { knownHosts: s.knownHosts } : {}),
     ...(typeof s.persist === "string" ? { persist: s.persist } : {}),
+    idleMinutes: typeof s.idleMinutes === "number" ? s.idleMinutes : IDLE_MINUTES,
   };
 }
 
@@ -59,6 +66,7 @@ export function checkSandbox(raw: any): void {
   if (typeof s.ssh !== "string" || !/^[^\s@]*\{name\}[^\s@]*@[^\s@]+$/.test(s.ssh)) throw new Error("sandbox.ssh must be like {name}.WORKSPACE@HOST");
   for (const k of ["identity", "knownHosts", "persist"]) if (s[k] !== undefined && typeof s[k] !== "string") throw new Error(`sandbox.${k} must be a path`);
   if (typeof s.persist === "string" && !s.persist.startsWith("/")) throw new Error("sandbox.persist must be an absolute path in the sandboxes");
+  if (s.idleMinutes !== undefined && (typeof s.idleMinutes !== "number" || !(s.idleMinutes > 0))) throw new Error("sandbox.idleMinutes must be a number of minutes above 0");
 }
 
 /// A sandbox's name for a station's key (a session's): what the front door takes (a lowercase letter, then lowercase
@@ -149,6 +157,24 @@ export function sandboxed(data: string): boolean {
   return (placed.get(data)?.config() ?? null) !== null;
 }
 
+/// How long a session's runtime process may idle before it is ended, while the station runs things in sandboxes; null
+/// when it does not.
+export function sandboxIdleMs(data: string): number | null {
+  const config = placed.get(data)?.config() ?? null;
+  return config === null ? null : config.idleMinutes * 60_000;
+}
+
+/// Stops (deletes) `key`'s sandbox, `size`'s of it when given: what it has on its own disk goes, its files in
+/// `persist` stay for the next. The front door refuses while anything still has a connection to it (a job, a program
+/// started since): then it stays, and is stopped when that ends. Whether it was stopped.
+export function stopSandbox(data: string, key: string, size?: string, timeoutMs = 60_000): Promise<boolean> {
+  const config = placed.get(data)?.config() ?? null;
+  if (config === null) return Promise.resolve(false);
+  const name = size === undefined ? sandboxName(key) : sandboxName(`${key}|${size}`);
+  const [ssh, ...args] = sshArgs(config, "_");
+  return new Promise((resolve) => execFile(ssh, [...args, "rm", name], { timeout: timeoutMs }, (error, out) => resolve(!error && /^deleting /m.test(out))));
+}
+
 /// A size's name as the sandboxes' operator gives them (l4es `SBX_SANDBOX_SIZES`).
 export const sizeName = (size: string) => /^[a-z][a-z0-9-]{0,30}$/.test(size);
 
@@ -186,6 +212,7 @@ export function inSandbox(data: string, key: string, program: string, args: stri
 }
 
 /// What `sync`'s entries have here, by size and time: the same as when last copied to a sandbox, nothing is copied.
+/// None of them there at all: "" (nothing to copy).
 function signature(sync: SyncEntry[]): string {
   const seen: string[] = [];
   const walk = (path: string, depth: number) => {
@@ -199,7 +226,7 @@ function signature(sync: SyncEntry[]): string {
     else if (st.isFile()) seen.push(`${path}:${st.size}:${st.mtimeMs}`);
   };
   for (const e of sync) if (e.push !== false) walk(e.path, 0);
-  return createHash("sha256").update(seen.join("\n")).digest("hex");
+  return seen.length === 0 ? "" : createHash("sha256").update(seen.join("\n")).digest("hex");
 }
 
 /// What was last copied to each sandbox (by its key), as `signature` has it.
@@ -211,7 +238,7 @@ const copied = new Map<string, string>();
 export async function syncChanged(data: string, key: string, sync: SyncEntry[]): Promise<void> {
   const now = signature(sync);
   const id = `${data}|${key}`;
-  if (copied.get(id) === now) return;
+  if (copied.get(id) === now || (now === "" && !copied.has(id))) return;
   await syncNow(data, key, sync);
   copied.set(id, now);
 }

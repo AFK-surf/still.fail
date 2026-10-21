@@ -1,7 +1,7 @@
 // The hub (src/sessions/hub.ts): routing, sessions, turns, nudges, waits, stops, sign-in retries, hold and release,
 // recover and handover, eviction, single-session connects, the station's own chat. Ported from
 // the Rust station's hub/tests.rs, on a real Store, a fake chat platform and fake runtimes.
-import { CONNECTION_LOST } from "../src/agents/sandbox.ts";
+import { CONNECTION_LOST, keyPart, placeIn, sandboxConfig, sandboxName } from "../src/agents/sandbox.ts";
 import assert from "node:assert/strict";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -893,6 +893,50 @@ test("an idle process beyond the limit is evicted at its own deadline", async ()
   await settle();
   assert.ok(r.claude.last().disposed);
   await r.close();
+});
+
+/// Waits for what a real process does (the stand-in front door below), looking every 5 ms; no deadline.
+async function until(check: () => boolean) {
+  while (!check()) await new Promise((r) => setTimeout(r, 5));
+}
+
+test("in sandboxes an idle session's process ends after the sandbox idle time, whatever its runtime, and its sandbox is stopped", async () => {
+  const time = testClock();
+  const r = new Rig({ clock: time.clock });
+  // The front door as l4es's: `rm NAME` said deleted, each call kept.
+  const calls = join(r.dir, "ssh-calls");
+  writeFileSync(join(r.dir, "ssh"), `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\nfor a; do last=$a; done\necho "deleting $last"\n`);
+  chmodSync(join(r.dir, "ssh"), 0o755);
+  const path = process.env.PATH;
+  process.env.PATH = `${r.dir}:${path}`;
+  const unplace = placeIn(r.dir, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", idleMinutes: 0.002 } }), () => []); // 120 ms
+  try {
+    const a = message();
+    await r.accept(a);
+    const b = say("<@UGPT> look", { threadTs: "1700000001.000200", ts: "1700000001.000200" });
+    await r.accept(b, "gpt");
+    await settle();
+    // Ended so that nothing follows (a turn that completes undeclared is nudged on).
+    r.claude.last().end({ kind: "aborted" });
+    r.codex.last().end({ kind: "aborted" });
+    await settle();
+    await time.adjust(119);
+    await settle();
+    assert.ok(!r.claude.last().disposed && !r.codex.last().disposed, "not idle long enough yet");
+    await time.adjust(1);
+    await settle();
+    // Both ended (no warm limit, no Codex exception), both sandboxes stopped through the front door.
+    assert.ok(r.claude.last().disposed && r.codex.last().disposed);
+    await until(() => existsSync(calls) && readFileSync(calls, "utf8").trim().split("\n").length === 2);
+    const stopped = readFileSync(calls, "utf8").trim().split("\n").map((l) => l.split(" ").slice(-3).join(" ")).sort();
+    const keyA = sessionKey("cl", "C1", a.threadTs);
+    const keyB = sessionKey("gpt", "C1", b.threadTs);
+    assert.deepEqual(stopped, [`_.ws@host rm ${sandboxName(keyPart(keyA))}`, `_.ws@host rm ${sandboxName(keyPart(keyB))}`].sort());
+  } finally {
+    unplace();
+    process.env.PATH = path;
+    await r.close();
+  }
 });
 
 test("a running turn is never evicted", async () => {

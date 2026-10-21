@@ -11,7 +11,7 @@ deployment of [l4h-sandbox](https://github.com/AFK-surf/l4h-sandbox), reached ov
 `sandbox` in config.json, edited by the workspace's owners and admins with `PUT /admin/api/sandbox`:
 
 ```json
-{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts", "persist": "/mnt/sf/stations/NAME" } }
+{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts", "persist": "/mnt/sf/stations/NAME", "idleMinutes": 10 } }
 ```
 
 `{name}` is the sandbox's name; `identity` a key linked to an account that is a member of the l4es workspace;
@@ -58,6 +58,17 @@ exit files are unchanged: the bridge stands in for the program here.
 - A session's processes and its jobs share one sandbox, named from the session's key (`sandboxName`, at most 31
   characters, `s-…-<hash>`). Codex too: in sandboxes each session has an app-server of its own (codex.ts `hostKey`),
   ended with its thread, instead of one shared by a profile's sessions.
+
+## Stopping
+
+The station stops a session's sandbox itself rather than leave it to l4es's idle timeout: once the session's runtime
+process has been idle (no turn, no wait) for `sandbox.idleMinutes` (10 by default), the process is ended, whatever its
+runtime (no warm limit, Codex's too), and the sandbox deleted through the front door (`rm NAME`). The front door
+refuses while anything still has a connection to it (a job of the session, a process started since): it stays then,
+and goes after the agent's next idle spell (a job's end wakes the agent). A sandbox of a job's own size goes when that
+job ends. What the sandbox had on its own disk goes with it; the session's files in `persist` stay, and the next
+message resumes the conversation in a new one (`--resume`). A profile's own Codex app-server (its account's limits and
+models) runs on the station's machine.
 
 ## A connection lost
 

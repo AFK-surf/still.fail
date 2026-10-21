@@ -19,7 +19,7 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
-import { keyPart, sandboxed, sessionSync, syncChanged } from "../agents/sandbox.ts";
+import { keyPart, sandboxIdleMs, sandboxed, sessionSync, stopSandbox, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -599,6 +599,16 @@ export class Hub {
   private evictIdle() {
     const config = this.config();
     const now = this.now();
+    // In sandboxes every session's process goes once idle long enough, whatever its runtime, and its sandbox with it:
+    // nothing is kept warm there (agents/sandbox.ts `sandboxIdleMs`).
+    const sandboxIdle = sandboxIdleMs(config.dataDir);
+    if (sandboxIdle !== null) {
+      for (const actor of this.actors.values()) {
+        const ms = actor.idleMs(now);
+        if (ms !== null && ms >= sandboxIdle) void this.stopIdle(actor);
+      }
+      return;
+    }
     const idle = [...this.actors.values()]
       .filter((a) => a.runtime !== "codex")
       .flatMap((a) => {
@@ -614,6 +624,15 @@ export class Hub {
     }
   }
 
+  /// Ends an idle session's process, then stops its sandbox, unless something started there again meanwhile (the front
+  /// door refuses while a job or a new process has a connection to it).
+  private async stopIdle(actor: SessionActor) {
+    await actor.evict();
+    if (actor.processState() !== "cold") return;
+    const data = this.config().dataDir;
+    if (await stopSandbox(data, keyPart(actor.key))) log.info("hub", "idle session's sandbox stopped", { session: actor.key });
+  }
+
   /// A process went idle: look again when it has idled past warmMs.
   idleNow(key: string) {
     // A manual archive may have arrived during the last turn. Finish that archive when the turn ends; never sweep old
@@ -626,7 +645,7 @@ export class Hub {
     const old = this.deadlines.get(key);
     if (old) this.interrupt(old);
     const fiber = this.runFork(
-      Effect.sleep(this.config().warmMs).pipe(
+      Effect.sleep(Math.min(this.config().warmMs, sandboxIdleMs(this.config().dataDir) ?? Infinity)).pipe(
         Effect.andThen(
           Effect.sync(() => {
             this.deadlines.delete(key);
