@@ -142,13 +142,26 @@ case "${1:-build}" in
     echo "libmbui.so $(size $SO) bytes in $(secs $T0 $T4) s"
     if [ -n "$HBC" ]; then wait $HBC || { cat $OUT/app-assets.log; exit 1; }; cat $OUT/app-assets.log; fi
     T5=$(now)
-    # (Gradle's failure is the build's: an APK of an earlier build must not pass for this one's)
+    # (its failure is the build's: an APK of an earlier build must not pass for this one's)
     rm -f "${APK_OUT:?}"/*.apk
-    (cd $PROJ && set -o pipefail && ./gradlew -q assemble$(echo ${VARIANT:0:1} | tr a-z A-Z)${VARIANT:1} 2>&1 | { grep -v '^$' || true; } | tail -20)
+    if [ -f $PROJ/apk.json ]; then
+      # without Gradle (scripts/apk.py: R8's dex kept by what it is made of, the build's number in the manifest
+      # alone); its number ORG_GRADLE_PROJECT_stillfailBuild, as Gradle's build took it
+      mkdir -p $APK_OUT
+      n=${ORG_GRADLE_PROJECT_stillfailBuild:-1}
+      python3 "$D/apk.py" build $PROJ/apk.json --variant $VARIANT --version-code $n --version-name 0.1.$n --abi $ABI \
+        --out $APK_FILE
+    # (on CI the tasks that ran, by name, the log's times between them what each took; quiet elsewhere)
+    elif [ -n "${GITHUB_ACTIONS:-}" ]; then
+      (cd $PROJ && set -o pipefail && ./gradlew --console=plain assemble$(echo ${VARIANT:0:1} | tr a-z A-Z)${VARIANT:1} 2>&1 |
+        { grep -E '^> Task|^BUILD|actionable|^FAILURE|What went wrong|^e: |error:' | grep -vE 'UP-TO-DATE$|NO-SOURCE$|SKIPPED$' || true; })
+    else
+      (cd $PROJ && set -o pipefail && ./gradlew -q assemble$(echo ${VARIANT:0:1} | tr a-z A-Z)${VARIANT:1} 2>&1 | { grep -v '^$' || true; } | tail -20)
+    fi
     T6=$(now)
     ls -la $APK_OUT/*.apk
     echo "android.sh: APP=$PKG APK in $(secs $T0 $T6) s: moonc $(secs $T0 $T1) s, cc $(secs $T1 $T2) s," \
-      "the app's .so wait $(secs $T2 $T3) s, link $(secs $T3 $T4) s, its assets wait $(secs $T4 $T5) s, gradle $(secs $T5 $T6) s"
+      "the app's .so wait $(secs $T2 $T3) s, link $(secs $T3 $T4) s, its assets wait $(secs $T4 $T5) s, packed $(secs $T5 $T6) s"
     ;;
   emu)
     if ! $SDK/emulator/emulator -list-avds | grep -qx $AVD; then

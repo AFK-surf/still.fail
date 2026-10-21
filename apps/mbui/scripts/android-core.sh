@@ -15,14 +15,12 @@ APP_KIND=core
 APP_EXTRA="--extra=src/core/core_native.c --extra=src/$PKG/android_engine.c"
 APP_LINK="-L$jni -lstillfail_hermes"
 
-# A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB), from Gradle's cache when it has it, into $jni.
+# A .so of an AAR on Maven Central (GROUP/ARTIFACT VERSION FILE LIB SHA-256), fetched once and checked (mbui's
+# scripts/apk.py fetch: kept in $APK_CACHE), into $jni.
 aar_lib() {
-  local aar=$(ls ${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2/files-2.1/$1/$2/*/$3 2>/dev/null | head -1)
-  if [ -z "$aar" ]; then
-    aar=$OUT/$3
-    [ -f $aar ] || curl -sSfL --retry 3 -o $aar https://repo1.maven.org/maven2/$(echo ${1%/*} | tr . /)/${1#*/}/$2/$3
-  fi
-  unzip -o -q -j $aar jni/arm64-v8a/$4 -d $jni
+  local aar
+  aar=$(python3 "$MBUI_DIR/scripts/apk.py" fetch "$(echo ${1%/*} | tr . /)/${1#*/}/$2/$3" "$5") || exit 1
+  unzip -o -q -j "$aar" jni/arm64-v8a/$4 -d $jni
 }
 
 # the .so files, which libmbui.so links against
@@ -33,8 +31,10 @@ app_libs() {
   cp -p $engine/libstillfail_hermes.so $engine/libjsi.so $engine/libc++_shared.so $shell/libstillfail_shell.so $jni/
   # Hermes as React Native 0.81.4 has it, and the fbjni it needs (libc++_shared.so is the engine's, the NDK's, which
   # fbjni's AAR carries an older copy of)
-  aar_lib com.facebook.react/hermes-android 0.81.4 hermes-android-0.81.4-release.aar libhermes.so
-  aar_lib com.facebook.fbjni/fbjni 0.7.0 fbjni-0.7.0.aar libfbjni.so
+  aar_lib com.facebook.react/hermes-android 0.81.4 hermes-android-0.81.4-release.aar libhermes.so \
+    c883c5e24b1361d30a0c2f21cc40be41291648f19598f70f2a018e910d96b041
+  aar_lib com.facebook.fbjni/fbjni 0.7.0 fbjni-0.7.0.aar libfbjni.so \
+    7e319ae110ac5e5ef18904170aea5c3e753e915d196699d7fd39d36c8e1dfe36
   echo "core parts: $(cd $jni && for f in *.so; do printf '%s %s, ' $f $(size $f); done)"
 }
 

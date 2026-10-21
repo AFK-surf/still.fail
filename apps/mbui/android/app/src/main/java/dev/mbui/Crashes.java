@@ -69,12 +69,26 @@ final class Crashes {
         return context.getSharedPreferences("stillfail", Context.MODE_PRIVATE);
     }
 
+    /** This build's PostHog project and its version, read as the app starts (install): its resources (build.gradle.kts
+     *  puts them there) and its package's versionName. */
+    private static String posthogHost = "";
+    private static String posthogKey = "";
+    private static String versionName = "";
+
     static boolean hasKey() {
-        return !BuildConfig.POSTHOG_KEY.isEmpty();
+        return !posthogKey.isEmpty();
     }
 
     /** Keeps a Java crash's exception in the app's files before the system's handler ends the process. */
     static void install(Context context) {
+        posthogHost = context.getString(R.string.posthog_host);
+        posthogKey = context.getString(R.string.posthog_key);
+        try {
+            String v = context.getPackageManager().getPackageInfo(context.getPackageName(), 0).versionName;
+            versionName = v != null ? v : "";
+        } catch (Exception e) {
+            versionName = "";
+        }
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();
         if (before instanceof Keeper) return;
         Thread.setDefaultUncaughtExceptionHandler(new Keeper(new File(context.getFilesDir(), DIR), before));
@@ -221,12 +235,12 @@ final class Crashes {
     /** What every event of the app carries: its build, and the device. */
     static JSONObject device() throws Exception {
         JSONObject d = new JSONObject();
-        d.put("release", BuildConfig.VERSION_NAME);
+        d.put("release", versionName);
         // still.fail mbui, not still.fail's Android app (its "android"): its own crashes and timings told apart
         d.put("app", "android-mbui");
         // it is still.fail's (app.still.fail), not the beta channel's
         d.put("beta", false);
-        d.put("$app_version", BuildConfig.VERSION_NAME);
+        d.put("$app_version", versionName);
         d.put("$os", "Android");
         d.put("$os_version", Build.VERSION.RELEASE);
         d.put("$device_manufacturer", Build.MANUFACTURER);
@@ -291,8 +305,8 @@ final class Crashes {
         if (!hasKey() || !reporting(context)) return;
         JSONArray all = new JSONArray();
         for (JSONObject e : batch) all.put(e);
-        byte[] body = new JSONObject().put("api_key", BuildConfig.POSTHOG_KEY).put("batch", all).toString().getBytes(StandardCharsets.UTF_8);
-        String host = BuildConfig.POSTHOG_HOST;
+        byte[] body = new JSONObject().put("api_key", posthogKey).put("batch", all).toString().getBytes(StandardCharsets.UTF_8);
+        String host = posthogHost;
         while (host.endsWith("/")) host = host.substring(0, host.length() - 1);
         HttpURLConnection c = (HttpURLConnection) new URL(host + "/batch/").openConnection();
         try {
