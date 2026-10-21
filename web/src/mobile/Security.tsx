@@ -76,8 +76,13 @@ function On({ lock }: { lock: LockView }) {
       <ListCard><div className={css.mBody}>
         <div className={css.mState}><span className={css.mDot} data-on="true" />{t("web-pages.security.on")}</div>
         <span className={partsCss.mSubtle}>{t("web-pages.security.onMeta", { signers: lock.signers, stations: lock.protected })}</span>
-        {!lock.signs && <span className={css.mNote}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</span>}
+        {!lock.signs && !lock.me?.waiting && <span className={css.mNote}>{lock.canSign ? t("web-pages.security.notSignerApp") : t("web-pages.security.notSignerWeb")}</span>}
       </div></ListCard>
+      {/* Not confirmed yet: asked for here too, not only on the waiting screen (settings skip it). */}
+      {lock.me?.waiting && <>
+        <SectionHeader title={t("web-pages.security.waitingTitle")} start={24} />
+        <ListCard><div className={css.mBody}><PairSteps lock={lock} /></div></ListCard>
+      </>}
       {lock.requests.length > 0 && <>
         <SectionHeader title={`${t("web-pages.security.waiting")} · ${lock.requests.length}`} start={24} />
         <ListCard>
@@ -277,6 +282,20 @@ export function SecurityOpenScreen() {
  * reached, the code one of them shows typed here (`me.pair`; views/pair.ts). */
 export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
   const app = useApp();
+  return (
+    <div className={css.mWaiting}>
+      <ShieldCheck size={44} strokeWidth={1.4} />
+      <b className={css.mWaitingTitle}>{t("web-pages.security.waitingTitle")}</b>
+      <span className={partsCss.mSubtle}>{t("web-pages.security.waitingLead", { name: app.entry.name })}</span>
+      <PairSteps lock={lock} />
+    </div>
+  );
+}
+
+/** Asking to be confirmed, and the code typed: on the waiting screen, and on 设置 › 安全 (where the vault's page sends a
+ * device not yet confirmed). */
+function PairSteps({ lock }: { lock: LockView }) {
+  const app = useApp();
   const run = useRun();
   const call = useCall();
   const ws = app.entry.id;
@@ -287,23 +306,16 @@ export function SecurityWaitingScreen({ lock }: { lock: LockView }) {
   const typing = pair !== null && (pair.state === "code" || pair.state === "wrong" || pair.state === "checking");
   // Typed wrong: the boxes empty again for the next try, the page says how many are left.
   const prove = (typed: string) => void call("lock.pairCode", { workspace: ws, code: typed }).catch(() => setCode(""));
-  return (
-    <div className={css.mWaiting}>
-      <ShieldCheck size={44} strokeWidth={1.4} />
-      <b className={css.mWaitingTitle}>{t("web-pages.security.waitingTitle")}</b>
-      <span className={partsCss.mSubtle}>{t("web-pages.security.waitingLead", { name: app.entry.name })}</span>
-      {typing ? <>
-        <span className={css.mNote}>{t("web-pages.security.pairEnter")}</span>
-        <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
-        {checking || pair.state === "checking" ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairChecking")}</span>
-          : pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
-      </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
-        : <>
-          <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>
-            {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
-          </span>
-          <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.request"))} />
-        </>}
-    </div>
-  );
+  return typing ? <>
+    <span className={css.mNote}>{t("web-pages.security.pairEnter")}</span>
+    <CodeEntry value={code} onChange={setCode} onDone={prove} wrong={pair.state === "wrong" && code === ""} disabled={checking || pair.state === "checking"} label={t("web-pages.security.pairEnter")} />
+    {checking || pair.state === "checking" ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairChecking")}</span>
+      : pair.state === "wrong" && <span className={css.mFailed}>{t("web-pages.security.pairWrong", { n: pair.left ?? 0 })}</span>}
+  </> : pair?.state === "finding" || asking ? <span className={css.mNote}><Spinner inline />{t("web-pages.security.pairFinding")}</span>
+    : <>
+      <span className={pair?.state === "failed" || lock.me?.failed ? css.mFailed : css.mNote}>
+        {pair?.state === "none" ? t("web-pages.security.pairNone") : pair?.state === "failed" ? (pair.error ?? "") : lock.me?.failed ? t("web-pages.security.requestFailed", { error: lock.me.failed }) : t("web-pages.security.notAsked")}
+      </span>
+      <Button primary label={t("web-pages.security.request")} onClick={() => void run("lock.pair", { workspace: ws }, t("web-pages.security.request"))} />
+    </>;
 }
