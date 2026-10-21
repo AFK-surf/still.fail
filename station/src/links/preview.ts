@@ -5,11 +5,15 @@
 // picture (og:image). Only public addresses are fetched (a link in a chat is no way into the station's own network), a
 // little of each, and what was found is kept a while, so a card opened again shows at once.
 import { execFile } from "node:child_process";
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { isIP } from "node:net";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { isIP, type LookupFunction } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { wall } from "../ops/fibers.ts";
 import { thumbnail } from "../drive/thumbs.ts";
 
@@ -206,6 +210,38 @@ export function isPublic(address: string): boolean {
   return !(v6 === "::" || v6 === "::1" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith("ff"));
 }
 
+/// One GET of `url` from `address` (what its name was checked to resolve to, not asked again), its body as sent. Not
+/// Node's fetch: that undoes gzip and brotli itself, and the decoders are no place for what any page a link points to
+/// sends (CVE-2026-111497, Node's brotli writing out of bounds); a body in any encoding is not read at all (null).
+export function getAt(url: URL, address: string, accept: string): Promise<Response | null> {
+  const family = isIP(address);
+  const pinned: LookupFunction = (_host, options, done) =>
+    options.all ? (done as (e: null, all: LookupAddress[]) => void)(null, [{ address, family }]) : done(null, address, family);
+  return new Promise((resolve, reject) => {
+    const req = (url.protocol === "https:" ? httpsRequest : httpRequest)(
+      url,
+      { headers: { ...UA, accept, "accept-encoding": "identity" }, lookup: pinned, agent: false, signal: AbortSignal.timeout(TIMEOUT_MS) },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        const encoding = res.headers["content-encoding"]?.trim().toLowerCase();
+        if ((encoding && encoding !== "identity") || status < 200 || status > 599) {
+          res.destroy();
+          return resolve(null);
+        }
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(res.headers)) for (const v of [value ?? []].flat()) headers.append(name, v);
+        const empty = status === 204 || status === 205 || status === 304;
+        if (empty) res.destroy();
+        const response = new Response(empty ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>), { status, headers });
+        Object.defineProperty(response, "url", { value: url.toString() });
+        resolve(response);
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 /// A fetch of a public address only, each redirect checked again; null for any other.
 async function fetchPublic(start: URL, accept: string): Promise<Response | null> {
   let url = start;
@@ -214,7 +250,8 @@ async function fetchPublic(start: URL, accept: string): Promise<Response | null>
     const host = url.hostname.replace(/^\[|\]$/g, "");
     const addresses = isIP(host) ? [{ address: host }] : await lookup(host, { all: true }).catch(() => []);
     if (addresses.length === 0 || !addresses.every((a) => isPublic(a.address))) return null;
-    const res = await fetch(url, { headers: { ...UA, accept }, redirect: "manual", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await getAt(url, addresses[0]!.address, accept);
+    if (res === null) return null;
     const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
     if (next === null) return res;
     await res.body?.cancel();

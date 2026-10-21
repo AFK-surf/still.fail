@@ -79,7 +79,8 @@ cp "$root/station/dist/dsh-bridge.mjs" "$root/station/dist/cursor-bridge.mjs" "$
 # The bundle is an ES module: said, so Node neither guesses nor takes the type of a package.json above the release
 # (the desktop app built in apps/desktop has one: every command warned).
 printf '{"type":"module"}\n' > "$app/station/package.json"
-# The Node it runs on, every release, CI and the desktop app's Electron alike (.node-version): what the tests ran on.
+# The Node it runs on, every release and CI alike (.node-version): what the tests ran on. The desktop app's runs on its
+# Electron's (apps/desktop/build.sh), the same but for a security release Electron has not taken in yet.
 cp "$root/.node-version" "$app/NODE_VERSION"
 git -C "$root" rev-parse HEAD > "$app/VERSION"
 git -C "$root" rev-list --count HEAD > "$app/BUILD"

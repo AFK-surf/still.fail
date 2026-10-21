@@ -122,8 +122,9 @@ export class LocalStation {
   }
 
   /**
-   * What the station's launcher runs it with: this app's own Electron as Node (ELECTRON_RUN_AS_NODE), which the release
-   * names as its Node (.node-version, Electron's): the station carries none.
+   * What the station's launcher runs it with: this app's own Electron as Node (ELECTRON_RUN_AS_NODE), not the Node the
+   * release names (.node-version, which Electron's may be a security release behind: apps/desktop/build.sh): the
+   * station carries none.
    */
   get #node(): Record<string, string> {
     return { STILLFAIL_NODE: process.execPath, ELECTRON_RUN_AS_NODE: "1" };
