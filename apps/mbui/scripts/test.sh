@@ -1,17 +1,17 @@
 #!/bin/bash
 # This module's tests against mbui's fake host (no window): still.fail's design system, its pages (over the fixtures),
-# the media screens' parts and the core client's, the screens as the Mac draws them (src/sfscreens, scripts/screens.sh:
-# on js), then the flows seen again over their runs' cores
-# (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run on (js by default; CI's
-# check-mbui: js; check-mbui-native: native). PARTS: which of the two (app: the design system, the pages, gallery and
-# player; replay: the core and the flows seen again), both by default; check-mbui runs each on a runner of its
+# the media screens' parts and the core client's, the screens (src/sfscreens, scripts/screens.sh), then the flows seen
+# again over their runs' cores (src/sfreplay/steps.mbt). UPDATE=1 refreshes snapshots. TARGETS: the targets they run
+# on (native by default, as the apps are built; CI's check-mbui: native on Linux, scripts/linux_host.py first, and on
+# macOS on main). PARTS: which of the two (app: the design system, the pages, the screens, gallery and player;
+# replay: the core and the flows seen again), both by default; check-mbui runs each on a runner of its
 # own. mbui's own: its scripts/test.sh.
 D="$(cd "$(dirname "$0")" && pwd)"
 . "$D/env.sh"
 cd "$A"
 F='^Warning\|^ *│\|^ *╭\|^ *╰\|^─\|^ *[0-9]* │'
 code=0
-for t in ${TARGETS:-js}; do
+for t in ${TARGETS:-native}; do
   echo "=== $t"
   # (native on macOS: the hosts' Objective-C linked in by mbui's own wrapper, as a test's binary is given no
   # cc-link-flags: mbui's scripts/cc_apple.sh. Built --release as the apps are, its C split and compiled in parallel
@@ -21,9 +21,11 @@ for t in ${TARGETS:-js}; do
   # Without ThinLTO unless MBC_LTO says (its link is 30-40 s a test; main's run has it on: mbui-check.yml).)
   unset MOON_CC
   mode=
-  if [ $t = native ] && [ "$(uname)" = Darwin ]; then
-    mode=--release
-    export MBC_REAL_CC="$A/mbui/scripts/cc_apple.sh" MBC_LTO=${MBC_LTO:-0}
+  # (native off macOS: Linux's, CI's, the hosts' code given answers of nothing by scripts/linux_host.py beforehand)
+  [ $t = native ] && mode=--release
+  if [ $t = native ]; then
+    if [ "$(uname)" = Darwin ]; then export MBC_REAL_CC="$A/mbui/scripts/cc_apple.sh"; else export MBC_REAL_CC=${MBC_REAL_CC:-cc}; fi
+    export MBC_LTO=${MBC_LTO:-0}
     # (a unit the same in several tests, as most of mbui's, sf's and sfapp's are, compiled once: MBC_STORE)
     export MBC_STORE=${MBC_STORE:-$A/_build/native/release/mbc-store}
     PATH="$(python3 "$MBUI_DIR/scripts/mbc.py" shim "$A/_build/mbc-bin"):$PATH"
@@ -33,7 +35,7 @@ for t in ${TARGETS:-js}; do
   pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
     pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
-    [ $t = js ] && pkgs="$pkgs -p stillfail/sfscreens"
+    pkgs="$pkgs -p stillfail/sfscreens"
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then
     pkgs="$pkgs -p stillfail/core -p stillfail/sfreplay"
