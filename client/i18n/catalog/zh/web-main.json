@@ -250,6 +250,7 @@
   "web-main.doing.failedWhy": "失败：{error}",
   "web-main.draft.notSent": "发送失败：{error}",
   "web-main.draft.otherStation": "{names} 传到了另一台 station，正在重新传到这台，传好后再发送",
+  "web-main.draft.selectAgain": "{names} 保存在原来的 station，本机已没有原文件。请移除后重新添加，再发送到这台 station。",
   "web-main.draft.tooBig": "超过 1 GB",
   "web-main.draft.uploadFailed": "上传失败",
   "web-main.file.noPreview": "暂时无法预览",

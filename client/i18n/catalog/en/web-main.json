@@ -277,6 +277,7 @@
   "web-main.doing.failedWhy": "Failed: {error}",
   "web-main.draft.notSent": "Couldn't send: {error}",
   "web-main.draft.otherStation": "{names} went up to another station; uploading it again here. Send once it's up.",
+  "web-main.draft.selectAgain": "{names} is stored on the previous station and its local file is no longer available. Remove and add it again to send to this station.",
   "web-main.draft.tooBig": "Over 1 GB",
   "web-main.draft.uploadFailed": "Upload failed",
   "web-main.file.noPreview": "Preview unavailable",
