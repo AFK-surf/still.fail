@@ -75,6 +75,7 @@
   "desktop.local.noService": "本机没有单独安装的 station",
   "desktop.local.byHand": "此 station 为手动启动，此处只能停止",
   "desktop.notify.allowed": "通知已开启",
+  "desktop.tray.open": "打开 {app}",
   "desktop.update.available": "有新版本 {version}",
   "desktop.update.availableDetail": "当前版本为 {current}。更新将下载新版本并重启 {app}。",
   "desktop.update.availableWebDetail": "当前版本为 {current}。新网页已下载，刷新窗口即可使用，{app} 无需重启。",

@@ -4,7 +4,7 @@
 // the page is served from app://ember, the core runs in Node (client/core-ts,
 // the full iroh endpoint) with its data in userData, and a sign-in finished in
 // the system browser comes back through stillfail://auth/callback.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, MessageChannelMain, nativeTheme, net, Notification, powerMonitor, protocol, safeStorage, shell, systemPreferences, Tray, utilityProcess, type MessagePortMain, type UtilityProcess, type WebContents } from "electron";
 import { autoUpdater, type NsisUpdater, type UpdateInfo } from "electron-updater";
 import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -1476,6 +1476,14 @@ function open(path = "/", titled = false): BrowserWindow {
     front = window;
     followMenu();
   });
+  // On Windows the app's last window goes to the tray (setTray) instead of closing, until the app quits.
+  window.on("close", (event) => {
+    if (titled || !tray || quitting || BrowserWindow.getAllWindows().some((w) => w !== window && w.isVisible())) return;
+    event.preventDefault();
+    window.hide();
+  });
+  // Windows signing out or shutting down closes the windows: they close then.
+  window.on("session-end", () => { quitting = true; });
   window.on("closed", () => {
     menuStates.delete(contents);
     frames.delete(contents);
@@ -1656,8 +1664,7 @@ function arrived(url: string): void {
     return;
   }
   void window.loadURL(`${APP_ORIGIN}${path}`);
-  if (window.isMinimized()) window.restore();
-  window.focus();
+  bringUp(window);
 }
 
 /** A page of the app (an item's /o/… link) in the window in front, which goes there itself; in a new one with none. */
@@ -1668,8 +1675,40 @@ function openPath(path: string): void {
     return;
   }
   window.webContents.send("app:navigate", path);
+  bringUp(window);
+}
+
+/** A window brought to the front: back from the tray or the taskbar first. */
+function bringUp(window: BrowserWindow): void {
+  if (!window.isVisible()) window.show();
   if (window.isMinimized()) window.restore();
   window.focus();
+}
+
+/**
+ * The app's icon in the Windows tray, where its last window goes when closed (open's `close`): a click brings the window
+ * back, its menu opens it or quits the app (the station with it, as quitting does).
+ */
+let tray: Tray | null = null;
+let quitting = false;
+
+async function setTray(): Promise<void> {
+  if (process.platform !== "win32") return;
+  const icon = await app.getFileIcon(process.execPath, { size: "small" });
+  tray = new Tray(icon);
+  tray.setToolTip(app.name);
+  const show = () => {
+    // The app's own window (one opened by open, not titled), not a page of a service or one the app opens for itself.
+    const window = BrowserWindow.getAllWindows().find((w) => { const frame = frames.get(w.webContents.id); return frame !== undefined && frame !== "system"; });
+    if (window) bringUp(window);
+    else open();
+  };
+  tray.on("click", show);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: t("desktop.tray.open", { app: app.name }), click: show },
+    { type: "separator" },
+    { label: t("desktop.menu.quit", { app: app.name }), click: () => app.quit() },
+  ]));
 }
 
 let stationStopped = false;
@@ -1706,7 +1745,10 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", (_event, argv) => {
     const url = argv.find((arg) => SCHEMES.some((scheme) => arg.startsWith(`${scheme}://`)));
     if (url) void startup.then(() => arrived(url));
-    else BrowserWindow.getAllWindows()[0]?.focus();
+    else {
+      const window = BrowserWindow.getAllWindows()[0];
+      if (window) bringUp(window);
+    }
   });
   startup = app.whenReady().then(async () => {
     // The beta app takes newer web apps (web-update.mts); run from the source the page is the source's.
@@ -1736,9 +1778,11 @@ if (!app.requestSingleInstanceLock()) {
     if (dockSettings().on) setDock({});
     followSleep();
     followNetwork();
+    await setTray().catch((error: unknown) => diagnostics?.write("tray-error", { error }));
   });
   // The station stops with the app, its runtimes first; the app quits once it has.
   app.on("before-quit", (event) => {
+    quitting = true;
     dock?.stop();
     if (stationStopped) return;
     event.preventDefault();
@@ -1749,7 +1793,8 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on("window-all-closed", () => {
     diagnostics?.write("window-all-closed", { quitting: started && process.platform !== "darwin" });
-    if (started && process.platform !== "darwin") app.quit();
+    // With a tray icon (Windows) the app stays there: its menu quits it.
+    if (started && process.platform !== "darwin" && !tray) app.quit();
   });
 }
 
