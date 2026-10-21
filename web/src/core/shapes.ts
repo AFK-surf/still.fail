@@ -1655,7 +1655,7 @@ export interface MessageBy {
 	maker?: Maker;
 	runtime?: RuntimeKind;
 	picture?: string;
-	/** Another chat's agent (session_send): that chat's link, its name opens it. */
+	/** Another chat's agent (session_send): that chat's link (its `came`). */
 	from?: string;
 	/** In a chat's page: its agent is one of the chat's, its name opens its execution history. Absent otherwise. */
 	here?: boolean;
@@ -1693,7 +1693,7 @@ export interface Place {
 
 /**
  * A message in Slack an agent of a chat sent (chat_post to a Slack thread, slack_api chat.postMessage) or was given,
- * read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
+ * or one it sent another chat's agent (session_send: `place` is that chat), read from its transcript: the chat shows it after the message it followed, without it being one of the chat's.
  */
 export interface ChatSentElsewhere {
 	key: string;
@@ -1787,6 +1787,11 @@ export interface ChatMessage {
 	 * or an agent's need): letting it go (`decision.dismiss`) is offered under it. Absent otherwise.
 	 */
 	asked?: boolean;
+	/**
+	 * Another chat's agent wrote it (session_send, or the first message of a chat it opened): that chat, said after
+	 * its name (`by` names the agent, by its model). Absent otherwise.
+	 */
+	came?: Place;
 	/**
 	 * In a chat's page: what its agents sent to Slack or were given there after this message, before the next. Absent
 	 * when nothing.

@@ -126,6 +126,8 @@ export type NewMessage = {
   thread: number; ts: string; authorKind: AuthorKind; author: string; text: string; attachments?: Attachment[];
   quotes?: Quote[]; declared?: string | null; client?: string | null; profile?: string | null; runtime?: string | null; card?: Json | null;
   options?: Json | null; at?: number | null;
+  /** An agent's model and effort where its session is not this station's (session_send from another station). */
+  agentIdentity?: Json | null;
 };
 
 export const newMessage = (thread: number, ts: string, authorKind: AuthorKind, author: string, text: string): NewMessage => ({

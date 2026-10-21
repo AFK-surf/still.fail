@@ -29,11 +29,24 @@ export function markdownOf(mrkdwn: string): string {
     .join("");
 }
 
-/// What a tool call sends to Slack, if anything: where to and its words.
+/// Where a message to another chat's agent (session_send) went, as kept: `chat:` and the chat it names (its link, its
+/// agent's session key, or its thread's address), told apart from a Slack channel's.
+export const CHAT = "chat:";
+
+/// What readItem reads, by version: a database read with an older one reads its transcripts again.
+export const READER = "2";
+
+/// What a tool call sends to Slack or to another chat's agent (session_send), if anything: where to and its words.
 export function sending(tool: string, call: string): { to: string; text: string } | null {
   const a = args(call);
   if (a === null) return null;
   const name = toolName(tool);
+  if (name === "session_send") {
+    const to = typeof a.to === "string" ? a.to.trim() : "";
+    const text = typeof a.text === "string" ? a.text : "";
+    if (to === "" || text.trim() === "") return null;
+    return { to: `${CHAT}${to}`, text };
+  }
   if (name === "chat_post") {
     const to = typeof a.to === "string" ? a.to : null;
     const text = typeof a.text === "string" ? a.text : null;
@@ -84,7 +97,9 @@ export function readItem(i: number, e: J): { said: Said[] } | { result: { call: 
   if (e?.kind === "tool_call") {
     const s = sending(typeof e.tool === "string" ? e.tool : "", typeof e.text === "string" ? e.text : "");
     if (s === null) return null;
-    return { said: [{ i, k: 0, out: true, call: typeof e.callId === "string" ? e.callId : null, user: null, who: null, at, to: s.to, text: markdownOf(s.text), failed: false }] };
+    // Words to another chat's agent are Markdown already; Slack's are mrkdwn.
+    const text = s.to.startsWith(CHAT) ? s.text : markdownOf(s.text);
+    return { said: [{ i, k: 0, out: true, call: typeof e.callId === "string" ? e.callId : null, user: null, who: null, at, to: s.to, text, failed: false }] };
   }
   if (e?.kind === "tool_result") return { result: { call: typeof e.callId === "string" ? e.callId : null, ...outcome(e) } };
   if (e?.kind === "user" && typeof e.text === "string") {

@@ -10,7 +10,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useId, useLayo
 import { Link, useHref, useSearchParams } from "react-router";
 import { useApi, useChat, useChatSend, useLives, type ChatTo, type Outgoing, type Activity as ActivityView, type AgentWait, type Attachment, type ChatItem, type ChatMessage, type ChatView, type Live, type Maker, type Quote, type RuntimeKind, type Session, type Stamp, type Status } from "./api.ts";
 import { Mark } from "./brand.tsx";
-import { scopeOf, stationBase, usePerson, useStation } from "./station.tsx";
+import { scopeOf, stationBase, useLink, usePerson, useStation } from "./station.tsx";
 import { chatOfLink } from "./chatRefs.ts";
 import { Hover, PathSession } from "./Peeks.tsx";
 import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented, Spinner, Switch, SlackLogo, Time, Tip, transitionTo } from "./ui.tsx";
@@ -36,13 +36,13 @@ import * as nav from "./Sidebar.css.ts";
 import * as sessionCss from "./styles/session.css.ts";
 import * as chatCss2 from "./styles/chat.css.ts";
 import * as conversationCss from "./styles/conversation.css.ts";
-import type { ChatAsk, ChatSentElsewhere, RuntimeInstall } from "./core/shapes.ts";
+import type { ChatAsk, ChatSentElsewhere, Place, RuntimeInstall } from "./core/shapes.ts";
 import * as partsCss from "@stillfail/ui/parts.css.ts";
 import * as historyCss from "./History.css.ts";
 import * as css from "./Chat.css.ts";
 import * as refCss from "./ChatRef.css.ts";
 import { core, useCall } from "./core/react.ts";
-import { ChatRefMenu, markBefore, refAt, RefMirror, WithRefs } from "./ChatRef.tsx";
+import { ChatRefMenu, markBefore, refAt, RefChip, RefMirror, WithRefs } from "./ChatRef.tsx";
 import { useOutsideShare } from "./OutsideShare.tsx";
 import { useMorph } from "./morph.ts";
 import * as cloudCss from "./styles/cloud.css.ts";
@@ -1018,10 +1018,10 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
     <OthersMessage data-vk={`m:${m.seq}`} data-seq={m.seq} data-author={who} data-ts={m.ts} data-role={m.authorKind === "agent" ? "agent" : "person"}
       data-enter={enter} data-caught={caught} data-held={emitted === "held" || undefined} data-emitting={emitted === "emitting" || undefined} data-covered={emitted === "emitting" || undefined}
       avatar={<MessageAvatar message={m} name={who} agent={agent} />} time={m.time?.createdAt}
+      // Another chat's agent wrote it: that chat after its name, as what an agent sent elsewhere says where it went.
+      route={m.came && <span className={css.msgRoute}><Received {...ICON} size={14} />{t("web-main.chat.fromChat")}<ChatPlace place={m.came} /></span>}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{who}</button>
-        // Another chat's agent: its name opens that chat (its link, as the chat pages open still.fail's links).
-        : m.by.from ? <a href={m.by.from} className={`${css.msgName} ${css.msgAgent}`}>{who}</a>
         : <span className={css.msgName}>{who}</span>}>
       <Quotes quotes={m.quotes} files={m.attachments} />
       {m.authorKind === "person"
@@ -1049,6 +1049,8 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
   const agent = s.by.here ? s.by.agent : undefined;
   const received = s.received === true;
   const kind = s.place?.surface;
+  // Sent to another chat's agent (session_send): no other platform's mark on the avatar, that chat after its name.
+  const chatPlace = isChatPlace(s.place);
   const place = s.place
     ? <><ElsewhereLogo kind={kind} size={12} /><span className={historyCss.hPlaceName}>{s.place.name}</span></>
     : <><SlackLogo size={12} /><span className={historyCss.hPlaceName}>Slack</span></>;
@@ -1056,7 +1058,7 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     <OthersMessage data-vk={`e:${s.key}`} data-role={received ? "person" : "agent"} data-author={s.by.name} data-elsewhere="" time={s.time?.createdAt}
       avatar={received
         ? <span className={`${chatCss2.msgAvatar} ${css.msgAvatarSlackHolder}`} data-slack=""><Avatar id={s.by.name} name={s.by.name} size={18} /><span className={css.msgAvatarSlack}><ElsewhereLogo kind={kind} size={9} /></span></span>
-        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={kind === "feishu" ? "feishu" : true} agent={agent} />}
+        : <AgentAvatar maker={s.by.maker} runtime={s.by.runtime} slack={chatPlace ? false : kind === "feishu" ? "feishu" : true} agent={agent} />}
       name={agent
         ? <button type="button" className={`${css.msgName} ${css.msgAgent}`} onClick={() => { if (chat) chatPage.agent(chat, agent); }}>{s.by.name}</button>
         : <span className={css.msgName}>{s.by.name}</span>}
@@ -1064,7 +1066,8 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
         <span className={css.msgRoute}>
           {received ? <Received {...ICON} size={14} /> : <Send {...ICON} size={14} />}
           {t(received ? "web-main.chat.fromSlack" : "web-main.history.sentTo")}
-          {s.place?.url
+          {chatPlace ? <ChatPlace place={s.place!} />
+            : s.place?.url
             ? <a className={historyCss.hPlace} href={s.place.url} target="_blank" rel="noopener">{place}</a>
             : <span className={historyCss.hPlace}>{place}</span>}
           {s.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
@@ -1074,6 +1077,18 @@ const SentElsewhere = memo(function SentElsewhere({ sent: s }: { sent: ChatSentE
     </OthersMessage>
   );
 }, (a, b) => JSON.stringify(a.sent) === JSON.stringify(b.sent));
+
+/** Whether a place is a still.fail chat (where another chat's agent wrote from, or was written to). */
+function isChatPlace(place: Place | undefined): boolean {
+  return place?.surface === "ember" || place?.surface === "stillfail";
+}
+
+/** A still.fail chat a message came from or went to: its reference chip (its title; pointed at, how it stands). */
+function ChatPlace({ place }: { place: Place }) {
+  const link = useLink();
+  const href = place.url ?? (place.session ? link(`/chats/${encodeURIComponent(place.session)}`) : null);
+  return href ? <RefChip title={place.name} href={href} /> : <span className={historyCss.hPlace}><Mark size={12} /><span className={historyCss.hPlaceName}>{place.name}</span></span>;
+}
 
 /** A message as a chat draws it, out of its chat (the decisions page): still, its name plain, no options under it. */
 export function StaticMessage({ message, keeper }: { message: ChatMessage; /** The session that keeps its files. */ keeper: string }) {
@@ -1242,7 +1257,7 @@ export function AgentAvatar({ maker, runtime, slack, agent }: { maker: Maker | n
   return (
     <AgentHover agent={agent}>
       <span className={`${chatCss2.msgAvatar} ${css.msgAvatarAgent}`} data-slack={slack || undefined}>
-        {runtime ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
+        {runtime || maker ? <ModelLogo maker={maker} runtime={runtime} size={12} /> : <Mark size={12} />}
         {/* What it said went to Slack, not here: Slack's mark on its corner. */}
         {slack && <span className={css.msgAvatarSlack}><ElsewhereLogo kind={slack === "feishu" ? "feishu" : "slack"} size={9} /></span>}
       </span>

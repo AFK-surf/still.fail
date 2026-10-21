@@ -160,8 +160,8 @@ export function RuntimeLogo({ runtime, size = 16 }: { runtime: RuntimeKind; size
  * The mark of the company that made a model (the core says which); the runtime's mark when it does not know. No tip of
  * its own: it sits in tabs, rows and buttons that have theirs, and one thing shows one tip.
  */
-export function ModelLogo({ maker, runtime, size = 14 }: { maker: Maker | null | undefined; runtime: RuntimeKind; size?: number }) {
-  if (!maker) return <RuntimeLogo runtime={runtime} size={size} />;
+export function ModelLogo({ maker, runtime, size = 14 }: { maker: Maker | null | undefined; runtime: RuntimeKind | null | undefined; size?: number }) {
+  if (!maker) return runtime ? <RuntimeLogo runtime={runtime} size={size} /> : null;
   return <img className={css.modelLogo} src={`${import.meta.env.BASE_URL}models/${maker.id}.svg`} alt={maker.name} width={size} height={size} data-mono={MONO.has(maker.id) || undefined} />;
 }
 

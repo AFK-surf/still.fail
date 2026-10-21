@@ -748,7 +748,7 @@ export class Store {
       const options = m.options ?? undefined;
       const entry = this.#append(
         {
-          agentIdentity: undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
+          agentIdentity: m.agentIdentity ?? undefined, thread: m.thread, n: 0, kind: "message", target: null, ts: m.ts, authorKind: m.authorKind,
           author: m.author, text: m.text, attachments: m.attachments ?? [], quotes: m.quotes ?? [], declared: m.declared ?? null,
           client: m.client ?? null, profile: m.profile ?? null, runtime: m.runtime ?? null,
           // An options card is kept as options too (what stations and clients from before cards read).
@@ -1677,7 +1677,8 @@ export class Store {
   #append(entry: EntryRow, changes: Changes): EntryRow {
     if (entry.kind === "message" && entry.authorKind === "agent") {
       const r = this.#one("SELECT model, effort FROM sessions WHERE key = ?", entry.author);
-      entry.agentIdentity = r ? { model: r.model, effort: r.effort } : undefined;
+      // Not a session of this station (another station's agent): as its station said, if it did.
+      entry.agentIdentity = r ? { model: r.model, effort: r.effort } : entry.agentIdentity;
     }
     if (this.#isArchived(entry.thread)) this.#restoreThread(entry.thread);
     this.#tx(() => {

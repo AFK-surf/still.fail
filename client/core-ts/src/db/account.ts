@@ -18,7 +18,7 @@ import { topicKey, type Topic } from "../protocol.ts";
 import type { Runner } from "../runtime.ts";
 import { equal, isObject } from "../util.ts";
 import { ensureFilesKept, ensureKept, ensureSaid, ensureSlackSaid, migrate, versionOf } from "./schema.ts";
-import { readItem, type Said } from "../elsewhere.ts";
+import { READER, readItem, type Said } from "../elsewhere.ts";
 
 // deno-lint-ignore no-explicit-any
 type J = any;
@@ -268,7 +268,12 @@ export class AccountDb {
         // No room to make it: messages are not found by their words this time.
       }
       try {
-        if (ensureSlackSaid(sql)) this.#fillSlackSaid();
+        // Read again from the transcripts held when what is read of them grew (READER: session_send's messages too).
+        const reader = this.sql.all("SELECT value FROM meta WHERE key = 'slack_said_reader'")[0]?.[0];
+        if (ensureSlackSaid(sql) || reader !== READER) {
+          this.#fillSlackSaid();
+          this.sql.run("INSERT OR REPLACE INTO meta (key, value) VALUES ('slack_said_reader', ?)", [READER]);
+        }
       } catch {
         // No room to make it: what agents said in Slack is not shown in their chats this time.
       }

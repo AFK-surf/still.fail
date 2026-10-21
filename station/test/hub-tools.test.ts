@@ -713,12 +713,15 @@ test("a message to another station's session goes through the station transport,
   assert.equal(station, "far");
   assert.deepEqual([request.method, request.to, request.session, request.text], ["session.message", "s:1", keyA, "ready?"]);
   assert.equal(request.from.link, `https://ember.test/o/ws/st/${keyA.replaceAll(":", "%3A")}`);
-  // The other way: what a session there sent arrives in B's chat, from that station's session.
-  const from = { title: "部署", link: "https://ember.test/o/ws/far/s%3A1" };
+  // Its model goes with it, the chat there naming it so.
+  const row = r.store.getSession(keyA)!;
+  assert.deepEqual([request.from.model, request.from.effort], [row.model ?? undefined, row.effort ?? undefined]);
+  // The other way: what a session there sent arrives in B's chat, from that station's session, by its model.
+  const from = { title: "部署", link: "https://ember.test/o/ws/far/s%3A1", model: "claude-opus-5-5", effort: "high" };
   const got = await fromPeer(r.hub, "far", { method: "session.message", session: "s:1", to: keyB, text: "yes", from });
   assert.equal(got.thread, `C1/${b.threadTs}`);
   const last = r.said(r.thread("C1", b.threadTs).id).at(-1)!;
-  assert.deepEqual([last.authorKind, last.author], ["agent", "far/s:1"]);
+  assert.deepEqual([last.authorKind, last.author, last.agentIdentity], ["agent", "far/s:1", { model: "claude-opus-5-5", effort: "high" }]);
   assert.ok(matches(last.text, ["<https://ember.test/o/ws/far/s%3A1|部署>", "\n\nyes"]), last.text);
   assert.equal(r.store.pendingMessages(keyB).length, 1);
   await assert.rejects(fromPeer(r.hub, "far", { session: "s:1", to: "nobody", text: "yes" }));

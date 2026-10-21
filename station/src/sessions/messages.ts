@@ -52,6 +52,12 @@ export function sender(hub: Hub, key: string): [string, string | null] {
   return [shown, hub.link(key) ?? null];
 }
 
+/// Session `key`'s model and effort, which a message it sends to another station carries (the chat there names it by them).
+export function identityOf(hub: Hub, key: string): { model?: string; effort?: string } {
+  const row = hub.store.getSession(key);
+  return { ...(row?.model ? { model: row.model } : {}), ...(row?.effort ? { effort: row.effort } : {}) };
+}
+
 /// session_send from session `key`: to a chat of its workspace (or one shared with it to write in), on this station or
 /// another of that workspace (docs/multi-workspace.md).
 export async function sessionSend(hub: Hub, key: string, args: Args): Promise<string> {
@@ -70,7 +76,7 @@ export async function sessionSend(hub: Hub, key: string, args: Args): Promise<st
     const call = peersOf(hub, key);
     if (!call) throw new Error("other stations cannot be reached from this one yet");
     const files = sendable(hub, key, paths);
-    const request: Json = { method: METHOD, session: key, to: target, text, from: { title, link } };
+    const request: Json = { method: METHOD, session: key, to: target, text, from: { title, link, ...identityOf(hub, key) } };
     let answer: Json;
     try {
       // The files first, the message naming them after (peer-files.ts).
@@ -127,17 +133,19 @@ export async function fromPeer(hub: Hub, peer: string, request: Json, ws: string
   const files = claim(hub, peer, from, targets[0] ?? target, request?.files);
   const title = typeof request?.from?.title === "string" && request.from.title.trim() !== "" ? request.from.title : from;
   const link = typeof request?.from?.link === "string" && request.from.link !== "" ? request.from.link : null;
+  const model = typeof request?.from?.model === "string" && request.from.model !== "" ? request.from.model : null;
+  const identity = model === null ? null : { model, effort: typeof request.from.effort === "string" ? request.from.effort : null };
   // The first message of a chat that session opened here (chat_create there): headed as its opening.
   const opener = hub.store.openerOf(target);
   const opened = request?.opened === true && opener !== null && opener.parentStation === peer && opener.parent === from;
   // Not a session of this station: by its station and key, so it is never taken for one.
-  const place = await postFrom(hub, thread, `${peer}/${from}`, title, link, text, targets, files, opened);
+  const place = await postFrom(hub, thread, `${peer}/${from}`, title, link, text, targets, files, opened, identity);
   return { thread: place };
 }
 
 /// Posts `text` from `author` in `thread`, headed with where it comes from (as its opening when `opened`), with `given`
 /// files, and hands it to `targets`. Its address.
-export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false): Promise<string> {
+export async function postFrom(hub: Hub, thread: SessionThread, author: string, title: string, link: string | null, text: string, targets: string[], given: Attachment[] = [], opened = false, identity: Json | null = null): Promise<string> {
   const row = thread.thread;
   let said = `${header(row.surface, title, link, opened)}\n\n${text}`;
   const files = await keep(given, thumbsDir(hub.config().dataDir));
@@ -154,7 +162,7 @@ export async function postFrom(hub: Hub, thread: SessionThread, author: string, 
     ts = await chat.post(here, sent, []);
     said = kept;
   }
-  const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files });
+  const [n] = hub.store.insertMessage({ thread: row.id, ts, authorKind: "agent", author, text: said, attachments: files, agentIdentity: identity });
   hub.deliver(row.id, n, targets.filter((t) => t !== author), said);
   return threadAddress(row.channel, row.threadTs);
 }

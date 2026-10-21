@@ -160,22 +160,28 @@ pub(all) struct Elsewhere {
 }
 
 ///|
+/// A place a message went to or came from, by its field (absent: None).
+fn place_field(s : Json?, key : String) -> Place? {
+  match field(s, key) {
+    Some(Object(_)) as p =>
+      Some({
+        name: text(p, "name"),
+        surface: text(p, "surface"),
+        session: text(p, "session"),
+        url: text(p, "url"),
+      })
+    _ => None
+  }
+}
+
+///|
 fn elsewhere_of(e : Json) -> Elsewhere {
   let s = Some(e)
   {
     key: text(s, "key"),
     after: number(s, "after"),
     text: text(s, "text"),
-    place: match field(s, "place") {
-      Some(Object(_)) as p =>
-        Some({
-          name: text(p, "name"),
-          surface: text(p, "surface"),
-          session: text(p, "session"),
-          url: text(p, "url"),
-        })
-      _ => None
-    },
+    place: place_field(s, "place"),
     failed: flag(s, "failed"),
     received: flag(s, "received"),
     by: by_of(s),
@@ -239,6 +245,8 @@ pub(all) struct Message {
   decision : Decision?
   asked : Bool
   ending : String
+  /// another chat's agent wrote it: that chat, said after its name (`by` names the agent)
+  came : Place?
   elsewhere : Array[Elsewhere]
   placed : Array[String]
   /// said while the chat shows (not caught up on): it comes in rather than being there at once
@@ -297,6 +305,7 @@ fn message_of(m : Json) -> Message {
     },
     asked: flag(s, "asked"),
     ending: text(s, "ending"),
+    came: place_field(s, "came"),
     elsewhere: items(s, "elsewhere").map(elsewhere_of),
     placed: items(s, "placed").map(fn(n) {
       match n {

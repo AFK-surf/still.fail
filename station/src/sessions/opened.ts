@@ -13,7 +13,7 @@ import { attach } from "./conversations.ts";
 import type { Hub } from "./hub.ts";
 import { INTERNAL_CONNECT } from "./internal.ts";
 import { newSession } from "./lifecycle.ts";
-import { chatNamed, postFrom, sender } from "./messages.ts";
+import { chatNamed, identityOf, postFrom, sender } from "./messages.ts";
 import { Refused } from "./neighbours.ts";
 import { fromBefore, linkedStation, peersOf, sessionThreadOf } from "./others.ts";
 import { sendable, sendAlong } from "./peer-files.ts";
@@ -214,7 +214,7 @@ export async function chatCreate(hub: Hub, key: string, args: Args): Promise<str
   // Its first message, unless it already came (an earlier call with this key opened the chat and sent it).
   if (made?.said !== true) {
     try {
-      const message: Json = { method: "session.message", session: key, to: child, text, from: { title: from, link: fromLink }, opened: true };
+      const message: Json = { method: "session.message", session: key, to: child, text, from: { title: from, link: fromLink, ...identityOf(hub, key) }, opened: true };
       if (files.length > 0) message.files = await sendAlong(call, there, key, child, files);
       await call(there, message);
     } catch (error) {
