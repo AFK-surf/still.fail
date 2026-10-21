@@ -43,6 +43,11 @@ def parse(t):
     return datetime.datetime.fromisoformat(t.replace("Z", "+00:00")).timestamp()
 
 
+def still_there(repo, c):
+    out = gh("api", "--paginate", f"repos/{repo}/actions/caches?per_page=100&ref={c['ref']}", "-q", ".actions_caches[].id")
+    return str(c["id"]) in out.split()
+
+
 def gh(*args):
     return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
 
@@ -76,7 +81,8 @@ def main():
         if not dry:
             r = subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{repo}/actions/caches/{c['id']}"], capture_output=True, text=True)
             # (gone already, between the list and here: GitHub's own eviction, run 39606378560)
-            if r.returncode != 0 and "HTTP 404" not in r.stderr:
+            # (or a 5xx for a delete that was done all the same, run 39620407496: what decides is whether it is still there)
+            if r.returncode != 0 and "HTTP 404" not in r.stderr and still_there(repo, c):
                 sys.exit(f"cache_prune: deleting {c['key']}: {r.stderr.strip()}")
         freed += c["size_in_bytes"]
     total = sum(c["size_in_bytes"] for c in caches)
