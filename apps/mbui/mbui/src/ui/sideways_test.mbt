@@ -153,3 +153,57 @@ test "sideways: a row in it is as wide as what it holds, not squeezed to the box
   assert_eq(x1 - x0, 43.0)
   assert_eq(x5 - x0, 215.0)
 }
+
+///|
+test "sideways across rows: a long text's rows scroll as one, as far as the widest of them" {
+  let at = Ref::new(0.0)
+  let words = ["a".repeat(120), "b".repeat(80), "c".repeat(40)]
+  let t = @ui.Tester::new(
+    fn(c) {
+      c.list("rows", 3, 40.0, fn(i) {
+        at.val = c.sideways_at("code", across=true)
+        c.sideways("code", across=true, fn() {
+          // 600, 400 and 200 wide
+          c.rich([@ui.plain(words[i])], size=10.0, wrap=false) |> ignore
+        })
+        |> ignore
+      })
+      |> ignore
+    },
+    w=300.0,
+    h=300.0,
+  )
+  t.draw()
+  // the narrowest row dragged: they all go, as far as the widest's end (600 in 300)
+  let (_, y, _, _) = t.rect_of(words[2]).unwrap()
+  t.drag(250.0, y + 5.0, 0.0, y + 5.0)
+  t.drag(250.0, y + 5.0, 0.0, y + 5.0)
+  t.draw()
+  assert_eq(at.val, 300.0)
+  // each row drawn as far to the left
+  let (x0, _, _, _) = t.rect_of(words[0]).unwrap()
+  let (x2, _, _, _) = t.rect_of(words[2]).unwrap()
+  assert_eq(x0, -300.0)
+  assert_eq(x2, -300.0)
+}
+
+///|
+test "sideways to its end: a path's end in view as it is first laid out and as it goes deeper, where it was left between" {
+  let path = Ref::new("a".repeat(100))
+  let at = Ref::new(0.0)
+  let t = @ui.Tester::new(
+    fn(c) {
+      at.val = c.sideways_at("way")
+      c.sideways("way", to_end=path.val, fn() { c.rich([@ui.plain(path.val)], size=10.0, wrap=false) |> ignore })
+      |> ignore
+    },
+    w=300.0,
+    h=100.0,
+  )
+  t.draw()
+  // 500 wide in 300: at its end, in the frame it is first laid out
+  assert_eq(at.val, 200.0)
+  path.val = "a".repeat(100) + "b".repeat(40)
+  t.draw()
+  assert_eq(at.val, 400.0)
+}

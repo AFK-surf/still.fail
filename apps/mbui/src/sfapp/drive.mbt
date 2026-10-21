@@ -674,29 +674,33 @@ fn drive_crumbs(c : @ui.Ctx, station : String, root : String, root_name : String
     so_far = dv_join(so_far, p)
     levels.push((p, so_far))
   }
-  c.box(dir=Row, w=Fill(1.0), pl=21.0, pr=20.0, pt=2.0, pb=4.0, align=ACenter, clip=true, fn() {
-    for i, l in levels {
-      let (label, to) = l
-      if i > 0 {
-        @sf.icon(c, "chevron-right", size=12.0, color=t.p.subtle) |> ignore
-      }
-      let last = i == levels.length() - 1
-      let id = c.id("crumb/\{i}")
-      if !last && c.clicked(id) {
-        drive_go_back_to(station, root, to)
-      }
-      c.box(padx=3.0, pady=2.0, radius=6.0, id=if last { 0 } else { id }, fn() {
-        c.text(
-          label,
-          size=13.0,
-          weight=if last { 600 } else { 400 },
-          color=if last { t.p.text } else { t.p.muted },
-          wrap=false,
-        )
+  // scrolled across when long, its end in view (DriveScreen.kt Crumbs: horizontalScroll, scrollTo(maxValue))
+  c.sideways("crumbs/" + station + "/" + root, to_end="/" + path, fn() {
+    c.box(dir=Row, pl=21.0, pr=20.0, pt=2.0, pb=4.0, align=ACenter, fn() {
+      for i, l in levels {
+        let (label, to) = l
+        if i > 0 {
+          @sf.icon(c, "chevron-right", size=12.0, color=t.p.subtle) |> ignore
+        }
+        let last = i == levels.length() - 1
+        let id = c.id("crumb/\{i}")
+        if !last && c.clicked(id) {
+          drive_go_back_to(station, root, to)
+        }
+        c.box(padx=3.0, pady=2.0, radius=6.0, id=if last { 0 } else { id }, fn() {
+          c.text(
+            label,
+            size=13.0,
+            weight=if last { 600 } else { 400 },
+            color=if last { t.p.text } else { t.p.muted },
+            wrap=false,
+          )
+          |> ignore
+        })
         |> ignore
-      })
-      |> ignore
-    }
+      }
+    })
+    |> ignore
   })
   |> ignore
 }

@@ -26,6 +26,13 @@ priv struct Sideways {
   mut box : Int
   mut inner : Int
   mut frame : Int
+  /// one box of several built as one (`across`: a long text's rows in a list): the others built this frame
+  others : Array[(Int, Int)]
+  /// the boxes are one across rows: how far it can go only grows while it is kept (rows out of view say nothing)
+  mut across : Bool
+  /// what it was last sent to its end for (Ctx::sideways's `to_end`), and whether it is to go there once laid out
+  mut end_for : String
+  mut to_end : Bool
 }
 
 ///|
@@ -37,7 +44,10 @@ let sideways_friction : Double = 0.996
 
 ///|
 /// A box (as wide as `w`) whose content is laid out as wide as it is and scrolled sideways inside it (see the file's
-/// head). `key` keeps where it is scrolled to from frame to frame. Its id, for what is drawn in it.
+/// head). `key` keeps where it is scrolled to from frame to frame. `across`: the boxes of `key` in any scope (a long
+/// text's rows in a list, each its own row) are one: scrolled together, as far as the widest of them seen. `to_end`:
+/// sent to its end once laid out whenever this changes (a path's end in view as it goes deeper, as Compose's
+/// scrollTo(maxValue)). Its id, for what is drawn in it.
 pub fn Ctx::sideways(
   self : Ctx,
   key : String,
@@ -45,9 +55,11 @@ pub fn Ctx::sideways(
   pad? : Double = 0.0,
   padx? : Double = -1.0,
   pady? : Double = -1.0,
+  across? : Bool = false,
+  to_end? : String = "",
   body : () -> Unit,
 ) -> Int {
-  let id = self.id("\u{1}sideways\u{1}" + key)
+  let id = if across { self.root_id("\u{1}sideways\u{1}" + key) } else { self.id("\u{1}sideways\u{1}" + key) }
   let st = self.scroll_state(id, false)
   let px = if padx >= 0.0 { padx } else { pad }
   let py = if pady >= 0.0 { pady } else { pad }
@@ -60,10 +72,26 @@ pub fn Ctx::sideways(
   self.nodes[b].sideways = true
   // a scroll target (the pointer's), not a tap's
   self.nodes[b].hit = false
-  st.box = b
-  st.inner = inner
-  st.frame = self.build_no
+  st.across = across
+  if to_end != "" && to_end != st.end_for {
+    st.end_for = to_end
+    st.to_end = true
+  }
+  if across && st.frame == self.build_no {
+    st.others.push((b, inner))
+  } else {
+    st.box = b
+    st.inner = inner
+    st.others.clear()
+    st.frame = self.build_no
+  }
   b
+}
+
+///|
+/// An id as `key` gives it at the build's root, whatever scope it is asked in.
+fn Ctx::root_id(self : Ctx, key : String) -> Int {
+  mix(if self.id_stack.is_empty() { self.id_seed } else { self.id_stack[0] }, stable_hash(key).to_int())
 }
 
 ///|
@@ -87,6 +115,10 @@ fn Ctx::scroll_state(self : Ctx, id : Int, vertical : Bool) -> Sideways {
         box: -1,
         inner: -1,
         frame: -1,
+        others: [],
+        across: false,
+        end_for: "",
+        to_end: false,
       }
       sideways[id] = s
       s
@@ -188,9 +220,9 @@ pub fn Ctx::capped(
 }
 
 ///|
-/// How far what the box `key` holds is scrolled sideways (0 at its start).
-pub fn Ctx::sideways_at(self : Ctx, key : String) -> Double {
-  match sideways.get(self.id("\u{1}sideways\u{1}" + key)) {
+/// How far what the box `key` holds is scrolled sideways (0 at its start); `across` as Ctx::sideways's.
+pub fn Ctx::sideways_at(self : Ctx, key : String, across? : Bool = false) -> Double {
+  match sideways.get(if across { self.root_id("\u{1}sideways\u{1}" + key) } else { self.id("\u{1}sideways\u{1}" + key) }) {
     Some(s) => s.x
     None => 0.0
   }
@@ -223,7 +255,19 @@ fn Ctx::sideways_after_layout(self : Ctx) -> Unit {
     }
     let o = self.nodes[st.box]
     let i = self.nodes[st.inner]
-    st.max = if st.vertical { dmax(0.0, i.fh - o.fh) } else { dmax(0.0, i.fw - o.fw) }
+    let mut most = if st.vertical { dmax(0.0, i.fh - o.fh) } else { dmax(0.0, i.fw - o.fw) }
+    for bi in st.others {
+      most = dmax(most, self.nodes[bi.1].fw - self.nodes[bi.0].fw)
+    }
+    st.max = if st.across { dmax(st.max, most) } else { most }
+    if st.to_end {
+      st.to_end = false
+      if st.x != st.max {
+        st.x = st.max
+        // (built again before this frame goes out: drawn there at once)
+        self.read_changed("a sideways box sent to its end")
+      }
+    }
     if st.x > st.max {
       st.x = st.max
     }
