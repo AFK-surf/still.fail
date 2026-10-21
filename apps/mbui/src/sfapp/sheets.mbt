@@ -4,8 +4,9 @@
 // openJob, JobBody), and the jobs left up a long while at the top of Home (OpenJobs.kt). What they show is the core's
 // (the `chat`, `agentCard`, `stations`, `chatJobs`, `jobLog` and `longJobs` views); what is done goes through its calls.
 //
-// Not here yet, against the Android app: the station's card (its row closes the sheet), the run settings page (its row
-// is shown), dragging a sheet by its grabber.
+// An agent's station opens the station's card in its place (settings/station_peek.mbt), its account how it runs.
+//
+// Not here yet, against the Android app: dragging a sheet by its grabber.
 
 // ── parts ───────────────────────────────────────────────────────────────
 
@@ -805,8 +806,9 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
                 |> ignore
                 chevron(c)
               }) {
-              // the station's card is a later slice's
+              // the station's card in place of this one
               close_sheet(c)
+              @settings.open_station_peek(r.station)
             }
           None => ()
         }
@@ -822,11 +824,13 @@ fn agent_sheet(c : @ui.Ctx, src : Source, w : Workspace, r : ChatRef, key : Stri
         } else {
           fill("android-chat.agent.account.auto", [("name", name)])
         }
-        // changing how it runs (History.kt RunSettingsScreen) is not here yet: the row says it
-        agent_row(c, "", tr("android-chat.agent.account"), value, fn() {
-          quota_chips(c, field(account, "quota"))
-        })
-        |> ignore
+        // changing how it runs is a page of its own (History.kt RunSettingsScreen)
+        if agent_row(c, "agent/account", tr("android-chat.agent.account"), value, fn() {
+            quota_chips(c, field(account, "quota"))
+          }) {
+          close_sheet(c)
+          app.nav.push(Setting(@settings.Route::RunSettings(r.station, key)))
+        }
         if agent_row(
             c,
             "agent/history",

@@ -1,16 +1,16 @@
 // Made-up decisions, an execution history, an agent's card, jobs, for the app with no core (fixture.mbt; slice 8's
 // screenshots). MBUI_FIXTURE: "decisions" (the 奏 page with an options card in front), "decisions-text" (a text card),
 // "decisions-idle" (none left: the day so far), "history" (an agent's steps, a few opened), "history-details", the chat
-// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-jobs", "chat-job"; "home-jobs" (Home with the jobs left
-// up a long while at its top); "history-link" (Home, the history there for a link to open at an entry: what apps/android's
-// MbuiCompareTest pictures beside it). Every word here is made up.
+// with a sheet open over it: "chat-info", "chat-publish", "chat-agent", "chat-peek" (its station's card), "chat-jobs",
+// "chat-job"; "home-jobs" (Home with the jobs left up a long while at its top); "history-link" (Home, the history there
+// for a link to open at an entry: what apps/android's MbuiCompareTest pictures beside it). Every word here is made up.
 
 ///|
 /// Whether `mode` is one of this slice's.
 fn decide_mode(mode : String) -> Bool {
   [
     "decisions", "decisions-text", "decisions-idle", "history", "history-details",
-    "chat-info", "chat-publish", "chat-agent", "chat-jobs", "chat-job", "home-jobs", "history-link",
+    "chat-info", "chat-publish", "chat-agent", "chat-peek", "chat-jobs", "chat-job", "home-jobs", "history-link",
   ].contains(mode)
 }
 
@@ -587,6 +587,8 @@ pub fn open_fixture(mode : String) -> Unit {
       dui.sheet = Some(Publish(r.station, 7.0))
     }
     "chat-agent" => dui.sheet = Some(AgentOf(r, "s-c1"))
+    // its station's card, from the agent's (Stations.kt openStationPeek)
+    "chat-peek" => @settings.open_station_peek(r.station)
     "chat-jobs" => dui.sheet = Some(JobsOf(r))
     "chat-job" => {
       dui.job_tab = 0

@@ -959,6 +959,7 @@ let zh : Map[String, String] = {
   "android-chat.run.speed.note": "Fast 响应更快，消耗更多额度或积分。",
   "android-chat.run.title": "更换模型",
   "android-chat.save.failed": "无法保存：{error}",
+  "android-chat.station.details": "机器详情",
   "android-misc.bar.add": "添加",
   "android-misc.bar.count": "{n} 栏",
   "android-misc.bar.current": "当前",

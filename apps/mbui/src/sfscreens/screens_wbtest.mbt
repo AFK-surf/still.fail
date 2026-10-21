@@ -491,6 +491,11 @@ test "chat-agent" {
 }
 
 ///|
+test "chat-peek" {
+  check("chat-peek", @ui.nav_push_ms)
+}
+
+///|
 test "chat-jobs" {
   check("chat-jobs", @ui.nav_push_ms)
 }

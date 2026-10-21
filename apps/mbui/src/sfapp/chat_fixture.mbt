@@ -419,8 +419,25 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
           "id": "st1",
           "name": "Studio",
           "icon": "glyph:desktop",
+          "summary": "Apple M2 Max · 2 个 agent 在工作",
           "online": true,
-          "net": { "via": "direct" },
+          // its machine and network as its card (settings/station_peek.mbt) shows them
+          "host": {
+            "meters": [
+              { "short": "CPU", "left": 72, "level": "ok", "remaining": "空闲 72%" },
+              { "short": "内存", "left": 18, "level": "amber", "remaining": "剩 11.5 G" },
+              { "short": "磁盘", "left": 41, "level": "ok", "remaining": "剩 380 G" },
+            ],
+          },
+          "net": {
+            "via": "direct",
+            "path": "直连",
+            "rtt": { "text": "38 ms", "level": "ok" },
+            "down": "1.4 MB/s",
+            "up": "96 KB/s",
+            "downTotal": "212 MB",
+            "upTotal": "9.6 MB",
+          },
           "overview": fixture_station_drive(true),
         },
         {
