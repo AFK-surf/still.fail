@@ -368,7 +368,7 @@ test("a station updating itself runs on the Node its signed words name, the mach
     const bad = m.run([], { ...told, STILLFAIL_NODE_SHA256: "0".repeat(64) }, bundled);
     assert.equal(bad.status, 1, bad.out);
     assert.match(bad.out, /Node 24\.21\.0 校验失败/);
-    assert.ok(!existsSync(join(data, "node", "v24.21.0")) && !existsSync(join(data, "node", "v24.21.0.part")));
+    assert.deepEqual(readdirSync(join(data, "node")), [], "nothing of it left");
     // No .sha256 asked for: the signed hash is the binary's own.
     assert.doesNotMatch(bad.said, /\.sha256/);
 
@@ -380,6 +380,37 @@ test("a station updating itself runs on the Node its signed words name, the mach
     assert.equal(good.status, 0, good.out);
     assert.equal(readFileSync(join(data, "node", "v24.21.0", "bin", "node"), "utf8"), readFileSync(join(dist, "bin", "node"), "utf8"));
     assert.match(good.said, /curl .*\/releases\/node\/node-v24\.21\.0-darwin-arm64\.tar\.gz/);
+  } finally {
+    m.done();
+  }
+});
+
+test("a Node another install put there meanwhile is the one kept, and nothing half-made is left beside it", () => {
+  const m = machine();
+  const data = join(m.home, ".stillfail");
+  try {
+    mkdirSync(join(data, "mesh"), { recursive: true });
+    writeFileSync(join(data, "mesh", "cloud.json"), '{"origin": "https://app.still.fail"}');
+    const release = join(m.root, "release", "stillfail");
+    writeFileSync(join(release, "NODE_VERSION"), "24.21.0\n");
+    execFileSync("tar", ["-czf", join(m.root, "release.tar.gz"), "-C", join(m.root, "release"), "stillfail"]);
+    // A stand-in that, asked its version from where this install unpacked it, has the other install (the station's own
+    // update, say) finish first: node/v24.21.0 is there by the time this one would move its own in.
+    const dist = join(m.root, "node");
+    mkdirSync(join(dist, "bin"), { recursive: true });
+    const theirs = '#!/bin/sh\necho v24.21.0 # theirs\n';
+    writeFileSync(join(dist, "bin", "node"), `#!/bin/sh\nd="$(cd "$(dirname "$0")/../.." && pwd)/v24.21.0"\n[ -x "$d/bin/node" ] || { mkdir -p "$d/bin"; printf '%s' '${theirs}' > "$d/bin/node"; chmod +x "$d/bin/node"; }\necho v24.21.0\n`, { mode: 0o755 });
+    execFileSync("tar", ["-czf", join(m.root, "node.tar.gz"), "-C", dist, "bin/node"]);
+    const stub = join(m.root, "stub");
+    writeFileSync(join(stub, "curl"), `#!/bin/sh\nwhile [ $# -gt 1 ]; do\n  case "$1" in */releases/node/*) node=yes ;; esac\n  [ "$1" = -o ] && { [ -n "\${node:-}" ] && cp "${join(m.root, "node.tar.gz")}" "$2" || cp "${join(m.root, "release.tar.gz")}" "$2"; }\n  shift\ndone\n`, { mode: 0o755 });
+    const run = m.run([], {
+      STILLFAIL_ORIGIN: "https://releases.test", STILLFAIL_RELEASE_SHA256: sha256Of(join(m.root, "release.tar.gz")),
+      STILLFAIL_NODE_SHA256: sha256Of(join(dist, "bin", "node")), PATH: `${stub}:/usr/bin:/bin:/usr/sbin:/sbin`,
+    }, bundledInstallScript("zh"));
+    assert.equal(run.status, 0, run.out);
+    assert.deepEqual(readdirSync(join(data, "node")), ["v24.21.0"]);
+    assert.deepEqual(readdirSync(join(data, "node", "v24.21.0")), ["bin"]);
+    assert.equal(readFileSync(join(data, "node", "v24.21.0", "bin", "node"), "utf8"), theirs);
   } finally {
     m.done();
   }
