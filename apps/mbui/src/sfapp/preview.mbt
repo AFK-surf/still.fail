@@ -9,9 +9,8 @@
 // Not yet, against the Android app: the flight from the chat's thumbnail and back (it fades in and out, as the
 // Android app does when the thumbnail is not on the screen), stepping through the chat's images (`imageNear`),
 // pinching on iOS (no second finger told there yet), marking an image (ImageMarks.kt), a video's frame-exact steps (its frames' times
-// read by MediaExtractor: here steps of a guessed 60 fps), saving a frame and turning to landscape, code
-// highlighting, a code file's sideways scroll, the frosted glass (the bars are a solid tint: a
-// native view under them cannot be blurred, and the canvas's blur is another slice's).
+// read by MediaExtractor: here steps of a guessed 60 fps), saving a frame and turning to landscape, the frosted glass
+// (the bars are a solid tint: a native view under them cannot be blurred, and the canvas's blur is another slice's).
 
 ///|
 /// The words this page adds (client/i18n/catalog/zh android-chat.json, common.json).
@@ -2676,7 +2675,7 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
           None => ()
         }
       }
-      c.box(w=Fill(1.0), pl=if code { 32.0 } else { 16.0 }, pr=if code { 32.0 } else { 16.0 }, clip=code, fn() {
+      let words = fn() {
         c.rich(
           if colored.length() > 0 { runs } else { [@ui.span(sb.to_string(), mono=true)] },
           size=12.5,
@@ -2685,8 +2684,13 @@ fn Viewer::text_stage(self : Viewer, c : @ui.Ctx, kind : PKind, b : Bytes, stage
           wrap=!code,
         )
         |> ignore
-      })
-      |> ignore
+      }
+      if code {
+        // scrolled across, its rows as one (FilePreview.kt: the code in a horizontalScroll, 32 in from its sides)
+        c.sideways("preview/code/" + v.file.path, across=true, padx=32.0, words) |> ignore
+      } else {
+        c.box(w=Fill(1.0), pl=16.0, pr=16.0, words) |> ignore
+      }
     }
   })
   |> ignore

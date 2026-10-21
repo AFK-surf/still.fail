@@ -892,40 +892,44 @@ fn marks_foot(c : @ui.Ctx) -> Unit {
     // the notes said so far, a card each
     let numbers = mark_numbers(marking.shapes)
     if numbers.length() > 0 {
-      c.box(dir=Row, w=Fill(1.0), padx=16.0, gap=8.0, clip=true, fn() {
-        for s in marking.shapes {
-          match numbers.get(s.id) {
-            Some(n) => {
-              let id = c.id("marks/card/\{s.id}")
-              if c.clicked(id) {
-                marks_put_down(c)
-                marking.note = s.id
-                marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
-                c.focus_editor("marks/note")
-              }
-              let said = marking.comments.get(s.id).unwrap_or("")
-              c.box(dir=Row, max_w=200.0, padx=10.0, pady=8.0, gap=8.0, radius=14.0, bg=glass, align=ACenter, id~, fn() {
-                c.box(w=Px(18.0), h=Px(18.0), radius=9.0, bg=s.color, align=ACenter, justify=JCenter, fn() {
-                  c.text("\{n}", size=10.0, weight=700, color=halo_of(s.color), wrap=false) |> ignore
+      // scrolled across when they do not fit (ImageMarks.kt: horizontalScroll)
+      c.sideways("marks/notes", padx=16.0, fn() {
+        c.box(dir=Row, gap=8.0, fn() {
+          for s in marking.shapes {
+            match numbers.get(s.id) {
+              Some(n) => {
+                let id = c.id("marks/card/\{s.id}")
+                if c.clicked(id) {
+                  marks_put_down(c)
+                  marking.note = s.id
+                  marking.note_field.set(marking.comments.get(s.id).unwrap_or(""))
+                  c.focus_editor("marks/note")
+                }
+                let said = marking.comments.get(s.id).unwrap_or("")
+                c.box(dir=Row, max_w=200.0, padx=10.0, pady=8.0, gap=8.0, radius=14.0, bg=glass, align=ACenter, id~, fn() {
+                  c.box(w=Px(18.0), h=Px(18.0), radius=9.0, bg=s.color, align=ACenter, justify=JCenter, fn() {
+                    c.text("\{n}", size=10.0, weight=700, color=halo_of(s.color), wrap=false) |> ignore
+                  })
+                  |> ignore
+                  c.text(
+                    if said != "" {
+                      said
+                    } else {
+                      pv(if s.kind == "box" { "android-chat.marks.note.box" } else { "android-chat.marks.note.arrow" })
+                    },
+                    size=13.0,
+                    color=if said != "" { dark_text } else { dark_muted },
+                    wrap=false,
+                  )
+                  |> ignore
                 })
                 |> ignore
-                c.text(
-                  if said != "" {
-                    said
-                  } else {
-                    pv(if s.kind == "box" { "android-chat.marks.note.box" } else { "android-chat.marks.note.arrow" })
-                  },
-                  size=13.0,
-                  color=if said != "" { dark_text } else { dark_muted },
-                  wrap=false,
-                )
-                |> ignore
-              })
-              |> ignore
+              }
+              None => ()
             }
-            None => ()
           }
-        }
+        })
+        |> ignore
       })
       |> ignore
     }

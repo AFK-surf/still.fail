@@ -341,26 +341,38 @@ fn sf_crumbs(c : @ui.Ctx) -> Unit {
     }
     None => ()
   }
-  c.box(dir=Row, w=Fill(1.0), min_h=28.0, pl=17.0, pr=20.0, pb=8.0, align=ACenter, clip=true, fn() {
-    for i, step in steps {
-      let (name, to) = step
-      if i > 0 {
-        @sf.icon(c, "chevron-right", size=12.0, color=t.p.subtle) |> ignore
-      }
-      let last = i == steps.length() - 1
-      let id = c.id("sf-way/\{i}")
-      if !last && c.clicked(id) {
-        sfs.place = to
-      }
-      c.box(padx=3.0, pady=3.0, radius=6.0, id=if last { 0 } else { id }, fn() {
-        c.text(name, size=14.0, weight=if last { 600 } else { 400 }, color=if last { t.p.text } else { t.p.muted }, wrap=false)
-        |> ignore
+  // scrolled across when long, its end in view (StationFiles.kt: horizontalScroll, scrollTo(maxValue))
+  c.box(style=sf_way_room, fn() {
+    c.sideways("sf-way", to_end=steps.length().to_string(), fn() {
+      c.box(dir=Row, min_h=28.0, pl=17.0, pr=20.0, align=ACenter, fn() {
+        for i, step in steps {
+          let (name, to) = step
+          if i > 0 {
+            @sf.icon(c, "chevron-right", size=12.0, color=t.p.subtle) |> ignore
+          }
+          let last = i == steps.length() - 1
+          let id = c.id("sf-way/\{i}")
+          if !last && c.clicked(id) {
+            sfs.place = to
+          }
+          c.box(padx=3.0, pady=3.0, radius=6.0, id=if last { 0 } else { id }, fn() {
+            c.text(name, size=14.0, weight=if last { 600 } else { 400 }, color=if last { t.p.text } else { t.p.muted }, wrap=false)
+            |> ignore
+          })
+          |> ignore
+        }
       })
       |> ignore
-    }
+    })
+    |> ignore
   })
   |> ignore
 }
+
+///|
+/// The way's room: 8 over the list under it (StationFiles.kt:145).
+// kept across runs: a value (no field of it changes)
+let sf_way_room : @ui.Style = @ui.style(w=Full, pb=S2)
 
 ///|
 /// Each station's places (StationFiles.kt Places): its home (for a member who browses every folder), then its folders

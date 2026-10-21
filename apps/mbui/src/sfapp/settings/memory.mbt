@@ -452,26 +452,38 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
 fn doc_chips(c : @ui.Ctx, key : String, pages : Array[(String, String, String)], picked : Int) -> Int {
   let t = @sf.theme()
   let mut got = picked
-  c.box(dir=Row, w=Fill(1.0), pl=12.0, pr=12.0, pb=10.0, gap=6.0, clip=true, fn() {
-    for i, p in pages {
-      let on = i == picked
-      let id = c.id(key + "/chip/" + i.to_string())
-      if hit(c, id) {
-        got = i
-      }
-      c.box(dir=Row, padx=14.0, pady=7.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
-        c.text(p.0, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
-        |> ignore
-        if p.1 != "" {
-          c.text("  " + p.1, size=13.0, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
+  // scrolled across when they do not fit (Memory.kt DocChips: horizontalScroll)
+  c.box(style=doc_chips_room, fn() {
+    c.sideways(key + "/chips", padx=12.0, fn() {
+      c.box(dir=Row, gap=6.0, fn() {
+        for i, p in pages {
+          let on = i == picked
+          let id = c.id(key + "/chip/" + i.to_string())
+          if hit(c, id) {
+            got = i
+          }
+          c.box(dir=Row, padx=14.0, pady=7.0, radius=16.0, bg=if on { t.p.text } else { t.p.chip }, id~, fn() {
+            c.text(p.0, size=13.0, weight=if on { 600 } else { 400 }, color=if on { t.p.bg } else { t.p.text }, wrap=false)
+            |> ignore
+            if p.1 != "" {
+              c.text("  " + p.1, size=13.0, color=@sf.alpha(if on { t.p.bg } else { t.p.text }, 0.6), wrap=false) |> ignore
+            }
+          })
+          |> ignore
         }
       })
       |> ignore
-    }
+    })
+    |> ignore
   })
   |> ignore
   got
 }
+
+///|
+/// The pills' room: 10 over what is under them; 12 in from the page's sides as they scroll (Memory.kt:243).
+// kept across runs: a value (no field of it changes)
+let doc_chips_room : @ui.Style = @ui.style(w=Full, pb=S2_5)
 
 ///|
 /// The card a skill's when and sharing are on: a card (20 down, 22 round) whose rows reach 8 from its sides, as
