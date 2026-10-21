@@ -3,6 +3,7 @@ import {
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
   "moonbitlang/core/math",
+  "mbui/dmath",
   "mbui/ui",
   "mbui/kit",
   "mbui/motion",

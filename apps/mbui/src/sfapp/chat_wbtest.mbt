@@ -154,6 +154,8 @@ test "a file card in the chat opens its preview" {
   let src = fixture("chat")
   let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
   open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  // (the chat opened drawn at its moment, its push from there)
+  t.draw()
   t.run_for(@ui.nav_push_ms)
   t.move(195.0, 400.0)
   t.wheel(195.0, 400.0, -600.0)

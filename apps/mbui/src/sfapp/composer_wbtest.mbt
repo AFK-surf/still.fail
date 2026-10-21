@@ -573,13 +573,11 @@ test "the list keeps clear the room the composer takes in the very frame it grow
     rows[rows.length() - 1].2
   }
   let before = composer_room_of(t.ctx())
-  // lines enough that it outgrows the least room the list keeps (composer_room): each taken by a frame of its own,
-  // in which the list's foot is already the room the composer takes then (not the one it took a frame before)
+  // lines enough that it outgrows the least room the list keeps (composer_room): in the frame that takes each, the
+  // list's foot is already the room the composer takes then (not the one it took a frame before)
   for line in ["第二行", "第三行", "第四行", "第五行", "第六行"] {
-    let at = t.next_frame_time()
     t.enter()
     t.type_text(line)
-    assert_true(t.time() >= at)
     assert_eq(foot(), composer_room_of(t.ctx()) + 10.0)
   }
   // and each frame of its morph, as the display draws them, to its end

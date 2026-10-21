@@ -33,6 +33,8 @@ test "97-video-frames" {
     f.see("=studio")
     f.see("e2e-clip.mp4")
     f.tap("e2e-clip.mp4")
+    // flown open, its bars on once it is in (preview.mbt: the viewer's way in)
+    f.run_to(@sfapp.preview_rest())
     // the system's player reads it through the core, then says its frames' times
     let v = opened_view(f)
     clip_reads(f, v, 423168, 423168)

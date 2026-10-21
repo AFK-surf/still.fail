@@ -105,8 +105,8 @@ pub fn progress_ring(c : @ui.Ctx, size : Double, part : Double, color : Int64) -
       let pts = []
       for i in 0..=n {
         let a = from + (to - from) * i.to_double() / n.to_double()
-        pts.push(mid + r * @math.cos(a))
-        pts.push(mid + r * @math.sin(a))
+        pts.push(mid + r * @dmath.cos(a))
+        pts.push(mid + r * @dmath.sin(a))
       }
       pts
     }

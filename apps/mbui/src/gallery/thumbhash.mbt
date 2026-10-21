@@ -114,10 +114,10 @@ fn thumbhash_rgba(hash : Array[Int]) -> (Int, Int, FixedArray[Byte])? {
       let mut q = q_dc
       let mut a = a_dc
       for cx in 0..<nfx {
-        fx[cx] = @math.cos(pi / w.to_double() * (x.to_double() + 0.5) * cx.to_double())
+        fx[cx] = @dmath.cos(pi / w.to_double() * (x.to_double() + 0.5) * cx.to_double())
       }
       for cy in 0..<nfy {
-        fy[cy] = @math.cos(pi / h.to_double() * (y.to_double() + 0.5) * cy.to_double())
+        fy[cy] = @dmath.cos(pi / h.to_double() * (y.to_double() + 0.5) * cy.to_double())
       }
       let mut j = 0
       for cy in 0..<ly {

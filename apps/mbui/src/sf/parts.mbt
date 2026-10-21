@@ -455,7 +455,7 @@ pub fn breath(c : @ui.Ctx, failed? : Bool = false) -> Double {
   let pi = 3.141592653589793
   let f = c.cycle(breath_ms)
   // ease-in-out between the two ends
-  0.75 + 0.25 * @math.cos(2.0 * pi * f)
+  0.75 + 0.25 * @dmath.cos(2.0 * pi * f)
 }
 
 ///|

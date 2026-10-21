@@ -328,7 +328,7 @@ fn emit_settle(s : Double) -> Double {
   let w0 = (520.0).sqrt()
   let z = 14.0 / (2.0 * w0)
   let wd = w0 * (1.0 - z * z).sqrt()
-  @math.exp(-z * w0 * s) * (@math.cos(wd * s) + z * w0 / wd * @math.sin(wd * s))
+  @dmath.exp(-z * w0 * s) * (@dmath.cos(wd * s) + z * w0 / wd * @dmath.sin(wd * s))
 }
 
 ///|
@@ -393,12 +393,12 @@ fn emit_flight(c : @ui.Ctx, key : String, e : Emits, agents : Array[String]) -> 
       let up = if rise > 0.0 { u / rise } else { 1.0 }
       let down = (u - rise) / (1.0 - rise)
       let y = if u < rise {
-        start.1 + (top - start.1) * (1.0 - @math.pow(1.0 - up, 2.5))
+        start.1 + (top - start.1) * (1.0 - @dmath.pow(1.0 - up, 2.5))
       } else {
-        top + (landing.1 - top) * @math.pow(dmax(down, 0.0), 2.5)
+        top + (landing.1 - top) * @dmath.pow(dmax(down, 0.0), 2.5)
       }
-      let across = if u < 0.5 { 4.0 * u * u * u } else { 1.0 - @math.pow(-2.0 * u + 2.0, 3.0) / 2.0 }
-      let stretch = if u < rise { 0.07 * @math.sin(@math.PI * up) } else { 0.14 * down * down }
+      let across = if u < 0.5 { 4.0 * u * u * u } else { 1.0 - @dmath.pow(-2.0 * u + 2.0, 3.0) / 2.0 }
+      let stretch = if u < rise { 0.07 * @dmath.sin(@math.PI * up) } else { 0.14 * down * down }
       Some((start.0 + (landing.0 - start.0) * across, y, 1.0 - stretch * 0.6, 1.0 + stretch))
     }
     Spit => {

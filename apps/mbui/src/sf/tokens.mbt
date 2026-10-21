@@ -487,6 +487,9 @@ pub fn ui_theme() -> @ui.Theme {
     leading: leading_scale,
     radii,
     link: if t.dark { base.accent } else { base.accent_text },
+    // a line of words that say none 1.4 of their size, as the web's root (`line-height: 1.4`) and Android's (Theme.kt
+    // WebType: 1.4.em)
+    text_line: 1.4,
   }
 }
 
