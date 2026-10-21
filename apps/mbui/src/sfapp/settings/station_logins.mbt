@@ -33,7 +33,8 @@ fn station_logins(c : @ui.Ctx, core : Core, address : String) -> Array[() -> Uni
     blocks.push(fn() {
       c.box(style=logins_active, fn() {
         for l in active {
-          (core.login_card)(c, address, text(Some(l), "id"))
+          let id = text(Some(l), "id")
+          (core.login_card)(c, address, id, login_marked.val is Some((a, m, _)) && a == address && m == id)
         }
       })
       |> ignore
@@ -71,4 +72,28 @@ fn station_logins(c : @ui.Ctx, core : Core, address : String) -> Array[() -> Uni
     c.box(style=logins_lead_room, fn() { c.text(tr("web-main.logins.lead"), style=logins_lead_words) |> ignore }) |> ignore
   })
   blocks
+}
+
+///|
+/// The login a link pointed to (AppState.open's `login`: Screen.Station(address, login)), on the station's page that
+/// opens: its card marked, brought into view once (`true` once it was).
+let login_marked : Ref[(String, String, Bool)?] = Ref(None)
+
+///|
+/// A link's login: the station's page about to open shows it marked, brought into view.
+pub fn mark_login(address : String, login : String) -> Unit {
+  login_marked.val = Some((address, login, false))
+}
+
+///|
+/// The station's page (list `key`) brought to its login a link pointed to, at block `at` (its cards under way), once
+/// the page's list is there.
+fn bring_marked_login(c : @ui.Ctx, address : String, key : String, at : Int) -> Unit {
+  match login_marked.val {
+    Some((a, m, false)) if a == address && c.list_info(key) is Some(_) => {
+      c.list_scroll_to(key, at)
+      login_marked.val = Some((a, m, true))
+    }
+    _ => ()
+  }
 }

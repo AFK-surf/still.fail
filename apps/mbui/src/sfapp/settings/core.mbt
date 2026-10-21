@@ -64,7 +64,7 @@ pub(all) struct Core {
   set_reporting : (Bool) -> Unit
   /// a station's login as its card, as wide as where it is (LoginCards.kt LoginCard: the chat's, src/sfapp/login_card.mbt),
   /// by station and id
-  login_card : (@ui.Ctx, String, String) -> Unit
+  login_card : (@ui.Ctx, String, String, Bool) -> Unit
 }
 
 ///|
@@ -496,6 +496,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  login_marked.val = None
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None

@@ -560,8 +560,11 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
             }
           _ => ()
         }
-        // the logins its agents did there (LoginCards.kt StationLogins): those under way as their cards
-        for b in station_logins(c, core, address) {
+        // the logins its agents did there (LoginCards.kt StationLogins): those under way as their cards (the second
+        // block of them: where a link's login is brought to)
+        let logins_at = blocks.length() + more.length() + 1
+        let logins = station_logins(c, core, address)
+        for b in logins {
           more.push(b)
         }
         match field(overview, "agentEnv") {
@@ -594,6 +597,9 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
           blocks.push(b)
         }
         scroll_page(c, "station/" + address, blocks)
+        if logins.length() > 1 {
+          bring_marked_login(c, address, "settings/station/" + address, logins_at)
+        }
       }
     }
   })
