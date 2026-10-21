@@ -146,6 +146,24 @@ const openCode = (signingIn: boolean): DemoExtension => ({
     };
   },
 });
+/** The demo's profile as a Kimi Code one on a Kimi account (accounts/kimi.ts), being signed in again: its device code. */
+const kimiCode: DemoExtension = {
+  then: (t, value) => {
+    if (t.topic !== "overview" || !value || typeof value !== "object") return undefined;
+    const o = value as { profiles: Record<string, unknown>[] };
+    const at = Date.UTC(2026, 9, 21, 3, 0);
+    const login = { profile: "machine-claude", runtime: "claude", provider: "kimi", state: "needs_approval", url: "https://www.kimi.com/code/authorize_device?user_code=UXP8-IJXV", userCode: "UXP8-IJXV", startedAt: at, expiresAt: at + 1_800_000 };
+    return {
+      ...o,
+      profiles: o.profiles.map((p) => ({
+        ...p, machine: false, runtimes: ["claude"], loginCommand: "", providerName: "Kimi Code", providerMark: "kimi",
+        access: { kind: "api-provider", key: "", provider: "kimi-code", login: true },
+        quota: null, trouble: null, login,
+        check: { ...(p.check as object), state: "login", detail: "Kimi 登录已失效", models: null }, checkText: "需要登录", checkTone: "amber",
+      })),
+    };
+  },
+};
 /** The demo's profile as a Claude subscription being signed in again: Claude's page is up and its code is pasted back. */
 const claudeSignIn: DemoExtension = {
   then: (t, value) => {
@@ -700,6 +718,7 @@ export const stories: Story[] = [
   { id: "app-profile-add-model", group: "应用", title: "Profile · 按名称添加模型", app: true, demo: addModel, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode", group: "应用", title: "Profile · OpenCode Go 账号登录", app: true, demo: openCode(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-opencode-signing-in", group: "应用", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, demo: openCode(true), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "app-profile-kimi-signing-in", group: "应用", title: "Profile · Kimi Code 重新登录（设备码）", app: true, demo: kimiCode, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-supergrok", group: "应用", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, demo: superGrok(false), steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-claude-signing-in", group: "应用", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, demo: claudeSignIn, steps: [{ click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "app-profile-add-install", group: "应用", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="Profile"]' }, { text: "添加 Profile" }] },
@@ -1043,6 +1062,7 @@ export const stories: Story[] = [
   { id: "phone-profile-add-install", group: "手机", title: "添加 Profile · SuperGrok · 先安装 Grok Build", app: true, phone: true, demo: installFlowDemo("missing"), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { click: '[aria-label="添加 Profile"]' }] },
   { id: "phone-profile-workspaces", group: "手机", title: "Profile · 也给加入的 workspace 用", app: true, phone: true, demo: profileFor(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-opencode-signing-in", group: "手机", title: "Profile · OpenCode Go 重新登录（设备码）", app: true, phone: true, demo: openCode(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
+  { id: "phone-profile-kimi-signing-in", group: "手机", title: "Profile · Kimi Code 重新登录（设备码）", app: true, phone: true, demo: kimiCode, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok", group: "手机", title: "Profile · SuperGrok 订阅（Grok Build）", app: true, phone: true, demo: superGrok(false), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-claude-signing-in", group: "手机", title: "Profile · Claude 订阅重新登录（贴回代码）", app: true, phone: true, demo: claudeSignIn, steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },
   { id: "phone-profile-supergrok-signing-in", group: "手机", title: "Profile · SuperGrok 重新登录（设备码）", app: true, phone: true, demo: superGrok(true), steps: [{ click: '[aria-label="返回"]' }, { click: '[aria-label="Profile"]' }, { text: "lin@acme.dev" }] },

@@ -103,7 +103,10 @@ export function checkConfig(raw: any, _data: string): void {
     }
     if (!runtimes.every((r) => accessKinds(r).includes(kind as any))) throw new Error(`profile ${p.id}: ${runtimes.join("/")} cannot use access ${kind}`);
     const key = String(access?.key ?? "").trim();
-    if (needsKey(kind as any, provider) && key === "") throw new Error(`profile ${p.id}: access ${kind} needs a key`);
+    optional(access?.login, "boolean", "a boolean");
+    // A Kimi Code sign-in has none: its token is in its home (accounts/kimi.ts).
+    const signedIn = kind === "api-provider" && provider === "kimi-code" && access?.login === true;
+    if (needsKey(kind as any, provider) && key === "" && !signedIn) throw new Error(`profile ${p.id}: access ${kind} needs a key`);
     profileIds.push(p.id);
   }
   unique("profile", profileIds);

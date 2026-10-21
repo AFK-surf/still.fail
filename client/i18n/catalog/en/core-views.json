@@ -180,6 +180,7 @@
   "core-views.flow.plan_hint.codex": "ChatGPT Plus / Pro, runs Codex. Sign in once with a device code.",
   "core-views.flow.plan_hint.grok": "SuperGrok / X Premium+, runs Grok Build. Sign in once with a device code.",
   "core-views.flow.plan_hint.opencode": "OpenCode Go / Go Plus, runs Claude Code, Codex and DeepSeek Harness. Sign in once with an OpenCode account.",
+  "core-views.flow.plan_hint.kimi": "Kimi Code membership, runs Claude Code. Sign in once with a Kimi account.",
   "core-views.flow.protocol.anthropic": "Anthropic Messages",
   "core-views.flow.protocol.chat_completions": "Chat Completions",
   "core-views.flow.protocol.responses": "Responses",

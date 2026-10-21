@@ -509,7 +509,7 @@ fun ProfileScreen(current: WorkspaceEntry, address: String, id: String) {
                     }
                 }
             }
-            val signs = !copy && (kind == "subscription" || (kind == "opencode-go" && p.access.login == true)) && p.machine != true
+            val signs = !copy && (kind == "subscription" || p.access.login == true) && p.machine != true
             if (signs) SignIn(address, p, needed = p.check?.state == "login" || p.login?.state in SIGNING_IN, head = status)
             else if (!copy && p.machine == true) {
                 // On the machine's own login: whose it is is changed on that machine, not here.
@@ -842,7 +842,7 @@ private fun SignIn(station: String, p: Profile, needed: Boolean, head: @Composab
     val api = app.api(station)
     val job = p.login
     val active = job != null && job.state in SIGNING_IN
-    val provider = if (p.access.kind == "opencode-go") "OpenCode" else when (p.runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; "devin" -> "Devin"; else -> "ChatGPT" }
+    val provider = if (p.access.kind == "opencode-go") "OpenCode" else if (p.access.provider == "kimi-code") "Kimi" else when (p.runtime) { "claude" -> "Claude"; "grok" -> "Grok"; "cursor" -> "Cursor"; "devin" -> "Devin"; else -> "ChatGPT" }
     val busy = app.isDoing("profile.login", "station" to station, "id" to p.id)
     var manual by remember { mutableStateOf(false) }
     var previous by remember { mutableStateOf(job?.state) }
@@ -944,9 +944,9 @@ private fun LoginSteps(job: LoginJob?, provider: String, send: suspend (String) 
             Box(Modifier.fillMaxWidth().clip(Smooth(CODE_BOX_CORNER)).background(C.chip).padding(horizontal = 14.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
                 Text(userCode, fontSize = 22.sp, letterSpacing = 2.sp, fontFamily = CodeFont, color = C.ink)
             }
-            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
-            // OpenCode's page has the code in its address: only compared there, not copied.
-            val filled = provider == "OpenCode"
+            Text(when (provider) { "OpenCode" -> t("android-settings.login.opencodeNote"); "Kimi" -> t("android-settings.login.kimiNote"); "Grok" -> t("android-settings.login.grokNote"); else -> t("android-settings.login.codexNote", "app" to BuildConfig.APP_NAME) }, fontSize = 13.sp, lineHeight = 19.sp, color = C.muted)
+            // OpenCode's and Kimi's pages have the code in their address: only compared there, not copied.
+            val filled = provider == "OpenCode" || provider == "Kimi"
             StepButton(if (filled) t("android-settings.login.openPage") else if (copied) t("android-settings.login.reopen") else t("android-settings.login.copyOpen"), solid = !copied, external = filled, corner = CODE_BOX_CORNER) {
                 if (!filled) (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("still.fail", userCode))
                 copied = true
@@ -1093,7 +1093,7 @@ fun NewProfileScreen(current: WorkspaceEntry, address: String) {
                 }
                 d.step == "method" -> RowsCard {
                     d.choices.forEach { c ->
-                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
+                        PickRow(c.title, c.hint, leading = { ProviderMark(runtime, if (c.id == "plan" && d.tile?.kind != "opencode-go" && d.tile?.id != "kimi-code") "subscription" else d.tile?.kind ?: "api-provider", 18.dp, d.tile?.mark) }) { edit("method", c.id) }
                     }
                 }
                 d.method == "plan" -> {

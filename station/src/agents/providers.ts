@@ -52,6 +52,8 @@ export const SOURCES: Source[] = [
   source("deepseek", "DeepSeek", { chat: "https://api.deepseek.com" }),
   source("qwen", "Qwen", { chat: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1" }),
   source("moonshotai", "Kimi", { chat: "https://api.moonshot.ai/v1" }),
+  // Kimi Code's membership: its key, or the person's Kimi account signed in to (accounts/kimi.ts).
+  source("kimi-code", "Kimi Code", { anthropic: "https://api.kimi.com/coding", chat: "https://api.kimi.com/coding/v1" }),
   source("zai", "Z.ai", { chat: "https://api.z.ai/api/coding/paas/v4" }),
   source("minimax", "MiniMax", { anthropic: "https://api.minimax.io/anthropic" }),
   source("xiaomi", "Xiaomi MiMo", { chat: "https://api.xiaomimimo.com/v1" }),

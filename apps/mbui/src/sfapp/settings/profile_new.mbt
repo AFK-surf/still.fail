@@ -270,7 +270,9 @@ fn new_profile_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
             for ch in items(d, "choices") {
               let cv = Some(ch)
               let cid = text(cv, "id")
-              let kind = if cid == "plan" && text(tile, "kind") != "opencode-go" {
+              let kind = if cid == "plan" &&
+                text(tile, "kind") != "opencode-go" &&
+                text(tile, "id") != "kimi-code" {
                 "subscription"
               } else {
                 match text(tile, "kind") {

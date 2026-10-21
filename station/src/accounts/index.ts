@@ -14,6 +14,8 @@
 // - a sign-in times out after 15 minutes; a finished sign-in for a new profile is kept 15 minutes for its page.
 // - an OpenCode Go profile signed in to the OpenCode Console: its token renewed some days before it runs out, looked at
 //   shortly after start and every few hours (console.ts).
+// - a Kimi Code profile signed in to Kimi: its token (minutes) renewed with half its life left, looked at every minute
+//   (kimi.ts).
 import { runtimeKind, runtimeLabel } from "../agents/runtime.ts";
 import type { Clock } from "effect";
 import { randomBytes } from "node:crypto";
@@ -22,7 +24,7 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import type { Env, MachineToken } from "../agents/machine-logins.ts";
 import { linkCodexAuth } from "../agents/machine-logins.ts";
-import { type AccessKind, accessKind, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
+import { type AccessKind, accessKind, KIMI_CODE, kimiSignedIn, profileVia, type Runtime, type Via } from "../agents/profiles.ts";
 import { cleanEndpoint, endpoints, find, groupOf, LEGACY, runtimesOf as runtimesOfEndpoints, SOURCES } from "../agents/providers.ts";
 import { type Viewer, managesStation } from "../mesh/credential.ts";
 import { maskValue, startEnv } from "../ops/agent-env.ts";
@@ -41,6 +43,7 @@ import { Fibers, wall } from "../ops/fibers.ts";
 import { checkAutomaticDecisions } from "./check.ts";
 import { readConsole, RenewRefused, renewToken, writeConsole } from "./console.ts";
 import { CURSOR } from "./cursor.ts";
+import { KIMI_AUTH, kimiDue, readKimi, renewKimiToken, writeKimi } from "./kimi.ts";
 import { type LoginCommands, type LoginJob, LoginManager } from "./login.ts";
 import { codexClaims, type MachineLogin, MachineLogins } from "./machine.ts";
 import { adopted, OUTDATED, uncheckOutdated } from "./models.ts";
@@ -63,6 +66,8 @@ const CHECK_ON_START_MS = 3_000;
 /// the token the runtimes were given, so it is done seldom, long before it would run out.
 const CONSOLE_RENEW_BEFORE_MS = 7 * 86_400_000;
 const CONSOLE_RENEW_EVERY_MS = 6 * 3600_000;
+/// How often the Kimi Code sign-ins' tokens (minutes) are looked at (kimi.ts kimiDue says which to renew).
+const KIMI_RENEW_EVERY_MS = 60_000;
 const PENDING_KEPT_MS = 15 * 60_000;
 /// The checks the policy page counts: of the last days, and the chats it names for each option at most.
 const POLICY_DAYS = 7;
@@ -131,8 +136,9 @@ export type AccountsDeps = {
 };
 
 /// A sign-in with no profile yet: its runtime, its home while signing in, who started it, what it made.
-/// `access`: an OpenCode Go profile signed in to the OpenCode Console (absent: the runtime's subscription).
-type Pending = { runtime: Runtime; access?: "opencode-go"; home: string; by: Viewer; created: string | null; error: string | null };
+/// `access`: an OpenCode Go profile signed in to the OpenCode Console, or a Kimi Code one to Kimi (absent: the runtime's
+/// subscription).
+type Pending = { runtime: Runtime; access?: "opencode-go" | "kimi-code"; home: string; by: Viewer; created: string | null; error: string | null };
 
 const isObject = (v: unknown): v is Record<string, any> => v !== null && typeof v === "object" && !Array.isArray(v);
 const manages = managesStation;
@@ -151,7 +157,7 @@ export class Accounts {
   private checks = new Map<string, ProfileCheck>();
   private quotas = new Map<string, ProfileQuota>();
   private quotaBusy = new Map<string, Promise<void>>();
-  /// OpenCode Console tokens being renewed, by profile (a refresh token is spent once).
+  /// OpenCode Console and Kimi tokens being renewed, by profile (a refresh token is spent once).
   private renewing = new Map<string, Promise<void>>();
   private pending = new Map<string, Pending>();
   private listeners = new Set<() => void>();
@@ -176,7 +182,7 @@ export class Accounts {
     this.background = new Fibers("accounts", deps.clock);
     this.urls = deps.urls ?? URLS;
     // A Cursor sign-in's key is named for this machine in the person's Cursor dashboard (accounts/cursor.ts).
-    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console, this.urls.cursor ?? CURSOR, () => `still.fail · ${hostname()}`);
+    this.logins = new LoginManager(deps.data, deps.loginCommands, undefined, deps.clock, this.urls.console, this.urls.cursor ?? CURSOR, () => `still.fail · ${hostname()}`, this.urls.kimi ?? KIMI_AUTH);
     this.machine =
       deps.machine !== undefined ? deps.machine : new MachineLogins(this.env, (runtime, env) => machineUsage(runtime, env, this.urls), undefined, deps.clock);
     this.checkFn =
@@ -232,6 +238,7 @@ export class Accounts {
       });
     }
     this.background.every(CONSOLE_RENEW_EVERY_MS, () => this.renewConsoles());
+    this.background.every(KIMI_RENEW_EVERY_MS, () => this.renewKimis());
     this.background.every(QUOTA_EVERY_MS, () => {
       if (this.deps.following?.() === true) this.refreshQuotas(false);
     });
@@ -392,8 +399,9 @@ export class Accounts {
         if (api && provider !== undefined) next.access.provider = provider;
         if (api && endpoint !== undefined) next.access.endpoint = endpoint;
         if (api && protocol !== undefined) next.access.protocol = protocol;
-        // Signed in to the OpenCode Console: still, unless a key was given in place of its token.
-        if (kind === "opencode-go" && keep?.login === true && givenKey === undefined) next.access.login = true;
+        // Signed in to the OpenCode Console or to Kimi: still, unless a key was given in place of its token.
+        const signsIn = kind === "opencode-go" || (api && provider === KIMI_CODE);
+        if (signsIn && keep?.login === true && givenKey === undefined) next.access.login = true;
       }
       next.home = home;
       next.env = env;
@@ -537,18 +545,21 @@ export class Accounts {
     const profile = this.profile(id);
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
     const kind = accessKind(profile);
-    if (kind !== "subscription" && kind !== "opencode-go") throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
+    const kimi = kimiSignedIn(profile);
+    if (kind !== "subscription" && kind !== "opencode-go" && !kimi) throw new Refusal(400, tr(lang, "station.admin.loginSubscriptionOnly"));
     if (profile.machine === true) throw new Refusal(400, tr(lang, "station.admin.loginOnMachine"));
     if (borrowed(profile)) throw new Refusal(409, tr(lang, "station.share.borrowedEdit"));
     log.info("accounts", "login started from the admin page", { profile: id, by: viewer.email });
     // An OpenCode Go one signs in to the OpenCode Console (its key replaced by the token once it is done).
     if (kind === "opencode-go") return this.logins.startConsole({ id, home: profile.home }, lang);
+    if (kimi) return this.logins.startKimi({ id, home: profile.home }, lang);
     if (profile.runtime === "cursor") return this.logins.startCursor({ id, home: profile.home }, lang);
     return this.logins.start({ id, runtime: profile.runtime, home: profile.home }, lang);
   }
 
   /// POST /logins: signing a subscription in before there is a profile; the profile is made once it succeeds.
-  /// `access: "opencode-go"`: an OpenCode Go profile signed in to the OpenCode Console instead (no runtime given).
+  /// `access: "opencode-go"`: an OpenCode Go profile signed in to the OpenCode Console instead (no runtime given);
+  /// `access: "kimi-code"`: a Kimi Code profile signed in to Kimi.
   async newLogin(input: Record<string, unknown>, viewer: Viewer, lang: Lang = stationLang()): Promise<{ id: string; job: LoginJob }> {
     const id = `login-${randomBytes(4).toString("hex")}`;
     const home = join(this.deps.data, "homes", id);
@@ -556,6 +567,11 @@ export class Accounts {
       this.pending.set(id, { runtime: "claude", access: "opencode-go", home, by: viewer, created: null, error: null });
       log.info("accounts", "OpenCode sign-in for a new profile started", { login: id, by: viewer.email });
       return { id, job: await this.logins.startConsole({ id, home }, lang) };
+    }
+    if (input.access === "kimi-code") {
+      this.pending.set(id, { runtime: "claude", access: "kimi-code", home, by: viewer, created: null, error: null });
+      log.info("accounts", "Kimi sign-in for a new profile started", { login: id, by: viewer.email });
+      return { id, job: await this.logins.startKimi({ id, home }, lang) };
     }
     const runtime = runtimeOf(input.runtime);
     if (!runtime) throw new Refusal(400, `unknown runtime ${text(input.runtime)}`);
@@ -593,8 +609,10 @@ export class Accounts {
     const lang = stationLang();
     const signedIn = p.access === "opencode-go" ? readConsole(p.home) : null;
     if (p.access === "opencode-go" && !signedIn) return this.pendingFailed(id, tr(lang, "station.login.consoleUnreadable"));
-    const email = signedIn ? signedIn.email : accountEmail(p.runtime, p.home);
-    const base = signedIn ? "opencode-go" : slug(email ?? `${p.runtime}-subscription`, 40) || p.runtime;
+    const kimi = p.access === "kimi-code";
+    if (kimi && !readKimi(p.home)) return this.pendingFailed(id, tr(lang, "station.login.kimiUnreadable"));
+    const email = signedIn ? signedIn.email : kimi ? null : accountEmail(p.runtime, p.home);
+    const base = signedIn ? "opencode-go" : kimi ? KIMI_CODE : slug(email ?? `${p.runtime}-subscription`, 40) || p.runtime;
     const profileId = unique(base, this.takenIds());
     const target = join(this.deps.data, "homes", profileId);
     try {
@@ -603,13 +621,16 @@ export class Accounts {
       log.warn("accounts", "could not move a new profile's home", { login: id, error: (e as Error).message });
       return this.pendingFailed(id, tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
     }
-    const name = signedIn ? (email ?? "OpenCode Go") : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : p.runtime === "devin" ? "station.profile.devinSubscription" : "station.profile.chatgptSubscription"));
+    const name = signedIn ? (email ?? "OpenCode Go") : kimi ? "Kimi Code" : (email ?? tr(lang, p.runtime === "claude" ? "station.profile.claudeSubscription" : p.runtime === "grok" ? "station.profile.grokSubscription" : p.runtime === "cursor" ? "station.profile.cursorSubscription" : p.runtime === "devin" ? "station.profile.devinSubscription" : "station.profile.chatgptSubscription"));
     try {
       this.save(p.by, `profile ${profileId} from a sign-in`, (raw) => {
         // An OpenCode Go one runs every runtime its key does (it has none of its own).
+        // A Kimi Code one runs Claude Code, its token read from its home (kimi.ts), never kept here.
         const made = signedIn
           ? { id: profileId, name, access: { kind: "opencode-go", key: signedIn.access, login: true }, home: `homes/${profileId}`, env: {} }
-          : { id: profileId, name, runtime: p.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} };
+          : kimi
+            ? { id: profileId, name, access: { kind: "api-provider", provider: KIMI_CODE, login: true }, home: `homes/${profileId}`, env: {} }
+            : { id: profileId, name, runtime: p.runtime, access: { kind: "subscription" }, home: `homes/${profileId}`, env: {} };
         raw.profiles = [...(Array.isArray(raw.profiles) ? raw.profiles : []), made];
       });
     } catch (e) {
@@ -687,6 +708,47 @@ export class Accounts {
     })().finally(() => this.renewing.delete(id));
     this.renewing.set(id, run);
     return run;
+  }
+
+  /// Each profile signed in to Kimi whose token is due (kimi.ts kimiDue), renewed (only on its station: it is not lent).
+  private renewKimis() {
+    for (const p of this.profiles()) {
+      if (!kimiSignedIn(p) || borrowed(p)) continue;
+      const login = readKimi(p.home);
+      if (!login || !kimiDue(login, wall.now())) continue;
+      this.background.spawn(() => this.renewKimi(p.id));
+    }
+  }
+
+  /// Renews a profile's Kimi token now (once at a time: its refresh token is spent); a token not yet due stays, and one
+  /// signed out (its refresh token refused, then dropped) is not asked again until it is signed in again.
+  renewKimi(id: string): Promise<void> {
+    const busy = this.renewing.get(id);
+    if (busy) return busy;
+    let refused = false;
+    const run = (async () => {
+      const profile = this.profile(id);
+      const login = profile ? readKimi(profile.home) : null;
+      if (!profile || !login || login.refresh === "" || !kimiDue(login, wall.now())) return;
+      let token;
+      try {
+        token = await renewKimiToken(this.urls.kimi ?? KIMI_AUTH, login.refresh, login.deviceId);
+      } catch (e) {
+        log.warn("accounts", "could not renew a Kimi token", { profile: id, error: (e as Error).message });
+        if (e instanceof RenewRefused) {
+          writeKimi(profile.home, { ...login, refresh: "" });
+          refused = true;
+        }
+        return;
+      }
+      // The refresh token was spent: the new one is written before anything else can fail.
+      writeKimi(profile.home, { ...login, access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, lifeMs: token.expiresInMs });
+    })().finally(() => this.renewing.delete(id));
+    this.renewing.set(id, run);
+    // Refused: signed out there; its check (which renews first, so not within this) says it needs signing in again.
+    return run.then(async () => {
+      if (refused) await this.check(id).catch(() => undefined);
+    });
   }
 
   /// A profile just signed in: checked (which lists its models) and its allowance read, so its page shows them at once.
@@ -767,8 +829,13 @@ export class Accounts {
     if (!profile) throw new Refusal(404, `unknown profile ${id}`);
     const kind = accessKind(profile);
     if (borrowed(profile) && kind === "subscription" && this.deps.shared) return this.checkBorrowed(profile, lang);
+    // Signed in to Kimi: asked with its current token (renewed first where due), none once signed out.
+    const kimi = kimiSignedIn(profile);
+    if (kimi) await this.renewKimi(id);
+    const key = kimi ? (readKimi(profile.home)?.access ?? "") : String((profile.access as Json)?.key ?? "").trim();
+    const signedOut = kimi && (readKimi(profile.home)?.refresh ?? "") === "";
     const check = await this.checkFn(
-      { runtime: profile.runtime, kind, key: String((profile.access as Json)?.key ?? "").trim(), via: profileVia(profile), home: profile.home, machine: profile.machine === true, login: (profile.access as Json)?.login === true },
+      { runtime: profile.runtime, kind, key: signedOut ? "" : key, via: profileVia(profile), home: profile.home, machine: profile.machine === true, login: (profile.access as Json)?.login === true },
       lang,
     );
     // Codex capabilities kept for each account, including providers whose model ids came from their API.
@@ -1102,8 +1169,8 @@ export class Accounts {
         access: {
           kind: kind === "api-provider" ? "env" : kind, key: mask(String(a.key ?? "").trim()),
           provider: via.provider ?? null, endpoint: via.endpoint ?? null, protocol: via.protocol ?? null,
-          // Its key is the token of a sign-in to the OpenCode Console (signed in again, not replaced).
-          login: kind === "opencode-go" && a.login === true,
+          // Its key is the token of a sign-in to the OpenCode Console or to Kimi (signed in again, not replaced).
+          login: (kind === "opencode-go" || kimiSignedIn(p)) && a.login === true,
         },
         home: p.home, homeExists: existsSync(p.home), model: p.model ?? null, models: p.models,
         env,

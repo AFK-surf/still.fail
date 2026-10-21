@@ -12,6 +12,7 @@
 //   Its sign-in lands in the profile's devin/data/ (XDG_DATA_HOME, agents/devin.ts).
 // - OpenCode Go (`startConsole`): no command; the station asks the OpenCode Console for a code itself (console.ts) and
 //   keeps asking until it is approved, then leaves the tokens in the profile's home. The page shows it as Codex's.
+// - Kimi Code (`startKimi`): the same with Kimi's device grant (kimi.ts).
 // - Cursor (`startCursor`): no command either; the station makes the login's page itself (accounts/cursor.ts), with no
 //   code to enter: the person confirms it there, the station mints the profile's key and keeps it in its home.
 // A stand-in `open` on PATH keeps the commands from opening a browser on the server. Who follows hears each change of a
@@ -21,7 +22,8 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileCredentials } from "../agents/no-keychain.ts";
-import { CONSOLE, type ConsoleLogin, deviceToken, startDevice, whoIs, writeConsole } from "./console.ts";
+import { CONSOLE, type ConsoleLogin, type Device, type DeviceAnswer, deviceToken, startDevice, type Token, whoIs, writeConsole } from "./console.ts";
+import { KIMI_AUTH, kimiDeviceToken, newDeviceId, readKimi, startKimiDevice, writeKimi } from "./kimi.ts";
 import { CURSOR, type CursorUrls, cursorHandshake, mintCursorKey, pollCursor, writeCursor } from "./cursor.ts";
 import { cleanEnv } from "../agents/runtime.ts";
 import { devinData } from "../agents/devin.ts";
@@ -36,8 +38,9 @@ export type LoginState = "starting" | "needs_code" | "needs_approval" | "verifyi
 export type LoginJob = {
   profile: string;
   runtime: Runtime;
-  /// Signing in to OpenCode (an OpenCode Go profile) rather than the runtime's subscription (absent: the runtime's).
-  provider?: "opencode";
+  /// Signing in to OpenCode (an OpenCode Go profile) or Kimi (a Kimi Code profile) rather than the runtime's
+  /// subscription (absent: the runtime's).
+  provider?: "opencode" | "kimi";
   state: LoginState;
   url: string | null;
   userCode: string | null;
@@ -75,12 +78,15 @@ export class LoginManager {
 
   /// The OpenCode Console signed in to (console.ts CONSOLE; a test's stand-in).
   private console: string;
+  /// Kimi's sign-in server (kimi.ts KIMI_AUTH; a test's stand-in).
+  private kimi: string;
   /// Cursor signed in to (cursor.ts CURSOR; a test's stand-in), and the name its key is given (the station's).
   private cursor: CursorUrls;
   private keyName: () => string;
 
-  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail") {
+  constructor(data: string, commands: LoginCommands = { claude: "claude", codex: "codex" }, env: () => Record<string, string> = () => cleanEnv(SCRUBBED), clock?: Clock.Clock, console = CONSOLE, cursor: CursorUrls = CURSOR, keyName: () => string = () => "still.fail", kimi = KIMI_AUTH) {
     this.console = console;
+    this.kimi = kimi;
     this.cursor = cursor;
     this.keyName = keyName;
     this.background = new Fibers("login", clock);
@@ -179,37 +185,70 @@ export class LoginManager {
 
   /// Starts signing an OpenCode Go profile in to the person's OpenCode Console account, replacing any running sign-in:
   /// a code from the Console, then asked about at the interval it gives until it is approved, refused or runs out.
-  async startConsole(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+  startConsole(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+    return this.deviceSignIn(profile, "opencode", lang, {
+      start: () => startDevice(this.console),
+      ask: (code) => deviceToken(this.console, code),
+      keep: async (token) => {
+        const who = await whoIs(this.console, token.access, token.org);
+        return () => writeConsole(profile.home, { access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, org: token.org, ...who } satisfies ConsoleLogin);
+      },
+    });
+  }
+
+  /// Starts signing a Kimi Code profile in to the person's Kimi account the same way (kimi.ts), for a device of its own:
+  /// the one it signed in on before where it has one (Kimi renews a token only for the device it was given to).
+  startKimi(profile: { id: string; home: string }, lang: Lang = stationLang()): Promise<LoginJob> {
+    const deviceId = readKimi(profile.home)?.deviceId ?? newDeviceId();
+    return this.deviceSignIn(profile, "kimi", lang, {
+      start: () => startKimiDevice(this.kimi, deviceId),
+      ask: (code) => kimiDeviceToken(this.kimi, code, deviceId),
+      keep: async (token) => () => writeKimi(profile.home, { access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, lifeMs: token.expiresInMs, deviceId }),
+    });
+  }
+
+  /// A device authorization grant (RFC 8628) the station follows itself: a code, then asked about at the interval given
+  /// until it is approved, refused or runs out; then what `keep` makes of the tokens written to the profile's home.
+  private async deviceSignIn(
+    profile: { id: string; home: string },
+    provider: "opencode" | "kimi",
+    lang: Lang,
+    steps: { start: () => Promise<Device>; ask: (deviceCode: string) => Promise<DeviceAnswer>; keep: (token: Token) => Promise<() => void> },
+  ): Promise<LoginJob> {
+    const [failed, expired, denied, unreachable] =
+      provider === "kimi"
+        ? ["station.login.kimiFailed", "station.login.kimiExpired", "station.login.kimiDenied", "could not ask Kimi about a sign-in"]
+        : ["station.login.consoleFailed", "station.login.consoleExpired", "station.login.consoleDenied", "could not ask the OpenCode Console about a sign-in"];
     this.cancel(profile.id);
     this.finished.delete(profile.id);
     mkdirSync(profile.home, { recursive: true });
     const id = profile.id;
     const now = this.background.now();
-    const job: LoginJob = { profile: id, runtime: "claude", provider: "opencode", state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
+    const job: LoginJob = { profile: id, runtime: "claude", provider, state: "starting", url: null, userCode: null, error: null, startedAt: now, expiresAt: now + TIMEOUT_MS };
     const run = ++this.runs;
     const running: Running = { run, job, child: null, raw: "", output: "", exited: true, lang, cancelTimer: () => {} };
     this.jobs.set(id, running);
     this.emit(id);
     const current = () => this.jobs.get(id)?.run === run;
-    let device;
+    let device: Device;
     try {
-      device = await startDevice(this.console);
+      device = await steps.start();
     } catch (e) {
-      if (current()) this.finish(id, "failed", tr(lang, "station.login.consoleFailed", { error: (e as Error).message }));
+      if (current()) this.finish(id, "failed", tr(lang, failed, { error: (e as Error).message }));
       return this.get(id)!;
     }
     if (!current()) return this.get(id)!;
     Object.assign(job, { state: "needs_approval", url: device.url, userCode: device.userCode, expiresAt: now + Math.min(device.expiresInMs, TIMEOUT_MS) });
-    running.cancelTimer = this.background.after(job.expiresAt - now, () => this.failRun(id, run, tr(lang, "station.login.consoleExpired")));
+    running.cancelTimer = this.background.after(job.expiresAt - now, () => this.failRun(id, run, tr(lang, expired)));
     let interval = device.intervalMs;
     const ask = async () => {
       if (!current()) return;
-      let answer;
+      let answer: DeviceAnswer;
       try {
-        answer = await deviceToken(this.console, device.deviceCode);
+        answer = await steps.ask(device.deviceCode);
       } catch (e) {
         // The network, for once: asked again at the next interval.
-        log.warn("login", "could not ask the OpenCode Console about a sign-in", { profile: id, error: (e as Error).message });
+        log.warn("login", unreachable, { profile: id, error: (e as Error).message });
         answer = { pending: true as const, slowDown: false };
       }
       if (!current()) return;
@@ -219,24 +258,22 @@ export class LoginManager {
         return;
       }
       if ("error" in answer) {
-        const denied = answer.error === "access_denied";
-        return this.finish(id, "failed", denied ? tr(lang, "station.login.consoleDenied") : tr(lang, answer.error === "expired_token" ? "station.login.consoleExpired" : "station.login.consoleFailed", { error: answer.error }));
+        if (answer.error === "access_denied") return this.finish(id, "failed", tr(lang, denied));
+        return this.finish(id, "failed", answer.error === "expired_token" ? tr(lang, expired) : tr(lang, failed, { error: answer.error }));
       }
       job.state = "verifying";
       this.emit(id);
-      const token = answer.token;
-      const who = await whoIs(this.console, token.access, token.org);
+      const write = await steps.keep(answer.token);
       if (!current()) return;
-      const login: ConsoleLogin = { access: token.access, refresh: token.refresh, expiresAt: wall.now() + token.expiresInMs, org: token.org, ...who };
       try {
-        writeConsole(profile.home, login);
+        write();
       } catch (e) {
         return this.finish(id, "failed", tr(lang, "station.login.homeFailed", { error: (e as Error).message }));
       }
       this.finish(id, "done", null);
     };
     running.stop = this.background.after(interval, ask);
-    log.info("login", "OpenCode sign-in started", { profile: id });
+    log.info("login", "device sign-in started", { profile: id, provider });
     this.emit(id);
     return { ...job };
   }

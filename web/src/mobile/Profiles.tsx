@@ -392,7 +392,7 @@ function ProfilePage({ p }: { p: Profile }) {
   const keyed = KEYED.has(p.access.kind) && !p.access.login;
   // A copy of another station's: shown, used, changed only there.
   const copy = p.share?.role === "user";
-  const signs = !copy && (p.access.kind === "subscription" || (p.access.kind === "opencode-go" && !!p.access.login)) && !p.machine;
+  const signs = !copy && (p.access.kind === "subscription" || !!p.access.login) && !p.machine;
   const detail = p.check ? p.check.detail.replace(/^可用[，,]\s*/, "") : t("web-mobile.profiles.notChecked");
   const checked = p.check?.time?.checkedAt ? t("web-mobile.profiles.checkedAgo", { ago: p.check.time.checkedAt.ago }) : "";
   const line = detail !== p.checkText ? detail + checked : checked.replace(/^ · /, "");
@@ -771,7 +771,7 @@ function SignIn({ p, needed, head }: { p: Profile; needed: boolean; head: ReactN
   const api = useApi();
   const job = p.login;
   const active = !!job && ["starting", "needs_code", "needs_approval", "verifying"].includes(job.state);
-  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : p.runtime === "devin" ? "Devin" : "ChatGPT";
+  const provider = p.access.kind === "opencode-go" ? "OpenCode" : p.access.provider === "kimi-code" ? "Kimi" : p.runtime === "claude" ? "Claude" : p.runtime === "grok" ? "Grok" : p.runtime === "cursor" ? "Cursor" : p.runtime === "devin" ? "Devin" : "ChatGPT";
   const busy = useDoing("profile.login", { station: useStation().address, id: p.id });
   const cancelling = useDoing("profile.cancelLogin", { station: useStation().address, id: p.id });
   const [manual, setManual] = useState(false);
@@ -838,6 +838,7 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
   const busy = operation.busy;
   const error = operation.error?.message;
   const [copied, setCopied] = useState(false);
+  const filled = provider === "OpenCode" || provider === "Kimi";
   if (!job || job.state === "starting") return <WaitLine text={t("web-mobile.profiles.loginLink", { provider })} />;
   if (job.state === "verifying") return <WaitLine text={t("web-mobile.profiles.finishing")} />;
   if (job.state === "done") return <WaitLine text={t("web-mobile.profiles.adding")} />;
@@ -854,10 +855,10 @@ function LoginSteps({ job, provider, send }: { job: LoginJob | null | undefined;
     return (
       <>
         <span className={css.mDeviceCode}>{job.userCode}</span>
-        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
-        {/* OpenCode's page has the code in its address: only compared there, not copied. */}
-        <Button label={provider === "OpenCode" ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
-          onClick={() => { if (provider === "OpenCode") return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
+        <p className={`${partsCss.mMuted} ${partsCss.mSmall}`}>{provider === "OpenCode" ? t("web-mobile.profiles.opencodeNote") : provider === "Kimi" ? t("web-mobile.profiles.kimiNote") : provider === "Grok" ? t("web-mobile.profiles.grokNote") : t("web-mobile.profiles.codexNote", { name: NAME })}</p>
+        {/* OpenCode's and Kimi's pages have the code in their address: only compared there, not copied. */}
+        <Button label={filled ? t("web-mobile.profiles.openAuth") : copied ? t("web-mobile.profiles.reopen") : t("web-mobile.profiles.copyOpen")} primary
+          onClick={() => { if (filled) return void window.open(job.url!, "_blank", "noopener"); void navigator.clipboard.writeText(job.userCode!).then(() => setCopied(true), () => app.toast(t("web-mobile.profiles.copyCodeFailed"))).finally(() => window.open(job.url!, "_blank", "noopener")); }} />
       </>
     );
   }
@@ -992,7 +993,7 @@ export function NewProfileScreen() {
           </>
         ) : d.step === "method" ? (
           <ListCard>
-            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
+            {d.choices.map((c) => <PickRow key={c.id} label={c.title} sub={c.hint} onClick={() => edit({ method: c.id })} leading={<ProviderMark runtime={runtime} kind={c.id === "plan" && d.tile?.kind !== "opencode-go" && d.tile?.id !== "kimi-code" ? "subscription" : d.tile?.kind ?? "api-provider"} mark={d.tile?.mark} size={18} />} />)}
           </ListCard>
         ) : d.method === "plan" ? (
           d.install ? <InstallStep install={d.install} />

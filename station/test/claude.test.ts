@@ -163,6 +163,24 @@ describe("the Claude Code driver", { concurrency: true }, () => {
     await until((e) => e.some((x) => x.type === "closed"));
   });
 
+  test("a Kimi Code sign-in's key is read from its home by Claude Code's key helper, not given it", async () => {
+    const d = driver();
+    const base = options();
+    const o = { ...base, profile: { ...base.profile, home: join(data, "kimi's home"), access: { kind: "api-provider", provider: "kimi-code", login: true } } };
+    mkdirSync(o.profile.home, { recursive: true });
+    writeFileSync(join(o.profile.home, ".credentials.json"), "{}");
+    const { push, until } = listen();
+    const session = await d.open(o, push);
+    await session.prompt("say:hi");
+    await until(ended(1));
+    const started = JSON.parse(readFileSync(o.dump, "utf8").trim());
+    const at = started.argv.indexOf("--settings");
+    assert.deepEqual(JSON.parse(started.argv[at + 1]), { apiKeyHelper: `cat '${join(data, "kimi'\\''s home", "kimi-code.token")}'` });
+    assert.equal(started.env.ANTHROPIC_BASE_URL, "https://api.kimi.com/coding");
+    assert.deepEqual([started.env.ANTHROPIC_AUTH_TOKEN, started.env.ANTHROPIC_API_KEY, started.env.CLAUDE_CODE_API_KEY_HELPER_TTL_MS], [undefined, undefined, "60000"]);
+    await session.dispose();
+  });
+
   test("a failed result is told apart by what claude said; is_error decides, not subtype", async () => {
     const d = driver();
     const { events, push, until } = listen();

@@ -222,6 +222,32 @@ test("opencode_go_is_signed_in_to_with_an_opencode_account_where_the_station_can
   assert.deepEqual([view.step, view.showKey, view.signIn], ["connect", true, null]);
 });
 
+test("kimi_code_is_signed_in_to_with_a_kimi_account_or_given_its_key_where_the_station_lists_it", () => {
+  const { s, flows, topic } = flow();
+  flows.change(topic, 1, "open", {});
+  s.set(overview, { ok: { apiProviders: [{ id: "moonshotai" }, { id: "kimi-code" }] } });
+  const labs = flows.value(topic).groups.find((g: J) => g.id === "labs").providers;
+  assert.deepEqual(labs.map((p: J) => p.id), ["openai", "anthropic", "moonshotai", "kimi-code"]);
+  assert.deepEqual([labs[3].hasKey, labs[3].hasPlan, labs[3].mark], [true, true, "kimi"]);
+  flows.change(topic, 1, "edit", { provider: "kimi-code" });
+  let view = flows.value(topic);
+  assert.ok("ok" in conform("ProfileFlowView", view), JSON.stringify(conform("ProfileFlowView", view)));
+  assert.deepEqual([view.step, view.choices.map((c: J) => c.id), view.choices[0].title], ["method", ["plan", "key"], "订阅 · Kimi Code"]);
+  // Signed in: Claude Code alone (the one that reads its token again as it is renewed).
+  flows.change(topic, 1, "edit", { method: "plan" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.signIn, view.usesLine], ["connect", { runtime: "claude", access: "kimi-code", provider: "Kimi" }, "添加后可用于：Claude Code"]);
+  // Its key: every runtime it speaks to (of those the station runs).
+  flows.change(topic, 1, "edit", { back: true });
+  flows.change(topic, 1, "edit", { method: "key", key: "sk-kimi" });
+  view = flows.value(topic);
+  assert.deepEqual([view.step, view.usesLine], ["connect", "添加后可用于：Claude Code · 自动决策"]);
+  assert.deepEqual(flows.begin(topic, 1), { access: { kind: "api-provider", key: "sk-kimi", provider: "kimi-code" } });
+  // A station from before it: not offered.
+  s.set(overview, { ok: { apiProviders: [{ id: "moonshotai" }] } });
+  assert.ok(!flows.value(topic).groups.some((g: J) => g.providers.some((p: J) => p.id === "kimi-code")));
+});
+
 test("deepseek_harness_is_offered_where_the_station_runs_it_on_any_endpoint", () => {
   const { s, flows, topic } = flow();
   flows.change(topic, 1, "open", {});

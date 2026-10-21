@@ -1,5 +1,7 @@
 // How much of a profile's allowance is used, where the provider says (the Rust station's quota.rs):
 // - OpenCode Go: GET /zen/go/v1/usage (rolling, weekly and monthly windows);
+// - Kimi Code (its key, or a Kimi sign-in's current token): GET /coding/v1/usages (the week, and shorter windows), as
+//   kimi-cli's /usage reads it;
 // - ChatGPT subscription (Codex): the app-server's account/rateLimits/read;
 // - Claude subscription: Claude Code's OAuth usage endpoint (what /usage shows), with the token Claude Code keeps in the
 //   profile's home (renewed first when about to run out, and once more when the provider says it is not good: oauth.ts);
@@ -10,7 +12,8 @@ import { join } from "node:path";
 import { platform } from "../platform/index.ts";
 import { codexAuthFile, type Env } from "../agents/machine-logins.ts";
 import type { Profile } from "../sessions/config.ts";
-import { accessKind } from "../agents/profiles.ts";
+import { accessKind, KIMI_CODE, kimiSignedIn } from "../agents/profiles.ts";
+import { readKimi } from "./kimi.ts";
 import { type Lang, stationLang, tr } from "../ops/i18n.ts";
 import { claudeOAuthToken } from "./oauth.ts";
 import { type ProfileQuota, type QuotaWindow, URLS, type Urls } from "./profiles.ts";
@@ -201,6 +204,10 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
   try {
     const kind = accessKind(profile);
     if (kind === "opencode-go") return await opencode(urls, String((profile.access as Json)?.key ?? "").trim(), lang);
+    if (kind === "api-provider" && (profile.access as Json)?.provider === KIMI_CODE) {
+      const key = kimiSignedIn(profile) ? (readKimi(profile.home)?.access ?? "") : String((profile.access as Json)?.key ?? "").trim();
+      return await kimiQuota(urls, key, lang);
+    }
     if (kind === "anthropic-api" || kind === "api-provider") return quota("unsupported", [], tr(lang, "station.quota.payAsYouGo"));
     if (kind === "env") return quota("unsupported", [], tr(lang, "station.quota.envUnsupported"));
     if (profile.runtime === "grok") return await grokQuota(profile, env, lang);
@@ -214,6 +221,47 @@ export async function checkQuota(profile: Profile, env: Env, codexRateLimits: Co
   } catch (e) {
     return failed(e);
   }
+}
+
+/// Kimi Code's allowance: its answer's `usage` (the week) and `limits` (each with its window, 5 hours say), each as a
+/// limit and what is used or left of it.
+async function kimiQuota(urls: Urls, key: string, lang: Lang): Promise<ProfileQuota> {
+  const response = await profileFetch(`${urls.kimiApi ?? KIMI_API}/usages`, { headers: { authorization: `Bearer ${key}`, accept: "application/json" }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!response.ok) return refused("Kimi Code ", response, lang);
+  let body: Json;
+  try {
+    body = JSON.parse(await response.text());
+  } catch {
+    return quota("unavailable", [], tr(lang, "station.quota.kimiNoWindows"));
+  }
+  return okOrUnavailable(kimiWindows(body), tr(lang, "station.quota.kimiNoWindows"));
+}
+
+const KIMI_API = "https://api.kimi.com/coding/v1";
+
+/// The windows of a Kimi Code usage answer.
+export function kimiWindows(body: Json): QuotaWindow[] {
+  const num = (v: unknown): number | null => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
+  const one = (d: Json, minutes: number | null, fallback: string): QuotaWindow | null => {
+    const limit = num(d?.limit);
+    if (limit === null || limit <= 0) return null;
+    const used = num(d?.used) ?? (num(d?.remaining) !== null ? limit - num(d?.remaining)! : null);
+    if (used === null) return null;
+    const resetsAt = at(d?.resetTime ?? d?.reset_time ?? d?.resetAt ?? d?.reset_at);
+    return { label: windowLabel(minutes, fallback), usedPercent: percent((used / limit) * 100), resetsAt, minutes };
+  };
+  const out: QuotaWindow[] = [];
+  for (const item of Array.isArray(body?.limits) ? body.limits : []) {
+    const window = isObject(item?.window) ? item.window : item;
+    const duration = num(window?.duration);
+    const unit = String(window?.timeUnit ?? "");
+    const minutes = duration === null ? null : unit.includes("MINUTE") ? duration : unit.includes("HOUR") ? duration * 60 : unit.includes("DAY") ? duration * DAY_MINUTES : duration / 60;
+    const w = one(isObject(item?.detail) ? item.detail : item, minutes, "限额");
+    if (w) out.push(w);
+  }
+  const week = one(body?.usage, WEEK_MINUTES, "每周");
+  if (week) out.push(week);
+  return out;
 }
 
 /// A SuperGrok subscription's allowance: what Grok Build's own pages show (its `x.ai/billing`: the included credits

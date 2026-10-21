@@ -1,6 +1,8 @@
 // How a profile's account reaches its models (the Rust station's profiles.rs `access_env`, `codex_overrides`), and the
 // environment a profile's runtime is started with, as config.rs parse_config makes it (`envs`: what the access kind
 // needs there plus the profile's own variables, which win). A profile here is config.json's, its home made absolute.
+import { join } from "node:path";
+import { KIMI_TOKEN_FILE } from "../accounts/kimi.ts";
 import { runtimeKind, type Profile, type RuntimeKind } from "./runtime.ts";
 import { cleanEndpoint, endpoints, find, runtimesOf, type Endpoints, type Source } from "./providers.ts";
 
@@ -11,12 +13,20 @@ export type Runtime = RuntimeKind;
 export type Via = { provider?: string; endpoint?: string; protocol?: string };
 
 /// A profile's fields as the drivers read them (config.json's names).
-export type ProfileAccess = { kind?: AccessKind; key?: string; provider?: string; endpoint?: string; protocol?: string };
+/// `login`: its key is a sign-in's token (an OpenCode Go one's in `key`; a Kimi Code one's in its home, kimiSignedIn).
+export type ProfileAccess = { kind?: AccessKind; key?: string; provider?: string; endpoint?: string; protocol?: string; login?: boolean };
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v !== "" ? v : undefined);
 const access = (p: Profile): ProfileAccess => (p.access && typeof p.access === "object" ? (p.access as ProfileAccess) : {});
 
 export const accessKind = (p: Profile): AccessKind => access(p).kind ?? "env";
+/// The provider of Kimi Code's membership (providers.ts).
+export const KIMI_CODE = "kimi-code";
+/// A Kimi Code profile signed in to the person's Kimi account (accounts/kimi.ts): its token, renewed every few minutes,
+/// is in its home, never its key; Claude Code reads it there for each request (`keyFile`).
+export const kimiSignedIn = (p: Profile): boolean => accessKind(p) === "api-provider" && access(p).provider === KIMI_CODE && access(p).login === true;
+/// The file a profile's runtime reads its current key from, where it has one (a Kimi sign-in's token: KIMI_TOKEN_FILE).
+export const keyFile = (p: Profile): string | undefined => (kimiSignedIn(p) ? join(p.home, KIMI_TOKEN_FILE) : undefined);
 /// Its model, when it names one.
 export const profileModel = (p: Profile): string | undefined => str(p.model);
 /// On the machine's own login (machine_logins.rs).
@@ -167,7 +177,9 @@ export function profileRuntimes(p: Profile): Runtime[] {
   if (kind === "api-provider") {
     const found = apiSource(profileVia(p));
     if (!found) return [];
-    // xAI's key runs Grok Build too (its own API, not one of the protocols).
+    // xAI's key runs Grok Build too (its own API, not one of the protocols). A Kimi sign-in runs Claude Code alone: only
+    // it reads its key again as the token is renewed (`keyFile`).
+    if (kimiSignedIn(p)) return ["claude"];
     return found[0].id === "xai" ? [...runtimesOf(found[1]), "grok"] : runtimesOf(found[1]);
   }
   if (kind === "opencode-go") return ["claude", "codex", "dsh"];
@@ -184,7 +196,13 @@ export function profileEnv(p: Profile, runtime: Runtime): Record<string, string>
   if (!profileRuntimes(p).includes(runtime)) return {};
   const key = (access(p).key ?? "").trim();
   const custom = p.env && typeof p.env === "object" ? (p.env as Record<string, string>) : {};
-  return { ...accessEnv(runtime, accessKind(p), key, profileModel(p), profileVia(p)), ...custom };
+  const env = accessEnv(runtime, accessKind(p), key, profileModel(p), profileVia(p));
+  // Its key read from a file instead (`keyFile`): none given, or Claude Code would take it over the file's.
+  if (keyFile(p) !== undefined) {
+    delete env.ANTHROPIC_AUTH_TOKEN;
+    delete env.ANTHROPIC_API_KEY;
+  }
+  return { ...env, ...custom };
 }
 
 export const expandRoute = (env: Record<string, string>, route: string): Record<string, string> =>

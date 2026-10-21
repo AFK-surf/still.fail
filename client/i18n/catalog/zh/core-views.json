@@ -144,6 +144,7 @@
   "core-views.flow.plan_hint.codex": "ChatGPT Plus / Pro，用于运行 Codex。用设备码登录一次。",
   "core-views.flow.plan_hint.grok": "SuperGrok / X Premium+，用于运行 Grok Build。用设备码登录一次。",
   "core-views.flow.plan_hint.opencode": "OpenCode Go / Go Plus，用于运行 Claude Code、Codex 和 DeepSeek Harness。用 OpenCode 账号登录一次。",
+  "core-views.flow.plan_hint.kimi": "Kimi Code 会员，用于运行 Claude Code。用 Kimi 账号登录一次。",
   "core-views.flow.protocol.anthropic": "Anthropic Messages",
   "core-views.flow.protocol.chat_completions": "Chat Completions",
   "core-views.flow.protocol.responses": "Responses",

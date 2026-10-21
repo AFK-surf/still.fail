@@ -869,6 +869,8 @@ export class Sharing {
     if (on && p.access?.kind === "subscription" && p.runtime === "cursor") throw new Error("a Cursor account cannot be shared with other stations yet");
     // Nor Devin's.
     if (on && p.access?.kind === "subscription" && p.runtime === "devin") throw new Error("a Devin account cannot be shared with other stations yet");
+    // Nor a Kimi sign-in (its token is renewed every few minutes here, accounts/kimi.ts).
+    if (on && p.access?.provider === "kimi-code" && p.access?.login === true) throw new Error("a Kimi Code sign-in cannot be shared with other stations yet");
     const had = isObject(p.share) && typeof p.share.id === "string" ? (p.share.id as string) : null;
     this.deps.config.update((raw) => {
       for (const x of raw.profiles ?? []) {
