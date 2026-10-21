@@ -349,7 +349,9 @@ pub fn[P] Ctx::nav(
       nav.t0 = self.now
       self.moving(nav.mover, nav as &Moving, what="a stack's slide")
     }
-    let t = if nav.dur <= 0.0 { 1.0 } else { (self.now - nav.t0) / nav.dur }
+    // (over at the end it says, t0 + dur, to the bit: (t0 + dur - t0) / dur can fall short of 1 by a rounding, and a
+    // frame drawn at the very end it declared would leave it a hair short of it, still sliding)
+    let t = if nav.dur <= 0.0 || self.now >= nav.t0 + nav.dur { 1.0 } else { (self.now - nav.t0) / nav.dur }
     nav.p = nav.p0 + (nav.p1 - nav.p0) * nav.curve.at(dmin(t, 1.0))
     if t >= 1.0 {
       nav.settle()

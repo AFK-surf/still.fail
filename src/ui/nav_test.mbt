@@ -220,3 +220,31 @@ test "a stack made before a Tester (as an app makes its own at start) slides to 
     t.assert_idle()
   }
 }
+
+///|
+test "a push is over at the end it declares, to the bit: the page under it no longer built there" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  // set out at the display's 27th frame, 450.00000000000006: (t0 + 300 − t0) / 300 falls short of 1 by a rounding
+  // there
+  t.frame_at(@ui.first_frame_ms * 27.0)
+  t.tap_text("open 1")
+  t.run_for(nav.rest() - t.time())
+  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.find("title 0") is None)
+  t.assert_idle()
+}
+
+///|
+test "a push whose end is a hair past one of the display's frames is run to its end, not to that frame" {
+  let nav = @ui.Nav::new(0)
+  let t = @ui.Tester::new(nav_view(nav))
+  // set out at 450.0000000000001, its end 750.0000000000001: a hair past the display's 45th frame, 750
+  let at = @ui.first_frame_ms * 27.0
+  t.advance(at - t.time())
+  t.tap_text("open 1")
+  t.run_for(nav.rest() - t.time())
+  assert_true(t.rest_of("a stack's slide") < 0.0)
+  assert_true(t.find("title 0") is None)
+  t.assert_idle()
+}

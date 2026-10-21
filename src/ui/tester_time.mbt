@@ -132,13 +132,16 @@ pub fn Tester::run_for(self : Tester, ms : Double) -> Unit {
 }
 
 ///|
-/// `t`, or the display's frame it falls on (within a millionth of a ms): a moment summed one way or another, the same.
+/// `t`, or the display's frame a hair after it (within a millionth of a ms): a moment summed one way or another, the
+/// same.
 fn Tester::on_grid(self : Tester, t : Double) -> Double {
   if t == @double.infinity {
     return t
   }
-  let tick = self.tick_at(t - 1.0e-6)
-  if (tick - t).abs() < 1.0e-6 {
+  // (never before it: a moment a hair past the display's frame, a motion's end summed as t0 + dur, is its own; drawn
+  // at the frame just before it, the motion would be a rounding short of its end)
+  let tick = self.tick_at(t)
+  if tick >= t && tick - t < 1.0e-6 {
     tick
   } else {
     t
