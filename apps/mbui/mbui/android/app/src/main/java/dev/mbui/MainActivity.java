@@ -120,6 +120,14 @@ public class MainActivity extends Activity {
                 layer.setLayoutParams(q);
             }
             if (!imeMoving) keyboardAt(insets);
+            // the keyboard put away by the person (its own key, Back, a swipe), not by the app: what was typed into
+            // lets go of the focus, as the Android app's composer does; tapped again, it takes it and the keyboard
+            // comes back (the app's own hiding comes after its focus went: Host.imeActive is off by then)
+            boolean shown = insets.isVisible(WindowInsets.Type.ime());
+            if (imeShown && !shown && Host.imeActive && mbView.hasWindowFocus()) {
+                mbView.toGL(() -> Native.text(7, "", 0, 0));
+            }
+            imeShown = shown;
             return WindowInsets.CONSUMED;
         });
         root.setWindowInsetsAnimationCallback(new WindowInsetsAnimation.Callback(
@@ -215,6 +223,8 @@ public class MainActivity extends Activity {
     }
 
     private boolean imeMoving;
+    /** Whether the soft keyboard was shown, as the insets last said. */
+    private boolean imeShown;
 
     /** This activity's own view and native views' layer: the host's (Host.view, NativeViews.layer) while it is resumed. */
     private MBView mbView;

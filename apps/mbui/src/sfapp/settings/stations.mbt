@@ -93,10 +93,17 @@ fn station_card(c : @ui.Ctx, core : Core, st : Json) -> Unit {
         chevron(c)
       })
       |> ignore
-      station_body(c, s)
+      station_body(c, core, s)
     }) {
     (core.push)(Station(address))
   }
+}
+
+///|
+/// How this device reaches station `s` now, its figures (Stations.kt rememberStationNet: the `stationNet` view, sampled
+/// while shown; none before a connection of its own is open).
+fn station_net(core : Core, s : Json?) -> Json? {
+  (core.topic)("stationNet", { "station": str(text(s, "station")) }).value
 }
 
 ///|
@@ -113,11 +120,11 @@ fn reconnecting(c : @ui.Ctx) -> Unit {
 ///|
 /// Under a station's name in the list (StationBody): what of its load runs low and its network, in the same room
 /// whatever state it is in; offline, its picture asleep and a line saying so; not read yet, grey bars.
-fn station_body(c : @ui.Ctx, s : Json?) -> Unit {
+fn station_body(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let t = @sf.theme()
   let online = flag(s, "online")
   let host = if online { field(s, "host") } else { None }
-  let net = if online { field(s, "net") } else { None }
+  let net = if online { station_net(core, s) } else { None }
   let faded = if flag(s, "reconnecting") { 0.45 } else { 1.0 }
   c.box(w=Fill(1.0), pt=10.0, fn() {
     c.box(w=Fill(1.0), opacity=faded, fn() {
@@ -362,10 +369,10 @@ fn meter_dials(c : @ui.Ctx, meters : Array[Json]) -> Unit {
 ///|
 /// An online station's machine on its page (Stations.kt StationFigures): what is left of it large, its network, the
 /// rest a row each, its agents' processes; reconnecting, as last heard, faded.
-fn station_figures(c : @ui.Ctx, s : Json?) -> Unit {
+fn station_figures(c : @ui.Ctx, core : Core, s : Json?) -> Unit {
   let t = @sf.theme()
   let host = field(s, "host")
-  let net = field(s, "net")
+  let net = station_net(core, s)
   c.box(w=Fill(1.0), opacity=if flag(s, "reconnecting") { 0.45 } else { 1.0 }, fn() {
     c.box(w=Fill(1.0), pt=4.0, fn() {
       match host {
@@ -468,7 +475,7 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
           fn() { gap(c, 12.0) },
           fn() {
             if flag(st, "online") {
-              card(c, fn() { station_figures(c, st) }) |> ignore
+              card(c, fn() { station_figures(c, core, st) }) |> ignore
             } else {
               card(c, fn() {
                 c.box(w=Fill(1.0), gap=4.0, align=ACenter, fn() {

@@ -1517,23 +1517,12 @@ fn via_dot(c : @ui.Ctx, via : String, size : Double, ring : Double) -> Unit {
 
 ///|
 /// An agent's state at its mark's corner (Parts.kt AgentStateMark): a 12 disc of the ground, red in it when it wants
-/// someone, a turning yellow ring with a gap at work; nothing when done.
+/// someone, yellow spokes stepping round at work (Spokes.kt); nothing when done.
 fn agent_state_mark(c : @ui.Ctx, badge : String) -> Unit {
   let t = @sf.theme()
   match badge {
-    "run" =>
-      c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=t.p.bg, align=ACenter, justify=JCenter, fn() {
-        @sf.spinner(
-          c,
-          size=8.0,
-          ring=@sf.alpha(mark_yellow, 0.25),
-          arc=mark_yellow,
-          sweep=0.75,
-          period=1200.0,
-        )
-        |> ignore
-      })
-      |> ignore
+    // yellow spokes 10 across stepping round, no disc round them (it showed as a dark rim)
+    "run" => @sf.spokes(c, 10.0, mark_yellow, box=12.0) |> ignore
     "block" | "failed" =>
       c.box(w=Px(12.0), h=Px(12.0), radius=6.0, bg=t.p.bg, align=ACenter, justify=JCenter, fn() {
         c.box(w=Px(8.0), h=Px(8.0), radius=4.0, bg=mark_red, fn() {  }) |> ignore

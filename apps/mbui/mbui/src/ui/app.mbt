@@ -917,6 +917,18 @@ fn key_in(code : Int, mods : Int) -> Unit {
 fn on_text(kind : Int, s : String, a : Int, b : Int) -> Unit {
   took_input("text", h_now(), [kind.to_double(), a.to_double(), b.to_double()], text=s)
   let c = g()
+  // the keyboard put away by the person: what has the focus lets go of it (what is composed stays, as words)
+  if kind == text_keyboard_gone {
+    match c.editors.get(c.focus) {
+      Some(st) if st.marked.length() > 0 => st.text_input(2, "", 0, 0, h_now())
+      _ => ()
+    }
+    if c.editors.contains(c.focus) || c.dev.catchers.contains(c.focus) {
+      c.focus = 0
+      h_request_frame()
+    }
+    return
+  }
   // a key catcher's while it has the focus (device.mbt)
   if catcher_text(c, kind, s, a, b) {
     return
