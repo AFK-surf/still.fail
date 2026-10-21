@@ -14,6 +14,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
   let t = @sf.theme()
   let (list, error) = dv_stations(src, w.id)
   let lenders = files_lenders(src, w, list)
+  dv.building = dv_page_of(None)
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     if !place {
       let back = match under_page() {
@@ -36,7 +37,7 @@ pub fn files_page(c : @ui.Ctx, src : Source, w : Workspace, place? : Bool = fals
       }
     })
     |> ignore
-    dv_sheets(c, src, w)
+    dv_sheets(c, src, w, dv_page_of(None))
   })
   |> ignore
 }
@@ -252,6 +253,7 @@ pub fn drive_page(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Uni
     None => None
   }
   let can = dv_rights(src, w.id, s)
+  dv.building = dv_page_of(Some(at))
   c.box(w=Fill(1.0), h=Fill(1.0), bg=t.p.bg, fn() {
     match s {
       Some(st) if st.drive => {
@@ -266,7 +268,7 @@ pub fn drive_page(c : @ui.Ctx, src : Source, w : Workspace, at : DriveAt) -> Uni
       }
       _ => roots_page(c, src, at.station, s, error, can)
     }
-    dv_sheets(c, src, w)
+    dv_sheets(c, src, w, dv_page_of(Some(at)))
   })
   |> ignore
 }

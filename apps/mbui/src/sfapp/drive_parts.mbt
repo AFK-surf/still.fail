@@ -53,6 +53,10 @@ priv struct DriveUi {
   mut sheet : DvSheet
   /// the sheet closing, what it showed kept until it is down
   mut closing : DvSheet
+  /// the page the sheet is over (dv_page_of: the one that opened it), and the page being built: a page under another
+  /// one (a folder pushed over 文件, both drawn while it slides in) draws no sheet of the other's
+  mut sheet_on : String
+  mut building : String
   /// what is chosen in a folder (by its page's key), by name
   chosen : Map[String, Array[String]]
   uploads : Array[DvUpload]
@@ -92,6 +96,8 @@ priv struct DriveUi {
 let dv : DriveUi = {
   sheet: NoSheet,
   closing: NoSheet,
+  sheet_on: "",
+  building: "",
   chosen: {},
   uploads: [],
   serial: 0,
@@ -121,6 +127,8 @@ let dv : DriveUi = {
 fn dv_reset() -> Unit {
   dv.sheet = NoSheet
   dv.closing = NoSheet
+  dv.sheet_on = ""
+  dv.building = ""
   dv.chosen.clear()
   dv.uploads.clear()
   dv.serial = 0
@@ -164,6 +172,25 @@ fn dv_reset() -> Unit {
 fn dv_open(c : @ui.Ctx, s : DvSheet) -> Unit {
   c.blur()
   dv.sheet = s
+  dv.sheet_on = dv.building
+}
+
+///|
+/// A drive's page by what it shows (文件, a station's drive or one of its folders): the page a sheet is over.
+fn dv_page_of(at : DriveAt?) -> String {
+  match at {
+    None => "files"
+    Some(a) =>
+      "drive\u{1}" +
+      a.station +
+      "\u{1}" +
+      (match a.root {
+        Some(r) => r
+        None => ""
+      }) +
+      "\u{1}" +
+      a.path
+  }
 }
 
 ///|

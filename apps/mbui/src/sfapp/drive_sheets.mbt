@@ -3,8 +3,12 @@
 // that opened them, one at a time.
 
 ///|
-/// The sheet open (or the one closing), over the page.
-fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace) -> Unit {
+/// The sheet open (or the one closing), over the page that opened it (`page`: the page drawing it, dv_page_of; a
+/// sheet a fixture put up without one, over the page drawing it).
+fn dv_sheets(c : @ui.Ctx, src : Source, w : Workspace, page : String) -> Unit {
+  if dv.sheet_on != "" && dv.sheet_on != page {
+    return
+  }
   let (s, closing) = match dv.sheet {
     NoSheet =>
       match dv.closing {
