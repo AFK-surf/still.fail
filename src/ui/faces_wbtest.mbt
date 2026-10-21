@@ -42,3 +42,13 @@ test "faces: a Tester starts with none given" {
   ignore(t2)
   assert_false(face_given(@host.face_ui))
 }
+
+///|
+test "faces: a face given as its file's bytes is given as one from a path; none for no bytes" {
+  let t = Tester::new(fn(c) { c.text("x") |> ignore })
+  ignore(t)
+  assert_true(face_add_bytes(@host.face_code, b"\x00\x01\x00\x00"))
+  assert_true(face_given(@host.face_code))
+  assert_false(face_add_bytes(@host.face_ui, b""))
+  assert_false(face_given(@host.face_ui))
+}

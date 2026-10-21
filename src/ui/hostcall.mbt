@@ -380,6 +380,14 @@ fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
 }
 
 ///|
+fn h_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
+  match fake.val {
+    Some(_) => data.length() > 0
+    None => @host.face_add_bytes(face, data, weight)
+  }
+}
+
+///|
 fn h_face_clear(face : Int) -> Unit {
   match fake.val {
     Some(_) => ()

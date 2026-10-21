@@ -25,6 +25,20 @@ pub fn face_add(face : Int, path : String, weight? : Int = 0) -> Bool {
 }
 
 ///|
+/// As face_add, the font's file being `data`: one the app carries in itself, or fetched and kept.
+pub fn face_add_bytes(face : Int, data : Bytes, weight? : Int = 0) -> Bool {
+  if face <= 0 || face >= @host.faces_most {
+    return false
+  }
+  let ok = h_face_add_bytes(face, data, weight)
+  if ok {
+    faces_given[face] = true
+    words_forgotten()
+  }
+  ok
+}
+
+///|
 /// Face `face` given up: its words in the system's face again.
 pub fn face_clear(face : Int) -> Unit {
   if face <= 0 || face >= @host.faces_most {

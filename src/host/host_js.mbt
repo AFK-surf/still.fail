@@ -53,6 +53,9 @@ extern "js" fn js_atlas_generation() -> Int =
 extern "js" fn js_face_add(face : Int, path : String, weight : Int) -> Bool =
   #|(f, p, w) => globalThis.__mbhost.faceAdd ? globalThis.__mbhost.faceAdd(f, p, w) : false
 
+extern "js" fn js_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool =
+  #|(f, d, w) => globalThis.__mbhost.faceAddBytes ? globalThis.__mbhost.faceAddBytes(f, d, w) : false
+
 extern "js" fn js_face_clear(face : Int) -> Unit =
   #|(f) => { if (globalThis.__mbhost.faceClear) globalThis.__mbhost.faceClear(f) }
 
@@ -206,6 +209,12 @@ pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 /// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
 pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
   js_face_add(face, path, weight)
+}
+
+///|
+/// As face_add, the font's file being `data`.
+pub fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
+  js_face_add_bytes(face, data, weight)
 }
 
 ///|

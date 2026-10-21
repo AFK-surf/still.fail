@@ -1115,6 +1115,18 @@
     }, () => {});
     return true;
   };
+  // the same, the file's bytes given
+  H.faceAddBytes = (face, data, weight) => {
+    if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
+    const ff = new FontFace(`mbface${face}`, data, { weight: weight ? String(weight) : '1 1000' });
+    ff.load().then(() => {
+      document.fonts.add(ff);
+      faces.add(face);
+      facesChanged();
+      H.requestFrame();
+    }, () => {});
+    return true;
+  };
   H.faceClear = (face) => {
     if (!faces.delete(face)) return;
     for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);

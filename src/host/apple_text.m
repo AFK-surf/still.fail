@@ -130,6 +130,22 @@ int32_t mb_host_face_add(int32_t face, moonbit_string_t path, int32_t weight) {
   return 1;
 }
 
+int32_t mb_host_face_add_bytes(int32_t face, moonbit_bytes_t data, int32_t weight) {
+  if (face <= 0 || face >= MB_FACES) return 0;
+  CFDataRef d = CFDataCreate(NULL, data, Moonbit_array_length(data));
+  CTFontDescriptorRef desc = CTFontManagerCreateFontDescriptorFromData(d);
+  CFRelease(d);
+  if (!desc) return 0;
+  if (!face_descs[face]) {
+    face_descs[face] = [NSMutableArray new];
+    face_weights[face] = [NSMutableArray new];
+  }
+  [face_descs[face] addObject:(__bridge_transfer id)desc];
+  [face_weights[face] addObject:@(weight)];
+  faces_changed();
+  return 1;
+}
+
 void mb_host_face_clear(int32_t face) {
   if (face <= 0 || face >= MB_FACES || !face_descs[face].count) return;
   [face_descs[face] removeAllObjects];

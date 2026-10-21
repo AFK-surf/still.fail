@@ -58,10 +58,10 @@ final class MBText {
         return (style & 2) != 0 ? Typeface.MONOSPACE : (style & 4) != 0 ? Typeface.SERIF : Typeface.DEFAULT;
     }
 
-    /** The faces given (faceAdd, style.mbt): each a list of font files and the weight each is for (0: variable). */
+    /** The faces given (faceAdd, style.mbt): each a list of font files (a File, or a direct ByteBuffer of one) and the weight each is for (0: variable). */
     static final int FACES = 16;
     @SuppressWarnings("unchecked")
-    static final ArrayList<File>[] faceFiles = new ArrayList[FACES];
+    static final ArrayList<Object>[] faceFiles = new ArrayList[FACES];
     @SuppressWarnings("unchecked")
     static final ArrayList<Integer>[] faceWeights = new ArrayList[FACES];
 
@@ -79,7 +79,18 @@ final class MBText {
         return faceFiles[f] != null && !faceFiles[f].isEmpty();
     }
 
-    /** Face `f` at a weight: its file for the nearest weight, a variable one at the weight itself (null: unreadable). */
+    /** A font of a file or its bytes at a weight and slant (a variable one at the weight itself). */
+    static android.graphics.fonts.Font font(Object src, int weight, int fileWeight, boolean italic) throws java.io.IOException {
+        android.graphics.fonts.Font.Builder b = src instanceof File
+            ? new android.graphics.fonts.Font.Builder((File) src)
+            : new android.graphics.fonts.Font.Builder(((ByteBuffer) src).duplicate());
+        if (fileWeight == 0) b.setFontVariationSettings("'wght' " + weight);
+        return b.setWeight(fileWeight == 0 ? weight : fileWeight)
+            .setSlant(italic ? android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC : android.graphics.fonts.FontStyle.FONT_SLANT_UPRIGHT)
+            .build();
+    }
+
+    /** Face `f` at a weight: its file for the nearest weight; what it lacks (Han, emoji) in the system's (null: unreadable). */
     static Typeface faceTypeface(int f, int weight, boolean italic) {
         int best = 0, bestd = Integer.MAX_VALUE;
         for (int i = 0; i < faceWeights[f].size(); i++) {
@@ -91,11 +102,13 @@ final class MBText {
             }
         }
         try {
-            Typeface.Builder b = new Typeface.Builder(faceFiles[f].get(best));
-            if (faceWeights[f].get(best) == 0) b.setFontVariationSettings("'wght' " + weight);
-            Typeface t = b.setWeight(weight).setItalic(italic).build();
-            return t;
-        } catch (RuntimeException e) {
+            android.graphics.fonts.Font font = font(faceFiles[f].get(best), weight, faceWeights[f].get(best), italic);
+            android.graphics.fonts.FontFamily fam = new android.graphics.fonts.FontFamily.Builder(font).build();
+            return new Typeface.CustomFallbackBuilder(fam)
+                .setStyle(new android.graphics.fonts.FontStyle(weight, italic ? android.graphics.fonts.FontStyle.FONT_SLANT_ITALIC : android.graphics.fonts.FontStyle.FONT_SLANT_UPRIGHT))
+                .setSystemFallback((f == 3) ? "monospace" : "sans-serif")
+                .build();
+        } catch (Exception e) {
             return null;
         }
     }
@@ -107,25 +120,33 @@ final class MBText {
         return given != null ? given : Typeface.create(face(style), weight, (style & 1) != 0);
     }
 
-    static boolean faceAdd(int f, String path, int weight) {
+    static boolean take(int f, Object src, int weight) {
         if (f <= 0 || f >= FACES) return false;
-        File file = new File(path);
         // one Android can read as a font, or none taken
-        Typeface t;
         try {
-            t = new Typeface.Builder(file).build();
-        } catch (RuntimeException e) {
+            font(src, weight == 0 ? 400 : weight, weight, false);
+        } catch (Exception e) {
             return false;
         }
-        if (t == null) return false;
         if (faceFiles[f] == null) {
             faceFiles[f] = new ArrayList<>();
             faceWeights[f] = new ArrayList<>();
         }
-        faceFiles[f].add(file);
+        faceFiles[f].add(src);
         faceWeights[f].add(weight);
         facesChanged();
         return true;
+    }
+
+    static boolean faceAdd(int f, String path, int weight) {
+        return take(f, new File(path), weight);
+    }
+
+    static boolean faceAddBytes(int f, byte[] data, int weight) {
+        ByteBuffer b = ByteBuffer.allocateDirect(data.length);
+        b.put(data);
+        b.flip();
+        return take(f, b, weight);
     }
 
     static void faceClear(int f) {

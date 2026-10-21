@@ -54,6 +54,9 @@ extern "C" fn ffi_face_add(face : Int, path : String, weight : Int) -> Int = "mb
 
 extern "C" fn ffi_face_clear(face : Int) -> Unit = "mb_host_face_clear"
 
+#borrow(data)
+extern "C" fn ffi_face_add_bytes(face : Int, data : Bytes, weight : Int) -> Int = "mb_host_face_add_bytes"
+
 extern "C" fn ffi_atlas_generation() -> Int = "mb_host_atlas_generation"
 
 #borrow(buf)
@@ -317,6 +320,12 @@ pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
 /// (atlas_generation moves on).
 pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
   ffi_face_add(face, path, weight) != 0
+}
+
+///|
+/// As face_add, the font's file being `data` (one the app carries in itself, or has fetched and kept).
+pub fn face_add_bytes(face : Int, data : Bytes, weight : Int) -> Bool {
+  ffi_face_add_bytes(face, data, weight) != 0
 }
 
 ///|

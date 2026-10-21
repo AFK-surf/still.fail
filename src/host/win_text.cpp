@@ -89,11 +89,15 @@ static void init(void) {
 // font set from the files: a variable file's named weights in it), and the family the files make.
 #define MB_FACES 16
 static struct {
-  WCHAR **paths;
+  WCHAR **paths;  // a file's path, or NULL: its bytes (data, sizes)
+  void **data;
+  UINT32 *sizes;
   int n;
   IDWriteFontCollection1 *fc;
   WCHAR family[128];
 } faces[MB_FACES];
+// fonts given as bytes: DirectWrite's in-memory loader (it keeps a copy of each)
+static IDWriteInMemoryFontFileLoader *mem_loader;
 
 // The face a style is set in: the one it names; else code's (style & 2), what people wrote's (style & 16), the app's
 // words' (not the serif face's); 0 none given.
@@ -118,7 +122,13 @@ static bool face_build(int f) {
   bool ok = SUCCEEDED(dw5->CreateFontSetBuilder(&b));
   for (int i = 0; ok && i < faces[f].n; i++) {
     IDWriteFontFile *file = NULL;
-    ok = SUCCEEDED(dw5->CreateFontFileReference(faces[f].paths[i], NULL, &file)) && SUCCEEDED(b->AddFontFile(file));
+    if (faces[f].paths[i]) {
+      ok = SUCCEEDED(dw5->CreateFontFileReference(faces[f].paths[i], NULL, &file));
+    } else {
+      if (!mem_loader && SUCCEEDED(dw5->CreateInMemoryFontFileLoader(&mem_loader))) dw5->RegisterFontFileLoader(mem_loader);
+      ok = mem_loader && SUCCEEDED(mem_loader->CreateInMemoryFontFileReference(dw5, faces[f].data[i], faces[f].sizes[i], NULL, &file));
+    }
+    ok = ok && SUCCEEDED(b->AddFontFile(file));
     if (file) file->Release();
   }
   ok = ok && SUCCEEDED(b->CreateFontSet(&set)) && SUCCEEDED(dw5->CreateFontCollectionFromFontSet(set, &fc)) &&
@@ -140,27 +150,55 @@ static bool face_build(int f) {
 
 static void faces_changed(void);
 
-extern "C" int32_t mb_host_face_add(int32_t f, moonbit_string_t path, int32_t weight) {
-  (void)weight;  // the files' own weights say which is which (a variable file: its named instances)
+// A file of face `f`: its path, or its bytes (path NULL); made part of it if DirectWrite reads them as a font.
+static int32_t face_take(int32_t f, WCHAR *path, void *data, UINT32 size) {
   init();
-  if (f <= 0 || f >= MB_FACES) return 0;
-  int len = Moonbit_array_length(path);
-  WCHAR *p = (WCHAR *)malloc(sizeof(WCHAR) * (len + 1));
-  memcpy(p, path, sizeof(WCHAR) * len);
-  p[len] = 0;
-  faces[f].paths = (WCHAR **)realloc(faces[f].paths, sizeof(WCHAR *) * (faces[f].n + 1));
-  faces[f].paths[faces[f].n++] = p;
+  if (f <= 0 || f >= MB_FACES) {
+    free(path);
+    free(data);
+    return 0;
+  }
+  int n = faces[f].n;
+  faces[f].paths = (WCHAR **)realloc(faces[f].paths, sizeof(WCHAR *) * (n + 1));
+  faces[f].data = (void **)realloc(faces[f].data, sizeof(void *) * (n + 1));
+  faces[f].sizes = (UINT32 *)realloc(faces[f].sizes, sizeof(UINT32) * (n + 1));
+  faces[f].paths[n] = path;
+  faces[f].data[n] = data;
+  faces[f].sizes[n] = size;
+  faces[f].n = n + 1;
   if (!face_build(f)) {
-    free(faces[f].paths[--faces[f].n]);
+    faces[f].n = n;
+    free(path);
+    free(data);
     return 0;
   }
   faces_changed();
   return 1;
 }
 
+extern "C" int32_t mb_host_face_add(int32_t f, moonbit_string_t path, int32_t weight) {
+  (void)weight;  // the files' own weights say which is which (a variable file: its named instances)
+  int len = Moonbit_array_length(path);
+  WCHAR *p = (WCHAR *)malloc(sizeof(WCHAR) * (len + 1));
+  memcpy(p, path, sizeof(WCHAR) * len);
+  p[len] = 0;
+  return face_take(f, p, NULL, 0);
+}
+
+extern "C" int32_t mb_host_face_add_bytes(int32_t f, moonbit_bytes_t data, int32_t weight) {
+  (void)weight;
+  UINT32 size = (UINT32)Moonbit_array_length(data);
+  void *copy = malloc(size);
+  memcpy(copy, data, size);
+  return face_take(f, NULL, copy, size);
+}
+
 extern "C" void mb_host_face_clear(int32_t f) {
   if (f <= 0 || f >= MB_FACES || !faces[f].fc) return;
-  for (int i = 0; i < faces[f].n; i++) free(faces[f].paths[i]);
+  for (int i = 0; i < faces[f].n; i++) {
+    free(faces[f].paths[i]);
+    free(faces[f].data[i]);
+  }
   faces[f].n = 0;
   faces[f].fc->Release();
   faces[f].fc = NULL;
