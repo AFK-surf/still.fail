@@ -58,6 +58,8 @@ const MAX_PUSH = 512 * 1024 * 1024;
 const SETTLE_MS = 300;
 /// Where the runtime processes the bridge started in this sandbox are kept (their process groups), one a line.
 const AGENTS = () => `${process.env.XDG_RUNTIME_DIR || "/tmp"}/stillfail-bridge-agents`;
+/// Variables naming certificate files or directories (OpenSSL, Codex, Node, Python, curl).
+const CERT_VARS = ["SSL_CERT_FILE", "SSL_CERT_DIR", "CODEX_CA_CERTIFICATE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"];
 /// What the sandbox keeps of its own environment over the station's: who it is, where its home and tools are.
 const OWN = ["HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "XDG_RUNTIME_DIR", "SSH_AUTH_SOCK", "SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "MAIL", "PWD", "OLDPWD", "SHLVL", "_"];
 
@@ -576,6 +578,9 @@ function remote() {
     }
     // The station's directories first (a job's bin), then the sandbox's own.
     env.PATH = [spec.env.PATH, process.env.PATH].filter(Boolean).join(":");
+    // Certificates named by a path of the station's machine (the Codex driver's SSL_CERT_FILE=/etc/ssl/cert.pem on
+    // macOS): one the sandbox does not have would make every TLS connection fail; its own are used.
+    for (const name of CERT_VARS) if (env[name] && !existsSync(L(env[name]))) delete env[name];
     // Codex's state database (SQLite) on the sandbox's own disk: the home it is in may be on NFS (`persist`), where
     // Codex cannot open it ("failed to initialize sqlite state runtime"). It goes with the sandbox; the transcripts
     // stay in the home.
