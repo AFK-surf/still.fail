@@ -1,7 +1,8 @@
 // The agents' memory on a station (settings/Memory.kt; `memory.get` on the station, read as its page opens): the global
 // memory by its parts, each project's memory (a skill whose description says when it applies), the station's other
 // skills (the built-in ones folded), each opening a page of its own to read, Markdown; the memory of every station a
-// row each from settings (MemoriesScreen). Whether a skill is shared is said; switching it is a later slice's.
+// row each from settings (MemoriesScreen). A skill of the station's own is shared with the workspace's other stations,
+// or no longer, from its page (ShareRow: `skill.share`).
 
 ///|
 /// The last memory read of each station (Memory.kt kept), so a page opened from the list has it at once; whether it
@@ -390,34 +391,36 @@ fn memory_doc_page(c : @ui.Ctx, core : Core, address : String, skill : String, a
     let blocks : Array[() -> Unit] = [fn() { gap(c, 4.0) }]
     if kv is Some(_) {
       blocks.push(fn() {
-        card(c, fn() {
-          c.text(tr("web-main.memory.when"), size=12.0, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
-          c.box(w=Fill(1.0), pt=2.0, fn() {
-            c.text(
-              match opt_text(kv, "about") {
-                Some(a) if a != "" => a
-                _ =>
-                  match text(kv, "description") {
-                    "" => tr("android-misc.memory.noWhen")
-                    d => d
-                  }
-              },
-              size=13.0,
-              color=t.p.muted,
-              w=Fill(1.0),
-              line=18.0,
-            )
-            |> ignore
-          })
-          |> ignore
-          if !flag(kv, "builtin") && text(field(kv, "share"), "role") != "user" {
-            // whether it is shared with the workspace's other stations (`skill.share`): said; switched by a later slice's
-            c.box(dir=Row, w=Fill(1.0), pt=12.0, gap=10.0, align=ACenter, fn() {
-              c.text(tr("web-main.memory.share.switch"), size=14.0, color=t.p.text, wrap=false, w=Fill(1.0)) |> ignore
-              switch(c, text(field(kv, "share"), "role") == "host")
+        // its rows in its corners: 8 in, their words 12 more (the card's 20)
+        c.box(style=card_room, fn() {
+          c.box(style=skill_card, fn() {
+            c.box(style=skill_card_words, fn() {
+              c.text(tr("web-main.memory.when"), size=12.0, weight=500, color=t.p.subtle, wrap=false, line=17.0) |> ignore
+              c.box(w=Fill(1.0), pt=2.0, fn() {
+                c.text(
+                  match opt_text(kv, "about") {
+                    Some(a) if a != "" => a
+                    _ =>
+                      match text(kv, "description") {
+                        "" => tr("android-misc.memory.noWhen")
+                        d => d
+                      }
+                  },
+                  size=13.0,
+                  color=t.p.muted,
+                  w=Fill(1.0),
+                  line=18.0,
+                )
+                |> ignore
+              })
+              |> ignore
             })
             |> ignore
-          }
+            if !flag(kv, "builtin") && text(field(kv, "share"), "role") != "user" {
+              skill_share_row(c, core, address, kv, read)
+            }
+          })
+          |> ignore
         })
         |> ignore
       })
@@ -468,4 +471,96 @@ fn doc_chips(c : @ui.Ctx, key : String, pages : Array[(String, String, String)],
   })
   |> ignore
   got
+}
+
+///|
+/// The card a skill's when and sharing are on: a card (20 down, 22 round) whose rows reach 8 from its sides, as
+/// MemoryDocScreen's ShareRow bleeds out of it (CARD_PAD less LIST_PAD).
+// kept across runs: a value (no field of it changes)
+let skill_card : @ui.Style = card_ground.then(@ui.style(px=S2))
+
+///|
+/// Its words 12 further in: 20 from its sides, as a card's.
+// kept across runs: a value (no field of it changes)
+let skill_card_words : @ui.Style = @ui.style(w=Full, px=S3)
+
+///|
+/// The sharing row, 12 under the words: its ground under the finger rounded as the card's less its room
+/// (LIST_ROW_CORNER), its words 12 in, 6 over and under.
+// kept across runs: a value (no field of it changes)
+let skill_share_room : @ui.Style = @ui.style(w=Full, pt=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let skill_share_line : @ui.Style = @ui.style(
+  row=true,
+  w=Full,
+  px=S3,
+  py=S1_5,
+  gap=S2_5,
+  radius=Inner,
+  align=ACenter,
+  pressed=@ui.patch(bg=A(Fg, O5)),
+)
+
+///|
+/// Its words (14, the ink, as wide as the row lets them).
+// kept across runs: a value (no field of it changes)
+let skill_share_words : @ui.TextStyle = @ui.text_style(size=Base, color=Fg, w=Full)
+
+///|
+/// The edits two stations made at once (12, the warning's ink), 6 under it, 12 in.
+// kept across runs: a value (no field of it changes)
+let skill_conflicts_room : @ui.Style = @ui.style(w=Full, px=S3, pt=S1_5)
+
+///|
+// kept across runs: a value (no field of it changes)
+let skill_conflicts_words : @ui.TextStyle = @ui.text_style(size=Xs, w=Full)
+
+///|
+/// Whether a skill of this station's is shared with the workspace's other stations (MemoryDocScreen's ShareRow): a tap
+/// switches it (`skill.share`), its memory read again once it has; and the edits two made at once.
+fn skill_share_row(c : @ui.Ctx, core : Core, address : String, kv : Json?, read : MemoryRead) -> Unit {
+  let t = @sf.theme()
+  let name = text(kv, "name")
+  let on_what = [("station", address), ("name", name)]
+  let busy = is_doing(core, ["skill.share"], on_what)
+  let on = text(field(kv, "share"), "role") == "host"
+  c.box(style=skill_share_room, fn() {
+    // (no tap while it is being switched)
+    let id = if busy { 0 } else { c.id("skill-share/" + name) }
+    c.box(style=skill_share_line, id~, fn() {
+      c.text(tr("web-main.memory.share.switch"), style=skill_share_words) |> ignore
+      doing_mark(c, busy, failed_of(core, ["skill.share"], on_what))
+      switch(c, on)
+    })
+    |> ignore
+    if id != 0 && hit(c, id) {
+      act(
+        core,
+        tr("web-main.memory.share.switch"),
+        "skill.share",
+        obj([("station", str(address)), ("name", str(name)), ("on", Json::boolean(!on))]),
+        then=fn(_) { read.asked = false },
+      )
+    }
+  })
+  |> ignore
+  let conflicts = items(field(kv, "share"), "conflicts").map(fn(x) {
+    match x {
+      String(n) => n
+      _ => ""
+    }
+  })
+  if conflicts.length() > 0 {
+    c.box(style=skill_conflicts_room, fn() {
+      c.text(
+        fill("web-main.memory.share.conflicts", [("names", join(conflicts, tr("web-main.list.separator")))]),
+        style=skill_conflicts_words,
+        color=t.p.warn_ink,
+      )
+      |> ignore
+    })
+    |> ignore
+  }
 }

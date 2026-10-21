@@ -481,8 +481,18 @@ test "chat-info" {
 }
 
 ///|
+test "chat-publish" {
+  check("chat-publish", @ui.nav_push_ms)
+}
+
+///|
 test "chat-agent" {
   check("chat-agent", @ui.nav_push_ms)
+}
+
+///|
+test "chat-peek" {
+  check("chat-peek", @ui.nav_push_ms)
 }
 
 ///|

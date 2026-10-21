@@ -3,4 +3,6 @@
 // until the bar is lowered here). A screen not listed has none.
 
 ///|
-let corners_known : Map[String, Int] = { "chat-info": 2, "chat-jobs": 2 }
+// (chat-publish's: the first message's picture in the snapshot's card, 17 from its top and 16 from its side, as
+// Android's Publish.kt PreviewMessage has it: the card's 14 and the picture's 3 under the name's line)
+let corners_known : Map[String, Int] = { "chat-info": 2, "chat-jobs": 2, "chat-publish": 1 }

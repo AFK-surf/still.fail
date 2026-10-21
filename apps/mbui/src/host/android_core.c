@@ -43,7 +43,8 @@ JavaVM *mb_android_vm(void);  // android_host.c
 
 static struct {
   int ready;
-  jclass host, core_host, string;
+  jclass host, core_host, string, adb_core;
+  jmethodID adb_says;
   jmethodID data_dir, asset, init, started, closing, string_init, secure_test;
   jstring utf8_name;
   jobject listener;  // this core's CoreHost
@@ -82,12 +83,42 @@ static int tracing(void) {
   return t && t[0] == '1';
 }
 
+// The app's Java (dev.mbui.AdbCore: 共享调试's service, which goes on while the app is behind and its frames stop)
+// asks the core on the UI's own client with ids of its own, from java_ids on; what the core says to those (it writes
+// the id first: client/core-ts protocol.ts) goes to AdbCore.says, not to the app.
+#define JAVA_IDS 1000000000LL
+
+static int java_said(const char *p, size_t n) {
+  static const char head[] = "{\"id\":";
+  size_t h = sizeof head - 1;
+  if (n <= h || memcmp(p, head, h) != 0) return 0;
+  long long id = 0;
+  size_t i = h;
+  if (i < n && p[i] == '-') return 0;
+  for (; i < n && p[i] >= '0' && p[i] <= '9' && i < h + 19; i++) id = id * 10 + (p[i] - '0');
+  return id >= JAVA_IDS;
+}
+
+static void to_java(JNIEnv *env, jbyteArray json) {
+  if (!A.adb_core) return;
+  (*env)->CallStaticVoidMethod(env, A.adb_core, A.adb_says, json);
+  cleared(env);
+}
+
 static void JNICALL on_bytes(JNIEnv *env, jobject self, jbyteArray json) {
   jsize n = (*env)->GetArrayLength(env, json);
   jbyte *p = (*env)->GetByteArrayElements(env, json, NULL);
   if (tracing()) CORE_LOG("core says %.*s%s", n < 400 ? (int)n : 400, (const char *)p, n > 400 ? "…" : "");
-  if (A.on_message) A.on_message((const char *)p, (size_t)n, NULL, 0, A.ctx);
+  int java = java_said((const char *)p, (size_t)n);
+  if (!java && A.on_message) A.on_message((const char *)p, (size_t)n, NULL, 0, A.ctx);
   (*env)->ReleaseByteArrayElements(env, json, p, JNI_ABORT);
+  if (java) to_java(env, json);
+}
+
+// What the app's Java asks the core (AdbCore.send): the UI's client, the core's thread takes it in order.
+static void JNICALL java_send(JNIEnv *env, jclass cls, jstring json) {
+  if (!A.handle || !json) return;
+  Java_fail_still_core_HermesNative_receive(env, NULL, A.handle, A.client, json);
 }
 
 static void JNICALL on_frame(JNIEnv *env, jobject self, jbyteArray json, jbyteArray bytes) {
@@ -124,6 +155,15 @@ static int core_init(JNIEnv *env) {
   };
   (*env)->RegisterNatives(env, A.core_host, natives, 3);
   if (cleared(env)) return 0;
+  // 共享调试's own client (dev.mbui.AdbCore), where the app has it
+  jclass adb = (*env)->FindClass(env, "dev/mbui/AdbCore");
+  if (!cleared(env) && adb) {
+    JNINativeMethod sends[] = {{"send", "(Ljava/lang/String;)V", (void *)java_send}};
+    (*env)->RegisterNatives(env, adb, sends, 1);
+    A.adb_says = (*env)->GetStaticMethodID(env, adb, "says", "([B)V");
+    if (!cleared(env)) A.adb_core = (*env)->NewGlobalRef(env, adb);
+    (*env)->DeleteLocalRef(env, adb);
+  }
   // the core's JS sampled, and what the shell was asked (the engine's, as still.fail's CoreProfile.kt has them):
   // dev.mbui.CoreProfile's, for CoreProfileReceiver and MemoryWatch (their `this` is the class, which neither reads)
   jclass profile = (*env)->FindClass(env, "dev/mbui/CoreProfile");

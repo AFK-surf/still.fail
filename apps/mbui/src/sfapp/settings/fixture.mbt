@@ -19,6 +19,8 @@ priv struct SettingsFixture {
   mut login : Bool
   /// the vault not set up on this device (settings-vault-off)
   mut vault_off : Bool
+  /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
+  skills_shared : Map[String, Bool]
 }
 
 ///|
@@ -31,6 +33,7 @@ let fx : SettingsFixture = {
   none: false,
   login: false,
   vault_off: false,
+  skills_shared: {},
 }
 
 ///|
@@ -55,6 +58,7 @@ let fx_connect_step : Ref[String] = Ref("team")
 fn fixture_reset() -> Unit {
   fx.names.clear()
   fx.restored.clear()
+  fx.skills_shared.clear()
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -638,7 +642,14 @@ fn fx_memory() -> Json {
           ("about", str("发布新版本时")),
           ("size", str("3 KB")),
           ("files", [obj([("name", str("checklist.md")), ("text", str("- 签名\n- 截图")), ("label", str("checklist")), ("size", str("1 KB"))])]),
-          ("share", obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1"))])),
+          (
+            "share",
+            if fx.skills_shared.get("发布流程").unwrap_or(true) {
+              obj([("id", str("sh1")), ("role", str("host")), ("host", str("st1")), ("conflicts", ["SKILL.md"])])
+            } else {
+              obj([])
+            },
+          ),
         ]),
         obj([
           ("name", str("周报")),
@@ -1109,6 +1120,11 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "memory.get" => Some(Ok(fx_memory()))
+    // a skill shared with the workspace's other stations, or no longer
+    "skill.share" => {
+      fx.skills_shared[text(p, "name")] = flag(p, "on")
+      Some(Ok(obj([])))
+    }
     "cache.usage" =>
       Some(
         Ok(

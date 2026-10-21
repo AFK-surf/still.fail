@@ -460,19 +460,22 @@ pub fn breath(c : @ui.Ctx, failed? : Bool = false) -> Double {
 
 ///|
 /// A placeholder bar (a title's, a line's, a picture's): the neutral grey,
-/// round.
+/// round; `breathing`, on the placeholders' breath by itself (Stations.kt Bar).
 pub fn bar(
   c : @ui.Ctx,
   w : @ui.Size,
   h : Double,
   radius? : Double = -1.0,
+  breathing? : Bool = false,
 ) -> Unit {
   let t = theme()
+  let seen = if breathing { breath(c) } else { 1.0 }
   c.box(
     w~,
     h=Px(h),
     bg=t.p.neutral_bg,
     radius=if radius >= 0.0 { radius } else { h / 2.0 },
+    opacity=seen,
     fn() {  },
   )
   |> ignore
