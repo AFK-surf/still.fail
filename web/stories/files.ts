@@ -3,6 +3,7 @@
 // done and failed (the `driveTransfers` topic as the core puts it together: client/core-ts/src/views/transfers.ts); and
 // what a copy asked answers.
 import type { DemoExtension } from "../src/demo/mount.tsx";
+import { driveFolder as studioFolder } from "../src/demo/station.ts";
 import type { DriveEntry, DriveFolder, DriveKind, DriveTransferShown, StationView } from "../src/core/shapes.ts";
 
 const MBA = "demo/mba";
@@ -70,7 +71,16 @@ export function filesDemo(transfers: DriveTransferShown[] = []): DemoExtension {
     },
     call: (name, params) => {
       if (name === "drive.transfer") return { transfer: transfers[0] ?? null };
-      if (name !== "drive.folders" || params.path) return undefined;
+      if (name !== "drive.folders") return undefined;
+      // A folder's folders (where a copy goes, a path typed): each station's as its folders are here.
+      if (typeof params.path === "string" && params.path !== "") {
+        const at = params.path.replace(/\/$/, "");
+        const listed = params.station === MBA ? folder(at) : studioFolder(at, "");
+        const entries = listed.entries.filter((e) => e.dir).map((e) => ({ name: e.name, path: `${at}/${e.name}`, unreadable: false }));
+        const parts = at.split("/").filter(Boolean);
+        return { path: at, parent: parts.length ? `/${parts.slice(0, -1).join("/")}` : null, home: params.station === MBA ? "/Users/mei" : "/Users/lin", entries, unreadable: false,
+          crumbs: parts.map((p, i) => ({ name: p, path: `/${parts.slice(0, i + 1).join("/")}` })), places: [] };
+      }
       // Each station's places, as its row opens: its home, the home's own folders, its disks.
       const home = params.station === MBA ? "/Users/mei" : "/Users/lin";
       const place = (name: string, path: string, disk = false) => ({ name, path, unreadable: false, ...(disk ? { disk: true } : {}) });
