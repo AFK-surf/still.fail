@@ -312,6 +312,14 @@ class Rules(unittest.TestCase):
         }
         found(self, good, "script-wait", 0)
 
+    def test_device_shot(self):
+        bad = {"scripts/ref.sh": '"SHOT "*) $ADB exec-out screencap -p > $O/$n.png ;;\n'
+                                 'xcrun simctl io "$ID" screenshot "$O/$n.png"\n'}
+        found(self, bad, "device-shot", 2)
+        good = {"scripts/ref.sh": "# adb's screencap was here\nbash scripts/render_android.sh run\n"
+                                  "MBUI_SCRIPT=shot MBUI_SHOT_DIR=out ./app\n"}
+        found(self, good, "device-shot", 0)
+
     def test_page_settle(self):
         bad = {"scripts/web.mjs": "await page.waitForFunction(() => __mbhost.settled(), null, { timeout: 30000 });\n"
                                   "console.log(await page.evaluate(() => __mbhost.unsettled()));\n"}

@@ -21,7 +21,8 @@
     ]
   },
   "flows": [
-    "e2e/flows/*.drive"
+    "e2e/flows/*.drive",
+    "e2e/win/*.drive"
   ],
   "scripts": [
     "scripts/*.sh",
@@ -50,6 +51,11 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "device-shot": {
+      "e2e/android-flow.sh": 2,
+      "scripts/android-ref.sh": 2,
+      "scripts/e2e-local.sh": 1
+    },
     "frame-wait": {
       "src/sfcore/clock.mbt": 1
     },
@@ -226,6 +232,7 @@
     "flow-wait": {},
     "script-wait": {},
     "page-settle": {},
+    "device-shot": {},
     "frame-wait": {},
     "at-rest-wait": {},
     "frame-count": {},

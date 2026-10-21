@@ -12,6 +12,17 @@ particular to this app:
   compares mbui with itself (#881 took that out); do not bring it back.
 - A change people can see (timing, rhythm, what is shown) says so in its PR with old and new side by side.
 
+## What is compared, and where
+
+- The app's screens are compared in the Tester: its draw list at the declared moment, over the same core JSON
+  Android's app draws (`client/fixtures/screens`). Pixels come from each host's offscreen render of that draw list
+  (`mbui-render-*`), and Android's own pictures (taken by `apps/android`'s tests) are the references.
+- No check runs the whole app on a device, an emulator, a simulator or a desktop window and compares its picture
+  with a kept one: that is slow, and what it waits for is never the app's own. A device runs only the host's
+  contracts (`mbui-host-*`), the render contracts, and a few end-to-end smoke flows that wait for named events; their
+  pictures are for people, not compared. detlint's `device-shot` counts each picture taken off a device: a new one
+  fails.
+
 ## Time is declared, nothing is waited for, nothing is flaky
 
 > 一个测试里动画是多少帧，跑多久现实时间，对测试不会有任何影响。如果测试断言了动画第 3 秒应该是什么样，测试就能正确得到

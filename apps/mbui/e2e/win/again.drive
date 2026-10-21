@@ -1,8 +1,8 @@
-# Started again on the same files: signed in at once, Home (a PC-sized window).
+# Started again on the same files: signed in at once, Home (a PC-sized window). What the core says of the accounts
+# first (the core started on the files the sign-in left), then no sign-in page: Home, not a frame before the core spoke.
 timeout 60000
-wait 6000
+answered {"topic":"accounts"}
 gone 登录或注册
 #station until 端到端测试
-wait 2000
 shot 3-home-again
 exit

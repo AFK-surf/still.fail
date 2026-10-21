@@ -8,6 +8,5 @@ timeout 90000
 gone 登录或注册
 #station until 端到端测试
 #station until 你好，我是测试用的 agent
-wait 3000
 shot 2-home
 exit
