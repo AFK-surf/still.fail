@@ -3,9 +3,13 @@ import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { buddyHopKeyframes } from "@stillfail/ui/styles/keyframes.css.ts";
 import { list, pageNarrow } from "./styles/pages.css.ts";
 import { newChat } from "./NewChat.css.ts";
-import { pageBar } from "./styles/sidebar.css.ts";
+import { pageBar as onePageBar } from "./styles/sidebar.css.ts";
+import { bar as filesBar } from "./pages/Files.css.ts";
 import { neg, outset } from "@stillfail/ui/styles/align.ts";
 import { STILL } from "@stillfail/ui/styles/still.ts";
+
+// A page's bar, and the files page's over its tabs (Files.tsx), which is in the same place.
+const pageBar = `:is(${onePageBar}, ${filesBar})`;
 
 export const brandLockup = style({ display: "block" });
 export const illus = style({

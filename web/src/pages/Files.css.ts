@@ -45,9 +45,11 @@ export const tabClose = style({
   padding: "0", border: "0", borderRadius: "50%", background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
   selectors: { [`${tab}:hover &`]: { opacity: "1" }, "&:hover": { background: vars.hover, color: vars.text } },
 });
+/** What can be done to the folder in front (Drive.tsx FolderView puts it here), then the tabs' own buttons after a line. */
+export const barFolder = style({ flex: "none", display: "flex", alignItems: "center", selectors: { "&:not(:empty)::after": { content: '""', width: "1px", height: "16px", margin: "0 6px 0 10px", background: vars.line } } });
 export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "4px" });
 // The bar sits in the row that drags the desktop window (styles/shell.css.ts main): its tabs and buttons are still pressed.
-globalStyle(`[data-desktop] ${bar} :is(button, [role="tab"])`, { WebkitAppRegion: "no-drag" });
+globalStyle(`[data-desktop] ${bar} :is(button, [role="tab"], [role="radio"], [role="radiogroup"])`, { WebkitAppRegion: "no-drag" });
 /** A toggle in the accent while it is on (split). */
 export const toggle = style({ display: "contents" });
 globalStyle(`${toggle}[data-on] button`, { color: vars.accent });

@@ -13,7 +13,11 @@ export const dropSays = style({
 });
 
 export const empty = style({ margin: "8px 12px", color: vars.muted, fontSize: vars.textMeta });
-export const hint = style({ margin: "2px 12px 6px", color: vars.subtle, fontSize: vars.textMeta });
+/** Where favourites go while there are none: a place to drop, as tall as a row, outlined. */
+export const hint = style({
+  display: "grid", placeItems: "center", minHeight: "34px", margin: "0", boxSizing: "border-box", borderRadius: vars.rNav,
+  border: `1px dashed ${vars.lineStrong}`, color: vars.subtle, fontSize: vars.textMeta,
+});
 /** 个人收藏: ringed while a folder dragged over it would be kept there. */
 export const keep = style({ borderRadius: vars.rNav, selectors: { "&[data-over]": { boxShadow: `inset 0 0 0 1px ${vars.accent}` } } });
 export const favorite = style({ position: "relative" });
@@ -44,3 +48,6 @@ globalStyle(`${disk}[data-full] > span`, { background: vars.amber });
 /** A station's places, in under it. */
 export const places = style({ paddingLeft: "14px" });
 export const reading = style({ margin: "4px 12px 6px 22px", color: vars.subtle, fontSize: vars.textMeta });
+// Rows next to each other never touch (Sidebar.css.ts navRow): here each is in a box of its own (a drop, a station),
+// so the 2px goes between the boxes.
+globalStyle(`:is(${drop}, ${station}, ${favorite}) + :is(${drop}, ${station}, ${favorite})`, { marginTop: "2px" });

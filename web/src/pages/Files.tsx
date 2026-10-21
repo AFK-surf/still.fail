@@ -35,7 +35,8 @@ export function paneName(p: Pane, views: readonly StationView[] | undefined): st
 }
 
 /** What a folder's page asks of the files' page around it: a folder opened in a new tab, or on the other side. */
-export interface FilesActions { open: (p: Pane, where: "tab" | "side") => void; goTo: () => void }
+/** `bar`: where the side in front puts what can be done to its folder (the bar over the tabs). */
+export interface FilesActions { open: (p: Pane, where: "tab" | "side") => void; goTo: () => void; bar: HTMLElement | null }
 const Actions = createContext<FilesActions | null>(null);
 /** The files' page's own, where there is one (none in a chat's 文件 tab). */
 export const useFilesActions = () => useContext(Actions);
@@ -62,7 +63,8 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
   };
   const tab = tabs.tabs.find((x) => x.id === tabs.current) ?? tabs.tabs[0]!;
   const [going, setGoing] = useState(false);
-  const actions: FilesActions = { open: (p, where) => show(where === "tab" ? opened(tabs, p) : besides(tabs, p)), goTo: () => setGoing(true) };
+  const [bar, setBar] = useState<HTMLElement | null>(null);
+  const actions: FilesActions = { open: (p, where) => show(where === "tab" ? opened(tabs, p) : besides(tabs, p)), goTo: () => setGoing(true), bar };
   const splitAt = tab.panes.length === 2;
   // ⌘T a new tab where the front is (⌘W stays the window's: the desktop app's menu closes it), ⌃Tab / ⌘⇧] and ⌘⇧[ go
   // along them, ⌘⌥D splits.
@@ -114,6 +116,7 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
             ))}
           </div>
         ) : <div className={css.tabsNone} />}
+        <div ref={setBar} className={css.barFolder} />
         <div className={css.barEnd}>
           <TransfersButton scope={scope} />
           <span className={css.toggle} data-on={splitAt || undefined}><IconButton label={t(splitAt ? "web-pages.files.unsplit" : "web-pages.files.split")} icon={ViewColumns} onClick={() => show(split(tabs))} /></span>
