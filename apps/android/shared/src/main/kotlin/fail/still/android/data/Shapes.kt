@@ -1129,7 +1129,7 @@ data class Profile (
 	val checkTone: Tone,
 	/// The first problem to resolve, with its next step; absent when nothing needs attention.
 	val trouble: ProfileTrouble? = null,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest). A station's
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest). A station's
 	/// profiles come by kind, in that order.
 	val group: String? = null,
 	/// That kind in words: Claude 订阅.
@@ -4304,7 +4304,7 @@ data class ShareStation (
 data class WorkspaceProfile (
 	/// The share's id, or station/profile for one on a station only.
 	val key: String,
-	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), cursor (Cursor), devin (Devin), key (the rest).
+	/// The kind of account it is listed under: claude (Claude's subscription), chatgpt, grok (SuperGrok), kimi (Kimi Code signed in), opencode (OpenCode Go signed in), cursor (Cursor), devin (Devin), key (the rest).
 	val group: String,
 	/// That kind in words: Claude 订阅.
 	val groupTitle: String,

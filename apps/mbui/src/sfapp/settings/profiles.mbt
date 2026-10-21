@@ -175,6 +175,9 @@ fn group_mark(c : @ui.Ctx, group : String) -> Unit {
     "chatgpt" => provider_mark(c, "codex", "subscription", 16.0, "")
     // SuperGrok: xAI's
     "grok" => provider_mark(c, "grok", "api-provider", 16.0, "xai")
+    // signed in to an account: its provider's
+    "kimi" => provider_mark(c, "claude", "api-provider", 16.0, "kimi")
+    "opencode" => provider_mark(c, "claude", "opencode-go", 16.0, "")
     _ => provider_mark(c, "claude", "subscription", 16.0, "")
   }
 }

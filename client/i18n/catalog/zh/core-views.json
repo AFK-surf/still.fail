@@ -335,6 +335,8 @@
   "core-views.profiles.group.claude": "Claude 订阅",
   "core-views.profiles.group.chatgpt": "ChatGPT 订阅",
   "core-views.profiles.group.grok": "SuperGrok 订阅",
+  "core-views.profiles.group.kimi": "Kimi Code 订阅",
+  "core-views.profiles.group.opencode": "OpenCode Go 订阅",
   "core-views.profiles.group.cursor": "Cursor 订阅",
   "core-views.profiles.group.devin": "Devin 订阅",
   "core-views.profiles.group.key": "API Key",
