@@ -11,17 +11,28 @@
 set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 
+# STILLFAIL_DIRECT_DNS (mini1's CI jobs: .github/actions/setup-mac): Cloudflare's API reached directly, by the address
+# that DNS server gives, not through the machine's own (the proxy on the home network, whose line went down for hours twice on
+# 2026-10-21 and failed two releases' puts; directly the upload is ~4.5 MB/s against ~5.5). Unanswered: as before.
+direct=""
+if [ -n "${STILLFAIL_DIRECT_DNS:-}" ]; then
+  ip=$(dig +short +time=3 +tries=2 @"$STILLFAIL_DIRECT_DNS" api.cloudflare.com A 2>/dev/null | grep -E '^[0-9.]+$' | head -1) || ip=""
+  if [ -n "$ip" ]; then direct="--resolve api.cloudflare.com:443:$ip"; echo "Cloudflare's API directly, at $ip"
+  else echo "Cloudflare's API: $STILLFAIL_DIRECT_DNS gave no address; through the machine's own DNS" >&2; fi
+fi
 # The account the bucket is in, for Cloudflare's API: asked once (empty when the token cannot say).
 account_id=${CLOUDFLARE_ACCOUNT_ID:-}
 if [ -z "$account_id" ] && [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
-  account_id=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" 2>/dev/null \
+  # shellcheck disable=SC2086 # direct is words
+  account_id=$(curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts" 2>/dev/null \
     | grep -o '"id":"[0-9a-f]\{32\}"' | head -1 | cut -d'"' -f4) || account_id=""
 fi
 # The object put straight through Cloudflare's API, as wrangler does it, without its start-up and at the speed the line
 # has (a 148 MB zip took wrangler ~45 s from mini1, whose upload is ~5.5 MB/s): wrangler when that cannot be done.
 api_put() {
   [ -n "${CLOUDFLARE_API_TOKEN:-}" ] && [ -n "$account_id" ] || return 1
-  curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
+  # shellcheck disable=SC2086 # direct is words
+  curl $direct -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: $3" -T "$2" \
     "https://api.cloudflare.com/client/v4/accounts/$account_id/r2/buckets/stillfail-releases/objects/$1" > /dev/null
 }
 # put <name in the bucket> <file> <content type>, tried again twice when Cloudflare's API fails on the way.
