@@ -54,7 +54,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           android: 'true'
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       - name: The mbui app (APP=sffix, debug, for the x86_64 emulator)
         run: |
           sh apps/mbui/scripts/mbui.sh > /dev/null

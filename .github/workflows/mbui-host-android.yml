@@ -92,13 +92,16 @@ jobs:
         run: python3 scripts/ci_paths.py
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
+      # (read only: the Gradle cache is the releases' (mbui.yml) and check-android's to write, one copy of it, the cache
+      # held to its 10 GB)
       - uses: gradle/actions/setup-gradle@v4
+        with: { cache-read-only: true }
       - uses: ./.github/actions/mbui-moonbit
       - name: kitdemo's APK for an x86_64 emulator
         run: ABI=x86_64 scripts/host_contract.sh android build
       # (the system's animations as a phone has them: off, motion would be reduced, not what a Tester plays)
       - uses: ./.github/actions/mbui-android-emulator
-        with: { target: google_apis, profile: pixel_7, animations: "true" }
+        with: { target: default, profile: pixel_6, animations: "true" }
       - name: "The host's contract (a run's tape = a Tester's frames), the text's (android_controls = the system's), the marks' (= goldens/marks/android.png)"
         env:
           HOST: ${{ steps.f.outputs.host }}

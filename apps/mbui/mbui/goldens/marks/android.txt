@@ -1,9 +1,10 @@
 # The marks' reference on Android (docs/determinism.md, the marks' contract; scripts/host_contract.sh android marks):
-# made in host-android's x86_64 emulator (API 34, google_apis) on GitHub's ubuntu-24.04 (its artifact). Checked: system
+# made in host-android's x86_64 emulator (API 34, AOSP's default image since #939; google_apis' drew it the same to
+# the byte, run 39603181198) on GitHub's ubuntu-24.04 (its artifact). Checked: system
 # (the system image's build: Skia's Canvas draws it) and fonts (fonts' list and Roboto's bytes); the rest is said.
 # Either another: made again from the workflow's artifact, said in the PR.
 png a8eb09a2a99db13853a60184e4b873df
-system google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.050/12077443:userdebug/dev-keys
+system Android/sdk_phone64_x86_64/emu64x:14/UE1A.230829.036.A1/11228894:userdebug/test-keys
 fonts d250c9f9ce15fa5bc8c331415e8e1fb7
 emulator 37.2.12
 simd sse4_2 avx

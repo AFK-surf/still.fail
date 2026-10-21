@@ -48,7 +48,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 21 }
+      # (read only: the Gradle cache is the releases' (mbui.yml) and check-android's to write, one copy of it, the cache
+      # held to its 10 GB)
       - uses: gradle/actions/setup-gradle@v4
+        with: { cache-read-only: true }
       - uses: ./.github/actions/mbui-moonbit
       - name: The draw list and the APK (scripts/render_android.sh build)
         run: scripts/render_android.sh build

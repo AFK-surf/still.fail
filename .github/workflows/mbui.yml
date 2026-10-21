@@ -82,7 +82,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with: { cache-read-only: "${{ github.ref != 'refs/heads/main' }}" }
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
       - uses: actions/cache/restore@v4
         with:
@@ -134,7 +134,7 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
       - uses: actions/cache/restore@v4
         with:
@@ -195,7 +195,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup
-      - uses: ./.github/actions/moonbit
+      - uses: ./.github/actions/mbui-moonbit
       # (restored on every run; saved by main's alone: a branch's would be its own, and the cache has 10 GB)
       - uses: actions/cache/restore@v4
         with:
@@ -249,31 +249,10 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version-file: .node-version, package-manager-cache: false }
       - uses: ilammy/msvc-dev-cmd@v1
-      # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
-      # core, a HEAD each, as beta.sh's moon_tools asks): installed (~20 s, most of it bundling the core) only when
-      # either changed. No answer: no key, installed as before.
-      - name: MoonBit's latest release
-        id: moon
-        run: |
-          tag=$( { curl -sfI --max-time 10 https://cli.moonbitlang.com/binaries/latest/moonbit-windows-x86_64.zip || true
-                   curl -sfI --max-time 10 https://cli.moonbitlang.com/cores/core-latest.zip || true; } \
-            | tr -d '\r' | awk -F': ' 'tolower($1) == "etag" { print $2 }' | tr -d '\n')
-          if [ "$(printf '%s' "$tag" | tr -cd '"' | wc -c)" = 4 ]; then
-            echo "key=moon-windows-$(printf '%s' "$tag" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.moon.outputs.key != ''
-        uses: actions/cache@v4
-        id: moon-cache
-        with:
-          path: ~/.moon
-          key: ${{ steps.moon.outputs.key }}
-      - name: Tools (MoonBit; MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
+      - uses: ./.github/actions/mbui-moonbit
+      - name: Tools (MSVC's link.exe for cargo, which Git Bash's /usr/bin/link shadows)
         run: |
           echo "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$(cygpath -m "$(dirname "$(which cl)")/link.exe")" >> "$GITHUB_ENV"
-          if [ "${{ steps.moon-cache.outputs.cache-hit }}" != true ] || ! [ -x "$USERPROFILE/.moon/bin/moon.exe" ]; then
-            powershell -NoProfile -Command 'irm https://cli.moonbitlang.com/install/powershell.ps1 | iex'
-          fi
-          echo "$USERPROFILE\.moon\bin" >> "$GITHUB_PATH"
       # (the Windows engine and shell in the native cache, as a run before fetched them: a download is not every run's
       # to break off, 39431384793)
       - name: The Windows natives' keys

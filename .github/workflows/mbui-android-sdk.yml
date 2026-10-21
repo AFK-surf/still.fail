@@ -25,7 +25,6 @@ jobs:
       matrix:
         # (each job's device: host-android's pixel_7 on google_apis, render-android's pixel_6 on default)
         include:
-          - { target: google_apis, profile: pixel_7 }
           - { target: default, profile: pixel_6 }
     runs-on: ubuntu-24.04
     timeout-minutes: 30
