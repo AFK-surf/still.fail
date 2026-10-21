@@ -31,7 +31,10 @@ fn context_rows(c : @ui.Ctx, src : Source, r : ChatRef, key : String, s : Json?)
   }
   let params = { "station": Json::string(r.station), "key": Json::string(key) }
   if flag(s, "canCompact") && row("compact", compacting, tr("web-pages.chat.compact")) {
-    act(src, tr("web-pages.chat.compact"), compacting, "session.compact", params, done=tr("web-mobile.agent.compacting"))
+    // told once the frame's builds are over, not while this one builds
+    c.after_build("context/compact", fn() {
+      act(src, tr("web-pages.chat.compact"), compacting, "session.compact", params, done=tr("web-mobile.agent.compacting"))
+    })
   }
   if flag(s, "canClear") && row("clear", clearing, tr("web-pages.chat.clear")) {
     open_sheet(c, ClearContext(r, key))
@@ -53,13 +56,15 @@ fn clear_context_sheet(c : @ui.Ctx, src : Source, r : ChatRef, key : String) -> 
         }
         if sheet_button(c, "clear-context/clear", tr("web-pages.chat.clear"), true, true) {
           close_sheet(c)
-          act(
-            src,
-            tr("web-pages.chat.clear"),
-            context_key("session.clear", r.station, key),
-            "session.clear",
-            { "station": Json::string(r.station), "key": Json::string(key) },
-          )
+          c.after_build("context/clear", fn() {
+            act(
+              src,
+              tr("web-pages.chat.clear"),
+              context_key("session.clear", r.station, key),
+              "session.clear",
+              { "station": Json::string(r.station), "key": Json::string(key) },
+            )
+          })
         }
       })
       |> ignore
