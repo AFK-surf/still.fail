@@ -65,8 +65,8 @@ test("a page's body is read as sent, from the address checked; one in any encodi
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const { port } = server.address() as AddressInfo;
   try {
-    // A name nothing resolves: the address given is the one asked.
-    const at = (path: string) => getAt(new URL(`http://page.invalid:${port}${path}`), "127.0.0.1", "text/html");
+    // A name nothing resolves: the addresses given are the ones tried (nothing listens on ::1).
+    const at = (path: string) => getAt(new URL(`http://page.invalid:${port}${path}`), ["::1", "127.0.0.1"], "text/html");
     const plain = await at("/plain");
     assert.equal(plain?.status, 200);
     assert.equal(plain?.url, `http://page.invalid:${port}/plain`);
@@ -80,5 +80,6 @@ test("a page's body is read as sent, from the address checked; one in any encodi
     assert.deepEqual(asked, Array(3).fill({ name: `page.invalid:${port}`, encoding: "identity" }));
   } finally {
     server.close();
+    server.closeAllConnections();
   }
 });
