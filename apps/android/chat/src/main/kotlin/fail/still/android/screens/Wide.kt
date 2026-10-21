@@ -1,6 +1,6 @@
 // A screen wider than a phone (an opened foldable, a phone on its side), as web mobile/app.tsx WIDE draws it: the pages
 // the screen's whole width; at its bottom left, level with the composer and as tall, a button raises the latest chats
-// over the page (the composer starts beside it); Home's new-chat button is at its bottom right.
+// over the page (the composer starts beside it). A place's top page has the bottom bar under it, as on a phone (App.kt).
 package fail.still.android.screens
 
 import fail.still.android.data.t
@@ -76,42 +76,20 @@ val NewChatColumn: Modifier = Modifier.padding(horizontal = 72.dp).widthIn(max =
 /** Where the composer starts on a wide screen: beside the latest chats' button (10 + 52 + 10). */
 val BesideRecent = 72.dp
 
-/** What is at the screen's bottom corners, over the page (Home draws its own new-chat button only when not wide). */
+/** What is at the screen's bottom corners, over the page. */
 @Composable
 fun BoxScope.WideCorners(current: WorkspaceEntry, top: Screen) {
     val app = LocalApp.current
     val foot = Modifier.windowInsetsPadding(WindowInsets.keyboard.union(WindowInsets.navigationBars))
     when (top) {
-        Screen.Home -> {
-            val decisions = decisionsWaiting(current)
-            androidx.compose.foundation.layout.Row(
-                Modifier.align(Alignment.BottomEnd).then(foot).padding(end = 10.dp, bottom = 10.dp),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
-            ) {
-                DecisionsCapsule(decisions, Modifier.floatingStill(CircleShape))
-                NewChatDisc()
-            }
-        }
+        // The chats: the bottom bar is under them, 令 in its notch, 奏 a place of it, as on a phone.
+        Screen.Home -> {}
         // The decisions: one at a time, back to the list; their foot is theirs.
         Screen.Decisions -> {}
         // The drive's reader and player take the whole screen: their controls are where the button would be.
         is Screen.DriveRead, is Screen.DrivePlay -> {}
         else -> Recent(current, top, foot)
     }
-}
-
-/**
- * The new-chat button: a disc of the 奏 capsule's glass in the accent, 令 white (Home.kt's Toolbar). Not frosted over the
- * pages (app.haze): drawn inside what that blurs, a frosted ring there shows the blur's own edges.
- */
-@Composable
-fun NewChatDisc() {
-    val app = LocalApp.current
-    Box(
-        Modifier.floatingStill(CircleShape, C.accent).size(56.dp)
-            .clickable { app.push(Screen.NewChat) }.semantics { contentDescription = t("android-misc.wide.newChat") },
-        contentAlignment = Alignment.Center,
-    ) { IconIn(Icons.Ling, 44.dp, Color.White) }
 }
 
 /**

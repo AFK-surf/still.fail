@@ -391,13 +391,11 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
             onDispose { topics.drawn = false; if (app.stack.none { keyOf(it) == page }) letGo { it != page } }
         }
         kept += app.pageOf(screen)
-        // A place's top page: no back with the bar under it (room kept for the bar at its foot); on a wide screen, which
-        // has no bar, back to the chats.
+        // A place's top page: no back with the bar under it (room kept for the bar at its foot), a wide screen's too.
         // A page going (switched away from on the bar, still drawn until the one coming has what it shows) stays as it
         // was: not a pushed page all at once, its back showing and its foot's room gone for a moment.
         val now = when {
             app.stack.firstOrNull() != screen || placeOf(screen) == null -> PlaceRoot.None
-            wide -> PlaceRoot.Wide
             else -> PlaceRoot.Bar
         }
         val held = remember { arrayOf(now) }
@@ -467,15 +465,14 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
     }
     }
     }
-    // The bottom bar (Places.kt): a phone's, on a place's top page with nothing over it.
-    if (!wide) {
-        // The keyboard up (a field on the page): out of its way.
-        val density = androidx.compose.ui.platform.LocalDensity.current
-        val ime = androidx.compose.foundation.layout.WindowInsets.ime
-        val keyboardUp by remember(density) { androidx.compose.runtime.derivedStateOf { ime.getBottom(density) > 0 } }
-        val root = app.stack.singleOrNull()
-        PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway)
-    }
+    // The bottom bar (Places.kt): on a place's top page with nothing over it, on a wide screen as on a phone (as wide as
+    // a phone's there, in the middle: ui/Bar.kt).
+    // The keyboard up (a field on the page): out of its way.
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val ime = androidx.compose.foundation.layout.WindowInsets.ime
+    val keyboardUp by remember(density) { androidx.compose.runtime.derivedStateOf { ime.getBottom(density) > 0 } }
+    val root = app.stack.singleOrNull()
+    PlaceBar(app, current, barHaze, shown = root != null && placeOf(root) != null && !keyboardUp && !app.barAway)
     }
     if (wide) WideCorners(current, top)
     }
