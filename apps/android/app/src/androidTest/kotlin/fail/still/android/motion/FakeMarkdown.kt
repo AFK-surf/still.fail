@@ -57,12 +57,16 @@ private fun block(n: Node): List<JsonElement> = when (n) {
             val inner = if (list.isTight) item.kids().flatMap { if (it is Paragraph) inlines(it.kids()) else block(it) } else item.kids().flatMap(::block)
             node("li", inner, task?.let { mapOf("checked" to JsonPrimitive(it)) })
         }
-        val attrs = if (n is OrderedList) buildMap { put("ordered", JsonPrimitive(true)); (n.markerStartNumber ?: 1).takeIf { it != 1 }?.let { put("start", JsonPrimitive(it)) } } else null
+        val attrs: Map<String, JsonElement>? = if (n is OrderedList) {
+            val start = n.markerStartNumber ?: 1
+            if (start == 1) mapOf("ordered" to JsonPrimitive(true)) else mapOf("ordered" to JsonPrimitive(true), "start" to JsonPrimitive(start))
+        } else null
         listOf(node("list", items, attrs))
     }
     is FencedCodeBlock -> {
         val lang = n.info?.trim()?.substringBefore(' ')?.ifEmpty { null }
-        listOf(node("pre", attrs = buildMap { put("code", s(n.literal.removeSuffix("\n"))); lang?.let { put("lang", s(it)) } }))
+        val code = s(n.literal.removeSuffix("\n"))
+        listOf(node("pre", attrs = if (lang == null) mapOf("code" to code) else mapOf("code" to code, "lang" to s(lang))))
     }
     is IndentedCodeBlock -> listOf(node("pre", attrs = mapOf("code" to s(n.literal.removeSuffix("\n")))))
     is TableBlock -> {
@@ -97,7 +101,10 @@ private fun inlines(nodes: List<Node>, inLink: Boolean = false): List<JsonElemen
         is StrongEmphasis -> listOf(node("b", inlines(n.kids(), inLink)))
         is Strikethrough -> listOf(node("s", inlines(n.kids(), inLink)))
         is Link -> listOf(node("a", inlines(n.kids(), inLink = true), mapOf("href" to s(n.destination))))
-        is Image -> listOf(node("img", attrs = buildMap { put("src", s(n.destination)); (n.firstChild as? Text)?.literal?.let { put("alt", s(it)) } }))
+        is Image -> {
+            val alt = (n.firstChild as? Text)?.literal
+            listOf(node("img", attrs = if (alt == null) mapOf("src" to s(n.destination)) else mapOf("src" to s(n.destination), "alt" to s(alt))))
+        }
         is TaskListItemMarker -> emptyList()
         else -> inlines(n.kids(), inLink)
     }
