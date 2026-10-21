@@ -4,8 +4,9 @@
 // openJob, JobBody), and the jobs left up a long while at the top of Home (OpenJobs.kt). What they show is the core's
 // (the `chat`, `agentCard`, `stations`, `chatJobs`, `jobLog` and `longJobs` views); what is done goes through its calls.
 //
-// Not here yet, against the Android app: the station's card (its row closes the sheet), the run settings page (its row
-// is shown), dragging a sheet by its grabber.
+// An agent's station opens the station's card in its place (settings/station_peek.mbt), its account how it runs.
+//
+// Not here yet, against the Android app: dragging a sheet by its grabber.
 
 // ── parts ───────────────────────────────────────────────────────────────
 
