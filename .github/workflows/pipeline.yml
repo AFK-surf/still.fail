@@ -529,8 +529,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with: { name: "windows-smoke-${{ github.sha }}", path: "${{ runner.temp }}/smoke", if-no-files-found: ignore, retention-days: 7 }
 
-  # A branch: the one check main's protection requires (2026-10-20, as asked: what is red goes into main by nobody, an
-  # admin's merge too): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
+  # A branch: the one check main's protection requires (2026-10-20, asked: "main 开保护"; an admin may merge past it,
+  # 2026-10-22): every job a branch runs, one skipped as passing, one failed or cancelled failing it. Its list
   # is the branch's jobs: a job added to them goes here too, or the protection does not wait for it.
   gate:
     needs: [plan, natives, windows-natives, check, check-linux, check-mbui, check-browser, check-android, check-android-lint, bundle, mac-build, windows-build, windows-smoke]
