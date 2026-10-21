@@ -16,9 +16,16 @@ fn main {
     @sf.set_dark(Some(true))
   }
   let mode = @ui.env("MBUI_FIXTURE")
-  let src = @sfapp.fixture(mode)
-  // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
-  @sfapp.open_fixture_mode(mode)
+  // json: a screen as the core's JSON gives it (MBUI_FIXTURE_JSON, or _B64: client/fixtures/screens, the file still.fail's
+  // Android app draws it from too; scripts/android-ref.sh), its pages opened as it says
+  let src = if mode == "json" {
+    @sfapp.fixture_json(@host.env_text("MBUI_FIXTURE_JSON"))
+  } else {
+    let src = @sfapp.fixture(mode)
+    // what the mode opens over Home before the first frame (src/sfapp/fixture.mbt: src/sfscreens opens the same)
+    @sfapp.open_fixture_mode(mode)
+    src
+  }
   // the faces the app carries (code's JetBrains Mono), as the app has them
   @sf.give_faces()
   @sfapp.desktop_window()
