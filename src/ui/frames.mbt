@@ -220,6 +220,14 @@ pub fn Tester::replay_frames(self : Tester, log : String) -> Array[(Int, String,
       }
       None => ()
     }
+    // a native call's answer as the app took it, given again at its place: the frame after it takes it (native.mbt)
+    match native_of_line(line) {
+      Some((name, r)) => {
+        fake_native_give(self.fake, name, r)
+        continue
+      }
+      None => ()
+    }
     // what came from outside, posted again at its place: the frame after it takes it (messages.mbt)
     if is_message_line(line) {
       replay_message(self.fake, line)

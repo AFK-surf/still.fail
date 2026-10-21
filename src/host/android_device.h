@@ -4,6 +4,8 @@
 static jclass device_cls;
 static jmethodID m_dv_catch, m_dv_inset, m_dv_copy_shown, m_dv_read, m_dv_state, m_dv_picture, m_dv_text, m_dv_png,
     m_dv_end, m_dv_set, m_dv_awake, m_dv_haptic;
+static jclass natives_cls;
+static jmethodID m_nt_call, m_nt_state, m_nt_result, m_nt_end;
 
 static void device_init(JNIEnv *env) {
   device_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Device"));
@@ -19,6 +21,11 @@ static void device_init(JNIEnv *env) {
   m_dv_set = (*env)->GetStaticMethodID(env, device_cls, "clipSet", "(Ljava/lang/String;[BLjava/lang/String;)V");
   m_dv_awake = (*env)->GetStaticMethodID(env, device_cls, "keepAwake", "(Z)V");
   m_dv_haptic = (*env)->GetStaticMethodID(env, device_cls, "haptic", "(I)V");
+  natives_cls = (*env)->NewGlobalRef(env, (*env)->FindClass(env, "dev/mbui/Natives"));
+  m_nt_call = (*env)->GetStaticMethodID(env, natives_cls, "call", "(Ljava/lang/String;Ljava/lang/String;)I");
+  m_nt_state = (*env)->GetStaticMethodID(env, natives_cls, "state", "(I)I");
+  m_nt_result = (*env)->GetStaticMethodID(env, natives_cls, "result", "(I)Ljava/lang/String;");
+  m_nt_end = (*env)->GetStaticMethodID(env, natives_cls, "end", "(I)V");
 }
 
 void mb_host_key_catch(int32_t on) {
@@ -92,4 +99,33 @@ void mb_host_keep_awake(int32_t on) {
 void mb_host_haptic(int32_t kind) {
   JNIEnv *env = env_();
   (*env)->CallStaticVoidMethod(env, device_cls, m_dv_haptic, kind);
+}
+
+// ---- an app's own native calls (src/host/native.mbt): dev.mbui.Natives answers them ----
+
+int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) {
+  JNIEnv *env = env_();
+  jstring n = jstr(env, name), p = jstr(env, params);
+  int32_t id = (*env)->CallStaticIntMethod(env, natives_cls, m_nt_call, n, p);
+  (*env)->DeleteLocalRef(env, n);
+  (*env)->DeleteLocalRef(env, p);
+  return id;
+}
+
+int32_t mb_host_native_state(int32_t id) {
+  JNIEnv *env = env_();
+  return (*env)->CallStaticIntMethod(env, natives_cls, m_nt_state, id);
+}
+
+moonbit_string_t mb_host_native_result(int32_t id) {
+  JNIEnv *env = env_();
+  jstring s = (jstring)(*env)->CallStaticObjectMethod(env, natives_cls, m_nt_result, id);
+  moonbit_string_t out = s ? mstr(env, s) : moonbit_make_string_raw(0);
+  if (s) (*env)->DeleteLocalRef(env, s);
+  return out;
+}
+
+void mb_host_native_end(int32_t id) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, natives_cls, m_nt_end, id);
 }

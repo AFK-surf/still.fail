@@ -588,6 +588,10 @@ let outside_stream = 8
 let outside_clip = 9
 
 ///|
+/// An app's own native call (@host.NativeCall's id: native_call.mbt).
+let outside_native = 10
+
+///|
 /// Every kind above, by its name: each its own number (outside_kinds_wbtest.mbt), the hosts' named the same
 /// (Native.java's OUTSIDE_*, apple.h's, win.h's and android_host.c's MB_OUTSIDE_*, web/host.js's OUTSIDE_*), every
 /// `outside_*` here in it: scripts/outside_kinds.py, host_contract.sh HOST kinds
@@ -602,6 +606,7 @@ fn outside_kinds() -> Array[(String, Int)] {
     ("update", outside_update),
     ("stream", outside_stream),
     ("clip", outside_clip),
+    ("native", outside_native),
   ]
 }
 
@@ -671,7 +676,8 @@ fn on_outside(kind : Int, id : Int, state : Int) -> Unit {
     kind == outside_gallery ||
     kind == outside_marks ||
     kind == outside_grab ||
-    kind == outside_clip {
+    kind == outside_clip ||
+    kind == outside_native {
     h_request_frame()
   }
 }

@@ -165,6 +165,11 @@ priv struct FakeDevice {
   mut key_catch : Bool
   reads : Array[FakeClipRead]
   held : Array[Clipboard]
+  /// the app's native calls (native.mbt), their answers given before a call (by its name), and the answers given by
+  /// themselves (Tester::native_answers)
+  natives : Array[FakeNative]
+  native_held : Array[(String, Result[Json, String])]
+  native_auto : Map[String, (Json) -> Result[Json, String]]
 }
 
 ///|
@@ -179,6 +184,9 @@ fn FakeDevice::new(copy_shown : Bool) -> FakeDevice {
     key_catch: false,
     reads: [],
     held: [],
+    natives: [],
+    native_held: [],
+    native_auto: {},
   }
 }
 

@@ -187,3 +187,9 @@ void mb_host_keep_awake(int32_t on) {
 }
 
 void mb_host_haptic(int32_t kind) { (void)kind; }
+
+// An app's own native calls (src/host/native.mbt): none on this host yet.
+int32_t mb_host_native_call(moonbit_string_t name, moonbit_string_t params) { return 0; }
+int32_t mb_host_native_state(int32_t id) { return -1; }
+moonbit_string_t mb_host_native_result(int32_t id) { return moonbit_make_string_raw(0); }
+void mb_host_native_end(int32_t id) {}
