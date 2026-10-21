@@ -493,6 +493,7 @@ pub fn left(route : Route) -> Unit {
 /// As at the start: nothing chosen, no sheet (tests).
 pub fn reset() -> Unit {
   archive_reset()
+  adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
   opening_lock.val = false

@@ -3,4 +3,5 @@ import {
   "mbui/kit",
   "mbui/motion",
   "stillfail/sf",
+  "moonbitlang/core/json",
 }
