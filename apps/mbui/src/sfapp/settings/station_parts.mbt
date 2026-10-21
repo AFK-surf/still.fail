@@ -231,6 +231,8 @@ fn open_agent_env(core : Core, station : String) -> Unit {
   call("open", obj([]))
   let filled : Ref[Bool] = Ref(false)
   let sent : Ref[String] = Ref("")
+  // what was typed here, until the core has it
+  let typed : Ref[String?] = Ref(None)
   let dropped : Ref[Bool] = Ref(false)
   let drop = fn() {
     if !dropped.val {
@@ -255,11 +257,22 @@ fn open_agent_env(core : Core, station : String) -> Unit {
           fn() {
             c.box(w=Fill(1.0), padx=20.0, pb=10.0, fn() {
               c.box(w=Fill(1.0), padx=12.0, pady=10.0, radius=12.0, bg=t.p.card, border=1.0, border_color=t.p.line, fn() {
-                // the station's text in the field once it has come (set where the field is: its key is of this row)
-                if !filled.val && d is Some(Object(_)) {
-                  filled.val = true
-                  sent.val = text(d, "text")
-                  field_of(key).set(sent.val)
+                // the station's text in the field (set where the field is: its key is of this row), while nothing
+                // typed here waits on the core (AgentEnvSheet: typed ?: d.text): once it has come, and again as the
+                // core's changes (a save told after the sheet opened again on the text before it)
+                match d {
+                  Some(Object(_)) => {
+                    let now = text(d, "text")
+                    if typed.val == Some(now) {
+                      typed.val = None
+                    }
+                    if typed.val is None && (!filled.val || now != sent.val) {
+                      filled.val = true
+                      sent.val = now
+                      field_of(key).set(now)
+                    }
+                  }
+                  _ => ()
                 }
                 let r = c.editor(
                   key,
@@ -277,6 +290,7 @@ fn open_agent_env(core : Core, station : String) -> Unit {
                 // what was typed, to the core's draft (the field never waits on it)
                 if filled.val && r.text != sent.val {
                   sent.val = r.text
+                  typed.val = Some(r.text)
                   call("edit", obj([("text", str(r.text))]))
                 }
               })

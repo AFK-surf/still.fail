@@ -76,3 +76,20 @@ test "the folder picker asks for a place's folders once: opened, its answer betw
   assert_eq(text(Some(asks[2]), "path"), "/Users/lin")
   assert_eq(pending.length(), 0)
 }
+
+///|
+test "文件's folder picker is drawn over 文件 alone while a drive's page slides in over it (one filter field)" {
+  let asks : Array[Json] = []
+  let pending : Array[() -> Unit] = []
+  let t = picker_tester(asks, pending)
+  t.run_for(@ui.nav_push_ms)
+  // opened from 文件 (its ＋ is in its build), then a station's drive pushed over it: both pages drawn while it
+  // slides in; before, each drew the sheet, and the filter's one Field went to two editors in one build
+  dv.building = dv_page_of(None)
+  dv_open_picker(t.ctx(), "ws1/st1", [])
+  answer(t, pending)
+  app.nav.push(Drive({ station: "ws1/st1", root: None, path: "" }))
+  t.draw()
+  t.run_for(@ui.nav_push_ms / 2.0)
+  assert_eq(t.locate("=" + tr("android-misc.drive.pick.title")).length(), 1)
+}
