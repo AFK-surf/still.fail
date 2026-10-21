@@ -154,12 +154,21 @@ function ChatScreen({ session: chatSession }: { session: string }) {
     }
     commit(open.includes(key) ? open : [...open, key], key);
   };
-  const closeTab = (key: string) => {
+  // A web service's or a visualization's tab closed ends it: not left small in the corner (Previews.tsx).
+  const endPreview = (key: string) => {
     const file = fileOf(key);
     const service = file ? fileService(file) : serviceOf(key);
     if (service) closePreview(previewKey(station.address, service));
+  };
+  const closeTab = (key: string) => {
+    endPreview(key);
     const next = open.filter((tab) => tab !== key);
     commit(next, shown === key ? next.at(-1) ?? null : active);
+  };
+  // The panel closed closes all its tabs.
+  const closePanel = () => {
+    for (const key of open) endPreview(key);
+    saveTabs([]);
   };
   const openJobs = (job?: string) => {
     if (job) pickJob(job);
@@ -256,7 +265,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   } : null);
   // A history tab in front closes the panel; else the first one open comes to the front, the chat's own agent's if none is.
   useShortcut("chat.history", agents[0] ? () => {
-    if (shown && isAgent(shown)) saveTabs([]); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
+    if (shown && isAgent(shown)) closePanel(); else openTab(open.find(isAgent) ?? agents[0]!.session.key);
   } : null);
   useShortcut("chat.jobs", () => (shown === JOBS ? closeTab(JOBS) : openJobs()));
   // The stations' files beside the chat (DriveTab.tsx), where they have them: pressed again while in front, closed.
@@ -264,7 +273,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
   // Files dragged anywhere over the chat go into its message (useChatDrop).
   const drop = useChatDrop(chatKey, station.address);
   const toggleFiles = () => (open.includes(FILES) && shown === FILES ? closeTab(FILES) : openTab(FILES));
-  useShortcut("panel.close", open.length ? () => saveTabs([]) : null);
+  useShortcut("panel.close", open.length ? closePanel : null);
   const thread = chatView.value?.thread?.id ?? null;
   const keeper = agents[0]?.session.key ?? ("session" in of ? of.session : null);
   const archive = async () => {
@@ -353,7 +362,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
         {side && (
           <Tabs.Root ref={panelRef} className={css.sidePanel} data-over-composer value={side.shown} onValueChange={setActive} inert={side === leaving}>
             <ResizeHandle variable="--panel-w" edge="left" min={PANEL_MIN} max={PANEL_MAX} label={t("web-pages.chat.resizePanel")}
-              press={{ label: t("web-pages.chat.closePanel"), run: () => saveTabs([]) }} />
+              press={{ label: t("web-pages.chat.closePanel"), run: closePanel }} />
             <div className={css.sideBar}>
               <Tabs.List className={css.sideTabList} aria-label={t("web-pages.chat.history")}>
                 {side.tabs.map((key) => {
@@ -405,7 +414,7 @@ function ChatScreen({ session: chatSession }: { session: string }) {
                 })}
               </Tabs.List>
               {/* The panel's switch stays in the top-right corner, open or closed. */}
-              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={() => saveTabs([])} />
+              <IconButton label={t("web-pages.chat.closePanel")} icon={PanelClose} shortcut="panel.close" onMouseDown={keepFocus} onClick={closePanel} />
             </div>
             {side.tabs.map((key) => {
               if (key === JOBS) {
