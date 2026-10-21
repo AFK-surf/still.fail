@@ -518,5 +518,18 @@
   "core-logic.choose.borrow.managers": "只有 owner 或 admin 可以借用",
   "core-logic.choose.borrow.pending": "{station} 已分享给所有 station，正在同步到此 station",
   "core-logic.choose.borrow.first": "请先借用此模型的账号",
-  "core-logic.choose.borrow.nothing": "所选模型无需借用"
+  "core-logic.choose.borrow.nothing": "所选模型无需借用",
+  "core-logic.transfer.queued": "排队中",
+  "core-logic.transfer.walking": "正在统计文件…",
+  "core-logic.transfer.copying": "{copied} / {total}",
+  "core-logic.transfer.done": "已完成 · {total}",
+  "core-logic.transfer.moved": "已移动 · {total}",
+  "core-logic.transfer.cancelled": "已取消",
+  "core-logic.transfer.failed": "失败：{error}",
+  "core-logic.transfer.many": {
+    "one": "{name} 等 {n} 项",
+    "other": "{name} 等 {n} 项"
+  },
+  "core-logic.transfer.otherWorkspace": "只能在同一个 workspace 的 station 之间复制",
+  "core-logic.transfer.noGrant": "文件所在的 station 没有允许读取"
 }

@@ -14,14 +14,15 @@ import { useAct, useToast } from "@stillfail/ui/toast.tsx";
 import { offerToDraft } from "../draft.ts";
 import type { DriveEntry, StationView } from "../core/shapes.ts";
 import { Button, IconButton, ICON, type MenuItem, Waiting } from "../ui.tsx";
-import { ChevronRight, Copy, Download, Folder, Pin, Refresh, Retry, Send, Server } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Copy, Download, Folder, PanelClose, PanelOpen, Pin, Refresh, Retry, Send, Server } from "@stillfail/ui/icons.tsx";
 import { download, joinPath, openerOf, refresh, useFolder, type At } from "../drive/model.ts";
 import { keepOpened, keepTab, keptTab, useKeptScroll, type Owner } from "../drive/kept.ts";
 import { useBrowse } from "../drive/browse.ts";
 import { absoluteOf, drive, drivePath, folderName, rootTrouble, trailOf, useDrive } from "../drive/useDrive.ts";
 import { draggedOf, droppedFrom } from "../drive/drag.ts";
 import { DrivePreview } from "../mobile/Drive.tsx";
-import { DriveRow } from "./Drive.tsx";
+import { DriveRow, usePreviewShown } from "./Drive.tsx";
+import { DrivePane, type Previewed } from "./DrivePane.tsx";
 import { ColumnsView, TreeView, useDriveView, ViewSwitch, type RowOf, type Shown } from "./DriveViews.tsx";
 import * as shellCss from "../styles/shell.css.ts";
 import * as controlsCss from "@stillfail/ui/styles/controls.css.ts";
@@ -148,6 +149,12 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
   });
   const shown: Shown = { rowOf, arranged: browse.arranged, clear: browse.clear };
   const shownEntries = browse.arranged(entries);
+  // The preview under the list (as the files' page has it beside its own): the one file chosen.
+  const [previewing, setPreviewing] = usePreviewShown("tab");
+  const chosenIn = useFolder(station, previewing && browse.chosen.names.length === 1 ? root : null, browse.chosen.folder).value;
+  const chosenEntry = chosenIn?.entries.find((e) => e.name === browse.chosen.names[0]);
+  const previewed: Previewed = browse.chosen.names.length > 1 ? { many: browse.chosen.names.length }
+    : chosenEntry ? { at: { station, root, path: browse.chosen.folder }, entry: chosenEntry } : null;
   // Going into a folder by the keys leaves nothing focused (the row pressed is gone): the keys stay the tab's.
   const focused = useRef(false);
   useEffect(() => {
@@ -202,6 +209,7 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
         <span className={driveCss.actions}>
           {d.anywhere && <span className={driveCss.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
           <ViewSwitch value={view} onChange={setView} />
+          <span className={driveCss.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
           <IconButton label={t("web-pages.drive.copyPath")} icon={Copy} onClick={() => copyPath(here)} />
           <span className={driveCss.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
         </span>
@@ -217,6 +225,12 @@ function FolderList({ owner, station, root, path, chat, onGo, onPlaces, onOpen }
           : shownEntries.length === 0 ? <p className={`${shellCss.muted} ${css.note}`}>{t("web-pages.drive.emptyFolder")}</p>
           : shownEntries.map((e) => <DriveRow key={e.name} at={at} entry={e} row={rowOf(at, e)} compact />)}
       </div>
+      {previewing && (
+        <DrivePane below shown={previewed} stationName={name}
+          onOpen={() => { if (previewed && "entry" in previewed) onOpen(previewed.at, folderOf(previewed.at), previewed.entry); }}
+          onSave={() => { if (previewed && "entry" in previewed) act(download({ ...previewed.at, path: joinPath(previewed.at.path, previewed.entry.name) }, previewed.entry), t("web-pages.drive.downloadWhat")); }}
+          onCopyPath={copyPath} />
+      )}
     </>
   );
 }

@@ -2667,6 +2667,66 @@ export interface DriveRoots {
 	watch?: boolean;
 	/** A folder can be zipped to download (`drive.zip`). */
 	zip?: boolean;
+	/**
+	 * Files can be copied and moved into it, from its own folders or another station's, and it grants another
+	 * station reads of its own (`drive.transfer`; docs/drive.md "Copying between stations"); absent from a station from before.
+	 */
+	transfers?: boolean;
+}
+
+/**
+ * Where a copy into a drive is: waiting its turn, finding what
+ * it copies, copying, or ended.
+ */
+export type DriveTransferState = "queued" | "walking" | "copying" | "done" | "failed" | "cancelled";
+
+/** A copy (or move) into a station's drive, as the transfers' list shows it. */
+export interface DriveTransferShown {
+	id: string;
+	/** The station the files go to (its address), which runs it. */
+	station: string;
+	stationName: string;
+	/** The station the files are on (its address; the same as `station` for a copy within one). */
+	fromStation: string;
+	fromStationName: string;
+	fromRoot: string;
+	/** The folder the names are in, relative to `fromRoot`. */
+	fromPath: string;
+	names: string[];
+	toRoot: string;
+	toPath: string;
+	/** Where they go, in words: MBA › 照片. */
+	toText: string;
+	/** What is copied, in words: 首页截图.png, or 首页截图.png 等 2 项. */
+	title: string;
+	move: boolean;
+	state: DriveTransferState;
+	/** Not ended: waiting, finding what it copies, or copying. */
+	active: boolean;
+	/** How much is copied, 0 to 1 (bytes; by files for files without bytes). */
+	progress: number;
+	total: number;
+	copied: number;
+	/** Folders and files it copies, once found. */
+	count: number;
+	files: number;
+	/** The file being copied, relative to the folder the names are in. */
+	current?: string;
+	/** How it stands, in a line: 17.5 / 46.0 MB · 排队中 · 已完成 · 失败：… . */
+	statusText: string;
+	error?: string;
+	createdAt: number;
+	endedAt?: number;
+}
+
+/** The copies into a station's drive the viewer asked (the `driveTransfers` topic). */
+export interface DriveTransfersView {
+	/** False for a station from before copies (it answers 404). */
+	supported: boolean;
+	/** What the station has was read (or told) at least once. */
+	loaded: boolean;
+	/** The viewer's own, newest first. */
+	transfers: DriveTransferShown[];
 }
 
 export interface FlowChoice {
@@ -4167,6 +4227,16 @@ export interface PrefsView {
 	 * (`column`: in pixels; none: 240).
 	 */
 	driveViews?: Record<string, string>;
+	/**
+	 * The files' page's tabs on this device, by workspace: what each shows (one folder, or two side by side), which
+	 * is in front, kept as the page writes it (JSON).
+	 */
+	filesTabs?: Record<string, string>;
+	/**
+	 * Folders this person keeps at hand on the files' page, by workspace, on this device: each a station's folder
+	 * (JSON: [{station, path, name}]), whoever else browses there.
+	 */
+	driveFavorites?: Record<string, string>;
 	/** How files dragged into a chat go unless the chat says otherwise (`dropFiles`): file, or (none) path. */
 	dropAs?: string;
 	/**

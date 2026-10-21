@@ -623,5 +623,18 @@
   "core-logic.choose.borrow.managers": "Only an owner or admin can borrow",
   "core-logic.choose.borrow.pending": "{station} shares it with every station; it is on its way to this one",
   "core-logic.choose.borrow.first": "Borrow an account for this model first",
-  "core-logic.choose.borrow.nothing": "The model picked needs no borrowing"
+  "core-logic.choose.borrow.nothing": "The model picked needs no borrowing",
+  "core-logic.transfer.queued": "Queued",
+  "core-logic.transfer.walking": "Counting files…",
+  "core-logic.transfer.copying": "{copied} / {total}",
+  "core-logic.transfer.done": "Done · {total}",
+  "core-logic.transfer.moved": "Moved · {total}",
+  "core-logic.transfer.cancelled": "Cancelled",
+  "core-logic.transfer.failed": "Failed: {error}",
+  "core-logic.transfer.many": {
+    "one": "{name} and others ({n} item)",
+    "other": "{name} and others ({n} items)"
+  },
+  "core-logic.transfer.otherWorkspace": "Files are copied between stations of one workspace",
+  "core-logic.transfer.noGrant": "The station the files are on did not grant reading them"
 }

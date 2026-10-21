@@ -115,7 +115,7 @@ Helper has no grant for):
 
 | Request | Answer |
 |---|---|
-| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?}` (also in the overview as `drive`; `state` `unreadable` for a folder macOS protects until still.fail Helper has its grant) |
+| `GET /drive` | `{roots: [{path, name, state}], manage, write, anywhere?, home?, trash?, watch, zip?, transfers?}` (also in the overview as `drive`; `state` `unreadable` for a folder macOS protects until still.fail Helper has its grant) |
 | `PUT /drive/roots {roots}` | the folders pinned, by any member who may write; each new one must be there, a folder, none of the station's data |
 | `GET /drive/folders?path=` | members who may write: the folders in `path` (the home when empty), to pick one to pin; with the way there (`crumbs`, from the home or the top of its disk) and the places to start from (`places`: the home's folders, then the disks: macOS's in /Volumes, Linux's in /media/<user> and /mnt, Windows' drives `C:\` to `Z:\`) |
 | `GET /drive/list?root=&path=` | `{path, entries: [{name, dir, size, mtime, type}], truncated}`, folders first, names by number; past 50000 entries the first 50000 in that order |
@@ -139,6 +139,63 @@ An upload is put together beside where it goes (`.stillfail-up-<id>.part`,
 left out of listings) and renamed into place once whole, synced first; one left
 unfinished for a day is removed the next time an upload starts in its folder. A
 part that leaves a gap is refused `upload_lost` with `have`, where to go on from.
+
+## Copying between stations (drive/transfers.ts, grants.ts, module.ts; api/routes/transfers.ts)
+
+Files are copied (or moved) into a folder of a station from a folder of its own or of another station of the
+workspace. The copy runs on the station the files go to, which reads them itself: from its own drive, or from the
+other station over the station transport (docs/station-peers.md). No file goes through the device that asked, and the
+copy goes on whatever becomes of that device: closed, asleep, away.
+
+**Who may.** The person asking must be able to read the files where they are and write where they go, each station
+checking it for itself as it does any request of theirs:
+
+- The station the files are on signs a **grant** when the person asks (`POST /drive/grant {root, path, names, move?}`):
+  it walks the names as that person reads them (a read-only member: only under a folder pinned, links out of it
+  refused), and refuses a move to a read-only member (a move lets the originals go). The grant names the workspace it
+  was asked in, the person, the folder and the names, whether it moves, and whether the person browses everywhere there;
+  it is signed with a key of the station's own (`drive-grant.key` in its data directory, never sent anywhere) and good
+  for seven days, so a copy that waited on a station away is taken up again with it.
+- The station the files go to takes the copy only from a member who may write there (`POST /drive/transfers`), and only
+  into a folder (as their uploads go).
+- It reads the files with the grant (`drive.walk`, `drive.part`, `drive.release` on the bus). The station they are on
+  checks its own signature, the workspace (the transport says which one the asking station asked in), that the path
+  read is under one of the names granted (no `..`), and reads as that person would. The transport says which station
+  asks; the grant is what says a person asked: no station reads another's files on its own say.
+
+**What is copied.** The names are walked first: folders before what is in them, links not followed (a listing follows
+them; a copy does not go where one leads), the station's own data left out as a listing leaves it out; at most
+100 000 folders and files. A name already where they go was answered before the copy began (the page asks):
+`replace` (the one there to its machine's trash first), `keep` (a name of its own beside it: `a 2.txt`, a folder
+`b 2`), or `skip`; one not answered is refused (`exists`) rather than overwritten. Each file is put together beside
+where it goes and put there whole, as an upload is (`.stillfail-up-<id>.part`, `upload`), a part at a time (8 MB from its
+own drive; 256 KiB over the transport, one part at a time, as its other bulk requests go). A file that changes while it
+is read (its time moves) is read again from its start. A move lets the originals go (to their machine's trash; where
+none takes them, removed) once every file is in place.
+
+**Kept and taken up again.** The station runs its copies one at a time, in the order asked, each kept in its data
+directory (`drive-transfers/<id>.json`) as it goes: a station that restarts takes the one under way up from the file
+it was at, as far as its last part synced. One whose source cannot be read (its station away) fails; tried again
+(`retry`), it goes on from where it was. Cancelled, it stops between parts; what is in place stays. Ended ones are
+kept a day.
+
+| Request | Answer |
+|---|---|
+| `POST /drive/grant {root, path, names, move?}` | `{grant, expires}`; refused as a read of those names is, and a move for a read-only member |
+| `POST /drive/transfers {from: {station?, grant?, root, path, names}, to: {root, path}, move?, conflicts?}` | `{transfer}`; `from.station` another station's id (with its `grant`), none or this one's for its own drive; members who may write |
+| `GET /drive/transfers` | `{transfers}`: the asker's own, newest first (without the list of what each copies) |
+| `POST /drive/transfers/<id>/cancel`, `…/retry` | `{transfer}` |
+
+A transfer as told: `{id, by, workspace, home, anywhere, move, from, to, conflicts, state (queued, walking, copying,
+done, failed, cancelled), done, at, total, copied, count, files, current?, error?, createdAt, endedAt?}`. Each change is
+told to the asker's own streams (`drive-transfers`, `{transfer}`).
+
+Over the bus (with `{workspace, grant}`): `drive.walk {names?}` → `{items: [{path, dir, size}]}`; `drive.part {path,
+offset}` → `{data (base64), size, mtime}`; `drive.release {names}` → `{}` (a move's grant only). A refusal is the drive's
+code and words (`permission: …`).
+
+Not done yet: taking the contents a station already has (the same file elsewhere on it) instead of sending them; a copy
+of a folder within one station by the disk's own clone.
 
 ## Core
 
@@ -164,6 +221,12 @@ part that leaves a gap is refused `upload_lost` with `have`, where to go on from
   with `have`, the next part starts there; the last reads its folder again);
   `drive.refresh {station, root, path}`; `drive.place {station, root, path, at,
   of?}`.
+- Topic `driveTransfers {workspace}` (views/transfers.ts): the person's copies into the workspace's stations, newest
+  first (`DriveTransfersView`), each as the list shows it (`DriveTransferShown`: its title, where it goes in words,
+  `statusText`, `progress`); held in memory as each station says them (read as its stream opens, told as they change).
+- Calls: `drive.transfer {from: {station, root, path, names}, to: {station, root, path}, move?, conflicts?}`: another
+  station's files granted there first (`POST /drive/grant`), then copied where they go (`POST /drive/transfers`); one
+  within a station asked of it alone; `drive.transfer.cancel {station, id}`, `drive.transfer.retry {station, id}`.
 - A station from before the drive has no `drive` in its overview: the clients
   offer nothing for it. One from before `anywhere` lends only its pinned folders.
 - Into a chat's message (composer.ts): a file or folder dragged into the
@@ -200,7 +263,7 @@ every column (kept on the device, `driveViews.column`), a double click as wide a
 longest name. On the files' page what is
 dragged onto a folder (its row, a column, the list) goes into it: a station's own
 files moved (`drive.rename`; by the top of the disk for one from another folder
-pinned), the computer's put up, a folder of them made there and filled. The phone reaches a drive from
+pinned; ⌥ copies them), another station's copied ("The files' page", below), the computer's put up, a folder of them made there and filled. The phone reaches a drive from
 its station's page, and puts a station's files into a message from ＋'s Station
 文件 (web/src/mobile/StationFiles.tsx, apps/android/…/screens/StationFiles.kt):
 the places, a folder entered, files (or the folder as a whole) ticked; each goes
@@ -213,3 +276,33 @@ asking the station: by station, root and path, and by the `mtime` and `size` its
 anew, the old one deleted; a read that finds it changed meanwhile starts again). Texts, pictures, PDFs and the rest are
 kept whole (the reader's first 16 MB of a longer text), the least lately opened going past 512 MB; videos and songs by
 the ranges played, in media3's cache, past 1.5 GB. Settings → storage shows both as one row, to clear.
+
+## The files' page (web/src/pages/Files.tsx, FilesNav.tsx, FilesGo.tsx, Transfers.tsx, DrivePane.tsx)
+
+On a wide screen the files' page is a window of Finder's over every station of the workspace:
+
+- **Tabs** (drive/tabs.ts): each a folder of a station, or two side by side (⌘⌥D, the bar's button), to work between
+  stations or folders; the side in front (underlined) is what the page's address says, where the keys go, and what a
+  link, the sidebar or going back in history moves. ⌘T opens a tab where the front is (its × closes it: ⌘W is the window's), ⌘⇧[ and
+  ⌘⇧] go along them; a folder's menu opens it in a new tab or on the other side. Kept on the device (prefs
+  `filesTabs`, by workspace): 文件 in the rail comes back to the folder in front as it was left; the first time, to this
+  machine's home (the desktop app on a station of the workspace).
+- **The sidebar** (FilesNav.tsx): 个人收藏, the person's own folders of any station (prefs `driveFavorites`, by
+  workspace; ☆ on a folder's page or its menu, or a folder dragged onto it); then each station with a drive, a row
+  each (this machine marked 本机, its disk's fill, offline faint), its home on a press and its places (the home's own
+  folders, its disks) under it opened; then 团队共享, the folders the stations pin for every member.
+- **Another station** from the start of a folder's trail: the same folder there where it has one, else its home (said
+  so); ⌥ opens it in a new tab. **前往文件夹** (⌘⇧G): a path, the station's name before a colon if another
+  (`mba:~/Projects`), `~` its home, a path without a slash in front under the folder shown; Tab completes a folder's
+  name.
+- **The preview** (⌘⇧P, the bar's button; a chat's 文件 tab has it under its list): the one file chosen, a picture
+  whole (up to 32 MB), the start of a text (Markdown rendered), what plays or needs a page of its own by how to open it;
+  its size, time, station and path.
+- **Copying and moving**: what is dragged onto a folder (a row, a column, the list, a folder in the sidebar) goes into
+  it: across stations a copy (⌘ held: a move), within one a move (⌥: a copy), as Finder does across disks and within
+  one; 复制到… and 移动到… on a menu pick the folder in a dialog of every station's. A name already there is asked
+  about first (replace, keep both, skip; for all the rest at once). A move within a station by a root both places are
+  under is a rename, at once; anything else a copy as above. The bar's 传输 says how many go and how far; its list
+  stops one, tries one that failed again, or shows the folder of one done. A station from before copies takes none
+  (`transfers` absent): what is dragged onto it is not taken, and 复制到… says it needs an update.
+

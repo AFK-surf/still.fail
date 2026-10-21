@@ -35,6 +35,14 @@ export function freeName(entries: readonly DriveEntry[], base: string): string {
   for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
 }
 
+/** A name beside those taken, as the station keeps both (station/src/drive/transfers.ts `free`): `a 2.txt`, `b 2`. */
+export function keptName(taken: readonly Pick<DriveEntry, "name">[], name: string, dir = false): string {
+  const names = new Set(taken.map((e) => e.name.toLowerCase()));
+  const dot = dir ? -1 : name.lastIndexOf(".");
+  const [stem, ext] = dot > 0 ? [name.slice(0, dot), name.slice(dot)] : [name, ""];
+  for (let n = 2; ; n++) if (!names.has(`${stem} ${n}${ext}`.toLowerCase())) return `${stem} ${n}${ext}`;
+}
+
 /**
  * The renames a drag of a station's files into the folder `into` makes: none for one dragged from another station, one
  * where it is already, or one into itself; each by a root both places are under (the one it was dragged from, or the

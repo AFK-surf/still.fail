@@ -40,6 +40,7 @@ const SPECS: Record<string, Spec> = {
   history: { fields: { items: items("key") } },
   vaults: { fields: { vaults: items("id"), requests: items("id") } },
   vaultItems: { fields: { items: items("id") } },
+  driveTransfers: { fields: { transfers: { key: ["station", "id"] } } },
 };
 
 export function specOf(topic: Topic): Spec | null {

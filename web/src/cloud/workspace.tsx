@@ -17,7 +17,8 @@ import { useReady, useTopics } from "../core/react.ts";
 import { LOCAL_MS } from "@stillfail/ui/motion.ts";
 import { AccountPage, PickModelsPage } from "../pages/Accounts.tsx";
 import { ConnectPage } from "../pages/Connect.tsx";
-import { DriveHome, DrivePage, useAddFolder, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
+import { DriveHome, DrivePage, DrivePlayPage, DriveReadPage } from "../pages/Drive.tsx";
+import { FilesNav } from "../pages/FilesNav.tsx";
 import { ChatPage } from "../pages/ChatPage.tsx";
 import { ScreenPage } from "../screen/ScreenPage.tsx";
 import { ChatList, StationTrouble, useGlassBands } from "../Sidebar.tsx";
@@ -414,41 +415,6 @@ function StationsSidebar({ entry }: { entry: WorkspaceEntry }) {
 /** Station's page: with the sidebar of their own, the first of them; else the settings' list of them. */
 function StationsIndex({ entry }: { entry: WorkspaceEntry }) {
   return useStationsSide() ? <StationsFirst entry={entry} /> : <StationsSettings entry={entry} />;
-}
-
-/** Every folder the stations lend (docs/drive.md), under a heading for each station (its name; 离线 beside it while away,
- * its rows faint). */
-function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
-  const stations = useStations(scope).value ?? [];
-  const where = useLocation();
-  const root = new URLSearchParams(where.search).get("root");
-  const add = useAddFolder(scope);
-  const lending = stations.filter((s) => (s.overview?.drive?.roots ?? []).length > 0 || (s.overview?.drive?.anywhere && s.overview.drive.home));
-  return (
-    <>
-      <NavTop top={top} action={add.can && <NavAction icon={<Plus {...ICON} />} label={t("web-pages.drive.addRoot")} onClick={add.start} />} />
-      <NavList>
-        {lending.length === 0 && <p className={nav.navEmpty}>{t("web-main.rail.filesNone")}</p>}
-        {lending.map((s) => {
-          const base = stationBase(s.station);
-          const drive = s.overview?.drive;
-          const roots = drive?.roots ?? [];
-          // A station whose every folder the viewer browses: its home first (the way to all the rest).
-          const home = drive?.anywhere && drive.home ? drive.home : null;
-          const lit = (path: string) => where.pathname.startsWith(`${base}/files`) && (root === path || (!root && (path === home ? roots.length !== 1 : roots.length === 1)));
-          return (
-            <NavSection key={s.station} title={s.online ? s.name : t("web-pages.drive.stationAway", { name: s.name })}>
-              {home && <NavItem to={drivePath(base, home)} current={lit(home)} tip={home} mark={<Server {...ICON} />} title={t("web-pages.drive.home")} away={!s.online} />}
-              {roots.map((r) => (
-                <NavItem key={r.path} to={drivePath(base, r.path)} current={lit(r.path)} tip={r.path} mark={<Folder {...ICON} />} title={r.name} away={!s.online} />
-              ))}
-            </NavSection>
-          );
-        })}
-        {add.dialogs}
-      </NavList>
-    </>
-  );
 }
 
 /** At the sidebar's foot: the workspace in view, which account it belongs to, and the others. */
