@@ -21,6 +21,10 @@ priv struct SettingsFixture {
   mut vault_off : Bool
   /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
   skills_shared : Map[String, Bool]
+  /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
+  mut resets_used : Int
+  /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
+  models_added : Array[String]
 }
 
 ///|
@@ -34,6 +38,8 @@ let fx : SettingsFixture = {
   login: false,
   vault_off: false,
   skills_shared: {},
+  resets_used: 0,
+  models_added: [],
 }
 
 ///|
@@ -60,6 +66,8 @@ fn fixture_reset() -> Unit {
   fx_many_models.val = false
   fx.restored.clear()
   fx.skills_shared.clear()
+  fx.resets_used = 0
+  fx.models_added.clear()
   fx.version = 0
   fx.marks.clear()
   fx.auto = false
@@ -105,6 +113,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-first-station" => fx.none = true
     "settings-profile-menu" => up("profile-menu", "", 0)
     "settings-profile-lower" => up("", "settings/profile/ws1/st1/cc", 4)
+    // ChatGPT 团队's quota with its resets, its models (many, a filter, one to name by hand)
+    "settings-profile-models" => up("", "settings/profile/ws1/st1/cx", 9)
     "settings-profile-login" => {
       fx.login = true
       up("", "settings/profile/ws1/st1/cc", 2)
@@ -158,6 +168,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-memory" => "memory:ws1/st1"
     "settings-memory-doc" => "memory-doc:ws1/st1#发布流程"
     "settings-profile" => "profile:ws1/st1#cc"
+    "settings-profile-quota" | "settings-profile-models" => "profile:ws1/st1#cx"
     "settings-me-reading" => "me"
     "settings-connect" => "connect:ws1/st1#k1"
     _ =>
@@ -270,12 +281,51 @@ fn fx_profiles() -> Array[Json] {
         },
       ),
     ]),
-    fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", [("modelsText", str("1 个模型"))]),
+    fx_profile("cx", "ChatGPT 团队", "subscription", "green", "可用", "chatgpt", "ChatGPT 订阅", fx_cx_more()),
     fx_profile("k2", "备用 key", "anthropic-api", "red", "没能使用", "key", "API key", [
       ("trouble", obj([("title", str("key 已失效")), ("detail", str("服务商拒绝了这个 key")), ("next", str("")), ("action", str("key")), ("label", str(""))])),
       ("quota", obj([("state", str("unsupported")), ("windows", []), ("checkedAt", Json::number(0.0))])),
       ("usedBy", []),
     ]),
+  ]
+}
+
+///|
+/// ChatGPT 团队's own: more models than a filter is over (one named by hand once added), a reset of its quota left.
+fn fx_cx_more() -> Array[(String, Json)] {
+  let ids = [
+    "gpt-6", "gpt-6-mini", "gpt-6-nano", "gpt-6-codex", "gpt-6-codex-mini", "gpt-5.5", "gpt-5.5-mini", "gpt-5.5-codex", "gpt-5",
+    "gpt-5-mini", "o9", "o9-mini",
+  ]..append(fx.models_added)
+  let names : Map[String, Json] = {}
+  for m in ids {
+    names[m] = str(m.to_upper())
+  }
+  let left = 2 - fx.resets_used
+  [
+    ("modelsText", str("1 个模型")),
+    ("models", ["gpt-6-mini"]),
+    ("available", Json::array(ids.map(str))),
+    ("names", Json::object(names)),
+    ("series", [obj([("name", str("GPT")), ("models", Json::array(ids.map(str)))])]),
+    ("canAddModel", Json::boolean(true)),
+    (
+      "quota",
+      obj([
+        ("state", str("ok")),
+        (
+          "windows",
+          [
+            obj([("label", str("5 小时")), ("usedPercent", Json::number(38.0)), ("mark", str("5H")), ("left", Json::number(62.0)), ("level", str("ok")), ("refills", str("2 小时后恢复"))]),
+            obj([("label", str("本周")), ("usedPercent", Json::number(81.0)), ("mark", str("W")), ("left", Json::number(19.0)), ("level", str("amber")), ("refills", str("星期一恢复"))]),
+          ],
+        ),
+        ("resetCount", Json::number(left.to_double())),
+        ("resetText", str("还可重置 \{left} 次")),
+        ("checkedAt", Json::number(0.0)),
+        ("time", obj([("checkedAt", stamp_of("3 分钟前"))])),
+      ]),
+    ),
   ]
 }
 
@@ -1166,6 +1216,16 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     "agentEnv.form.open" | "agentEnv.form.edit" | "agentEnv.form.drop" | "agentEnv.form.save" => Some(Ok(obj([])))
     "profile.quota" | "profile.check" | "profile.put" => Some(Ok(obj([])))
+    "profile.resetQuota" => {
+      fx.resets_used += 1
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
+    "profile.addModel" => {
+      fx.models_added.push(text(p, "model"))
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
     // the drafts' forms (a new profile's, a new connect's, the decisions' and the archive policy's), opened and edited
     "profile.flow.open" | "profile.flow.edit" | "profile.flow.drop" | "connect.flow.open" | "connect.flow.edit"
     | "connect.flow.drop" | "automaticDecisions.form.open" | "automaticDecisions.form.edit"
