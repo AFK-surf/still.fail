@@ -428,6 +428,9 @@ pub(all) enum Color {
   A(Color, Opacity)
   Over(Color, Color)
   Exact(Int64)
+  /// a colour that comes with what is shown, not the design's (an avatar's own ground, a colour a person typed): from
+  /// data, never a number written in a view (one there is a style-literal)
+  Data(Int64)
 } derive(Eq, Show, Debug)
 
 ///|

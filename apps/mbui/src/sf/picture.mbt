@@ -327,6 +327,20 @@ fn draw_drawable(
 }
 
 ///|
+/// The picture `name` drawn `px` pixels wide (as tall as it is for that), in its own colours or all in `tint`: its
+/// width, height and pixels (RGBA, straight, rows from the top), to make another picture with; None when there is no
+/// such picture.
+pub fn drawable_pixels(name : String, px : Int, tint? : Int64) -> (Int, Int, FixedArray[Byte])? {
+  match drawables.get(name) {
+    Some(d) => {
+      let ph = imax((px.to_double() * d.h / d.w).round().to_int(), 1)
+      Some((px, ph, raster(d, px, ph, tint)))
+    }
+    None => None
+  }
+}
+
+///|
 /// Whether the app has the picture `name` (its drawable's name: maker_openai,
 /// illus_sign_in…).
 pub fn has_drawable(name : String) -> Bool {

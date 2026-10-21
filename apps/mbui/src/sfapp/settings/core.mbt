@@ -494,6 +494,7 @@ pub fn left(route : Route) -> Unit {
     SlackApp(a, id) => {
       app_drafts.remove(a + "/" + id)
       slack_adding.remove(a + "/" + id)
+      app_looks.remove("slack-app/" + a + "/" + id)
     }
     Usage => {
       usage_state.day = ""
@@ -571,6 +572,8 @@ pub fn reset() -> Unit {
   mark_pick.color = ""
   mark_pick.serial = 0
   mark_pick.asking = false
+  mark_pick.reading = ""
+  mark_pictures.val = 0
   env_form.val = 0
   versions_state.updating.clear()
   versions_state.checking.clear()
@@ -590,6 +593,7 @@ pub fn reset() -> Unit {
   new_connects.clear()
   app_drafts.clear()
   slack_adding.clear()
+  app_looks_reset()
   new_profiles.clear()
   bar_adding.val = false
   changelog_state.part = ""

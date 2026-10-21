@@ -1472,6 +1472,29 @@ void mb_host_image_free(int32_t id) {
   (*env)->CallStaticVoidMethod(env, images_cls, m_img_free, id);
 }
 
+// A ready image's pixels read back from its texture through a framebuffer of its own (premultiplied RGBA, as
+// uploaded), rows from the top (as the bitmap's were uploaded).
+int32_t mb_host_image_pixels(int32_t id, moonbit_bytes_t out) {
+  if (id <= 0 || id >= nimgs) return 0;
+  mb_image *im = &imgs[id];
+  if (im->state != 1 || !im->tex) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)im->w * im->h * 4) return 0;
+  GLint was = 0;
+  glGetIntegerv(GL_FRAMEBUFFER_BINDING, &was);
+  GLuint fb = 0;
+  glGenFramebuffers(1, &fb);
+  glBindFramebuffer(GL_FRAMEBUFFER, fb);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, im->tex, 0);
+  int ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+  if (ok) {
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, im->w, im->h, GL_RGBA, GL_UNSIGNED_BYTE, out);
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)was);
+  glDeleteFramebuffers(1, &fb);
+  return ok;
+}
+
 JNIEXPORT void JNICALL Java_dev_mbui_Native_imageDone(JNIEnv *env, jclass c, jint id, jint tex,
                                                      jint w, jint h, jint ow, jint oh) {
   GLuint t = (GLuint)tex;

@@ -588,6 +588,9 @@ extern "C" fn ffi_image_info(id : Int, out : FixedArray[Double]) -> Int = "mb_ho
 
 extern "C" fn ffi_image_free(id : Int) -> Unit = "mb_host_image_free"
 
+#borrow(out)
+extern "C" fn ffi_image_pixels(id : Int, out : FixedArray[Byte]) -> Int = "mb_host_image_pixels"
+
 ///|
 /// Starts decoding the image at `src` (a file path or an http(s) URL);
 /// returns its id.
@@ -611,6 +614,13 @@ pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
 ///|
 pub fn image_free(id : Int) -> Unit {
   ffi_image_free(id)
+}
+
+///|
+/// A ready image's pixels as decoded (image_info's width by height, rows from the top, RGBA premultiplied) into `out`
+/// (at least w × h × 4 long): false where it is not ready or cannot be read back.
+pub fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
+  ffi_image_pixels(id, out) == 1
 }
 
 // A sign-in in the browser that comes back here (browser_login.mbt; apple_browser_login.m, and on Android

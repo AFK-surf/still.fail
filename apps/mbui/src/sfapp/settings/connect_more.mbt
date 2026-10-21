@@ -1151,8 +1151,43 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
                   _ => ()
                 }
               }
-              // (its icon: the Android app draws one from still.fail's buddies or a picture; this app has no way to
-              // draw one yet, so the app is made with Slack's own until its Slack app page sets one)
+              // its icon and colour (AppLook, a new app's: the general helper to start)
+              app_look(
+                c,
+                core,
+                "flow-look/" + form,
+                text(settings, "backgroundColor"),
+                // (put in the flow once the frame is built: the look picks as it is built)
+                fn(color) {
+                  match settings {
+                    Some(Object(m)) => {
+                      let m2 = m.copy()
+                      m2["backgroundColor"] = str(color)
+                      c.after_build("flow-look/color", fn() { edit([("settings", Json::object(m2))]) })
+                    }
+                    _ => ()
+                  }
+                },
+                fn(icon, error) {
+                  c.after_build("flow-look/icon", fn() {
+                    edit([
+                    (
+                      "icon",
+                      match icon {
+                        Some(i) => str(i)
+                        None => Json::null()
+                      },
+                    ),
+                      ("iconError", if error == "" { Json::null() } else { str(error) }),
+                    ])
+                  })
+                },
+                true,
+              )
+              match opt_text(view, "iconError") {
+                Some(e) if e != "" => c.text(e, style=look_error) |> ignore
+                _ => ()
+              }
               c.text(tr("android-settings.flow.permsNote"), size=13.0, color=t.p.muted, w=Fill(1.0), line=18.0) |> ignore
               flow_next(c, "flow-make", tr("android-settings.flow.make"), flag(view, "canMake"), busy, fn() { flow_act(core, station, form, "make", fn(_) {  }) })
             })
@@ -1168,6 +1203,11 @@ fn new_connect_page(c : @ui.Ctx, core : Core, here : Here, station : String) -> 
               let install = opt_text(made, "install")
               let links = field(made, "links")
               let installed = flag(made, "installed")
+              // its icon not taken by Slack (the app made all the same)
+              match opt_text(view, "iconError") {
+                Some(e) if e != "" => c.text(fill("android-settings.flow.iconFailed", [("error", e)]), style=look_error) |> ignore
+                _ => ()
+              }
               let team = first_text(made, ["installedTeam", "team"], tr("android-settings.flow.team"))
               let tapped = steps(c, "flow-install", [
                 (
@@ -1375,6 +1415,9 @@ priv struct AppDraft {
   mut approve : Bool
   mut error : String
   mut fresh : Bool
+  /// the icon made in its look (a data URL), to go with the rest; why one was not made, or not taken
+  mut icon : String?
+  mut icon_error : String
 }
 
 ///|
@@ -1490,7 +1533,11 @@ fn slack_app_page(c : @ui.Ctx, core : Core, station : String, connect : String) 
             },
             error: "",
             fresh: true,
+            icon: None,
+            icon_error: "",
           }
+          // its look made again with it
+          app_looks.remove("slack-app/" + k)
           app_drafts[k] = d
           d
         }
@@ -1529,7 +1576,6 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
     d.fresh = false
     field_of(k + "/name").set(d.name)
     field_of(k + "/desc").set(d.description)
-    field_of(k + "/color").set(d.color)
   }
   if d.approve {
     c.box(w=Fill(1.0), padx=12.0, pady=10.0, gap=8.0, radius=12.0, bg=@sf.alpha(t.p.blue, 0.10), fn() {
@@ -1556,12 +1602,21 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
   label(tr("android-settings.slack.description"))
   let desc = field_box(c, k + "/desc", tr("android-settings.slack.descriptionPlaceholder"))
   d.description = if desc.length() > 140 { desc.unsafe_substring(start=0, end=140) } else { desc }
-  label(tr("android-settings.slack.background"))
-  c.box(dir=Row, w=Fill(1.0), gap=10.0, align=ACenter, fn() {
-    c.box(w=Px(44.0), h=Px(44.0), radius=12.0, bg=hex_color(d.color).unwrap_or(t.p.chip), fn() {  }) |> ignore
-    c.box(w=Fill(1.0), fn() { d.color = field_box(c, k + "/color", "#RRGGBB").trim(chars=" ").to_owned().to_upper() }) |> ignore
-  })
-  |> ignore
+  app_look(
+    c,
+    core,
+    "slack-app/" + station + "/" + connect,
+    d.color,
+    fn(color) { d.color = color },
+    fn(icon, error) {
+      d.icon = icon
+      d.icon_error = error
+    },
+    false,
+  )
+  if d.icon_error != "" {
+    c.text(d.icon_error, style=look_error) |> ignore
+  }
   // permissions, folded: changed now and then
   let on = slack_groups.iter().filter(fn(g) { d.groups.get(g).unwrap_or(false) }).count()
   c.box(dir=Row, w=Fill(1.0), pady=6.0, gap=6.0, align=ACenter, id=c.id(k + "/perms"), fn() {
@@ -1642,6 +1697,10 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
   if slack_groups.iter().any(fn(g) { d.groups.get(g).unwrap_or(false) != flag(field(settings, "groups"), g) }) {
     changes.push(("groups", Json::object(Map::from_array(slack_groups.map(fn(g) { (g, Json::boolean(d.groups.get(g).unwrap_or(false))) })))))
   }
+  match d.icon {
+    Some(icon) => changes.push(("icon", str(icon)))
+    None => ()
+  }
   let dirty = changes.length() > 0
   c.box(dir=Row, w=Fill(1.0), gap=8.0, justify=JEnd, fn() {
     if dirty && button(c, k + "/revert", tr("android-settings.slack.revert"), false) {
@@ -1652,6 +1711,10 @@ fn app_form(c : @ui.Ctx, core : Core, station : String, connect : String, d : Ap
       (core.call)("connect.putSlackApp", obj([("station", str(station)), ("connect", str(connect)), ("input", obj(changes))]), fn(r) {
         match r {
           Ok(v) => {
+            // the icon gone with it: its look as it was, what Slack said of it kept
+            d.icon = None
+            d.icon_error = text(Some(v), "iconError")
+            app_looks.remove("slack-app/" + station + "/" + connect)
             let updated = flag(Some(v), "permissionsUpdated")
             d.approve = updated
             // changed permissions are approved in Slack: its page handed over at once (the notice stays)

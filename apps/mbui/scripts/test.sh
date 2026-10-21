@@ -32,7 +32,7 @@ for t in ${TARGETS:-js}; do
   # side: the flows in packages of their own for it, src/sfreplay/flows/*/)
   pkgs=""
   if [[ " ${PARTS:-app replay} " = *" app "* ]]; then
-    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/gallery -p stillfail/player"
+    pkgs="-p stillfail/sf -p stillfail/sfapp -p stillfail/sfapp/settings -p stillfail/gallery -p stillfail/player"
     [ $t = js ] && pkgs="$pkgs -p stillfail/sfscreens"
   fi
   if [[ " ${PARTS:-app replay} " = *" replay "* ]]; then

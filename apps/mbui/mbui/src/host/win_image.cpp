@@ -284,6 +284,58 @@ void mb_host_image_free(int32_t id) {
   if (srv) srv->Release();
 }
 
+// A ready image's pixels read back from its texture through a staging copy (premultiplied BGRA there: RGBA here),
+// rows from the top.
+int32_t mb_host_image_pixels(int32_t id, moonbit_bytes_t out) {
+  if (id <= 0 || id >= nimgs) return 0;
+  EnterCriticalSection(&lock);
+  Image im = imgs[id];
+  if (im.srv) im.srv->AddRef();
+  LeaveCriticalSection(&lock);
+  if (im.state != 1 || !im.srv) {
+    if (im.srv) im.srv->Release();
+    return 0;
+  }
+  int ok = 0;
+  ID3D11Resource *res = NULL;
+  ID3D11Texture2D *staging = NULL;
+  ID3D11DeviceContext *dc = (ID3D11DeviceContext *)mb_render_context();
+  ID3D11Device *dev = (ID3D11Device *)mb_render_device();
+  im.srv->GetResource(&res);
+  if ((size_t)Moonbit_array_length(out) >= (size_t)im.w * im.h * 4 && res && dc && dev) {
+    D3D11_TEXTURE2D_DESC td = {};
+    td.Width = im.w;
+    td.Height = im.h;
+    td.MipLevels = td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_STAGING;
+    td.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+    D3D11_MAPPED_SUBRESOURCE m;
+    if (SUCCEEDED(dev->CreateTexture2D(&td, NULL, &staging))) {
+      dc->CopyResource(staging, res);
+      if (SUCCEEDED(dc->Map(staging, 0, D3D11_MAP_READ, 0, &m))) {
+        for (int y = 0; y < im.h; y++) {
+          const uint8_t *row = (const uint8_t *)m.pData + (size_t)y * m.RowPitch;
+          uint8_t *o = out + (size_t)y * im.w * 4;
+          for (int x = 0; x < im.w; x++) {
+            o[x * 4] = row[x * 4 + 2];
+            o[x * 4 + 1] = row[x * 4 + 1];
+            o[x * 4 + 2] = row[x * 4];
+            o[x * 4 + 3] = row[x * 4 + 3];
+          }
+        }
+        dc->Unmap(staging, 0);
+        ok = 1;
+      }
+      staging->Release();
+    }
+  }
+  if (res) res->Release();
+  im.srv->Release();
+  return ok;
+}
+
 void mb_images_tell(mb_outside_fn f) {
   if (!pool) return;  // no image asked for yet
   for (;;) {

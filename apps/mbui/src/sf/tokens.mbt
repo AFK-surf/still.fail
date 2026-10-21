@@ -659,3 +659,7 @@ pub let faint_ground : @ui.Color = A(Fg, Exact(0.04))
 ///|
 /// How wide a face's status at its row's end may be (Fonts.kt:142).
 pub let face_status_most : @ui.Len = Fixed(140.0)
+
+///|
+/// A Slack app's icon as it is in its look (SlackApp.kt AppLook: 72 square), off the scale.
+pub let app_icon_side : @ui.Len = Fixed(72.0)

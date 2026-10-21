@@ -137,6 +137,10 @@ struct FakeHost {
   stream_said : Map[Int, Array[String]]
   /// the device beyond the window (device.mbt): awake, haptics, the clipboard's picture and reads, the keyboard's height
   dev : FakeDevice
+  /// pictures' pixels as the test made them up (Tester::add_pixels), by source; and those of the images loaded from
+  /// them, by image
+  pixels_of_src : Map[String, FixedArray[Byte]]
+  pixels_of : Map[Int, FixedArray[Byte]]
 }
 
 ///|
@@ -716,6 +720,10 @@ fn h_image_load(src : String, max_px : Int) -> Int {
           fake_image(f, w, h, max_px)
         }
       }
+      match f.pixels_of_src.get(src) {
+        Some(px) => f.pixels_of[id] = px
+        None => ()
+      }
       // one it does not know failed at once: nothing of it is left to wait for
       match f.images.get(id) {
         Some(im) if im.state < 0 => return id
@@ -784,6 +792,30 @@ fn h_image_info(id : Int, out : FixedArray[Double]) -> Int {
       }
       st
     }
+  }
+}
+
+///|
+/// A ready image's pixels read back (premultiplied RGBA, rows from the top) into `out`: the fake host's as the test
+/// made them (Tester::add_pixels), else every pixel a mid grey, opaque.
+fn h_image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
+  match fake.val {
+    Some(f) =>
+      match f.images.get(id) {
+        Some(im) if im.state == 1 => {
+          let n = im.w.to_int() * im.h.to_int() * 4
+          match f.pixels_of.get(id) {
+            Some(px) if px.length() == n => px.blit_to(out, len=n)
+            _ =>
+              for i in 0..<n {
+                out[i] = if i % 4 == 3 { b'\xFF' } else { b'\x80' }
+              }
+          }
+          true
+        }
+        _ => false
+      }
+    None => @host.image_pixels(id, out)
   }
 }
 
