@@ -8,10 +8,7 @@ Application identity and its notarytool profile (Apple ID and app-specific passw
 MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 and _2 (the file's base64 in two halves: one secret holds 48 KB at most), opened with
 KEYCHAIN_PASSWORD_AFK (both copied from Cue's; a rotation there is copied again). A copy of it is put on the user's
 search list for the command and taken off after (the list restored, the copy deleted), under the lock mini1's signing
-jobs share: they run beside each other on its one search list. The Apple Development certificate the apps were signed
-with before (MACOS_SIGNING_CERTIFICATE_B64 / _PASSWORD), while it is still given, is imported into that copy too: the
-apps already installed take an update only signed as the build they run says (after-sign.cjs), so it signs one more
-release, which says the Developer ID too, before the identity moves.
+jobs share: they run beside each other on its one search list.
 Without the keychain's secrets (a maintainer's own Mac), nothing is set up: the login keychain has the identity.
 
     python3 .github/mac_signing.py run -- COMMAND…   COMMAND with MAC_SIGN_IDENTITY, STILLFAIL_SIGNING_KEYCHAIN and
@@ -31,8 +28,7 @@ import tempfile
 
 root = Path(__file__).resolve().parents[1]
 identity = json.loads((root / 'apps/desktop/package.json').read_text())['build']['mac']['identity']
-SECRETS = ('MACOS_DEVELOPER_ID_KEYCHAIN_B64_1', 'MACOS_DEVELOPER_ID_KEYCHAIN_B64_2', 'KEYCHAIN_PASSWORD_AFK',
-           'MACOS_SIGNING_CERTIFICATE_B64', 'MACOS_SIGNING_CERTIFICATE_PASSWORD')
+SECRETS = ('MACOS_DEVELOPER_ID_KEYCHAIN_B64_1', 'MACOS_DEVELOPER_ID_KEYCHAIN_B64_2', 'KEYCHAIN_PASSWORD_AFK')
 
 
 def run(args, **kwargs):
@@ -86,14 +82,6 @@ def keychain():
         try:
             run(['security', 'unlock-keychain', '-p', password, path])
             run(['security', 'set-keychain-settings', '-lut', '21600', path])
-            certificate = os.environ.get('MACOS_SIGNING_CERTIFICATE_B64')
-            if certificate:
-                p12 = Path(directory) / 'certificate.p12'
-                p12.write_bytes(base64.b64decode(''.join(certificate.split()), validate=True))
-                p12.chmod(0o600)
-                run(['security', 'import', str(p12), '-k', path, '-P', os.environ.get('MACOS_SIGNING_CERTIFICATE_PASSWORD', ''), '-T', '/usr/bin/codesign'], stdout=subprocess.DEVNULL)
-                run(['security', 'set-key-partition-list', '-S', 'apple-tool:,apple:', '-k', password, path], stdout=subprocess.DEVNULL)
-                p12.unlink()
             run(['security', 'list-keychains', '-d', 'user', '-s', path, *previous])
             name = found(path)
             if not name:

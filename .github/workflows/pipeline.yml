@@ -171,11 +171,6 @@ jobs:
           uname -sm
           sw_vers
           for tool in brew rustup cargo node python3; do command -v "$tool" || true; done
-          if security find-identity -v -p codesigning | grep -Fq 'Apple Development: zuozijian1994@gmail.com (9C49UVFRK3)'; then
-            echo 'Existing still.fail signing identity is available'
-          else
-            echo 'Existing still.fail signing identity needs provisioning'
-          fi
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-mac
       - name: Get or build the native parts
@@ -619,13 +614,10 @@ jobs:
       - name: Build the station's release (darwin-arm64, linux-x64, linux-arm64, win32-x64)
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
-          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          # AFK's Developer ID and notary profile (.github/mac_signing.py).
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
-          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
           # The key the release is signed with (docs/release-signing.md): none is an error.
           RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
           RELEASE_DIR: ${{ runner.temp }}/release
@@ -675,13 +667,10 @@ jobs:
       - name: Build and sign the beta desktop app on the organization Mac
         env:
           POSTHOG_JSON: ${{ secrets.POSTHOG_JSON }}
-          # AFK's Developer ID and notary profile (.github/mac_signing.py); the Apple Development certificate below
-          # signs while installed apps move to the Developer ID (apps/desktop/after-sign.cjs).
+          # AFK's Developer ID and notary profile (.github/mac_signing.py).
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_1: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_1 }}
           MACOS_DEVELOPER_ID_KEYCHAIN_B64_2: ${{ secrets.MACOS_DEVELOPER_ID_KEYCHAIN_B64_2 }}
           KEYCHAIN_PASSWORD_AFK: ${{ secrets.KEYCHAIN_PASSWORD_AFK }}
-          MACOS_SIGNING_CERTIFICATE_B64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_B64 }}
-          MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
         run: python3 .github/release-desktop.py --only mac --out "$RUNNER_TEMP/release"
       - name: Put its files (named by its version, nothing points at them until put writes the feed)
         env:
