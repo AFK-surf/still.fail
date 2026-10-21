@@ -28,6 +28,12 @@ runs:
         path: /usr/local/lib/android/sdk/system-images/android-34/${{ inputs.target }}/x86_64
         key: android-image-34-${{ inputs.target }}-x86_64-none
         restore-keys: android-image-34-${{ inputs.target }}-x86_64-
+    - uses: actions/cache/restore@v4
+      id: avd
+      with:
+        path: ~/.android/avd
+        key: android-avd-${{ inputs.target }}-${{ inputs.profile }}-none
+        restore-keys: android-avd-${{ inputs.target }}-${{ inputs.profile }}-
     - shell: bash
       env:
         TARGET: ${{ inputs.target }}

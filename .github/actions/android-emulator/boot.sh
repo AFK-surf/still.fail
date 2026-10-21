@@ -13,14 +13,18 @@ echo "emulator: $(grep -a '^Pkg.Revision' "$HOME/android-emu/emulator/source.pro
 echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules >/dev/null
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
-# (one AVD home for the two: avdmanager's and the emulator's, as android-emulator-runner had it)
+# (the SDK's emulator package the cached build: avdmanager asks that one be installed, and the image's run on it)
+if [ "$(readlink "$SDK/emulator" 2>/dev/null)" != "$HOME/android-emu/emulator" ]; then
+  rm -rf "$SDK/emulator"
+  ln -s "$HOME/android-emu/emulator" "$SDK/emulator"
+fi
+# the AVD the android-sdk workflow made over the image (avdmanager is never run here: it asks for the SDK's emulator
+# package installed, which a job has not)
 export ANDROID_AVD_HOME=$HOME/.android/avd
-mkdir -p "$ANDROID_AVD_HOME"
-echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd --force -n ci --package "$IMAGE" --device "$PROFILE" > "$RUNNER_TEMP/avd.log" 2>&1 ||
-  { cat "$RUNNER_TEMP/avd.log"; exit 1; }
-[ -f "$ANDROID_AVD_HOME/ci.ini" ] || { echo "::error::avdmanager made no ci.ini in $ANDROID_AVD_HOME"; cat "$RUNNER_TEMP/avd.log"; ls -la ~/.android ~/.config/.android 2>/dev/null; exit 1; }
+AVD=ci-$TARGET-$PROFILE
+[ -f "$ANDROID_AVD_HOME/$AVD.ini" ] || { echo "::error::no AVD $AVD in the Actions cache: run the android-sdk workflow"; exit 1; }
 ADB=$SDK/platform-tools/adb
-ANDROID_SDK_ROOT=$SDK "$EMU" -avd ci -port 5554 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio \
+ANDROID_SDK_ROOT=$SDK "$EMU" -avd "$AVD" -port 5554 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio \
   -no-boot-anim > "$RUNNER_TEMP/emulator.log" 2>&1 &
 E=$!
 echo "emulator pid $E"

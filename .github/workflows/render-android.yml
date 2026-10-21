@@ -47,23 +47,11 @@ jobs:
       - uses: ./.github/actions/moonbit
       - name: The draw list and the APK (scripts/render_android.sh build)
         run: scripts/render_android.sh build
-      - name: KVM for the emulator
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+      # (the emulator's build the reference was made with, goldens/render/android.txt: the action's, 16428233)
+      - uses: ./.github/actions/android-emulator
+        with: { target: default, profile: pixel_6, animations: "false" }
       - name: Drawn offscreen in the emulator, twice (scripts/render_android.sh run)
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: default
-          arch: x86_64
-          # the emulator's build the reference was made with (goldens/render/android.txt), not the newest
-          emulator-build: 16428233
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash scripts/render_android.sh run
+        run: bash scripts/render_android.sh run
       - uses: actions/upload-artifact@v4
         if: always()
         with:
