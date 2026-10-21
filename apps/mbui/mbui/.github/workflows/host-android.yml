@@ -1,0 +1,119 @@
+# The host's and the text's contracts on Android (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh): kitdemo's controls page run on an x86_64 emulator with its scripted taps, its tape made a
+# Tester's test and run here (every frame the same), then the committed tape's text (android_controls) asked of the
+# emulator's text system again (every answer the same). When Android's host changes.
+name: host-android
+on:
+  pull_request:
+    paths: &paths
+      - "src/ui/native.mbt"
+      - "src/kitdemo/viewcheck.mbt"
+      - "src/host/android_host.c"
+      - "src/host/done_watch.h"
+      - "src/ui/drive.mbt"
+      - "scripts/done_runner.py"
+      - "android/**"
+      - "scripts/android.sh"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_android_*"
+      - ".github/workflows/host-android.yml"
+      - "src/host/marks.mbt"
+      - "src/host/host_native.mbt"
+      - "src/kitdemo/markscheck.mbt"
+      - "src/kitdemo/main.mbt"
+      - "test/marks/**"
+      - "goldens/marks/android*"
+      - "src/host/moon.pkg"
+      - "src/host/post.h"
+      - "src/ui/app.mbt"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        # (the merge commit and its base: what changed is told by them, scripts/ci_paths.py)
+        with: { fetch-depth: 2 }
+      - name: What changed (a pull request runs the contracts its files touch)
+        id: f
+        if: github.event_name == 'pull_request'
+        env:
+          FILTERS: |
+            host:
+              - "src/ui/native.mbt"
+              - "src/kitdemo/viewcheck.mbt"
+              - "src/host/android_host.c"
+              - "src/host/done_watch.h"
+              - "src/ui/drive.mbt"
+              - "scripts/done_runner.py"
+              - "android/**"
+              - "scripts/android.sh"
+              - "scripts/host_contract.sh"
+              - "scripts/textrec_test.py"
+              - "test/host/**"
+              - "src/kitdemo/textcheck.mbt"
+              - "src/kitdemo/textrec_android_*"
+              - ".github/workflows/host-android.yml"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/main.mbt"
+              - "src/host/moon.pkg"
+            marks:
+              - "src/host/android_host.c"
+              - "src/host/done_watch.h"
+              - "src/ui/drive.mbt"
+              - "scripts/done_runner.py"
+              - "android/app/src/main/java/dev/mbui/Marks.java"
+              - "android/app/src/main/java/dev/mbui/Host.java"
+              - "android/app/build.gradle.kts"
+              - "src/host/marks.mbt"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/markscheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "test/marks/**"
+              - "goldens/marks/android*"
+              - "scripts/android.sh"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/host-android.yml"
+              - "src/host/moon.pkg"
+        run: python3 scripts/ci_paths.py
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ./.github/actions/moonbit
+      - name: kitdemo's APK for an x86_64 emulator
+        run: ABI=x86_64 scripts/host_contract.sh android build
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: "The host's contract (a run's tape = a Tester's frames), the text's (android_controls = the system's), the marks' (= goldens/marks/android.png)"
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          HOST: ${{ steps.f.outputs.host }}
+          MARKS: ${{ steps.f.outputs.marks }}
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          # the system's animations as a phone has them (off, motion would be reduced: not what a Tester plays)
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # (each when a pull request's files touch it: HOST, MARKS as the filter said; everything else, all)
+          script: if [ "$HOST" != false ]; then bash scripts/host_contract.sh android record && bash scripts/host_contract.sh android text && bash scripts/host_contract.sh android views && bash scripts/host_contract.sh android site && bash scripts/host_contract.sh android runner; fi; h=$?; m=0; if [ "$MARKS" != false ]; then bash scripts/host_contract.sh android marks || m=1; fi; [ $h = 0 ] && [ $m = 0 ]
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-android
+          path: out/host/
+          if-no-files-found: ignore

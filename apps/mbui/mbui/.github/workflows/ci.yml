@@ -1,0 +1,130 @@
+# Every platform but Windows (windows.yml) on each push: the tests, the macOS
+# apps with Core Text's text and the host's picture against mbui's own, the iOS
+# simulator app, and the Android APK; each job's time is what this measures too
+# (the summary lists the steps' seconds). Every step holds a merge back: none
+# continues on an error (a check that cannot fail is no one's to look at).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    # (every step's script run with no network: a test that reaches for it fails every time, scripts/offline.sh)
+    defaults:
+      run:
+        shell: bash scripts/offline.sh {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: "A network namespace of its own for the steps (Ubuntu 24.04's AppArmor keeps them from a user's: let)"
+        shell: bash
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: The steps' network is none (a connection out fails at once)
+        run: if curl -fsS --max-time 5 -o /dev/null https://github.com; then echo "reached github.com"; exit 1; fi
+      - name: "Determinism: nothing waits on a guessed time or on settling, the app asks no frame (scripts/detlint.py, docs/detlint.md)"
+        run: python3 scripts/detlint_test.py && python3 scripts/detlint.py
+      - name: "The outsides' kinds: each its own number in src/ui/hostcall.mbt, every host's named the same (scripts/outside_kinds.py)"
+        run: python3 scripts/outside_kinds.py
+      - name: "The renderers' corners are src/host/corner.sl's (scripts/corner_sl.py)"
+        run: python3 scripts/corner_sl.py --check
+      - name: "The kept runs: textrec_runs.mbt is what textrec_runs.txt makes, and lists every run git keeps (scripts/textrec_test.py --check)"
+        run: python3 scripts/textrec_test.py --check
+      - uses: ./.github/actions/moonbit
+      - name: Check
+        run: moon version --all && moon check --target js --output-json 2>&1 | python3 scripts/errs.py
+      - name: ui, motion, the components and Markdown tests; the hosts' kept runs replayed (src/kitdemo/textrec_*)
+        run: |
+          set -o pipefail
+          moon test --target js -p mbui/ui -p mbui/motion -p mbui/kit -p mbui/md -p mbui/kitdemo 2>&1 | grep -v '^TDUMP' | tail -3
+      - name: "The same tests with the display's frames drawn on the way, at 60, 120, 24 and 7 a second (scripts/fps_check.sh): the same results"
+        run: bash scripts/fps_check.sh
+      - name: "effect.mb on native and JS, and the demo of a screen and its logic on one clock over seeds (SEED=<n> replays a failure)"
+        run: |
+          set -o pipefail
+          moon test --target native -p mbui/effecttest 2>&1 | tail -3
+          moon test --target js -p mbui/effecttest -p mbui/effectdemo 2>&1 | tail -3
+      - name: "Unicode text (UAX #29, #14, #9 against Unicode's own tests)"
+        run: |
+          set -o pipefail
+          moon test --target native -p mbui/text 2>&1 | tail -4
+      - name: flexbox (Yoga's tests)
+        run: moon test --target native -p mbui/flex 2>&1 | tail -3
+      - name: "sin, exp, pow… worked out in MoonBit (mbui/dmath): the same digits on js and on native"
+        run: |
+          set -o pipefail
+          moon test --target js -p mbui/dmath 2>&1 | tail -3
+          moon test --target native -p mbui/dmath 2>&1 | tail -3
+      - name: "The C step: the splitter on made-up C, and a MoonBit program built whole and split (scripts/mbc_test.py)"
+        run: python3 scripts/mbc_test.py
+
+  native:
+    # the same tests on native, on macOS (Mini1, mbui's runner: the hosts' Objective-C linked in by scripts/cc_apple.sh)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/moonbit
+      - name: ui, motion, the components, Markdown, kitdemo and effect.mb's tests on native (scripts/test_native.sh)
+        # (with no network: scripts/offline.sh)
+        shell: bash scripts/offline.sh {0}
+        run: scripts/test_native.sh
+
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/moonbit
+      - name: macOS apps
+        run: |
+          for app in demo textdiff kitdemo; do
+            /usr/bin/time -p env APP=$app scripts/mac.sh build 2>&1 | tail -4
+          done
+      # (no screenshot against goldens/mac*.png here: those are Studio's, at its scale, and every run on this runner
+      # differed from them in size; the pictures are the render workflows' against their machine's references, and the
+      # host's picture is the draw list's below, to the byte)
+      - name: "Text against Core Text's own (scripts/textdiff.sh mac: the corpus's 255 strings, not only kitdemo's)"
+        run: |
+          mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
+          scripts/textdiff.sh mac
+      - name: "A Tester's draw list drawn offscreen (mbui-render) against the host's own picture of it (scripts/render_check.sh); its md5, to compare machines"
+        run: scripts/render_check.sh
+      - name: iOS simulator app
+        run: scripts/ios.sh build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-shots
+          path: |
+            out/textdiff/
+            out/render-check/
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      # Gradle's own distribution, the dependencies and its build cache from main's last run: cold, the first build's
+      # Gradle was ~90 s of the job's ~150 (written on main only, read on branches)
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: ./.github/actions/moonbit
+      - name: "The differential text test's APK (APP=textdiff; it runs on an emulator, scripts/textdiff.sh android)"
+        run: APP=textdiff scripts/android.sh build
+      - name: APK (libmbui.so from the generated C, then Gradle)
+        run: scripts/android.sh build
+      - name: "The split's self-check: the app's C whole and split define the same symbols (scripts/mbc.py check)"
+        run: |
+          TC=$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+          python3 scripts/mbc.py check "--cc=$TC/aarch64-linux-android29-clang" --nm="$TC/llvm-nm" --obj=out/mbc-check \
+            "--cflags=-I$MOON_HOME/include -Isrc/host -fPIC -fwrapv -fno-strict-aliasing -Wno-unused-value -O2 -DMOONBIT_ALLOCATOR=MOONBIT_ALLOCATOR_SYSTEM -Dmain=mbui_main" \
+            out/android/mod/_build/native/release/build/demo/demo.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/*.apk

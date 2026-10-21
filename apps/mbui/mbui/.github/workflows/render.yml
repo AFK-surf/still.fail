@@ -1,0 +1,75 @@
+# The renderer's pixels (docs/determinism.md, "Pixel references belong to one machine"): a Tester's draw list drawn
+# offscreen on Mini1 (mbui's runner there, label mbui-render), against its reference (goldens/render/mini1-*.png) to
+# the byte, on the macOS and GPU the references were made on (goldens/render/mini1.txt). The pictures drawn are the
+# artifact: what a PR that changes them commits, saying which and why.
+name: render
+on:
+  pull_request:
+    paths:
+      - "src/host/apple_render.m"
+      - "src/host/apple_text.m"
+      - "src/render/**"
+      - "src/ui/drawlist.mbt"
+      - "src/ui/scene.mbt"
+      - "src/ui/line.mbt"
+      - "scripts/lines_check.py"
+      - "src/kitdemo/dl_print_wbtest.mbt"
+      - "src/ui/smooth.mbt"
+      - "src/host/corner*"
+      - "goldens/render/**"
+      - "scripts/render_offscreen.sh"
+      - ".github/workflows/render.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/host/apple_render.m"
+      - "src/host/apple_text.m"
+      - "src/render/**"
+      - "src/ui/drawlist.mbt"
+      - "src/ui/scene.mbt"
+      - "src/ui/line.mbt"
+      - "scripts/lines_check.py"
+      - "src/kitdemo/dl_print_wbtest.mbt"
+      - "src/ui/smooth.mbt"
+      - "src/host/corner*"
+      - "goldens/render/**"
+  workflow_dispatch:
+
+concurrency:
+  group: render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offscreen:
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/moonbit
+      - name: A Tester's draw list drawn offscreen (scripts/render_offscreen.sh)
+        run: scripts/render_offscreen.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: render
+          path: out/render/
+      - name: The macOS and the GPU the references were made on
+        run: |
+          for k in system gpu; do
+            want=$(sed -n "s/^$k //p" goldens/render/mini1.txt)
+            have=$(sed -n "s/^$k //p" out/render/machine.txt)
+            if [ "$want" != "$have" ]; then
+              echo "$k is $have here, the references were made on $want: make them all again in one PR (this run's artifact), saying so"
+              exit 1
+            fi
+          done
+      - name: Against the references, to the byte
+        run: |
+          if cmp -s out/render/controls.png goldens/render/mini1-controls.png; then
+            echo "the same to the byte"
+          else
+            echo "goldens/render/mini1-controls.png: not what Mini1 draws now (this run's artifact has it)"
+            exit 1
+          fi

@@ -1,0 +1,10 @@
+# The renderer's pixel references in the browser (docs/determinism.md): made and checked on GitHub's ubuntu-24.04 runner,
+# headless Chromium (Playwright pinned in scripts/render_web.sh) on SwiftShader. Checked: the browser and the system's
+# fonts (their files' bytes); the rest is said. Either new: every reference made again in one PR (the render-web
+# workflow's artifact), said there.
+image ubuntu24 20261012.334.1
+browser chromium 156.0.8078.4
+fonts 4f279073189384e785fa2de97d0ffc9b
+gl ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)
+system Ubuntu 24.04.5 LTS 6.17.0-1022-azure
+cpu AMD EPYC 7763 64-Core Processor

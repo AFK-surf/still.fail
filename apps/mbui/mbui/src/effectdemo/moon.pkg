@@ -1,0 +1,10 @@
+import {
+  "mbui/effect",
+  "mbui/ui",
+  "moonbitlang/core/string",
+}
+
+import {
+  "mbui/effect",
+  "moonbitlang/core/env",
+} for "test"

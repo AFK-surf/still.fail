@@ -1,0 +1,115 @@
+# The host's and the text's contracts on macOS (docs/determinism.md, "What is compared, and where"; scripts/
+# host_contract.sh), on Mini1 (mbui's runner there, label mbui-render): kitdemo's controls page run in a window with its
+# scripted taps, its tape made a Tester's test and run here (every frame the same), then the tape Mini1 kept
+# (mini1_controls) asked of Core Text again (every answer the same). When the macOS host changes.
+name: host-mac
+on:
+  pull_request:
+    paths: &paths
+      - "src/ui/native.mbt"
+      - "src/kitdemo/viewcheck.mbt"
+      - "src/host/apple_*"
+      - "src/host/apple.h"
+      - "src/host/mac_app.m"
+      - "src/host/done_watch.h"
+      - "src/ui/drive.mbt"
+      - "scripts/done_runner.py"
+      - "scripts/mac.sh"
+      - "scripts/host_contract.sh"
+      - "scripts/textrec_test.py"
+      - "test/host/**"
+      - "src/kitdemo/textcheck.mbt"
+      - "src/kitdemo/textrec_mini1_*"
+      - ".github/workflows/host-mac.yml"
+      - "src/host/marks.mbt"
+      - "src/host/host_native.mbt"
+      - "src/kitdemo/markscheck.mbt"
+      - "src/kitdemo/main.mbt"
+      - "test/marks/**"
+      - "goldens/marks/mac*"
+      - "src/host/moon.pkg"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: host-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    # (a machine of ours: never a fork's pull request)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, mbui-render]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        # (the merge commit and its base: what changed is told by them, scripts/ci_paths.py)
+        with: { fetch-depth: 2 }
+      - name: What changed (a pull request runs the contracts its files touch)
+        id: f
+        if: github.event_name == 'pull_request'
+        env:
+          FILTERS: |
+            host:
+              - "src/ui/native.mbt"
+              - "src/kitdemo/viewcheck.mbt"
+              - "src/host/apple_*"
+              - "src/host/apple.h"
+              - "src/host/mac_app.m"
+              - "src/host/done_watch.h"
+              - "src/ui/drive.mbt"
+              - "scripts/done_runner.py"
+              - "scripts/mac.sh"
+              - "scripts/host_contract.sh"
+              - "scripts/textrec_test.py"
+              - "test/host/**"
+              - "src/kitdemo/textcheck.mbt"
+              - "src/kitdemo/textrec_mini1_*"
+              - ".github/workflows/host-mac.yml"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/main.mbt"
+              - "src/host/moon.pkg"
+            marks:
+              - "src/host/apple_views.m"
+              - "src/host/apple.h"
+              - "src/host/mac_app.m"
+              - "src/host/marks.mbt"
+              - "src/host/host_native.mbt"
+              - "src/kitdemo/markscheck.mbt"
+              - "src/kitdemo/main.mbt"
+              - "test/marks/**"
+              - "goldens/marks/mac*"
+              - "scripts/mac.sh"
+              - "scripts/host_contract.sh"
+              - ".github/workflows/host-mac.yml"
+              - "src/host/moon.pkg"
+        run: python3 scripts/ci_paths.py
+      - uses: ./.github/actions/moonbit
+      - name: kitdemo
+        run: scripts/host_contract.sh mac build
+      - name: "The host's contract: a run's tape = a Tester's frames"
+        if: steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac record
+      - name: "The text's contract: mini1_controls = Core Text's"
+        if: steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac text
+      - name: "The native views' contract: one placed between pixels is put where it was told, on whole device pixels"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac views
+      - name: "The pages' contract: a page says to the app, runs its scripts, keeps cookies, takes an event stream as it is sent"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac site
+      - name: "The runner's contract: a file written in the run's directory is told as it comes (done X)"
+        if: (success() || failure()) && steps.f.outputs.host != 'false'
+        run: scripts/host_contract.sh mac runner
+      - name: "The marks' contract: test/marks drawn by Core Graphics = goldens/marks/mac.png"
+        if: (success() || failure()) && steps.f.outputs.marks != 'false'
+        run: scripts/host_contract.sh mac marks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: host-mac
+          path: out/host/
+          if-no-files-found: ignore

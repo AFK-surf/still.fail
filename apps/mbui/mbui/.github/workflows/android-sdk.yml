@@ -1,0 +1,73 @@
+# What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
+# build the references were made with (16428233, from Google's repository as a zip) and the API 34 x86_64 system
+# images, each by its revision (sdkmanager's, here alone). Asked each day; what is in already, nothing done. A download
+# that breaks off fails this run alone, the jobs going on with what is in.
+name: android-sdk
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: &paths
+      - ".github/workflows/android-sdk.yml"
+      - ".github/actions/android-emulator/**"
+  # (a change to it tried on its pull request: what it puts in is that pull request's own)
+  pull_request:
+    paths: *paths
+
+jobs:
+  put:
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [google_apis, default]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/cache/restore@v4
+        id: emu
+        with:
+          path: ~/android-emu
+          key: android-emulator-16428233
+          lookup-only: true
+      - name: The emulator's build 16428233
+        if: steps.emu.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/android-emu && cd ~/android-emu
+          curl -fsSL --retry 3 -o emu.zip https://dl.google.com/android/repository/emulator-linux_x64-16428233.zip
+          unzip -q emu.zip && rm emu.zip
+          grep -a '^Pkg.Revision' emulator/source.properties
+      - if: steps.emu.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/android-emu
+          key: android-emulator-16428233
+      - name: The system image's latest revision
+        id: rev
+        run: |
+          sdk=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          yes | $sdk --licenses > /dev/null || true
+          $sdk --install "system-images;android-34;${{ matrix.target }};x86_64" --channel=0 > /dev/null
+          rev=$(sed -n 's/^Pkg.Revision=//p' $ANDROID_HOME/system-images/android-34/${{ matrix.target }}/x86_64/source.properties)
+          [ -n "$rev" ] || { echo "::error::no revision for the image"; exit 1; }
+          echo "key=android-image-34-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
+          echo "revision $rev"
+      - uses: actions/cache/restore@v4
+        id: img
+        with:
+          path: /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
+          key: ${{ steps.rev.outputs.key }}
+          lookup-only: true
+      - if: steps.img.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
+          key: ${{ steps.rev.outputs.key }}
+      # (what a job gets: the action over what was put in, booted)
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: .github/actions }
+      - name: Boot once (the action as the jobs take it)
+        run: sudo rm -rf /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
+      - uses: ./.github/actions/android-emulator
+        with: { target: "${{ matrix.target }}", profile: pixel_7 }

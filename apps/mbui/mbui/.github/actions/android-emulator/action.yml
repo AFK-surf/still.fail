@@ -1,0 +1,37 @@
+# An x86_64 emulator for a job, from what the android-sdk workflow put in the Actions cache (the emulator's build, the
+# system image): nothing downloaded here, no sdkmanager (its downloads broke off: "Error on ZipFile unknown archive",
+# 39488765905, 39467847598, 39476088429; the emulator's: HTTP/2 INTERNAL_ERROR, 39499976531). Either not in the cache:
+# the job fails saying so (run the android-sdk workflow). Booted, the steps after it have it as emulator-5554.
+name: Android emulator
+description: An emulator from the cache the android-sdk workflow fills, booted
+inputs:
+  target:
+    description: The system image's target (google_apis, default)
+    required: true
+  profile:
+    description: The device (avdmanager's -d)
+    required: true
+  animations:
+    description: "'false': the system's animations off"
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache/restore@v4
+      id: emu
+      with:
+        path: ~/android-emu
+        key: android-emulator-16428233
+    - uses: actions/cache/restore@v4
+      id: img
+      with:
+        path: /usr/local/lib/android/sdk/system-images/android-34/${{ inputs.target }}/x86_64
+        key: android-image-34-${{ inputs.target }}-x86_64-none
+        restore-keys: android-image-34-${{ inputs.target }}-x86_64-
+    - shell: bash
+      env:
+        TARGET: ${{ inputs.target }}
+        PROFILE: ${{ inputs.profile }}
+        ANIMATIONS: ${{ inputs.animations }}
+        IMG: ${{ steps.img.outputs.cache-matched-key }}
+      run: bash "$GITHUB_ACTION_PATH/boot.sh"

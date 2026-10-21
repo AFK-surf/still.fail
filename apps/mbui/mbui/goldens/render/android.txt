@@ -1,0 +1,9 @@
+# The renderer's pixel references on Android (docs/determinism.md): made and checked on GitHub's ubuntu-24.04 runner, in an
+# x86_64 emulator on SwiftShader, offscreen. Checked: the emulator, the system image and its build (all the drawing is
+# theirs); the rest is said. Any new: every reference made again in one PR (the render-android workflow's artifact).
+image ubuntu24 20261012.334.1
+emulator 37.2.12
+system android-34/default/x86_64 2
+build Android/sdk_phone64_x86_64/emu64x:14/UE1A.230829.036.A1/11228894:userdebug/test-keys
+gl Google (Google Inc.), Android Emulator OpenGL ES Translator (Google SwiftShader), OpenGL ES 3.0 (OpenGL ES 3.0 SwiftShader 4.0.0.1)
+cpu INTEL(R) XEON(R) PLATINUM 8573C

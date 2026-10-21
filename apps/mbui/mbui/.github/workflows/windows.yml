@@ -1,0 +1,134 @@
+# The demo on Windows: build with MoonBit and MSVC, take the scripted
+# screenshot (Direct3D falls back to WARP on the GPU-less runner), and compare
+# it with goldens/windows.png when there is one; then the text against
+# DirectWrite's own.
+name: windows
+on:
+  push:
+    branches: [main, windows, images-android-win]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      stillfail_ref:
+        description: "also build still.fail's apps/mbui sffix (AFK-surf/still.fail at this ref) and shoot its wide frame"
+        required: false
+        default: ""
+
+jobs:
+  demo:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
+      # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
+      # key, installed as before.
+      - uses: ./.github/actions/moonbit
+      - name: Build
+        run: |
+          moon version --all
+          scripts/win.sh build
+          echo "binary: $(stat -c %s out/win/mod/_build/native/release/build/demo/demo.exe) bytes"
+      - name: Screenshot
+        run: |
+          scripts/win.sh shot
+          ls -la out/shot-win
+      - name: IME script
+        run: scripts/win.sh script ime
+      - name: Compare with the golden
+        run: |
+          mkdir -p out/shots
+          cp out/shot-win/main.png out/shots/windows.png
+          if [ -f goldens/windows.png ]; then
+            mkdir -p out/node && cd out/node && npm init -y >/dev/null && npm i pngjs pixelmatch >/dev/null && cd ../..
+            node scripts/imgdiff.mjs goldens/windows.png out/shots/windows.png out/shots/windows-review.png
+          else
+            echo "no goldens/windows.png yet"
+          fi
+      - name: Text against DirectWrite's own (scripts/textdiff.sh windows; the report is in the artifact)
+        run: |
+          mkdir -p out/node && (cd out/node && { [ -f package.json ] || npm init -y >/dev/null; } && npm i pngjs >/dev/null)
+          scripts/textdiff.sh windows
+      - name: Web views (WebView2) - a page, a site the app answers, and with no runtime to be had
+        run: |
+          APP=webdemo scripts/win.sh build
+          mkdir -p out/webviews
+          D=$(cygpath -w "$PWD/out/webviews")
+          EXE=out/win/mod/_build/native/release/build/webdemo/webdemo.exe
+          MBUI_SHOT_SCREEN=1 MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=webviews MBUI_SHOT_DIR="$D" ./$EXE 2>&1 | tee out/webviews/webviews.log
+          # the runtime looked for where there is none (as on a machine without it): every view says it cannot be shown
+          MBUI_WEBVIEW2_DIR='C:\no-webview2-here' MBUI_BENCH=-1 MBUI_SCRIPT=shot MBUI_SHOT_NAME=webviews-none \
+            MBUI_SHOT_DIR="$D" ./$EXE 2>&1 | tee out/webviews/webviews-none.log
+          for want in "view 1: page loaded" "view 2: site page loaded" "view 1: told 1" "view 2: told 0" "view 2: told 1" \
+                      "site asked GET /style.css" "site asked POST /api/echo (page false, body 7 bytes)" "SHOT .* ok"; do
+            grep -q "$want" out/webviews/webviews.log || { echo "webviews.log: no \"$want\""; exit 1; }
+          done
+          grep -q "no WebView2 runtime" out/webviews/webviews-none.log || { echo "webviews-none.log: the runtime was found"; exit 1; }
+          grep -q "SHOT .* ok" out/webviews/webviews-none.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-shots
+          path: |
+            out/webviews/
+            out/shots/
+            out/shot-win/
+            out/shot-kit/
+            out/ime/
+            out/photos/
+            out/textdiff/
+          if-no-files-found: warn
+
+  # still.fail's app over made-up data (its apps/mbui sffix, against this mbui), asked for by a run's stillfail_ref:
+  # its wide frame (a desktop's window) and a phone's page, light and dark, for comparing with macOS's.
+  stillfail:
+    if: github.event_name == 'workflow_dispatch' && inputs.stillfail_ref != ''
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: AFK-surf/still.fail
+          ref: ${{ inputs.stillfail_ref }}
+          path: sf
+          sparse-checkout: apps/mbui
+      - uses: ilammy/msvc-dev-cmd@v1
+      # MoonBit's latest release, kept in the Actions cache by the ETags of its two downloads (the binaries and the
+      # core, a HEAD each): installed (~16 s, most of it bundling the core) only when either changed. No answer: no
+      # key, installed as before.
+      - uses: ./.github/actions/moonbit
+      - name: Build sffix
+        run: MBUI_APP_MOD=sf/apps/mbui APP=sffix scripts/win.sh build
+      - name: Screenshots
+        run: |
+          mkdir -p out/shot-sf
+          D=$(cygpath -w "$PWD/out/shot-sf")
+          EXE=$(ls out/win/app/_build/native/release/build/*/sffix/sffix.exe)
+          for m in home chat settings-appearance files; do
+            for d in 0 1; do
+              n=win-wide-$m$([ $d = 1 ] && echo -dark || true)
+              MBUI_BENCH=-1 MBUI_WIN=1280x800 MBUI_DARK=$d MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=$n MBUI_SHOT_DIR="$D" ./$EXE
+            done
+          done
+          MBUI_BENCH=-1 MBUI_WIN=1440x900 MBUI_FIXTURE=chat MBUI_SCRIPT=shot MBUI_SHOT_NAME=win-wide-chat-1440 MBUI_SHOT_DIR="$D" ./$EXE
+          MBUI_BENCH=-1 MBUI_WIN=390x844 MBUI_SCRIPT=shot MBUI_SHOT_NAME=win-phone-home MBUI_SHOT_DIR="$D" ./$EXE
+          # its web views (WebView2): a service's page the app answers, an HTML file previewed
+          for m in service chat-preview-html; do
+            MBUI_SHOT_SCREEN=1 MBUI_BENCH=-1 MBUI_WIN=1280x800 MBUI_FIXTURE=$m MBUI_SCRIPT=shot MBUI_SHOT_NAME=win-wide-$m \
+              MBUI_SHOT_DIR="$D" ./$EXE 2>&1 | tee out/shot-sf/win-wide-$m.log
+          done
+          ls -la out/shot-sf
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stillfail-windows-shots
+          path: out/shot-sf/
+          if-no-files-found: warn

@@ -1,0 +1,7 @@
+# The kit's controls page (MBUI_SCREEN=controls) for the host's contract (scripts/host_contract.sh): four taps, each
+# on what its words name, then the run's end (DRIVE PASS: what the script waits for).
+tap Center
+tap Accept terms
+tap Small
+tap Italic
+exit
