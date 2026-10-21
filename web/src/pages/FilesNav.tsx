@@ -12,7 +12,7 @@ import type { StationView } from "../core/shapes.ts";
 import { stationBase } from "../station.tsx";
 import { useThisMachineAddress } from "../thisMachine.ts";
 import { ICON, Tip } from "../ui.tsx";
-import { ChevronRight, Close, Disk, Folder, Monitor, Pin, Plus, Server } from "@stillfail/ui/icons.tsx";
+import { ChevronRight, Close, Disk, Folder, Monitor, Pin, Plus, Server, Star } from "@stillfail/ui/icons.tsx";
 import { NavAction, NavItem, NavList, NavSection, NavTop } from "../SidebarList.tsx";
 import { drive, drivePath, folderName, type PickFolder } from "../drive/useDrive.ts";
 import { carriesDrive, draggedNow, droppedOf } from "../drive/drag.ts";
@@ -167,7 +167,7 @@ export function FilesNav({ scope, top }: { scope: string; top?: ReactNode }) {
         {withDrive.length === 0 && <p className={css.empty}>{t("web-main.rail.filesNone")}</p>}
         <div className={css.keep} data-over={keeping || undefined} {...keepDrop}>
           <NavSection title={t("web-pages.files.favorites")}>
-            {fav.list.length === 0 && <p className={css.hint}>{t("web-pages.files.favoritesHint")}</p>}
+            {fav.list.length === 0 && <p className={css.hint}><Star {...ICON} />{t("web-pages.files.favoritesHint")}</p>}
             {fav.list.map((f) => {
               const s = views.find((v) => v.station === f.station);
               if (!s) return null;

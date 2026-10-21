@@ -6,7 +6,9 @@ import { STILL, stillLoop } from "@stillfail/ui/styles/still.ts";
 
 /** Not a settings page: its head up by the window's top, its name level with the sidebar's first row, the files close under it. */
 export const page = style({ position: "relative", selectors: { [`${settingsPage}&`]: { paddingTop: "12px" } } });
-globalStyle(`${page} > ${pageHead}`, { marginBottom: "12px" });
+// Kept at the top as the folder scrolls (as Finder's path bar stays): where it is and what can be done to it, on the
+// page's ground, what scrolls passing under it.
+globalStyle(`${page} > ${pageHead}`, { position: "sticky", top: "0", zIndex: "2", marginBottom: "0", paddingBottom: "12px", background: vars.canvas });
 // As wide as the page, up to where a row's name and its size and time still read as one line.
 globalStyle(`${page} > *`, { maxWidth: "1120px" });
 

@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import * as listCss from "../SidebarList.css.ts";
 
 /** A folder's row that takes a drop: ringed in the accent while something it takes is over it, saying what a drop does. */
 export const drop = style({
@@ -12,7 +13,13 @@ export const dropSays = style({
 });
 
 export const empty = style({ margin: "8px 12px", color: vars.muted, fontSize: vars.textMeta });
-export const hint = style({ margin: "2px 12px 6px", color: vars.subtle, fontSize: vars.textMeta });
+/** Where favourites go while there are none: a row of the list, as a favourite's is laid out (its mark, then its
+ * words where a name would be), faint. */
+export const hint = style({
+  display: "flex", alignItems: "center", gap: "8px", margin: "0", padding: "7px 10px", lineHeight: "20px",
+  color: vars.subtle, fontSize: vars.textUi,
+});
+globalStyle(`${hint} svg`, { flex: "none", color: vars.subtle });
 /** 个人收藏: ringed while a folder dragged over it would be kept there. */
 export const keep = style({ borderRadius: vars.rNav, selectors: { "&[data-over]": { boxShadow: `inset 0 0 0 1px ${vars.accent}` } } });
 export const favorite = style({ position: "relative" });
@@ -26,6 +33,8 @@ export const station = style({ display: "grid" });
 /** A station's line: its disclosure, then its row (its home). */
 export const stationLine = style({ position: "relative", display: "flex", alignItems: "center" });
 globalStyle(`${stationLine} > :last-child`, { flex: "1", minWidth: "0" });
+// Its end (This machine, the disk bar) is short and whole: the row's 45% cap would cut the bar off after the badge.
+globalStyle(`${stationLine} ${listCss.end}`, { maxWidth: "none" });
 export const disclosure = style({
   position: "absolute", left: "-2px", top: "50%", zIndex: "1", transform: "translateY(-50%)", display: "grid", placeItems: "center",
   width: "16px", height: "20px", padding: "0", border: "0", background: "none", color: vars.subtle, cursor: "pointer",
@@ -41,3 +50,6 @@ globalStyle(`${disk}[data-full] > span`, { background: vars.amber });
 /** A station's places, in under it. */
 export const places = style({ paddingLeft: "14px" });
 export const reading = style({ margin: "4px 12px 6px 22px", color: vars.subtle, fontSize: vars.textMeta });
+// Rows next to each other never touch (Sidebar.css.ts navRow): here each is in a box of its own (a drop, a station),
+// so the 2px goes between the boxes.
+globalStyle(`:is(${drop}, ${station}, ${favorite}) + :is(${drop}, ${station}, ${favorite})`, { marginTop: "2px" });

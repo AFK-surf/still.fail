@@ -8,6 +8,7 @@
 // The reader and the player are pages of their own (`files/read`, `files/play`); images, PDFs and code open in the
 // chat's preview over the page. The phone's pages are ../mobile/Drive.tsx, with the same parts under them.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Navigate, useLocation, useSearchParams } from "react-router";
 import { ContextMenu } from "radix-ui";
 import { scopeOf, stationBase, useStation } from "../station.tsx";
@@ -382,8 +383,28 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
     const under = abs === root ? "" : abs.startsWith(root.endsWith("/") ? root : `${root}/`) ? abs.slice(root.length).replace(/^\/+/, "") : null;
     go(under !== null ? drivePath(station.base, root, under) : drivePath(station.base, abs));
   };
+  // What can be done to the folder: on the files' page in its bar over the tabs, for the side in front (as Finder's
+  // toolbar is the window's), else at the head's end.
+  const toBar = filesPage?.bar ?? null;
+  const actions = (
+    <div className={css.actions}>
+      <ViewSwitch value={view} onChange={setView} />
+      <span className={css.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
+      {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
+      {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={newFolder} />}
+      <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
+      <span className={css.pin} data-on={kept || undefined}><IconButton label={t(kept ? "web-pages.files.unfavorite" : "web-pages.files.favorite", { name })} icon={Star} onClick={() => keepHere(!kept)} /></span>
+      {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
+      <Menu items={[
+        { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(here) },
+        ...(filesPage ? [{ label: t("web-pages.files.goTo"), icon: Search, onSelect: filesPage.goTo }] : []),
+        ...(d.manage || d.anywhere ? [{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }] : []),
+      ]} />
+    </div>
+  );
   return (
     <>
+      {toBar && front && createPortal(actions, toBar)}
       <header className={pagesCss.pageHead}>
         <div className={css.headText}>
           {/* Its station (another one picked from there), then the way back up: from the home or the disk's top for a
@@ -408,20 +429,7 @@ export function FolderView({ d, root, path, front = true }: { d: DriveState; roo
             {folder.value && <> · {folder.value.countText}{folder.value.truncated ? ` · ${t("web-pages.drive.truncated")}` : ""}</>}
           </p>
         </div>
-        <div className={css.actions}>
-          <ViewSwitch value={view} onChange={setView} />
-          <span className={css.pin} data-on={previewing || undefined}><IconButton label={t(previewing ? "web-pages.files.hidePreview" : "web-pages.files.showPreview")} icon={previewing ? PanelClose : PanelOpen} onClick={() => setPreviewing(!previewing)} /></span>
-          {d.write && <IconButton label={t("web-pages.drive.upload")} icon={Upload} onClick={() => files.current?.click()} />}
-          {d.write && <IconButton label={t("web-pages.drive.mkdir")} icon={FolderPlus} onClick={newFolder} />}
-          <span className={css.spin} data-on={refreshing || undefined}><IconButton label={t("web-pages.drive.refresh")} icon={Refresh} onClick={reload} /></span>
-          <span className={css.pin} data-on={kept || undefined}><IconButton label={t(kept ? "web-pages.files.unfavorite" : "web-pages.files.favorite", { name })} icon={Star} onClick={() => keepHere(!kept)} /></span>
-          {d.anywhere && <span className={css.pin} data-on={pinned || undefined}><IconButton label={t(pinned ? "web-pages.drive.unpin" : "web-pages.drive.pin")} icon={Pin} onClick={() => pin(here, !pinned)} /></span>}
-          <Menu items={[
-            { label: t("web-pages.drive.copyPath"), icon: Copy, onSelect: () => copyPath(here) },
-            ...(filesPage ? [{ label: t("web-pages.files.goTo"), icon: Search, onSelect: filesPage.goTo }] : []),
-            ...(d.manage || d.anywhere ? [{ label: t("web-pages.drive.manage"), icon: Folder, onSelect: manage.open }] : []),
-          ]} />
-        </div>
+        {!toBar && actions}
       </header>
       <div className={css.withPane} data-pane={previewing || undefined}>
       <ContextMenu.Root modal={false}>
