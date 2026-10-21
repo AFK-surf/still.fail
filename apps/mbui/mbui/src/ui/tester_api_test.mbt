@@ -17,6 +17,11 @@ test "a test finds words as a scripted run does, reads and pastes into the focus
   t.tap_text("words")
   t.paste("pasted words")
   assert_eq(t.field_words(), "pasted words")
+  // a field found by the words in it (field:), by its placeholder otherwise
+  t.draw()
+  assert_eq(t.locate("field:pasted words").length(), 1)
+  assert_eq(t.locate("pasted").length(), 0)
+  assert_eq(t.locate("words").length(), 1)
   assert_true(t.key_named("shift+enter"))
   assert_true(t.key_named("cmd+a"))
   assert_false(t.key_named("hyper+q"))

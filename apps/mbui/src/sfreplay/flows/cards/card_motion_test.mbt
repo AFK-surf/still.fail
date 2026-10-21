@@ -20,11 +20,19 @@ test "70-card-motion" {
     // answered (decision.answer): the options fade and shrink to 90% on their 200 ms from the frame that took the
     // chat's change saying the card decided (its `chosen`: messages.mbt's `resolved`), their room closing on the rows'
     // spring after them; how it went comes in their place, its room opening
-    f.until_moving("under-look/options/") |> ignore
+    // (the change can come with the tap's own frame, from a station that answers at once: its motion said there)
+    if !f.t.moving().iter().any(fn(l) { l.contains("under-look/options/") }) {
+      f.until_moving("under-look/options/") |> ignore
+    }
     let from = f.message_taken(fn(m) { m.stringify().contains("\"chosen\"") })
-    assert_eq(f.t.rest_of("under-look/options/"), from + @sfapp.options_out_ms)
-    assert_true(f.t.rest_of("under/options/") > from + @sfapp.options_out_ms)
-    assert_true(f.t.rest_of("under/outcome/") > from)
+    // (checks: while a script is written over a trace the app has outgrown, said and the steps after written all the
+    // same)
+    f.check(
+      f.t.rest_of("under-look/options/") == from + @sfapp.options_out_ms,
+      "the options at rest at \{f.t.rest_of("under-look/options/")}, not \{from + @sfapp.options_out_ms}",
+    )
+    f.check(f.t.rest_of("under/options/") > from + @sfapp.options_out_ms, "their room closes after them")
+    f.check(f.t.rest_of("under/outcome/") > from, "how it went comes in their place")
     // (their shrinking to 90% not checked here: Tester::look_of by words takes the first node holding them, and the
     // message sent, card: and all, holds the option's words before the option does)
     f.run_to(@sfapp.under_rest())

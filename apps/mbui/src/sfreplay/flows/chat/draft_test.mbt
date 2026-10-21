@@ -10,8 +10,9 @@ test "06-draft" {
     f.see("=studio")
     f.tap("发消息")
     f.type_text("还没发出去的草稿 082947")
-    // kept a moment after the change
+    // kept a moment after the change, by the core (the next run, 07, finds it there)
     f.run_for(@sfapp.draft_keep_ms)
+    f.answered("draft.put", 1)
     f.tap("icon:chevron-left")
     f.run_for(@ui.nav_push_ms)
     f.see("端到端测试")

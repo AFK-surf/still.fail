@@ -143,11 +143,22 @@ fn emit_answered(names : Array[String]) -> Unit {
   match script.val {
     Some(_) =>
       for n in names {
-        emit("answered " + n)
+        if !unawaited.contains(n) {
+          emit("answered " + n)
+        }
       }
     None => ()
   }
 }
+
+///|
+/// Calls a scripted run does not wait for after a step: the app makes them by its own clock, not by the step
+/// (session.warm: once a minute while typing, composer.mbt; draft.put: a moment after the words last changed), so a
+/// trace's run at another pace made them where this one does not (a run re-recorded from a trace whose replies came
+/// slower: its second message warmed again, the live one's a second later does not). A flow that needs one waits for
+/// it by name (Flow::answered).
+// kept across runs: a value (nothing is added to it)
+let unawaited : Array[String] = ["session.warm", "draft.put"]
 
 ///|
 /// The script written's `answered CALL` lines up to `n` of them (the run's n-th answer: drive counts them from the

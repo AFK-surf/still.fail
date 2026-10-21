@@ -646,7 +646,10 @@ pub fn Flow::run_to(self : Flow, end : Double) -> Unit {
   }
   let now = self.t.time()
   if end > now {
-    // (in a scripted run, nothing: its steps after wait for what they look for, not for this motion's end)
+    // (in a scripted run, the same length on its clock, as run_for writes it: a step after it at once looks for what
+    // is there then, not for a page still sliding in over the one it leaves (two ＋ in a bar, the lower page's taken)
+    // or a sheet still going down over what is under it)
+    emit_wait(end - now)
     self.t.run_for(end - now)
   }
   self.core()

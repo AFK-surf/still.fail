@@ -354,6 +354,16 @@ fn under_another(c : Ctx, i : Int, x : Double, y : Double) -> Bool {
 }
 
 ///|
+/// The words a field holds, as it shows them (a secret one's masked): what `field:WORDS` looks for (a field's own text
+/// node is its placeholder).
+fn field_words_of(c : Ctx, n : Node) -> String {
+  match c.editors.get(n.id) {
+    Some(st) => st.shown()
+    None => ""
+  }
+}
+
+///|
 /// The words looked for on screen with their node: (x, y, node, where they are: x0 y0 x1 y1).
 fn on_screen_nodes(
   c : Ctx,
@@ -368,6 +378,11 @@ fn on_screen_nodes(
   } else {
     None
   }
+  let field = if what.has_prefix("field:") && what.length() > 6 {
+    Some(what.unsafe_substring(start=6, end=what.length()))
+  } else {
+    None
+  }
   let exact = if what.has_prefix("=") && what.length() > 1 {
     Some(what.unsafe_substring(start=1, end=what.length()))
   } else {
@@ -379,9 +394,14 @@ fn on_screen_nodes(
       Some(k) => n.kind == kind_image && n.text.contains(k)
       None =>
         (n.kind == kind_text || n.kind == kind_rich || n.kind == kind_editor) &&
-        (match exact {
-          Some(e) => n.text == e
-          None => n.text.contains(what)
+        (match field {
+          // a field by the words in it (`field:WORDS`), not its placeholder
+          Some(w) => n.kind == kind_editor && field_words_of(c, n).contains(w)
+          None =>
+            match exact {
+              Some(e) => n.text == e
+              None => n.text.contains(what)
+            }
         })
     }
     if hit && n.fw > 0.0 && n.fh > 0.0 && !c.in_draw_only(i) {

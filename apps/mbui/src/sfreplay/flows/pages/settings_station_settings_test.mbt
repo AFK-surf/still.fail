@@ -22,11 +22,12 @@ test "82-station-settings" {
     f.see("已保存")
     f.toast_gone()
     f.see("E2E_PROXY_080726")
-    // taken away again: the field (its words are no text a step finds) under the sheet's note
+    // taken away again: the field by its words, once the station's text is in it (the page's line under the sheet is
+    // not to be pressed)
     f.tap("编辑变量")
     f.run_to(@kit.sheet_rest("settings-sheet"))
     f.see("Agent 环境变量")
-    f.tap_at(195.0, 304.0)
+    f.tap("field:E2E_PROXY_080726=http")
     f.clear()
     f.tap("=保存")
     // said as it shows, and its time out before 检查更新 is pressed where it shows (a toast waits while the pointer is

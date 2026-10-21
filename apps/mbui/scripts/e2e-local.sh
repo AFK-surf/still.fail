@@ -103,12 +103,14 @@ native() { (cd $E && node scripts/native.ts file $1); }
 # the cloud (cloud/test/dev.ts) over what it holds in $RUN/cloud-state; RESUME=1 (a starting point put back): the same
 # cloud again, nothing made anew
 start_cloud() {
-  # (emptied here, before the wait reads it: the background start's own `>` comes when that process gets to it, and a
-  # wait that reads first saw the last run's READY, under load on Mini1, 2026-10-20)
-  : > $RUN/cloud.log
+  # (its output read from its pipe as it comes (waitfor.mjs --tee), into cloud.log, and its READY line made a file of its
+  # own, cloud.ready: a file made is told to the waiting side as it is made; a log another process writes to is not
+  # always (GitHub's macOS runner: the READY line in cloud.log, its write never told, 2026-10-21))
+  rm -f $RUN/cloud.ready
   (cd $E/cloud && PORT=$PORT ADMIN_PORT=$((PORT + 2)) RELAY=http://127.0.0.1:$RELAY_PORT PERSIST=$RUN/cloud-state \
-    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach pnpm exec tsx test/dev.ts >$RUN/cloud.log 2>&1 & echo $! > $RUN/cloud.pid)
-  waitfor 120 --what "the cloud's READY line" --log $RUN/cloud.log --line 'READY still.fail cloud' || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
+    AUTH_KEY=$(cat $RUN/auth-key) RESUME=${1:+1} detach node "$D/waitfor.mjs" --tee $RUN/cloud.log \
+    --line 'READY still.fail cloud' --mark $RUN/cloud.ready -- pnpm exec tsx test/dev.ts & echo $! > $RUN/cloud.pid)
+  waitfor 120 --what "the cloud's READY line" --exists $RUN/cloud.ready || { tail -20 $RUN/cloud.log; die "the cloud did not start"; }
 }
 
 # the test station (enrolled), its launcher over its own data

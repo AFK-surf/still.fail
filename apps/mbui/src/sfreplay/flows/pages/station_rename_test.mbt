@@ -16,8 +16,9 @@ test "35-station-rename" {
     for name in ["e2e-082939", "studio"] {
       f.tap("icon:more")
       f.run_to(@kit.sheet_rest("settings-sheet"))
-      // (the menu's 重命名, the higher: the rename sheet before may still be sinking under it, its title the same words)
-      f.tap("重命名", top=true)
+      // (the menu's 重命名, the higher: the rename sheet before may still be sinking under it, its title the same words;
+      // the words alone, not 已重命名 said above the menu by the rename before, which a scripted run took for it)
+      f.tap("=重命名", top=true)
       f.run_to(@kit.sheet_rest("settings-sheet"))
       f.see("station 名称")
       f.clear()
