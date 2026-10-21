@@ -404,6 +404,9 @@ export function lockView(inner: Inner, ws: string): J {
   const renew = members.flatMap((m) => (m.you ? m.devices.filter((d) => d.renewSoon) : []));
   const dismissed = get(get(inner.data.shared({ topic: "prefs" }), "lockNotice"), ws) === true;
   const signs = mine !== undefined && typeof mine.sign_key === "string" && mine.sign_key === signer;
+  // An app in the lock that does not sign with its key (let in before it kept one, as the devices there when the lock
+  // was turned on were; or its key since lost): it may be made one that signs, approved face to face as a new one is.
+  const unsigned = locked && mine !== undefined && mine.kind === "app" && inner.host.appKeys === true && signers.has(inner) && !signs;
   return {
     available: true,
     locked,
@@ -425,8 +428,9 @@ export function lockView(inner: Inner, ws: string): J {
       failed: locked && mine === undefined ? (p.failed?.message ?? null) : null,
       // Not in the lock: it waits to be confirmed, and asks by hand.
       waiting: locked && base !== null && mine === undefined,
+      ...(unsigned ? { unsigned: true } : {}),
       // Its try to be approved face to face (views/pair.ts), once it began.
-      pair: locked && mine === undefined ? pairs.mine(inner, ws) : null,
+      pair: locked && (mine === undefined || unsigned) ? pairs.mine(inner, ws) : null,
     },
     signers: [...f.devices.values()].filter((d) => typeof d.sign_key === "string").length,
     members,
