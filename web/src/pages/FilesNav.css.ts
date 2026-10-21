@@ -1,5 +1,6 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
+import * as listCss from "../SidebarList.css.ts";
 
 /** A folder's row that takes a drop: ringed in the accent while something it takes is over it, saying what a drop does. */
 export const drop = style({
@@ -26,6 +27,8 @@ export const station = style({ display: "grid" });
 /** A station's line: its disclosure, then its row (its home). */
 export const stationLine = style({ position: "relative", display: "flex", alignItems: "center" });
 globalStyle(`${stationLine} > :last-child`, { flex: "1", minWidth: "0" });
+// Its end (This machine, the disk bar) is short and whole: the row's 45% cap would cut the bar off after the badge.
+globalStyle(`${stationLine} ${listCss.end}`, { maxWidth: "none" });
 export const disclosure = style({
   position: "absolute", left: "-2px", top: "50%", zIndex: "1", transform: "translateY(-50%)", display: "grid", placeItems: "center",
   width: "16px", height: "20px", padding: "0", border: "0", background: "none", color: vars.subtle, cursor: "pointer",
