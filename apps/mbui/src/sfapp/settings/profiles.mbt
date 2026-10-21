@@ -743,7 +743,8 @@ fn quota_dials(c : @ui.Ctx, windows : Array[Json]) -> Unit {
 ///|
 /// Which of its models may be used (Profiles.kt ModelsSection): how many of how many, reading them again
 /// (`profile.check`), all / none, then by series a row each, ticked on or off (`profile.put` with its models).
-fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Array[() -> Unit] {
+/// `bare`: on the step after a profile is added (pick_models.mbt), which says what these are: no header or note.
+fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?, bare? : Bool = false) -> Array[() -> Unit] {
   let t = @sf.theme()
   let id = text(pv, "id")
   let on = [("station", station), ("id", id)]
@@ -812,29 +813,31 @@ fn models_section(c : @ui.Ctx, core : Core, station : String, pv : Json?) -> Arr
   }
   let blocks : Array[() -> Unit] = [
     fn() {
-      section_header(
-        c,
-        fill(
-          if saving {
-            "android-settings.models.headerSaving"
-          } else {
-            "android-settings.models.header"
-          },
-          [("on", models.length().to_string()), ("n", all.length().to_string())],
-        ),
-        start=S6,
-      )
-      c.box(w=Fill(1.0), padx=24.0, pb=6.0, fn() {
-        c.text(
-          tr(if all.length() == 0 { "android-settings.models.empty" } else { "android-settings.models.note" }),
-          size=13.0,
-          color=t.p.muted,
-          w=Fill(1.0),
-          line=18.0,
+      if !bare {
+        section_header(
+          c,
+          fill(
+            if saving {
+              "android-settings.models.headerSaving"
+            } else {
+              "android-settings.models.header"
+            },
+            [("on", models.length().to_string()), ("n", all.length().to_string())],
+          ),
+          start=S6,
         )
+        c.box(w=Fill(1.0), padx=24.0, pb=6.0, fn() {
+          c.text(
+            tr(if all.length() == 0 { "android-settings.models.empty" } else { "android-settings.models.note" }),
+            size=13.0,
+            color=t.p.muted,
+            w=Fill(1.0),
+            line=18.0,
+          )
+          |> ignore
+        })
         |> ignore
-      })
-      |> ignore
+      }
       c.box(dir=Row, w=Fill(1.0), padx=24.0, pb=8.0, gap=12.0, align=ACenter, fn() {
         let rid = c.id("models-refresh")
         if hit(c, rid) && !checking {

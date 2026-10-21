@@ -1096,7 +1096,7 @@ fn machine_login_offers(c : @ui.Ctx, core : Core, station : String, overview : J
                       match r {
                         Ok(v) => {
                           (core.say)(tr("android-settings.machine.added"))
-                          (core.push)(Profile(station, text(Some(v), "id")))
+                          (core.push)(PickModels(station, text(Some(v), "id")))
                         }
                         Err(e) => (core.say)(error_text(e))
                       }

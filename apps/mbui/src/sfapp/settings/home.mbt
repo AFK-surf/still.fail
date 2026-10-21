@@ -27,6 +27,7 @@ fn route_page(c : @ui.Ctx, core : Core, here : Here, route : Route) -> Unit {
     Station(a) => station_page(c, core, here, a)
     Profiles(only) => profiles_page(c, core, here, only)
     Profile(a, id) => profile_page(c, core, here, a, id)
+    PickModels(a, id) => pick_models_page(c, core, here, a, id)
     Connects(only) => connects_page(c, core, here, only)
     Connect(a, id) => connect_page(c, core, here, a, id)
     Memories => memories_page(c, core, here)

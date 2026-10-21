@@ -86,6 +86,8 @@ pub(all) enum Route {
   Profiles(String)
   /// a profile's page: its station's address, its id
   Profile(String, String)
+  /// the step right after a profile is added: its models chosen, or skipped (PickModelsScreen)
+  PickModels(String, String)
   /// the connects, of every station ("") or of one
   Connects(String)
   /// a connect's page: its station's address, its id
@@ -634,6 +636,7 @@ pub fn route_of(name : String) -> Route? {
             "memory-doc" => Some(MemoryDoc(address, id, 0))
             "profiles" => Some(Profiles(arg))
             "profile" => Some(Profile(address, id))
+            "pick-models" => Some(PickModels(address, id))
             "connects" => Some(Connects(arg))
             "connect" => Some(Connect(address, id))
             _ => None
