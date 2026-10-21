@@ -8,7 +8,7 @@
 // day went, where the next may come from, what was answered today.
 //
 // It is reached from the bottom bar's 奏 (slice 7's): `open_decisions()`, or `decisions_capsule` drawn where the bar
-// puts it. Not here yet, against the Android app: the card's tilt and scale as it moves (boxes have no transforms yet),
+// puts it. Not here yet, against the Android app: the card's tilt as it moves (boxes do not turn yet),
 // attachments and quotes in the reply (words only), the reply's draft kept by the core, a vault item's approval, a
 // login card's buttons on this page (its card as in the chat).
 
@@ -293,6 +293,13 @@ let card_back_ms : Double = 250.0
 let card_arrive_ms : Double = 260.0
 
 ///|
+/// How small a card comes in from, and goes up to (Decisions.kt: 0.94, 0.88), about its top's middle.
+let card_arrive_scale : Double = 0.94
+
+///|
+let card_gathered_scale : Double = 0.88
+
+///|
 /// The deck's motions, each from 0 to 1 on its curve: the one that went flying off (across or up), the front one
 /// going back where it rests, the front one coming in (1: there).
 fn card_out(c : @ui.Ctx) -> @motion.Anim {
@@ -535,18 +542,11 @@ fn deck(c : @ui.Ctx, src : Source, shown : Array[Json]) -> Unit {
         |> ignore
       }
       c.layer(fn() {
-        c.box(
-          w=Fill(1.0),
-          h=Fill(1.0),
-          tx=dui.drag,
-          ty=12.0 * (1.0 - arrive),
-          opacity=arrive,
-          bg=t.p.bg,
-          fn() {
-            decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, set_aside, true)
-          },
-        )
-        |> ignore
+        let card = c.box(w=Fill(1.0), h=Fill(1.0), tx=dui.drag, opacity=arrive, bg=t.p.bg, fn() {
+          decision_face(c, src, item, fn(o) { if !swiped && dui.going == 0 { answer(o) } }, set_aside, true)
+        })
+        // coming in from a little smaller, about its top's middle (Decisions.kt: lerp(0.94, 1, arrive))
+        c.look(card, @ui.look(scale=card_arrive_scale + (1.0 - card_arrive_scale) * arrive, oy=0.0))
       })
       |> ignore
       // over it, the one that went
@@ -582,18 +582,19 @@ fn deck_out(c : @ui.Ctx, src : Source, width : Double, height : Double) -> Unit 
   }
   // (its curve's: card_go's, as it set out)
   let p = a.get()
-  let (x, y, fade) = if dui.out_dir == 2 {
+  // up: drawn smaller as it rises, to 88% by 40% of the way (Decisions.kt: lerp(1, 0.88, gathered)); across, as it is
+  let (x, y, scale) = if dui.out_dir == 2 {
     let lift = height * p
-    (dui.out_from, -lift, 1.0 - dmin(lift / height / 0.4, 1.0) * 0.6)
+    (dui.out_from, -lift, 1.0 - dmin(lift / height / 0.4, 1.0) * (1.0 - card_gathered_scale))
   } else {
     let to = dui.out_dir.to_double() * width * 1.25
     (dui.out_from + (to - dui.out_from) * p, 0.0, 1.0)
   }
   c.layer(fn() {
-    c.box(w=Fill(1.0), h=Fill(1.0), tx=x, ty=y, opacity=fade, bg=t.p.bg, fn() {
+    let card = c.box(w=Fill(1.0), h=Fill(1.0), tx=x, ty=y, bg=t.p.bg, fn() {
       decision_face(c, src, o, fn(_) {  }, fn() {  }, false)
     })
-    |> ignore
+    c.look(card, @ui.look(scale~, oy=0.0))
   })
   |> ignore
 }
