@@ -588,6 +588,10 @@ pub fn reset() -> Unit {
   // opens its own
   decision_forms.clear()
   policy_forms.clear()
+  // what this device keeps, asked of a run's own core
+  kept.chats = None
+  kept.asked = 0
+  kept.read = -1
   run_opened.clear()
   run_list.clear()
   new_connects.clear()

@@ -1,0 +1,14 @@
+# What mbui's scripts/apk.py keeps for a debug APK of mbui's own apps (apps/mbui/mbui/android): the dependencies
+# apk.lock pins, fetched and each dexed once, by the lock (a new lock: fetched and dexed anew, then kept). APK_CACHE
+# for the steps after it.
+name: mbui APK
+description: The APK's dependencies and their dex, kept by apk.lock
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/.ci/apk
+        key: mbui-apk-lib-${{ runner.os }}-${{ hashFiles('apps/mbui/mbui/android/apk.lock', 'apps/mbui/mbui/scripts/apk.py') }}
+    - shell: bash
+      run: echo "APK_CACHE=$GITHUB_WORKSPACE/.ci/apk" >> "$GITHUB_ENV"

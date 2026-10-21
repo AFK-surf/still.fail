@@ -1,7 +1,7 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
-# build the references were made with (16428233, from Google's repository as a zip) and the API 34 x86_64 system
-# images, each by its revision (sdkmanager's, here alone). Asked each day; what is in already, nothing done. A download
+# build the references were made with (16428233, from Google's repository as a zip) and the x86_64 system images
+# (API 34; API 36, mbui-android-ref's), each by its revision (sdkmanager's, here alone). Asked each day; what is in already, nothing done. A download
 # that breaks off fails this run alone, the jobs going on with what is in.
 name: mbui-android-sdk
 on:
@@ -25,7 +25,9 @@ jobs:
       matrix:
         # (each job's device: host-android's pixel_7 on google_apis, render-android's pixel_6 on default)
         include:
-          - { target: default, profile: pixel_6 }
+          - { api: 34, target: default, profile: pixel_6, avd: ci-default-pixel_6, keyed: "" }
+          # (mbui-android-ref's: the image Android's references are taken on, API 36)
+          - { api: 36, target: google_apis, profile: pixel_7, avd: ci-36-google_apis-pixel_7, keyed: "36-" }
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -52,47 +54,47 @@ jobs:
         run: |
           sdk=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
           yes | $sdk --licenses > /dev/null || true
-          $sdk --install "system-images;android-34;${{ matrix.target }};x86_64" --channel=0 > /dev/null
-          rev=$(sed -n 's/^Pkg.Revision=//p' $ANDROID_HOME/system-images/android-34/${{ matrix.target }}/x86_64/source.properties)
+          $sdk --install "system-images;android-${{ matrix.api }};${{ matrix.target }};x86_64" --channel=0 > /dev/null
+          rev=$(sed -n 's/^Pkg.Revision=//p' $ANDROID_HOME/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64/source.properties)
           [ -n "$rev" ] || { echo "::error::no revision for the image"; exit 1; }
-          echo "key=android-image-34-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
+          echo "key=android-image-${{ matrix.api }}-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
           echo "rev=$rev" >> "$GITHUB_OUTPUT"
           echo "revision $rev"
       - uses: actions/cache/restore@v4
         id: img
         with:
-          path: /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
+          path: /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64
           key: ${{ steps.rev.outputs.key }}
           lookup-only: true
       - if: steps.img.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64
+          path: /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64
           key: ${{ steps.rev.outputs.key }}
       # the AVD made over it (avdmanager, which asks for the SDK's emulator package: the image's install brought one),
       # as a job boots it: config.ini's device, sizes and image by name; made once a revision, never in a job
-      - name: The AVD (ci-${{ matrix.target }}-${{ matrix.profile }})
+      - name: The AVD (${{ matrix.avd }})
         run: |
           export ANDROID_AVD_HOME=$HOME/.android/avd
           rm -rf "$ANDROID_AVD_HOME" && mkdir -p "$ANDROID_AVD_HOME"
-          echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force -n ci-${{ matrix.target }}-${{ matrix.profile }} \
-            --package "system-images;android-34;${{ matrix.target }};x86_64" --device ${{ matrix.profile }}
+          echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force -n ${{ matrix.avd }} \
+            --package "system-images;android-${{ matrix.api }};${{ matrix.target }};x86_64" --device ${{ matrix.profile }}
           ls "$ANDROID_AVD_HOME"
       - uses: actions/cache/restore@v4
         id: avd
         with:
           path: ~/.android/avd
-          key: android-avd-${{ matrix.target }}-${{ matrix.profile }}-${{ steps.rev.outputs.rev }}
+          key: android-avd-${{ matrix.keyed }}${{ matrix.target }}-${{ matrix.profile }}-${{ steps.rev.outputs.rev }}
           lookup-only: true
       - if: steps.avd.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/.android/avd
-          key: android-avd-${{ matrix.target }}-${{ matrix.profile }}-${{ steps.rev.outputs.rev }}
+          key: android-avd-${{ matrix.keyed }}${{ matrix.target }}-${{ matrix.profile }}-${{ steps.rev.outputs.rev }}
       # (what a job gets: the action over what was put in, booted)
       - uses: actions/checkout@v4
         with: { sparse-checkout: .github/actions }
       - name: Boot once (the action as the jobs take it)
-        run: sudo rm -rf /usr/local/lib/android/sdk/system-images/android-34/${{ matrix.target }}/x86_64 ~/.android/avd
+        run: sudo rm -rf /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64 ~/.android/avd
       - uses: ./.github/actions/mbui-android-emulator
-        with: { target: "${{ matrix.target }}", profile: "${{ matrix.profile }}" }
+        with: { api: "${{ matrix.api }}", target: "${{ matrix.target }}", profile: "${{ matrix.profile }}" }

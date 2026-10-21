@@ -10,6 +10,12 @@ icons the system's: REFS/android.json `bars`, the rows at the top and the bottom
 lets differ. allowed.json: {"NAME": {"regions": [{"x", "y", "w", "h", "why"}], "left": N, "why": …}}: `left` the
 pixels the mbui app is known to differ by still, outside its regions (what is not done yet, said in `why`): a screen
 fails when it differs by more, and is told to lower it when by fewer (the number only falls).
+  android_ref.py place PICTURE OUT WIDTH HEIGHT TOP
+
+`place`: the mbui app's window drawn offscreen (PICTURE: mbui-render's of its draw list, the window between the
+emulator's bars) put where the window is on the emulator's screen (WIDTH × HEIGHT, its top TOP rows down: the bars'
+rows black, which the comparison leaves out), as Android's picture is of the whole screen.
+
 Out: OUT/NAME.png (Android | mbui | Android greyed with the differing pixels red, the allowed regions outlined blue,
 at half size), OUT/report.md (each screen's count and where its differences lie). Exit 1 when a screen differs
 outside its regions by more than its `left`, or a picture is missing or of another size.
@@ -181,5 +187,16 @@ def main():
         sys.exit(1)
 
 
+def place(picture, out, width, height, top):
+    w, h, rows = load(picture)
+    if w != width or top + h > height:
+        sys.exit(f"android_ref: {picture} is {w}×{h}: not a window {width} wide that fits {height} from {top} down")
+    blank = bytes(3 * width)
+    save(out, width, height, [blank] * top + rows + [blank] * (height - top - h))
+
+
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:2] == ["place"]:
+        place(sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]))
+    else:
+        main()

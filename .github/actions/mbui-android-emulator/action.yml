@@ -5,6 +5,9 @@
 name: Android emulator
 description: An emulator from the cache the android-sdk workflow fills, booted
 inputs:
+  api:
+    description: The system image's API level (34, default; mbui-android-ref's 36, its references')
+    default: "34"
   target:
     description: The system image's target (google_apis, default)
     required: true
@@ -25,17 +28,19 @@ runs:
     - uses: actions/cache/restore@v4
       id: img
       with:
-        path: /usr/local/lib/android/sdk/system-images/android-34/${{ inputs.target }}/x86_64
-        key: android-image-34-${{ inputs.target }}-x86_64-none
-        restore-keys: android-image-34-${{ inputs.target }}-x86_64-
+        path: /usr/local/lib/android/sdk/system-images/android-${{ inputs.api }}/${{ inputs.target }}/x86_64
+        key: android-image-${{ inputs.api }}-${{ inputs.target }}-x86_64-none
+        restore-keys: android-image-${{ inputs.api }}-${{ inputs.target }}-x86_64-
     - uses: actions/cache/restore@v4
       id: avd
       with:
         path: ~/.android/avd
-        key: android-avd-${{ inputs.target }}-${{ inputs.profile }}-none
-        restore-keys: android-avd-${{ inputs.target }}-${{ inputs.profile }}-
+        # (API 34's without its level, as they were first put in)
+        key: android-avd-${{ inputs.api != '34' && format('{0}-', inputs.api) || '' }}${{ inputs.target }}-${{ inputs.profile }}-none
+        restore-keys: android-avd-${{ inputs.api != '34' && format('{0}-', inputs.api) || '' }}${{ inputs.target }}-${{ inputs.profile }}-
     - shell: bash
       env:
+        API: ${{ inputs.api }}
         TARGET: ${{ inputs.target }}
         PROFILE: ${{ inputs.profile }}
         ANIMATIONS: ${{ inputs.animations }}

@@ -1,0 +1,18 @@
+{
+  "//": "mbui's own apps' APK (dev.mbui.demo: scripts/android.sh APP=demo, kitdemo, render…), as scripts/apk.py builds it (no Gradle): the host's Java and resources here, libmbui.so and what an app adds put by scripts/android.sh where jniLibs and assets say. Only debug builds (no R8).",
+  "namespace": "dev.mbui",
+  "applicationId": "dev.mbui.demo",
+  "minSdk": 29,
+  "targetSdk": 36,
+  "compileSdk": 36,
+  "manifest": "app/src/main/AndroidManifest.xml",
+  "java": ["app/src/main/java"],
+  "res": ["app/src/main/res"],
+  "assets": ["../out/android/apk/assets"],
+  "jniLibs": ["../out/android/apk/jniLibs", "app/src/main/jniLibs"],
+  "rules": [],
+  "lock": "apk.lock",
+  "variants": {
+    "debug": {"debuggable": true, "placeholders": {}}
+  }
+}
