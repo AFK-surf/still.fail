@@ -678,8 +678,9 @@ fn go_place(c : @ui.Ctx, place : String, sets : Array[Array[String]], cur : Int)
 }
 
 ///|
-/// A picture the settings asked the system's picker for (a station's or workspace's mark), and who takes it.
-let picture_pick : Ref[(@host.Pick, (Bytes?) -> Unit)?] = Ref(None)
+/// A picture the settings asked the system's picker for (a station's or workspace's mark, a Slack app's icon), and who
+/// takes it: through the framework, so a Tester's picker is the test's (Tester::picks).
+let picture_pick : Ref[(@ui.Pick, (Bytes?) -> Unit)?] = Ref(None)
 
 ///|
 /// A page of the settings (src/sfapp/settings), over the workspace in view.
@@ -777,7 +778,7 @@ fn settings_core(src : Source, w : Workspace) -> @settings.Core {
       }
     },
     pick_picture: fn(done) {
-      match @host.pick(@host.PickKind::Photos) {
+      match @ui.pick(@host.PickKind::Photos) {
         Some(p) => {
           picture_pick.val = Some((p, done))
           true

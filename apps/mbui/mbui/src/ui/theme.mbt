@@ -507,6 +507,7 @@ pub fn Theme::color(self : Theme, c : Color) -> Int64 {
     A(c, o) => alpha(self.color(c), o.value())
     Over(u, t) => over(self.color(u), self.color(t))
     Exact(v) => v
+    Data(v) => v
   }
 }
 

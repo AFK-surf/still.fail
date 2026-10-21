@@ -147,6 +147,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-fonts-code" => fonts_at.val = 2
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
+    // a new Slack app's step: its name, its look
+    "settings-new-connect-app" => fx_connect_step.val = "app"
     _ => fx_connect_step.val = "team"
   }
   match m {
@@ -160,7 +162,8 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-profile" => "new-profile:ws1/st1"
     "settings-connect-menu" | "settings-connect-mode" => "connect:ws1/st1#k1"
     "settings-connect-run" => "connect-run:ws1/st1#k1"
-    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" => "new-connect:ws1/st1"
+    "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" | "settings-new-connect-app" =>
+      "new-connect:ws1/st1"
     "settings-slack-app" => "slack-app:ws1/st1#k1"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
     "settings-vault-recover" | "settings-vault-plain" => "vault"
@@ -875,18 +878,26 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
       )
     "profileFlow" => Some(fx_profile_flow())
     "pick" if text(Some(Json::object(params)), "of").has_prefix("session:") => Some(fx_session_pick())
-    "connectFlow" if fx_connect_step.val != "team" => Some(fx_feishu_flow(fx_connect_step.val))
+    "connectFlow" if fx_connect_step.val != "team" && fx_connect_step.val != "app" =>
+      Some(fx_feishu_flow(fx_connect_step.val))
     "connectFlow" =>
       Some(
         obj([
-          ("step", str("team")),
+          ("step", str(fx_connect_step.val)),
           ("title", str("Slack 工作区")),
           ("back", str("close")),
           ("number", Json::number(1.0)),
           ("total", Json::number(4.0)),
           ("mobile", Json::boolean(true)),
           ("adding", Json::boolean(false)),
-          ("settings", obj([("name", str("still.fail")), ("description", str("Coding agent in your threads (still.fail)"))])),
+          (
+            "settings",
+            obj([
+              ("name", str("still.fail")),
+              ("description", str("Coding agent in your threads (still.fail)")),
+              ("backgroundColor", str("#F3E3D3")),
+            ]),
+          ),
           ("config", str("")),
           ("configReady", Json::boolean(false)),
           ("mode", str("multi-session")),
@@ -1253,6 +1264,17 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "memory.get" => Some(Ok(fx_memory()))
+    // still.fail's buddies a Slack app can wear (the core's own list, web/public/avatars/index.json: three of it)
+    "buddies" =>
+      Some(
+        Ok(
+          Json::array([
+            obj([("id", str("backend")), ("label", str("后端接口")), ("bg", str("#B582EB"))]),
+            obj([("id", str("mobile")), ("label", str("移动应用")), ("bg", str("#B9D84A"))]),
+            obj([("id", str("documentation")), ("label", str("写文档")), ("bg", str("#F3CA43"))]),
+          ]),
+        ),
+      )
     // lin's secrets from before security mode encrypted into their vault
     "vault.migrate" => {
       fx.plain_left = 0

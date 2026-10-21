@@ -63,6 +63,7 @@ fn reset_globals() -> Unit {
   code_fields.clear()
   code_clears.clear()
   image_data.clear()
+  pixels_read.clear()
   open_views.clear()
   streams_reset()
   native_nodes.clear()
@@ -254,6 +255,8 @@ pub fn Tester::new(
     streams_fed: {},
     stream_said: {},
     dev: FakeDevice::new(copy_shown),
+    pixels_of_src: {},
+    pixels_of: {},
   }
   for im in images {
     f.image_sizes[im.0] = (im.1, im.2)
@@ -1277,6 +1280,14 @@ pub fn Tester::tap_run(self : Tester, s : String) -> Unit {
 /// Makes up an image at `src`, `w` × `h` pixels, for views to load.
 pub fn Tester::add_image(self : Tester, src : String, w : Int, h : Int) -> Unit {
   self.fake.image_sizes[src] = (w, h)
+}
+
+///|
+/// Makes up a picture at `src`, `w` × `h` pixels of `rgba` (premultiplied, rows from the top), for views to load and
+/// read back (Ctx::image_pixels): loaded no larger than asked, as it is.
+pub fn Tester::add_pixels(self : Tester, src : String, w : Int, h : Int, rgba : FixedArray[Byte]) -> Unit {
+  self.fake.image_sizes[src] = (w, h)
+  self.fake.pixels_of_src[src] = rgba
 }
 
 ///|

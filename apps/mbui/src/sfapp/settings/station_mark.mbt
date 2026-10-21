@@ -28,10 +28,12 @@ priv struct MarkPick {
   mut serial : Int
   /// a picture asked of the system's photo picker
   mut asking : Bool
+  /// a picture picked too large to put up as it is, being read to make it small (its key), "" none
+  mut reading : String
 }
 
 ///|
-let mark_pick : MarkPick = { emojis: false, color: "", serial: 0, asking: false }
+let mark_pick : MarkPick = { emojis: false, color: "", serial: 0, asking: false, reading: "" }
 
 ///|
 /// A glyph's name and colour of an icon (glyph:<name>[:<colour>]); None for another.
@@ -114,9 +116,8 @@ fn first_emoji(words : String) -> String? {
 }
 
 ///|
-/// A picture picked as a mark (stationPictureOf): put up as it is, as a data URL, where it is a PNG, JPEG or WebP
-/// small enough to go with the workspace (46 000 characters); None otherwise. (The Android app crops its middle
-/// square to 96 px first; this app has no way to draw a picture smaller yet, so a larger one is refused.)
+/// A picture picked as a mark: put up as it is, as a data URL, where it is a PNG, JPEG or WebP small enough to go with
+/// the workspace (46 000 characters); None otherwise (made small first: picture_mark_small).
 fn picture_mark(bytes : Bytes) -> String? {
   let n = bytes.length()
   let kind = if n > 8 && bytes[0] == b'\x89' && bytes[1] == b'P' && bytes[2] == b'N' && bytes[3] == b'G' {
@@ -135,6 +136,37 @@ fn picture_mark(bytes : Bytes) -> String? {
     None
   }
 }
+
+///|
+/// A picture too large to put up as it is made small (Settings.kt stationPictureOf): its middle square at 96 px, read
+/// at least 192 on its shorter side, as a JPEG (85) on white where it is clear (this app writes no WebP); None when
+/// even that is too large.
+fn picture_mark_small(w : Int, h : Int, px : FixedArray[Byte]) -> String? {
+  let icon = @pixels.Canvas::new(mark_picture_px, mark_picture_px)
+  icon.fill(0xFFFFFFFFL)
+  let s = if w < h { w } else { h }
+  let x = (w - s) / 2
+  let y = (h - s) / 2
+  icon.draw(w, h, px, (x, y, x + s, y + s), (0.0, 0.0, mark_picture_px.to_double(), mark_picture_px.to_double()))
+  let url = "data:image/jpeg;base64," +
+    base64_of(@pixels.jpeg(mark_picture_px, mark_picture_px, icon.pixels(), quality=85))
+  if url.length() <= 46000 {
+    Some(url)
+  } else {
+    None
+  }
+}
+
+///|
+/// A picture's side as a mark, and how large it is read to be made that.
+let mark_picture_px : Int = 96
+
+///|
+let mark_picture_read : Int = 768
+
+///|
+/// Pictures picked as marks too large to put up as they are: each its own key.
+let mark_pictures : Ref[Int] = Ref(0)
 
 ///|
 /// Bytes in base64 (RFC 4648, padded).
@@ -191,9 +223,27 @@ fn open_mark_pick(
   }
   mark_pick.serial += 1
   mark_pick.asking = false
+  mark_pick.reading = ""
   let serial = mark_pick.serial
   open_sheet(0.78, fn(c, core) {
     let t = @sf.theme()
+    // a picture too large as it is, read: made small and put up
+    if mark_pick.reading != "" {
+      match c.image_pixels(mark_pick.reading, mark_picture_read) {
+        PixelsComing => ()
+        PixelsRead(w, h, px) => {
+          mark_pick.reading = ""
+          match picture_mark_small(w, h, px) {
+            Some(url) => pick("", url)
+            None => (core.say)(tr("android-settings.station.imageFailed"))
+          }
+        }
+        PixelsFailed => {
+          mark_pick.reading = ""
+          (core.say)(tr("android-settings.station.imageFailed"))
+        }
+      }
+    }
     sheet_head(c, fill("android-settings.station.emojiTitle", [("name", name)]))
     let emojis = mark_pick.emojis
     let typed_key = "mark-typed/" + serial.to_string()
@@ -356,7 +406,11 @@ fn open_mark_pick(
               Some(b) =>
                 match picture_mark(b) {
                   Some(url) => pick("", url)
-                  None => (core.say)(tr("android-settings.station.imageFailed"))
+                  None => {
+                    mark_pictures.val += 1
+                    mark_pick.reading = "mem:station-mark/\{mark_pictures.val}"
+                    @ui.add_image(mark_pick.reading, b)
+                  }
                 }
               None => ()
             }

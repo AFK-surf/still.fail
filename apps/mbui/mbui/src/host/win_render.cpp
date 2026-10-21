@@ -459,6 +459,7 @@ static void make_pipeline(void) {
 }
 
 void *mb_render_device(void) { return dev; }
+void *mb_render_context(void) { return ctx; }
 
 void *mb_render_dcomp(void) { return dcomp; }
 void *mb_render_views_visual(void) { return dunder; }

@@ -451,6 +451,10 @@ extern "js" fn js_image_free(id : Int) -> Unit =
   #|(i) => globalThis.__mbhost.imageFree(i)
 
 ///|
+extern "js" fn js_image_pixels(id : Int, out : FixedArray[Byte]) -> Int =
+  #|(i, o) => globalThis.__mbhost.imagePixels(i, o)
+
+///|
 pub fn image_load(src : String, max_px : Int) -> Int {
   js_image_load(src, max_px)
 }
@@ -468,6 +472,12 @@ pub fn image_info(id : Int, out : FixedArray[Double]) -> Int {
 ///|
 pub fn image_free(id : Int) -> Unit {
   js_image_free(id)
+}
+
+///|
+/// A ready image's pixels (as host_native.mbt's).
+pub fn image_pixels(id : Int, out : FixedArray[Byte]) -> Bool {
+  js_image_pixels(id, out) == 1
 }
 
 // A sign-in in the browser that comes back here (browser_login.mbt): a page cannot listen.

@@ -916,6 +916,25 @@
     }
     return im.state;
   };
+  // a ready image's pixels read back from its texture through a framebuffer of its own (premultiplied RGBA, rows from
+  // the top as it was uploaded)
+  H.imagePixels = (id, out) => {
+    const im = images.get(id);
+    if (!im || im.state !== 1 || !im.tex || out.length < im.w * im.h * 4) return 0;
+    const was = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, im.tex, 0);
+    let ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    if (ok) {
+      const px = new Uint8Array(im.w * im.h * 4);
+      gl.readPixels(0, 0, im.w, im.h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      for (let i = 0; i < px.length; i++) out[i] = px[i];
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, was);
+    gl.deleteFramebuffer(fb);
+    return ok ? 1 : 0;
+  };
   H.imageFree = (id) => {
     const im = images.get(id);
     if (im && im.tex) gl.deleteTexture(im.tex);

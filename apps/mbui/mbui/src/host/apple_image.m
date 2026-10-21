@@ -160,6 +160,15 @@ int32_t mb_host_image_info(int32_t iid, double *out) {
 
 void mb_host_image_free(int32_t iid) { [images removeObjectForKey:@(iid)]; }
 
+// A ready image's pixels read back from its texture (premultiplied RGBA, as drawn into it), rows from the top.
+int32_t mb_host_image_pixels(int32_t iid, moonbit_bytes_t out) {
+  MBImage *im = images[@(iid)];
+  if (!im || im.state != 1 || !im.tex) return 0;
+  if ((size_t)Moonbit_array_length(out) < (size_t)im.w * im.h * 4) return 0;
+  [im.tex getBytes:out bytesPerRow:(NSUInteger)im.w * 4 fromRegion:MTLRegionMake2D(0, 0, im.w, im.h) mipmapLevel:0];
+  return 1;
+}
+
 id<MTLTexture> mb_image_texture(int iid) {
   MBImage *im = images[@(iid)];
   return im.state == 1 ? im.tex : nil;

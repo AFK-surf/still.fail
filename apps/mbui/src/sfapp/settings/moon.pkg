@@ -2,6 +2,7 @@ import {
   "mbui/ui",
   "mbui/kit",
   "mbui/motion",
+  "mbui/pixels",
   "stillfail/sf",
   "moonbitlang/core/json",
 }

@@ -41,6 +41,7 @@ int mb_screen_snapshot(void *hwnd, const wchar_t *path);
 void mb_atlas_upload(int x, int y, int w, int h, const void *rgba);
 extern int mb_atlas_size;
 void *mb_render_device(void);  // ID3D11Device *
+void *mb_render_context(void);  // ID3D11DeviceContext *, the UI thread's
 // the composition (IDCompositionDevice *) and the visual the native views go in, under the canvas
 // (IDCompositionVisual *); NULL where the canvas is the window's own swap chain (no native views)
 void *mb_render_dcomp(void);
