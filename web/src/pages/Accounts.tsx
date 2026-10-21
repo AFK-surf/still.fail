@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { useAction, useApi, useMemberships, useOverview, useProfiles, type AccessKind, type LoginJob, type Overview, type ProfileInput, type Profile } from "../api.ts";
 import { ACCESS, KEYED, RUNTIME_LABEL } from "../format.ts";
 import { useUsage, usageCss } from "../Usage.tsx";
-import { useProfilesSidebar } from "../ProfilesNav.tsx";
+import { pickModelsPath, useProfilesSidebar } from "../ProfilesNav.tsx";
 import { hosts } from "../cloud/settings.tsx";
 import type { WorkspaceProfile } from "../core/shapes.ts";
 import { useDoing, useDoingFailed } from "../doing.ts";
@@ -47,14 +47,13 @@ function ProfileLead() {
  */
 export function MachineLoginOffers({ logins, onAdd }: { logins: MachineLogin[] | undefined; onAdd(choice: Choice): void }) {
   const api = useApi();
-  const link = useLink();
   const navigate = useNavigate();
   const toast = useToast();
   // Whose logins: the page may list several stations', and is read from any machine.
   const station = useStation();
   const use = useAction((runtime: MachineLogin["runtime"]) => api.useMachineLogin(runtime), ({ id }) => {
     toast(t("web-pages.profiles.machineAdded"));
-    navigate(link(`/settings/accounts/${id}`));
+    navigate(pickModelsPath(station.address, id));
   });
   const offers = (logins ?? []).filter((l) => l.offered);
   if (!offers.length) return null;
@@ -679,35 +678,13 @@ function QuotaSection({ profile }: { profile: Profile }) {
  * account pool sends a chat only to a profile that has its model enabled.
  */
 function ModelPool({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
-  const api = useApi();
-  const act = useAct();
-  const [typed, setTyped] = useState("");
-  const adding = useDoing("profile.addModel", { station: useStation().address, id: profile.id });
   const enabled = new Set(profile.models);
-  const busy = profile.modelsSaving != null;
-  const [filter, setFilter] = useState("");
-
   const all = [...new Set([...(found ?? []), ...profile.models])].sort();
   const name = (m: string) => profile.names[m] ?? m;
-  const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
-  const commit = (next: Set<string>) => { void onSave([...next].sort()); };
-  const toggle = (m: string) => {
-    const next = new Set(enabled);
-    if (next.has(m)) next.delete(m); else next.add(m);
-    commit(next);
-  };
   // With none enabled yet (a profile just added), the whole list is out to choose from.
   const [picked, setChoosing] = useState<boolean | null>(null);
   const choosing = picked ?? enabled.size === 0;
-  // By series, newest first (the core's); one a newer check found that the core has not placed yet goes with 其他.
-  const placed = new Set(profile.series.flatMap((s) => s.models));
-  const loose = all.filter((m) => !placed.has(m));
-  // The core's series of the rest, as it names it in either language (core-views.present.models_other).
-  const isOther = (name: string) => name === "其他" || name === "Other";
-  const other = profile.series.find((s) => isOther(s.name));
-  const series = [...profile.series.filter((s) => !isOther(s.name)),
-    ...((other?.models.length ?? 0) + loose.length ? [{ name: other?.name ?? t("web-pages.profiles.otherSeries"), models: [...(other?.models ?? []), ...loose] }] : [])];
-  const ordered = series.flatMap((s) => s.models);
+  const ordered = modelSeries(profile, all).flatMap((s) => s.models);
   const on = [...enabled].sort((a, b) => ordered.indexOf(a) - ordered.indexOf(b));
   // A provider that answers the automatic decisions alone: the models its probe found, as they are.
   if (profile.decisionOnly) {
@@ -732,50 +709,134 @@ function ModelPool({ profile, found, onSave }: { profile: Profile; found: string
             </ul>
           )
         )}
-        {all.length > 0 && choosing && (
-          <div className={chatCss.modelPool}>
-            <div className={chatCss.modelPoolTools}>
-              {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
-              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
-              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
-            </div>
-            {series.map((s) => {
-              const list = s.models.filter((m) => shown.includes(m));
-              if (list.length === 0) return null;
-              const every = list.every((m) => enabled.has(m));
-              return (
-                <div key={s.name} className={modelCss.poolSeries}>
-                  <div className={modelCss.poolSeriesHead}>
-                    <h4>{s.name}</h4>
-                    <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
-                  </div>
-                  <ul className={chatCss.modelPoolList}>
-                    {list.map((m) => (
-                      <li key={m}>
-                        <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
-                          <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
-                          <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
-                          <span>{name(m)}</span>
-                          {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
-                          {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
-                        </label></Tip>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {all.length > 0 && choosing && <ModelChecklist profile={profile} found={found} onSave={onSave} />}
         {/* A provider that does not list its models: one is named by hand. */}
-        {profile.canAddModel && (
-          <div className={additionsCss.inputRow}>
-            <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
-              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); } }} />
-            <Button disabled={!typed.trim()} busy={adding} onClick={() => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); }}>{t("web-pages.profiles.addModel")}</Button>
-          </div>
-        )}
+        {profile.canAddModel && <AddModel profile={profile} />}
       </div>
     </Section>
+  );
+}
+
+/** The whole list of a profile's models to enable, by series, with a filter when there are many and all / none of
+ * what is shown; each tick saved at once. On its page (ModelPool) and on the step after it is added (PickModelsPage). */
+function ModelChecklist({ profile, found, onSave }: { profile: Profile; found: string[] | null; onSave(models: string[]): Promise<unknown> }) {
+  const enabled = new Set(profile.models);
+  const busy = profile.modelsSaving != null;
+  const [filter, setFilter] = useState("");
+  const all = [...new Set([...(found ?? []), ...profile.models])].sort();
+  const name = (m: string) => profile.names[m] ?? m;
+  const shown = all.filter((m) => [m, name(m)].some((s) => s.toLowerCase().includes(filter.trim().toLowerCase())));
+  const commit = (next: Set<string>) => { void onSave([...next].sort()); };
+  const toggle = (m: string) => {
+    const next = new Set(enabled);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    commit(next);
+  };
+  const series = modelSeries(profile, all);
+  return (
+    <div className={chatCss.modelPool}>
+      <div className={chatCss.modelPoolTools}>
+        {all.length > 10 && <input className={`${controlsCss.input} ${css.modelPoolFilter}`} placeholder={t("web-pages.profiles.filter")} autoFocus value={filter} onChange={(e) => setFilter(e.target.value)} />}
+        <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled, ...shown]))}>{filter ? t("web-pages.profiles.selectFiltered") : t("web-pages.settings.members.all")}</button>
+        <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(new Set([...enabled].filter((m) => !shown.includes(m))))}>{filter ? t("web-pages.profiles.unselectFiltered") : t("web-pages.settings.members.none")}</button>
+      </div>
+      {series.map((s) => {
+        const list = s.models.filter((m) => shown.includes(m));
+        if (list.length === 0) return null;
+        const every = list.every((m) => enabled.has(m));
+        return (
+          <div key={s.name} className={modelCss.poolSeries}>
+            <div className={modelCss.poolSeriesHead}>
+              <h4>{s.name}</h4>
+              <button type="button" className={controlsCss.textToggle} disabled={busy} onClick={() => commit(every ? new Set([...enabled].filter((m) => !list.includes(m))) : new Set([...enabled, ...list]))}>{every ? t("web-pages.settings.members.none") : t("web-pages.settings.members.all")}</button>
+            </div>
+            <ul className={chatCss.modelPoolList}>
+              {list.map((m) => (
+                <li key={m}>
+                  <Tip label={m}><label className={chatCss.modelPoolItem} data-on={enabled.has(m) || undefined}>
+                    <input type="checkbox" disabled={busy} checked={enabled.has(m)} onChange={() => toggle(m)} />
+                    <ModelLogo maker={profile.makers[m]} runtime={profile.runtime} size={14} />
+                    <span>{name(m)}</span>
+                    {profile.modelsSaving?.includes(m) && <Spinner inline label={t("common.saving")} />}
+                    {found && !found.includes(m) && <span className={`${shellCss.muted} ${css.modelPoolGone}`}>{t("web-pages.profiles.gone")}</span>}
+                  </label></Tip>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Its models and those its check found, by the core's series (newest first); one a newer check found that the core
+ * has not placed yet goes with 其他. */
+function modelSeries(profile: Profile, all: string[]) {
+  const placed = new Set(profile.series.flatMap((s) => s.models));
+  const loose = all.filter((m) => !placed.has(m));
+  // The core's series of the rest, as it names it in either language (core-views.present.models_other).
+  const isOther = (name: string) => name === "其他" || name === "Other";
+  const other = profile.series.find((s) => isOther(s.name));
+  return [...profile.series.filter((s) => !isOther(s.name)),
+    ...((other?.models.length ?? 0) + loose.length ? [{ name: other?.name ?? t("web-pages.profiles.otherSeries"), models: [...(other?.models ?? []), ...loose] }] : [])];
+}
+
+/** A model named by hand, for a provider that does not list them all. */
+function AddModel({ profile }: { profile: Profile }) {
+  const api = useApi();
+  const act = useAct();
+  const [typed, setTyped] = useState("");
+  const adding = useDoing("profile.addModel", { station: useStation().address, id: profile.id });
+  const add = () => { act(api.addModel(profile.id, typed.trim()), t("web-pages.profiles.addModelWhat")); setTyped(""); };
+  return (
+    <div className={additionsCss.inputRow}>
+      <input className={`${controlsCss.input} ${shellCss.mono}`} spellCheck={false} autoComplete="off" value={typed} aria-label={t("web-pages.profiles.addModelLabel")} placeholder={t("web-pages.profiles.addModelPlaceholder")}
+        onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && typed.trim() && !adding) add(); }} />
+      <Button disabled={!typed.trim()} busy={adding} onClick={add}>{t("web-pages.profiles.addModel")}</Button>
+    </div>
+  );
+}
+
+/**
+ * The step right after a profile is added (settings/accounts/<id>/models): its models chosen on a page of their own,
+ * since chats use only those enabled, or skipped; either way on to its page. Its models are read by the check the
+ * station runs once it is added (a few seconds): until then, that.
+ */
+export function PickModelsPage() {
+  const { id = "" } = useParams();
+  const api = useApi();
+  const link = useLink();
+  const navigate = useNavigate();
+  const overview = useOverview(useStation().address);
+  const profile = overview.value?.profiles.find((p) => p.id === id);
+  const save = useAction((models: string[]) => api.putProfile(id, { models }));
+  if (!overview.value) return overview.error ? <Empty><p>{overview.error.message}</p></Empty> : <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}><Waiting shape="cards" text={t("web-pages.profiles.loading")} /></div>;
+  if (!profile) return <Empty><p>{t("web-pages.profiles.notFound", { id })}</p></Empty>;
+  const leave = () => navigate(link(`/settings/accounts/${encodeURIComponent(id)}`), { replace: true });
+  const found = profile.check?.models ?? null;
+  const listed = (profile.available ?? []).length > 0;
+  return (
+    <div className={`${pagesCss.page} ${pagesCss.pageNarrow}`}>
+      <header className={pagesCss.pageHead}>
+        <div>
+          <h1>{t("web-pages.profiles.pickModels.title")}</h1>
+          <p className={shellCss.muted}>{t("web-pages.profiles.pickModels.lead", { name: profile.name })}</p>
+        </div>
+        <div className={css.pickModelsActions}>
+          <Button variant="ghost" onClick={leave}>{t("web-pages.profiles.pickModels.skip")}</Button>
+          <Button variant="primary" disabled={profile.models.length === 0} onClick={leave}>{t("common.done")}</Button>
+        </div>
+      </header>
+      {profile.modelsReading ? <WaitLine text={t("web-pages.profiles.pickModels.reading")} />
+        : !listed && !profile.canAddModel ? <p className={shellCss.muted}>{profile.check?.state === "ok" ? t("web-pages.profiles.pickModels.none") : profile.check?.detail || profile.checkText}</p>
+        : (
+          <div className={css.modelsBody}>
+            {listed && <ModelChecklist profile={profile} found={found} onSave={(models) => save.run(models)} />}
+            {profile.canAddModel && <AddModel profile={profile} />}
+          </div>
+        )}
+      {save.error && <p className={controlsCss.fieldError} role="alert">{save.error.message}</p>}
+    </div>
   );
 }

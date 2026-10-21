@@ -1143,6 +1143,8 @@ data class Profile (
 	val modelsText: String,
 	/// What can be enabled on it: what its provider lists, then whatever is enabled already, each once.
 	val available: List<String>? = null,
+	/// Its models are still being read: never checked yet (one just added is checked at once, a few seconds).
+	val modelsReading: Boolean? = null,
 	/// What it can do: `claude`, `codex`, `dsh`, `grok`, `cursor`, `devin`, `decision` (the automatic decisions). The core works it out from where its
 	/// provider speaks and what its check found.
 	val uses: List<String>? = null,

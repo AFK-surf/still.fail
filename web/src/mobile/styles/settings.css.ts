@@ -6,6 +6,8 @@ import { mCard } from "./lists.css.ts";
 
 export const mStationPage = style({ paddingTop: "12px", paddingBottom: "var(--m-foot)" });
 export const mProfileTools = style({ display: "flex", alignItems: "center", gap: "12px", padding: "0 12px 8px" });
+/** A row of links alone (no field framed out to 12): its words in line with the rows under it, at 24. */
+export const mProfileLinks = style({ paddingInline: "24px" });
 export const mModelRow = style({
   display: "flex", alignItems: "center", gap: "12px", boxSizing: "border-box", width: "100%", minHeight: "44px",
   padding: "11px 24px",

@@ -9,6 +9,9 @@ export const mMono = style({
   textOverflow: "ellipsis", whiteSpace: "nowrap",
 });
 export const mProfileNote = style({ padding: "8px 24px", fontSize: vars.textMeta, color: "var(--m-muted)" });
+/** The step after a profile is added (PickModelsScreen): skipping and done side by side at the screen's foot. */
+export const mPickFoot = style({ display: "flex", gap: "10px", flex: "none", padding: "10px 16px calc(var(--m-foot) + 12px)" });
+globalStyle(`${mPickFoot} > button`, { flex: "1", justifyContent: "center" });
 export const mRowQuota = style({ display: "flex", marginTop: "6px" });
 export const mCheckPill = style({ marginLeft: "0", fontSize: vars.textCaption });
 export const mDeviceCode = style({

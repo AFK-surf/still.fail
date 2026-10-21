@@ -376,6 +376,46 @@ export function ProfileScreen() {
   return <ProfilePage p={p} />;
 }
 
+/**
+ * The step right after a profile is added (s/<station>/settings/accounts/<id>/models): its models chosen on a screen of
+ * their own, since chats use only those enabled, or skipped; either way on to its page. Its models are read by the check
+ * the station runs once it is added (a few seconds): until then, that.
+ */
+export function PickModelsScreen() {
+  const app = useApp();
+  const api = useApi();
+  const station = useStation();
+  const { id = "" } = useParams();
+  const overview = useOverview(station.address);
+  const p = overview.value?.profiles.find((x) => x.id === id);
+  const leave = () => app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`);
+  const title = t("web-mobile.profiles.pickModels.title");
+  if (!p) {
+    return (
+      <div className={pagesCss.mScreen}>
+        <NavBar back="Profile" onBack={app.pop} title={title} />
+        {overview.value ? <Gone text={t("web-mobile.profiles.notFound")} /> : <Waiting fill shape="cards" error={overview.error?.message} />}
+      </div>
+    );
+  }
+  const listed = (p.available ?? []).length > 0;
+  return (
+    <div className={pagesCss.mScreen}>
+      <NavBar back="Profile" onBack={leave} title={title} sub={p.models.length > 0 ? <span className={barsCss.mNavbarNote}>{t("web-mobile.profiles.pickModels.selected", { n: p.models.length })}</span> : undefined} />
+      <div className={pagesCss.mScroll}>
+        <p className={css.mProfileNote}>{t("web-mobile.profiles.pickModels.lead", { name: p.name })}</p>
+        {p.modelsReading ? <WaitLine className={css.mProfileNote} text={t("web-mobile.profiles.pickModels.reading")} />
+          : !listed && !p.canAddModel ? <p className={css.mProfileNote}>{p.check?.state === "ok" ? t("web-mobile.profiles.pickModels.none") : p.check?.detail || p.checkText}</p>
+          : <Models p={p} put={(models) => api.putProfile(p.id, { models })} bare />}
+      </div>
+      <div className={css.mPickFoot}>
+        <Button label={t("web-mobile.profiles.pickModels.skip")} primary={false} onClick={leave} />
+        <Button label={t("common.done")} primary enabled={p.models.length > 0} onClick={leave} />
+      </div>
+    </div>
+  );
+}
+
 function ProfilePage({ p }: { p: Profile }) {
   const app = useApp();
   const sheet = useStationSheet();
@@ -694,7 +734,7 @@ function BackgroundRow({ p, put }: { p: Profile; put: (on: boolean) => Promise<u
 }
 
 /** Which of its models may be used: one per line, a filter when there are many, and all / none of what is shown. */
-function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unknown> }) {
+function Models({ p, put, bare = false }: { p: Profile; put: (models: string[]) => Promise<unknown>; bare?: boolean }) {
   const station = useStation();
   const api = useApi();
   const act = useAct();
@@ -724,9 +764,10 @@ function Models({ p, put }: { p: Profile; put: (models: string[]) => Promise<unk
   }
   return (
     <>
-      <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />
-      <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>
-      <div className={settingsCss.mProfileTools}>
+      {/* On the step after it is added (PickModelsScreen) the screen says what these are. */}
+      {!bare && <SectionHeader title={t(busy ? "web-mobile.profiles.modelsSaving" : "web-mobile.profiles.models", { on: models.length, n: all.length })} start={24} />}
+      {!bare && <p className={css.mProfileNote}>{all.length === 0 ? t("web-mobile.profiles.modelsEmpty") : t("web-mobile.profiles.modelsNote")}</p>}
+      <div className={`${settingsCss.mProfileTools} ${settingsCss.mProfileLinks}`}>
         <button type="button" className={partsCss.mLink} disabled={checking} onClick={() => act(api.checkProfile(p.id), t("web-mobile.profiles.what.refreshModels"), t("web-mobile.profiles.checkDone"))}>
           {checking ? <Spinner inline /> : checkFailed ? <FailedMark error={checkFailed} size={12} /> : null}{checking ? t("web-mobile.profiles.refreshing") : t("web-mobile.profiles.refreshModels")}
         </button>
@@ -952,7 +993,8 @@ export function NewProfileScreen() {
   const runtime = d?.signIn?.runtime ?? (d?.tile?.runtime === "codex" || d?.tile?.runtime === "grok" || d?.tile?.runtime === "cursor" || d?.tile?.runtime === "devin" ? d.tile.runtime : "claude");
   const provider = d?.signIn?.provider ?? (runtime === "claude" ? "Claude" : runtime === "grok" ? "Grok" : runtime === "cursor" ? "Cursor" : runtime === "devin" ? "Devin" : "ChatGPT");
   const begin = () => api.newLogin(runtime, d?.signIn?.access).then(({ id }) => setLogin(id), (e: Error) => setError(e.message));
-  const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`); };
+  // Added: on to choosing its models (PickModelsScreen), the step chats need.
+  const go = (id: string, message: string) => { app.toast(message); app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}/models`); };
   // The sign-in made its profile: on to it.
   useEffect(() => { if (pending?.created) go(pending.created, t("web-mobile.profiles.signedInAdded")); }, [pending?.created]); // eslint-disable-line react-hooks/exhaustive-deps
   // A plan's sign-in starts when it is chosen; leaving before it made its profile leaves nothing behind.
@@ -1080,7 +1122,7 @@ export function MachineLoginOffers({ logins, onSignIn, inForm = false }: { login
   const use = (l: MachineLogin) => {
     api.useMachineLogin(l.runtime).then(({ id }) => {
       app.toast(t("web-mobile.profiles.addedMachine"));
-      app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}`);
+      app.replace(`${stationBase(station.address)}/settings/accounts/${encodeURIComponent(id)}/models`);
     }, (e: Error) => app.toast(t("web-mobile.profiles.addFailed", { error: e.message })));
   };
   return (

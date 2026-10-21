@@ -416,6 +416,7 @@ private fun Pages(app: AppState, current: fail.still.android.data.WorkspaceEntry
                     is Screen.Station -> StationScreen(current, screen.address, screen.login)
                     is Screen.AdbShare -> fail.still.android.screens.AdbShareScreen(current, screen.address)
                     is Screen.Profile -> ProfileScreen(current, screen.address, screen.profile)
+                    is Screen.PickModels -> fail.still.android.screens.PickModelsScreen(current, screen.address, screen.profile)
                     is Screen.History -> fail.still.android.screens.HistoryScreen(screen.station, screen.of, screen.key, screen.entry)
                     is Screen.RunSettings -> fail.still.android.screens.RunSettingsScreen(screen.station, screen.of, screen.key)
                     Screen.Me -> MeScreen(current)

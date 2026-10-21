@@ -666,5 +666,11 @@
   "android-settings.fonts.download": "下载 {size}",
   "android-settings.fonts.downloading": "正在下载 {percent}%",
   "android-settings.fonts.failed": "下载失败：{error}",
-  "android-settings.fonts.damaged": "文件已损坏"
+  "android-settings.fonts.damaged": "文件已损坏",
+  "android-settings.profile.pickModels.title": "选择模型",
+  "android-settings.profile.pickModels.lead": "已添加 {name}。只有已启用的模型可在新对话和连接中选择，之后也可在 Profile 页修改。",
+  "android-settings.profile.pickModels.reading": "正在读取可用模型",
+  "android-settings.profile.pickModels.selected": "已选 {n} 项",
+  "android-settings.profile.pickModels.skip": "跳过",
+  "android-settings.profile.pickModels.none": "此 Profile 未列出模型，可稍后在 Profile 页添加"
 }

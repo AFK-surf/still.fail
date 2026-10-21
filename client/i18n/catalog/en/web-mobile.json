@@ -715,5 +715,11 @@
   "web-mobile.profiles.step1ShortDevin": "On the page, sign in with the Devin account {name} should use",
   "web-mobile.profiles.step2Short": "Paste the code the page shows here",
   "web-mobile.profiles.finishShort": "Finish",
-  "web-mobile.profiles.manualShort": "Sign in on the machine"
+  "web-mobile.profiles.manualShort": "Sign in on the machine",
+  "web-mobile.profiles.pickModels.title": "Select models",
+  "web-mobile.profiles.pickModels.lead": "{name} was added. Only enabled models can be selected for new chats and connects; you can change them later on the profile's page.",
+  "web-mobile.profiles.pickModels.reading": "Reading available models",
+  "web-mobile.profiles.pickModels.selected": "{n} selected",
+  "web-mobile.profiles.pickModels.skip": "Skip",
+  "web-mobile.profiles.pickModels.none": "This profile lists no models; you can add them later on its page"
 }
