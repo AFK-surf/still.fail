@@ -62,6 +62,9 @@ pub(all) struct Core {
   reporting : () -> Bool?
   /// them turned on or off on this device (Crashes.setReporting)
   set_reporting : (Bool) -> Unit
+  /// a station's login as its card, as wide as where it is (LoginCards.kt LoginCard: the chat's, src/sfapp/login_card.mbt),
+  /// by station and id
+  login_card : (@ui.Ctx, String, String) -> Unit
 }
 
 ///|

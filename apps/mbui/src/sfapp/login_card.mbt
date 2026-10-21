@@ -41,6 +41,11 @@ let login_ended_room : @ui.Style = @ui.style(pt=SPx)
 let login_card_room : @ui.Style = @ui.style(w=Full, pt=S1_5, align=AStart)
 
 ///|
+/// `fill`: as wide as where it is (a station page's 登录: StationLogins' Modifier.fillMaxWidth()).
+// kept across runs: a value (no field of it changes)
+let login_card_room_fill : @ui.Style = @ui.style(w=Full, pt=S1_5)
+
+///|
 /// The card's least width (LoginCard: widthIn(min = 280.dp)).
 // kept across runs: a value (no field of it changes)
 let login_card_min_w : @ui.Len = Fixed(280.0)
@@ -172,7 +177,14 @@ let login_finish_words : @ui.TextStyle = @ui.text_style(size=Lg, weight=Semibold
 
 ///|
 /// A login as its card shows it; a login the core does not know draws nothing. `marked`: the one a link pointed to.
-fn login_card(c : @ui.Ctx, src : Source, station : String, id : String, marked? : Bool = false) -> Unit {
+fn login_card(
+  c : @ui.Ctx,
+  src : Source,
+  station : String,
+  id : String,
+  marked? : Bool = false,
+  fill? : Bool = false,
+) -> Unit {
   let topic = (src.topic)("machineLogin", { "station": Json::string(station), "id": Json::string(id) })
   let l = match topic.value {
     Some(Object(_)) as v => v
@@ -188,7 +200,7 @@ fn login_card(c : @ui.Ctx, src : Source, station : String, id : String, marked? 
     return
   }
   let all = (src.topic)("machineLogins", { "station": Json::string(station) })
-  c.box(style=login_card_room, fn() {
+  c.box(style=if fill { login_card_room_fill } else { login_card_room }, fn() {
     c.box(style=if marked { login_card_marked } else { login_card_box }, fn() {
       if flag(all.value, "canLogin") {
         c.box(style=login_head, fn() {

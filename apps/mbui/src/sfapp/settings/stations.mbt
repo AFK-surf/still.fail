@@ -560,6 +560,10 @@ fn station_page(c : @ui.Ctx, core : Core, here : Here, address : String) -> Unit
             }
           _ => ()
         }
+        // the logins its agents did there (LoginCards.kt StationLogins): those under way as their cards
+        for b in station_logins(c, core, address) {
+          more.push(b)
+        }
         match field(overview, "agentEnv") {
           Some(Array(env)) =>
             for b in station_agent_env(c, core, address, env, manager) {
