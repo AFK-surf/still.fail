@@ -46,6 +46,35 @@ for ds in json.load(sys.stdin)['devices'].values():
     if x['name']=='$MBUI_IOS_DEVICE': print(x['udid'], x['state']); sys.exit()
 "
 }
+# iOS's own services the flows never use, which a booted simulator runs all the same (health and fitness, Siri, the
+# weather, mail, Spotlight's knowledge): on GitHub's 3-core runner they kept the load in the hundreds through the flows,
+# the local still.fail starved beside them (its cloud "stopped answering", the app's mesh to the station unanswered:
+# 2026-10-21). Disabled in the simulator's launchd (kept in its data: a cached simulator boots without them) and taken
+# down now.
+QUIET="com.apple.healthappd com.apple.healthd com.apple.finhealthd com.apple.fitnesscoachingd com.apple.fitnessintelligenced
+  com.apple.assistantd com.apple.assistant_service com.apple.assistant_cdmd com.apple.siri.context.service
+  com.apple.siriactionsd com.apple.siriinferenced com.apple.siriknowledged com.apple.sirittsd com.apple.weatherd
+  com.apple.email.maild com.apple.icloudmailagent com.apple.spotlightknowledged.updater"
+quiet() {  # $1 the simulator's id
+  local j
+  for j in $QUIET; do
+    xcrun simctl spawn "$1" launchctl disable "system/$j" >/dev/null 2>&1
+    xcrun simctl spawn "$1" launchctl bootout "system/$j" >/dev/null 2>&1
+  done
+  echo "ios-smoke: $MBUI_IOS_DEVICE's unused services off ($(echo $QUIET | wc -w | tr -d ' '))"
+}
+# The local still.fail (its cloud, relay, station: each a process group, scripts/e2e-local.sh) ahead of the simulator's
+# own processes for the CPU, where the runner lets us (CI's passwordless sudo): with the simulator's load in the
+# hundreds on a 3-core runner its cloud stopped answering and the app's mesh to the station went unanswered
+# (2026-10-21). By hand on Mini1 nothing is changed.
+ahead() {
+  [ -n "${CI:-}" ] && sudo -n true 2>/dev/null || return 0
+  local p pid
+  for p in relay cloud station; do
+    pid=$(cat "$E2E_WORK/run/$p.pid" 2>/dev/null) || continue
+    sudo -n renice -n -10 -g "$pid" >/dev/null 2>&1 && echo "ios-smoke: the local still.fail's $p ahead (group $pid)"
+  done
+}
 apps() {  # the apps running on simulator $1, the system's own left out (as mbui's scripts/host_contract.sh)
   xcrun simctl spawn "$1" launchctl list 2>/dev/null \
     | awk '$1 != "-" && index($3, "UIKitApplication:") == 1 && index($3, "UIKitApplication:com.apple.") != 1 { print $3 }'
@@ -139,7 +168,7 @@ case "${1:-}" in
         rm -rf "$dir/data" && mv "$SIM_DATA/data" "$dir/data" && echo "ios-smoke: $MBUI_IOS_DEVICE with an earlier run's data ($(du -sh "$dir/data" | cut -f1))"
       fi
     fi
-    bash "$D/ios.sh" device > "$STATE/boot.log" 2>&1 &
+    (bash "$D/ios.sh" device && read -r id _ <<< "$(device)" && quiet "$id") > "$STATE/boot.log" 2>&1 &
     echo $! > "$STATE/boot.pid"
     echo "ios-smoke: $MBUI_IOS_DEVICE booting ($STATE/boot.log)" ;;
   prepare)
@@ -166,6 +195,7 @@ case "${1:-}" in
       cat "$STATE/boot.log"
     fi
     [ -z "$up" ] || bash "$D/e2e-local.sh" up || { tail -30 "$E2E_WORK/run/"*.log 2>/dev/null; bash "$D/e2e-local.sh" down; exit 1; }
+    ahead
     bash e2e/run.sh ios; r=$?
     bash "$D/e2e-local.sh" down > /dev/null 2>&1
     exit $r ;;
