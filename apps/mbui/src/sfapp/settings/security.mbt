@@ -390,34 +390,34 @@ fn confirm_device(core : Core, ws : String, r : Json) -> Unit {
           },
         ),
       )
-      c.box(dir=Row, w=Fill(1.0), pt=4.0, gap=10.0, fn() {
-        c.box(w=Fill(1.0), fn() {
-          if wide_button(c, "lock-deny", tr("web-pages.security.deny"), false) {
-            close_sheet()
-            lock_call(core, ws, "deny", tr("web-pages.security.deny"), [("device", device)])
-          }
-        })
-        |> ignore
-        c.box(w=Fill(1.0), fn() {
-          if wide_button(c, "lock-confirm", tr("web-pages.security.confirm"), true) {
-            close_sheet()
-            lock_call(
-              core,
-              ws,
-              "confirm",
-              tr("web-pages.security.confirm"),
-              [("device", device), ("code", code)],
-              done=tr("web-pages.security.confirmed"),
-            )
-          }
-        })
-        |> ignore
+      // one above the other, as wide as the sheet: the words fit in any language (Security.kt:349)
+      c.box(style=confirm_buttons, fn() {
+        if wide_button(c, "lock-confirm", tr("web-pages.security.confirm"), true) {
+          close_sheet()
+          lock_call(
+            core,
+            ws,
+            "confirm",
+            tr("web-pages.security.confirmDevice"),
+            [("device", device), ("code", code)],
+            done=tr("web-pages.security.confirmed"),
+          )
+        }
+        if wide_button(c, "lock-deny", tr("web-pages.security.deny"), false) {
+          close_sheet()
+          lock_call(core, ws, "deny", tr("web-pages.security.denyDevice"), [("device", device)])
+        }
       })
       |> ignore
     })
     |> ignore
   })
 }
+
+///|
+/// 确认 over 拒绝, 10 apart, 4 under the note (Security.kt:349).
+// kept across runs: a value (no field of it changes)
+let confirm_buttons : @ui.Style = @ui.style(w=Full, pt=S1, gap=S2_5)
 
 ///|
 /// A code's letters a little apart (letterSpacing 5): a thin space between each two.

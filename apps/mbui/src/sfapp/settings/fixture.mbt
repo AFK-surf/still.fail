@@ -27,6 +27,8 @@ priv struct SettingsFixture {
   mut resets_used : Int
   /// the models named by hand on ChatGPT 团队 (`profile.addModel`)
   models_added : Array[String]
+  /// a new device of lin's asking to be let in with this one's code (settings-lock-prompt), until turned away
+  mut pairing : Bool
 }
 
 ///|
@@ -43,6 +45,7 @@ let fx : SettingsFixture = {
   skills_shared: {},
   resets_used: 0,
   models_added: [],
+  pairing: false,
 }
 
 ///|
@@ -78,6 +81,7 @@ fn fixture_reset() -> Unit {
   fx.login = false
   fx.vault_off = false
   fx.plain_left = 0
+  fx.pairing = false
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
@@ -127,6 +131,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-mode" => up("connect-mode", "", 0)
     "settings-vault-off" => fx.vault_off = true
     "settings-vault-plain" => fx.plain_left = 2
+    "settings-lock-prompt" => fx.pairing = true
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => up("vault-add", "", 0)
     "settings-vault-editor" => up("vault-editor", "", 0)
@@ -167,7 +172,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"
-    "settings-notify-off" => "home"
+    "settings-notify-off" | "settings-lock-prompt" => "home"
     "settings-station" => "station:ws1/st1"
     "settings-station-offline" => "station:ws1/st2"
     "settings-memory" => "memory:ws1/st1"
@@ -794,6 +799,31 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
         ]),
       )
     "stations" => if fx.none { Some([]) } else { Some([fx_station("ws1/st1"), fx_station("ws1/st2")]) }
+    // a new device asking with this one's code (lock_prompts.mbt)
+    "lockPrompts" =>
+      Some(
+        obj([
+          (
+            "pairing",
+            if fx.pairing {
+              [
+                obj([
+                  ("device", str("d-new")),
+                  ("name", str("林")),
+                  ("email", str("lin@example.com")),
+                  ("kind", str("android")),
+                  ("label", str("Pixel 9")),
+                  ("code", str("482915")),
+                  ("created_at", Json::number(0.0)),
+                  ("workspaces", [obj([("id", str("ws1")), ("name", str("星火工作室"))]), obj([("id", str("ws2")), ("name", str("个人"))])]),
+                ]),
+              ]
+            } else {
+              []
+            },
+          ),
+        ]),
+      )
     "screens" =>
       Some(
         obj([
@@ -1223,6 +1253,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
     // lin's secrets from before security mode encrypted into their vault
     "vault.migrate" => {
       fx.plain_left = 0
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
+    // the new device turned away: no longer asking
+    "lockPrompt.deny" => {
+      fx.pairing = false
       fx.version += 1
       Some(Ok(obj([])))
     }

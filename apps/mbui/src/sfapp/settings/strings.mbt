@@ -445,6 +445,13 @@ let zh : Map[String, String] = {
   // (this app's own: the 安全 page of a device that waits, where it asks: the chats' place)
   "mbui.security.waitingWhere": "在对话页「发送批准请求」，再输入你的受信任设备上显示的安全码；批准前此设备看不到对话，也连不上 station",
   "web-pages.security.requestFailed": "此设备无法提交批准请求：{error}",
+  "web-pages.security.confirmDevice": "批准设备",
+  "web-pages.security.denyDevice": "拒绝设备",
+  "web-pages.security.pairTitle": "{name}的新设备请求批准",
+  "web-pages.security.pairBody": "{device}。在新设备上输入下方安全码即可批准；如果不是你本人的操作，请拒绝。",
+  "web-pages.security.promptFor": "申请访问",
+  "web-pages.security.pairNote": "安全码只显示在此设备上，不会发送给任何人",
+  "web-pages.security.pairDeny": "拒绝",
   "web-pages.security.pairEnter": "输入你的受信任设备上显示的安全码",
   "web-pages.security.pairChecking": "正在验证",
   "web-pages.security.pairFinding": "正在联系你的受信任设备",

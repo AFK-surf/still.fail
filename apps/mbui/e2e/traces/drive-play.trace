@@ -1,763 +1,356 @@
 {"step":"drive-media 105609"}
-{"env":{"MBUI_CLOUD":"http://127.0.0.1:18787","MBUI_CORE_ACCOUNT":"{\"sub\":\"alice\",\"email\":\"alice@example.test\",\"name\":\"Name of alice\",\"picture\":\"\",\"access\":\"-\",\"refresh\":\"-\",\"accessExpires\":1792556158}"}}
-{"out":{"id":1,"call":"client.device","params":{"client":"still.fail mbui","app":"desktop","userAgent":"Macintosh; Mac OS X"}},"w":1792555861760.741}
-{"in":{"id":1,"ok":null},"w":1792555861850.837}
-{"out":{"id":2,"subscribe":{"topic":"accounts"},"keyed":true},"w":1792555861850.862}
-{"out":{"id":3,"subscribe":{"topic":"prefs"},"keyed":true},"w":1792555861850.872}
-{"step":"# written by scripts/rerecord.sh from its test (src/sfreplay/emit.mbt): not edited by hand","w":1792555861852.271}
-{"step":"timeout 90000","w":1792555861852.277}
-{"step":"answered client.device","w":1792555861852.28}
-{"step":"answered client.focus","w":1792555861865.737}
-{"in":{"id":2,"value":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""}]},"w":1792555861931.795}
-{"in":{"id":3,"value":{"onlyMine":false,"onlyWatching":false,"onlyDecisions":false,"listFilter":{},"appearance":"system","rowPicture":"auto","absoluteTime":false,"lang":"zh","keys":{},"lastChat":{},"openChat":{},"chatTabs":{},"dropFiles":{},"driveViews":{},"resume":{},"stationUpdatesDismissed":{},"device":{"app":"desktop","phone":false,"handoff":false},"reader":{"size":18,"line":1.7,"margin":22,"face":"sans","indent":true,"paper":"follow"},"rails":{},"bars":{"sets":[["chats","files","profiles","stations"],["decisions","usage","connects","archive"]],"current":0},"barsBy":{},"fonts":{},"faces":{"ui":{"id":"","name":"","mono":false,"family":"","files":[],"bytes":0},"text":{"id":"","name":"","mono":false,"family":"","files":[],"bytes":0},"code":{"id":"","name":"","mono":true,"family":"","files":[],"bytes":0},"list":[{"id":"inter","name":"Inter","mono":false,"family":"SF Inter","css":"http://127.0.0.1:18787/releases/fonts/inter/4.001/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/inter/4.001/var.ttf.gz","bytes":457818,"sha256":"29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031"}],"preview":"http://127.0.0.1:18787/releases/fonts/inter/4.001/preview-194fa287.ttf","bytes":457818},{"id":"noto-sans-sc","name":"思源黑体","mono":false,"family":"SF Noto Sans SC","css":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/var.ttf.gz","bytes":11276563,"sha256":"a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"}],"preview":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/preview-f0494178.ttf","bytes":11276563},{"id":"noto-serif-sc","name":"思源宋体","mono":false,"family":"SF Noto Serif SC","css":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/var.ttf.gz","bytes":15454579,"sha256":"050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9"}],"preview":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/preview-001bbedf.ttf","bytes":15454579},{"id":"lxgw-wenkai","name":"霞鹜文楷","mono":false,"family":"SF LXGW WenKai","css":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/font.css","files":[{"weight":400,"url":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/400.ttf.gz","bytes":12904482,"sha256":"2d73eea94ad808999d90c0000c239a84a33b09d4bc6ab6c5b8bbf1eda8a7fc8b"},{"weight":500,"url":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/500.ttf.gz","bytes":13272430,"sha256":"f4b8a34d1f838fe411540cb7c97b1c384ac9738a876c4104500bc42508b2312a"}],"preview":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/preview-d3505af4.ttf","bytes":26176912},{"id":"jetbrains-mono","name":"JetBrains Mono","mono":true,"family":"SF JetBrains Mono","css":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/var.ttf.gz","bytes":90579,"sha256":"48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"}],"preview":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/preview-ee73078f.ttf","bytes":90579},{"id":"fira-code","name":"Fira Code","mono":true,"family":"SF Fira Code","css":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/var.ttf.gz","bytes":137151,"sha256":"9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"}],"preview":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/preview-555be27a.ttf","bytes":137151},{"id":"maple-mono","name":"Maple Mono","mono":true,"family":"SF Maple Mono CN","css":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/font.css","files":[{"weight":400,"url":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/400.ttf.gz","bytes":8352545,"sha256":"0fcc5139bfd5ab14ff989bb7dfd5236d0cafc10e60b9828569e6883613ab4085"},{"weight":600,"url":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/600.ttf.gz","bytes":8438132,"sha256":"96ed7ae26ee7c50b02b2d2b2bc0f1a0cbabe45ae5d6e6abf6678e2177c415677"}],"preview":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/preview-cffdf246.ttf","bytes":16790677}]}}},"w":1792555861931.839}
-{"out":{"id":4,"subscribe":{"topic":"workspaces"},"keyed":true},"w":1792555861931.89}
-{"out":{"id":5,"subscribe":{"topic":"status"},"keyed":true},"w":1792555861931.901}
-{"in":{"id":4,"value":[{"account":{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""},"workspaces":[{"id":"01M5EAFAPP5SHX4NP2QN7R5740","name":"Dev","role":"owner","created_at":1792555854,"stations":1,"members":1,"relays":[],"time":{"created_at":{"past":true,"at":1792555854000,"ago":"刚刚","full":"10/21 12:10:54","until":"1 分钟内"}}}],"invitations":[],"relay_url":"http://127.0.0.1:18740","loaded":true,"beta":true}]},"w":1792555861948.472}
-{"in":{"id":5,"value":{"items":[]}},"w":1792555861948.49}
-{"out":{"id":6,"subscribe":{"topic":"lock","workspace":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861948.536}
-{"out":{"id":7,"subscribe":{"topic":"chats","scope":"01M5EAFAPP5SHX4NP2QN7R5740","mine":false},"keyed":true},"w":1792555861948.551}
-{"out":{"id":8,"subscribe":{"topic":"changelog"},"keyed":true},"w":1792555861948.56}
-{"out":{"id":9,"subscribe":{"topic":"workspaceMarks","workspace":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861948.692}
-{"out":{"id":10,"subscribe":{"topic":"stations","scope":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861948.716}
-{"out":{"id":11,"subscribe":{"topic":"workspace","workspace":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861948.72}
-{"out":{"id":12,"subscribe":{"topic":"status","workspace":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861948.785}
-{"out":{"id":13,"call":"client.focus","params":{"visible":true,"focused":true,"workspace":"01M5EAFAPP5SHX4NP2QN7R5740"}},"w":1792555861951.88}
-{"out":{"id":14,"subscribe":{"topic":"notify"},"keyed":true},"w":1792555861951.89}
-{"out":{"id":15,"subscribe":{"topic":"notify","workspace":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861951.898}
-{"in":{"id":6,"value":{"available":true,"locked":false,"notice":true,"role":"owner","manages":true,"owner":true,"canSign":true,"signs":false,"me":{"device":"c2ed27fbe89882822831c740c3fb6222e8f720cc6e26afab50703efe6040aa99","code":"EP9-LDA","kind":"app","confirmed":false,"waiting":false,"asked":false},"signers":0,"members":[],"stations":[{"id":"894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","name":"studio","version":"0.1.0","online":true,"protected":false}],"protected":0,"requests":[],"renew":[],"attention":0}},"w":1792555861967.956}
-{"in":{"id":11,"value":{"id":"01M5EAFAPP5SHX4NP2QN7R5740","name":"Dev","role":"owner","created_at":1792555854,"members":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":"https://example.test/p.png","role":"owner","added_at":1792555854}],"stations":[{"id":"894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","name":"studio","emoji":null,"icon":null,"enrolled_at":1792555855,"enrolled_by":"alice","last_seen":1792555858,"version":"0.1.0","time":{"last_seen":{"past":true,"at":1792555858000,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内"}}}],"invitations":[],"added":[],"relays":[],"lock":null,"lock_requests":0,"time":{"created_at":{"past":true,"at":1792555854000,"ago":"刚刚","full":"10/21 12:10:54","until":"1 分钟内"}}}},"w":1792555861967.978}
-{"in":{"id":7,"value":{"me":{"id":"alice@example.test","email":"alice@example.test"},"stations":[{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","id":"894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","name":"studio","state":"online"}],"loading":false,"days":[{"daysAgo":0,"at":1792555858647,"label":"今天","items":[{"id":"ember:c-af527ffb1b","session":"ember:c-af527ffb1b","thread":1,"title":"端到端测试的对话 post:你好，我是测试用的 agent","agents":[{"key":"ember:c-af527ffb1b","runtime":"claude","process":"warm","pending":0,"lastTurn":{"id":"010879a5-cd27-40c6-b188-dce83ecaa37f","kind":"input","outcome":"completed","declared":"final","ending":"all_done","need":"answered the question that was asked","startedAt":1792555858582,"endedAt":1792555858649},"agentText":"默认模型","statusText":"已完成：answered the question that was asked"}],"last":{"seq":2,"authorKind":"agent","author":"ember:c-af527ffb1b","text":"你好，我是测试用的 agent","createdAt":1792555858647,"by":{"kind":"agent","name":"agent","mine":false,"runtime":"claude","label":"agent"},"preview":"你好，我是测试用的 agent","time":{"createdAt":{"at":1792555858647,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}}},"unread":true,"mine":true,"lastActiveAt":1792555858647,"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","stationName":"studio","time":{"lastActiveAt":{"at":1792555858647,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}},"people":[{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}}],"creator":{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}},"peopleText":"你 发起","clientKey":"new:chat-0136067662b6109fea","pinned":false,"tone":"done"}]}],"trouble":null,"members":1,"leading":"agents","glyph":{"online":1,"dim":0,"connecting":0,"failing":0,"working":0,"summary":"studio","label":"1 台 station，1 台在线"},"note":{"reading":false,"text":null,"failing":[],"empty":false}}},"w":1792555861968.003}
-{"in":{"id":8,"value":{"app":"desktop","tabs":[{"part":"desktop","label":"桌面","days":[]},{"part":"web","label":"网页","days":[]},{"part":"android","label":"安卓","days":[]},{"part":"station","label":"Station","days":[]},{"part":"cloud","label":"云端","days":[]}],"loading":false}},"w":1792555861968.02}
-{"in":{"id":9,"value":{"workspaces":{"01M5EAFAPP5SHX4NP2QN7R5740":{"alert":0,"unread":1,"tone":"done","label":"1 个有新消息","badge":0,"items":[],"mineTone":"done"}},"badge":0,"badgeCounts":"attention","badgeKinds":{"on":true,"wait":true,"failed":true,"done":false,"message":false}}},"w":1792555861968.026}
-{"in":{"id":10,"value":[{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","id":"894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","name":"studio","summary":"空闲 · Apple M4 · 16 GB · macOS 27.0.1","face":"idle","line":"Apple M4","online":true,"reconnecting":false,"lastSeen":1792555858,"version":"0.1.0","link":{"state":"online"},"runtimes":[{"runtime":"claude","models":["claude-sonnet-5-5"]}],"models":[{"model":"claude-sonnet-5-5","name":"Sonnet 5.5","family":"Sonnet","ids":["claude-sonnet-5-5"],"maker":{"id":"anthropic","name":"Anthropic"},"runtimes":["claude"],"efforts":{"claude":["low","medium","high","xhigh","max"]},"accounts":{"claude":[{"efforts":["low","medium","high","xhigh","max"],"id":"cc","name":"cc","current":false,"kind":"env","runtime":"claude","quota":{"state":"unsupported","windows":[],"detail":"自定义环境变量的账号无法查询额度","checkedAt":1792555858563,"time":{"checkedAt":{"at":1792555858563,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}}},"quotaLine":{"text":"自定义环境变量的账号无法查询额度"}}]}}],"overview":{"automaticDecisions":{"canEdit":true,"canReview":true,"settings":{"completion":{"enabled":false,"model":null}},"models":[],"recent":[],"policy":{"text":"agent 说做完了以后，看这个 chat 里用户要的东西现在怎么样了。只按用户实际要的判断：不替用户加要求，用户没要求部署或验证的就不算欠着。agent 说做完了但消息对不上时，以消息为准。看不到的东西（文件、线上状态）不要猜，看不出来就选「看不出来」。","options":[{"id":"answered","name":"已回答","rubric":"用户要的是答案、解释或建议，已经给了，没有要做的事","archive":true,"count":0,"chats":[]},{"id":"landed","name":"已落地","rubric":"要做的改动已经合进 main、已上线或已发版；用户要验证的已经验证","archive":true,"count":0,"chats":[]},{"id":"dropped","name":"不要了","rubric":"用户说不做了、不合了，或者改去别处做了","archive":true,"count":0,"chats":[]},{"id":"agent_work","name":"agent 还有活","rubric":"还有 agent 自己能接着做的事，或者有任务还在跑","archive":false,"count":0,"chats":[]},{"id":"awaiting_review","name":"等人看结果","rubric":"分支、截图、方案等做好了，在等人看或确认","archive":false,"count":0,"chats":[]},{"id":"awaiting_answer","name":"等人回答","rubric":"有没回答的问题，或没做的决定","archive":false,"count":0,"chats":[]},{"id":"awaiting_action","name":"等人去做","rubric":"要人去操作或提供东西，比如 key、权限、真机测试","archive":false,"count":0,"chats":[]},{"id":"uncertain","name":"看不出来","rubric":"消息不够判断还有没有事","archive":false,"count":0,"chats":[]}],"days":7,"checked":0,"failed":0,"edited":false,"change":null,"summaryText":"最近 7 天检查了 0 个 chat","changeText":null}},"archiving":{"days":1,"slackDays":3,"reviewed":false,"canEdit":true},"viewer":{"via":"mesh","email":"alice@example.test","name":"Name of alice","sub":"alice","role":"owner","workspace":"01M5EAFAPP5SHX4NP2QN7R5740","device":"c2ed27fbe89882822831c740c3fb6222e8f720cc6e26afab50703efe6040aa99"},"connects":[],"profiles":[{"id":"cc","name":"cc","runtime":"claude","runtimes":["claude"],"access":{"kind":"env","key":"","login":false},"home":"/tmp/mbe2e-C/data/homes/cc","homeExists":true,"models":["claude-sonnet-5-5"],"env":[],"usedBy":[],"loginCommand":"","machine":false,"backgroundOnMessage":true,"check":{"decision":{"state":"unsupported","detail":"当前登录未提供决策概率接口"},"state":"unknown","detail":"自定义环境变量，still.fail 无法自动检查","checkedAt":1792555858446,"time":{"checkedAt":{"at":1792555858446,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}}},"quota":{"state":"unsupported","windows":[],"detail":"自定义环境变量的账号无法查询额度","checkedAt":1792555858563,"time":{"checkedAt":{"at":1792555858563,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}}},"checkText":"无法检查","checkTone":"neutral","group":"key","groupTitle":"API Key","makers":{"claude-sonnet-5-5":{"id":"anthropic","name":"Anthropic"}},"names":{"claude-sonnet-5-5":"Sonnet 5.5"},"series":[{"name":"Sonnet","models":["claude-sonnet-5-5"]}],"modelsText":"已启用 1 / 1 个模型","available":["claude-sonnet-5-5"],"uses":["claude"],"usesText":"","canAddModel":false,"decisionOnly":false,"decisionModels":[],"workspaces":[]}],"processes":[],"counts":{"sessions":1,"running":0,"warm":1},"mesh":{"state":"running","origin":"http://127.0.0.1:18787","station":"894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","workspace":"Dev","workspaceId":"01M5EAFAPP5SHX4NP2QN7R5740","name":"studio"},"slackUsers":[],"slackTeams":[],"slackApps":[],"feishuRegistrations":[],"disk":{"freeBytes":39952191488,"totalBytes":245107195904},"logins":[],"machineLogins":[],"sharing":true,"consoleSignIn":true,"apiProviders":[{"id":"openai","name":"OpenAI","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"google","name":"Google Gemini","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"xai","name":"xAI","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"mistral","name":"Mistral","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"deepseek","name":"DeepSeek","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"qwen","name":"Qwen","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"moonshotai","name":"Kimi","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"zai","name":"Z.ai","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"minimax","name":"MiniMax","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"xiaomi","name":"Xiaomi MiMo","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"ant-ling","name":"Ant Ling","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"jev","name":"Jev","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"qwen-cn","name":"Qwen (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"moonshotai-cn","name":"Kimi (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"zai-coding-cn","name":"Z.ai Coding (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"minimax-cn","name":"MiniMax (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"openrouter","name":"OpenRouter","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"vercel-ai-gateway","name":"Vercel AI Gateway","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"opencode","name":"OpenCode Zen","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cloudflare-ai-gateway","name":"Cloudflare AI Gateway","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"azure-openai","name":"Azure OpenAI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"groq","name":"Groq","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"together","name":"Together AI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"fireworks","name":"Fireworks","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cerebras","name":"Cerebras","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"huggingface","name":"Hugging Face","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"nvidia","name":"NVIDIA","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"baseten","name":"Baseten","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cloudflare-workers-ai","name":"Cloudflare Workers AI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"ollama","name":"Ollama","group":"local","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"custom","name":"Custom","group":"local","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""}],"updates":[{"id":"station","name":"Station","installed":true,"newer":false,"downgrade":false,"updatable":false,"note":"并非通过安装脚本安装，无法在此更新","state":"idle","checkedAt":1792555856021},{"id":"claude","name":"Claude Code","installed":true,"latest":"2.1.306","newer":false,"downgrade":false,"updatable":true,"state":"idle","checkedAt":1792555856021},{"id":"codex","name":"Codex","installed":true,"latest":"0.163.0","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-news/apps/e2e-local/ember/station/test/fake/codex，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792555856021},{"id":"dsh","name":"DeepSeek Harness","installed":true,"version":"0.2.0","latest":"0.2.1-rc.2","newer":true,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-news/apps/e2e-local/ember/station/test/fake/dsh，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792555856021},{"id":"grok","name":"Grok Build","installed":true,"version":"1.0.62","latest":"1.0.62","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-news/apps/e2e-local/ember/station/test/fake/grok，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792555856021},{"id":"cursor","name":"Cursor","installed":false,"latest":"1.0.40","newer":false,"downgrade":false,"updatable":true,"state":"idle","checkedAt":1792555856021},{"id":"devin","name":"Devin","installed":true,"version":"3000.11.92","latest":"3000.11.92","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-news/apps/e2e-local/ember/station/test/fake/devin，不是用 Devin 的安装脚本装的，需在该机器上手动更新","state":"idle","checkedAt":1792555856021}],"processesText":"没有运行中的 agent 进程","agentEnv":[],"drive":{"roots":[{"path":"/tmp/mbe2e-C/home/e2e-105609","name":"e2e-105609","state":"ok"}],"anywhere":true,"home":"/tmp/mbe2e-C/home"},"search":{"files":"spotlight","personal":false}},"betaOffered":false,"host":{"hostname":"3720-Mac-mini-1","os":"macOS 27.0.1","arch":"arm64","cpus":10,"cpuModel":"Apple M4","load":0.36,"cpuBusy":0.12,"uptimeSec":35222,"memory":{"totalBytes":17179869184,"usedBytes":9038315520,"swapUsedBytes":300742083},"disk":{"path":"/tmp/mbe2e-C/data","totalBytes":245107195904,"freeBytes":39955177472},"emberRssBytes":160118464,"checkedAt":1792555860142,"summary":"10 核 · 16 GB","line":"macOS 27.0.1 · 10 核 · 16 GB · 已运行 0 天","facts":["3720-Mac-mini-1","macOS 27.0.1","arm64 · 10 核","已运行 9 小时"],"meters":[{"label":"CPU","short":"CPU","percent":12,"left":88,"level":"ok","value":"12%","remaining":"空闲 88%","big":"88","unit":"%","title":"CPU 空闲","total":"负载 3.6","note":"负载 3.6 · Apple M4"},{"label":"内存","short":"内存","percent":53,"left":47,"level":"ok","value":"8.4 GB / 16.0 GB","remaining":"剩 7.6 G","big":"7.6","unit":"GB","title":"内存剩","total":"共 16 GB","note":"swap 0.3 GB"},{"label":"磁盘","short":"磁盘","percent":84,"left":16,"level":"amber","value":"剩余 37.2 GB / 228 GB","remaining":"剩 37.2 G","big":"37.2","unit":"GB","title":"磁盘剩","total":"共 228 GB"}],"identity":"Apple M4 · 16 GB · macOS 27.0.1","details":[{"label":"主机名","value":"3720-Mac-mini-1"},{"label":"芯片","value":"Apple M4 · 10 核 · arm64"},{"label":"已运行","value":"9 小时"},{"label":"still.fail","value":"进程占用 153 MB"}],"usage":"内存 8.4 GB / 16.0 GB · 磁盘 剩余 37.2 GB / 228 GB","emberText":"still.fail 153 MB"},"way":{"path":"直连","via":"direct"},"time":{"lastSeen":{"at":1792555858000,"ago":"刚刚","full":"10/21 12:10:58","until":"1 分钟内","past":true}},"joined":false}]},"w":1792555861968.112}
-{"in":{"id":12,"value":{"items":[]}},"w":1792555861968.19}
-{"in":{"id":13,"ok":null},"w":1792555861968.193}
-{"in":{"id":14,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792555861968.198}
-{"in":{"id":15,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792555861968.202}
-{"out":{"id":16,"subscribe":{"topic":"longJobs","scope":"01M5EAFAPP5SHX4NP2QN7R5740"},"keyed":true},"w":1792555861968.242}
-{"out":{"id":17,"call":"notify.permission","params":{"state":"unknown"}},"w":1792555861970.367}
-{"in":{"id":10,"delta":[{"path":[0,"overview","disk","freeBytes"],"set":39952171008}]},"w":1792555861981.891}
-{"in":{"id":16,"value":{"groups":[]}},"w":1792555861981.927}
-{"in":{"id":17,"ok":null},"w":1792555861981.935}
-{"step":"#before drive-media 105609","w":1792555861982.163}
-{"step":"#env MBUI_OPEN_PAGE=files","w":1792555861982.165}
-{"step":"answered notify.permission","w":1792555861982.167}
-{"step":"tap =e2e-105609","w":1792555861998.948}
-{"step":"tap =e2e-105609","acted":true,"w":1792555862065.373}
-{"out":{"id":18,"subscribe":{"topic":"drive","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":""},"keyed":true},"w":1792555862081.914}
-{"step":"tap 影音","w":1792555862083.198}
-{"in":{"id":18,"value":{"path":"","entries":[{"name":"子文件夹","dir":true,"size":0,"mtime":1792555859188,"type":"","kind":"folder","sizeText":"","timeText":"12:10"},{"name":"影音","dir":true,"size":0,"mtime":1792555861745,"type":"","kind":"folder","sizeText":"","timeText":"12:11"},{"name":"小说-e2e.txt","dir":false,"size":36779,"mtime":1792555859201,"type":"text/plain; charset=utf-8","kind":"text","sizeText":"36 KB","timeText":"12:10"},{"name":"说明.txt","dir":false,"size":43,"mtime":1792555859188,"type":"text/plain; charset=utf-8","kind":"text","sizeText":"43 B","timeText":"12:10"}],"truncated":false,"folders":2,"files":2,"countText":"2 个文件夹 · 2 个文件"}},"w":1792555862098.475}
-{"out":{"id":19,"subscribe":{"topic":"drivePlace","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"小说-e2e.txt"},"keyed":true},"w":1792555862100.025}
-{"out":{"id":20,"subscribe":{"topic":"drivePlace","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"说明.txt"},"keyed":true},"w":1792555862100.306}
-{"in":{"id":19,"value":null},"w":1792555862115.142}
-{"in":{"id":20,"value":null},"w":1792555862115.157}
-{"step":"tap 影音","acted":true,"w":1792555862199.266}
-{"out":{"id":21,"subscribe":{"topic":"drive","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音"},"keyed":true},"w":1792555862215.841}
-{"step":"until 第01集.mp4","w":1792555862220.885}
-{"in":{"id":21,"value":{"path":"影音","entries":[{"name":"片尾曲.m4a","dir":false,"size":45252,"mtime":1792555861744,"type":"audio/mp4","kind":"audio","sizeText":"44 KB","timeText":"12:11"},{"name":"第01集.mp4","dir":false,"size":2276541,"mtime":1792555861547,"type":"video/mp4","kind":"video","sizeText":"2.2 MB","timeText":"12:11"},{"name":"第01集.srt","dir":false,"size":97,"mtime":1792555861745,"type":"application/x-subrip","kind":"subtitle","sizeText":"97 B","timeText":"12:11"},{"name":"第02集.mp4","dir":false,"size":461621,"mtime":1792555861686,"type":"video/mp4","kind":"video","sizeText":"451 KB","timeText":"12:11"}],"truncated":false,"folders":0,"files":4,"countText":"4 个文件"}},"w":1792555862231.841}
-{"step":"until 片尾曲.m4a","w":1792555862333.014}
-{"step":"tap 第01集.mp4","w":1792555862333.041}
-{"step":"tap 第01集.mp4","acted":true,"w":1792555862333.091}
-{"out":{"id":22,"subscribe":{"topic":"drivePlace","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4"},"keyed":true},"w":1792555862349.39}
-{"out":{"id":23,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.srt","offset":0,"length":4194304}},"w":1792555862350.123}
-{"step":"answered drive.read","w":1792555862356.139}
-{"in":{"id":22,"value":null},"w":1792555862365.319}
-{"in":{"id":23,"ok":{"type":"application/x-subrip","total":97,"mtime":1792555861745}},"w":1792555862365.358,"b":"310a30303a30303a30302c323030202d2d3e2030303a30303a30342c3030300ae7acace4b880e58fa5e5ad97e5b9950a0a320a30303a30303a30342c303030202d2d3e2030303a30303a30372c3530300ae7acace4ba8ce58fa5e5ad97e5b9950a"}
-{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792555862408.514}
-{"step":"until 2 / 3","w":1792555862419.451}
-{"out":{"id":24,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2}},"w":1792555862432.96}
-{"in":{"id":24,"ok":{"type":"video/mp4","total":2276541,"mtime":1792555861547}},"w":1792555862448.463,"b":"0000"}
-{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792555862448.833}
-{"step":"answered drive.read","w":1792555862449.314}
-{"out":{"id":25,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2276541}},"w":1792555862465.536}
-{"step":"answered drive.read","w":1792555862465.638}
-{"in":{"id":25,"ok":{"type":"video/mp4","total":2276541,"mtime":1792555861547}},"w":1792555862498.734,"bn":2276541}
-{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,2276543,0,1,0,0]},"w":1792555862498.944}
-{"step":"until 第一句字幕","w":1792555862515.372}
-{"info":{"view":1,"state":1,"at":[20000,0,1,640,360,2276543,0,0,20000,0]},"w":1792555862648.462}
-{"info":{"view":1,"state":1,"at":[20000,0,1,640,360,2276543,1,0,20000,0]},"w":1792555862665.246}
-{"info":{"view":1,"state":1,"at":[20000,1.9954880000000002,1,640,360,2276543,1,0,20000,0]},"w":1792555862765.135}
-{"info":{"view":1,"state":1,"at":[20000,2.116905,1,640,360,2276543,1,0,20000,0]},"w":1792555862765.253}
-{"info":{"view":1,"state":1,"at":[20000,18.662363000000003,1,640,360,2276543,1,0,20000,0]},"w":1792555862781.799}
-{"info":{"view":1,"state":1,"at":[20000,18.733822,1,640,360,2276543,1,0,20000,0]},"w":1792555862781.87}
-{"info":{"view":1,"state":1,"at":[20000,35.328947,1,640,360,2276543,1,0,20000,0]},"w":1792555862798.465}
-{"info":{"view":1,"state":1,"at":[20000,35.397322,1,640,360,2276543,1,0,20000,0]},"w":1792555862798.533}
-{"info":{"view":1,"state":1,"at":[20000,51.986655,1,640,360,2276543,1,0,20000,0]},"w":1792555862815.123}
-{"info":{"view":1,"state":1,"at":[20000,52.051988,1,640,360,2276543,1,0,20000,0]},"w":1792555862815.188}
-{"info":{"view":1,"state":1,"at":[20000,68.65598800000001,1,640,360,2276543,1,0,20000,0]},"w":1792555862831.795}
-{"info":{"view":1,"state":1,"at":[20000,68.776947,1,640,360,2276543,1,0,20000,0]},"w":1792555862831.914}
-{"info":{"view":1,"state":1,"at":[20000,85.346822,1,640,360,2276543,1,0,20000,0]},"w":1792555862848.49}
-{"info":{"view":1,"state":1,"at":[20000,85.459155,1,640,360,2276543,1,0,20000,0]},"w":1792555862848.596}
-{"info":{"view":1,"state":1,"at":[20000,102.027488,1,640,360,2276543,1,0,20000,0]},"w":1792555862865.168}
-{"info":{"view":1,"state":1,"at":[20000,102.163822,1,640,360,2276543,1,0,20000,0]},"w":1792555862865.301}
-{"info":{"view":1,"state":1,"at":[20000,118.699738,1,640,360,2276543,1,0,20000,0]},"w":1792555862881.856}
-{"info":{"view":1,"state":1,"at":[20000,119.064697,1,640,360,2276543,1,0,20000,0]},"w":1792555862882.21}
-{"info":{"view":1,"state":1,"at":[20000,135.386822,1,640,360,2276543,1,0,20000,0]},"w":1792555862898.551}
-{"info":{"view":1,"state":1,"at":[20000,135.89652999999998,1,640,360,2276543,1,0,20000,0]},"w":1792555862899.042}
-{"info":{"view":1,"state":1,"at":[20000,152.03915500000002,1,640,360,2276543,1,0,20000,0]},"w":1792555862915.197}
-{"info":{"view":1,"state":1,"at":[20000,152.523405,1,640,360,2276543,1,0,20000,0]},"w":1792555862915.667}
-{"info":{"view":1,"state":1,"at":[20000,168.734155,1,640,360,2276543,1,0,20000,0]},"w":1792555862931.9}
-{"info":{"view":1,"state":1,"at":[20000,169.36532200000002,1,640,360,2276543,1,0,20000,0]},"w":1792555862932.513}
-{"info":{"view":1,"state":1,"at":[20000,185.39361300000002,1,640,360,2276543,1,0,20000,0]},"w":1792555862948.561}
-{"info":{"view":1,"state":1,"at":[20000,186.03773800000002,1,640,360,2276543,1,0,20000,0]},"w":1792555862949.186}
-{"info":{"view":1,"state":1,"at":[20000,202.099322,1,640,360,2276543,1,0,20000,0]},"w":1792555862965.27}
-{"info":{"view":1,"state":1,"at":[20000,205.47828,1,640,360,2276543,1,0,20000,0]},"w":1792555862968.631}
-{"step":"back","w":1792555862968.953}
-{"step":"back","acted":true,"w":1792555862969.005}
-{"info":{"view":1,"state":1,"at":[20000,218.70932200000001,1,640,360,2276543,1,0,20000,0]},"w":1792555862981.862}
-{"info":{"view":1,"state":1,"at":[20000,219.946822,1,640,360,2276543,1,0,20000,0]},"w":1792555862983.093}
-{"step":"answered drive.place","w":1792555862983.331}
-{"info":{"view":1,"state":1,"at":[20000,235.408322,1,640,360,2276543,1,0,20000,0]},"w":1792555862998.573}
-{"info":{"view":1,"state":1,"at":[20000,236.765863,1,640,360,2276543,1,0,20000,0]},"w":1792555862999.916}
-{"info":{"view":1,"state":1,"at":[20000,252.000863,1,640,360,2276543,1,0,20000,0]},"w":1792555863015.144}
-{"info":{"view":1,"state":1,"at":[20000,252.53423800000002,1,640,360,2276543,1,0,20000,0]},"w":1792555863015.673}
-{"info":{"view":1,"state":1,"at":[20000,268.782738,1,640,360,2276543,1,0,20000,0]},"w":1792555863031.957}
-{"info":{"view":1,"state":1,"at":[20000,269.903613,1,640,360,2276543,1,0,20000,0]},"w":1792555863033.052}
-{"info":{"view":1,"state":1,"at":[20000,285.380572,1,640,360,2276543,1,0,20000,0]},"w":1792555863048.538}
-{"info":{"view":1,"state":1,"at":[20000,286.914405,1,640,360,2276543,1,0,20000,0]},"w":1792555863050.064}
-{"info":{"view":1,"state":1,"at":[20000,302.052322,1,640,360,2276543,1,0,20000,0]},"w":1792555863065.216}
-{"info":{"view":1,"state":1,"at":[20000,303.341197,1,640,360,2276543,1,0,20000,0]},"w":1792555863066.49}
-{"info":{"view":1,"state":1,"at":[20000,318.722488,1,640,360,2276543,1,0,20000,0]},"w":1792555863081.885}
-{"info":{"view":1,"state":1,"at":[20000,320.042947,1,640,360,2276543,1,0,20000,0]},"w":1792555863083.193}
-{"info":{"view":1,"state":1,"at":[20000,335.405572,1,640,360,2276543,1,0,20000,0]},"w":1792555863098.577}
-{"info":{"view":1,"state":1,"at":[20000,336.894572,1,640,360,2276543,1,0,20000,0]},"w":1792555863100.048}
-{"info":{"view":1,"state":1,"at":[20000,352.04661300000004,1,640,360,2276543,1,0,20000,0]},"w":1792555863115.211}
-{"info":{"view":1,"state":1,"at":[20000,353.376822,1,640,360,2276543,1,0,20000,0]},"w":1792555863116.527}
-{"info":{"view":1,"state":1,"at":[20000,368.73790499999996,1,640,360,2276543,1,0,20000,0]},"w":1792555863131.906}
-{"info":{"view":1,"state":1,"at":[20000,370.129905,1,640,360,2276543,1,0,20000,0]},"w":1792555863133.282}
-{"info":{"view":1,"state":1,"at":[20000,385.879238,1,640,360,2276543,1,0,20000,0]},"w":1792555863149.051}
-{"info":{"view":1,"state":1,"at":[20000,387.32277999999997,1,640,360,2276543,1,0,20000,0]},"w":1792555863150.485}
-{"info":{"view":1,"state":1,"at":[20000,402.070488,1,640,360,2276543,1,0,20000,0]},"w":1792555863165.242}
-{"info":{"view":1,"state":1,"at":[20000,403.30278000000004,1,640,360,2276543,1,0,20000,0]},"w":1792555863166.452}
-{"info":{"view":1,"state":1,"at":[20000,418.73190500000004,1,640,360,2276543,1,0,20000,0]},"w":1792555863181.901}
-{"info":{"view":1,"state":1,"at":[20000,420.159322,1,640,360,2276543,1,0,20000,0]},"w":1792555863183.312}
-{"info":{"view":1,"state":1,"at":[20000,435.395822,1,640,360,2276543,1,0,20000,0]},"w":1792555863198.56}
-{"info":{"view":1,"state":1,"at":[20000,436.781655,1,640,360,2276543,1,0,20000,0]},"w":1792555863199.932}
-{"info":{"view":1,"state":1,"at":[20000,452.056447,1,640,360,2276543,1,0,20000,0]},"w":1792555863215.217}
-{"info":{"view":1,"state":1,"at":[20000,453.334072,1,640,360,2276543,1,0,20000,0]},"w":1792555863216.483}
-{"info":{"view":1,"state":1,"at":[20000,468.73236299999996,1,640,360,2276543,1,0,20000,0]},"w":1792555863231.897}
-{"info":{"view":1,"state":1,"at":[20000,470.054572,1,640,360,2276543,1,0,20000,0]},"w":1792555863233.204}
-{"info":{"view":1,"state":1,"at":[20000,485.41173799999996,1,640,360,2276543,1,0,20000,0]},"w":1792555863248.588}
-{"info":{"view":1,"state":1,"at":[20000,486.73132200000003,1,640,360,2276543,1,0,20000,0]},"w":1792555863249.882}
-{"info":{"view":1,"state":1,"at":[20000,502.08261300000004,1,640,360,2276543,1,0,20000,0]},"w":1792555863265.258}
-{"info":{"view":1,"state":1,"at":[20000,503.93273800000003,1,640,360,2276543,1,0,20000,0]},"w":1792555863267.087}
-{"info":{"view":1,"state":1,"at":[20000,518.7501129999999,1,640,360,2276543,1,0,20000,0]},"w":1792555863281.927}
-{"out":{"id":26,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","at":519,"of":20000}},"w":1792555863283.131}
-{"in":{"id":26,"ok":null},"w":1792555863298.484}
-{"step":"until 第02集.mp4","w":1792555863316.013}
-{"step":"tap 第01集.mp4","w":1792555863316.049}
-{"step":"tap 第01集.mp4","acted":true,"w":1792555863316.08}
-{"out":{"id":27,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.srt","offset":0,"length":4194304}},"w":1792555863335.936}
-{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792555863336.796}
-{"step":"answered drive.read","w":1792555863337.137}
-{"in":{"id":22,"value":{"at":519,"of":20000,"changed":1792555863283}},"w":1792555863348.481}
-{"in":{"id":27,"ok":{"type":"application/x-subrip","total":97,"mtime":1792555861745}},"w":1792555863348.522,"b":"310a30303a30303a30302c323030202d2d3e2030303a30303a30342c3030300ae7acace4b880e58fa5e5ad97e5b9950a0a320a30303a30303a30342c303030202d2d3e2030303a30303a30372c3530300ae7acace4ba8ce58fa5e5ad97e5b9950a"}
-{"out":{"id":28,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2}},"w":1792555863349.656}
-{"in":{"id":28,"ok":{"type":"video/mp4","total":2276541,"mtime":1792555861547}},"w":1792555863365.147,"b":"0000"}
-{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792555863365.358}
-{"step":"until 2 / 3","w":1792555863366.752}
-{"out":{"id":29,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2276541}},"w":1792555863382.956}
-{"in":{"id":29,"ok":{"type":"video/mp4","total":2276541,"mtime":1792555861547}},"w":1792555863415.331,"bn":2276541}
-{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,2276543,0,1,0,0]},"w":1792555863415.826}
-{"info":{"view":2,"state":0,"at":[20000,0,1,640,360,2276543,0,1,0,0]},"w":1792555863433.504}
-{"step":"answered drive.read","w":1792555863434.178}
-{"info":{"view":2,"state":1,"at":[20000,0,1,640,360,2276543,1,0,20000,0]},"w":1792555863448.478}
-{"step":"answered drive.read","w":1792555863449.021}
-{"step":"until / 0:20","w":1792555863465.484}
-{"step":"tap icon:forward-15","w":1792555863465.494}
-{"step":"tap icon:forward-15","acted":true,"w":1792555863465.51}
-{"info":{"view":2,"state":1,"at":[20000,15000,1,640,360,2276543,1,0,20000,0]},"w":1792555863482.382}
-{"step":"tap icon:forward-15","w":1792555863482.455}
-{"step":"tap icon:forward-15","acted":true,"w":1792555863482.47}
-{"info":{"view":2,"state":1,"at":[20000,20000,1,640,360,2276543,1,0,20000,0]},"w":1792555863523.009}
-{"step":"until 播放结束","w":1792555863523.213}
-{"info":{"view":2,"state":1,"at":[20000,20000,0,640,360,2276543,1,0,20000,1]},"w":1792555863615.195}
-{"step":"tap 下一个：第02集.mp4","w":1792555863620.677}
-{"step":"tap 下一个：第02集.mp4","acted":true,"w":1792555863620.711}
-{"out":{"id":30,"subscribe":{"topic":"drivePlace","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4"},"keyed":true},"w":1792555863632.636}
-{"step":"answered drive.place","w":1792555863633.502}
-{"in":{"id":30,"value":null},"w":1792555863648.483}
-{"out":{"id":31,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","at":20000,"of":20000}},"w":1792555863653.766}
-{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792555863655.623}
-{"in":{"id":31,"ok":null},"w":1792555863665.146}
-{"out":{"id":32,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","offset":0,"length":2}},"w":1792555863665.697}
-{"in":{"id":32,"ok":{"type":"video/mp4","total":461621,"mtime":1792555861686}},"w":1792555863681.824,"b":"0000"}
-{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792555863682.038}
-{"step":"answered drive.place","w":1792555863683.067}
-{"out":{"id":33,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","offset":0,"length":461621}},"w":1792555863698.704}
-{"in":{"id":22,"value":{"at":20000,"of":20000,"changed":1792555863654}},"w":1792555863715.155}
-{"in":{"id":33,"ok":{"type":"video/mp4","total":461621,"mtime":1792555861686}},"w":1792555863715.296,"bn":461621}
-{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,461623,0,1,0,0]},"w":1792555863715.441}
-{"info":{"view":3,"state":1,"at":[4000,0,1,640,360,461623,1,0,4000,0]},"w":1792555863731.793}
-{"info":{"view":3,"state":1,"at":[4000,6.71629,1,640,360,461623,1,0,4000,0]},"w":1792555863815.22}
-{"info":{"view":3,"state":1,"at":[4000,7.26554,1,640,360,461623,1,0,4000,0]},"w":1792555863815.75}
-{"info":{"view":3,"state":1,"at":[4000,23.376831,1,640,360,461623,1,0,4000,0]},"w":1792555863831.88}
-{"info":{"view":3,"state":1,"at":[4000,23.897665,1,640,360,461623,1,0,4000,0]},"w":1792555863832.382}
-{"info":{"view":3,"state":1,"at":[4000,40.047622999999994,1,640,360,461623,1,0,4000,0]},"w":1792555863848.551}
-{"info":{"view":3,"state":1,"at":[4000,40.647998,1,640,360,461623,1,0,4000,0]},"w":1792555863849.135}
-{"info":{"view":3,"state":1,"at":[4000,56.705580999999995,1,640,360,461623,1,0,4000,0]},"w":1792555863865.209}
-{"info":{"view":3,"state":1,"at":[4000,57.247122999999995,1,640,360,461623,1,0,4000,0]},"w":1792555863865.733}
-{"info":{"view":3,"state":1,"at":[4000,73.380956,1,640,360,461623,1,0,4000,0]},"w":1792555863881.883}
-{"info":{"view":3,"state":1,"at":[4000,73.959915,1,640,360,461623,1,0,4000,0]},"w":1792555863882.446}
-{"info":{"view":3,"state":1,"at":[4000,90.034081,1,640,360,461623,1,0,4000,0]},"w":1792555863898.534}
-{"info":{"view":3,"state":1,"at":[4000,90.569456,1,640,360,461623,1,0,4000,0]},"w":1792555863899.054}
-{"info":{"view":3,"state":1,"at":[4000,106.738206,1,640,360,461623,1,0,4000,0]},"w":1792555863915.249}
-{"info":{"view":3,"state":1,"at":[4000,107.284123,1,640,360,461623,1,0,4000,0]},"w":1792555863915.766}
-{"info":{"view":3,"state":1,"at":[4000,123.337665,1,640,360,461623,1,0,4000,0]},"w":1792555863931.828}
-{"info":{"view":3,"state":1,"at":[4000,123.61916500000001,1,640,360,461623,1,0,4000,0]},"w":1792555863932.097}
-{"info":{"view":3,"state":1,"at":[4000,140.012956,1,640,360,461623,1,0,4000,0]},"w":1792555863948.507}
-{"info":{"view":3,"state":1,"at":[4000,140.32429,1,640,360,461623,1,0,4000,0]},"w":1792555863948.802}
-{"info":{"view":3,"state":1,"at":[4000,156.655081,1,640,360,461623,1,0,4000,0]},"w":1792555863965.136}
-{"info":{"view":3,"state":1,"at":[4000,156.782248,1,640,360,461623,1,0,4000,0]},"w":1792555863965.257}
-{"info":{"view":3,"state":1,"at":[4000,173.316665,1,640,360,461623,1,0,4000,0]},"w":1792555863981.794}
-{"info":{"view":3,"state":1,"at":[4000,173.412873,1,640,360,461623,1,0,4000,0]},"w":1792555863981.887}
-{"info":{"view":3,"state":1,"at":[4000,189.99274799999998,1,640,360,461623,1,0,4000,0]},"w":1792555863998.471}
-{"info":{"view":3,"state":1,"at":[4000,190.14233099999998,1,640,360,461623,1,0,4000,0]},"w":1792555863998.617}
-{"info":{"view":3,"state":1,"at":[4000,206.647165,1,640,360,461623,1,0,4000,0]},"w":1792555864015.122}
-{"info":{"view":3,"state":1,"at":[4000,206.726873,1,640,360,461623,1,0,4000,0]},"w":1792555864015.201}
-{"info":{"view":3,"state":1,"at":[4000,223.313873,1,640,360,461623,1,0,4000,0]},"w":1792555864031.79}
-{"info":{"view":3,"state":1,"at":[4000,223.401498,1,640,360,461623,1,0,4000,0]},"w":1792555864031.876}
-{"info":{"view":3,"state":1,"at":[4000,239.980415,1,640,360,461623,1,0,4000,0]},"w":1792555864048.455}
-{"info":{"view":3,"state":1,"at":[4000,240.060623,1,640,360,461623,1,0,4000,0]},"w":1792555864048.535}
-{"info":{"view":3,"state":1,"at":[4000,256.65379,1,640,360,461623,1,0,4000,0]},"w":1792555864065.129}
-{"info":{"view":3,"state":1,"at":[4000,256.753665,1,640,360,461623,1,0,4000,0]},"w":1792555864065.228}
-{"info":{"view":3,"state":1,"at":[4000,273.318915,1,640,360,461623,1,0,4000,0]},"w":1792555864081.795}
-{"info":{"view":3,"state":1,"at":[4000,273.43337299999996,1,640,360,461623,1,0,4000,0]},"w":1792555864081.909}
-{"info":{"view":3,"state":1,"at":[4000,290.022831,1,640,360,461623,1,0,4000,0]},"w":1792555864098.518}
-{"info":{"view":3,"state":1,"at":[4000,290.375331,1,640,360,461623,1,0,4000,0]},"w":1792555864098.86}
-{"info":{"view":3,"state":1,"at":[4000,306.716956,1,640,360,461623,1,0,4000,0]},"w":1792555864115.222}
-{"info":{"view":3,"state":1,"at":[4000,307.270623,1,640,360,461623,1,0,4000,0]},"w":1792555864115.754}
-{"info":{"view":3,"state":1,"at":[4000,323.380373,1,640,360,461623,1,0,4000,0]},"w":1792555864131.881}
-{"info":{"view":3,"state":1,"at":[4000,323.88962300000003,1,640,360,461623,1,0,4000,0]},"w":1792555864132.372}
-{"info":{"view":3,"state":1,"at":[4000,340.049956,1,640,360,461623,1,0,4000,0]},"w":1792555864148.555}
-{"info":{"view":3,"state":1,"at":[4000,340.701456,1,640,360,461623,1,0,4000,0]},"w":1792555864149.189}
-{"info":{"view":3,"state":1,"at":[4000,356.711498,1,640,360,461623,1,0,4000,0]},"w":1792555864165.216}
-{"info":{"view":3,"state":1,"at":[4000,357.332831,1,640,360,461623,1,0,4000,0]},"w":1792555864165.82}
-{"info":{"view":3,"state":1,"at":[4000,373.37420599999996,1,640,360,461623,1,0,4000,0]},"w":1792555864181.877}
-{"info":{"view":3,"state":1,"at":[4000,373.96704,1,640,360,461623,1,0,4000,0]},"w":1792555864182.453}
-{"info":{"view":3,"state":1,"at":[4000,390.21429,1,640,360,461623,1,0,4000,0]},"w":1792555864198.731}
-{"info":{"view":3,"state":1,"at":[4000,390.937748,1,640,360,461623,1,0,4000,0]},"w":1792555864199.424}
-{"info":{"view":3,"state":1,"at":[4000,406.73454,1,640,360,461623,1,0,4000,0]},"w":1792555864215.254}
-{"info":{"view":3,"state":1,"at":[4000,407.42779,1,640,360,461623,1,0,4000,0]},"w":1792555864215.915}
-{"info":{"view":3,"state":1,"at":[4000,423.82333100000005,1,640,360,461623,1,0,4000,0]},"w":1792555864232.352}
-{"info":{"view":3,"state":1,"at":[4000,424.427122,1,640,360,461623,1,0,4000,0]},"w":1792555864232.93}
-{"info":{"view":3,"state":1,"at":[4000,440.023914,1,640,360,461623,1,0,4000,0]},"w":1792555864248.542}
-{"info":{"view":3,"state":1,"at":[4000,440.602831,1,640,360,461623,1,0,4000,0]},"w":1792555864249.104}
-{"info":{"view":3,"state":1,"at":[4000,456.71378899999996,1,640,360,461623,1,0,4000,0]},"w":1792555864265.273}
-{"info":{"view":3,"state":1,"at":[4000,457.380164,1,640,360,461623,1,0,4000,0]},"w":1792555864265.884}
-{"info":{"view":3,"state":1,"at":[4000,473.348122,1,640,360,461623,1,0,4000,0]},"w":1792555864281.866}
-{"info":{"view":3,"state":1,"at":[4000,473.901039,1,640,360,461623,1,0,4000,0]},"w":1792555864282.403}
-{"info":{"view":3,"state":1,"at":[4000,490.018122,1,640,360,461623,1,0,4000,0]},"w":1792555864298.546}
-{"info":{"view":3,"state":1,"at":[4000,490.581831,1,640,360,461623,1,0,4000,0]},"w":1792555864299.083}
-{"info":{"view":3,"state":1,"at":[4000,506.69020600000005,1,640,360,461623,1,0,4000,0]},"w":1792555864315.208}
-{"info":{"view":3,"state":1,"at":[4000,507.290622,1,640,360,461623,1,0,4000,0]},"w":1792555864315.792}
-{"info":{"view":3,"state":1,"at":[4000,523.355081,1,640,360,461623,1,0,4000,0]},"w":1792555864331.872}
-{"info":{"view":3,"state":1,"at":[4000,523.8891639999999,1,640,360,461623,1,0,4000,0]},"w":1792555864332.39}
-{"info":{"view":3,"state":1,"at":[4000,540.034831,1,640,360,461623,1,0,4000,0]},"w":1792555864348.558}
-{"info":{"view":3,"state":1,"at":[4000,540.653247,1,640,360,461623,1,0,4000,0]},"w":1792555864349.156}
-{"info":{"view":3,"state":1,"at":[4000,556.6988309999999,1,640,360,461623,1,0,4000,0]},"w":1792555864365.221}
-{"info":{"view":3,"state":1,"at":[4000,557.3289139999999,1,640,360,461623,1,0,4000,0]},"w":1792555864365.832}
-{"info":{"view":3,"state":1,"at":[4000,573.364664,1,640,360,461623,1,0,4000,0]},"w":1792555864381.885}
-{"info":{"view":3,"state":1,"at":[4000,573.951997,1,640,360,461623,1,0,4000,0]},"w":1792555864382.455}
-{"info":{"view":3,"state":1,"at":[4000,590.0409970000001,1,640,360,461623,1,0,4000,0]},"w":1792555864398.561}
-{"info":{"view":3,"state":1,"at":[4000,590.619497,1,640,360,461623,1,0,4000,0]},"w":1792555864399.122}
-{"info":{"view":3,"state":1,"at":[4000,606.696331,1,640,360,461623,1,0,4000,0]},"w":1792555864415.213}
-{"info":{"view":3,"state":1,"at":[4000,607.278414,1,640,360,461623,1,0,4000,0]},"w":1792555864415.791}
-{"info":{"view":3,"state":1,"at":[4000,623.350789,1,640,360,461623,1,0,4000,0]},"w":1792555864431.869}
-{"info":{"view":3,"state":1,"at":[4000,623.9054560000001,1,640,360,461623,1,0,4000,0]},"w":1792555864432.407}
-{"info":{"view":3,"state":1,"at":[4000,640.024622,1,640,360,461623,1,0,4000,0]},"w":1792555864448.54}
-{"info":{"view":3,"state":1,"at":[4000,640.584831,1,640,360,461623,1,0,4000,0]},"w":1792555864449.086}
-{"info":{"view":3,"state":1,"at":[4000,656.708622,1,640,360,461623,1,0,4000,0]},"w":1792555864465.228}
-{"info":{"view":3,"state":1,"at":[4000,657.306914,1,640,360,461623,1,0,4000,0]},"w":1792555864465.81}
-{"info":{"view":3,"state":1,"at":[4000,673.3769560000001,1,640,360,461623,1,0,4000,0]},"w":1792555864481.897}
-{"info":{"view":3,"state":1,"at":[4000,674.036831,1,640,360,461623,1,0,4000,0]},"w":1792555864482.542}
-{"info":{"view":3,"state":1,"at":[4000,690.0376219999999,1,640,360,461623,1,0,4000,0]},"w":1792555864498.555}
-{"info":{"view":3,"state":1,"at":[4000,690.5890810000001,1,640,360,461623,1,0,4000,0]},"w":1792555864499.089}
-{"info":{"view":3,"state":1,"at":[4000,706.6989970000001,1,640,360,461623,1,0,4000,0]},"w":1792555864515.216}
-{"info":{"view":3,"state":1,"at":[4000,707.2753720000001,1,640,360,461623,1,0,4000,0]},"w":1792555864515.777}
-{"info":{"view":3,"state":1,"at":[4000,723.370372,1,640,360,461623,1,0,4000,0]},"w":1792555864531.89}
-{"info":{"view":3,"state":1,"at":[4000,723.9807059999999,1,640,360,461623,1,0,4000,0]},"w":1792555864532.485}
-{"info":{"view":3,"state":1,"at":[4000,740.011122,1,640,360,461623,1,0,4000,0]},"w":1792555864548.522}
-{"info":{"view":3,"state":1,"at":[4000,740.551289,1,640,360,461623,1,0,4000,0]},"w":1792555864549.051}
-{"info":{"view":3,"state":1,"at":[4000,756.701664,1,640,360,461623,1,0,4000,0]},"w":1792555864565.228}
-{"info":{"view":3,"state":1,"at":[4000,757.279039,1,640,360,461623,1,0,4000,0]},"w":1792555864565.777}
-{"info":{"view":3,"state":1,"at":[4000,773.375497,1,640,360,461623,1,0,4000,0]},"w":1792555864581.901}
-{"info":{"view":3,"state":1,"at":[4000,774.003331,1,640,360,461623,1,0,4000,0]},"w":1792555864582.506}
-{"info":{"view":3,"state":1,"at":[4000,790.055289,1,640,360,461623,1,0,4000,0]},"w":1792555864598.581}
-{"info":{"view":3,"state":1,"at":[4000,790.694622,1,640,360,461623,1,0,4000,0]},"w":1792555864599.197}
-{"info":{"view":3,"state":1,"at":[4000,806.7280810000001,1,640,360,461623,1,0,4000,0]},"w":1792555864615.254}
-{"info":{"view":3,"state":1,"at":[4000,807.343872,1,640,360,461623,1,0,4000,0]},"w":1792555864615.847}
-{"info":{"view":3,"state":1,"at":[4000,823.354622,1,640,360,461623,1,0,4000,0]},"w":1792555864631.87}
-{"info":{"view":3,"state":1,"at":[4000,823.899081,1,640,360,461623,1,0,4000,0]},"w":1792555864632.399}
-{"info":{"view":3,"state":1,"at":[4000,840.016539,1,640,360,461623,1,0,4000,0]},"w":1792555864648.532}
-{"info":{"view":3,"state":1,"at":[4000,840.5298310000001,1,640,360,461623,1,0,4000,0]},"w":1792555864649.028}
-{"info":{"view":3,"state":1,"at":[4000,856.695789,1,640,360,461623,1,0,4000,0]},"w":1792555864665.212}
-{"info":{"view":3,"state":1,"at":[4000,857.2485810000001,1,640,360,461623,1,0,4000,0]},"w":1792555864665.749}
-{"info":{"view":3,"state":1,"at":[4000,873.360164,1,640,360,461623,1,0,4000,0]},"w":1792555864681.876}
-{"info":{"view":3,"state":1,"at":[4000,873.9401220000001,1,640,360,461623,1,0,4000,0]},"w":1792555864682.451}
-{"info":{"view":3,"state":1,"at":[4000,890.028872,1,640,360,461623,1,0,4000,0]},"w":1792555864698.548}
-{"info":{"view":3,"state":1,"at":[4000,890.676414,1,640,360,461623,1,0,4000,0]},"w":1792555864699.18}
-{"info":{"view":3,"state":1,"at":[4000,906.694122,1,640,360,461623,1,0,4000,0]},"w":1792555864715.206}
-{"info":{"view":3,"state":1,"at":[4000,907.240081,1,640,360,461623,1,0,4000,0]},"w":1792555864715.742}
-{"info":{"view":3,"state":1,"at":[4000,923.8234560000001,1,640,360,461623,1,0,4000,0]},"w":1792555864732.36}
-{"info":{"view":3,"state":1,"at":[4000,924.4741640000001,1,640,360,461623,1,0,4000,0]},"w":1792555864732.979}
-{"info":{"view":3,"state":1,"at":[4000,940.0163729999999,1,640,360,461623,1,0,4000,0]},"w":1792555864748.533}
-{"info":{"view":3,"state":1,"at":[4000,940.5517060000001,1,640,360,461623,1,0,4000,0]},"w":1792555864749.054}
-{"info":{"view":3,"state":1,"at":[4000,956.688706,1,640,360,461623,1,0,4000,0]},"w":1792555864765.206}
-{"info":{"view":3,"state":1,"at":[4000,957.213956,1,640,360,461623,1,0,4000,0]},"w":1792555864765.715}
-{"info":{"view":3,"state":1,"at":[4000,973.348373,1,640,360,461623,1,0,4000,0]},"w":1792555864781.864}
-{"info":{"view":3,"state":1,"at":[4000,973.871914,1,640,360,461623,1,0,4000,0]},"w":1792555864782.373}
-{"info":{"view":3,"state":1,"at":[4000,990.017373,1,640,360,461623,1,0,4000,0]},"w":1792555864798.535}
-{"info":{"view":3,"state":1,"at":[4000,990.534456,1,640,360,461623,1,0,4000,0]},"w":1792555864799.035}
-{"info":{"view":3,"state":1,"at":[4000,1006.7007480000001,1,640,360,461623,1,0,4000,0]},"w":1792555864815.222}
-{"info":{"view":3,"state":1,"at":[4000,1007.3315389999999,1,640,360,461623,1,0,4000,0]},"w":1792555864815.836}
-{"info":{"view":3,"state":1,"at":[4000,1023.3714140000001,1,640,360,461623,1,0,4000,0]},"w":1792555864831.889}
-{"info":{"view":3,"state":1,"at":[4000,1023.991414,1,640,360,461623,1,0,4000,0]},"w":1792555864832.496}
-{"info":{"view":3,"state":1,"at":[4000,1040.055206,1,640,360,461623,1,0,4000,0]},"w":1792555864848.583}
-{"info":{"view":3,"state":1,"at":[4000,1040.743123,1,640,360,461623,1,0,4000,0]},"w":1792555864849.249}
-{"info":{"view":3,"state":1,"at":[4000,1056.7391639999998,1,640,360,461623,1,0,4000,0]},"w":1792555864865.273}
-{"info":{"view":3,"state":1,"at":[4000,1057.470414,1,640,360,461623,1,0,4000,0]},"w":1792555864865.979}
-{"info":{"view":3,"state":1,"at":[4000,1073.408164,1,640,360,461623,1,0,4000,0]},"w":1792555864881.944}
-{"info":{"view":3,"state":1,"at":[4000,1074.111748,1,640,360,461623,1,0,4000,0]},"w":1792555864882.621}
-{"info":{"view":3,"state":1,"at":[4000,1090.089123,1,640,360,461623,1,0,4000,0]},"w":1792555864898.625}
-{"info":{"view":3,"state":1,"at":[4000,1090.806456,1,640,360,461623,1,0,4000,0]},"w":1792555864899.317}
-{"info":{"view":3,"state":1,"at":[4000,1106.730206,1,640,360,461623,1,0,4000,0]},"w":1792555864915.266}
-{"info":{"view":3,"state":1,"at":[4000,1107.635123,1,640,360,461623,1,0,4000,0]},"w":1792555864916.18}
-{"info":{"view":3,"state":1,"at":[4000,1123.393498,1,640,360,461623,1,0,4000,0]},"w":1792555864931.926}
-{"info":{"view":3,"state":1,"at":[4000,1124.070498,1,640,360,461623,1,0,4000,0]},"w":1792555864932.574}
-{"info":{"view":3,"state":1,"at":[4000,1140.040581,1,640,360,461623,1,0,4000,0]},"w":1792555864948.565}
-{"info":{"view":3,"state":1,"at":[4000,1140.703039,1,640,360,461623,1,0,4000,0]},"w":1792555864949.207}
-{"info":{"view":3,"state":1,"at":[4000,1156.7125389999999,1,640,360,461623,1,0,4000,0]},"w":1792555864965.235}
-{"info":{"view":3,"state":1,"at":[4000,1157.3479980000002,1,640,360,461623,1,0,4000,0]},"w":1792555864965.853}
-{"info":{"view":3,"state":1,"at":[4000,1173.368706,1,640,360,461623,1,0,4000,0]},"w":1792555864981.891}
-{"info":{"view":3,"state":1,"at":[4000,1173.9328309999999,1,640,360,461623,1,0,4000,0]},"w":1792555864982.441}
-{"info":{"view":3,"state":1,"at":[4000,1190.063414,1,640,360,461623,1,0,4000,0]},"w":1792555864998.589}
-{"info":{"view":3,"state":1,"at":[4000,1190.659706,1,640,360,461623,1,0,4000,0]},"w":1792555864999.162}
-{"info":{"view":3,"state":1,"at":[4000,1206.692081,1,640,360,461623,1,0,4000,0]},"w":1792555865015.212}
-{"info":{"view":3,"state":1,"at":[4000,1207.287248,1,640,360,461623,1,0,4000,0]},"w":1792555865015.789}
-{"info":{"view":3,"state":1,"at":[4000,1223.365206,1,640,360,461623,1,0,4000,0]},"w":1792555865031.887}
-{"info":{"view":3,"state":1,"at":[4000,1223.999331,1,640,360,461623,1,0,4000,0]},"w":1792555865032.503}
-{"info":{"view":3,"state":1,"at":[4000,1240.042289,1,640,360,461623,1,0,4000,0]},"w":1792555865048.564}
-{"info":{"view":3,"state":1,"at":[4000,1240.652206,1,640,360,461623,1,0,4000,0]},"w":1792555865049.155}
-{"info":{"view":3,"state":1,"at":[4000,1256.706248,1,640,360,461623,1,0,4000,0]},"w":1792555865065.225}
-{"info":{"view":3,"state":1,"at":[4000,1257.275789,1,640,360,461623,1,0,4000,0]},"w":1792555865065.778}
-{"info":{"view":3,"state":1,"at":[4000,1273.3556230000002,1,640,360,461623,1,0,4000,0]},"w":1792555865081.875}
-{"info":{"view":3,"state":1,"at":[4000,1273.9392890000001,1,640,360,461623,1,0,4000,0]},"w":1792555865082.442}
-{"info":{"view":3,"state":1,"at":[4000,1290.0209140000002,1,640,360,461623,1,0,4000,0]},"w":1792555865098.537}
-{"info":{"view":3,"state":1,"at":[4000,1290.553373,1,640,360,461623,1,0,4000,0]},"w":1792555865099.055}
-{"info":{"view":3,"state":1,"at":[4000,1306.758581,1,640,360,461623,1,0,4000,0]},"w":1792555865115.285}
-{"info":{"view":3,"state":1,"at":[4000,1307.369706,1,640,360,461623,1,0,4000,0]},"w":1792555865115.872}
-{"info":{"view":3,"state":1,"at":[4000,1323.363664,1,640,360,461623,1,0,4000,0]},"w":1792555865131.882}
-{"info":{"view":3,"state":1,"at":[4000,1323.909748,1,640,360,461623,1,0,4000,0]},"w":1792555865132.412}
-{"info":{"view":3,"state":1,"at":[4000,1340.029623,1,640,360,461623,1,0,4000,0]},"w":1792555865148.549}
-{"info":{"view":3,"state":1,"at":[4000,1340.627706,1,640,360,461623,1,0,4000,0]},"w":1792555865149.143}
-{"info":{"view":3,"state":1,"at":[4000,1356.694539,1,640,360,461623,1,0,4000,0]},"w":1792555865165.212}
-{"info":{"view":3,"state":1,"at":[4000,1357.257914,1,640,360,461623,1,0,4000,0]},"w":1792555865165.758}
-{"info":{"view":3,"state":1,"at":[4000,1373.357123,1,640,360,461623,1,0,4000,0]},"w":1792555865181.875}
-{"info":{"view":3,"state":1,"at":[4000,1373.939331,1,640,360,461623,1,0,4000,0]},"w":1792555865182.443}
-{"info":{"view":3,"state":1,"at":[4000,1390.021998,1,640,360,461623,1,0,4000,0]},"w":1792555865198.538}
-{"info":{"view":3,"state":1,"at":[4000,1390.584831,1,640,360,461623,1,0,4000,0]},"w":1792555865199.085}
-{"info":{"view":3,"state":1,"at":[4000,1406.6839980000002,1,640,360,461623,1,0,4000,0]},"w":1792555865215.198}
-{"info":{"view":3,"state":1,"at":[4000,1407.207456,1,640,360,461623,1,0,4000,0]},"w":1792555865215.708}
-{"info":{"view":3,"state":1,"at":[4000,1423.369039,1,640,360,461623,1,0,4000,0]},"w":1792555865231.886}
-{"info":{"view":3,"state":1,"at":[4000,1424.490206,1,640,360,461623,1,0,4000,0]},"w":1792555865233.014}
-{"info":{"view":3,"state":1,"at":[4000,1440.0081229999998,1,640,360,461623,1,0,4000,0]},"w":1792555865248.531}
-{"info":{"view":3,"state":1,"at":[4000,1440.550206,1,640,360,461623,1,0,4000,0]},"w":1792555865249.06}
-{"info":{"view":3,"state":1,"at":[4000,1456.709623,1,640,360,461623,1,0,4000,0]},"w":1792555865265.239}
-{"info":{"view":3,"state":1,"at":[4000,1457.281289,1,640,360,461623,1,0,4000,0]},"w":1792555865265.794}
-{"info":{"view":3,"state":1,"at":[4000,1473.345914,1,640,360,461623,1,0,4000,0]},"w":1792555865281.872}
-{"info":{"view":3,"state":1,"at":[4000,1473.920331,1,640,360,461623,1,0,4000,0]},"w":1792555865282.433}
-{"info":{"view":3,"state":1,"at":[4000,1490.020664,1,640,360,461623,1,0,4000,0]},"w":1792555865298.554}
-{"info":{"view":3,"state":1,"at":[4000,1490.590956,1,640,360,461623,1,0,4000,0]},"w":1792555865299.099}
-{"info":{"view":3,"state":1,"at":[4000,1506.705873,1,640,360,461623,1,0,4000,0]},"w":1792555865315.239}
-{"info":{"view":3,"state":1,"at":[4000,1507.6399979999999,1,640,360,461623,1,0,4000,0]},"w":1792555865316.155}
-{"info":{"view":3,"state":1,"at":[4000,1523.391664,1,640,360,461623,1,0,4000,0]},"w":1792555865331.937}
-{"info":{"view":3,"state":1,"at":[4000,1524.129664,1,640,360,461623,1,0,4000,0]},"w":1792555865332.648}
-{"info":{"view":3,"state":1,"at":[4000,1540.059706,1,640,360,461623,1,0,4000,0]},"w":1792555865348.603}
-{"info":{"view":3,"state":1,"at":[4000,1540.738664,1,640,360,461623,1,0,4000,0]},"w":1792555865349.255}
-{"info":{"view":3,"state":1,"at":[4000,1556.752789,1,640,360,461623,1,0,4000,0]},"w":1792555865365.296}
-{"info":{"view":3,"state":1,"at":[4000,1557.4302890000001,1,640,360,461623,1,0,4000,0]},"w":1792555865365.948}
-{"info":{"view":3,"state":1,"at":[4000,1573.388789,1,640,360,461623,1,0,4000,0]},"w":1792555865381.93}
-{"info":{"view":3,"state":1,"at":[4000,1574.032289,1,640,360,461623,1,0,4000,0]},"w":1792555865382.547}
-{"info":{"view":3,"state":1,"at":[4000,1590.037956,1,640,360,461623,1,0,4000,0]},"w":1792555865398.573}
-{"info":{"view":3,"state":1,"at":[4000,1590.670081,1,640,360,461623,1,0,4000,0]},"w":1792555865399.183}
-{"info":{"view":3,"state":1,"at":[4000,1606.698289,1,640,360,461623,1,0,4000,0]},"w":1792555865415.233}
-{"info":{"view":3,"state":1,"at":[4000,1607.346539,1,640,360,461623,1,0,4000,0]},"w":1792555865415.862}
-{"info":{"view":3,"state":1,"at":[4000,1623.3584139999998,1,640,360,461623,1,0,4000,0]},"w":1792555865431.887}
-{"info":{"view":3,"state":1,"at":[4000,1623.941081,1,640,360,461623,1,0,4000,0]},"w":1792555865432.452}
-{"info":{"view":3,"state":1,"at":[4000,1640.079331,1,640,360,461623,1,0,4000,0]},"w":1792555865448.611}
-{"info":{"view":3,"state":1,"at":[4000,1640.950373,1,640,360,461623,1,0,4000,0]},"w":1792555865449.463}
-{"info":{"view":3,"state":1,"at":[4000,1656.6414140000002,1,640,360,461623,1,0,4000,0]},"w":1792555865465.157}
-{"info":{"view":3,"state":1,"at":[4000,1656.910623,1,640,360,461623,1,0,4000,0]},"w":1792555865465.416}
-{"info":{"view":3,"state":1,"at":[4000,1673.303331,1,640,360,461623,1,0,4000,0]},"w":1792555865481.816}
-{"info":{"view":3,"state":1,"at":[4000,1673.4992479999999,1,640,360,461623,1,0,4000,0]},"w":1792555865482.001}
-{"info":{"view":3,"state":1,"at":[4000,1689.984498,1,640,360,461623,1,0,4000,0]},"w":1792555865498.501}
-{"info":{"view":3,"state":1,"at":[4000,1690.228706,1,640,360,461623,1,0,4000,0]},"w":1792555865498.73}
-{"info":{"view":3,"state":1,"at":[4000,1706.653164,1,640,360,461623,1,0,4000,0]},"w":1792555865515.166}
-{"info":{"view":3,"state":1,"at":[4000,1706.857706,1,640,360,461623,1,0,4000,0]},"w":1792555865515.359}
-{"info":{"view":3,"state":1,"at":[4000,1723.2916229999998,1,640,360,461623,1,0,4000,0]},"w":1792555865531.794}
-{"info":{"view":3,"state":1,"at":[4000,1723.433789,1,640,360,461623,1,0,4000,0]},"w":1792555865531.934}
-{"info":{"view":3,"state":1,"at":[4000,1739.959623,1,640,360,461623,1,0,4000,0]},"w":1792555865548.465}
-{"info":{"view":3,"state":1,"at":[4000,1740.074414,1,640,360,461623,1,0,4000,0]},"w":1792555865548.575}
-{"info":{"view":3,"state":1,"at":[4000,1756.620623,1,640,360,461623,1,0,4000,0]},"w":1792555865565.127}
-{"info":{"view":3,"state":1,"at":[4000,1756.7644559999999,1,640,360,461623,1,0,4000,0]},"w":1792555865565.266}
-{"info":{"view":3,"state":1,"at":[4000,1773.287914,1,640,360,461623,1,0,4000,0]},"w":1792555865581.791}
-{"info":{"view":3,"state":1,"at":[4000,1773.409414,1,640,360,461623,1,0,4000,0]},"w":1792555865581.911}
-{"info":{"view":3,"state":1,"at":[4000,1789.9935389999998,1,640,360,461623,1,0,4000,0]},"w":1792555865598.517}
-{"info":{"view":3,"state":1,"at":[4000,1790.361081,1,640,360,461623,1,0,4000,0]},"w":1792555865598.871}
-{"info":{"view":3,"state":1,"at":[4000,1806.651748,1,640,360,461623,1,0,4000,0]},"w":1792555865615.177}
-{"info":{"view":3,"state":1,"at":[4000,1807.1348309999998,1,640,360,461623,1,0,4000,0]},"w":1792555865615.644}
-{"info":{"view":3,"state":1,"at":[4000,1823.339498,1,640,360,461623,1,0,4000,0]},"w":1792555865631.868}
-{"info":{"view":3,"state":1,"at":[4000,1823.851206,1,640,360,461623,1,0,4000,0]},"w":1792555865632.361}
-{"info":{"view":3,"state":1,"at":[4000,1840.0181229999998,1,640,360,461623,1,0,4000,0]},"w":1792555865648.546}
-{"info":{"view":3,"state":1,"at":[4000,1840.578914,1,640,360,461623,1,0,4000,0]},"w":1792555865649.089}
-{"info":{"view":3,"state":1,"at":[4000,1856.690956,1,640,360,461623,1,0,4000,0]},"w":1792555865665.229}
-{"info":{"view":3,"state":1,"at":[4000,1857.276914,1,640,360,461623,1,0,4000,0]},"w":1792555865665.785}
-{"info":{"view":3,"state":1,"at":[4000,1873.3549560000001,1,640,360,461623,1,0,4000,0]},"w":1792555865681.888}
-{"info":{"view":3,"state":1,"at":[4000,1873.978873,1,640,360,461623,1,0,4000,0]},"w":1792555865682.492}
-{"info":{"view":3,"state":1,"at":[4000,1890.0398730000002,1,640,360,461623,1,0,4000,0]},"w":1792555865698.575}
-{"info":{"view":3,"state":1,"at":[4000,1890.6799139999998,1,640,360,461623,1,0,4000,0]},"w":1792555865699.193}
-{"info":{"view":3,"state":1,"at":[4000,1906.6932889999998,1,640,360,461623,1,0,4000,0]},"w":1792555865715.225}
-{"info":{"view":3,"state":1,"at":[4000,1907.3035810000001,1,640,360,461623,1,0,4000,0]},"w":1792555865715.814}
-{"info":{"view":3,"state":1,"at":[4000,1923.359581,1,640,360,461623,1,0,4000,0]},"w":1792555865731.893}
-{"info":{"view":3,"state":1,"at":[4000,1924.5114139999998,1,640,360,461623,1,0,4000,0]},"w":1792555865733.031}
-{"info":{"view":3,"state":1,"at":[4000,1940.015289,1,640,360,461623,1,0,4000,0]},"w":1792555865748.534}
-{"info":{"view":3,"state":1,"at":[4000,1940.590206,1,640,360,461623,1,0,4000,0]},"w":1792555865749.096}
-{"info":{"view":3,"state":1,"at":[4000,1956.709872,1,640,360,461623,1,0,4000,0]},"w":1792555865765.235}
-{"info":{"view":3,"state":1,"at":[4000,1957.330164,1,640,360,461623,1,0,4000,0]},"w":1792555865765.836}
-{"info":{"view":3,"state":1,"at":[4000,1973.3529139999998,1,640,360,461623,1,0,4000,0]},"w":1792555865781.882}
-{"info":{"view":3,"state":1,"at":[4000,1973.9261640000002,1,640,360,461623,1,0,4000,0]},"w":1792555865782.431}
-{"info":{"view":3,"state":1,"at":[4000,1990.024497,1,640,360,461623,1,0,4000,0]},"w":1792555865798.548}
-{"info":{"view":3,"state":1,"at":[4000,1990.619372,1,640,360,461623,1,0,4000,0]},"w":1792555865799.125}
-{"info":{"view":3,"state":1,"at":[4000,2006.687747,1,640,360,461623,1,0,4000,0]},"w":1792555865815.21}
-{"info":{"view":3,"state":1,"at":[4000,2007.292831,1,640,360,461623,1,0,4000,0]},"w":1792555865815.799}
-{"info":{"view":3,"state":1,"at":[4000,2023.3611640000001,1,640,360,461623,1,0,4000,0]},"w":1792555865831.885}
-{"info":{"view":3,"state":1,"at":[4000,2023.9664140000002,1,640,360,461623,1,0,4000,0]},"w":1792555865832.471}
-{"info":{"view":3,"state":1,"at":[4000,2040.012622,1,640,360,461623,1,0,4000,0]},"w":1792555865848.531}
-{"info":{"view":3,"state":1,"at":[4000,2040.554706,1,640,360,461623,1,0,4000,0]},"w":1792555865849.057}
-{"info":{"view":3,"state":1,"at":[4000,2056.6984970000003,1,640,360,461623,1,0,4000,0]},"w":1792555865865.221}
-{"info":{"view":3,"state":1,"at":[4000,2057.2707060000002,1,640,360,461623,1,0,4000,0]},"w":1792555865865.775}
-{"info":{"view":3,"state":1,"at":[4000,2073.352914,1,640,360,461623,1,0,4000,0]},"w":1792555865881.874}
-{"info":{"view":3,"state":1,"at":[4000,2073.955206,1,640,360,461623,1,0,4000,0]},"w":1792555865882.46}
-{"info":{"view":3,"state":1,"at":[4000,2090.016372,1,640,360,461623,1,0,4000,0]},"w":1792555865898.535}
-{"info":{"view":3,"state":1,"at":[4000,2090.5531220000003,1,640,360,461623,1,0,4000,0]},"w":1792555865899.056}
-{"info":{"view":3,"state":1,"at":[4000,2106.6848720000003,1,640,360,461623,1,0,4000,0]},"w":1792555865915.207}
-{"info":{"view":3,"state":1,"at":[4000,2107.295206,1,640,360,461623,1,0,4000,0]},"w":1792555865915.804}
-{"info":{"view":3,"state":1,"at":[4000,2123.361414,1,640,360,461623,1,0,4000,0]},"w":1792555865931.885}
-{"info":{"view":3,"state":1,"at":[4000,2123.945581,1,640,360,461623,1,0,4000,0]},"w":1792555865932.45}
-{"info":{"view":3,"state":1,"at":[4000,2140.035539,1,640,360,461623,1,0,4000,0]},"w":1792555865948.562}
-{"info":{"view":3,"state":1,"at":[4000,2140.679289,1,640,360,461623,1,0,4000,0]},"w":1792555865949.185}
-{"info":{"view":3,"state":1,"at":[4000,2156.7081639999997,1,640,360,461623,1,0,4000,0]},"w":1792555865965.239}
-{"info":{"view":3,"state":1,"at":[4000,2157.292622,1,640,360,461623,1,0,4000,0]},"w":1792555865965.797}
-{"info":{"view":3,"state":1,"at":[4000,2173.293914,1,640,360,461623,1,0,4000,0]},"w":1792555865981.797}
-{"info":{"view":3,"state":1,"at":[4000,2173.452331,1,640,360,461623,1,0,4000,0]},"w":1792555865981.947}
-{"info":{"view":3,"state":1,"at":[4000,2189.978289,1,640,360,461623,1,0,4000,0]},"w":1792555865998.489}
-{"info":{"view":3,"state":1,"at":[4000,2190.207081,1,640,360,461623,1,0,4000,0]},"w":1792555865998.702}
-{"info":{"view":3,"state":1,"at":[4000,2206.625581,1,640,360,461623,1,0,4000,0]},"w":1792555866015.124}
-{"info":{"view":3,"state":1,"at":[4000,2206.7332890000002,1,640,360,461623,1,0,4000,0]},"w":1792555866015.227}
-{"info":{"view":3,"state":1,"at":[4000,2223.314414,1,640,360,461623,1,0,4000,0]},"w":1792555866031.822}
-{"info":{"view":3,"state":1,"at":[4000,2223.526956,1,640,360,461623,1,0,4000,0]},"w":1792555866032.021}
-{"info":{"view":3,"state":1,"at":[4000,2239.960456,1,640,360,461623,1,0,4000,0]},"w":1792555866048.457}
-{"info":{"view":3,"state":1,"at":[4000,2240.098747,1,640,360,461623,1,0,4000,0]},"w":1792555866048.592}
-{"info":{"view":3,"state":1,"at":[4000,2256.626081,1,640,360,461623,1,0,4000,0]},"w":1792555866065.121}
-{"info":{"view":3,"state":1,"at":[4000,2256.716997,1,640,360,461623,1,0,4000,0]},"w":1792555866065.211}
-{"info":{"view":3,"state":1,"at":[4000,2273.285664,1,640,360,461623,1,0,4000,0]},"w":1792555866081.78}
-{"info":{"view":3,"state":1,"at":[4000,2273.368247,1,640,360,461623,1,0,4000,0]},"w":1792555866081.862}
-{"info":{"view":3,"state":1,"at":[4000,2289.967372,1,640,360,461623,1,0,4000,0]},"w":1792555866098.467}
-{"info":{"view":3,"state":1,"at":[4000,2290.137706,1,640,360,461623,1,0,4000,0]},"w":1792555866098.634}
-{"info":{"view":3,"state":1,"at":[4000,2306.686789,1,640,360,461623,1,0,4000,0]},"w":1792555866115.202}
-{"info":{"view":3,"state":1,"at":[4000,2307.067622,1,640,360,461623,1,0,4000,0]},"w":1792555866115.573}
-{"info":{"view":3,"state":1,"at":[4000,2323.350414,1,640,360,461623,1,0,4000,0]},"w":1792555866131.873}
-{"info":{"view":3,"state":1,"at":[4000,2323.858081,1,640,360,461623,1,0,4000,0]},"w":1792555866132.359}
-{"info":{"view":3,"state":1,"at":[4000,2339.9894560000002,1,640,360,461623,1,0,4000,0]},"w":1792555866148.506}
-{"info":{"view":3,"state":1,"at":[4000,2340.4801220000004,1,640,360,461623,1,0,4000,0]},"w":1792555866148.982}
-{"info":{"view":3,"state":1,"at":[4000,2356.715456,1,640,360,461623,1,0,4000,0]},"w":1792555866165.243}
-{"info":{"view":3,"state":1,"at":[4000,2357.3717890000003,1,640,360,461623,1,0,4000,0]},"w":1792555866165.879}
-{"info":{"view":3,"state":1,"at":[4000,2373.3724970000003,1,640,360,461623,1,0,4000,0]},"w":1792555866181.899}
-{"info":{"view":3,"state":1,"at":[4000,2374.005247,1,640,360,461623,1,0,4000,0]},"w":1792555866182.512}
-{"info":{"view":3,"state":1,"at":[4000,2390.0410810000003,1,640,360,461623,1,0,4000,0]},"w":1792555866198.569}
-{"info":{"view":3,"state":1,"at":[4000,2390.674872,1,640,360,461623,1,0,4000,0]},"w":1792555866199.182}
-{"info":{"view":3,"state":1,"at":[4000,2406.6980390000003,1,640,360,461623,1,0,4000,0]},"w":1792555866215.225}
-{"info":{"view":3,"state":1,"at":[4000,2407.330706,1,640,360,461623,1,0,4000,0]},"w":1792555866215.835}
-{"info":{"view":3,"state":1,"at":[4000,2423.3537890000002,1,640,360,461623,1,0,4000,0]},"w":1792555866231.875}
-{"info":{"view":3,"state":1,"at":[4000,2423.933247,1,640,360,461623,1,0,4000,0]},"w":1792555866232.436}
-{"info":{"view":3,"state":1,"at":[4000,2440.489748,1,640,360,461623,1,0,4000,0]},"w":1792555866249.033}
-{"info":{"view":3,"state":1,"at":[4000,2441.1719980000003,1,640,360,461623,1,0,4000,0]},"w":1792555866249.681}
-{"info":{"view":3,"state":1,"at":[4000,2456.692457,1,640,360,461623,1,0,4000,0]},"w":1792555866265.217}
-{"info":{"view":3,"state":1,"at":[4000,2457.2875820000004,1,640,360,461623,1,0,4000,0]},"w":1792555866265.796}
-{"info":{"view":3,"state":1,"at":[4000,2473.350915,1,640,360,461623,1,0,4000,0]},"w":1792555866281.875}
-{"info":{"view":3,"state":1,"at":[4000,2473.977457,1,640,360,461623,1,0,4000,0]},"w":1792555866282.486}
-{"info":{"view":3,"state":1,"at":[4000,2490.017748,1,640,360,461623,1,0,4000,0]},"w":1792555866298.54}
-{"info":{"view":3,"state":1,"at":[4000,2490.593332,1,640,360,461623,1,0,4000,0]},"w":1792555866299.1}
-{"info":{"view":3,"state":1,"at":[4000,2506.6904980000004,1,640,360,461623,1,0,4000,0]},"w":1792555866315.218}
-{"info":{"view":3,"state":1,"at":[4000,2508.129457,1,640,360,461623,1,0,4000,0]},"w":1792555866316.64}
-{"info":{"view":3,"state":1,"at":[4000,2523.355832,1,640,360,461623,1,0,4000,0]},"w":1792555866331.88}
-{"info":{"view":3,"state":1,"at":[4000,2523.948832,1,640,360,461623,1,0,4000,0]},"w":1792555866332.455}
-{"info":{"view":3,"state":1,"at":[4000,2540.0193729999996,1,640,360,461623,1,0,4000,0]},"w":1792555866348.544}
-{"info":{"view":3,"state":1,"at":[4000,2540.638665,1,640,360,461623,1,0,4000,0]},"w":1792555866349.147}
-{"info":{"view":3,"state":1,"at":[4000,2556.6847479999997,1,640,360,461623,1,0,4000,0]},"w":1792555866365.21}
-{"info":{"view":3,"state":1,"at":[4000,2557.33354,1,640,360,461623,1,0,4000,0]},"w":1792555866365.842}
-{"info":{"view":3,"state":1,"at":[4000,2573.3683730000002,1,640,360,461623,1,0,4000,0]},"w":1792555866381.894}
-{"info":{"view":3,"state":1,"at":[4000,2574.00754,1,640,360,461623,1,0,4000,0]},"w":1792555866382.516}
-{"info":{"view":3,"state":1,"at":[4000,2590.0539569999996,1,640,360,461623,1,0,4000,0]},"w":1792555866398.592}
-{"info":{"view":3,"state":1,"at":[4000,2590.751207,1,640,360,461623,1,0,4000,0]},"w":1792555866399.26}
-{"info":{"view":3,"state":1,"at":[4000,2606.7029979999998,1,640,360,461623,1,0,4000,0]},"w":1792555866415.237}
-{"info":{"view":3,"state":1,"at":[4000,2607.36954,1,640,360,461623,1,0,4000,0]},"w":1792555866415.88}
-{"info":{"view":3,"state":1,"at":[4000,2623.355873,1,640,360,461623,1,0,4000,0]},"w":1792555866431.883}
-{"info":{"view":3,"state":1,"at":[4000,2623.904873,1,640,360,461623,1,0,4000,0]},"w":1792555866432.414}
-{"info":{"view":3,"state":1,"at":[4000,2640.02154,1,640,360,461623,1,0,4000,0]},"w":1792555866448.548}
-{"info":{"view":3,"state":1,"at":[4000,2640.572373,1,640,360,461623,1,0,4000,0]},"w":1792555866449.082}
-{"info":{"view":3,"state":1,"at":[4000,2656.692665,1,640,360,461623,1,0,4000,0]},"w":1792555866465.222}
-{"info":{"view":3,"state":1,"at":[4000,2657.298832,1,640,360,461623,1,0,4000,0]},"w":1792555866465.808}
-{"info":{"view":3,"state":1,"at":[4000,2673.3574569999996,1,640,360,461623,1,0,4000,0]},"w":1792555866481.885}
-{"info":{"view":3,"state":1,"at":[4000,2673.914873,1,640,360,461623,1,0,4000,0]},"w":1792555866482.424}
-{"info":{"view":3,"state":1,"at":[4000,2690.03804,1,640,360,461623,1,0,4000,0]},"w":1792555866498.563}
-{"info":{"view":3,"state":1,"at":[4000,2690.602457,1,640,360,461623,1,0,4000,0]},"w":1792555866499.109}
-{"info":{"view":3,"state":1,"at":[4000,2706.683498,1,640,360,461623,1,0,4000,0]},"w":1792555866515.209}
-{"info":{"view":3,"state":1,"at":[4000,2707.259707,1,640,360,461623,1,0,4000,0]},"w":1792555866515.768}
-{"info":{"view":3,"state":1,"at":[4000,2723.341915,1,640,360,461623,1,0,4000,0]},"w":1792555866531.866}
-{"info":{"view":3,"state":1,"at":[4000,2723.871457,1,640,360,461623,1,0,4000,0]},"w":1792555866532.378}
-{"info":{"view":3,"state":1,"at":[4000,2740.002832,1,640,360,461623,1,0,4000,0]},"w":1792555866548.523}
-{"info":{"view":3,"state":1,"at":[4000,2740.487623,1,640,360,461623,1,0,4000,0]},"w":1792555866548.993}
-{"info":{"view":3,"state":1,"at":[4000,2756.6715400000003,1,640,360,461623,1,0,4000,0]},"w":1792555866565.195}
-{"info":{"view":3,"state":1,"at":[4000,2757.196915,1,640,360,461623,1,0,4000,0]},"w":1792555866565.704}
-{"info":{"view":3,"state":1,"at":[4000,2773.344415,1,640,360,461623,1,0,4000,0]},"w":1792555866581.866}
-{"info":{"view":3,"state":1,"at":[4000,2773.8605820000002,1,640,360,461623,1,0,4000,0]},"w":1792555866582.366}
-{"info":{"view":3,"state":1,"at":[4000,2790.033623,1,640,360,461623,1,0,4000,0]},"w":1792555866598.559}
-{"info":{"view":3,"state":1,"at":[4000,2790.584248,1,640,360,461623,1,0,4000,0]},"w":1792555866599.092}
-{"info":{"view":3,"state":1,"at":[4000,2806.672082,1,640,360,461623,1,0,4000,0]},"w":1792555866615.196}
-{"info":{"view":3,"state":1,"at":[4000,2807.21429,1,640,360,461623,1,0,4000,0]},"w":1792555866615.723}
-{"info":{"view":3,"state":1,"at":[4000,2823.350998,1,640,360,461623,1,0,4000,0]},"w":1792555866631.87}
-{"info":{"view":3,"state":1,"at":[4000,2823.85404,1,640,360,461623,1,0,4000,0]},"w":1792555866632.361}
-{"info":{"view":3,"state":1,"at":[4000,2840.06304,1,640,360,461623,1,0,4000,0]},"w":1792555866648.6}
-{"info":{"view":3,"state":1,"at":[4000,2840.677832,1,640,360,461623,1,0,4000,0]},"w":1792555866649.186}
-{"info":{"view":3,"state":1,"at":[4000,2856.7445820000003,1,640,360,461623,1,0,4000,0]},"w":1792555866665.286}
-{"info":{"view":3,"state":1,"at":[4000,2857.4072899999996,1,640,360,461623,1,0,4000,0]},"w":1792555866665.917}
-{"info":{"view":3,"state":1,"at":[4000,2873.387248,1,640,360,461623,1,0,4000,0]},"w":1792555866681.925}
-{"info":{"view":3,"state":1,"at":[4000,2874.057498,1,640,360,461623,1,0,4000,0]},"w":1792555866682.569}
-{"info":{"view":3,"state":1,"at":[4000,2890.064082,1,640,360,461623,1,0,4000,0]},"w":1792555866698.604}
-{"info":{"view":3,"state":1,"at":[4000,2890.6915400000003,1,640,360,461623,1,0,4000,0]},"w":1792555866699.205}
-{"info":{"view":3,"state":1,"at":[4000,2906.711957,1,640,360,461623,1,0,4000,0]},"w":1792555866715.247}
-{"info":{"view":3,"state":1,"at":[4000,2907.319623,1,640,360,461623,1,0,4000,0]},"w":1792555866715.83}
-{"info":{"view":3,"state":1,"at":[4000,2923.3741649999997,1,640,360,461623,1,0,4000,0]},"w":1792555866731.907}
-{"info":{"view":3,"state":1,"at":[4000,2923.9662900000003,1,640,360,461623,1,0,4000,0]},"w":1792555866732.476}
-{"info":{"view":3,"state":1,"at":[4000,2940.849873,1,640,360,461623,1,0,4000,0]},"w":1792555866749.426}
-{"info":{"view":3,"state":1,"at":[4000,2941.764873,1,640,360,461623,1,0,4000,0]},"w":1792555866750.297}
-{"info":{"view":3,"state":1,"at":[4000,2956.690165,1,640,360,461623,1,0,4000,0]},"w":1792555866765.24}
-{"info":{"view":3,"state":1,"at":[4000,2957.270623,1,640,360,461623,1,0,4000,0]},"w":1792555866765.791}
-{"info":{"view":3,"state":1,"at":[4000,2973.374123,1,640,360,461623,1,0,4000,0]},"w":1792555866781.924}
-{"info":{"view":3,"state":1,"at":[4000,2974.040206,1,640,360,461623,1,0,4000,0]},"w":1792555866782.564}
-{"info":{"view":3,"state":1,"at":[4000,2990.0646229999998,1,640,360,461623,1,0,4000,0]},"w":1792555866798.618}
-{"info":{"view":3,"state":1,"at":[4000,2990.739206,1,640,360,461623,1,0,4000,0]},"w":1792555866799.263}
-{"info":{"view":3,"state":1,"at":[4000,3006.709915,1,640,360,461623,1,0,4000,0]},"w":1792555866815.26}
-{"info":{"view":3,"state":1,"at":[4000,3007.3527059999997,1,640,360,461623,1,0,4000,0]},"w":1792555866815.876}
-{"info":{"view":3,"state":1,"at":[4000,3023.368498,1,640,360,461623,1,0,4000,0]},"w":1792555866831.92}
-{"info":{"view":3,"state":1,"at":[4000,3023.999331,1,640,360,461623,1,0,4000,0]},"w":1792555866832.524}
-{"info":{"view":3,"state":1,"at":[4000,3040.053456,1,640,360,461623,1,0,4000,0]},"w":1792555866848.606}
-{"info":{"view":3,"state":1,"at":[4000,3040.729331,1,640,360,461623,1,0,4000,0]},"w":1792555866849.254}
-{"info":{"view":3,"state":1,"at":[4000,3056.767165,1,640,360,461623,1,0,4000,0]},"w":1792555866865.331}
-{"info":{"view":3,"state":1,"at":[4000,3057.752706,1,640,360,461623,1,0,4000,0]},"w":1792555866866.288}
-{"info":{"view":3,"state":1,"at":[4000,3073.363956,1,640,360,461623,1,0,4000,0]},"w":1792555866881.911}
-{"info":{"view":3,"state":1,"at":[4000,3074.039665,1,640,360,461623,1,0,4000,0]},"w":1792555866882.563}
-{"info":{"view":3,"state":1,"at":[4000,3090.021206,1,640,360,461623,1,0,4000,0]},"w":1792555866898.562}
-{"info":{"view":3,"state":1,"at":[4000,3090.580373,1,640,360,461623,1,0,4000,0]},"w":1792555866899.1}
-{"info":{"view":3,"state":1,"at":[4000,3106.6826650000003,1,640,360,461623,1,0,4000,0]},"w":1792555866915.223}
-{"info":{"view":3,"state":1,"at":[4000,3107.264665,1,640,360,461623,1,0,4000,0]},"w":1792555866915.785}
-{"info":{"view":3,"state":1,"at":[4000,3123.3409149999998,1,640,360,461623,1,0,4000,0]},"w":1792555866931.884}
-{"info":{"view":3,"state":1,"at":[4000,3123.92179,1,640,360,461623,1,0,4000,0]},"w":1792555866932.442}
-{"info":{"view":3,"state":1,"at":[4000,3140.0122060000003,1,640,360,461623,1,0,4000,0]},"w":1792555866948.554}
-{"info":{"view":3,"state":1,"at":[4000,3140.599456,1,640,360,461623,1,0,4000,0]},"w":1792555866949.117}
-{"info":{"view":3,"state":1,"at":[4000,3156.666748,1,640,360,461623,1,0,4000,0]},"w":1792555866965.207}
-{"info":{"view":3,"state":1,"at":[4000,3157.228581,1,640,360,461623,1,0,4000,0]},"w":1792555866965.746}
-{"info":{"view":3,"state":1,"at":[4000,3173.361081,1,640,360,461623,1,0,4000,0]},"w":1792555866981.906}
-{"info":{"view":3,"state":1,"at":[4000,3173.9834149999997,1,640,360,461623,1,0,4000,0]},"w":1792555866982.505}
-{"info":{"view":3,"state":1,"at":[4000,3190.000415,1,640,360,461623,1,0,4000,0]},"w":1792555866998.539}
-{"info":{"view":3,"state":1,"at":[4000,3190.552581,1,640,360,461623,1,0,4000,0]},"w":1792555866999.071}
-{"info":{"view":3,"state":1,"at":[4000,3206.664415,1,640,360,461623,1,0,4000,0]},"w":1792555867015.199}
-{"info":{"view":3,"state":1,"at":[4000,3207.193498,1,640,360,461623,1,0,4000,0]},"w":1792555867015.711}
-{"info":{"view":3,"state":1,"at":[4000,3223.324123,1,640,360,461623,1,0,4000,0]},"w":1792555867031.859}
-{"info":{"view":3,"state":1,"at":[4000,3223.819956,1,640,360,461623,1,0,4000,0]},"w":1792555867032.337}
-{"info":{"view":3,"state":1,"at":[4000,3240.00429,1,640,360,461623,1,0,4000,0]},"w":1792555867048.54}
-{"info":{"view":3,"state":1,"at":[4000,3240.5600400000003,1,640,360,461623,1,0,4000,0]},"w":1792555867049.079}
-{"info":{"view":3,"state":1,"at":[4000,3256.6532060000004,1,640,360,461623,1,0,4000,0]},"w":1792555867065.186}
-{"info":{"view":3,"state":1,"at":[4000,3257.140498,1,640,360,461623,1,0,4000,0]},"w":1792555867065.657}
-{"info":{"view":3,"state":1,"at":[4000,3273.3545400000003,1,640,360,461623,1,0,4000,0]},"w":1792555867081.892}
-{"info":{"view":3,"state":1,"at":[4000,3273.9285809999997,1,640,360,461623,1,0,4000,0]},"w":1792555867082.447}
-{"info":{"view":3,"state":1,"at":[4000,3290.01854,1,640,360,461623,1,0,4000,0]},"w":1792555867098.557}
-{"info":{"view":3,"state":1,"at":[4000,3290.79554,1,640,360,461623,1,0,4000,0]},"w":1792555867099.317}
-{"info":{"view":3,"state":1,"at":[4000,3306.671081,1,640,360,461623,1,0,4000,0]},"w":1792555867115.209}
-{"info":{"view":3,"state":1,"at":[4000,3307.223081,1,640,360,461623,1,0,4000,0]},"w":1792555867115.742}
-{"info":{"view":3,"state":1,"at":[4000,3323.344623,1,640,360,461623,1,0,4000,0]},"w":1792555867131.891}
-{"info":{"view":3,"state":1,"at":[4000,3323.9460400000003,1,640,360,461623,1,0,4000,0]},"w":1792555867132.464}
-{"info":{"view":3,"state":1,"at":[4000,3340.009248,1,640,360,461623,1,0,4000,0]},"w":1792555867148.552}
-{"info":{"view":3,"state":1,"at":[4000,3340.6156650000003,1,640,360,461623,1,0,4000,0]},"w":1792555867149.136}
-{"info":{"view":3,"state":1,"at":[4000,3356.699456,1,640,360,461623,1,0,4000,0]},"w":1792555867165.247}
-{"info":{"view":3,"state":1,"at":[4000,3357.351748,1,640,360,461623,1,0,4000,0]},"w":1792555867165.875}
-{"info":{"view":3,"state":1,"at":[4000,3373.382165,1,640,360,461623,1,0,4000,0]},"w":1792555867181.933}
-{"info":{"view":3,"state":1,"at":[4000,3374.028665,1,640,360,461623,1,0,4000,0]},"w":1792555867182.55}
-{"info":{"view":3,"state":1,"at":[4000,3390.051915,1,640,360,461623,1,0,4000,0]},"w":1792555867198.601}
-{"info":{"view":3,"state":1,"at":[4000,3390.708873,1,640,360,461623,1,0,4000,0]},"w":1792555867199.232}
-{"info":{"view":3,"state":1,"at":[4000,3406.711331,1,640,360,461623,1,0,4000,0]},"w":1792555867215.263}
-{"info":{"view":3,"state":1,"at":[4000,3407.386248,1,640,360,461623,1,0,4000,0]},"w":1792555867215.91}
-{"info":{"view":3,"state":1,"at":[4000,3423.3809979999996,1,640,360,461623,1,0,4000,0]},"w":1792555867231.942}
-{"info":{"view":3,"state":1,"at":[4000,3424.03354,1,640,360,461623,1,0,4000,0]},"w":1792555867232.556}
-{"info":{"view":3,"state":1,"at":[4000,3440.0354979999997,1,640,360,461623,1,0,4000,0]},"w":1792555867248.585}
-{"info":{"view":3,"state":1,"at":[4000,3441.135831,1,640,360,461623,1,0,4000,0]},"w":1792555867249.667}
-{"info":{"view":3,"state":1,"at":[4000,3456.6822890000003,1,640,360,461623,1,0,4000,0]},"w":1792555867265.221}
-{"info":{"view":3,"state":1,"at":[4000,3457.265206,1,640,360,461623,1,0,4000,0]},"w":1792555867265.784}
-{"info":{"view":3,"state":1,"at":[4000,3473.337164,1,640,360,461623,1,0,4000,0]},"w":1792555867281.871}
-{"info":{"view":3,"state":1,"at":[4000,3473.867456,1,640,360,461623,1,0,4000,0]},"w":1792555867282.384}
-{"info":{"view":3,"state":1,"at":[4000,3490.0250389999997,1,640,360,461623,1,0,4000,0]},"w":1792555867298.564}
-{"info":{"view":3,"state":1,"at":[4000,3490.6338309999996,1,640,360,461623,1,0,4000,0]},"w":1792555867299.153}
-{"info":{"view":3,"state":1,"at":[4000,3506.679706,1,640,360,461623,1,0,4000,0]},"w":1792555867315.218}
-{"info":{"view":3,"state":1,"at":[4000,3507.631289,1,640,360,461623,1,0,4000,0]},"w":1792555867316.152}
-{"info":{"view":3,"state":1,"at":[4000,3523.3331639999997,1,640,360,461623,1,0,4000,0]},"w":1792555867331.868}
-{"info":{"view":3,"state":1,"at":[4000,3523.881539,1,640,360,461623,1,0,4000,0]},"w":1792555867332.399}
-{"info":{"view":3,"state":1,"at":[4000,3540.006581,1,640,360,461623,1,0,4000,0]},"w":1792555867348.544}
-{"info":{"view":3,"state":1,"at":[4000,3540.585039,1,640,360,461623,1,0,4000,0]},"w":1792555867349.103}
-{"info":{"view":3,"state":1,"at":[4000,3556.698664,1,640,360,461623,1,0,4000,0]},"w":1792555867365.244}
-{"info":{"view":3,"state":1,"at":[4000,3557.327414,1,640,360,461623,1,0,4000,0]},"w":1792555867365.846}
-{"info":{"view":3,"state":1,"at":[4000,3573.330081,1,640,360,461623,1,0,4000,0]},"w":1792555867381.867}
-{"info":{"view":3,"state":1,"at":[4000,3573.8845389999997,1,640,360,461623,1,0,4000,0]},"w":1792555867382.403}
-{"info":{"view":3,"state":1,"at":[4000,3589.996081,1,640,360,461623,1,0,4000,0]},"w":1792555867398.533}
-{"info":{"view":3,"state":1,"at":[4000,3590.541831,1,640,360,461623,1,0,4000,0]},"w":1792555867399.059}
-{"info":{"view":3,"state":1,"at":[4000,3606.670997,1,640,360,461623,1,0,4000,0]},"w":1792555867415.208}
-{"info":{"view":3,"state":1,"at":[4000,3607.2418310000003,1,640,360,461623,1,0,4000,0]},"w":1792555867415.761}
-{"info":{"view":3,"state":1,"at":[4000,3623.329081,1,640,360,461623,1,0,4000,0]},"w":1792555867431.863}
-{"info":{"view":3,"state":1,"at":[4000,3623.8572059999997,1,640,360,461623,1,0,4000,0]},"w":1792555867432.374}
-{"info":{"view":3,"state":1,"at":[4000,3639.990081,1,640,360,461623,1,0,4000,0]},"w":1792555867448.524}
-{"info":{"view":3,"state":1,"at":[4000,3640.518997,1,640,360,461623,1,0,4000,0]},"w":1792555867449.035}
-{"info":{"view":3,"state":1,"at":[4000,3656.671872,1,640,360,461623,1,0,4000,0]},"w":1792555867465.21}
-{"info":{"view":3,"state":1,"at":[4000,3657.242206,1,640,360,461623,1,0,4000,0]},"w":1792555867465.76}
-{"info":{"view":3,"state":1,"at":[4000,3673.325664,1,640,360,461623,1,0,4000,0]},"w":1792555867481.857}
-{"info":{"view":3,"state":1,"at":[4000,3673.8285809999998,1,640,360,461623,1,0,4000,0]},"w":1792555867482.345}
-{"info":{"view":3,"state":1,"at":[4000,3690.177497,1,640,360,461623,1,0,4000,0]},"w":1792555867498.716}
-{"info":{"view":3,"state":1,"at":[4000,3690.8773309999997,1,640,360,461623,1,0,4000,0]},"w":1792555867499.41}
-{"info":{"view":3,"state":1,"at":[4000,3706.6844969999997,1,640,360,461623,1,0,4000,0]},"w":1792555867515.227}
-{"info":{"view":3,"state":1,"at":[4000,3707.263039,1,640,360,461623,1,0,4000,0]},"w":1792555867515.781}
-{"info":{"view":3,"state":1,"at":[4000,3723.335414,1,640,360,461623,1,0,4000,0]},"w":1792555867531.874}
-{"info":{"view":3,"state":1,"at":[4000,3723.873664,1,640,360,461623,1,0,4000,0]},"w":1792555867532.391}
-{"info":{"view":3,"state":1,"at":[4000,3740.009789,1,640,360,461623,1,0,4000,0]},"w":1792555867548.547}
-{"info":{"view":3,"state":1,"at":[4000,3740.566664,1,640,360,461623,1,0,4000,0]},"w":1792555867549.085}
-{"info":{"view":3,"state":1,"at":[4000,3756.672081,1,640,360,461623,1,0,4000,0]},"w":1792555867565.208}
-{"info":{"view":3,"state":1,"at":[4000,3757.2192059999998,1,640,360,461623,1,0,4000,0]},"w":1792555867565.736}
-{"info":{"view":3,"state":1,"at":[4000,3773.322456,1,640,360,461623,1,0,4000,0]},"w":1792555867581.857}
-{"info":{"view":3,"state":1,"at":[4000,3773.8257059999996,1,640,360,461623,1,0,4000,0]},"w":1792555867582.341}
-{"info":{"view":3,"state":1,"at":[4000,3789.986914,1,640,360,461623,1,0,4000,0]},"w":1792555867598.528}
-{"info":{"view":3,"state":1,"at":[4000,3790.480289,1,640,360,461623,1,0,4000,0]},"w":1792555867598.997}
-{"info":{"view":3,"state":1,"at":[4000,3806.658414,1,640,360,461623,1,0,4000,0]},"w":1792555867615.191}
-{"info":{"view":3,"state":1,"at":[4000,3807.146081,1,640,360,461623,1,0,4000,0]},"w":1792555867615.661}
-{"info":{"view":3,"state":1,"at":[4000,3823.318622,1,640,360,461623,1,0,4000,0]},"w":1792555867631.859}
-{"info":{"view":3,"state":1,"at":[4000,3823.807997,1,640,360,461623,1,0,4000,0]},"w":1792555867632.323}
-{"info":{"view":3,"state":1,"at":[4000,3839.991747,1,640,360,461623,1,0,4000,0]},"w":1792555867648.524}
-{"info":{"view":3,"state":1,"at":[4000,3840.515789,1,640,360,461623,1,0,4000,0]},"w":1792555867649.033}
-{"info":{"view":3,"state":1,"at":[4000,3856.651789,1,640,360,461623,1,0,4000,0]},"w":1792555867665.184}
-{"info":{"view":3,"state":1,"at":[4000,3857.157914,1,640,360,461623,1,0,4000,0]},"w":1792555867665.674}
-{"info":{"view":3,"state":1,"at":[4000,3873.326039,1,640,360,461623,1,0,4000,0]},"w":1792555867681.86}
-{"info":{"view":3,"state":1,"at":[4000,3873.8672890000003,1,640,360,461623,1,0,4000,0]},"w":1792555867682.386}
-{"info":{"view":3,"state":1,"at":[4000,3889.994831,1,640,360,461623,1,0,4000,0]},"w":1792555867698.531}
-{"info":{"view":3,"state":1,"at":[4000,3890.5210389999997,1,640,360,461623,1,0,4000,0]},"w":1792555867699.038}
-{"info":{"view":3,"state":1,"at":[4000,3906.658206,1,640,360,461623,1,0,4000,0]},"w":1792555867715.19}
-{"info":{"view":3,"state":1,"at":[4000,3907.1527889999998,1,640,360,461623,1,0,4000,0]},"w":1792555867715.667}
-{"info":{"view":3,"state":1,"at":[4000,3923.3285809999998,1,640,360,461623,1,0,4000,0]},"w":1792555867731.868}
-{"info":{"view":3,"state":1,"at":[4000,3923.881789,1,640,360,461623,1,0,4000,0]},"w":1792555867732.399}
-{"info":{"view":3,"state":1,"at":[4000,3940.015997,1,640,360,461623,1,0,4000,0]},"w":1792555867748.557}
-{"info":{"view":3,"state":1,"at":[4000,3940.611581,1,640,360,461623,1,0,4000,0]},"w":1792555867749.132}
-{"info":{"view":3,"state":1,"at":[4000,3956.6702060000002,1,640,360,461623,1,0,4000,0]},"w":1792555867765.216}
-{"info":{"view":3,"state":1,"at":[4000,3957.256123,1,640,360,461623,1,0,4000,0]},"w":1792555867765.783}
-{"info":{"view":3,"state":1,"at":[4000,3973.335623,1,640,360,461623,1,0,4000,0]},"w":1792555867781.893}
-{"info":{"view":3,"state":1,"at":[4000,3973.950915,1,640,360,461623,1,0,4000,0]},"w":1792555867782.481}
-{"info":{"view":3,"state":1,"at":[4000,3989.99679,1,640,360,461623,1,0,4000,0]},"w":1792555867798.542}
-{"info":{"view":3,"state":1,"at":[4000,3990.5629980000003,1,640,360,461623,1,0,4000,0]},"w":1792555867799.101}
-{"info":{"view":3,"state":1,"at":[4000,4006.6678309999998,1,640,360,461623,1,0,4000,0]},"w":1792555867815.213}
-{"info":{"view":3,"state":1,"at":[4000,4007.289998,1,640,360,461623,1,0,4000,0]},"w":1792555867815.817}
-{"info":{"view":3,"state":1,"at":[4000,4000,1,640,360,461623,1,0,4000,0]},"w":1792555867831.868}
-{"info":{"view":3,"state":1,"at":[4000,4000,0,640,360,461623,1,0,4000,1]},"w":1792555867865.183}
-{"out":{"id":34,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":4000,"of":4000}},"w":1792555868765.616}
-{"in":{"id":34,"ok":null},"w":1792555868781.787}
-{"step":"answered drive.place","w":1792555868799.106}
-{"in":{"id":30,"value":{"at":4000,"of":4000,"changed":1792555868766}},"w":1792555868915.158}
-{"out":{"id":35,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":4000,"of":4000}},"w":1792555874282.954}
-{"in":{"id":35,"ok":null},"w":1792555874298.442}
-{"step":"answered drive.place","w":1792555874315.717}
-{"in":{"id":30,"delta":[{"path":["changed"],"set":1792555874283}]},"w":1792555874465.152}
-{"in":{"id":10,"delta":[{"path":[0,"overview","disk","freeBytes"],"set":39952330752},{"path":[0,"overview","machineLogins"],"append":[{"runtime":"claude","installed":true,"loggedIn":false,"usable":false,"text":"无法读取 Claude Code 的登录信息","offered":false},{"runtime":"codex","installed":true,"loggedIn":false,"usable":false,"text":"Codex 未登录","offered":false}]}]},"w":1792555875581.819}
-{"out":{"id":36,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":4000,"of":4000}},"w":1792555879682.482}
-{"in":{"id":36,"ok":null},"w":1792555879698.448}
-{"step":"answered drive.place","w":1792555879715.634}
-{"in":{"id":30,"delta":[{"path":["changed"],"set":1792555879683}]},"w":1792555879748.466}
-{"in":{"id":10,"delta":[{"path":[0,"host","checkedAt"],"set":1792555879839},{"path":[0,"host","cpuBusy"],"set":0.07},{"path":[0,"host","details",3,"value"],"set":"进程占用 134 MB"},{"path":[0,"host","disk","freeBytes"],"set":39952560128},{"path":[0,"host","emberRssBytes"],"set":140949424},{"path":[0,"host","emberText"],"set":"still.fail 134 MB"},{"path":[0,"host","load"],"set":0.32},{"path":[0,"host","memory","usedBytes"],"set":8825798656},{"path":[0,"host","meters",0,"big"],"set":"93"},{"path":[0,"host","meters",0,"left"],"set":93},{"path":[0,"host","meters",0,"note"],"set":"负载 3.2 · Apple M4"},{"path":[0,"host","meters",0,"percent"],"set":7},{"path":[0,"host","meters",0,"remaining"],"set":"空闲 93%"},{"path":[0,"host","meters",0,"total"],"set":"负载 3.2"},{"path":[0,"host","meters",0,"value"],"set":"7%"},{"path":[0,"host","meters",1,"big"],"set":"7.8"},{"path":[0,"host","meters",1,"left"],"set":49},{"path":[0,"host","meters",1,"percent"],"set":51},{"path":[0,"host","meters",1,"remaining"],"set":"剩 7.8 G"},{"path":[0,"host","meters",1,"value"],"set":"8.2 GB / 16.0 GB"},{"path":[0,"host","uptimeSec"],"set":35241},{"path":[0,"host","usage"],"set":"内存 8.2 GB / 16.0 GB · 磁盘 剩余 37.2 GB / 228 GB"}]},"w":1792555880181.821}
-{"out":{"id":37,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":4000,"of":4000}},"w":1792555885115.83}
-{"in":{"id":37,"ok":null},"w":1792555885131.763}
-{"step":"until 3 / 3","w":1792555885148.895}
-{"step":"answered drive.read","w":1792555885148.91}
-{"step":"answered drive.read","w":1792555885165.782}
-{"step":"until / 0:04","w":1792555885182.29}
-{"step":"back","w":1792555885182.312}
-{"step":"back","acted":true,"w":1792555885182.329}
-{"step":"answered drive.place","w":1792555885199.992}
-{"in":{"id":30,"delta":[{"path":["changed"],"set":1792555885116}]},"w":1792555885331.806}
-{"out":{"id":38,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":4000,"of":4000}},"w":1792555885516.105}
-{"in":{"id":38,"ok":null},"w":1792555885531.815}
-{"step":"tap 片尾曲.m4a","w":1792555885549.066}
-{"step":"tap 片尾曲.m4a","acted":true,"w":1792555885549.095}
-{"out":{"id":39,"subscribe":{"topic":"drivePlace","station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a"},"keyed":true},"w":1792555885565.552}
-{"step":"until 1 / 3","w":1792555885566.281}
-{"in":{"id":30,"delta":[{"path":["changed"],"set":1792555885516}]},"w":1792555885581.813}
-{"in":{"id":39,"value":null},"w":1792555885581.847}
-{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792555885586.514}
-{"out":{"id":40,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","offset":0,"length":2}},"w":1792555885598.804}
-{"in":{"id":40,"ok":{"type":"audio/mp4","total":45252,"mtime":1792555861744}},"w":1792555885615.093,"b":"0000"}
-{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792555885615.157}
-{"out":{"id":41,"call":"drive.read","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","offset":0,"length":45252}},"w":1792555885632.406}
-{"in":{"id":41,"ok":{"type":"audio/mp4","total":45252,"mtime":1792555861744}},"w":1792555885648.438,"bn":45252}
-{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,45254,0,1,0,0]},"w":1792555885648.5}
-{"info":{"view":4,"state":0,"at":[4975.32879818594,0,1,0,0,45254,0,1,0,0]},"w":1792555885701.884}
-{"step":"answered drive.read","w":1792555885702.344}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,0,1,0,0,45254,0,0,5000,0]},"w":1792555885702.587}
-{"step":"answered drive.read","w":1792555885712.115}
-{"step":"back","w":1792555885732.836}
-{"step":"back","acted":true,"w":1792555885732.852}
-{"step":"answered drive.place","w":1792555885749.347}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,11.647011000000001,1,0,0,45254,0,0,5000,0]},"w":1792555885765.179}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,12.999969,1,0,0,45254,0,0,5000,0]},"w":1792555885766.515}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,28.313261,1,0,0,45254,0,0,5000,0]},"w":1792555885781.842}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,29.624719000000002,1,0,0,45254,0,0,5000,0]},"w":1792555885783.141}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,44.978469,1,0,0,45254,0,0,5000,0]},"w":1792555885798.505}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,46.245427,1,0,0,45254,0,0,5000,0]},"w":1792555885799.759}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,61.656510999999995,1,0,0,45254,0,0,5000,0]},"w":1792555885815.185}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,62.97984399999999,1,0,0,45254,0,0,5000,0]},"w":1792555885816.494}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,78.314302,1,0,0,45254,0,0,5000,0]},"w":1792555885831.844}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,79.679636,1,0,0,45254,0,0,5000,0]},"w":1792555885833.196}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,94.987052,1,0,0,45254,0,0,5000,0]},"w":1792555885848.516}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,96.376927,1,0,0,45254,0,0,5000,0]},"w":1792555885849.893}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,111.649136,1,0,0,45254,0,0,5000,0]},"w":1792555885865.176}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,112.955011,1,0,0,45254,0,0,5000,0]},"w":1792555885866.47}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,128.31255199999998,1,0,0,45254,0,0,5000,0]},"w":1792555885881.842}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,129.740969,1,0,0,45254,0,0,5000,0]},"w":1792555885883.259}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,145.00480199999998,1,0,0,45254,0,0,5000,0]},"w":1792555885898.537}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,146.432219,1,0,0,45254,0,0,5000,0]},"w":1792555885899.949}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,161.645094,1,0,0,45254,0,0,5000,0]},"w":1792555885915.17}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,162.967636,1,0,0,45254,0,0,5000,0]},"w":1792555885916.482}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,178.325552,1,0,0,45254,0,0,5000,0]},"w":1792555885931.862}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,179.860636,1,0,0,45254,0,0,5000,0]},"w":1792555885933.38}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,194.971136,1,0,0,45254,0,0,5000,0]},"w":1792555885948.494}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,196.272594,1,0,0,45254,0,0,5000,0]},"w":1792555885949.788}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,211.65942700000002,1,0,0,45254,0,0,5000,0]},"w":1792555885965.19}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,212.853011,1,0,0,45254,0,0,5000,0]},"w":1792555885966.366}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,228.281427,1,0,0,45254,0,0,5000,0]},"w":1792555885981.796}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,228.78267699999998,1,0,0,45254,0,0,5000,0]},"w":1792555885982.289}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,244.978261,1,0,0,45254,0,0,5000,0]},"w":1792555885998.497}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,245.583802,1,0,0,45254,0,0,5000,0]},"w":1792555885999.088}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,261.609302,1,0,0,45254,0,0,5000,0]},"w":1792555886015.121}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,262.04884400000003,1,0,0,45254,0,0,5000,0]},"w":1792555886015.553}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,278.26426100000003,1,0,0,45254,0,0,5000,0]},"w":1792555886031.772}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,278.560177,1,0,0,45254,0,0,5000,0]},"w":1792555886032.062}
-{"info":{"view":4,"state":1,"at":[4975.32879818594,294.930886,1,0,0,45254,0,0,5000,0]},"w":1792555886048.433}
-{"out":{"id":42,"call":"drive.place","params":{"station":"01M5EAFAPP5SHX4NP2QN7R5740/894ebdc6aa3fdf993b6c6f001328b4770c3a43478599ff6ac59a2dc6c42ecc54","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","at":295,"of":4975}},"w":1792555886048.674}
-{"in":{"id":42,"ok":null},"w":1792555886065.143}
-{"step":"until 片尾曲.m4a","w":1792555886081.963}
-{"step":"","w":1792555886081.973}
+{"env":{"MBUI_CLOUD":"http://127.0.0.1:18787","MBUI_CORE_ACCOUNT":"{\"sub\":\"alice\",\"email\":\"alice@example.test\",\"name\":\"Name of alice\",\"picture\":\"\",\"access\":\"-\",\"refresh\":\"-\",\"accessExpires\":1792593275}"}}
+{"out":{"id":1,"call":"client.device","params":{"client":"still.fail mbui","app":"desktop","userAgent":"Macintosh; Mac OS X"}},"w":1792592978417.391}
+{"in":{"id":1,"ok":null},"w":1792592978494.634}
+{"out":{"id":2,"subscribe":{"topic":"accounts"},"keyed":true},"w":1792592978494.659}
+{"out":{"id":3,"subscribe":{"topic":"prefs"},"keyed":true},"w":1792592978494.669}
+{"step":"# written by scripts/rerecord.sh from its test (src/sfreplay/emit.mbt): not edited by hand","w":1792592978496.076}
+{"step":"timeout 90000","w":1792592978496.081}
+{"step":"answered client.device","w":1792592978496.084}
+{"step":"answered client.focus","w":1792592978522.563}
+{"in":{"id":2,"value":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""}]},"w":1792592978588.598}
+{"in":{"id":3,"value":{"onlyMine":false,"onlyWatching":false,"onlyDecisions":false,"listFilter":{},"appearance":"system","rowPicture":"auto","absoluteTime":false,"lang":"zh","keys":{},"lastChat":{},"openChat":{},"chatTabs":{},"dropFiles":{},"driveViews":{},"resume":{},"stationUpdatesDismissed":{},"device":{"app":"desktop","phone":false,"handoff":false},"reader":{"size":18,"line":1.7,"margin":22,"face":"sans","indent":true,"paper":"follow"},"rails":{},"bars":{"sets":[["chats","files","profiles","stations"],["decisions","usage","connects","archive"]],"current":0},"barsBy":{},"fonts":{},"faces":{"ui":{"id":"","name":"","mono":false,"family":"","files":[],"bytes":0},"text":{"id":"","name":"","mono":false,"family":"","files":[],"bytes":0},"code":{"id":"","name":"","mono":true,"family":"","files":[],"bytes":0},"list":[{"id":"inter","name":"Inter","mono":false,"family":"SF Inter","css":"http://127.0.0.1:18787/releases/fonts/inter/4.001/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/inter/4.001/var.ttf.gz","bytes":457818,"sha256":"29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031"}],"preview":"http://127.0.0.1:18787/releases/fonts/inter/4.001/preview-194fa287.ttf","bytes":457818},{"id":"noto-sans-sc","name":"思源黑体","mono":false,"family":"SF Noto Sans SC","css":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/var.ttf.gz","bytes":11276563,"sha256":"a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da"}],"preview":"http://127.0.0.1:18787/releases/fonts/noto-sans-sc/2.004/preview-f0494178.ttf","bytes":11276563},{"id":"noto-serif-sc","name":"思源宋体","mono":false,"family":"SF Noto Serif SC","css":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/var.ttf.gz","bytes":15454579,"sha256":"050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9"}],"preview":"http://127.0.0.1:18787/releases/fonts/noto-serif-sc/2.003/preview-001bbedf.ttf","bytes":15454579},{"id":"lxgw-wenkai","name":"霞鹜文楷","mono":false,"family":"SF LXGW WenKai","css":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/font.css","files":[{"weight":400,"url":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/400.ttf.gz","bytes":12904482,"sha256":"2d73eea94ad808999d90c0000c239a84a33b09d4bc6ab6c5b8bbf1eda8a7fc8b"},{"weight":500,"url":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/500.ttf.gz","bytes":13272430,"sha256":"f4b8a34d1f838fe411540cb7c97b1c384ac9738a876c4104500bc42508b2312a"}],"preview":"http://127.0.0.1:18787/releases/fonts/lxgw-wenkai/1.530/preview-d3505af4.ttf","bytes":26176912},{"id":"jetbrains-mono","name":"JetBrains Mono","mono":true,"family":"SF JetBrains Mono","css":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/var.ttf.gz","bytes":90579,"sha256":"48715a42ec242c21e9f02692891e147d022299a52e48d5e413e1a942193ffeda"}],"preview":"http://127.0.0.1:18787/releases/fonts/jetbrains-mono/2.211/preview-ee73078f.ttf","bytes":90579},{"id":"fira-code","name":"Fira Code","mono":true,"family":"SF Fira Code","css":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/font.css","files":[{"weight":0,"url":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/var.ttf.gz","bytes":137151,"sha256":"9335b082b3c7850d98a64b584f3417f65355f3471278bb5eeb8c6c0e8657aeeb"}],"preview":"http://127.0.0.1:18787/releases/fonts/fira-code/5.002/preview-555be27a.ttf","bytes":137151},{"id":"maple-mono","name":"Maple Mono","mono":true,"family":"SF Maple Mono CN","css":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/font.css","files":[{"weight":400,"url":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/400.ttf.gz","bytes":8352545,"sha256":"0fcc5139bfd5ab14ff989bb7dfd5236d0cafc10e60b9828569e6883613ab4085"},{"weight":600,"url":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/600.ttf.gz","bytes":8438132,"sha256":"96ed7ae26ee7c50b02b2d2b2bc0f1a0cbabe45ae5d6e6abf6678e2177c415677"}],"preview":"http://127.0.0.1:18787/releases/fonts/maple-mono/7.9/preview-cffdf246.ttf","bytes":16790677}]}}},"w":1792592978588.642}
+{"out":{"id":4,"subscribe":{"topic":"workspaces"},"keyed":true},"w":1792592978588.691}
+{"out":{"id":5,"subscribe":{"topic":"status"},"keyed":true},"w":1792592978588.7}
+{"in":{"id":4,"value":[{"account":{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":""},"workspaces":[{"id":"01M5FDW1FW86V3FFXE2V16Z744","name":"Dev","role":"owner","created_at":1792592971,"stations":1,"members":1,"relays":[],"time":{"created_at":{"past":true,"at":1792592971000,"ago":"刚刚","full":"10/21 22:29:31","until":"1 分钟内"}}}],"invitations":[],"relay_url":"http://127.0.0.1:18740","loaded":true,"beta":true}]},"w":1792592978605.275}
+{"in":{"id":5,"value":{"items":[]}},"w":1792592978605.392}
+{"out":{"id":6,"subscribe":{"topic":"lock","workspace":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978605.427}
+{"out":{"id":7,"subscribe":{"topic":"chats","scope":"01M5FDW1FW86V3FFXE2V16Z744","mine":false},"keyed":true},"w":1792592978605.448}
+{"out":{"id":8,"subscribe":{"topic":"changelog"},"keyed":true},"w":1792592978605.457}
+{"out":{"id":9,"subscribe":{"topic":"workspaceMarks","workspace":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978605.586}
+{"out":{"id":10,"subscribe":{"topic":"stations","scope":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978605.608}
+{"out":{"id":11,"subscribe":{"topic":"workspace","workspace":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978605.612}
+{"out":{"id":12,"subscribe":{"topic":"status","workspace":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978605.677}
+{"out":{"id":13,"subscribe":{"topic":"lockPrompts"},"keyed":true},"w":1792592978605.706}
+{"out":{"id":14,"call":"client.focus","params":{"visible":true,"focused":true,"workspace":"01M5FDW1FW86V3FFXE2V16Z744"}},"w":1792592978608.834}
+{"out":{"id":15,"subscribe":{"topic":"notify"},"keyed":true},"w":1792592978608.843}
+{"out":{"id":16,"subscribe":{"topic":"notify","workspace":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978608.851}
+{"in":{"id":6,"value":{"available":true,"locked":false,"notice":true,"role":"owner","manages":true,"owner":true,"canSign":true,"signs":false,"me":{"device":"b1f916167a90c4e4164de95952b631cbbcd46a5dc864a223da0917697bd1d126","code":"BGQ-Q8D","kind":"app","confirmed":false,"waiting":false,"asked":false},"signers":0,"members":[],"stations":[{"id":"022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","name":"studio","version":"0.1.0","online":true,"protected":false}],"protected":0,"requests":[],"renew":[],"attention":0}},"w":1792592978624.614}
+{"in":{"id":11,"value":{"id":"01M5FDW1FW86V3FFXE2V16Z744","name":"Dev","role":"owner","created_at":1792592971,"members":[{"sub":"alice","email":"alice@example.test","name":"Name of alice","picture":"https://example.test/p.png","role":"owner","added_at":1792592971}],"stations":[{"id":"022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","name":"studio","emoji":null,"icon":null,"enrolled_at":1792592971,"enrolled_by":"alice","last_seen":1792592975,"version":"0.1.0","time":{"last_seen":{"past":true,"at":1792592975000,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内"}}}],"invitations":[],"added":[],"relays":[],"lock":null,"lock_requests":0,"time":{"created_at":{"past":true,"at":1792592971000,"ago":"刚刚","full":"10/21 22:29:31","until":"1 分钟内"}}}},"w":1792592978624.637}
+{"in":{"id":7,"value":{"me":{"id":"alice@example.test","email":"alice@example.test"},"stations":[{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","id":"022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","name":"studio","state":"online"}],"loading":false,"days":[{"daysAgo":0,"at":1792592975203,"label":"今天","items":[{"id":"ember:c-4e06bfe5d4","session":"ember:c-4e06bfe5d4","thread":1,"title":"端到端测试的对话 post:你好，我是测试用的 agent","agents":[{"key":"ember:c-4e06bfe5d4","runtime":"claude","process":"warm","pending":0,"lastTurn":{"id":"b468902a-6641-4195-a38b-d756fb195533","kind":"input","outcome":"completed","declared":"final","ending":"all_done","need":"answered the question that was asked","startedAt":1792592975138,"endedAt":1792592975206},"agentText":"默认模型","statusText":"已完成：answered the question that was asked"}],"last":{"seq":2,"authorKind":"agent","author":"ember:c-4e06bfe5d4","text":"你好，我是测试用的 agent","createdAt":1792592975203,"by":{"kind":"agent","name":"agent","mine":false,"runtime":"claude","label":"agent"},"preview":"你好，我是测试用的 agent","time":{"createdAt":{"at":1792592975203,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}}},"unread":true,"mine":true,"lastActiveAt":1792592975203,"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","stationName":"studio","time":{"lastActiveAt":{"at":1792592975203,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}},"people":[{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}}],"creator":{"id":"alice@example.test","name":"Name of alice","email":"alice@example.test","via":"cloud","shown":{"name":"Name of alice","display":"你","picture":"https://example.test/p.png","mine":true}},"peopleText":"你 发起","clientKey":"new:chat-8c8228a9f62fb91cc6","pinned":false,"tone":"done"}]}],"trouble":null,"members":1,"leading":"agents","glyph":{"online":1,"dim":0,"connecting":0,"failing":0,"working":0,"summary":"studio","label":"1 台 station，1 台在线"},"note":{"reading":false,"text":null,"failing":[],"empty":false}}},"w":1792592978624.661}
+{"in":{"id":8,"value":{"app":"desktop","tabs":[{"part":"desktop","label":"桌面","days":[]},{"part":"web","label":"网页","days":[]},{"part":"android","label":"安卓","days":[]},{"part":"station","label":"Station","days":[]},{"part":"cloud","label":"云端","days":[]}],"loading":false}},"w":1792592978624.679}
+{"in":{"id":9,"value":{"workspaces":{"01M5FDW1FW86V3FFXE2V16Z744":{"alert":0,"unread":1,"tone":"done","label":"1 个有新消息","badge":0,"items":[],"mineTone":"done"}},"badge":0,"badgeCounts":"attention","badgeKinds":{"on":true,"wait":true,"failed":true,"done":false,"message":false}}},"w":1792592978624.687}
+{"in":{"id":10,"value":[{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","id":"022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","name":"studio","summary":"空闲 · Apple M4 · 16 GB · macOS 27.0.1","face":"idle","line":"Apple M4","online":true,"reconnecting":false,"lastSeen":1792592975,"version":"0.1.0","link":{"state":"online"},"runtimes":[{"runtime":"claude","models":["claude-sonnet-5-5"]}],"models":[{"model":"claude-sonnet-5-5","name":"Sonnet 5.5","family":"Sonnet","ids":["claude-sonnet-5-5"],"maker":{"id":"anthropic","name":"Anthropic"},"runtimes":["claude"],"efforts":{"claude":["low","medium","high","xhigh","max"]},"accounts":{"claude":[{"efforts":["low","medium","high","xhigh","max"],"id":"cc","name":"cc","current":false,"kind":"env","runtime":"claude","quota":{"state":"unsupported","windows":[],"detail":"自定义环境变量的账号无法查询额度","checkedAt":1792592975117,"time":{"checkedAt":{"at":1792592975117,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}}},"quotaLine":{"text":"自定义环境变量的账号无法查询额度"}}]}}],"overview":{"automaticDecisions":{"canEdit":true,"canReview":true,"settings":{"completion":{"enabled":false,"model":null}},"models":[],"recent":[],"policy":{"text":"agent 说做完了以后，看这个 chat 里用户要的东西现在怎么样了。只按用户实际要的判断：不替用户加要求，用户没要求部署或验证的就不算欠着。agent 说做完了但消息对不上时，以消息为准。看不到的东西（文件、线上状态）不要猜，看不出来就选「看不出来」。","options":[{"id":"answered","name":"已回答","rubric":"用户要的是答案、解释或建议，已经给了，没有要做的事","archive":true,"count":0,"chats":[]},{"id":"landed","name":"已落地","rubric":"要做的改动已经合进 main、已上线或已发版；用户要验证的已经验证","archive":true,"count":0,"chats":[]},{"id":"dropped","name":"不要了","rubric":"用户说不做了、不合了，或者改去别处做了","archive":true,"count":0,"chats":[]},{"id":"agent_work","name":"agent 还有活","rubric":"还有 agent 自己能接着做的事，或者有任务还在跑","archive":false,"count":0,"chats":[]},{"id":"awaiting_review","name":"等人看结果","rubric":"分支、截图、方案等做好了，在等人看或确认","archive":false,"count":0,"chats":[]},{"id":"awaiting_answer","name":"等人回答","rubric":"有没回答的问题，或没做的决定","archive":false,"count":0,"chats":[]},{"id":"awaiting_action","name":"等人去做","rubric":"要人去操作或提供东西，比如 key、权限、真机测试","archive":false,"count":0,"chats":[]},{"id":"uncertain","name":"看不出来","rubric":"消息不够判断还有没有事","archive":false,"count":0,"chats":[]}],"days":7,"checked":0,"failed":0,"edited":false,"change":null,"summaryText":"最近 7 天检查了 0 个 chat","changeText":null}},"archiving":{"days":1,"slackDays":3,"reviewed":false,"canEdit":true},"viewer":{"via":"mesh","email":"alice@example.test","name":"Name of alice","sub":"alice","role":"owner","workspace":"01M5FDW1FW86V3FFXE2V16Z744","device":"b1f916167a90c4e4164de95952b631cbbcd46a5dc864a223da0917697bd1d126"},"connects":[],"profiles":[{"id":"cc","name":"cc","runtime":"claude","runtimes":["claude"],"access":{"kind":"env","key":"","login":false},"home":"/tmp/mbe2e-C/data/homes/cc","homeExists":true,"models":["claude-sonnet-5-5"],"env":[],"usedBy":[],"loginCommand":"","machine":false,"backgroundOnMessage":true,"check":{"decision":{"state":"unsupported","detail":"当前登录未提供决策概率接口"},"state":"unknown","detail":"自定义环境变量，still.fail 无法自动检查","checkedAt":1792592975000,"time":{"checkedAt":{"at":1792592975000,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}}},"quota":{"state":"unsupported","windows":[],"detail":"自定义环境变量的账号无法查询额度","checkedAt":1792592975117,"time":{"checkedAt":{"at":1792592975117,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}}},"checkText":"无法检查","checkTone":"neutral","group":"key","groupTitle":"API Key","makers":{"claude-sonnet-5-5":{"id":"anthropic","name":"Anthropic"}},"names":{"claude-sonnet-5-5":"Sonnet 5.5"},"series":[{"name":"Sonnet","models":["claude-sonnet-5-5"]}],"modelsText":"已启用 1 / 1 个模型","available":["claude-sonnet-5-5"],"modelsReading":false,"uses":["claude"],"usesText":"","canAddModel":false,"decisionOnly":false,"decisionModels":[],"workspaces":[]}],"processes":[],"counts":{"sessions":1,"running":0,"warm":1},"mesh":{"state":"running","origin":"http://127.0.0.1:18787","station":"022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","workspace":"Dev","workspaceId":"01M5FDW1FW86V3FFXE2V16Z744","name":"studio"},"slackUsers":[],"slackTeams":[],"slackApps":[],"feishuRegistrations":[],"disk":{"freeBytes":30698336256,"totalBytes":245107195904},"logins":[],"machineLogins":[],"sharing":true,"consoleSignIn":true,"apiProviders":[{"id":"openai","name":"OpenAI","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"google","name":"Google Gemini","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"xai","name":"xAI","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"mistral","name":"Mistral","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"deepseek","name":"DeepSeek","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"qwen","name":"Qwen","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"moonshotai","name":"Kimi","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"zai","name":"Z.ai","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"minimax","name":"MiniMax","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"xiaomi","name":"Xiaomi MiMo","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"ant-ling","name":"Ant Ling","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"jev","name":"Jev","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"qwen-cn","name":"Qwen (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"moonshotai-cn","name":"Kimi (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"zai-coding-cn","name":"Z.ai Coding (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"minimax-cn","name":"MiniMax (China)","group":"labs","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"openrouter","name":"OpenRouter","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"vercel-ai-gateway","name":"Vercel AI Gateway","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"opencode","name":"OpenCode Zen","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cloudflare-ai-gateway","name":"Cloudflare AI Gateway","group":"gateways","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"azure-openai","name":"Azure OpenAI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"groq","name":"Groq","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"together","name":"Together AI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"fireworks","name":"Fireworks","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cerebras","name":"Cerebras","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"huggingface","name":"Hugging Face","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"nvidia","name":"NVIDIA","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"baseten","name":"Baseten","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"cloudflare-workers-ai","name":"Cloudflare Workers AI","group":"hosted","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"ollama","name":"Ollama","group":"local","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""},{"id":"custom","name":"Custom","group":"local","kind":"","hasKey":false,"hasPlan":false,"endpointRequired":false,"protocols":[],"keyOptional":false,"uses":[],"usesText":""}],"updates":[{"id":"station","name":"Station","installed":true,"newer":false,"downgrade":false,"updatable":false,"note":"并非通过安装脚本安装，无法在此更新","state":"idle","checkedAt":1792592975688},{"id":"claude","name":"Claude Code","installed":true,"latest":"2.1.306","newer":false,"downgrade":false,"updatable":true,"state":"idle","checkedAt":1792592975688},{"id":"codex","name":"Codex","installed":true,"latest":"0.163.0","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-lockp/apps/e2e-local/ember/station/test/fake/codex，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792592975688},{"id":"dsh","name":"DeepSeek Harness","installed":true,"version":"0.2.0","latest":"0.2.1-rc.2","newer":true,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-lockp/apps/e2e-local/ember/station/test/fake/dsh，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792592975688},{"id":"grok","name":"Grok Build","installed":true,"version":"1.0.62","latest":"1.0.62","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-lockp/apps/e2e-local/ember/station/test/fake/grok，并非通过 npm 或 Homebrew 安装，需在该机器上手动更新","state":"idle","checkedAt":1792592975688},{"id":"cursor","name":"Cursor","installed":false,"latest":"1.0.40","newer":false,"downgrade":false,"updatable":true,"state":"idle","checkedAt":1792592975688},{"id":"devin","name":"Devin","installed":true,"version":"3000.11.92","latest":"3000.11.92","newer":false,"downgrade":false,"updatable":false,"note":"安装在 /Users/zuozijian/.stillfail/remote/sessions/61edb1e36469ce593c7abd6fcefcd2f202762a225c94afebae72c82db5245391/work/sf-lockp/apps/e2e-local/ember/station/test/fake/devin，不是用 Devin 的安装脚本装的，需在该机器上手动更新","state":"idle","checkedAt":1792592975688}],"processesText":"没有运行中的 agent 进程","agentEnv":[],"drive":{"roots":[{"path":"/tmp/mbe2e-C/home/e2e-105609","name":"e2e-105609","state":"ok"}],"anywhere":true,"home":"/tmp/mbe2e-C/home"},"search":{"files":"spotlight","personal":false}},"betaOffered":false,"host":{"hostname":"3720-Mac-mini-1","os":"macOS 27.0.1","arch":"arm64","cpus":10,"cpuModel":"Apple M4","load":0.25,"cpuBusy":0.13,"uptimeSec":72338,"memory":{"totalBytes":17179869184,"usedBytes":9663266816,"swapUsedBytes":250347520},"disk":{"path":"/tmp/mbe2e-C/data","totalBytes":245107195904,"freeBytes":30701244416},"emberRssBytes":160889640,"checkedAt":1792592976698,"summary":"10 核 · 16 GB","line":"macOS 27.0.1 · 10 核 · 16 GB · 已运行 0 天","facts":["3720-Mac-mini-1","macOS 27.0.1","arm64 · 10 核","已运行 20 小时"],"meters":[{"label":"CPU","short":"CPU","percent":13,"left":87,"level":"ok","value":"13%","remaining":"空闲 87%","big":"87","unit":"%","title":"CPU 空闲","total":"负载 2.5","note":"负载 2.5 · Apple M4"},{"label":"内存","short":"内存","percent":56,"left":44,"level":"ok","value":"9.0 GB / 16.0 GB","remaining":"剩 7.0 G","big":"7.0","unit":"GB","title":"内存剩","total":"共 16 GB","note":"swap 0.2 GB"},{"label":"磁盘","short":"磁盘","percent":87,"left":13,"level":"amber","value":"剩余 28.6 GB / 228 GB","remaining":"剩 28.6 G","big":"28.6","unit":"GB","title":"磁盘剩","total":"共 228 GB"}],"identity":"Apple M4 · 16 GB · macOS 27.0.1","details":[{"label":"主机名","value":"3720-Mac-mini-1"},{"label":"芯片","value":"Apple M4 · 10 核 · arm64"},{"label":"已运行","value":"20 小时"},{"label":"still.fail","value":"进程占用 153 MB"}],"usage":"内存 9.0 GB / 16.0 GB · 磁盘 剩余 28.6 GB / 228 GB","emberText":"still.fail 153 MB"},"way":{"path":"直连","via":"direct"},"time":{"lastSeen":{"at":1792592975000,"ago":"刚刚","full":"10/21 22:29:35","until":"1 分钟内","past":true}},"joined":false}]},"w":1792592978624.777}
+{"in":{"id":12,"value":{"items":[]}},"w":1792592978624.851}
+{"in":{"id":13,"value":{"pairing":[]}},"w":1792592978624.854}
+{"in":{"id":14,"ok":null},"w":1792592978624.856}
+{"in":{"id":15,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792592978624.862}
+{"in":{"id":16,"value":{"on":true,"asked":true,"push":true,"kinds":{"wait":true,"failed":true,"done":"away","message":true},"preview":true,"permission":"unknown","show":[]}},"w":1792592978624.865}
+{"out":{"id":17,"subscribe":{"topic":"longJobs","scope":"01M5FDW1FW86V3FFXE2V16Z744"},"keyed":true},"w":1792592978624.901}
+{"out":{"id":18,"call":"notify.permission","params":{"state":"unknown"}},"w":1792592978627.12}
+{"in":{"id":10,"delta":[{"path":[0,"overview","disk","freeBytes"],"set":30698299392}]},"w":1792592978638.601}
+{"in":{"id":17,"value":{"groups":[]}},"w":1792592978638.613}
+{"in":{"id":18,"ok":null},"w":1792592978638.617}
+{"step":"#before drive-media 105609","w":1792592978638.84}
+{"step":"#env MBUI_OPEN_PAGE=files","w":1792592978638.842}
+{"step":"answered notify.permission","w":1792592978638.844}
+{"step":"wait 299","w":1792592978655.688}
+{"step":"now tap =e2e-105609","w":1792592978955.793}
+{"step":"now tap =e2e-105609","acted":true,"w":1792592978955.91}
+{"out":{"id":19,"subscribe":{"topic":"drive","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":""},"keyed":true},"w":1792592978972.446}
+{"step":"wait 300","w":1792592978978.762}
+{"in":{"id":19,"value":{"path":"","entries":[{"name":"子文件夹","dir":true,"size":0,"mtime":1792592975747,"type":"","kind":"folder","sizeText":"","timeText":"22:29"},{"name":"影音","dir":true,"size":0,"mtime":1792592978401,"type":"","kind":"folder","sizeText":"","timeText":"22:29"},{"name":"小说-e2e.txt","dir":false,"size":36779,"mtime":1792592975761,"type":"text/plain; charset=utf-8","kind":"text","sizeText":"36 KB","timeText":"22:29"},{"name":"说明.txt","dir":false,"size":43,"mtime":1792592975747,"type":"text/plain; charset=utf-8","kind":"text","sizeText":"43 B","timeText":"22:29"}],"truncated":false,"folders":2,"files":2,"countText":"2 个文件夹 · 2 个文件"}},"w":1792592978988.663}
+{"out":{"id":20,"subscribe":{"topic":"drivePlace","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"小说-e2e.txt"},"keyed":true},"w":1792592978992.325}
+{"out":{"id":21,"subscribe":{"topic":"drivePlace","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"说明.txt"},"keyed":true},"w":1792592978993.019}
+{"in":{"id":20,"value":null},"w":1792592979005.293}
+{"in":{"id":21,"value":null},"w":1792592979005.323}
+{"step":"now tap 影音","w":1792592979289.557}
+{"step":"now tap 影音","acted":true,"w":1792592979289.642}
+{"out":{"id":22,"subscribe":{"topic":"drive","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音"},"keyed":true},"w":1792592979305.722}
+{"step":"wait 300","w":1792592979308.66}
+{"in":{"id":22,"value":{"path":"影音","entries":[{"name":"片尾曲.m4a","dir":false,"size":45252,"mtime":1792592978400,"type":"audio/mp4","kind":"audio","sizeText":"44 KB","timeText":"22:29"},{"name":"第01集.mp4","dir":false,"size":2276541,"mtime":1792592978204,"type":"video/mp4","kind":"video","sizeText":"2.2 MB","timeText":"22:29"},{"name":"第01集.srt","dir":false,"size":97,"mtime":1792592978401,"type":"application/x-subrip","kind":"subtitle","sizeText":"97 B","timeText":"22:29"},{"name":"第02集.mp4","dir":false,"size":461621,"mtime":1792592978343,"type":"video/mp4","kind":"video","sizeText":"451 KB","timeText":"22:29"}],"truncated":false,"folders":0,"files":4,"countText":"4 个文件"}},"w":1792592979321.994}
+{"step":"now until 第01集.mp4","w":1792592979622.467}
+{"step":"until 片尾曲.m4a","w":1792592979622.517}
+{"step":"tap 第01集.mp4","w":1792592979622.525}
+{"step":"tap 第01集.mp4","acted":true,"w":1792592979622.556}
+{"out":{"id":23,"subscribe":{"topic":"drivePlace","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4"},"keyed":true},"w":1792592979639.279}
+{"out":{"id":24,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.srt","offset":0,"length":4194304}},"w":1792592979639.417}
+{"step":"answered drive.read","w":1792592979644.188}
+{"in":{"id":23,"value":null},"w":1792592979655.295}
+{"in":{"id":24,"ok":{"type":"application/x-subrip","total":97,"mtime":1792592978401}},"w":1792592979655.34,"b":"310a30303a30303a30302c323030202d2d3e2030303a30303a30342c3030300ae7acace4b880e58fa5e5ad97e5b9950a0a320a30303a30303a30342c303030202d2d3e2030303a30303a30372c3530300ae7acace4ba8ce58fa5e5ad97e5b9950a"}
+{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792592979673.039}
+{"out":{"id":25,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2}},"w":1792592979690.165}
+{"step":"wait 300","w":1792592979690.435}
+{"in":{"id":25,"ok":{"type":"video/mp4","total":2276541,"mtime":1792592978204}},"w":1792592979705.275,"b":"0000"}
+{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792592979705.476}
+{"out":{"id":26,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2276541}},"w":1792592979722.291}
+{"in":{"id":26,"ok":{"type":"video/mp4","total":2276541,"mtime":1792592978204}},"w":1792592979755.466,"bn":2276541}
+{"info":{"view":1,"state":0,"at":[-1,0,1,0,0,2276543,0,1,0,0]},"w":1792592979755.702}
+{"info":{"view":1,"state":0,"at":[20000,0,1,640,360,2276543,0,1,0,0]},"w":1792592979833.287}
+{"info":{"view":1,"state":1,"at":[20000,0,1,640,360,2276543,0,1,20000,0]},"w":1792592979835.401}
+{"info":{"view":1,"state":1,"at":[20000,0,1,640,360,2276543,1,0,20000,0]},"w":1792592979855.324}
+{"info":{"view":1,"state":1,"at":[20000,14.277345,1,640,360,2276543,1,0,20000,0]},"w":1792592979955.368}
+{"info":{"view":1,"state":1,"at":[20000,14.488302999999998,1,640,360,2276543,1,0,20000,0]},"w":1792592979955.566}
+{"info":{"view":1,"state":1,"at":[20000,30.856845,1,640,360,2276543,1,0,20000,0]},"w":1792592979971.935}
+{"info":{"view":1,"state":1,"at":[20000,30.962428,1,640,360,2276543,1,0,20000,0]},"w":1792592979972.039}
+{"info":{"view":1,"state":1,"at":[20000,47.522428,1,640,360,2276543,1,0,20000,0]},"w":1792592979988.604}
+{"info":{"view":1,"state":1,"at":[20000,47.623636,1,640,360,2276543,1,0,20000,0]},"w":1792592979988.701}
+{"info":{"view":1,"state":1,"at":[20000,64.211636,1,640,360,2276543,1,0,20000,0]},"w":1792592980005.296}
+{"info":{"view":1,"state":1,"at":[20000,64.33272,1,640,360,2276543,1,0,20000,0]},"w":1792592980005.41}
+{"step":"now until 2 / 3","w":1792592980005.446}
+{"step":"answered drive.read","w":1792592980005.454}
+{"info":{"view":1,"state":1,"at":[20000,80.854053,1,640,360,2276543,1,0,20000,0]},"w":1792592980021.932}
+{"info":{"view":1,"state":1,"at":[20000,80.92692799999999,1,640,360,2276543,1,0,20000,0]},"w":1792592980022.004}
+{"step":"answered drive.read","w":1792592980022.049}
+{"info":{"view":1,"state":1,"at":[20000,97.536761,1,640,360,2276543,1,0,20000,0]},"w":1792592980038.62}
+{"info":{"view":1,"state":1,"at":[20000,97.635178,1,640,360,2276543,1,0,20000,0]},"w":1792592980038.713}
+{"step":"until 第一句字幕","w":1792592980038.747}
+{"info":{"view":1,"state":1,"at":[20000,114.186886,1,640,360,2276543,1,0,20000,0]},"w":1792592980055.265}
+{"info":{"view":1,"state":1,"at":[20000,114.253511,1,640,360,2276543,1,0,20000,0]},"w":1792592980055.331}
+{"info":{"view":1,"state":1,"at":[20000,130.85622,1,640,360,2276543,1,0,20000,0]},"w":1792592980071.935}
+{"info":{"view":1,"state":1,"at":[20000,130.953261,1,640,360,2276543,1,0,20000,0]},"w":1792592980072.031}
+{"info":{"view":1,"state":1,"at":[20000,147.541136,1,640,360,2276543,1,0,20000,0]},"w":1792592980088.625}
+{"info":{"view":1,"state":1,"at":[20000,147.72297,1,640,360,2276543,1,0,20000,0]},"w":1792592980088.803}
+{"info":{"view":1,"state":1,"at":[20000,164.19967799999998,1,640,360,2276543,1,0,20000,0]},"w":1792592980105.282}
+{"info":{"view":1,"state":1,"at":[20000,164.34097,1,640,360,2276543,1,0,20000,0]},"w":1792592980105.42}
+{"info":{"view":1,"state":1,"at":[20000,180.89217799999997,1,640,360,2276543,1,0,20000,0]},"w":1792592980121.981}
+{"info":{"view":1,"state":1,"at":[20000,181.089428,1,640,360,2276543,1,0,20000,0]},"w":1792592980122.17}
+{"info":{"view":1,"state":1,"at":[20000,197.573511,1,640,360,2276543,1,0,20000,0]},"w":1792592980138.668}
+{"info":{"view":1,"state":1,"at":[20000,197.93547,1,640,360,2276543,1,0,20000,0]},"w":1792592980139.021}
+{"info":{"view":1,"state":1,"at":[20000,214.197803,1,640,360,2276543,1,0,20000,0]},"w":1792592980155.284}
+{"info":{"view":1,"state":1,"at":[20000,216.447553,1,640,360,2276543,1,0,20000,0]},"w":1792592980157.527}
+{"step":"back","w":1792592980157.649}
+{"step":"back","acted":true,"w":1792592980157.66}
+{"info":{"view":1,"state":1,"at":[20000,230.88547,1,640,360,2276543,1,0,20000,0]},"w":1792592980171.97}
+{"info":{"view":1,"state":1,"at":[20000,231.197511,1,640,360,2276543,1,0,20000,0]},"w":1792592980172.275}
+{"step":"wait 300","w":1792592980172.369}
+{"info":{"view":1,"state":1,"at":[20000,247.537845,1,640,360,2276543,1,0,20000,0]},"w":1792592980188.622}
+{"info":{"view":1,"state":1,"at":[20000,247.863553,1,640,360,2276543,1,0,20000,0]},"w":1792592980188.942}
+{"info":{"view":1,"state":1,"at":[20000,264.20959500000004,1,640,360,2276543,1,0,20000,0]},"w":1792592980205.297}
+{"info":{"view":1,"state":1,"at":[20000,264.501303,1,640,360,2276543,1,0,20000,0]},"w":1792592980205.579}
+{"info":{"view":1,"state":1,"at":[20000,280.892636,1,640,360,2276543,1,0,20000,0]},"w":1792592980221.983}
+{"info":{"view":1,"state":1,"at":[20000,281.117136,1,640,360,2276543,1,0,20000,0]},"w":1792592980222.195}
+{"info":{"view":1,"state":1,"at":[20000,297.526053,1,640,360,2276543,1,0,20000,0]},"w":1792592980238.605}
+{"info":{"view":1,"state":1,"at":[20000,297.746636,1,640,360,2276543,1,0,20000,0]},"w":1792592980238.825}
+{"info":{"view":1,"state":1,"at":[20000,314.19897000000003,1,640,360,2276543,1,0,20000,0]},"w":1792592980255.279}
+{"info":{"view":1,"state":1,"at":[20000,314.440636,1,640,360,2276543,1,0,20000,0]},"w":1792592980255.519}
+{"info":{"view":1,"state":1,"at":[20000,330.860636,1,640,360,2276543,1,0,20000,0]},"w":1792592980271.939}
+{"info":{"view":1,"state":1,"at":[20000,331.076928,1,640,360,2276543,1,0,20000,0]},"w":1792592980272.155}
+{"info":{"view":1,"state":1,"at":[20000,347.525303,1,640,360,2276543,1,0,20000,0]},"w":1792592980288.605}
+{"info":{"view":1,"state":1,"at":[20000,347.74142800000004,1,640,360,2276543,1,0,20000,0]},"w":1792592980288.82}
+{"info":{"view":1,"state":1,"at":[20000,364.194345,1,640,360,2276543,1,0,20000,0]},"w":1792592980305.274}
+{"info":{"view":1,"state":1,"at":[20000,364.424511,1,640,360,2276543,1,0,20000,0]},"w":1792592980305.504}
+{"info":{"view":1,"state":1,"at":[20000,380.90826100000004,1,640,360,2276543,1,0,20000,0]},"w":1792592980322.003}
+{"info":{"view":1,"state":1,"at":[20000,381.76392799999996,1,640,360,2276543,1,0,20000,0]},"w":1792592980322.856}
+{"info":{"view":1,"state":1,"at":[20000,397.55367800000005,1,640,360,2276543,1,0,20000,0]},"w":1792592980338.644}
+{"info":{"view":1,"state":1,"at":[20000,397.92684499999996,1,640,360,2276543,1,0,20000,0]},"w":1792592980339.007}
+{"info":{"view":1,"state":1,"at":[20000,414.263678,1,640,360,2276543,1,0,20000,0]},"w":1792592980355.373}
+{"info":{"view":1,"state":1,"at":[20000,415.41397,1,640,360,2276543,1,0,20000,0]},"w":1792592980356.504}
+{"info":{"view":1,"state":1,"at":[20000,430.89930300000003,1,640,360,2276543,1,0,20000,0]},"w":1792592980371.999}
+{"info":{"view":1,"state":1,"at":[20000,431.985511,1,640,360,2276543,1,0,20000,0]},"w":1792592980373.073}
+{"info":{"view":1,"state":1,"at":[20000,447.59688600000004,1,640,360,2276543,1,0,20000,0]},"w":1792592980388.707}
+{"info":{"view":1,"state":1,"at":[20000,448.994053,1,640,360,2276543,1,0,20000,0]},"w":1792592980390.085}
+{"info":{"view":1,"state":1,"at":[20000,464.26426100000003,1,640,360,2276543,1,0,20000,0]},"w":1792592980405.371}
+{"info":{"view":1,"state":1,"at":[20000,465.606261,1,640,360,2276543,1,0,20000,0]},"w":1792592980406.698}
+{"info":{"view":1,"state":1,"at":[20000,480.917428,1,640,360,2276543,1,0,20000,0]},"w":1792592980422.023}
+{"info":{"view":1,"state":1,"at":[20000,482.23242799999997,1,640,360,2276543,1,0,20000,0]},"w":1792592980423.324}
+{"info":{"view":1,"state":1,"at":[20000,497.594178,1,640,360,2276543,1,0,20000,0]},"w":1792592980438.697}
+{"info":{"view":1,"state":1,"at":[20000,498.95617799999997,1,640,360,2276543,1,0,20000,0]},"w":1792592980440.047}
+{"info":{"view":1,"state":1,"at":[20000,514.2577200000001,1,640,360,2276543,1,0,20000,0]},"w":1792592980455.36}
+{"info":{"view":1,"state":1,"at":[20000,515.92197,1,640,360,2276543,1,0,20000,0]},"w":1792592980457.013}
+{"info":{"view":1,"state":1,"at":[20000,530.9168450000001,1,640,360,2276543,1,0,20000,0]},"w":1792592980472.017}
+{"out":{"id":27,"call":"drive.place","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","at":531,"of":20000}},"w":1792592980473.082}
+{"step":"now answered drive.place","w":1792592980475.498}
+{"in":{"id":27,"ok":null},"w":1792592980488.631}
+{"step":"until 第02集.mp4","w":1792592980506.19}
+{"step":"tap 第01集.mp4","w":1792592980506.229}
+{"step":"tap 第01集.mp4","acted":true,"w":1792592980506.259}
+{"out":{"id":28,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.srt","offset":0,"length":4194304}},"w":1792592980525.904}
+{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792592980526.674}
+{"step":"answered drive.read","w":1792592980526.997}
+{"in":{"id":23,"value":{"at":531,"of":20000,"changed":1792592980473}},"w":1792592980538.624}
+{"in":{"id":28,"ok":{"type":"application/x-subrip","total":97,"mtime":1792592978401}},"w":1792592980538.662,"b":"310a30303a30303a30302c323030202d2d3e2030303a30303a30342c3030300ae7acace4b880e58fa5e5ad97e5b9950a0a320a30303a30303a30342c303030202d2d3e2030303a30303a30372c3530300ae7acace4ba8ce58fa5e5ad97e5b9950a"}
+{"out":{"id":29,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2}},"w":1792592980539.836}
+{"in":{"id":29,"ok":{"type":"video/mp4","total":2276541,"mtime":1792592978204}},"w":1792592980555.317,"b":"0000"}
+{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792592980555.496}
+{"step":"wait 300","w":1792592980556.855}
+{"out":{"id":30,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","offset":0,"length":2276541}},"w":1792592980573.122}
+{"in":{"id":30,"ok":{"type":"video/mp4","total":2276541,"mtime":1792592978204}},"w":1792592980605.558,"bn":2276541}
+{"info":{"view":2,"state":0,"at":[-1,0,1,0,0,2276543,0,1,0,0]},"w":1792592980606.059}
+{"info":{"view":2,"state":0,"at":[20000,0,1,640,360,2276543,0,1,0,0]},"w":1792592980622.286}
+{"info":{"view":2,"state":1,"at":[20000,0,1,640,360,2276543,1,0,20000,0]},"w":1792592980638.635}
+{"info":{"view":2,"state":1,"at":[20000,6.910863,1,640,360,2276543,1,0,20000,0]},"w":1792592980705.365}
+{"info":{"view":2,"state":1,"at":[20000,7.9716130000000005,1,640,360,2276543,1,0,20000,0]},"w":1792592980706.414}
+{"info":{"view":2,"state":1,"at":[20000,23.561988,1,640,360,2276543,1,0,20000,0]},"w":1792592980722.018}
+{"info":{"view":2,"state":1,"at":[20000,24.727655000000002,1,640,360,2276543,1,0,20000,0]},"w":1792592980723.168}
+{"info":{"view":2,"state":1,"at":[20000,40.229488,1,640,360,2276543,1,0,20000,0]},"w":1792592980738.685}
+{"info":{"view":2,"state":1,"at":[20000,41.464529999999996,1,640,360,2276543,1,0,20000,0]},"w":1792592980739.905}
+{"info":{"view":2,"state":1,"at":[20000,56.925905,1,640,360,2276543,1,0,20000,0]},"w":1792592980755.387}
+{"info":{"view":2,"state":1,"at":[20000,58.281822,1,640,360,2276543,1,0,20000,0]},"w":1792592980756.725}
+{"info":{"view":2,"state":1,"at":[20000,73.573405,1,640,360,2276543,1,0,20000,0]},"w":1792592980772.03}
+{"info":{"view":2,"state":1,"at":[20000,74.89153,1,640,360,2276543,1,0,20000,0]},"w":1792592980773.333}
+{"info":{"view":2,"state":1,"at":[20000,90.24673800000001,1,640,360,2276543,1,0,20000,0]},"w":1792592980788.703}
+{"info":{"view":2,"state":1,"at":[20000,91.53053,1,640,360,2276543,1,0,20000,0]},"w":1792592980789.973}
+{"info":{"view":2,"state":1,"at":[20000,106.907072,1,640,360,2276543,1,0,20000,0]},"w":1792592980805.364}
+{"info":{"view":2,"state":1,"at":[20000,108.279197,1,640,360,2276543,1,0,20000,0]},"w":1792592980806.727}
+{"info":{"view":2,"state":1,"at":[20000,123.573488,1,640,360,2276543,1,0,20000,0]},"w":1792592980822.029}
+{"info":{"view":2,"state":1,"at":[20000,124.84173799999999,1,640,360,2276543,1,0,20000,0]},"w":1792592980823.284}
+{"info":{"view":2,"state":1,"at":[20000,140.248697,1,640,360,2276543,1,0,20000,0]},"w":1792592980838.71}
+{"info":{"view":2,"state":1,"at":[20000,141.02490500000002,1,640,360,2276543,1,0,20000,0]},"w":1792592980839.468}
+{"info":{"view":2,"state":1,"at":[20000,156.92107199999998,1,640,360,2276543,1,0,20000,0]},"w":1792592980855.387}
+{"info":{"view":2,"state":1,"at":[20000,157.59103,1,640,360,2276543,1,0,20000,0]},"w":1792592980856.034}
+{"info":{"view":2,"state":1,"at":[20000,173.58036299999998,1,640,360,2276543,1,0,20000,0]},"w":1792592980872.042}
+{"info":{"view":2,"state":1,"at":[20000,174.21811300000002,1,640,360,2276543,1,0,20000,0]},"w":1792592980872.659}
+{"step":"now until 2 / 3","w":1792592980872.943}
+{"step":"answered drive.read","w":1792592980872.971}
+{"info":{"view":2,"state":1,"at":[20000,190.25678,1,640,360,2276543,1,0,20000,0]},"w":1792592980888.72}
+{"info":{"view":2,"state":1,"at":[20000,190.898988,1,640,360,2276543,1,0,20000,0]},"w":1792592980889.34}
+{"step":"answered drive.read","w":1792592980889.632}
+{"info":{"view":2,"state":1,"at":[20000,206.908697,1,640,360,2276543,1,0,20000,0]},"w":1792592980905.367}
+{"info":{"view":2,"state":1,"at":[20000,207.60228,1,640,360,2276543,1,0,20000,0]},"w":1792592980906.043}
+{"step":"until / 0:20","w":1792592980906.322}
+{"step":"tap icon:forward-15","w":1792592980906.344}
+{"step":"tap icon:forward-15","acted":true,"w":1792592980906.374}
+{"info":{"view":2,"state":1,"at":[20000,223.626822,1,640,360,2276543,1,0,20000,0]},"w":1792592980922.091}
+{"info":{"view":2,"state":1,"at":[20000,15224,1,640,360,2276543,1,0,20000,0]},"w":1792592980924.02}
+{"step":"tap icon:forward-15","w":1792592980924.311}
+{"step":"tap icon:forward-15","acted":true,"w":1792592980924.36}
+{"info":{"view":2,"state":1,"at":[20000,20000,1,640,360,2276543,1,0,20000,0]},"w":1792592980974.53}
+{"step":"until 播放结束","w":1792592980974.798}
+{"info":{"view":2,"state":1,"at":[20000,20000,0,640,360,2276543,1,0,20000,1]},"w":1792592981088.687}
+{"step":"tap 下一个：第02集.mp4","w":1792592981094.791}
+{"step":"tap 下一个：第02集.mp4","acted":true,"w":1792592981094.833}
+{"out":{"id":31,"subscribe":{"topic":"drivePlace","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4"},"keyed":true},"w":1792592981105.986}
+{"step":"answered drive.place","w":1792592981107.078}
+{"in":{"id":31,"value":null},"w":1792592981121.979}
+{"out":{"id":32,"call":"drive.place","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第01集.mp4","at":20000,"of":20000}},"w":1792592981128.033}
+{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792592981129.903}
+{"in":{"id":32,"ok":null},"w":1792592981138.632}
+{"out":{"id":33,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","offset":0,"length":2}},"w":1792592981139.318}
+{"in":{"id":33,"ok":{"type":"video/mp4","total":461621,"mtime":1792592978343}},"w":1792592981155.312,"b":"0000"}
+{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792592981155.508}
+{"step":"until 3 / 3","w":1792592981156.284}
+{"step":"answered drive.read","w":1792592981156.297}
+{"out":{"id":34,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","offset":0,"length":461621}},"w":1792592981172.151}
+{"step":"answered drive.read","w":1792592981172.293}
+{"in":{"id":23,"value":{"at":20000,"of":20000,"changed":1792592981128}},"w":1792592981188.618}
+{"in":{"id":34,"ok":{"type":"video/mp4","total":461621,"mtime":1792592978343}},"w":1792592981188.676,"bn":461621}
+{"info":{"view":3,"state":0,"at":[-1,0,1,0,0,461623,0,1,0,0]},"w":1792592981188.851}
+{"info":{"view":3,"state":0,"at":[4000,0,1,640,360,461623,0,1,0,0]},"w":1792592981205.975}
+{"step":"until / 0:04","w":1792592981207.822}
+{"step":"back","w":1792592981207.867}
+{"step":"back","acted":true,"w":1792592981207.907}
+{"info":{"view":3,"state":1,"at":[4000,0,1,640,360,461623,1,0,4000,0]},"w":1792592981221.961}
+{"step":"wait 300","w":1792592981222.562}
+{"info":{"view":3,"state":1,"at":[4000,3.530113,1,640,360,461623,1,0,4000,0]},"w":1792592981288.658}
+{"info":{"view":3,"state":1,"at":[4000,4.697571,1,640,360,461623,1,0,4000,0]},"w":1792592981289.811}
+{"info":{"view":3,"state":1,"at":[4000,20.192071,1,640,360,461623,1,0,4000,0]},"w":1792592981305.314}
+{"info":{"view":3,"state":1,"at":[4000,21.257696,1,640,360,461623,1,0,4000,0]},"w":1792592981306.37}
+{"info":{"view":3,"state":1,"at":[4000,36.913363,1,640,360,461623,1,0,4000,0]},"w":1792592981322.047}
+{"info":{"view":3,"state":1,"at":[4000,38.307946,1,640,360,461623,1,0,4000,0]},"w":1792592981323.426}
+{"info":{"view":3,"state":1,"at":[4000,53.547071,1,640,360,461623,1,0,4000,0]},"w":1792592981338.673}
+{"info":{"view":3,"state":1,"at":[4000,54.758155,1,640,360,461623,1,0,4000,0]},"w":1792592981339.872}
+{"info":{"view":3,"state":1,"at":[4000,70.22578,1,640,360,461623,1,0,4000,0]},"w":1792592981355.357}
+{"info":{"view":3,"state":1,"at":[4000,71.55344600000001,1,640,360,461623,1,0,4000,0]},"w":1792592981356.669}
+{"info":{"view":3,"state":1,"at":[4000,86.88553,1,640,360,461623,1,0,4000,0]},"w":1792592981372.013}
+{"info":{"view":3,"state":1,"at":[4000,88.14202999999999,1,640,360,461623,1,0,4000,0]},"w":1792592981373.257}
+{"info":{"view":3,"state":1,"at":[4000,103.565155,1,640,360,461623,1,0,4000,0]},"w":1792592981388.694}
+{"info":{"view":3,"state":1,"at":[4000,104.83502999999999,1,640,360,461623,1,0,4000,0]},"w":1792592981389.952}
+{"info":{"view":3,"state":1,"at":[4000,120.260988,1,640,360,461623,1,0,4000,0]},"w":1792592981405.402}
+{"info":{"view":3,"state":1,"at":[4000,121.754238,1,640,360,461623,1,0,4000,0]},"w":1792592981406.876}
+{"info":{"view":3,"state":1,"at":[4000,136.94886300000002,1,640,360,461623,1,0,4000,0]},"w":1792592981422.094}
+{"info":{"view":3,"state":1,"at":[4000,138.45348800000002,1,640,360,461623,1,0,4000,0]},"w":1792592981423.576}
+{"info":{"view":3,"state":1,"at":[4000,153.600405,1,640,360,461623,1,0,4000,0]},"w":1792592981438.745}
+{"info":{"view":3,"state":1,"at":[4000,155.147905,1,640,360,461623,1,0,4000,0]},"w":1792592981440.271}
+{"info":{"view":3,"state":1,"at":[4000,170.29982099999998,1,640,360,461623,1,0,4000,0]},"w":1792592981455.446}
+{"info":{"view":3,"state":1,"at":[4000,171.938863,1,640,360,461623,1,0,4000,0]},"w":1792592981457.064}
+{"info":{"view":3,"state":1,"at":[4000,186.930071,1,640,360,461623,1,0,4000,0]},"w":1792592981472.071}
+{"info":{"view":3,"state":1,"at":[4000,188.35244600000001,1,640,360,461623,1,0,4000,0]},"w":1792592981473.473}
+{"info":{"view":3,"state":1,"at":[4000,203.577946,1,640,360,461623,1,0,4000,0]},"w":1792592981488.713}
+{"info":{"view":3,"state":1,"at":[4000,204.96098800000001,1,640,360,461623,1,0,4000,0]},"w":1792592981490.081}
+{"info":{"view":3,"state":1,"at":[4000,220.218696,1,640,360,461623,1,0,4000,0]},"w":1792592981505.347}
+{"info":{"view":3,"state":1,"at":[4000,221.486405,1,640,360,461623,1,0,4000,0]},"w":1792592981506.603}
+{"info":{"view":3,"state":1,"at":[4000,236.890863,1,640,360,461623,1,0,4000,0]},"w":1792592981522.021}
+{"out":{"id":35,"call":"drive.place","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/第02集.mp4","at":237,"of":4000}},"w":1792592981523.068}
+{"step":"now answered drive.place","w":1792592981524.852}
+{"in":{"id":35,"ok":null},"w":1792592981538.633}
+{"step":"tap 片尾曲.m4a","w":1792592981556.662}
+{"step":"tap 片尾曲.m4a","acted":true,"w":1792592981556.715}
+{"out":{"id":36,"subscribe":{"topic":"drivePlace","station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a"},"keyed":true},"w":1792592981572.605}
+{"step":"wait 300","w":1792592981573.556}
+{"in":{"id":31,"value":{"at":237,"of":4000,"changed":1792592981523}},"w":1792592981588.65}
+{"in":{"id":36,"value":null},"w":1792592981588.701}
+{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,0,0,1,0,0]},"w":1792592981597.219}
+{"out":{"id":37,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","offset":0,"length":2}},"w":1792592981606.12}
+{"in":{"id":37,"ok":{"type":"audio/mp4","total":45252,"mtime":1792592978400}},"w":1792592981621.979,"b":"0000"}
+{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,2,0,1,0,0]},"w":1792592981622.196}
+{"out":{"id":38,"call":"drive.read","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","offset":0,"length":45252}},"w":1792592981640.769}
+{"in":{"id":38,"ok":{"type":"audio/mp4","total":45252,"mtime":1792592978400}},"w":1792592981655.658,"bn":45252}
+{"info":{"view":4,"state":0,"at":[-1,0,1,0,0,45254,0,1,0,0]},"w":1792592981655.865}
+{"info":{"view":4,"state":0,"at":[4975.32879818594,0,1,0,0,45254,0,1,0,0]},"w":1792592981681.759}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,0,1,0,0,45254,0,0,5000,0]},"w":1792592981688.765}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,5.59345,1,0,0,45254,0,0,5000,0]},"w":1792592981738.745}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,7.270117000000001,1,0,0,45254,0,0,5000,0]},"w":1792592981740.4}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,22.247825,1,0,0,45254,0,0,5000,0]},"w":1792592981755.394}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,23.71745,1,0,0,45254,0,0,5000,0]},"w":1792592981756.845}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,38.918075,1,0,0,45254,0,0,5000,0]},"w":1792592981772.065}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,40.405659,1,0,0,45254,0,0,5000,0]},"w":1792592981773.533}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,55.582367,1,0,0,45254,0,0,5000,0]},"w":1792592981788.73}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,57.051367,1,0,0,45254,0,0,5000,0]},"w":1792592981790.181}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,72.243617,1,0,0,45254,0,0,5000,0]},"w":1792592981805.393}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,73.66307499999999,1,0,0,45254,0,0,5000,0]},"w":1792592981806.79}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,88.919075,1,0,0,45254,0,0,5000,0]},"w":1792592981822.068}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,90.333492,1,0,0,45254,0,0,5000,0]},"w":1792592981823.461}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,105.626784,1,0,0,45254,0,0,5000,0]},"w":1792592981838.775}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,107.10486700000001,1,0,0,45254,0,0,5000,0]},"w":1792592981840.244}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,122.267992,1,0,0,45254,0,0,5000,0]},"w":1792592981855.422}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,123.789617,1,0,0,45254,0,0,5000,0]},"w":1792592981856.921}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,138.93774200000001,1,0,0,45254,0,0,5000,0]},"w":1792592981872.092}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,140.491992,1,0,0,45254,0,0,5000,0]},"w":1792592981873.623}
+{"step":"now until 1 / 3","w":1792592981873.955}
+{"step":"answered drive.read","w":1792592981873.997}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,155.62790900000002,1,0,0,45254,0,0,5000,0]},"w":1792592981888.782}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,156.488325,1,0,0,45254,0,0,5000,0]},"w":1792592981889.616}
+{"step":"answered drive.read","w":1792592981890.006}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,172.281992,1,0,0,45254,0,0,5000,0]},"w":1792592981905.439}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,173.025909,1,0,0,45254,0,0,5000,0]},"w":1792592981906.156}
+{"step":"back","w":1792592981906.55}
+{"step":"back","acted":true,"w":1792592981906.574}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,188.948117,1,0,0,45254,0,0,5000,0]},"w":1792592981922.103}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,190.11495,1,0,0,45254,0,0,5000,0]},"w":1792592981923.241}
+{"step":"wait 300","w":1792592981923.576}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,205.585784,1,0,0,45254,0,0,5000,0]},"w":1792592981938.731}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,207.018575,1,0,0,45254,0,0,5000,0]},"w":1792592981940.145}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,222.25661699999998,1,0,0,45254,0,0,5000,0]},"w":1792592981955.406}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,223.726784,1,0,0,45254,0,0,5000,0]},"w":1792592981956.854}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,238.921575,1,0,0,45254,0,0,5000,0]},"w":1792592981972.069}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,240.439617,1,0,0,45254,0,0,5000,0]},"w":1792592981973.569}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,255.6037,1,0,0,45254,0,0,5000,0]},"w":1792592981988.752}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,257.050075,1,0,0,45254,0,0,5000,0]},"w":1792592981990.177}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,272.26178400000003,1,0,0,45254,0,0,5000,0]},"w":1792592982005.409}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,273.62811700000003,1,0,0,45254,0,0,5000,0]},"w":1792592982006.756}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,288.835909,1,0,0,45254,0,0,5000,0]},"w":1792592982021.959}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,289.28640900000005,1,0,0,45254,0,0,5000,0]},"w":1792592982022.4}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,305.513742,1,0,0,45254,0,0,5000,0]},"w":1792592982038.633}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,305.974284,1,0,0,45254,0,0,5000,0]},"w":1792592982039.086}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,322.200325,1,0,0,45254,0,0,5000,0]},"w":1792592982055.338}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,322.906159,1,0,0,45254,0,0,5000,0]},"w":1792592982056.02}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,338.892534,1,0,0,45254,0,0,5000,0]},"w":1792592982072.019}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,339.19807499999996,1,0,0,45254,0,0,5000,0]},"w":1792592982072.309}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,355.4962,1,0,0,45254,0,0,5000,0]},"w":1792592982088.611}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,355.788992,1,0,0,45254,0,0,5000,0]},"w":1792592982088.901}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,372.15511699999996,1,0,0,45254,0,0,5000,0]},"w":1792592982105.267}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,372.39145,1,0,0,45254,0,0,5000,0]},"w":1792592982105.503}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,388.824742,1,0,0,45254,0,0,5000,0]},"w":1792592982121.938}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,389.05761700000005,1,0,0,45254,0,0,5000,0]},"w":1792592982122.169}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,405.4932,1,0,0,45254,0,0,5000,0]},"w":1792592982138.606}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,405.720492,1,0,0,45254,0,0,5000,0]},"w":1792592982138.833}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,422.1702,1,0,0,45254,0,0,5000,0]},"w":1792592982155.287}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,422.556575,1,0,0,45254,0,0,5000,0]},"w":1792592982155.672}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,439.23920100000004,1,0,0,45254,0,0,5000,0]},"w":1792592982172.385}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,440.113201,1,0,0,45254,0,0,5000,0]},"w":1792592982173.243}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,455.60445100000004,1,0,0,45254,0,0,5000,0]},"w":1792592982188.758}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,456.84120099999996,1,0,0,45254,0,0,5000,0]},"w":1792592982189.971}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,472.246368,1,0,0,45254,0,0,5000,0]},"w":1792592982205.397}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,473.67353499999996,1,0,0,45254,0,0,5000,0]},"w":1792592982206.808}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,488.90132600000004,1,0,0,45254,0,0,5000,0]},"w":1792592982222.052}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,490.31032600000003,1,0,0,45254,0,0,5000,0]},"w":1792592982223.442}
+{"step":"now answered drive.place","w":1792592982223.714}
+{"info":{"view":4,"state":1,"at":[4975.32879818594,505.569951,1,0,0,45254,0,0,5000,0]},"w":1792592982238.719}
+{"out":{"id":39,"call":"drive.place","params":{"station":"01M5FDW1FW86V3FFXE2V16Z744/022644157b6993d24e2ad3d221f5a5bcbf5e81ba0df87f71239a029ac2bd4b2c","root":"/tmp/mbe2e-C/home/e2e-105609","path":"影音/片尾曲.m4a","at":506,"of":4975}},"w":1792592982239.904}
+{"in":{"id":39,"ok":null},"w":1792592982255.302}
+{"step":"until 片尾曲.m4a","w":1792592982272.957}
+{"step":"","w":1792592982272.992}
 {"textrec":{"ib":["bfd9b0d6dc602826",12668,64],"r":[56,56,56,56]}}
 {"textrec":{"s":[13,400,0,"正在读取你的 workspace"],"r":[0,1,12.898832684824903,0,1,1,12.898832684824903,1,2,1,12.898832684824903,2,3,1,12.898832684824903,3,4,1,12.898832684824896,4,5,1,12.898832684824896,5,6,1,3.580078125,-1,7,1,9.8642578125,6,8,1,7.4775390625,7,9,1,4.875,8,10,1,6.85546875,9,11,1,6.6015625,10,12,1,7.8583984375,11,13,1,7.0966796875,12,14,1,7.1982421875,13,15,1,7.3505859375,14]}}
 {"textrec":{"m":[13,400,0],"r":[12.568359375,2.7421875,18,12.568359375,2.7421875,0]}}
@@ -838,8 +431,8 @@
 {"textrec":{"g":70,"r":[736,0,11,15,-1,-13,0]}}
 {"textrec":{"g":71,"r":[748,0,6,14,-1,-13,0]}}
 {"textrec":{"g":72,"r":[755,0,11,12,-1,-10,0]}}
-{"textrec":{"ib":["7d024a54eca23c07",1108,64],"r":[16,16,16,16]}}
 {"textrec":{"ib":["4165e1c325ff4b32",1108,64],"r":[16,16,16,16]}}
+{"textrec":{"ib":["7d024a54eca23c07",1108,64],"r":[16,16,16,16]}}
 {"textrec":{"g":73,"r":[767,0,17,17,-1,-14,0]}}
 {"textrec":{"g":74,"r":[785,0,14,16,1,-13,0]}}
 {"textrec":{"g":75,"r":[800,0,17,17,-1,-14,0]}}
@@ -853,22 +446,21 @@
 {"textrec":{"g":83,"r":[893,0,11,15,0,-13,0]}}
 {"textrec":{"g":18,"r":[905,0,18,17,-1,-14,0]}}
 {"textrec":{"g":19,"r":[924,0,17,17,-1,-14,0]}}
+{"textrec":{"ib":["2bb63fc1d380f765",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"s":[17,400,0,"设置"],"r":[0,1,16.851167315175097,84,1,1,16.851167315175097,85]}}
 {"textrec":{"s":[16,600,0,"e2e-105609"],"r":[0,1,9.127458572387695,50,1,1,9.717817306518555,86,2,1,9.100765228271484,50,3,1,7.363014221191406,87,4,1,7.594245910644531,88,5,1,10.31976318359375,89,6,1,10.035783767700195,90,7,1,10.3499755859375,91,8,1,10.31976318359375,89,9,1,10.3499755859375,92]}}
 {"textrec":{"s":[17,400,0,"文件"],"r":[0,1,16.851167315175097,93,1,1,16.851167315175097,94]}}
 {"textrec":{"g":84,"r":[942,0,19,18,-1,-15,0]}}
 {"textrec":{"g":85,"r":[962,0,18,17,-1,-14,0]}}
-{"textrec":{"ib":["2bb63fc1d380f765",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"s":[13,400,0,"2 个文件夹 · 2 个文件"],"r":[0,1,7.76953125,95,1,1,3.580078125,-1,2,1,12.898832684824903,96,3,1,12.898832684824903,97,4,1,12.898832684824903,98,5,1,12.898832684824903,99,6,1,3.580078125,-1,7,1,6.228545204222115,100,8,1,3.580078125,-1,9,1,7.76953125,95,10,1,3.580078125,-1,11,1,12.898832684824896,96,12,1,12.898832684824896,97,13,1,12.898832684824896,98]}}
 {"textrec":{"s":[15,400,0,"子文件夹"],"r":[0,1,14.883268482490273,101,1,1,14.883268482490273,102,2,1,14.883268482490273,103,3,1,14.883268482490273,104]}}
-{"textrec":{"s":[12,400,0,"12:10"],"r":[0,1,5.56640625,105,1,1,7.2421875,106,2,1,3.5625,107,3,1,5.56640625,105,4,1,7.55859375,108]}}
+{"textrec":{"s":[12,400,0,"22:29"],"r":[0,1,7.2421875,105,1,1,7.2421875,105,2,1,3.591796875,106,3,1,7.271484375,105,4,1,7.640625,107]}}
 {"textrec":{"m":[12,400,0],"r":[11.6015625,2.53125,17,11.6015625,2.53125,0]}}
-{"textrec":{"s":[15,400,0,"影音"],"r":[0,1,14.883268482490273,109,1,1,14.883268482490273,110]}}
-{"textrec":{"s":[12,400,0,"12:11"],"r":[0,1,5.56640625,105,1,1,7.2421875,106,2,1,3.5625,107,3,1,5.56640625,105,4,1,5.56640625,105]}}
-{"textrec":{"s":[15,400,0,"小说-e2e.txt"],"r":[0,1,14.883268482490273,111,1,1,14.883268482490273,112,2,1,6.8408203125,113,3,1,8.3349609375,114,4,1,8.78173828125,115,5,1,8.29833984375,114,6,1,4.072265625,116,7,1,5.068359375,117,8,1,7.6318359375,118,9,1,5.21484375,117]}}
-{"textrec":{"s":[12,400,0,"36 KB · 12:10"],"r":[0,1,7.5234375,119,1,1,7.640625,120,2,1,3.375,-1,3,1,7.904296875,121,4,1,7.88671875,122,5,1,3.375,-1,6,1,5.754933455713626,123,7,1,3.375,-1,8,1,5.56640625,105,9,1,7.2421875,106,10,1,3.5625,107,11,1,5.56640625,105,12,1,7.55859375,108]}}
-{"textrec":{"s":[15,400,0,"说明.txt"],"r":[0,1,14.883268482490273,112,1,1,14.883268482490273,124,2,1,4.072265625,116,3,1,5.068359375,117,4,1,7.6318359375,118,5,1,5.21484375,117]}}
-{"textrec":{"s":[12,400,0,"43 B · 12:10"],"r":[0,1,7.72265625,125,1,1,7.5234375,119,2,1,3.375,-1,3,1,7.88671875,122,4,1,3.375,-1,5,1,5.754933455713626,123,6,1,3.375,-1,7,1,5.56640625,105,8,1,7.2421875,106,9,1,3.5625,107,10,1,5.56640625,105,11,1,7.55859375,108]}}
+{"textrec":{"s":[15,400,0,"影音"],"r":[0,1,14.883268482490273,108,1,1,14.883268482490273,109]}}
+{"textrec":{"s":[15,400,0,"小说-e2e.txt"],"r":[0,1,14.883268482490273,110,1,1,14.883268482490273,111,2,1,6.8408203125,112,3,1,8.3349609375,113,4,1,8.78173828125,114,5,1,8.29833984375,113,6,1,4.072265625,115,7,1,5.068359375,116,8,1,7.6318359375,117,9,1,5.21484375,116]}}
+{"textrec":{"s":[12,400,0,"36 KB · 22:29"],"r":[0,1,7.5234375,118,1,1,7.640625,119,2,1,3.375,-1,3,1,7.904296875,120,4,1,7.88671875,121,5,1,3.375,-1,6,1,5.754933455713626,122,7,1,3.375,-1,8,1,7.2421875,105,9,1,7.2421875,105,10,1,3.591796875,106,11,1,7.271484375,105,12,1,7.640625,107]}}
+{"textrec":{"s":[15,400,0,"说明.txt"],"r":[0,1,14.883268482490273,111,1,1,14.883268482490273,123,2,1,4.072265625,115,3,1,5.068359375,116,4,1,7.6318359375,117,5,1,5.21484375,116]}}
+{"textrec":{"s":[12,400,0,"43 B · 22:29"],"r":[0,1,7.72265625,124,1,1,7.5234375,118,2,1,3.375,-1,3,1,7.88671875,121,4,1,3.375,-1,5,1,5.754933455713626,122,6,1,3.375,-1,7,1,7.2421875,105,8,1,7.2421875,105,9,1,3.591796875,106,10,1,7.271484375,105,11,1,7.640625,107]}}
 {"textrec":{"g":93,"r":[981,0,18,18,-1,-15,0]}}
 {"textrec":{"g":94,"r":[1000,0,18,18,-1,-15,0]}}
 {"textrec":{"g":95,"r":[1019,0,9,12,-1,-11,0]}}
@@ -877,181 +469,176 @@
 {"textrec":{"g":98,"r":[1061,0,15,15,-1,-12,0]}}
 {"textrec":{"g":99,"r":[1077,0,15,15,-1,-12,0]}}
 {"textrec":{"g":100,"r":[1093,0,4,5,1,-7,0]}}
-{"textrec":{"ib":["b17c2fa67cbec771",2026,64],"r":[22,22,22,22]}}
 {"textrec":{"ib":["275a1f2a0cb12622",2026,64],"r":[22,22,22,22]}}
+{"textrec":{"ib":["b17c2fa67cbec771",2026,64],"r":[22,22,22,22]}}
 {"textrec":{"g":101,"r":[1098,0,16,16,-1,-13,0]}}
 {"textrec":{"g":102,"r":[1115,0,17,17,-1,-14,0]}}
 {"textrec":{"g":103,"r":[1133,0,16,17,-1,-14,0]}}
 {"textrec":{"g":104,"r":[1150,0,16,16,-1,-13,0]}}
-{"textrec":{"g":105,"r":[1167,0,7,11,-1,-10,0]}}
-{"textrec":{"g":106,"r":[1175,0,9,11,-1,-10,0]}}
-{"textrec":{"g":107,"r":[1185,0,4,9,0,-7,0]}}
-{"textrec":{"g":108,"r":[1190,0,9,12,-1,-10,0]}}
-{"textrec":{"g":109,"r":[1200,0,17,16,-1,-13,0]}}
-{"textrec":{"g":110,"r":[1218,0,16,17,-1,-14,0]}}
-{"textrec":{"g":111,"r":[1235,0,17,16,-1,-13,0]}}
-{"textrec":{"g":112,"r":[1253,0,17,17,-1,-14,0]}}
-{"textrec":{"g":113,"r":[1271,0,7,4,0,-6,0]}}
-{"textrec":{"g":114,"r":[1279,0,10,12,-1,-10,0]}}
-{"textrec":{"g":115,"r":[1290,0,10,13,0,-12,0]}}
-{"textrec":{"g":116,"r":[1301,0,5,5,0,-3,0]}}
-{"textrec":{"g":117,"r":[1307,0,7,13,-1,-11,0]}}
-{"textrec":{"g":118,"r":[1315,0,10,10,-1,-9,0]}}
-{"textrec":{"g":119,"r":[1326,0,9,12,-1,-10,0]}}
-{"textrec":{"g":120,"r":[1336,0,9,12,-1,-10,0]}}
-{"textrec":{"g":121,"r":[1346,0,9,11,0,-10,0]}}
-{"textrec":{"g":122,"r":[1356,0,9,11,0,-10,0]}}
-{"textrec":{"g":123,"r":[1366,0,5,5,0,-7,0]}}
-{"textrec":{"g":124,"r":[1372,0,15,16,0,-13,0]}}
-{"textrec":{"g":125,"r":[1388,0,10,11,-1,-10,0]}}
-{"textrec":{"g":50,"r":[1399,0,11,12,-1,-10,0]}}
-{"textrec":{"g":86,"r":[1411,0,11,14,0,-13,0]}}
-{"textrec":{"g":87,"r":[1423,0,8,5,0,-7,0]}}
-{"textrec":{"g":88,"r":[1432,0,7,14,0,-13,0]}}
-{"textrec":{"g":89,"r":[1440,0,11,15,0,-13,0]}}
-{"textrec":{"g":90,"r":[1452,0,11,15,0,-13,0]}}
-{"textrec":{"g":91,"r":[1464,0,12,15,-1,-13,0]}}
-{"textrec":{"g":92,"r":[1477,0,12,15,-1,-13,0]}}
-{"textrec":{"s":[16,600,0,"影音"],"r":[0,1,15.875486381322958,126,1,1,15.875486381322958,127]}}
-{"textrec":{"s":[17,400,0,"e2e-105609"],"r":[0,1,9.2802734375,128,1,1,9.78662109375,129,2,1,9.23876953125,128,3,1,7.5869140625,130,4,1,7.4541015625,131,5,1,10.2763671875,132,6,1,10.0771484375,133,7,1,10.392578125,134,8,1,10.2763671875,132,9,1,10.392578125,135]}}
-{"textrec":{"s":[17,400,0,"…"],"r":[0,1,13.248046875,136]}}
-{"textrec":{"s":[17,400,0,"e2e-105…"],"r":[0,1,9.2802734375,128,1,1,9.78662109375,129,2,1,9.23876953125,128,3,1,7.5869140625,130,4,1,7.4541015625,131,5,1,10.2763671875,132,6,1,9.78662109375,133,7,1,12.95751953125,137]}}
-{"textrec":{"s":[13,400,0,"e2e-105609"],"r":[0,1,7.3505859375,14,1,1,7.73779296875,95,2,1,7.31884765625,14,3,1,6.0556640625,138,4,1,5.9541015625,139,5,1,8.1123046875,140,6,1,7.9599609375,141,7,1,8.201171875,142,8,1,8.1123046875,140,9,1,8.201171875,143]}}
-{"textrec":{"s":[13,600,0,"影音"],"r":[0,1,12.898832684824903,144,1,1,12.898832684824903,145]}}
-{"textrec":{"m":[13,600,0],"r":[12.568359375,2.7421875,18,12.568359375,2.7421875,0]}}
+{"textrec":{"g":105,"r":[1167,0,9,11,-1,-10,0]}}
+{"textrec":{"g":106,"r":[1177,0,4,9,0,-7,0]}}
+{"textrec":{"g":107,"r":[1182,0,9,12,-1,-10,0]}}
+{"textrec":{"g":108,"r":[1192,0,17,16,-1,-13,0]}}
+{"textrec":{"g":109,"r":[1210,0,16,17,-1,-14,0]}}
+{"textrec":{"g":110,"r":[1227,0,17,16,-1,-13,0]}}
+{"textrec":{"g":111,"r":[1245,0,17,17,-1,-14,0]}}
+{"textrec":{"g":112,"r":[1263,0,7,4,0,-6,0]}}
+{"textrec":{"g":113,"r":[1271,0,10,12,-1,-10,0]}}
+{"textrec":{"g":114,"r":[1282,0,10,13,0,-12,0]}}
+{"textrec":{"g":115,"r":[1293,0,5,5,0,-3,0]}}
+{"textrec":{"g":116,"r":[1299,0,7,13,-1,-11,0]}}
+{"textrec":{"g":117,"r":[1307,0,10,10,-1,-9,0]}}
+{"textrec":{"g":118,"r":[1318,0,9,12,-1,-10,0]}}
+{"textrec":{"g":119,"r":[1328,0,9,12,-1,-10,0]}}
+{"textrec":{"g":120,"r":[1338,0,9,11,0,-10,0]}}
+{"textrec":{"g":121,"r":[1348,0,9,11,0,-10,0]}}
+{"textrec":{"g":122,"r":[1358,0,5,5,0,-7,0]}}
+{"textrec":{"g":123,"r":[1364,0,15,16,0,-13,0]}}
+{"textrec":{"g":124,"r":[1380,0,10,11,-1,-10,0]}}
+{"textrec":{"g":50,"r":[1391,0,11,12,-1,-10,0]}}
+{"textrec":{"g":86,"r":[1403,0,11,14,0,-13,0]}}
+{"textrec":{"g":87,"r":[1415,0,8,5,0,-7,0]}}
+{"textrec":{"g":88,"r":[1424,0,7,14,0,-13,0]}}
+{"textrec":{"g":89,"r":[1432,0,11,15,0,-13,0]}}
+{"textrec":{"g":90,"r":[1444,0,11,15,0,-13,0]}}
+{"textrec":{"g":91,"r":[1456,0,12,15,-1,-13,0]}}
+{"textrec":{"g":92,"r":[1469,0,12,15,-1,-13,0]}}
 {"textrec":{"ib":["0e910fb4d25445a3",1382,64],"r":[18,18,18,18]}}
 {"textrec":{"ib":["ddfdc2820df8a676",1382,64],"r":[18,18,18,18]}}
 {"textrec":{"ib":["b3685975cd23abc3",866,64],"r":[14,14,14,14]}}
-{"textrec":{"s":[13,400,0,"4 个文件"],"r":[0,1,8.2900390625,146,1,1,3.580078125,-1,2,1,12.898832684824903,96,3,1,12.898832684824903,97,4,1,12.898832684824903,98]}}
-{"textrec":{"s":[15,400,0,"片尾曲.m4a"],"r":[0,1,14.883268482490273,147,1,1,14.883268482490273,148,2,1,14.883268482490273,149,3,1,4.21875,116,4,1,12.8173828125,150,5,1,9.418945312499993,151,6,1,8.0419921875,152]}}
-{"textrec":{"s":[12,400,0,"44 KB · 12:11"],"r":[0,1,7.72265625,125,1,1,7.72265625,125,2,1,3.375,-1,3,1,7.904296875,121,4,1,7.88671875,122,5,1,3.375,-1,6,1,5.754933455713626,123,7,1,3.375,-1,8,1,5.56640625,105,9,1,7.2421875,106,10,1,3.5625,107,11,1,5.56640625,105,12,1,5.56640625,105]}}
-{"textrec":{"s":[15,400,0,"第01集.mp4"],"r":[0,1,14.883268482490273,153,1,1,11.0888671875,154,2,1,8.5986328125,155,3,1,14.883268482490273,156,4,1,4.21875,116,5,1,12.8173828125,150,6,1,8.9208984375,157,7,1,9.4189453125,151]}}
-{"textrec":{"s":[12,400,0,"2.2 MB · 12:11"],"r":[0,1,7.154296875,106,1,1,3.357421875,158,2,1,7.125,106,3,1,3.375,-1,4,1,10.48828125,159,5,1,7.88671875,122,6,1,3.375,-1,7,1,5.754933455713626,123,8,1,3.375,-1,9,1,5.56640625,105,10,1,7.2421875,106,11,1,3.5625,107,12,1,5.56640625,105,13,1,5.56640625,105]}}
-{"textrec":{"s":[15,400,0,"第01集.srt"],"r":[0,1,14.883268482490273,153,1,1,11.0888671875,154,2,1,8.5986328125,155,3,1,14.883268482490273,156,4,1,4.21875,116,5,1,7.6171875,160,6,1,5.5517578125,161,7,1,5.2880859375,117]}}
-{"textrec":{"s":[12,400,0,"97 B · 12:11"],"r":[0,1,7.5234375,162,1,1,6.71484375,163,2,1,3.375,-1,3,1,7.88671875,122,4,1,3.375,-1,5,1,5.754933455713626,123,6,1,3.375,-1,7,1,5.56640625,105,8,1,7.2421875,106,9,1,3.5625,107,10,1,5.56640625,105,11,1,5.56640625,105]}}
-{"textrec":{"s":[15,400,0,"第02集.mp4"],"r":[0,1,14.883268482490273,153,1,1,11.0888671875,154,2,1,10.693359375,115,3,1,14.883268482490273,156,4,1,4.21875,116,5,1,12.8173828125,150,6,1,8.9208984375,157,7,1,9.4189453125,151]}}
-{"textrec":{"s":[12,400,0,"451 KB · 12:11"],"r":[0,1,7.72265625,125,1,1,7.41796875,164,2,1,5.56640625,105,3,1,3.375,-1,4,1,7.904296875,121,5,1,7.88671875,122,6,1,3.375,-1,7,1,5.754933455713626,123,8,1,3.375,-1,9,1,5.56640625,105,10,1,7.2421875,106,11,1,3.5625,107,12,1,5.56640625,105,13,1,5.56640625,105]}}
-{"textrec":{"g":128,"r":[1490,0,11,13,-1,-11,0]}}
-{"textrec":{"g":129,"r":[1502,0,11,15,0,-14,0]}}
-{"textrec":{"g":130,"r":[1514,0,8,4,0,-7,0]}}
-{"textrec":{"g":131,"r":[1523,0,7,14,0,-13,0]}}
-{"textrec":{"g":132,"r":[1531,0,11,16,0,-14,0]}}
-{"textrec":{"g":133,"r":[1543,0,11,15,0,-13,0]}}
-{"textrec":{"g":137,"r":[1555,0,14,6,-0.29052734375,-4,0]}}
-{"textrec":{"g":14,"r":[1570,0,9,10,-1,-8,0]}}
-{"textrec":{"g":138,"r":[1580,0,8,4,-1,-6,0]}}
-{"textrec":{"g":139,"r":[1589,0,7,12,-1,-11,0]}}
-{"textrec":{"g":140,"r":[1597,0,10,13,-1,-11,0]}}
-{"textrec":{"g":141,"r":[1608,0,10,13,-1,-11,0]}}
-{"textrec":{"g":142,"r":[1619,0,10,13,-1,-11,0]}}
-{"textrec":{"g":143,"r":[1630,0,10,13,-1,-11,0]}}
-{"textrec":{"g":146,"r":[1641,0,10,12,-1,-11,0]}}
-{"textrec":{"ib":["97df5131f09b2974",2026,64],"r":[22,22,22,22]}}
+{"textrec":{"s":[16,600,0,"影音"],"r":[0,1,15.875486381322958,125,1,1,15.875486381322958,126]}}
+{"textrec":{"s":[17,400,0,"e2e-105609"],"r":[0,1,9.2802734375,127,1,1,9.78662109375,128,2,1,9.23876953125,127,3,1,7.5869140625,129,4,1,7.4541015625,130,5,1,10.2763671875,131,6,1,10.0771484375,132,7,1,10.392578125,133,8,1,10.2763671875,131,9,1,10.392578125,134]}}
+{"textrec":{"s":[17,400,0,"…"],"r":[0,1,13.248046875,135]}}
+{"textrec":{"s":[17,400,0,"e2e-105…"],"r":[0,1,9.2802734375,127,1,1,9.78662109375,128,2,1,9.23876953125,127,3,1,7.5869140625,129,4,1,7.4541015625,130,5,1,10.2763671875,131,6,1,9.78662109375,132,7,1,12.95751953125,136]}}
+{"textrec":{"s":[13,400,0,"e2e-105609"],"r":[0,1,7.3505859375,14,1,1,7.73779296875,95,2,1,7.31884765625,14,3,1,6.0556640625,137,4,1,5.9541015625,138,5,1,8.1123046875,139,6,1,7.9599609375,140,7,1,8.201171875,141,8,1,8.1123046875,139,9,1,8.201171875,142]}}
+{"textrec":{"s":[13,600,0,"影音"],"r":[0,1,12.898832684824903,143,1,1,12.898832684824903,144]}}
+{"textrec":{"m":[13,600,0],"r":[12.568359375,2.7421875,18,12.568359375,2.7421875,0]}}
+{"textrec":{"s":[13,400,0,"4 个文件"],"r":[0,1,8.2900390625,145,1,1,3.580078125,-1,2,1,12.898832684824903,96,3,1,12.898832684824903,97,4,1,12.898832684824903,98]}}
+{"textrec":{"s":[15,400,0,"片尾曲.m4a"],"r":[0,1,14.883268482490273,146,1,1,14.883268482490273,147,2,1,14.883268482490273,148,3,1,4.21875,115,4,1,12.8173828125,149,5,1,9.418945312499993,150,6,1,8.0419921875,151]}}
+{"textrec":{"s":[12,400,0,"44 KB · 22:29"],"r":[0,1,7.72265625,124,1,1,7.72265625,124,2,1,3.375,-1,3,1,7.904296875,120,4,1,7.88671875,121,5,1,3.375,-1,6,1,5.754933455713626,122,7,1,3.375,-1,8,1,7.2421875,105,9,1,7.2421875,105,10,1,3.591796875,106,11,1,7.271484375,105,12,1,7.640625,107]}}
+{"textrec":{"s":[15,400,0,"第01集.mp4"],"r":[0,1,14.883268482490273,152,1,1,11.0888671875,153,2,1,8.5986328125,154,3,1,14.883268482490273,155,4,1,4.21875,115,5,1,12.8173828125,149,6,1,8.9208984375,156,7,1,9.4189453125,150]}}
+{"textrec":{"s":[12,400,0,"2.2 MB · 22:29"],"r":[0,1,7.154296875,105,1,1,3.357421875,157,2,1,7.125,105,3,1,3.375,-1,4,1,10.48828125,158,5,1,7.88671875,121,6,1,3.375,-1,7,1,5.754933455713626,122,8,1,3.375,-1,9,1,7.2421875,105,10,1,7.2421875,105,11,1,3.591796875,106,12,1,7.271484375,105,13,1,7.640625,107]}}
+{"textrec":{"s":[15,400,0,"第01集.srt"],"r":[0,1,14.883268482490273,152,1,1,11.0888671875,153,2,1,8.5986328125,154,3,1,14.883268482490273,155,4,1,4.21875,115,5,1,7.6171875,159,6,1,5.5517578125,160,7,1,5.2880859375,116]}}
+{"textrec":{"s":[12,400,0,"97 B · 22:29"],"r":[0,1,7.5234375,107,1,1,6.71484375,161,2,1,3.375,-1,3,1,7.88671875,121,4,1,3.375,-1,5,1,5.754933455713626,122,6,1,3.375,-1,7,1,7.2421875,105,8,1,7.2421875,105,9,1,3.591796875,106,10,1,7.271484375,105,11,1,7.640625,107]}}
+{"textrec":{"s":[15,400,0,"第02集.mp4"],"r":[0,1,14.883268482490273,152,1,1,11.0888671875,153,2,1,10.693359375,114,3,1,14.883268482490273,155,4,1,4.21875,115,5,1,12.8173828125,149,6,1,8.9208984375,156,7,1,9.4189453125,150]}}
+{"textrec":{"s":[12,400,0,"451 KB · 22:29"],"r":[0,1,7.72265625,124,1,1,7.41796875,162,2,1,5.56640625,163,3,1,3.375,-1,4,1,7.904296875,120,5,1,7.88671875,121,6,1,3.375,-1,7,1,5.754933455713626,122,8,1,3.375,-1,9,1,7.2421875,105,10,1,7.2421875,105,11,1,3.591796875,106,12,1,7.271484375,105,13,1,7.640625,107]}}
+{"textrec":{"g":127,"r":[1482,0,11,13,-1,-11,0]}}
+{"textrec":{"g":128,"r":[1494,0,11,15,0,-14,0]}}
+{"textrec":{"g":129,"r":[1506,0,8,4,0,-7,0]}}
+{"textrec":{"g":130,"r":[1515,0,7,14,0,-13,0]}}
+{"textrec":{"g":131,"r":[1523,0,11,16,0,-14,0]}}
+{"textrec":{"g":132,"r":[1535,0,11,15,0,-13,0]}}
+{"textrec":{"g":136,"r":[1547,0,14,6,-0.29052734375,-4,0]}}
+{"textrec":{"g":14,"r":[1562,0,9,10,-1,-8,0]}}
+{"textrec":{"g":137,"r":[1572,0,8,4,-1,-6,0]}}
+{"textrec":{"g":138,"r":[1581,0,7,12,-1,-11,0]}}
+{"textrec":{"g":139,"r":[1589,0,10,13,-1,-11,0]}}
+{"textrec":{"g":140,"r":[1600,0,10,13,-1,-11,0]}}
+{"textrec":{"g":141,"r":[1611,0,10,13,-1,-11,0]}}
+{"textrec":{"g":142,"r":[1622,0,10,13,-1,-11,0]}}
+{"textrec":{"g":145,"r":[1633,0,10,12,-1,-11,0]}}
 {"textrec":{"ib":["96f36fe05edfa445",2026,64],"r":[22,22,22,22]}}
-{"textrec":{"g":147,"r":[1652,0,15,16,0,-13,0]}}
-{"textrec":{"g":148,"r":[1668,0,16,16,-1,-13,0]}}
-{"textrec":{"g":149,"r":[1685,0,14,16,0,-13,0]}}
-{"textrec":{"g":150,"r":[1700,0,13,11,0,-10,0]}}
-{"textrec":{"g":151,"r":[1714,0,11,13,-1,-12,0]}}
-{"textrec":{"g":152,"r":[1726,0,10,12,-1,-10,0]}}
-{"textrec":{"g":153,"r":[1737,0,16,17,-1,-14,0]}}
-{"textrec":{"g":154,"r":[1754,0,11,14,-1,-12,0]}}
-{"textrec":{"g":155,"r":[1766,0,8,13,-1,-12,0]}}
-{"textrec":{"g":156,"r":[1775,0,16,17,-1,-14,0]}}
-{"textrec":{"g":157,"r":[1792,0,10,14,0,-10,0]}}
-{"textrec":{"g":158,"r":[1803,0,4,5,0,-3,0]}}
-{"textrec":{"g":159,"r":[1808,0,11,11,0,-10,0]}}
-{"textrec":{"g":160,"r":[1820,0,10,12,-1,-10,0]}}
-{"textrec":{"g":161,"r":[1831,0,7,11,0,-10,0]}}
-{"textrec":{"g":162,"r":[1839,0,9,12,-1,-10,0]}}
-{"textrec":{"g":163,"r":[1849,0,9,11,-1,-10,0]}}
-{"textrec":{"g":164,"r":[1859,0,9,12,-1,-10,0]}}
-{"textrec":{"g":144,"r":[1869,0,15,15,-1,-12,0]}}
-{"textrec":{"g":145,"r":[1885,0,14,15,-1,-12,0]}}
+{"textrec":{"ib":["97df5131f09b2974",2026,64],"r":[22,22,22,22]}}
+{"textrec":{"g":146,"r":[1644,0,15,16,0,-13,0]}}
+{"textrec":{"g":147,"r":[1660,0,16,16,-1,-13,0]}}
+{"textrec":{"g":148,"r":[1677,0,14,16,0,-13,0]}}
+{"textrec":{"g":149,"r":[1692,0,13,11,0,-10,0]}}
+{"textrec":{"g":150,"r":[1706,0,11,13,-1,-12,0]}}
+{"textrec":{"g":151,"r":[1718,0,10,12,-1,-10,0]}}
+{"textrec":{"g":152,"r":[1729,0,16,17,-1,-14,0]}}
+{"textrec":{"g":153,"r":[1746,0,11,14,-1,-12,0]}}
+{"textrec":{"g":154,"r":[1758,0,8,13,-1,-12,0]}}
+{"textrec":{"g":155,"r":[1767,0,16,17,-1,-14,0]}}
+{"textrec":{"g":156,"r":[1784,0,10,14,0,-10,0]}}
+{"textrec":{"g":157,"r":[1795,0,4,5,0,-3,0]}}
+{"textrec":{"g":158,"r":[1800,0,11,11,0,-10,0]}}
+{"textrec":{"g":159,"r":[1812,0,10,12,-1,-10,0]}}
+{"textrec":{"g":160,"r":[1823,0,7,11,0,-10,0]}}
+{"textrec":{"g":161,"r":[1831,0,9,11,-1,-10,0]}}
+{"textrec":{"g":162,"r":[1841,0,9,12,-1,-10,0]}}
+{"textrec":{"g":163,"r":[1851,0,7,11,-1,-10,0]}}
+{"textrec":{"g":143,"r":[1859,0,15,15,-1,-12,0]}}
+{"textrec":{"g":144,"r":[1875,0,14,15,-1,-12,0]}}
 {"textrec":{"ib":["c63576325cefdb0c",656,64],"r":[12,12,12,12]}}
-{"textrec":{"g":126,"r":[1900,0,18,17,-1,-14,0]}}
-{"textrec":{"g":127,"r":[1919,0,17,17,-1,-14,0]}}
-{"textrec":{"s":[12,600,0,"0:00"],"r":[0,1,7.9741973876953125,165,1,1,3.9484176635742188,166,2,1,7.9741973876953125,165,3,1,7.9741973876953125,165]}}
+{"textrec":{"g":125,"r":[1890,0,18,17,-1,-14,0]}}
+{"textrec":{"g":126,"r":[1909,0,17,17,-1,-14,0]}}
+{"textrec":{"s":[12,600,0,"0:00"],"r":[0,1,7.9741973876953125,164,1,1,3.9484176635742188,165,2,1,7.9741973876953125,164,3,1,7.9741973876953125,164]}}
 {"textrec":{"m":[12,600,0],"r":[11.6015625,2.53125,17,11.6015625,2.53125,0]}}
-{"textrec":{"s":[12,400,0," / --:--"],"r":[0,1,3.375,-1,1,1,3.65625,167,2,1,3.375,-1,3,1,5.66015625,168,4,1,5.66015625,168,5,1,3.5625,107,6,1,5.66015625,168,7,1,5.66015625,168]}}
-{"textrec":{"s":[12,600,0,"1×"],"r":[0,1,5.930059432983398,169,1,1,7.874007225036621,170]}}
-{"textrec":{"s":[15,600,0,"第01集.mp4"],"r":[0,1,14.883268482490273,171,1,1,11.60837173461914,172,2,1,9.053199291229248,173,3,1,14.883268482490273,174,4,1,4.701147079467773,175,5,1,13.406463861465454,176,6,1,9.268780946731567,177,7,1,9.83176589012146,178]}}
-{"textrec":{"s":[12,400,0,"2 / 3"],"r":[0,1,7.2421875,106,1,1,3.375,-1,2,1,3.65625,167,3,1,3.375,-1,4,1,7.5234375,119]}}
-{"textrec":{"g":165,"r":[1937,0,10,12,-1,-10,0]}}
-{"textrec":{"g":166,"r":[1948,0,4,10,0,-8,0]}}
-{"textrec":{"g":167,"r":[1953,0,6,14,-1,-10,0]}}
-{"textrec":{"g":168,"r":[1960,0,7,4,-1,-5,0]}}
+{"textrec":{"s":[12,400,0," / --:--"],"r":[0,1,3.375,-1,1,1,3.65625,166,2,1,3.375,-1,3,1,5.66015625,167,4,1,5.66015625,167,5,1,3.5625,106,6,1,5.66015625,167,7,1,5.66015625,167]}}
+{"textrec":{"s":[12,600,0,"1×"],"r":[0,1,5.930059432983398,168,1,1,7.874007225036621,169]}}
+{"textrec":{"s":[15,600,0,"第01集.mp4"],"r":[0,1,14.883268482490273,170,1,1,11.60837173461914,171,2,1,9.053199291229248,172,3,1,14.883268482490273,173,4,1,4.701147079467773,174,5,1,13.406463861465454,175,6,1,9.268780946731567,176,7,1,9.83176589012146,177]}}
+{"textrec":{"s":[12,400,0,"2 / 3"],"r":[0,1,7.2421875,105,1,1,3.375,-1,2,1,3.65625,166,3,1,3.375,-1,4,1,7.5234375,118]}}
+{"textrec":{"g":164,"r":[1927,0,10,12,-1,-10,0]}}
+{"textrec":{"g":165,"r":[1938,0,4,10,0,-8,0]}}
+{"textrec":{"g":166,"r":[1943,0,6,14,-1,-10,0]}}
+{"textrec":{"g":167,"r":[1950,0,7,4,-1,-5,0]}}
 {"textrec":{"ib":["f00e470aace2a081",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"ib":["af0d7cb1109658d2",1688,64],"r":[20,20,20,20]}}
-{"textrec":{"g":171,"r":[1968,0,16,17,-1,-14,0]}}
-{"textrec":{"g":172,"r":[1985,0,12,14,-1,-12,0]}}
-{"textrec":{"g":173,"r":[1998,0,8,13,-1,-12,0]}}
-{"textrec":{"g":174,"r":[2007,0,16,17,-1,-14,0]}}
-{"textrec":{"g":175,"r":[2024,0,5,6,0,-4,0]}}
-{"textrec":{"g":176,"r":[2030,0,14,11,0,-10,0]}}
-{"textrec":{"g":177,"r":[0,20,10,14,0,-10,0]}}
-{"textrec":{"g":178,"r":[11,20,12,13,-1,-12,0]}}
-{"textrec":{"ib":["13aa32d5ea22b559",1688,64],"r":[20,20,20,20]}}
+{"textrec":{"g":170,"r":[1958,0,16,17,-1,-14,0]}}
+{"textrec":{"g":171,"r":[1975,0,12,14,-1,-12,0]}}
+{"textrec":{"g":172,"r":[1988,0,8,13,-1,-12,0]}}
+{"textrec":{"g":173,"r":[1997,0,16,17,-1,-14,0]}}
+{"textrec":{"g":174,"r":[2014,0,5,6,0,-4,0]}}
+{"textrec":{"g":175,"r":[2020,0,14,11,0,-10,0]}}
+{"textrec":{"g":176,"r":[2035,0,10,14,0,-10,0]}}
+{"textrec":{"g":177,"r":[0,20,12,13,-1,-12,0]}}
 {"textrec":{"ib":["2d6cd96a3768a333",1688,64],"r":[20,20,20,20]}}
+{"textrec":{"ib":["13aa32d5ea22b559",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"ib":["c58bfada23ab4c58",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"ib":["924e0a5889de9908",1688,64],"r":[20,20,20,20]}}
-{"textrec":{"g":169,"r":[24,20,7,11,-1,-10,0]}}
-{"textrec":{"g":170,"r":[32,20,9,9,-1,-8,0]}}
+{"textrec":{"s":[12,400,0," / 0:20"],"r":[0,1,3.375,-1,1,1,3.65625,166,2,1,3.375,-1,3,1,7.55859375,178,4,1,3.591796875,106,5,1,7.271484375,105,6,1,7.55859375,178]}}
+{"textrec":{"g":178,"r":[13,20,9,12,-1,-10,0]}}
+{"textrec":{"g":168,"r":[23,20,7,11,-1,-10,0]}}
+{"textrec":{"g":169,"r":[31,20,9,9,-1,-8,0]}}
 {"textrec":{"ib":["9afe52c45983c87a",1688,64],"r":[20,20,20,20]}}
-{"textrec":{"ib":["9312e605623e30af",1688,64],"r":[20,20,20,20]}}
-{"textrec":{"s":[12,400,0," / 0:20"],"r":[0,1,3.375,-1,1,1,3.65625,167,2,1,3.375,-1,3,1,7.55859375,108,4,1,3.591796875,107,5,1,7.271484375,106,6,1,7.55859375,108]}}
 {"textrec":{"ib":["666e55c8b6341385",1688,64],"r":[20,20,20,20]}}
+{"textrec":{"ib":["9312e605623e30af",1688,64],"r":[20,20,20,20]}}
 {"textrec":{"s":[16,400,0,"第一句字幕"],"r":[0,1,15.875486381322958,179,1,1,15.875486381322958,180,2,1,15.875486381322958,181,3,1,15.875486381322958,182,4,1,15.875486381322958,183]}}
-{"textrec":{"g":179,"r":[42,20,17,17,-1,-14,0]}}
-{"textrec":{"g":180,"r":[60,20,17,4,-1,-8,0]}}
-{"textrec":{"g":181,"r":[78,20,16,17,-1,-14,0]}}
-{"textrec":{"g":182,"r":[95,20,17,17,-1,-14,0]}}
-{"textrec":{"g":183,"r":[113,20,18,17,-1,-14,0]}}
-{"textrec":{"s":[12,600,0,"0:01"],"r":[0,1,7.9741973876953125,165,1,1,3.9484176635742188,166,2,1,7.9741973876953125,165,3,1,5.930059432983398,169]}}
-{"textrec":{"s":[12,600,0,"0:15"],"r":[0,1,7.9741973876953125,165,1,1,3.9484176635742188,166,2,1,5.930059432983398,169,3,1,7.7612128257751465,184]}}
-{"textrec":{"g":184,"r":[132,20,10,12,-1,-10,0]}}
-{"textrec":{"s":[12,600,0,"0:20"],"r":[0,1,7.946366786956787,165,1,1,3.9406070709228516,166,2,1,7.562777996063232,185,3,1,7.9741973876953125,165]}}
-{"textrec":{"g":185,"r":[143,20,9,11,-1,-10,0]}}
+{"textrec":{"g":179,"r":[41,20,17,17,-1,-14,0]}}
+{"textrec":{"g":180,"r":[59,20,17,4,-1,-8,0]}}
+{"textrec":{"g":181,"r":[77,20,16,17,-1,-14,0]}}
+{"textrec":{"g":182,"r":[94,20,17,17,-1,-14,0]}}
+{"textrec":{"g":183,"r":[112,20,18,17,-1,-14,0]}}
+{"textrec":{"s":[12,600,0,"0:01"],"r":[0,1,7.9741973876953125,164,1,1,3.9484176635742188,165,2,1,7.9741973876953125,164,3,1,5.930059432983398,168]}}
+{"textrec":{"s":[12,600,0,"0:15"],"r":[0,1,7.9741973876953125,164,1,1,3.9484176635742188,165,2,1,5.930059432983398,168,3,1,7.7612128257751465,184]}}
+{"textrec":{"g":184,"r":[131,20,10,12,-1,-10,0]}}
+{"textrec":{"s":[12,600,0,"0:20"],"r":[0,1,7.946366786956787,164,1,1,3.9406070709228516,165,2,1,7.562777996063232,185,3,1,7.9741973876953125,164]}}
+{"textrec":{"g":185,"r":[142,20,9,11,-1,-10,0]}}
 {"textrec":{"s":[14,400,0,"播放结束"],"r":[0,1,13.891050583657588,186,1,1,13.891050583657588,187,2,1,13.891050583657588,188,3,1,13.891050583657588,189]}}
 {"textrec":{"s":[14,400,0,"下一个：第02集.mp4"],"r":[0,1,13.891050583657588,190,1,1,13.891050583657588,191,2,1,13.891050583657588,192,3,1,14.081712062256813,193,4,1,13.891050583657588,194,5,1,10.41796875,195,6,1,10.048828125,196,7,1,13.891050583657588,197,8,1,4.005859375,198,9,1,12.03125,199,10,1,8.39453125,200,11,1,8.859375,201]}}
-{"textrec":{"g":186,"r":[153,20,16,16,-1,-13,0]}}
-{"textrec":{"g":187,"r":[170,20,16,16,-1,-13,0]}}
-{"textrec":{"g":188,"r":[187,20,15,16,-1,-13,0]}}
-{"textrec":{"g":189,"r":[203,20,16,16,-1,-13,0]}}
-{"textrec":{"g":190,"r":[220,20,15,15,-1,-12,0]}}
-{"textrec":{"g":191,"r":[236,20,15,4,-1,-7,0]}}
-{"textrec":{"g":192,"r":[252,20,16,16,-1,-13,0]}}
-{"textrec":{"g":193,"r":[269,20,5,10,1,-10,0]}}
-{"textrec":{"g":194,"r":[275,20,15,16,-1,-13,0]}}
-{"textrec":{"g":195,"r":[291,20,10,14,-1,-12,0]}}
-{"textrec":{"g":196,"r":[302,20,9,13,0,-12,0]}}
-{"textrec":{"g":197,"r":[312,20,15,16,-1,-13,0]}}
-{"textrec":{"g":198,"r":[328,20,4,5,0,-3,0]}}
-{"textrec":{"g":199,"r":[333,20,13,10,0,-9,0]}}
-{"textrec":{"g":200,"r":[347,20,9,13,0,-9,0]}}
-{"textrec":{"g":201,"r":[357,20,11,12,-1,-11,0]}}
-{"textrec":{"s":[15,600,0,"第02集.mp4"],"r":[0,1,14.883268482490273,171,1,1,11.60837173461914,172,2,1,11.069072484970093,202,3,1,14.883268482490273,174,4,1,4.701147079467773,175,5,1,13.406463861465454,176,6,1,9.268780946731567,177,7,1,9.83176589012146,178]}}
-{"textrec":{"s":[12,400,0,"3 / 3"],"r":[0,1,7.5234375,119,1,1,3.375,-1,2,1,3.65625,167,3,1,3.375,-1,4,1,7.5234375,119]}}
-{"textrec":{"g":202,"r":[369,20,11,13,-1,-12,0]}}
-{"textrec":{"s":[12,400,0," / 0:04"],"r":[0,1,3.375,-1,1,1,3.65625,167,2,1,3.375,-1,3,1,7.55859375,108,4,1,3.5625,107,5,1,7.55859375,108,6,1,7.72265625,125]}}
-{"textrec":{"s":[12,600,0,"0:02"],"r":[0,1,7.9741973876953125,165,1,1,3.9484176635742188,166,2,1,7.9741973876953125,165,3,1,7.542757987976074,185]}}
-{"textrec":{"s":[12,600,0,"0:03"],"r":[0,1,7.946366786956787,165,1,1,3.892756462097168,166,2,1,7.918536186218262,165,3,1,7.814731121063232,203]}}
-{"textrec":{"g":203,"r":[381,20,10,12,-1,-10,0]}}
-{"textrec":{"s":[12,600,0,"0:04"],"r":[0,1,7.9741973876953125,165,1,1,3.9484176635742188,166,2,1,7.9741973876953125,165,3,1,8.052912712097168,204]}}
-{"textrec":{"g":204,"r":[392,20,10,11,-1,-10,0]}}
-{"textrec":{"s":[16,400,0,"片尾曲.m4a"],"r":[0,1,15.875486381322958,205,1,1,15.875486381322958,206,2,1,15.875486381322958,207,3,1,4.4375,208,4,1,13.609375,209,5,1,9.984375,210,6,1,8.515625,211]}}
-{"textrec":{"s":[15,600,0,"片尾曲.m4a"],"r":[0,1,14.883268482490273,212,1,1,14.883268482490273,213,2,1,14.883268482490273,214,3,1,4.701147079467773,175,4,1,13.406463861465454,176,5,1,9.831765890121453,178,6,1,8.40147078037262,215]}}
-{"textrec":{"s":[12,400,0,"1 / 3"],"r":[0,1,5.56640625,105,1,1,3.375,-1,2,1,3.65625,167,3,1,3.375,-1,4,1,7.5234375,119]}}
-{"textrec":{"g":205,"r":[403,20,15,17,0,-14,0]}}
-{"textrec":{"g":206,"r":[419,20,17,17,-1,-14,0]}}
-{"textrec":{"g":207,"r":[437,20,15,17,0,-14,0]}}
-{"textrec":{"g":208,"r":[453,20,5,5,0,-3,0]}}
-{"textrec":{"g":209,"r":[459,20,14,11,0,-10,0]}}
-{"textrec":{"g":210,"r":[474,20,12,14,-1,-13,0]}}
-{"textrec":{"g":211,"r":[487,20,10,12,-1,-10,0]}}
-{"textrec":{"g":212,"r":[498,20,15,16,0,-13,0]}}
-{"textrec":{"g":213,"r":[514,20,16,16,-1,-13,0]}}
-{"textrec":{"g":214,"r":[531,20,15,17,0,-14,0]}}
-{"textrec":{"g":215,"r":[547,20,10,12,-1,-10,0]}}
-{"textrec":{"s":[12,400,0," / 0:05"],"r":[0,1,3.375,-1,1,1,3.65625,167,2,1,3.375,-1,3,1,7.55859375,108,4,1,3.5625,107,5,1,7.55859375,108,6,1,7.41796875,164]}}
+{"textrec":{"g":186,"r":[152,20,16,16,-1,-13,0]}}
+{"textrec":{"g":187,"r":[169,20,16,16,-1,-13,0]}}
+{"textrec":{"g":188,"r":[186,20,15,16,-1,-13,0]}}
+{"textrec":{"g":189,"r":[202,20,16,16,-1,-13,0]}}
+{"textrec":{"g":190,"r":[219,20,15,15,-1,-12,0]}}
+{"textrec":{"g":191,"r":[235,20,15,4,-1,-7,0]}}
+{"textrec":{"g":192,"r":[251,20,16,16,-1,-13,0]}}
+{"textrec":{"g":193,"r":[268,20,5,10,1,-10,0]}}
+{"textrec":{"g":194,"r":[274,20,15,16,-1,-13,0]}}
+{"textrec":{"g":195,"r":[290,20,10,14,-1,-12,0]}}
+{"textrec":{"g":196,"r":[301,20,9,13,0,-12,0]}}
+{"textrec":{"g":197,"r":[311,20,15,16,-1,-13,0]}}
+{"textrec":{"g":198,"r":[327,20,4,5,0,-3,0]}}
+{"textrec":{"g":199,"r":[332,20,13,10,0,-9,0]}}
+{"textrec":{"g":200,"r":[346,20,9,13,0,-9,0]}}
+{"textrec":{"g":201,"r":[356,20,11,12,-1,-11,0]}}
+{"textrec":{"s":[15,600,0,"第02集.mp4"],"r":[0,1,14.883268482490273,170,1,1,11.60837173461914,171,2,1,11.069072484970093,202,3,1,14.883268482490273,173,4,1,4.701147079467773,174,5,1,13.406463861465454,175,6,1,9.268780946731567,176,7,1,9.83176589012146,177]}}
+{"textrec":{"s":[12,400,0,"3 / 3"],"r":[0,1,7.5234375,118,1,1,3.375,-1,2,1,3.65625,166,3,1,3.375,-1,4,1,7.5234375,118]}}
+{"textrec":{"g":202,"r":[368,20,11,13,-1,-12,0]}}
+{"textrec":{"s":[12,400,0," / 0:04"],"r":[0,1,3.375,-1,1,1,3.65625,166,2,1,3.375,-1,3,1,7.55859375,178,4,1,3.5625,106,5,1,7.55859375,178,6,1,7.72265625,124]}}
+{"textrec":{"s":[16,400,0,"片尾曲.m4a"],"r":[0,1,15.875486381322958,203,1,1,15.875486381322958,204,2,1,15.875486381322958,205,3,1,4.4375,206,4,1,13.609375,207,5,1,9.984375,208,6,1,8.515625,209]}}
+{"textrec":{"s":[15,600,0,"片尾曲.m4a"],"r":[0,1,14.883268482490273,210,1,1,14.883268482490273,211,2,1,14.883268482490273,212,3,1,4.701147079467773,174,4,1,13.406463861465454,175,5,1,9.831765890121453,177,6,1,8.40147078037262,213]}}
+{"textrec":{"s":[12,400,0,"1 / 3"],"r":[0,1,5.56640625,163,1,1,3.375,-1,2,1,3.65625,166,3,1,3.375,-1,4,1,7.5234375,118]}}
+{"textrec":{"g":203,"r":[380,20,15,17,0,-14,0]}}
+{"textrec":{"g":204,"r":[396,20,17,17,-1,-14,0]}}
+{"textrec":{"g":205,"r":[414,20,15,17,0,-14,0]}}
+{"textrec":{"g":206,"r":[430,20,5,5,0,-3,0]}}
+{"textrec":{"g":207,"r":[436,20,14,11,0,-10,0]}}
+{"textrec":{"g":208,"r":[451,20,12,14,-1,-13,0]}}
+{"textrec":{"g":209,"r":[464,20,10,12,-1,-10,0]}}
+{"textrec":{"g":210,"r":[475,20,15,16,0,-13,0]}}
+{"textrec":{"g":211,"r":[491,20,16,16,-1,-13,0]}}
+{"textrec":{"g":212,"r":[508,20,15,17,0,-14,0]}}
+{"textrec":{"g":213,"r":[524,20,10,12,-1,-10,0]}}
+{"textrec":{"s":[12,400,0," / 0:05"],"r":[0,1,3.375,-1,1,1,3.65625,166,2,1,3.375,-1,3,1,7.55859375,178,4,1,3.5625,106,5,1,7.55859375,178,6,1,7.41796875,162]}}
 {"textrec":{"ib":["d055295857a347b8",12668,64],"r":[56,56,56,56]}}

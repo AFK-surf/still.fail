@@ -22,9 +22,11 @@ test "91-drive-download-many" {
     f.tap("icon:more")
     f.run_to(@kit.sheet_rest("dv-sheet"))
     f.tap("下载 2 个文件")
+    // its toast, up as the download begins (looked for then: how long the parts take is the run's own, the toast's
+    // time its own, and one may outlast the other)
+    f.see("已保存到「下载」")
     f.run_to(@kit.sheet_rest("dv-sheet"))
     f.gone("%")
-    f.see("已保存到「下载」")
     // both kept, each whole as the run read it: the small one's 40 bytes, the big one's parts all taken in
     let kept = f.t.kept().map(fn(k) { k.0 })
     assert_true(kept.contains("大文件.bin"))
