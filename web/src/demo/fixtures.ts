@@ -191,6 +191,8 @@ function session(chat: DemoChat): Session {
     running: !!chat.running, tone: chat.running ? "accent" : chat.blocked ? "amber" : chat.failed ? "red" : "green", titleText: chat.title,
     efforts: ["low", "medium", "high"], ...(chat.model.runtime === "claude" ? { profile: "machine-claude" } : {}), workspace: `~/.stillfail/sessions/${chat.key.slice(6)}/workspace`,
     time: { lastActiveAt: stamp(lastActive(chat)) },
+    // Between turns its context can be compacted or cleared by hand.
+    canCompact: !chat.running, canClear: !chat.running,
   };
 }
 
