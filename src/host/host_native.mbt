@@ -49,6 +49,11 @@ extern "C" fn ffi_text_key(
 #borrow(out)
 extern "C" fn ffi_glyph(key : Int, out : FixedArray[Double]) -> Unit = "mb_host_glyph"
 
+#borrow(path)
+extern "C" fn ffi_face_add(face : Int, path : String, weight : Int) -> Int = "mb_host_face_add"
+
+extern "C" fn ffi_face_clear(face : Int) -> Unit = "mb_host_face_clear"
+
 extern "C" fn ffi_atlas_generation() -> Int = "mb_host_atlas_generation"
 
 #borrow(buf)
@@ -303,6 +308,21 @@ pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int 
 ///|
 pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   ffi_glyph(key, out)
+}
+
+///|
+/// A font file (TrueType or OpenType, at `path`) made part of face `face` (style.mbt: face_ui, face_text, face_code,
+/// or 4 to 15 for what names it), for `weight` (0: a variable file, every weight from it). False when the host could
+/// not read it as a font (the face as it was). What was shaped or drawn before is the host's to forget
+/// (atlas_generation moves on).
+pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
+  ffi_face_add(face, path, weight) != 0
+}
+
+///|
+/// Face `face` given up: what was in it is in the system's face again.
+pub fn face_clear(face : Int) -> Unit {
+  ffi_face_clear(face)
 }
 
 ///|

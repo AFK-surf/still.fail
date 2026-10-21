@@ -174,6 +174,7 @@ fn frame_body(c : Ctx, w : Double, h : Double, scale : Double, t : Double) -> Do
   c.periodic.clear()
   c.nav_rest = -1.0
   c.read_back_moved = false
+  faces_from_env()
   check_atlas()
   if bench.mode > 0 && c.bench_list != 0 && bench.frames >= 30 {
     c.scroll_list(c.bench_list, bench.speed)

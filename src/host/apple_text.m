@@ -61,6 +61,82 @@ static CTFontRef serif_font(double size, int weight) {
   return mb_platform_font(size, weight, 0);
 }
 
+// The faces given (mb_host_face_add, style.mbt): each a list of font files, by the weight each is for (0: one variable
+// file for every weight), its descriptors read once.
+#define MB_FACES 16
+static NSMutableArray<NSNumber *> *face_weights[MB_FACES];
+static NSMutableArray *face_descs[MB_FACES];  // CTFontDescriptorRef, as id
+
+// The face a style is set in (style.mbt): the one it names; else code's for the code face, what people wrote's for
+// theirs, the app's own words' for the rest (not the serif face's); 0: none given, the system's.
+static int face_id(int style) {
+  int f = (style >> 8) & 15;
+  if (f > 0) return face_descs[f].count ? f : 0;
+  if (style & 2) return face_descs[3].count ? 3 : 0;
+  if ((style & 16) && face_descs[2].count) return 2;
+  if (style & 4) return 0;
+  return face_descs[1].count ? 1 : 0;
+}
+
+// Face `face` at this size and weight: its file for the nearest weight, a variable one at the weight itself.
+static CTFontRef face_font(int face, double size, int weight) {
+  NSArray<NSNumber *> *ws = face_weights[face];
+  NSUInteger best = 0;
+  int bestd = INT_MAX;
+  for (NSUInteger i = 0; i < ws.count; i++) {
+    int w = ws[i].intValue;
+    int d = w == 0 ? 0 : abs(w - weight);
+    if (d < bestd) {
+      bestd = d;
+      best = i;
+    }
+  }
+  CTFontDescriptorRef d = (__bridge CTFontDescriptorRef)face_descs[face][best];
+  CTFontDescriptorRef at = NULL;
+  if (ws[best].intValue == 0) {
+    // 'wght': the variable file at this weight
+    at = CTFontDescriptorCreateCopyWithVariation(d, (__bridge CFNumberRef)@(0x77676874), (CGFloat)weight);
+  }
+  CTFontRef f = CTFontCreateWithFontDescriptor(at ? at : d, size, NULL);
+  if (at) CFRelease(at);
+  return f;
+}
+
+// What was shaped and drawn before a face changed: forgotten (MoonBit drops its glyphs as the generation moves on).
+static void faces_changed(void) {
+  [fonts removeAllObjects];
+  last_size = -1;
+  for (int i = 0; i < n_entries; i++) entries[i].done = 0;
+  pack_x = pack_y = pack_h = 0;
+  generation++;
+}
+
+int32_t mb_host_face_add(int32_t face, moonbit_string_t path, int32_t weight) {
+  if (face <= 0 || face >= MB_FACES) return 0;
+  NSURL *url = [NSURL fileURLWithPath:mb_ns_from_string(path)];
+  CFArrayRef ds = CTFontManagerCreateFontDescriptorsFromURL((__bridge CFURLRef)url);
+  if (!ds || CFArrayGetCount(ds) == 0) {
+    if (ds) CFRelease(ds);
+    return 0;
+  }
+  if (!face_descs[face]) {
+    face_descs[face] = [NSMutableArray new];
+    face_weights[face] = [NSMutableArray new];
+  }
+  [face_descs[face] addObject:(__bridge id)CFArrayGetValueAtIndex(ds, 0)];
+  [face_weights[face] addObject:@(weight)];
+  CFRelease(ds);
+  faces_changed();
+  return 1;
+}
+
+void mb_host_face_clear(int32_t face) {
+  if (face <= 0 || face >= MB_FACES || !face_descs[face].count) return;
+  [face_descs[face] removeAllObjects];
+  [face_weights[face] removeAllObjects];
+  faces_changed();
+}
+
 static CTFontRef font_for(double size, int weight, int style) {
   // the font asked for last, without building its key (most calls)
   if (size == last_size && weight == last_weight && style == last_style) return last_font;
@@ -68,7 +144,9 @@ static CTFontRef font_for(double size, int weight, int style) {
   NSString *k = [NSString stringWithFormat:@"%g/%d/%d", size, weight, style];
   id f = fonts[k];
   if (!f) {
-    CTFontRef base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
+    int face = face_id(style);
+    CTFontRef base = face ? face_font(face, size, weight) : NULL;
+    if (!base) base = (style & 4) && !(style & 2) ? serif_font(size, weight) : mb_platform_font(size, weight, (style & 2) != 0);
     if (style & 1) {
       CTFontRef it = CTFontCreateCopyWithSymbolicTraits(base, 0, NULL, kCTFontTraitItalic, kCTFontTraitItalic);
       if (it) {

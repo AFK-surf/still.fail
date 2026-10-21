@@ -50,6 +50,12 @@ extern "js" fn js_glyph(key : Int, out : FixedArray[Double]) -> Unit =
 extern "js" fn js_atlas_generation() -> Int =
   #|() => globalThis.__mbhost.atlasGeneration()
 
+extern "js" fn js_face_add(face : Int, path : String, weight : Int) -> Bool =
+  #|(f, p, w) => globalThis.__mbhost.faceAdd ? globalThis.__mbhost.faceAdd(f, p, w) : false
+
+extern "js" fn js_face_clear(face : Int) -> Unit =
+  #|(f) => { if (globalThis.__mbhost.faceClear) globalThis.__mbhost.faceClear(f) }
+
 extern "js" fn js_present(
   buf : FixedArray[Double],
   count : Int,
@@ -193,6 +199,19 @@ pub fn text_key(text : String, size : Double, weight : Int, style : Int) -> Int 
 ///|
 pub fn glyph(key : Int, out : FixedArray[Double]) -> Unit {
   js_glyph(key, out)
+}
+
+///|
+/// A font file (at `path`: a URL the page can fetch) made part of face `face` (style.mbt), for `weight` (0: variable,
+/// every weight). The page loads it as it can (FontFace): drawn in it once loaded (atlas_generation moves on then).
+pub fn face_add(face : Int, path : String, weight : Int) -> Bool {
+  js_face_add(face, path, weight)
+}
+
+///|
+/// Face `face` given up.
+pub fn face_clear(face : Int) -> Unit {
+  js_face_clear(face)
 }
 
 ///|

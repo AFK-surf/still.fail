@@ -58,13 +58,95 @@ final class MBText {
         return (style & 2) != 0 ? Typeface.MONOSPACE : (style & 4) != 0 ? Typeface.SERIF : Typeface.DEFAULT;
     }
 
+    /** The faces given (faceAdd, style.mbt): each a list of font files and the weight each is for (0: variable). */
+    static final int FACES = 16;
+    @SuppressWarnings("unchecked")
+    static final ArrayList<File>[] faceFiles = new ArrayList[FACES];
+    @SuppressWarnings("unchecked")
+    static final ArrayList<Integer>[] faceWeights = new ArrayList[FACES];
+
+    /** The face a style is set in: the one it names; else code's, what people wrote's, the app's words' (not the serif face's); 0 none. */
+    static int faceId(int style) {
+        int f = (style >> 8) & 15;
+        if (f > 0) return given(f) ? f : 0;
+        if ((style & 2) != 0) return given(3) ? 3 : 0;
+        if ((style & 16) != 0 && given(2)) return 2;
+        if ((style & 4) != 0) return 0;
+        return given(1) ? 1 : 0;
+    }
+
+    static boolean given(int f) {
+        return faceFiles[f] != null && !faceFiles[f].isEmpty();
+    }
+
+    /** Face `f` at a weight: its file for the nearest weight, a variable one at the weight itself (null: unreadable). */
+    static Typeface faceTypeface(int f, int weight, boolean italic) {
+        int best = 0, bestd = Integer.MAX_VALUE;
+        for (int i = 0; i < faceWeights[f].size(); i++) {
+            int w = faceWeights[f].get(i);
+            int d = w == 0 ? 0 : Math.abs(w - weight);
+            if (d < bestd) {
+                bestd = d;
+                best = i;
+            }
+        }
+        try {
+            Typeface.Builder b = new Typeface.Builder(faceFiles[f].get(best));
+            if (faceWeights[f].get(best) == 0) b.setFontVariationSettings("'wght' " + weight);
+            Typeface t = b.setWeight(weight).setItalic(italic).build();
+            return t;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** The typeface a style is drawn in at a weight: its face given, else the system's (face). */
+    static Typeface typeface(int style, int weight) {
+        int f = faceId(style);
+        Typeface given = f > 0 ? faceTypeface(f, weight, (style & 1) != 0) : null;
+        return given != null ? given : Typeface.create(face(style), weight, (style & 1) != 0);
+    }
+
+    static boolean faceAdd(int f, String path, int weight) {
+        if (f <= 0 || f >= FACES) return false;
+        File file = new File(path);
+        // one Android can read as a font, or none taken
+        Typeface t;
+        try {
+            t = new Typeface.Builder(file).build();
+        } catch (RuntimeException e) {
+            return false;
+        }
+        if (t == null) return false;
+        if (faceFiles[f] == null) {
+            faceFiles[f] = new ArrayList<>();
+            faceWeights[f] = new ArrayList<>();
+        }
+        faceFiles[f].add(file);
+        faceWeights[f].add(weight);
+        facesChanged();
+        return true;
+    }
+
+    static void faceClear(int f) {
+        if (f <= 0 || f >= FACES || !given(f)) return;
+        faceFiles[f].clear();
+        faceWeights[f].clear();
+        facesChanged();
+    }
+
+    /** What was measured and drawn before a face changed: forgotten (MoonBit drops its glyphs as the generation moves on). */
+    static void facesChanged() {
+        paints.clear();
+        reset();
+    }
+
     static Paint paint(float size, int weight, int style) {
         String k = size + "/" + weight + "/" + style;
         Paint p = paints.get(k);
         if (p == null) {
             p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-            Typeface base = face(style);
-            p.setTypeface(Typeface.create(base, weight, (style & 1) != 0));
+            p.setTypeface(typeface(style, weight));
             p.setTextSize(size);
             // ligatures as the system draws them: shape() tells MoonBit which clusters a ligature covers; none for
             // words with letter spacing (style & 8), each cluster spaced on its own
@@ -296,7 +378,7 @@ final class MBText {
         if (refCanvas == null) return;
         float d = refScale;
         TextPaint p = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-        p.setTypeface(Typeface.create(face(style), weight, (style & 1) != 0));
+        p.setTypeface(typeface(style, weight));
         p.setTextSize((float) size * d);
         p.setColor(0xFF000000 | color);
         StaticLayout l = StaticLayout.Builder.obtain(text, 0, text.length(), p, 1 << 20)

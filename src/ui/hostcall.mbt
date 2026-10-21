@@ -371,6 +371,23 @@ fn h_glyph(key : Int, out : FixedArray[Double]) -> Unit {
 }
 
 ///|
+/// A face's file given to the host (faces.mbt); a Tester's fake host takes any (its words measured as ever).
+fn h_face_add(face : Int, path : String, weight : Int) -> Bool {
+  match fake.val {
+    Some(_) => true
+    None => @host.face_add(face, path, weight)
+  }
+}
+
+///|
+fn h_face_clear(face : Int) -> Unit {
+  match fake.val {
+    Some(_) => ()
+    None => @host.face_clear(face)
+  }
+}
+
+///|
 fn h_atlas_generation() -> Int {
   match fake.val {
     Some(_) => 0

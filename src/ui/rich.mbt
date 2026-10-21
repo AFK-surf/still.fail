@@ -122,6 +122,10 @@ struct Rich {
   select : Bool
   // wrapped words cut after that many lines, ending in an ellipsis (0: all of them)
   max_lines : Int
+  // what every run's style has besides its own (faces.mbt faces_style: the face named, what people wrote)
+  faces : Int
+  // the faces as they were given when it was built (faces.mbt words_shaped_in): laid out again once they change
+  shaped_in : Int
 }
 
 ///|
@@ -245,7 +249,7 @@ fn layout_rich(r : Rich, max_w : Double) -> RichLayout {
   for k, run in r.runs {
     let size = r.run_size(run)
     let weight = r.run_weight(run)
-    let style = run_style(run)
+    let style = run_style(run) | r.faces
     let s = shape(run.text, size, weight, style~, spacing=r.spacing)
     let (a, d, _) = font_metrics(size, weight, style~)
     let (a, d) = if words_cjk(run.text) {
@@ -626,7 +630,9 @@ fn RichLayout::pieces(self : RichLayout, k : Int) -> Array[(Int, Int, Int)] {
 /// paragraph's) on `code_bg` (0: none). `key` keeps its links' ids apart
 /// from another paragraph's with the same words. `tracking`: letter spacing in pixels, in every run (a style's
 /// `Tracking` in ems of `size`). `max_lines`: wrapped words cut after that many lines, ending in an ellipsis in the
-/// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis).
+/// style of the run it follows (as Ctx::text's, Android's maxLines with TextOverflow.Ellipsis). `words`: what people
+/// and agents wrote (a message, a composer's words), set in the face given for them (faces.mbt, @host.face_text) where
+/// there is one. `face`: every run in that face (4 to 15, face_add), where it is given (a face shown in itself).
 pub fn Ctx::rich(
   self : Ctx,
   runs : Array[Run],
@@ -647,6 +653,8 @@ pub fn Ctx::rich(
   max_lines? : Int,
   on_link? : (String) -> Unit = fn(_) {  },
   on_link_hold? : ((String, (Double, Double, Double, Double)) -> Unit)? = None,
+  words? : Bool = false,
+  face? : Int = 0,
 ) -> Int {
   // its style (style.mbt) under what is said here, as Ctx::text's
   let st = self.text_patch(style)
@@ -726,6 +734,8 @@ pub fn Ctx::rich(
     base,
     select: desk.selecting,
     max_lines: first(max_lines, st.max_lines).unwrap_or(0),
+    faces: faces_style(words, face),
+    shaped_in: words_shaped_in.val,
   })
   i
 }
@@ -771,7 +781,7 @@ fn cut_rich(r : Rich, lay : RichLayout, w : Double) -> Rich {
   // the run the line's words end in, by the last of it that fits
   let style_of = fn(c : Int) { r.runs[lay.run_of[imin(imax(c, 0), count - 1)]] }
   let dots_w = fn(run : Run) {
-    shape("…", r.run_size(run), r.run_weight(run), style=run_style(run), spacing=r.spacing).adv.fold(
+    shape("…", r.run_size(run), r.run_weight(run), style=run_style(run) | r.faces, spacing=r.spacing).adv.fold(
       init=0.0,
       fn(s, x) { s + x },
     )

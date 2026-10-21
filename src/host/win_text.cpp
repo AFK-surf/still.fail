@@ -5,7 +5,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <objbase.h>
-#include <dwrite_2.h>
+#include <dwrite_3.h>
 #include <d2d1.h>
 #include <wincodec.h>
 #include <math.h>
@@ -85,11 +85,95 @@ static void init(void) {
   wic->CreateBitmap(RT_SIZE, RT_SIZE, GUID_WICPixelFormat32bppPBGRA, WICBitmapCacheOnDemand, &bitmap);
 }
 
+// The faces given (mb_host_face_add, style.mbt): each its files, made into a collection of their own (DirectWrite's
+// font set from the files: a variable file's named weights in it), and the family the files make.
+#define MB_FACES 16
+static struct {
+  WCHAR **paths;
+  int n;
+  IDWriteFontCollection1 *fc;
+  WCHAR family[128];
+} faces[MB_FACES];
+
+// The face a style is set in: the one it names; else code's (style & 2), what people wrote's (style & 16), the app's
+// words' (not the serif face's); 0 none given.
+static int face_id(int style) {
+  int f = (style >> 8) & 15;
+  if (f > 0) return faces[f].fc ? f : 0;
+  if (style & 2) return faces[3].fc ? 3 : 0;
+  if ((style & 16) && faces[2].fc) return 2;
+  if (style & 4) return 0;
+  return faces[1].fc ? 1 : 0;
+}
+
+// Face `f`'s files as a collection, its family's name from it (false: not fonts DirectWrite reads).
+static bool face_build(int f) {
+  IDWriteFactory5 *dw5 = NULL;
+  if (FAILED(dw->QueryInterface(__uuidof(IDWriteFactory5), (void **)&dw5))) return false;
+  IDWriteFontSetBuilder1 *b = NULL;
+  IDWriteFontSet *set = NULL;
+  IDWriteFontCollection1 *fc = NULL;
+  IDWriteFontFamily1 *fam = NULL;
+  IDWriteLocalizedStrings *names = NULL;
+  bool ok = SUCCEEDED(dw5->CreateFontSetBuilder(&b));
+  for (int i = 0; ok && i < faces[f].n; i++) {
+    IDWriteFontFile *file = NULL;
+    ok = SUCCEEDED(dw5->CreateFontFileReference(faces[f].paths[i], NULL, &file)) && SUCCEEDED(b->AddFontFile(file));
+    if (file) file->Release();
+  }
+  ok = ok && SUCCEEDED(b->CreateFontSet(&set)) && SUCCEEDED(dw5->CreateFontCollectionFromFontSet(set, &fc)) &&
+       fc->GetFontFamilyCount() > 0 && SUCCEEDED(fc->GetFontFamily(0, &fam)) && SUCCEEDED(fam->GetFamilyNames(&names)) &&
+       SUCCEEDED(names->GetString(0, faces[f].family, 128));
+  if (ok) {
+    if (faces[f].fc) faces[f].fc->Release();
+    faces[f].fc = fc;
+    fc = NULL;
+  }
+  if (names) names->Release();
+  if (fam) fam->Release();
+  if (fc) fc->Release();
+  if (set) set->Release();
+  if (b) b->Release();
+  dw5->Release();
+  return ok;
+}
+
+static void faces_changed(void);
+
+extern "C" int32_t mb_host_face_add(int32_t f, moonbit_string_t path, int32_t weight) {
+  (void)weight;  // the files' own weights say which is which (a variable file: its named instances)
+  init();
+  if (f <= 0 || f >= MB_FACES) return 0;
+  int len = Moonbit_array_length(path);
+  WCHAR *p = (WCHAR *)malloc(sizeof(WCHAR) * (len + 1));
+  memcpy(p, path, sizeof(WCHAR) * len);
+  p[len] = 0;
+  faces[f].paths = (WCHAR **)realloc(faces[f].paths, sizeof(WCHAR *) * (faces[f].n + 1));
+  faces[f].paths[faces[f].n++] = p;
+  if (!face_build(f)) {
+    free(faces[f].paths[--faces[f].n]);
+    return 0;
+  }
+  faces_changed();
+  return 1;
+}
+
+extern "C" void mb_host_face_clear(int32_t f) {
+  if (f <= 0 || f >= MB_FACES || !faces[f].fc) return;
+  for (int i = 0; i < faces[f].n; i++) free(faces[f].paths[i]);
+  faces[f].n = 0;
+  faces[f].fc->Release();
+  faces[f].fc = NULL;
+  faces_changed();
+}
+
 static IDWriteTextFormat *format_for(double size, int weight, int style) {
   for (int i = 0; i < n_formats; i++)
     if (formats[i].size == size && formats[i].weight == weight && formats[i].style == style) return formats[i].f;
   IDWriteTextFormat *f = NULL;
-  dw->CreateTextFormat((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, NULL, (DWRITE_FONT_WEIGHT)weight,
+  int face = face_id(style);
+  dw->CreateTextFormat(face ? faces[face].family : (style & 2) ? MONO : (style & 4) ? SERIF : FAMILY,
+                       face ? faces[face].fc : NULL, (DWRITE_FONT_WEIGHT)weight,
                        (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
                        DWRITE_FONT_STRETCH_NORMAL, (FLOAT)size, L"zh-cn", &f);
   f->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -129,15 +213,21 @@ static IDWriteTextLayout *make_layout(const WCHAR *s, int len, double size, int 
   return l;
 }
 
-// A family's metrics at this weight and style (false: not on this system, `m` as it was).
-static bool family_metrics(const WCHAR *name, int weight, int style, DWRITE_FONT_METRICS *m) {
+// A family's metrics at this weight and style (false: not on this system, `m` as it was); in a face's collection
+// where one is given.
+static bool family_metrics(const WCHAR *name, int weight, int style, DWRITE_FONT_METRICS *m, IDWriteFontCollection *in = NULL) {
   IDWriteFontCollection *fc = NULL;
   IDWriteFontFamily *fam = NULL;
   IDWriteFont *font = NULL;
   UINT32 i = 0;
   BOOL found = FALSE;
   bool ok = false;
-  dw->GetSystemFontCollection(&fc, FALSE);
+  if (in) {
+    fc = in;
+    fc->AddRef();
+  } else {
+    dw->GetSystemFontCollection(&fc, FALSE);
+  }
   if (SUCCEEDED(fc->FindFamilyName(name, &i, &found)) && found && SUCCEEDED(fc->GetFontFamily(i, &fam)) &&
       SUCCEEDED(fam->GetFirstMatchingFont((DWRITE_FONT_WEIGHT)weight, DWRITE_FONT_STRETCH_NORMAL,
                                           (style & 1) ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL, &font))) {
@@ -156,7 +246,9 @@ extern "C" void mb_host_font_metrics(double size, int32_t weight, int32_t style,
   m.designUnitsPerEm = 2048;
   m.ascent = 2210;
   m.descent = 514;
-  family_metrics((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, weight, style, &m);
+  int face = face_id(style);
+  if (face) family_metrics(faces[face].family, weight, style, &m, faces[face].fc);
+  else family_metrics((style & 2) ? MONO : (style & 4) ? SERIF : FAMILY, weight, style, &m);
   out[0] = size * m.ascent / m.designUnitsPerEm;
   out[1] = size * m.descent / m.designUnitsPerEm;
   out[2] = round(size * 1.42);
@@ -268,6 +360,13 @@ static void reset_atlas(void) {
   for (int i = 0; i < n_entries; i++) entries[i].done = 0;
   pack_x = pack_y = pack_h = 0;
   generation++;
+}
+
+// What was measured and drawn before a face changed: its formats made again, its glyphs drawn again.
+static void faces_changed(void) {
+  for (int i = 0; i < n_formats; i++) formats[i].f->Release();
+  n_formats = 0;
+  reset_atlas();
 }
 
 extern "C" void mb_text_set_scale(double scale) {

@@ -48,6 +48,7 @@ static jclass updates_cls, shares_cls, keeps_cls, holds_cls;
 static jclass gallery_cls, marks_cls;
 static void device_init(JNIEnv *env);  // android_device.h
 static jmethodID m_mk_start, m_mk_state, m_mk_png;
+static jmethodID m_face_add, m_face_clear;
 static jmethodID m_cs_known, m_cs_decode;
 static jmethodID m_v_text, m_v_still;
 static jmethodID m_ga_access, m_ga_ask, m_ga_answers, m_ga_read, m_ga_state, m_ga_rows, m_ga_end, m_pk_photo;
@@ -110,6 +111,8 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *v, void *reserved) {
   m_glyph = (*env)->GetStaticMethodID(env, text_cls, "glyph", "(I[D)V");
   m_generation = (*env)->GetStaticMethodID(env, text_cls, "atlasGeneration", "()I");
   m_text_key = (*env)->GetStaticMethodID(env, text_cls, "textKey", "(Ljava/lang/String;DII)I");
+  m_face_add = (*env)->GetStaticMethodID(env, text_cls, "faceAdd", "(ILjava/lang/String;I)Z");
+  m_face_clear = (*env)->GetStaticMethodID(env, text_cls, "faceClear", "(I)V");
   m_ref_begin = (*env)->GetStaticMethodID(env, text_cls, "refBegin", "(DDDI)V");
   m_ref_text = (*env)->GetStaticMethodID(env, text_cls, "refText", "(Ljava/lang/String;DIIDDI[D)V");
   m_ref_end = (*env)->GetStaticMethodID(env, text_cls, "refEnd", "(Ljava/lang/String;)Z");
@@ -1195,6 +1198,20 @@ int32_t mb_host_text_key(moonbit_string_t text, double size, int32_t weight, int
   jint k = (*env)->CallStaticIntMethod(env, text_cls, m_text_key, s, size, weight, style);
   (*env)->DeleteLocalRef(env, s);
   return k;
+}
+
+// A face's file (style.mbt; MBText.faceAdd): false when Android could not make a typeface of it.
+int32_t mb_host_face_add(int32_t face, moonbit_string_t path, int32_t weight) {
+  JNIEnv *env = env_();
+  jstring s = jstr(env, path);
+  jboolean ok = (*env)->CallStaticBooleanMethod(env, text_cls, m_face_add, face, s, weight);
+  (*env)->DeleteLocalRef(env, s);
+  return ok ? 1 : 0;
+}
+
+void mb_host_face_clear(int32_t face) {
+  JNIEnv *env = env_();
+  (*env)->CallStaticVoidMethod(env, text_cls, m_face_clear, face);
 }
 
 void mb_host_glyph(int32_t key, double *out) {

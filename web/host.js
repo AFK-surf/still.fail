@@ -1078,8 +1078,48 @@
   let packX = 0, packY = 0, packH = 0, generation = 0;
   const rc = document.createElement('canvas');
   const rctx = rc.getContext('2d', { willReadFrequently: true });
+  // the faces given (faceAdd, style.mbt), loaded: each a family of its own ahead of the place's own
+  const faces = new Set();
+  // the face a style is set in: the one it names; else code's (style bit 2), what people wrote's (bit 16), the app's
+  // words' (not the serif face's); 0 none
+  const faceOf = (style) => {
+    const f = (style >> 8) & 15;
+    if (f) return faces.has(f) ? f : 0;
+    if (style & 2) return faces.has(3) ? 3 : 0;
+    if (style & 16 && faces.has(2)) return 2;
+    if (style & 4) return 0;
+    return faces.has(1) ? 1 : 0;
+  };
   // style: 1 slanted, 2 the code face
-  const font = (size, weight, style) => `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${style & 2 ? MONO : style & 4 ? SERIF : FAMILY}`;
+  const font = (size, weight, style) => {
+    const own = style & 2 ? MONO : style & 4 ? SERIF : FAMILY;
+    const f = faceOf(style);
+    return `${style & 1 ? 'italic ' : ''}${weight} ${size}px ${f ? `"mbface${f}", ${own}` : own}`;
+  };
+  // what was shaped and drawn before a face changed, forgotten (MoonBit drops its glyphs as the generation moves on)
+  const facesChanged = () => {
+    advCache.clear();
+    for (const e of entries) e.done = false;
+    packX = packY = packH = 0;
+    generation++;
+  };
+  // a face's file (a URL), for a weight (0: variable, all of them): drawn in once the page has loaded it
+  H.faceAdd = (face, url, weight) => {
+    if (!(face > 0 && face < 16) || typeof FontFace !== 'function') return false;
+    const ff = new FontFace(`mbface${face}`, `url(${JSON.stringify(url)})`, { weight: weight ? String(weight) : '1 1000' });
+    ff.load().then(() => {
+      document.fonts.add(ff);
+      faces.add(face);
+      facesChanged();
+      H.requestFrame();
+    }, () => {});
+    return true;
+  };
+  H.faceClear = (face) => {
+    if (!faces.delete(face)) return;
+    for (const ff of [...document.fonts]) if (ff.family === `mbface${face}` || ff.family === `"mbface${face}"`) document.fonts.delete(ff);
+    facesChanged();
+  };
 
   H.fontMetrics = (size, weight, style, out) => {
     mctx.font = font(size, weight, style);

@@ -47,6 +47,7 @@ fn reset_globals() -> Unit {
   text_cache.metrics.clear()
   text_cache.glyphs.clear()
   text_cache.generation = -1
+  faces_reset()
   text_table.val = None
   inputs_since.val = false
   in_frame.val = false

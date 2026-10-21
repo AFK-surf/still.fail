@@ -82,7 +82,7 @@ struct TextCache {
   mut shaped : Int
   // ascent, descent, line height; the ascent and descent of the font Han falls back to; whether the host sets lines
   // on whole pixels
-  metrics : Map[Int, (Double, Double, Double, Double, Double, Bool)]
+  metrics : Map[Int64, (Double, Double, Double, Double, Double, Bool)]
   glyphs : Map[Int, Glyph]
   mut generation : Int
   buf : FixedArray[Double]
@@ -104,8 +104,16 @@ let text_cache : TextCache = {
 fn check_atlas() -> Unit {
   let g = h_atlas_generation()
   if g != text_cache.generation {
+    // (a host moves it on as its atlas starts over, and as a face it was given is here: a page's, loaded later than
+    // asked; what was measured in the face before is forgotten with the glyphs)
+    let first = text_cache.generation < 0
     text_cache.generation = g
     text_cache.glyphs.clear()
+    if !first {
+      clear_shapes()
+      text_cache.fonts.clear()
+      text_cache.metrics.clear()
+    }
   }
 }
 
@@ -138,7 +146,8 @@ fn whole_pixel_lines(size : Double, weight : Int, style? : Int = 0) -> Bool {
 
 ///|
 fn all_metrics(size : Double, weight : Int, style : Int) -> (Double, Double, Double, Double, Double, Bool) {
-  let key = ((size * 10.0).to_int() * 1000 + weight) * 8 + style
+  // (the size in tenths, the weight, the style's bits: faces and all, each in a field of its own)
+  let key = (((size * 10.0).to_int() * 1000 + weight).to_int64() << 12) | (style & 4095).to_int64()
   match text_cache.metrics.get(key) {
     Some(m) => m
     None => {
