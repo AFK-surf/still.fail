@@ -10,7 +10,7 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
 
 - **身份**：看着哪个 workspace，就以那个 workspace 所用的已登录账号标识，只用 still.fail 账号 id（即 Google `sub`），不发邮箱；退出或注销这个账号时 reset。station 自己的管理页不标识人。
 - **开关**：设置里的「发送使用统计和错误报告」（宽屏在 设置 → 关于，窄屏在设置的「此设备」里），默认开。关掉用的是 PostHog 自己的 `opt_out_capturing()`，选择由 PostHog 存在这个浏览器里；关掉后事件、错误、会话回放都不再发（回放的录制也停掉）。reset 会清掉这个选择，所以 reset 后重新 opt out。构建时没有 key 的话不显示这个开关。
-- **错误**：页面上未捕获的异常和 promise 拒绝；核心 worker（SharedWorker / Worker）里捕获到的错误由 worker 转给一个页面上报；worker 崩溃（`{fatal}`）或起不来也上报。每个事件都带 `release`（构建时的 git 提交）和 `app`（`cloud` / `station`）。
+- **错误**：页面上未捕获的异常和 promise 拒绝；核心 worker（SharedWorker / Worker）里捕获到的错误由 worker 转给一个页面上报；worker 崩溃（`{fatal}`）或起不来也上报。核心照常运行但本机少存了东西时也报一条（data.ts `#report`，只带 SQLite 的报错，不带内容）：`LocalDbFailed`（账号的本机库打不开，这次只放在内存里）、`LocalDbBusy`（被另一个进程占着）、`LocalDbMadeAgain`（库文件坏了，删掉重建，消息里有原因和带过去几行本机做的改动）。每个事件都带 `release`（构建时的 git 提交）和 `app`（`cloud` / `station`）。
 - **会话回放**：所有文字、所有输入框都打码；图片、视频、canvas 整块挡掉；`title`、`alt`、`aria-label`、`placeholder`、`href`、`src` 等可能带人名、文件名、对话名的属性打码。回放里只有布局和操作。控制台日志不录。登录回调页（URL 里有 Google 的 code）不录。是否录制还取决于 PostHog 项目设置里的 Session replay 开关。
 - **事件**（不按键入发）：
 
@@ -22,9 +22,10 @@ still.fail 用 PostHog（美国区，`https://us.i.posthog.com`）做产品分�
   | `chat_created` | `runtime`、`model`、`effort`、`ms` |
   | `workspace_created` | `first`（登录后自动建的第一个） |
   | `station_added` | `ms`（从生成命令到 station 出现在列表里） |
+  | `workspace_opened` | 每次页面加载第一次显示出 workspace（不再是「正在打开 workspace」）时发一次：`ms`（从页面开始加载算）、`kept`（是不是靠本机存的数据打开的；false 是等 still.fail cloud 的 `/v1/me` 回来才打开）、`accounts`（登录的账号数） |
   | `$pageview` | 只在路由变化时发 |
 
-- **URL**：所有事件里的 URL 都把 id 换成占位（`/w/:workspace/s/:station/chats/:thread`），去掉查询串和 `#` 之后的部分；别的域名只留域名。不开 autocapture（它会记元素里的文字），也不开热图、死点击、rage click。
+- **URL**：所有事件里的 URL 都把 id 换成占位（`/w/:workspace/s/:station/chats/:thread`），路由里固定的词以外的段一律换成 `:id`（Profile 的 key 带着邮箱，skill 的名字可能是客户名；`pathTemplate`，`test/telemetry-paths.test.ts`），去掉查询串和 `#` 之后的部分；别的域名只留域名。不开 autocapture（它会记元素里的文字），也不开热图、死点击、rage click。
 
 ## station
 

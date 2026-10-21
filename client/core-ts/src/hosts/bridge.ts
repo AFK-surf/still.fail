@@ -380,7 +380,8 @@ export function startBridged(native: Native, cloudOrigin: string, beta: boolean,
     onFatal(t("core-misc.host.crashed", { reason: error instanceof Error ? error.message : String(error) }));
   };
   const ready = Core.create(host, { iroh: bridgeIroh(bridge), modules: extra.modules }).then((core) => {
-    core.inner.runner.onDefect = fatal;
+    // A database found damaged on the way is marked first: the core that follows makes it again (data.ts).
+    core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => fatal(error));
     core.keepTime();
     return core;
   });

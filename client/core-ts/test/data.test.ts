@@ -150,6 +150,104 @@ test("a_database_another_process_holds_is_one_in_memory_this_run_and_says_so", a
   runner.shutdown();
 });
 
+/// A host whose databases can be damaged: every statement on one marked damaged, but those `readable` lets through,
+/// fails as SQLite's SQLITE_CORRUPT does.
+function damageable() {
+  const host = new FakeHost();
+  const damaged = new Map<NodeSql, (sql: string) => boolean>();
+  host.openDbHook = (name) => {
+    let inner = host.sqls.get(name);
+    if (!inner) {
+      inner = new NodeSql(new DatabaseSync(":memory:"), true);
+      host.sqls.set(name, inner);
+    }
+    const sql = inner;
+    const check = (q: string) => {
+      const readable = damaged.get(sql);
+      if (readable && !readable(q)) throw new SqlError("SQLITE_CORRUPT: sqlite3 result code 11: database disk image is malformed", "corrupt");
+    };
+    return {
+      exec: (q) => (check(q), sql.exec(q)),
+      run: (q, p) => (check(q), sql.run(q, p)),
+      all: (q, p) => (check(q), sql.all(q, p)),
+      close: () => {},
+    } satisfies Sql;
+  };
+  const runner = new Runner(host.time.clock);
+  const damage = (sub: string, readable: (sql: string) => boolean) => damaged.set(host.sqls.get(dbName(sub))!, readable);
+  return { host, runner, damage };
+}
+
+test("a_database_damaged_as_it_is_opened_is_made_again_with_what_was_done_here", async () => {
+  const { host, runner, damage } = damageable();
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  data.set(rows("w/a"), [{ id: "x" }]);
+  data.putLocal("outbox", "w/a", "7", [{ id: "out-1", text: "你好" }]);
+  data.putLocal("pending", "w/a", "k1", { text: "新对话" });
+  await run(data.written);
+  // Only the outbox still reads.
+  damage("s1", (q) => /^SELECT .* FROM outbox$/.test(q));
+  const before = host.sqls.get(dbName("s1"));
+  const next = new Data(host, runner, { owner: () => "s1" });
+  await run(next.open(["s1"]));
+  assert.notEqual(host.sqls.get(dbName("s1")), before, "a new file");
+  assert.deepEqual([...next.notes.values()], [], "nothing to say: it works");
+  assert.deepEqual(next.locals("outbox").map(([s, k, v]) => [s, k, (v as J)[0].text]), [["w/a", "7", "你好"]], "what was done here, as far as it read");
+  assert.deepEqual(next.locals("pending"), [], "what did not read is lost with the file");
+  assert.equal(next.get(rows("w/a")), undefined, "what the station sent comes again from it");
+  assert.deepEqual(host.reported.map((e) => e.name), ["LocalDbMadeAgain"]);
+  assert.match(host.reported[0]!.message, /malformed.*1 rows/);
+  // Made again, it is no import's: what the device kept before was brought into the damaged one.
+  assert.deepEqual(host.rows(dbName("s1"), "SELECT value FROM meta WHERE key = 'imported'"), [["made again"]]);
+  next.putLocal("outbox", "w/a", "8", [{ id: "out-2", text: "再见" }]);
+  await run(next.written);
+  assert.equal(next.locals("outbox").length, 2, "and it is written");
+  runner.shutdown();
+});
+
+test("a_database_found_damaged_as_the_core_runs_is_marked_and_made_again_as_it_next_opens", async () => {
+  const { host, runner, damage } = damageable();
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  data.set(rows("w/a"), [{ id: "x" }]);
+  data.putLocal("outbox", "w/a", "7", [{ id: "out-1", text: "你好" }]);
+  await run(data.written);
+  data.release(rows("w/a"));
+  // A page of the chats is damaged: its read fails (the core ends on it), and the database is marked first.
+  damage("s1", (q) => !/FROM chat\b/.test(q));
+  assert.throws(() => data.get(rows("w/a")), /malformed/);
+  await data.damageKept();
+  assert.ok(host.storage.has(`db-damaged/${dbName("s1")}`));
+  assert.equal(host.reported.length, 0, "nothing to report yet: it is made again as it next opens");
+  // The core that follows.
+  const next = new Data(host, runner, { owner: () => "s1" });
+  await run(next.open(["s1"]));
+  assert.deepEqual(next.locals("outbox").map(([, k]) => k), ["7"]);
+  assert.equal(next.get(rows("w/a")), undefined);
+  assert.ok(!host.storage.has(`db-damaged/${dbName("s1")}`), "the mark goes with it");
+  assert.deepEqual(host.reported.map((e) => e.name), ["LocalDbMadeAgain"]);
+  // Opened again: nothing more is made again.
+  const third = new Data(host, runner, { owner: () => "s1" });
+  await run(third.open(["s1"]));
+  assert.deepEqual(third.locals("outbox").map(([, k]) => k), ["7"]);
+  assert.equal(host.reported.length, 1);
+  runner.shutdown();
+});
+
+test("a_database_that_cannot_be_opened_is_reported", async () => {
+  const { host, runner } = fresh();
+  host.openDbHook = () => new SqlError("unable to open database file", "other");
+  host.memoryDb = () => new NodeSql(new DatabaseSync(":memory:"));
+  const data = new Data(host, runner, { owner: () => "s1" });
+  await run(data.open(["s1"]));
+  assert.deepEqual([...data.notes.values()].map((n) => n.kind), ["failed"]);
+  assert.deepEqual(host.reported.map((e) => [e.name, e.message]), [["LocalDbFailed", "unable to open database file"]]);
+  data.set(rows("w/a"), [{ id: "x" }]);
+  assert.deepEqual(data.get(rows("w/a")), [{ id: "x" }], "in memory this run");
+  runner.shutdown();
+});
+
 test("a_burst_of_writes_is_one_transaction_and_tells_once_it_is_committed", async () => {
   const { data, told, open, db, runner } = fresh();
   await open();

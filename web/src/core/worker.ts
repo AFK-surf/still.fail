@@ -311,13 +311,14 @@ async function lead(): Promise<void> {
   holding = true;
   const followed = leader !== null;
   // On the test channel the page names the worker so (core/client.ts workerName): the core's words say youdid.wtf.
-  // A defect's stack goes to error tracking first (as a fault): the fatal the pages hear is its message only.
+  // A defect's stack goes to error tracking first (as a fault): the fatal the pages hear is its message only. What the
+  // core reports and goes on after (a database it cannot open or made again) is a fault too.
   // In development what the core shares is frozen where it is shared: a write on it throws where it is written.
   if (import.meta.env.DEV) checkShared(true);
   ready = startWeb(emit, (globalThis as { name?: string }).name?.endsWith("-test") ?? false, loadIroh, (reason, error) => {
     if (!dead) fault(error);
     fatal(reason);
-  }, loadSqlite);
+  }, loadSqlite, [], fault);
   ready.catch((error: unknown) => fatal(`核心启动失败：${String(error)}`));
   const running = await ready;
   core = running;

@@ -7,8 +7,8 @@
 // out; each database's writer says which topics a burst changed, and the store pushes what changed (keyed deltas).
 import { Effect, Fiber, Queue } from "effect";
 import { AccountDb, LIST_OF, type Changes, type Derive, type ListKind, type RowChange, frozen } from "./db/account.ts";
-import type { Host, Sql } from "./host.ts";
-import { HostError, SqlError } from "./host.ts";
+import type { Host, Sql, SqlRow, SqlValue } from "./host.ts";
+import { HostError, SqlError, sqlError } from "./host.ts";
 import type { Topic } from "./protocol.ts";
 import type { Runner } from "./runtime.ts";
 import { equal, get, isObject, parseJson, toJsonBytes } from "./util.ts";
@@ -166,6 +166,85 @@ const KEPT_CHECK_MS = 10_000;
 /// core wrote (read only), one another process holds.
 export type DbNote = { kind: "full" | "newer" | "busy" | "failed"; detail: string | null };
 
+/// Where a database found damaged as the core ran is marked (the host's storage), to be made again as it is next
+/// opened: a damaged page is found by a read, which ends the core (its next start opens it again).
+const damagedKey = (name: string) => `db-damaged/${name}`;
+
+/// What this device did itself, brought over from a damaged database to the one made again in its place (as far as it
+/// can be read): the columns of each table, in schema.ts's order. The rest comes again from the stations and the cloud.
+const RESCUED: [string, string[]][] = [
+  ["outbox", ["station", "thread", "json"]],
+  ["pending", ["key", "station", "json"]],
+  ["first", ["station", "session", "json"]],
+  ["changing", ["station", "id", "json"]],
+  ["draft", ["station", "chat", "json"]],
+  ["workspace_pref", ["workspace", "key", "json"]],
+];
+
+type Rescued = [table: string, columns: string[], rows: SqlRow[]][];
+
+/// What of RESCUED a damaged database still gives: each table as far as it reads, none of one that does not.
+function rescue(sql: Sql): Rescued {
+  const out: Rescued = [];
+  for (const [table, columns] of RESCUED) {
+    try {
+      out.push([table, columns, sql.all(`SELECT ${columns.join(", ")} FROM ${table}`)]);
+    } catch {
+      // Unreadable: lost with the file.
+    }
+  }
+  return out;
+}
+
+/// An account's database as the core uses it: a damaged file (SQLITE_CORRUPT, SQLITE_NOTADB) found by any statement is
+/// told (`onDamaged`), and the statement fails as it would.
+class Watched implements Sql {
+  readonly #inner: Sql;
+  readonly #onDamaged: (error: SqlError) => void;
+
+  constructor(inner: Sql, onDamaged: (error: SqlError) => void) {
+    this.#inner = inner;
+    this.#onDamaged = onDamaged;
+  }
+
+  #saw(e: unknown): never {
+    const error = sqlError(e);
+    if (error.kind === "corrupt") this.#onDamaged(error);
+    throw e;
+  }
+
+  exec(sql: string): void {
+    try {
+      this.#inner.exec(sql);
+    } catch (e) {
+      this.#saw(e);
+    }
+  }
+
+  run(sql: string, params?: readonly SqlValue[]): number {
+    try {
+      return this.#inner.run(sql, params);
+    } catch (e) {
+      return this.#saw(e);
+    }
+  }
+
+  all(sql: string, params?: readonly SqlValue[]): SqlRow[] {
+    try {
+      return this.#inner.all(sql, params);
+    } catch (e) {
+      return this.#saw(e);
+    }
+  }
+
+  close(): void {
+    this.#inner.close();
+  }
+}
+
+/// An account's database opened, or why not (`sql`: the file opened, its tables not read).
+type Opened = { db: AccountDb; sql: Sql } | { db: null; sql: Sql | null; error: SqlError | HostError };
+
 const NO_DERIVE: Derive = { tone: () => null, asks: () => false };
 
 export class Data {
@@ -189,6 +268,8 @@ export class Data {
   onSignedOut: (sub: string, me: unknown) => void = () => {};
   /// Told once an account's database is opened (a sign-in), to bring in what it may (db/import.ts).
   onOpened: (db: AccountDb) => Effect.Effect<void> = () => Effect.void;
+  /// The marks of databases found damaged as the core ran, as they are written (damageKept).
+  readonly #damaged = new Map<string, Promise<void>>();
 
   /// The most a database may take (KEPT); the logs a UI shows now, with how many show each; when room was last looked at.
   readonly #kept: number;
@@ -235,13 +316,27 @@ export class Data {
       if (this.#dbs.has(sub)) return;
       const name = dbName(sub);
       let sql: Sql | null = null;
+      let db: AccountDb | null = null;
       let note: DbNote | null = null;
       if (this.#host.openDb) {
-        const opened = yield* Effect.result(this.#host.openDb(name));
-        if (opened._tag === "Success") sql = opened.success;
-        else note = { kind: opened.failure instanceof SqlError && opened.failure.kind === "busy" ? "busy" : "failed", detail: opened.failure.message };
+        let opened = yield* this.#openFile(sub, name);
+        // Damaged (found so now, or as an earlier core ran): made again, with what this device did itself.
+        const mark = yield* Effect.orElseSucceed(this.#host.storageGet(damagedKey(name)), () => null);
+        const damaged = opened.db === null ? opened.error instanceof SqlError && opened.error.kind === "corrupt" : mark !== null;
+        if (damaged) opened = yield* this.#makeAgain(sub, name, opened, opened.db === null ? opened.error.message : `as it ran: ${String(get(mark ? parseJson(mark) : null, "error") ?? "")}`);
+        if (opened.db !== null) db = opened.db;
+        else {
+          try {
+            opened.sql?.close();
+          } catch {
+            // Let go however it can be.
+          }
+          const busy = opened.error instanceof SqlError && opened.error.kind === "busy";
+          note = { kind: busy ? "busy" : "failed", detail: opened.error.message };
+          this.#report(busy ? "LocalDbBusy" : "LocalDbFailed", opened.error.message);
+        }
       }
-      if (sql === null) {
+      if (db === null) {
         // Nothing to keep it in (another process holds it, or this host keeps nothing): kept in memory this run.
         try {
           sql = this.#host.memoryDb?.() ?? null;
@@ -252,13 +347,12 @@ export class Data {
           if (note) this.#setNote(sub, note);
           return;
         }
-      }
-      let db: AccountDb;
-      try {
-        db = new AccountDb(sub, name, sql, this.#runner, this.#derive);
-      } catch (e) {
-        this.#setNote(sub, { kind: "failed", detail: e instanceof Error ? e.message : String(e) });
-        return;
+        try {
+          db = new AccountDb(sub, name, sql, this.#runner, this.#derive);
+        } catch (e) {
+          this.#setNote(sub, { kind: "failed", detail: e instanceof Error ? e.message : String(e) });
+          return;
+        }
       }
       if (db.readOnly) note = { kind: "newer", detail: null };
       db.onCommit = (changes) => this.#committed(changes);
@@ -269,6 +363,83 @@ export class Data {
       this.#keepWithin(db);
       this.#tellAll();
     });
+  }
+
+  /// An account's database file opened and read as the core uses it (Watched), or why not.
+  #openFile(sub: string, name: string): Effect.Effect<Opened> {
+    return Effect.gen({ self: this }, function* () {
+      const opened = yield* Effect.result(this.#host.openDb!(name));
+      if (opened._tag === "Failure") return { db: null, sql: null, error: opened.failure };
+      const sql = opened.success;
+      try {
+        return { db: new AccountDb(sub, name, new Watched(sql, (error) => this.#sawDamage(name, error)), this.#runner, this.#derive), sql };
+      } catch (e) {
+        return { db: null, sql, error: sqlError(e) };
+      }
+    });
+  }
+
+  /// A damaged database made again: what this device did itself read from it as far as it can be, the file removed, a
+  /// new one made with that in it. The rest comes again from the stations and the cloud, as for a new sign-in; what the
+  /// device kept before the databases was brought into the damaged one already, and is not again.
+  #makeAgain(sub: string, name: string, damaged: Opened, why: string): Effect.Effect<Opened> {
+    return Effect.gen({ self: this }, function* () {
+      const kept = damaged.sql ? rescue(damaged.sql) : [];
+      try {
+        if (damaged.db) damaged.db.close();
+        else damaged.sql?.close();
+      } catch {
+        // Let go however it can be.
+      }
+      if (this.#host.deleteDb) {
+        const gone = yield* Effect.result(this.#host.deleteDb(name));
+        if (gone._tag === "Failure") return { db: null, sql: null, error: gone.failure };
+      }
+      const opened = yield* this.#openFile(sub, name);
+      if (opened.db === null) return opened;
+      const sql = opened.sql;
+      let rows = 0;
+      try {
+        sql.exec("BEGIN IMMEDIATE");
+        for (const [table, columns, found] of kept) {
+          const insert = `INSERT OR REPLACE INTO ${table} (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`;
+          for (const row of found) rows += sql.run(insert, row);
+        }
+        sql.run("INSERT OR REPLACE INTO meta (key, value) VALUES ('imported', ?)", ["made again"]);
+        sql.exec("COMMIT");
+      } catch {
+        try {
+          sql.exec("ROLLBACK");
+        } catch {
+          // Rolled back already.
+        }
+      }
+      // The mark goes, after any made as the damaged one was read here.
+      const marking = this.#damaged.get(name);
+      if (marking) yield* Effect.promise(() => marking);
+      this.#damaged.delete(name);
+      yield* Effect.ignore(this.#host.storageDelete(damagedKey(name)));
+      this.#report("LocalDbMadeAgain", `${why}; ${rows} rows of this device's kept`);
+      return opened;
+    });
+  }
+
+  /// A damaged database found as the core ran: marked (once) to be made again as it is next opened. The core that found
+  /// it waits for the mark before it ends (damageKept).
+  #sawDamage(name: string, error: SqlError): void {
+    if (this.#damaged.has(name)) return;
+    this.#damaged.set(name, this.#runner.run(Effect.ignore(this.#host.storageSet(damagedKey(name), toJsonBytes({ error: error.message })))));
+  }
+
+  /// Resolves once every damaged database found is marked so: what a core ending on a bug waits for (the hosts'
+  /// onDefect), as the read that found the damage is what ends it.
+  damageKept(): Promise<void> {
+    return Promise.all(this.#damaged.values()).then(() => undefined);
+  }
+
+  /// An error the core goes on after, to the host's error tracking (`name` is what it is grouped by).
+  #report(name: string, message: string): void {
+    this.#host.report?.(Object.assign(new Error(message), { name }));
   }
 
   #setNote(sub: string, note: DbNote | null): void {

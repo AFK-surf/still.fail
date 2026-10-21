@@ -366,7 +366,8 @@ export function start(dataDir: string, cloudOrigin: string, listener: Listener, 
   // Messages that arrive while the core starts wait, in order (as the Rust core's queue did).
   const ready = Core.create(host, { ...(options.hostWire ? { iroh: null, wire: () => new HostWire(host) } : { iroh: nodeIroh() }), account: options.account, modules: options.modules }).then((core) => {
     running = core;
-    core.inner.runner.onDefect = fatal;
+    // A database found damaged on the way is marked first: the core that follows makes it again (data.ts).
+    core.inner.runner.onDefect = (error) => void core.inner.data.damageKept().then(() => fatal(error));
     core.keepTime();
     return core;
   });

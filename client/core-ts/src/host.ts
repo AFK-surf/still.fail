@@ -58,10 +58,10 @@ export interface Sql {
 }
 
 /// What SQLite said went wrong: `full` (no room left: the disk or the browser's quota), `busy` (another process holds
-/// the database), or anything else.
+/// the database), `corrupt` (its file is damaged, or no database at all), or anything else.
 export class SqlError extends Error {
-  readonly kind: "full" | "busy" | "other";
-  constructor(message: string, kind: "full" | "busy" | "other") {
+  readonly kind: "full" | "busy" | "corrupt" | "other";
+  constructor(message: string, kind: "full" | "busy" | "corrupt" | "other") {
     super(message);
     this.kind = kind;
   }
@@ -75,6 +75,7 @@ export function sqlError(e: unknown): SqlError {
   const primary = code === null ? null : code & 0xff;
   if (primary === 13 || /SQLITE_FULL|database or disk is full|quota/i.test(message)) return new SqlError(message, "full");
   if (primary === 5 || primary === 6 || /SQLITE_BUSY|SQLITE_LOCKED|database is locked/i.test(message)) return new SqlError(message, "busy");
+  if (primary === 11 || primary === 26 || /SQLITE_CORRUPT|SQLITE_NOTADB|disk image is malformed|file is not a database/i.test(message)) return new SqlError(message, "corrupt");
   return new SqlError(message, "other");
 }
 
@@ -119,8 +120,12 @@ export interface Host {
   /// A database in memory, for an account whose file cannot be opened (another process holds it): kept this run only
   /// (undefined while the host cannot make one yet).
   memoryDb?(): Sql | undefined;
-  /// An account's database gone (it signed out).
+  /// An account's database gone (it signed out, or its file was damaged and is made again).
   deleteDb?(name: string): Effect.Effect<void, HostError>;
+  /// An error the core goes on after, told to the host's error tracking (the web's goes to its page's, docs/telemetry.md):
+  /// one that says why the device keeps less than it should (an account's database that cannot be opened, or was made
+  /// again). Its message names no one's content. A host without error tracking has none.
+  report?(error: Error): void;
   /// The former records store (before the databases per account), read once to bring what it kept over; left as it
   /// is, so an older core still finds it.
   legacyRead?(range: DbRange): Effect.Effect<[string, Uint8Array][], HostError>;
