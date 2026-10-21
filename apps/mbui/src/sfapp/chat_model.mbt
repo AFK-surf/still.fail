@@ -97,6 +97,8 @@ fn choices_of(v : Json?, key : String) -> Array[Choice]? {
 pub(all) struct Card {
   kind : String
   assignee_text : String?
+  /// who is to decide (their email), where someone is
+  assignee : String
   options : Array[Choice]?
   login : String
   station : String
@@ -278,6 +280,7 @@ fn message_of(m : Json) -> Message {
         Some({
           kind: text(c, "type"),
           assignee_text: opt_text(c, "assigneeText"),
+          assignee: text(c, "assignee"),
           options: choices_of(c, "options"),
           login: text(c, "login"),
           station: text(c, "station"),
@@ -393,6 +396,8 @@ pub(all) struct ChatView {
   asks : Array[Double]
   /// its station's update, as the bar says it (StationUpdateNotice)
   station_update : Json?
+  /// the viewer's email, as the chat knows them (`me`): whose a card is to decide
+  me : String
 }
 
 ///|
@@ -433,6 +438,7 @@ pub fn chat_view(v : Json) -> ChatView {
     archivable: flag(s, "archivable"),
     asks: items(s, "asks").map(fn(a) { number(Some(a), "seq") }),
     station_update: field(s, "stationUpdate"),
+    me: text(field(s, "me"), "email"),
     pending: flag(s, "pending"),
     key: text(s, "key"),
   }
