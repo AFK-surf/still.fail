@@ -19,6 +19,7 @@
 // every actor into <data>/run/handover.json; the runners keep the processes. A starting hub takes them up from that
 // file (`takeUp`), and from the runners a crashed station left (no snapshot), then `recover` resumes the turns marked
 // running that nothing took up.
+import { keyPart, sandboxed, sessionSync, syncChanged } from "../agents/sandbox.ts";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -915,6 +916,11 @@ export class Hub {
       spend: (key) => this.accounts.spend(key),
       refillsAt: (key) => this.accounts.refillsAt(key),
       mcpUrl: () => (typeof this.options.mcpUrl === "string" ? this.options.mcpUrl : this.options.mcpUrl()),
+      toSandbox: async (key) => {
+        const data = this.config().dataDir;
+        const row = this.store.getSession(key);
+        if (row && sandboxed(data)) await syncChanged(data, keyPart(key), sessionSync(data, row.workspace));
+      },
       reposDir: () => this.reposDir(),
       memoryPath: (key) => agentHomePaths(workspaceAgentHome(this.config().agentHome, this.wsOf(key), this.workspaces()[0] ?? null))[0],
       maxNudges: () => this.config().maxNudges,

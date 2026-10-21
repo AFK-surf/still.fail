@@ -11,14 +11,36 @@ deployment of [l4h-sandbox](https://github.com/AFK-surf/l4h-sandbox), reached ov
 `sandbox` in config.json, edited by the workspace's owners and admins with `PUT /admin/api/sandbox`:
 
 ```json
-{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts" } }
+{ "sandbox": { "ssh": "{name}.WORKSPACE@l4es.afk.surf", "identity": "/path/to/key", "knownHosts": "/path/to/known_hosts", "persist": "/mnt/sf/stations/NAME" } }
 ```
 
-`{name}` is the sandbox's name; `identity` a key linked to an account that is a member of the l4es workspace.
-`"enabled": false` switches it off and keeps the rest. Switching on is refused unless a sandbox sees the station's data
-directory at the same path (`checkReach` writes a file here and reads it there): the station's data directory must be
-on storage its sandboxes mount too, in practice an l4es managed NFS mount, with the station on a machine that mounts the
-same export at the same path (an l4es sandbox created with `create NAME --keep`, so it is not deleted when idle).
+`{name}` is the sandbox's name; `identity` a key linked to an account that is a member of the l4es workspace;
+`persist` a directory on storage the sandboxes keep (an l4es managed NFS mount), where the station's files there live,
+so that a session's outlive its sandbox (without it they are on each sandbox's own disk, gone when it is deleted).
+`"enabled": false` switches it off and keeps the rest. Switching on is refused unless a sandbox can be had and the
+station's data directory made there at its own path (`checkReach`).
+
+## No shared file system
+
+The station and its sandboxes share no file system. In each sandbox the station's data directory is made at the same
+path (a link into `persist`; sudo where its parent is not the sandbox user's), so paths mean the same on both sides, and
+the bridge copies files over its connection:
+
+| What | Which way | When |
+|---|---|---|
+| The runtime's home (settings, the station's instructions), without what the runtime makes as it runs and without its login | here → there | the process starts |
+| The station's agent home (MEMORY.md, skills) | both ways, newer wins | the process starts; back as the agent changes it |
+| Transcripts (Claude's `projects/`, Codex's `sessions/`) | there → here, what they gained | the process starts; as they grow |
+| What the station puts in a session's workspace (`uploads/`, `station-back/`, `.stillfail-instructions.md`), the jobs' `stillfail-job` | here → there | the process or job starts; before each input, when it changed |
+| A file the agent attaches (`chat_post` files and the like) | there → here | when it is attached |
+| A job's output and exit code | there → here | as it runs (the job's shell here runs the bridge) |
+
+Everything else of the workspace (checkouts, builds, what the agent writes) is the sandbox's alone. A subscription's
+login stays here: each process there is lent a short-lived token, as a subscription borrowed from another station is
+(Claude: `CLAUDE_CODE_OAUTH_TOKEN`; Codex: an auth.json without its refresh token, renewed under the running app-server).
+Newer is by modification time (whole seconds, kept when copied) for whole files and by size for transcripts. Links
+into the data directory are copied as links, others followed; a file over 64 MB, or more than 512 MB at a start, is
+left out.
 
 ## How a program gets there
 
@@ -53,7 +75,8 @@ exit files are unchanged: the bridge stands in for the program here.
 - The station's own machine is not looked after: if its sandbox goes, the station goes with it until it is started
   again. Its data is on NFS.
 
-Not sent: a job with a port (a web service, reached here through the station) and a task that uses the screen.
+Not sent: a job with a port (a web service, reached here through the station) and another station's task (its files are
+mirrored here, jobs/remote.ts).
 
 ## Sizes
 
@@ -65,8 +88,7 @@ the chat before asking for one.
 
 ## Other stations' tasks
 
-`station_task` jobs from other stations go through the same bridge, in a sandbox per source session. They do not wait
-in the station's queue (jobs/admit.ts), which measures this machine: l4es places the sandbox where a node has room.
+`station_task` jobs from other stations run on the station's own machine, as before: their files are mirrored here.
 
 ## Measured (2026-10-21, l4es, sandboxes of 2 vCPU and 4 GiB)
 
@@ -77,9 +99,16 @@ in the station's queue (jobs/admit.ts), which measures this machine: l4es places
 | A turn with an MCP call back to the station | 0.24 s |
 | A new exec on an existing sandbox, from a machine outside l4es | 2.0 s |
 
+Copying files (2026-10-21, the station on a VM in Tokyo, the sandbox in Los Angeles): a line a transcript gained there is
+here within about 1.5 s; bringing one attached file, or copying new uploads before an input, about 3 s (a connection of
+its own); nothing new to copy, no connection.
+
 ## Not yet
 
 - The setting has no page in the clients: it is config.json and the admin API.
+- The files page and `station_task`'s `dir` see the workspace as it is here: what the agent made in its sandbox is not
+  there.
+- Runtimes other than Claude Code and Codex get their home copied there, not their transcripts back.
 - Services (jobs with a port) and screen tasks stay on the station's machine.
 - The station's own machine has no recovery: a sandbox of the station's that goes takes the station with it until it
   is started again.

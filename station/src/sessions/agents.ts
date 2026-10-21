@@ -19,7 +19,7 @@ import { Jobs, notifyEndpoint } from "../jobs/jobs.ts";
 import { liveMemory } from "../jobs/memory.ts";
 import { Remote, followRoster } from "../jobs/remote.ts";
 import { ConfigFile } from "../ops/config.ts";
-import { placeIn, sandboxConfig } from "../agents/sandbox.ts";
+import { lentFile, placeIn, sandboxConfig, sandboxed } from "../agents/sandbox.ts";
 import type { Control } from "../ops/launcher.ts";
 import { log } from "../ops/log.ts";
 import { mcpPortFile, ownData, portsToTry, rememberedMcpPort } from "../ops/files.ts";
@@ -172,10 +172,16 @@ export const AgentsLive = (control: Control) =>
       // What other stations of the workspace share with this one, and what it shares (made below, once the accounts are).
       let sharing: Sharing | null = null;
       const borrowed = (p: unknown) => sharing?.borrowedSubscription(p) === true;
+      // In sandboxes a subscription's login stays here: each process there is lent a short-lived one, as a borrowed
+      // subscription's is (agents/sandbox.ts).
+      const lentToSandbox = (p: any) => !borrowed(p) && p?.access?.kind === "subscription" && sandboxed(data);
       const codex = new CodexDriver({
         data,
         currentProfile: (id) => settings().profiles.find((p) => p.id === id),
-        lent: { borrowed, write: (p) => sharing!.lendCodex(p) },
+        lent: {
+          borrowed: (p) => borrowed(p) || lentToSandbox(p),
+          write: (p) => (borrowed(p) ? sharing!.lendCodex(p) : sharing!.lendOwnCodex(p, lentFile(data, p.home))),
+        },
       });
       // What the parts of the agents' side add (slack/module.ts): the connects' chats, their overview, and what they do
       // as the station takes its sessions up and as its workspaces change, in the order the agents need.
@@ -195,7 +201,14 @@ export const AgentsLive = (control: Control) =>
           return undefined;
         },
         drivers: [
-          new ClaudeDriver({ data, machineToken: (env, rejected) => accounts.machineToken(env, rejected), lent: { borrowed, token: (p, rejected) => sharing!.lendClaude(p, rejected) } }),
+          new ClaudeDriver({
+            data,
+            machineToken: (env, rejected) => accounts.machineToken(env, rejected),
+            lent: {
+              borrowed: (p) => borrowed(p) || (lentToSandbox(p) && p.machine !== true),
+              token: (p, rejected) => (borrowed(p) ? sharing!.lendClaude(p, rejected) : accounts.claudeToken(p, rejected)),
+            },
+          }),
           codex,
           new DshDriver({ data }),
           new GrokDriver({ data }),
@@ -406,7 +419,8 @@ export const AgentsLive = (control: Control) =>
         agentHome: () => settings().agentHome,
         env: process.env as Record<string, string | undefined>,
         claudeToken: (p, rejected) => accounts.claudeToken(p, rejected),
-        codexRunning: (id) => codex.running(id),
+        // In sandboxes no Codex here holds the refresh token: it is renewed here whenever it runs out.
+        codexRunning: (id) => !sandboxed(data) && codex.running(id),
         status: (id) => { const h = accounts.health(id); return { check: h.check ?? null, quota: h.quota ?? null }; },
         changed: () => events.overviewChanged(),
         recheck: () => accounts.recheckBorrowed(),
@@ -542,7 +556,7 @@ export const AgentsLive = (control: Control) =>
         const opened = door!;
         jobs.setNotifyUrl(opened.url.replace(/\/mcp$/, "/jobs/notify"));
         // What it starts runs in sandboxes while config.json says so; their programs reach the door at its port there.
-        placeIn(data, () => sandboxConfig(config.raw()), () => [opened.port]);
+        placeIn(data, () => sandboxConfig(config.raw()), () => [opened.port], settings().agentHome);
         // Taken over and serving: the launcher's entrance comes here now (not before: launcher/src/lifecycle.rs).
         control.serving("mcp", opened.port);
         log.info("station", "agents' door open", { url: opened.url });
