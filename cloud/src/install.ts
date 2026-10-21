@@ -244,12 +244,14 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
   node_version=$(cat "$tmp/stillfail/NODE_VERSION")
   node_dir="$cur/node/v$node_version"
   if [ ! -x "$node_dir/bin/node" ]; then
-    rm -rf "$node_dir.part"
-    mkdir -p "$node_dir.part/bin"
+    # This install's own (the station's update and one asked for can run at once), not one of the v* the next one prunes.
+    part="$cur/node/.part-v$node_version.$$"
+    rm -rf "$part"
+    mkdir -p "$part/bin"
     own=$(command -v node 2>/dev/null || true)
     # With the signed hash of the Node binary (STILLFAIL_NODE_SHA256), the machine's own only when it is that very one.
     if [ -n "$own" ] && [ "$("$own" -v 2>/dev/null)" = "v$node_version" ] && { [ -z "\${STILLFAIL_NODE_SHA256:-}" ] || [ "$(sha256_of "$own")" = "$STILLFAIL_NODE_SHA256" ]; }; then
-      cp "$own" "$node_dir.part/bin/node"
+      cp "$own" "$part/bin/node"
     elif [ -n "\${STILLFAIL_NODE_SHA256:-}" ]; then
       node_file="node-v$node_version-$platform.tar.gz"
       echo "${say("cloud.install.node.download", { version: "${node_version}" })}"
@@ -257,9 +259,9 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
         echo "${say("cloud.install.node.failed", { version: "${node_version}", origin: "${origin}" })}" >&2
         exit 1
       fi
-      tar -xzf "$tmp/$node_file" -C "$node_dir.part"
-      if [ "$(sha256_of "$node_dir.part/bin/node")" != "$STILLFAIL_NODE_SHA256" ]; then
-        rm -rf "$node_dir.part"
+      tar -xzf "$tmp/$node_file" -C "$part"
+      if [ "$(sha256_of "$part/bin/node")" != "$STILLFAIL_NODE_SHA256" ]; then
+        rm -rf "$part"
         echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
         exit 1
       fi
@@ -276,10 +278,11 @@ if [ -f "$tmp/stillfail/NODE_VERSION" ]; then
         echo "${say("cloud.install.node.mismatch", { version: "${node_version}" })}" >&2
         exit 1
       fi
-      tar -xzf "$tmp/$node_file" -C "$node_dir.part"
+      tar -xzf "$tmp/$node_file" -C "$part"
     fi
-    "$node_dir.part/bin/node" -v >/dev/null 2>&1 || { echo "${say("cloud.install.node.broken", { version: "${node_version}" })}" >&2; exit 1; }
-    mv "$node_dir.part" "$node_dir"
+    "$part/bin/node" -v >/dev/null 2>&1 || { rm -rf "$part"; echo "${say("cloud.install.node.broken", { version: "${node_version}" })}" >&2; exit 1; }
+    # Another install may have put the same one there meanwhile: the first one stays.
+    if [ -x "$node_dir/bin/node" ]; then rm -rf "$part"; else rm -rf "$node_dir" && mv "$part" "$node_dir"; fi
   fi
   ln -s "$node_dir" "$tmp/stillfail/node"
 fi
