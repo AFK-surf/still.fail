@@ -63,7 +63,7 @@ export function useSidePanel(open: string[], shown: string | null) {
     }
   };
   const sliding = leaving && !(open.length && shown) ? "out" : opening ? "in" : null;
-  const slide = useRef<{ run: AnimationPlaybackControls; value: number } | null>(null);
+  const slide = useRef<{ run?: AnimationPlaybackControls; value: number } | null>(null);
   // The page's width as last laid out, told by an observer: the panel's width is worked out from it (as its styles
   // have it) rather than read off the panel just made, which laid the whole page out in the middle of the commit and
   // again for the frame.
@@ -89,7 +89,7 @@ export function useSidePanel(open: string[], shown: string | null) {
     }
     if (!page || !el) return;
     const was = slide.current;
-    was?.run.stop();
+    was?.run?.stop();
     const narrow = matchMedia("(max-width: 1100px)").matches;
     // Its width at rest, without what the motion holds.
     page.style.removeProperty("grid-template-columns");
@@ -105,9 +105,14 @@ export function useSidePanel(open: string[], shown: string | null) {
       else page.style.gridTemplateColumns = `minmax(0, 1fr) ${v}px`;
     };
     draw(start);
-    const now = { value: start, run: animate(start, goal, {
+    // With reduced motion, motion calls its last update after its end: drawn then, the motion's width stayed on the
+    // page for good (the chat crushed beside a panel as wide as it was when opened, once the window or the sidebar
+    // left less room). Updates count only while it is the current one, known as such before it starts.
+    const now: { value: number; run?: AnimationPlaybackControls } = { value: start };
+    slide.current = now;
+    now.run = animate(start, goal, {
       duration: sliding === "in" ? 0.28 : 0.24, ease: EASE_OUT,
-      onUpdate: (v) => { now.value = v; draw(v); },
+      onUpdate: (v) => { if (slide.current !== now) return; now.value = v; draw(v); },
       onComplete: () => {
         if (slide.current !== now) return;
         slide.current = null;
@@ -117,8 +122,7 @@ export function useSidePanel(open: string[], shown: string | null) {
         el.style.removeProperty("transform");
         setOpening(false);
       },
-    }) };
-    slide.current = now;
+    });
   }, [sliding]);
   const side = open.length && shown ? { tabs: open, shown } : leaving;
   return { pageRef, panelRef, leaving, side, changing };
