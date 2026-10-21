@@ -4,7 +4,10 @@
 // session's steps, a job's log, host samples) has none, and moves nothing here.
 //
 // The id is written down with what its events changed (`toKeep`), so a core started again goes on from it too
-// (`restored`), as long as what it wrote down is still held.
+// (`restored`), as long as what it wrote down is still held. Not while the station is being read afresh (`reading`):
+// the station tells a stream that is not resumed nothing of what came before it, so what the device holds stands on the
+// id only once that reading is done; a core started again before then (a phone letting the app's process go while a
+// slow link reads the lists) would go on from the id and never read what the lists missed.
 
 type At = { run: string; n: number };
 
@@ -19,6 +22,9 @@ export class Cursor {
   #kept: At | null = null;
   /// Whether where it is was written down by a core before this one, and no stream has opened since.
   restored = false;
+  /// Readings of the station afresh not done yet; whether one could not read all of it.
+  #reading = 0;
+  #unread = false;
 
   /// `kept`: the id a core before this one wrote down, where what it wrote down with it is still held.
   constructor(kept: string | null = null) {
@@ -40,10 +46,28 @@ export class Cursor {
     return this.#at === null ? null : `${this.#at.run}.${this.#at.n}`;
   }
 
-  /// The id to write down now, with what its events changed: null when it is as last written.
+  /// The id to write down now, with what its events changed: null when it is as last written, or not to be yet.
   toKeep(): string | null {
-    if (this.#at === null || this.#at === this.#kept) return null;
+    if (this.#reading > 0 || this.#unread || this.#at === null || this.#at === this.#kept) return null;
     this.#kept = this.#at;
     return this.since;
+  }
+
+  /// The station is read afresh: nothing is written down until it is (`read`), and what was is to be forgotten.
+  reading(): void {
+    this.#reading++;
+    this.#unread = false;
+    this.#kept = null;
+  }
+
+  /// A reading of the station could not read all of it: nothing is written down until another reads it all.
+  unread(): void {
+    this.#unread = true;
+  }
+
+  /// A reading of the station is done: the id to write down now, once none is still reading and all was read.
+  read(): string | null {
+    this.#reading = Math.max(this.#reading - 1, 0);
+    return this.toKeep();
   }
 }

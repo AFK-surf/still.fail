@@ -310,7 +310,7 @@ test("a_socket_that_answered_pings_and_went_silent_is_opened_again", async () =>
   await host.settle();
   const opened = host.sockets.length;
   assert.equal(host.openSockets("/v1/events"), 1);
-  await host.time.pass(SOCKET_IDLE_MS * 2, 500);
+  await host.time.pass(SOCKET_IDLE_MS / 2, 500);
   assert.equal(host.sockets.length, opened);
   host.socketSend("/v1/events", "pong");
   await host.time.pass(SOCKET_IDLE_MS / 2, 500);

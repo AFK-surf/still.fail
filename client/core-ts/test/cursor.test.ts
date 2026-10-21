@@ -32,3 +32,23 @@ test("a_cursor_goes_on_from_what_a_core_before_wrote_down", () => {
   assert.equal(new Cursor(null).restored, false);
   assert.equal(new Cursor("gibberish").since, null);
 });
+
+test("a_cursor_is_not_written_down_while_its_station_is_read_afresh", () => {
+  const c = new Cursor("1f2e3d4c.9");
+  c.reading();
+  c.heard("1f2e3d4c.12");
+  assert.equal(c.toKeep(), null, "not while read");
+  assert.equal(c.since, "1f2e3d4c.12", "the stream goes on from it all the same");
+  // Two readings at once: written once both are done.
+  c.reading();
+  assert.equal(c.read(), null);
+  assert.equal(c.read(), "1f2e3d4c.12", "forgotten as the reading began: written again, though it moved nothing");
+  // One that could not read all of it: nothing until another reads it all.
+  c.reading();
+  c.unread();
+  c.heard("1f2e3d4c.13");
+  assert.equal(c.read(), null);
+  assert.equal(c.toKeep(), null);
+  c.reading();
+  assert.equal(c.read(), "1f2e3d4c.13");
+});
