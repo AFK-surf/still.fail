@@ -12,8 +12,8 @@ runs:
       with:
         path: ~/.moon-ci
         # (no key is this one: the newest of this prefix, the latest release the moonbit workflow put in)
-        key: moonbit-${{ runner.os }}-${{ runner.arch }}-none
-        restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-
+        key: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-none
+        restore-keys: moonbit-${{ runner.os }}-${{ runner.arch }}-${{ runner.environment }}-
     - shell: bash
       run: |
         m=$(cd ~ && pwd)/.moon-ci

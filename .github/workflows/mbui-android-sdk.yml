@@ -20,9 +20,6 @@ on:
 
 jobs:
   put:
-    defaults:
-      run:
-        working-directory: apps/mbui/mbui
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +43,6 @@ jobs:
           curl -fsSL --retry 3 -o emu.zip https://dl.google.com/android/repository/emulator-linux_x64-16428233.zip
           unzip -q emu.zip && rm emu.zip
           grep -a '^Pkg.Revision' emulator/source.properties
-        working-directory: ${{ github.workspace }}
       - if: steps.emu.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
@@ -63,7 +59,6 @@ jobs:
           echo "key=android-image-34-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
           echo "rev=$rev" >> "$GITHUB_OUTPUT"
           echo "revision $rev"
-        working-directory: ${{ github.workspace }}
       - uses: actions/cache/restore@v4
         id: img
         with:
@@ -84,7 +79,6 @@ jobs:
           echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force -n ci-${{ matrix.target }}-${{ matrix.profile }} \
             --package "system-images;android-34;${{ matrix.target }};x86_64" --device ${{ matrix.profile }}
           ls "$ANDROID_AVD_HOME"
-        working-directory: ${{ github.workspace }}
       - uses: actions/cache/restore@v4
         id: avd
         with:
