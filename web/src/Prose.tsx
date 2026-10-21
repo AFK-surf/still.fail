@@ -44,7 +44,7 @@ export function Code({ text, language, ink }: { text: string; language?: string 
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
-      <pre><code>{colours ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
+      <pre className={css.codePre}><code>{colours ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
     </div>
   );
 }

@@ -67,7 +67,10 @@ export const tableScroll = style({
 globalStyle(`${tableScroll}:last-child`, { marginBottom: "0" });
 globalStyle(`${tableScroll} > table`, { margin: "0" });
 globalStyle(`${tableScroll} th, ${tableScroll} td`, { overflowWrap: "normal", minWidth: "4em" });
-globalStyle(`${markdown} ${codeBlock} pre`, {
+/** A code block's code: square in its block's frame, on its ground, wherever the words around it frame their own `pre`
+ * (the reader's page). */
+export const codePre = style({});
+globalStyle(`${markdown} ${codeBlock} ${codePre}`, {
   margin: "0", padding: "10px 12px", borderRadius: "0", background: "none", fontSize: vars.textMeta, lineHeight: "1.55",
 });
 /** Code's colours by what each piece is (the letters of the core's `ink`, client/core-ts/src/highlight.ts SCOPES):
@@ -96,4 +99,4 @@ export const ink = styleVariants(INK, ([light, dark]) => ({
   selectors: { ':root[data-theme="dark"] &': { color: dark } },
   "@media": { "(prefers-color-scheme: dark)": { selectors: { ':root:not([data-theme="light"]) &': { color: dark } } } },
 }));
-globalStyle(`${markdown} ${codeBlock} pre`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });
+globalStyle(`${markdown} ${codeBlock} ${codePre}`, { padding: "12px 14px", fontSize: vars.textMeta, lineHeight: "1.6" });
