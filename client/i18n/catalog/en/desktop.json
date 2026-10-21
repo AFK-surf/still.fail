@@ -75,6 +75,7 @@
   "desktop.local.noService": "No separately installed station on this machine",
   "desktop.local.byHand": "This station was started manually and can only be stopped here",
   "desktop.notify.allowed": "Notifications are on",
+  "desktop.tray.open": "Open {app}",
   "desktop.update.available": "{version} is available",
   "desktop.update.availableDetail": "You have {current}. Updating downloads the new version and restarts {app}.",
   "desktop.update.availableWebDetail": "You have {current}. The new web app is downloaded. Reload the windows to use it; {app} doesn't need to restart.",

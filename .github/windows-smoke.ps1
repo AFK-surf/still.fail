@@ -19,6 +19,8 @@ $exe = Get-ChildItem (Join-Path $env:LOCALAPPDATA "Programs") -Recurse -Filter "
 if (-not $exe) { throw "the app is not where the installer puts it" }
 Write-Host "installed: $($exe.FullName)"
 $resources = Join-Path $exe.DirectoryName "resources"
+# The tray's icon (main.ts trayIcon), the app's own.
+if (-not (Test-Path (Join-Path $resources "tray.png"))) { throw "the tray's icon is not in the app" }
 
 # A script in the app's Electron as Node, waited for (the app is a GUI program: PowerShell neither waits for it nor
 # gets its exit code otherwise), its output shown.
@@ -73,5 +75,21 @@ $windows = Get-Process | Where-Object { $_.Path -eq $exe.FullName -and $_.MainWi
 Write-Host "windows: $($windows -join ' | ')"
 if ($app.HasExited) { throw "the app exited ($($app.ExitCode))" }
 if (-not $windows) { throw "the app shows no window" }
+
+# Its window closed (WM_CLOSE, as its close button does) goes to the tray: the app still runs, with no window shown;
+# started again (a second instance), it shows the window again.
+function Shown { @(Get-Process | Where-Object { $_.Path -eq $exe.FullName -and $_.MainWindowTitle }) }
+function Until([scriptblock] $done, [string] $what) {
+  $deadline = (Get-Date).AddSeconds(15)
+  while (-not (& $done)) { if ((Get-Date) -gt $deadline) { throw $what }; Start-Sleep -Milliseconds 250 }
+}
+Shown | ForEach-Object { [void]$_.CloseMainWindow() }
+Until { -not (Shown) } "the window did not go when closed"
+Start-Sleep -Seconds 2
+if ($app.HasExited) { throw "closing the window quit the app ($($app.ExitCode))" }
+Write-Host "closed: in the tray, still running"
+Start-Process $exe.FullName | Out-Null
+Until { Shown } "started again, the app did not show its window"
+Write-Host "started again: window back ($((Shown | ForEach-Object { $_.MainWindowTitle }) -join ' | '))"
 Get-Process | Where-Object { $_.Path -eq $exe.FullName } | Stop-Process -Force
 Write-Host "ok"
