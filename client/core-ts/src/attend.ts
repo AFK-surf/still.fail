@@ -62,7 +62,7 @@ type Visit = {
   started: Set<string>;
 };
 
-/// What a chat's value asks of the core once computed: a read position recorded.
+/// What a chat's value asks of the core once computed: a read position recorded (its end shown on a page in front).
 export type Due = { read: { thread: number; seq: number } };
 
 export class Attend {
@@ -268,8 +268,10 @@ export class Attend {
     }
     if (started.length > 0) out.agents = agents.map((a) => (started.includes(a) ? { ...a, started: true } : a));
     out.unreadLine = unreadLine(visit.read, visit.at);
+    // Read only on a page in front (shown and focused): a window left open on the chat behind others, or on another
+    // screen, is not being looked at.
     const short = value.newer === true;
-    if (!short && shown.some((f) => f.visible && f.chat?.end === true) && newest > known) {
+    if (!short && shown.some((f) => f.visible && f.focused && f.chat?.end === true) && newest > known) {
       const sent = this.#reads.get(key) ?? 0;
       if (sent < newest) {
         this.#reads.set(key, newest);
