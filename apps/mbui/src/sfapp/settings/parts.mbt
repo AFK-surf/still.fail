@@ -169,6 +169,7 @@ fn nav_bar(
   title : String,
   sub? : () -> Unit,
   trailing? : () -> Unit,
+  on_back? : () -> Unit,
 ) -> Unit {
   if wide.val {
     ignore(sub)
@@ -179,7 +180,10 @@ fn nav_bar(
     return
   }
   if @sf.nav_bar(c, "settings-back", back, title, sub?=sub, trailing?=trailing, bg=@sf.theme().p.bg) {
-    (core.pop)()
+    match on_back {
+      Some(f) => f()
+      None => (core.pop)()
+    }
   }
 }
 
