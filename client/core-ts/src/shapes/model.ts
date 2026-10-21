@@ -138,15 +138,28 @@ function namedOf(base: string): string | null {
     out.push(...rest);
     return out.join(" ");
   }
-  const dashed = first === "gpt" ? "GPT" : first === "glm" ? "GLM" : null;
-  if (dashed !== null && words[1] !== undefined) {
-    return [`${dashed}-${words[1]}`, ...words.slice(2).map(word)].join(" ");
+  const parts = joined(words);
+  const dashed = first === "gpt" ? "GPT" : first === "glm" ? "GLM" : first === "swe" ? "SWE" : null;
+  if (dashed !== null && parts[1] !== undefined) {
+    return [`${dashed}-${parts[1]}`, ...parts.slice(2).map(word)].join(" ");
   }
   const o = oSeries(first);
-  const known = ["gpt", "glm", "codex", "deepseek", "qwen", "qwq", "gemini", "gemma", "kimi", "moonshot", "minimax", "grok", "mistral", "devstral", "codestral", "llama", "doubao", "hunyuan", "ernie"];
+  const known = ["gpt", "glm", "codex", "deepseek", "qwen", "qwq", "gemini", "gemma", "kimi", "moonshot", "minimax", "grok", "mistral", "devstral", "codestral", "llama", "doubao", "hunyuan", "ernie", "nemotron", "muse", "adaptive"];
   const fam = first.replace(/[0-9.]+$/, "");
   if (!o && !known.includes(fam)) return null;
-  return words.map((w, i) => (i === 0 && o ? w : word(w))).join(" ");
+  return parts.map((w, i) => (i === 0 && o ? w : word(w))).join(" ");
+}
+
+/// A version spelled in parts joined again (gpt-5-6 is GPT-5.6, kimi-k2-6 Kimi K2.6): a part of one or two digits after
+/// one that ends in a digit, not a longer one (deepseek-r1-0528 is a date).
+function joined(words: string[]): string[] {
+  const out: string[] = [];
+  for (const w of words) {
+    const last = out[out.length - 1];
+    if (last !== undefined && /[0-9]$/.test(last) && /^[0-9]{1,2}$/.test(w)) out[out.length - 1] = `${last}.${w}`;
+    else out.push(w);
+  }
+  return out;
 }
 
 const BRANDS: Record<string, string> = {

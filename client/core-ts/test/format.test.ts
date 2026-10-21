@@ -102,6 +102,9 @@ test("models_read_as_people_call_them", () => {
     ["gpt-4o-mini", "GPT-4o Mini"], ["o3", "o3"], ["o4-mini", "o4 Mini"], ["deepseek-v4-pro", "DeepSeek V4 Pro"], ["deepseek-flash", "DeepSeek Flash"],
     ["qwen3-coder-plus", "Qwen3 Coder Plus"], ["glm-4.6", "GLM-4.6"], ["kimi-k2", "Kimi K2"], ["gemini-2.5-pro", "Gemini 2.5 Pro"], ["grok-4", "Grok 4"],
     ["minimax-m2", "MiniMax M2"], ["something-else", "something-else"], ["my-proxy/Custom-Model", "my-proxy/Custom-Model"],
+    // Devin spells versions in parts.
+    ["gpt-6-1-sol", "GPT-6.1 Sol"], ["gpt-5-6-luna", "GPT-5.6 Luna"], ["glm-5-3", "GLM-5.3"], ["gemini-3-8-flash", "Gemini 3.8 Flash"], ["kimi-k2-6", "Kimi K2.6"],
+    ["deepseek-v4-1-flash-1017", "DeepSeek V4.1 Flash 1017"], ["deepseek-r1-0528", "DeepSeek R1 0528"], ["swe-2", "SWE-2"], ["swe-1-7", "SWE-1.7"], ["adaptive", "Adaptive"],
   ]) assert.equal(name(id), want, id);
 });
 
