@@ -76,6 +76,15 @@ jobs:
           restore-keys: |
             mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-${{ hashFiles('client/Cargo.lock') }}-
             mbui-ios-cargo-${{ steps.keys.outputs.rustc }}-
+      # The Rust shell's .a for the simulator (and its link line), by what it is made of: core.sh builds it only when
+      # missing, and without it each run ran `cargo rustc` again, 44-51 s on the 3-core runner with the target cached
+      # (the crate itself relinked; 2026-10-21)
+      - uses: actions/cache@v4
+        with:
+          path: |
+            apps/mbui/out/core/aarch64-apple-ios-sim/libstillfail_shell.a
+            apps/mbui/out/core/shell-aarch64-apple-ios-sim.libs
+          key: mbui-ios-shell-${{ steps.keys.outputs.rustc }}-${{ hashFiles('client/**/*.rs', 'client/**/Cargo.toml', 'client/Cargo.lock', 'client/shell/**', 'vendor/**', 'apps/mbui/scripts/core.sh') }}
       - uses: actions/cache/restore@v4
         id: build
         with:
