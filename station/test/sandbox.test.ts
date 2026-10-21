@@ -9,7 +9,7 @@ import type { AddressInfo } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { after, describe, test } from "node:test";
-import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, fetchFiles, keyPart, sessionSync, syncChanged, syncFor, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
+import { BRIDGE, CONNECTION_LOST, LOST_EXIT, checkSandbox, fetchFiles, keyPart, sessionSync, stationPath, syncChanged, syncFor, inSandbox, keyOfRunner, placeIn, sandboxConfig, sandboxName, sshArgs } from "../src/agents/sandbox.ts";
 import { runnerId } from "../src/agents/process.ts";
 import { ClaudeDriver } from "../src/agents/claude.ts";
 import { CodexDriver } from "../src/agents/codex.ts";
@@ -428,6 +428,25 @@ describe("Codex", () => {
     await one.dispose();
     await until("its app-server ends", () => !alive(pid));
     assert.ok(alive(started()[1].pid), "the other session's goes on");
+  });
+});
+
+describe("paths in a sandbox with persist", () => {
+  test("its data directory is a link into persist there, a shell there says the station's path, and a path under persist is the station's", async () => {
+    const dir = tempdir();
+    const data = join(dir, "data");
+    mkdirSync(join(data, "sessions", "s", "workspace"), { recursive: true });
+    const cwd = join(data, "sessions", "s", "workspace");
+    const ran = await bridge({ ssh: [fakeSsh(dir), "s-x.ws@host"], program: "/bin/sh", args: ["-c", "pwd; pwd -P"], cwd, ports: [], root: { path: data, persist: "/mnt/sf/st" }, dirs: [], sync: [] }, "");
+    assert.equal(ran.code, 0, ran.err);
+    const [logical, physical] = ran.out.trim().split("\n");
+    assert.ok(logical!.endsWith(`/fs${cwd}`), logical);
+    assert.ok(physical!.includes("/fs/mnt/sf/st/sessions/s/workspace"), physical);
+    cleanups.push(placeIn(data, () => sandboxConfig({ sandbox: { ssh: "{name}.ws@host", persist: "/mnt/sf/st/" } }), () => []));
+    assert.equal(stationPath(data, "/mnt/sf/st/sessions/s/workspace/a.png"), join(cwd, "a.png"));
+    assert.equal(stationPath(data, "/mnt/sf/st"), data);
+    assert.equal(stationPath(data, "/mnt/sf/stx/a"), "/mnt/sf/stx/a");
+    assert.equal(stationPath(data, join(cwd, "a.png")), join(cwd, "a.png"));
   });
 });
 
