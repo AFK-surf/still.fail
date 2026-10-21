@@ -36,22 +36,25 @@ jobs:
   screens:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 10
     env:
       MBUI_FRESH: 1
     steps:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
-      # Android's pictures taken anew: its app or the screens changed since main (on main: in the push), or the emulator
-      # they are taken on (this workflow's lines naming it, the emulator action's); not where pictures taken over all of
+      # Android's pictures taken anew: the screens changed since main (on main: in the push, or Android's app), or the
+      # emulator they are taken on (this workflow's lines naming it, the emulator action's); not where pictures taken over all of
       # that as it is now came out the same as those kept (`key`: Android's code, the screens and their pictures kept,
       # the emulator; a run whose take matched keeps a mark of it)
       - id: changed
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then base=${{ github.event.before }}; else base=$(git merge-base origin/main HEAD); fi
-          # (allowed.json the mbui app's, not Android's)
+          # (allowed.json the mbui app's, not Android's; Android's app changed: its pictures taken on main, after the
+          # merge, not in each of its pull requests, which seldom touch these screens: a change there fails main's run,
+          # saying to commit them)
+          if [ "$GITHUB_EVENT_NAME" = push ]; then whose='^(apps/android/|client/fixtures/screens/)'; else whose='^client/fixtures/screens/'; fi
           if git diff --name-only "$base" HEAD | grep -v -x client/fixtures/screens/allowed.json \
-              | grep -qE '^(apps/android/|client/fixtures/screens/)' \
+              | grep -qE "$whose" \
             || git diff -U0 "$base" HEAD -- .github/workflows/mbui-android-ref.yml \
               | grep -qE '^[-+] .*(mbui-android-emulator|with: [{] api:)'; then
             echo "refs=1" >> "$GITHUB_OUTPUT"; else echo "refs=0" >> "$GITHUB_OUTPUT"; fi
@@ -130,6 +133,24 @@ jobs:
         if: steps.emu.outputs.on == '1'
         working-directory: apps/mbui/mbui
         run: ABI=x86_64 APP=render MBUI_ANDROID_HOOK=$PWD/scripts/render_android_hook.sh bash scripts/android.sh build
+      # Android's build directories as pipeline's check-android left them (this branch's, else main's; read only, that
+      # job keeps them): what did not change is up to date (from nothing, Gradle took 176-222 s of this job)
+      - uses: actions/cache/restore@v4
+        if: steps.what.outputs.refs == '1'
+        with:
+          path: |
+            apps/android/.gradle
+            apps/android/build
+            apps/android/app/build
+            apps/android/core/build
+            apps/android/shared/build
+            apps/android/settings/build
+            apps/android/chat/build
+            apps/android/drive/build
+          key: android-build-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            android-build-${{ github.ref_name }}-
+            android-build-main-
       - name: Android's app and its tests (ScreensRefTest)
         if: steps.what.outputs.refs == '1'
         env:
