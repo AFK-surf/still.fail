@@ -960,7 +960,7 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   if cost == "" && cache is None && context is None && entry is None {
     return
   }
-  let tile = fn(figure : String, name : String, color : Int64, open? : ContextTile? = None) {
+  let tile = fn(figure : String, name : String, color : Int64, open : ContextTile?) {
     // its context's, when something can be done to it (context.mbt): a tap opens it
     let id = if open is Some(_) { c.id("agent/context-tile") } else { 0 }
     c.box(
@@ -995,16 +995,16 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
   }
   c.box(dir=Row, w=Fill(1.0), pt=top, gap=8.0, fn() {
     if cost != "" {
-      tile(cost, tr("android-chat.agent.cost"), t.p.text)
+      tile(cost, tr("android-chat.agent.cost"), t.p.text, None)
     }
     if cache is Some(Object(_)) {
-      tile(text(cache, "text"), tr("android-chat.agent.cache"), t.p.text)
+      tile(text(cache, "text"), tr("android-chat.agent.cache"), t.p.text, None)
     }
     let name = context_tile_label(entry, text(context, "level"))
     match context {
       Some(Object(_)) =>
         if flag(context, "unknown") {
-          tile(text(context, "text"), name, t.p.text, open=entry)
+          tile(text(context, "text"), name, t.p.text, entry)
         } else {
           tile(
             "\{number(context, "percent").round().to_int()}%",
@@ -1014,11 +1014,11 @@ fn agent_tiles(c : @ui.Ctx, card : Json?, top : Double, entry? : ContextTile? = 
               "amber" => 0xD9962BFFL
               _ => t.p.text
             },
-            open=entry,
+            entry,
           )
         }
       // not said yet: a dash, its entry all the same
-      _ => if entry is Some(_) { tile("—", name, t.p.text, open=entry) }
+      _ => if entry is Some(_) { tile("—", name, t.p.text, entry) }
     }
   })
   |> ignore
