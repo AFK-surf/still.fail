@@ -224,6 +224,10 @@ if part ts; then
   if touches '^design/(station-)?icons/|^scripts/icons\.py$|^web/ui/src/icons\.tsx$|/ui/Icons\.kt$'; then
     step icons python3 scripts/icons.py --check
   fi
+  # Every CI job may take 10 minutes at most, and says so (timeout-minutes).
+  if touches '^\.github/workflows/|^scripts/ci-timeouts\.py$'; then
+    step "CI jobs: 10 minutes at most" python3 scripts/ci-timeouts.py
+  fi
   # The UIs never make a request of a station or still.fail cloud themselves: they name what they want done
   # (client/core-ts/src/ops.ts), and the core, which knows what it changes, brings every topic that shows it up to date.
   # The phone's corners are Smooth (ui/Corners.kt: the web's superellipse), not RoundedCornerShape, in what a change adds

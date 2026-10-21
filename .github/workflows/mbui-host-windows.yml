@@ -33,7 +33,7 @@ on:
 jobs:
   contracts:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mbui/mbui
