@@ -92,6 +92,9 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
         Script.frameDrawn();
         if (shotTaken) return;
         shotFrames++;
+        // (the run's way to its moment said every half second of its clock: a machine drawing slowly, the emulator's
+        // software renderer on a runner's CPU, is told from one that stopped by these, not by how long it took)
+        if (shotFrames % 30 == 0) Host.log("shot: frame " + shotFrames + " at " + t);
         if (Native.awaiting() > 0) {
             // the clock stands still; the host's answer asks for the next frame
             return;
