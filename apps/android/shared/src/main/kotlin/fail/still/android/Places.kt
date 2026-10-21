@@ -82,9 +82,9 @@ fun placeLabel(place: String): String = t("android-misc.bar.place.$place")
 
 /**
  * What a page is to the bar: not a place's top (`None`); a place's top with the bar under it (`Bar`: no back, room at
- * its foot for the bar); a place's top on a wide screen, which has no bar (`Wide`: its back goes to the chats).
+ * its foot for the bar), on any screen.
  */
-enum class PlaceRoot { None, Bar, Wide }
+enum class PlaceRoot { None, Bar }
 
 val LocalPlaceRoot = compositionLocalOf { PlaceRoot.None }
 

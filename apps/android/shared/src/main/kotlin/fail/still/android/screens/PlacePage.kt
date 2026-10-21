@@ -127,11 +127,10 @@ fun PlacePage(
         }
         return
     }
-    // Pushed, or the top of a place on a wide screen (no bar there: back goes to the chats).
-    val wide = root == PlaceRoot.Wide
+    // Pushed: back to the page under it.
     Column(Modifier.fillMaxSize()) {
         NavBar(
-            if (wide) placeLabel("chats") else underLabel(back), { if (wide) app.place(Screen.Home) else app.pop() }, title,
+            underLabel(back), { app.pop() }, title,
             trailing = if (actions == null && primary == null) null else ({
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     actions?.invoke(this)

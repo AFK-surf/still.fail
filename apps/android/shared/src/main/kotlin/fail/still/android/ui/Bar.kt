@@ -719,7 +719,9 @@ fun BottomBar(
     if (shown && m.mode) Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitEachGesture { awaitFirstDown(); m.openPanel(false) } })
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // 22 in from either side, as from the foot: the ball (6 past the bar) as far from the screen's sides as from its foot.
-        val w = maxWidth.value - 44f
+        // On a wide screen (an opened foldable, a phone on its side: screens/Wide.kt WideAt) as wide as a phone's, in the
+        // middle (web mobile/Bar.css.ts mBarHost the same).
+        val w = if (maxWidth >= 680.dp) 390f else maxWidth.value - 44f
         // A bar being chosen with a place in it: the notch already as that place will have it (no action coming up only to go).
         val landsOn = m.swap?.key?.let(notches)
         val g = Geo(w, sets, cur, active, landsOn ?: (action != null))

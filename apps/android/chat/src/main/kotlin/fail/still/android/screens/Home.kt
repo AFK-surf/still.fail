@@ -169,7 +169,7 @@ fun HomeScreen(current: WorkspaceEntry) {
     // list's top is not drawn under the bar until it has been measured (which a busy start can take a while to do).
     val statusTop = WindowInsets.statusBars.getTop(density)
     var topBar by rememberSaveable { mutableIntStateOf(statusTop + with(density) { 50.dp.roundToPx() }) }
-    // At the foot, room for the bottom bar (App.kt Pages: none on a wide screen, whose corners have 奏 and 令).
+    // At the foot, room for the bottom bar (App.kt Pages).
     val room = fail.still.android.LocalBarRoom.current
     val foot = if (room > 0.dp) with(density) { WindowInsets.navigationBars.getBottom(density).toDp() } + room else 8.dp
     val padding = with(density) { PaddingValues(top = topBar.toDp() + 8.dp, bottom = foot) }
@@ -725,32 +725,4 @@ private fun LastMessage(item: ChatItem) {
             androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
         )),
     )
-}
-
-/** How many decisions wait for the viewer in the workspace (the core's marks: the home page's 奏 N); 0 from a core before them. */
-@Composable
-internal fun decisionsWaiting(current: WorkspaceEntry): Int {
-    val app = LocalApp.current
-    val marks by rememberTopic<WorkspaceMarksView>(app.core, Topics.workspaceMarks(current.workspace.id))
-    return marks.value?.workspaces?.get(current.workspace.id)?.decisions?.toInt() ?: 0
-}
-
-/** 奏 N: the decisions page's way in, there at 0 too (奏 alone then, a disc), a capsule of the new-chat button's glass (`ground`) beside it, as tall. */
-@Composable
-internal fun DecisionsCapsule(n: Int, ground: Modifier) {
-    val app = LocalApp.current
-    val button = ground.height(56.dp).clickable { app.push(Screen.Decisions) }
-        .semantics(mergeDescendants = true) { contentDescription = t("android-chat.home.decisions", "n" to n) }
-    if (n == 0) {
-        Box(button.width(56.dp), contentAlignment = Alignment.Center) { IconIn(Icons.Zou, 40.dp, C.ink) }
-        return
-    }
-    Row(
-        button.padding(start = 10.dp, end = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        IconIn(Icons.Zou, 40.dp, C.ink)
-        // How many, drawn (design/icons num-*): 1 to 9, and + past that.
-        IconIn(if (n in 1..9) listOf(Icons.Num1, Icons.Num2, Icons.Num3, Icons.Num4, Icons.Num5, Icons.Num6, Icons.Num7, Icons.Num8, Icons.Num9)[n - 1] else Icons.NumMore, 24.dp, C.ink)
-    }
 }
