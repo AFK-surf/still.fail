@@ -5,6 +5,10 @@
 // counts once its owner's device signed it and a box key once its device did, both checked against the workspace's
 // lock, itself checked entry by entry here (vault/lock-check.ts).
 //
+// Every station of the workspace keeps a copy of each vault (its ciphertext and signatures), so that an agent on any of
+// them may ask for its secrets: a vault is written on the station it was made on (`at`, its host), and the latest
+// version held anywhere is brought to each station that lacks it (`spread`, `?copy=1`), as it is read or written here.
+//
 // Topics:
 //   vaults {workspace}            the vaults this person is in, whether this device is set up, requests to approve
 //   vaultItems {workspace, vault} a vault's items: names once it is unlocked (the listed ones' always)
@@ -68,11 +72,17 @@ const GRANT_SECS: Record<Scope, number> = { once: 3600, hour: 3600, chat: 86400 
 /// stations that hold no vault (a code: `vault_needs_lock`, `http_404` for one from before).
 type Held = {
   vaults: Record<string, Vault>; at: Record<string, string>; boxes: Record<string, BoxCert>; requests: Record<string, Request>; asked: Record<string, string>; refused: Record<string, string>;
+  /// What each station holds of each vault (by vault, then station): its version and its items' (by id); the stations
+  /// that answered what vaults they hold (those a copy may be brought to).
+  on: Record<string, Record<string, Holding>>; keeps: string[];
   /// The plain library's items by id (without their fields) and the station each is on; the stations that keep one.
   plain: Record<string, PlainRow>; plainOn: string[];
   /// The uses of each vault's items (`<station>/<vault>`), as the station keeping it said them, the latest first.
   uses: Record<string, Use[]>;
 };
+
+/// A vault's version a station holds, and its items' versions.
+type Holding = { seq: number; items: Record<string, number> };
 
 /// An item of the plain library as a station lists it (vault/plain.ts `shown`), and where it is.
 type PlainRow = { id: string; owner: string; version: number; kind: string; name: string; notes: string; listing?: Listing; at: number; deleted?: true; station: string };
@@ -92,7 +102,7 @@ const mem = (inner: Inner): Mem => {
   return m;
 };
 
-const EMPTY: Held = { vaults: {}, at: {}, boxes: {}, requests: {}, asked: {}, refused: {}, plain: {}, plainOn: [], uses: {} };
+const EMPTY: Held = { vaults: {}, at: {}, boxes: {}, requests: {}, asked: {}, refused: {}, on: {}, keeps: [], plain: {}, plainOn: [], uses: {} };
 const arr = (v: unknown): J[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 const nowS = (inner: Inner) => Math.floor(inner.host.nowMs() / 1000);
@@ -225,30 +235,31 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
     let boxes: BoxCert[] = [];
     if (vaults._tag === "Failure") {
       const e = vaults.failure;
-      if (e.status !== undefined && e.status >= 400 && e.status < 500) change(inner, ws, (h) => void (h.refused[station] = e.code));
+      if (e.status !== undefined && e.status >= 400 && e.status < 500) change(inner, ws, (h) => {
+        h.refused[station] = e.code;
+        h.keeps = h.keeps.filter((s) => s !== station);
+      });
     } else {
       list = arr(get(vaults.success, "vaults")) as Vault[];
       all = arr(get(yield* ask(inner, address, "GET", "/vault/items"), "items")) as Item[];
       boxes = arr(get(yield* ask(inner, address, "GET", "/vault/boxes"), "boxes")) as BoxCert[];
     }
     for (const v of [...(plainItems !== null ? [PLAIN] : []), ...(list ?? []).map((v) => v.id)]) yield* readUses(inner, address, v);
+    // Each item as the latest version any station holds (a copy behind its host's says nothing newer).
     for (const v of list ?? []) changeItems(inner, ws, v.id, (held) => {
-      for (const k of Object.keys(held)) delete held[k];
-      for (const i of all) if (i.vault === v.id) held[i.id] = i;
+      for (const i of all) if (i.vault === v.id && newer(i, held[i.id])) held[i.id] = i;
     });
     change(inner, ws, (h) => {
       if (list !== null) {
         delete h.refused[station];
+        if (!h.keeps.includes(station)) h.keeps.push(station);
         const ids = new Set(list.map((v) => v.id));
-        for (const [id, at] of Object.entries(h.at)) {
-          if (at === station && !ids.has(id)) {
-            delete h.vaults[id];
-            delete h.at[id];
-          }
+        // Those it held and holds no more (one held from before copies were kept: where it was).
+        for (const id of new Set([...Object.keys(h.on), ...Object.keys(h.at)])) {
+          if (!ids.has(id) && (h.on[id]?.[station] !== undefined || (h.on[id] === undefined && h.at[id] === station))) letGo(h, id, station);
         }
         for (const v of list) {
-          h.vaults[v.id] = v;
-          h.at[v.id] = station;
+          holds(h, v, station, Object.fromEntries(all.filter((i) => i.vault === v.id).map((i) => [i.id, i.version])));
         }
       }
       for (const c of boxes) if (!h.boxes[c.device] || h.boxes[c.device]!.at <= c.at) h.boxes[c.device] = c;
@@ -264,6 +275,81 @@ function readStation(inner: Inner, address: string): Effect.Effect<void, CoreErr
         h.asked[r.id] = station;
       }
     });
+    if (list !== null) spreadAll(inner, ws);
+  });
+}
+
+/// Whether item `i` is a later version than `had` (none: it is).
+const newer = (i: Item, had: Item | undefined) => had === undefined || i.version > had.version;
+
+/// `station` holds vault `v` (and its items at these versions): the latest version held anywhere is the one shown; its
+/// host is the station it was on first, until that one no longer holds it.
+function holds(h: Held, v: Vault, station: string, items: Record<string, number> | null): void {
+  const on = (h.on[v.id] ??= {});
+  on[station] = { seq: v.seq, items: items ?? on[station]?.items ?? {} };
+  if (h.at[v.id] === undefined || on[h.at[v.id]!] === undefined) h.at[v.id] = station;
+  // Two versions of one seq (written on two stations at once): the host's.
+  const had = h.vaults[v.id];
+  if (had === undefined || v.seq > had.seq || (v.seq === had.seq && station === h.at[v.id])) h.vaults[v.id] = v;
+}
+
+/// `station` no longer holds vault `id`: gone where no station holds it; its host another that does.
+function letGo(h: Held, id: string, station: string): void {
+  const on = h.on[id];
+  if (on !== undefined) delete on[station];
+  if (on === undefined || Object.keys(on).length === 0) {
+    delete h.on[id];
+    delete h.vaults[id];
+    delete h.at[id];
+    return;
+  }
+  if (h.at[id] === station || h.at[id] === undefined) h.at[id] = Object.keys(on).sort()[0]!;
+}
+
+/// What `station` lacks of what the vaults' latest versions are: the vaults it holds none or an older version of, and
+/// the items it holds none or an older version of (of the vaults it will hold).
+function lacks(h: Pick<Held, "vaults" | "on">, items: (vault: string) => Record<string, Item>, station: string): { id: string; vault: Vault | null; items: Item[] }[] {
+  return Object.values(h.vaults).flatMap((v) => {
+    const have = h.on[v.id]?.[station];
+    const behind = have === undefined || have.seq < v.seq;
+    const missing = Object.values(items(v.id)).filter((i) => (have?.items[i.id] ?? -1) < i.version);
+    return behind || missing.length > 0 ? [{ id: v.id, vault: behind ? v : null, items: missing }] : [];
+  });
+}
+
+/// Every station that keeps vaults brought what it lacks (each in its own lane, once at a time).
+function spreadAll(inner: Inner, ws: string): void {
+  for (const station of held(inner, ws).keeps) {
+    const address = `${ws}/${station}`;
+    inner.scheduler.enqueue(address, `${address} vault-spread`, Priority.background, spread(inner, address));
+  }
+}
+
+/// A station brought the latest version of each vault and item it lacks, as copies (`?copy=1`: a later version than
+/// the one it holds, checked as any is). One that will not take it (a station from before, which takes only the next
+/// version) is left as it is: its agents see what it holds.
+function spread(inner: Inner, address: string): Effect.Effect<void> {
+  const ws = ofAddress(address);
+  const station = address.slice(ws.length + 1);
+  return Effect.gen(function* () {
+    if (!inner.stations.link(address) || !inner.stations.reachable(address)) return;
+    for (const want of lacks(held(inner, ws), (vault) => items(inner, ws, vault), station)) {
+      if (want.vault !== null) {
+        const said = yield* Effect.result(ask(inner, address, "PUT", "/vault/vaults?copy=1", want.vault));
+        if (said._tag === "Failure") continue;
+        const v = (get(said.success, "vault") as Vault | undefined) ?? want.vault;
+        change(inner, ws, (h) => holds(h, v, station, null));
+      }
+      for (const i of want.items) {
+        const said = yield* Effect.result(ask(inner, address, "PUT", "/vault/items?copy=1", i));
+        if (said._tag === "Failure") continue;
+        const kept = (get(said.success, "item") as Item | undefined) ?? i;
+        change(inner, ws, (h) => {
+          const at = h.on[want.id]?.[station];
+          if (at !== undefined) at.items[kept.id] = kept.version;
+        });
+      }
+    }
   });
 }
 
@@ -275,25 +361,27 @@ function heard(inner: Inner, address: string, name: string, data: unknown): void
   switch (name) {
     case "vault": {
       if (typeof d?.id !== "string") return;
-      const known = held(inner, ws).vaults[d.id] !== undefined;
-      change(inner, ws, (h) => {
-        h.vaults[d.id] = d;
-        h.at[d.id] = station;
-      });
-      // One this person was just put in: its items are read.
+      const known = held(inner, ws).on[d.id]?.[station] !== undefined;
+      change(inner, ws, (h) => holds(h, d as Vault, station, null));
+      // One this person was just put in (or this station was just brought): its items are read.
       if (!known) inner.scheduler.enqueue(address, `${address} vault/${d.id}`, Priority.background, readItems(inner, address, d.id));
+      spreadAll(inner, ws);
       return;
     }
     case "vault-gone":
       if (typeof d?.id !== "string") return;
-      change(inner, ws, (h) => {
-        delete h.vaults[d.id];
-        delete h.at[d.id];
-      });
-      inner.data.forgetRecord("vaultItems", `${ws}/${d.id}`);
+      change(inner, ws, (h) => letGo(h, d.id, station));
+      if (held(inner, ws).vaults[d.id] === undefined) inner.data.forgetRecord("vaultItems", `${ws}/${d.id}`);
       return;
     case "vault-item":
-      if (typeof d?.vault === "string" && typeof d?.id === "string") changeItems(inner, ws, d.vault, (all) => void (all[d.id] = d));
+      if (typeof d?.vault === "string" && typeof d?.id === "string") {
+        changeItems(inner, ws, d.vault, (all) => { if (newer(d as Item, all[d.id])) all[d.id] = d; });
+        change(inner, ws, (h) => {
+          const at = h.on[d.vault]?.[station];
+          if (at !== undefined) at.items[d.id] = d.version;
+        });
+        spreadAll(inner, ws);
+      }
       return;
     case "vault-box":
       if (typeof d?.device === "string") change(inner, ws, (h) => {
@@ -335,11 +423,16 @@ function readUses(inner: Inner, address: string, vault: string): Effect.Effect<v
 function readItems(inner: Inner, address: string, vault: string): Effect.Effect<void, CoreError> {
   return Effect.gen(function* () {
     const ws = ofAddress(address);
+    const station = address.slice(ws.length + 1);
     const all = arr(get(yield* ask(inner, address, "GET", `/vault/items?vault=${encodeURIComponent(vault)}`), "items")) as Item[];
     changeItems(inner, ws, vault, (held) => {
-      for (const k of Object.keys(held)) delete held[k];
-      for (const i of all) held[i.id] = i;
+      for (const i of all) if (newer(i, held[i.id])) held[i.id] = i;
     });
+    change(inner, ws, (h) => {
+      const at = h.on[vault]?.[station];
+      if (at !== undefined) at.items = Object.fromEntries(all.map((i) => [i.id, i.version]));
+    });
+    spreadAll(inner, ws);
   });
 }
 
@@ -668,9 +761,10 @@ class Vaults {
       const said = yield* self.#station(station, "PUT", "/vault/vaults", next);
       const v = (get(said, "vault") as Vault | undefined) ?? next;
       change(self.#inner, self.ws, (h) => {
-        h.vaults[v.id] = v;
+        holds(h, v, station, null);
         h.at[v.id] = station;
       });
+      spreadAll(self.#inner, self.ws);
       return v;
     });
   }
@@ -818,6 +912,11 @@ class Vaults {
       );
       const item = (get(said, "item") as Item | undefined) ?? next;
       changeItems(self.#inner, self.ws, v.id, (all) => void (all[item.id] = item));
+      change(self.#inner, self.ws, (h) => {
+        const at = h.on[v.id]?.[station];
+        if (at !== undefined) at.items[item.id] = item.version;
+      });
+      spreadAll(self.#inner, self.ws);
       return { id: item.id, version: item.version };
     });
   }
