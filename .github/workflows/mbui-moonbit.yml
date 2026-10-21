@@ -1,6 +1,6 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # MoonBit's latest release put in the Actions cache, once each (by the ETags of this platform's binaries and core): what
-# every job's MoonBit is (.github/actions/moonbit), restored there, never downloaded in a job. Asked each hour; a release
+# every job's MoonBit is (.github/actions/mbui-moonbit), restored there, never downloaded in a job. Asked each hour; a release
 # already in, nothing done. A download that breaks off fails this run alone, the jobs going on with the release before.
 name: mbui-moonbit
 on:
