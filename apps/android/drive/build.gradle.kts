@@ -32,7 +32,6 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
-    implementation(libs.commonmark)
     implementation(libs.haze)
     // A drive played as it streams (Player.kt): ranged reads through the core, never the whole file first.
     implementation(libs.androidx.media3.exoplayer)

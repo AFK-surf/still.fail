@@ -28,8 +28,9 @@ class ChatDecoder {
             val list = incoming.map { item ->
                 (decoded[item] ?: decode(ChatMessage.serializer(), item)).also { next[item] = it }
             }
-            // What the newest of them say, parsed here (off the UI thread) for the page to draw at once (ui/Markdown.kt).
-            for (m in list.takeLast(PREPARED)) if (m.authorKind == "agent") fail.still.android.ui.prepareMarkdown(m.text)
+            // What the newest of them say, the core's trees of them read out here (off the UI thread) for the page to draw
+            // at once (ui/Markdown.kt).
+            for (m in list.takeLast(PREPARED)) fail.still.android.ui.prepareMarkdown(m.text, m.md)
             // Commit only after the entire value decoded: a malformed update must not poison the cache.
             source = incoming
             decoded = next

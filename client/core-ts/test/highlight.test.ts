@@ -131,6 +131,7 @@ test("highlight_runs_cover_the_code_whatever_it_is", () => {
 
 test("highlight_code_ink_a_call_of_the_clients_kept_by_its_code", () => {
   assert.deepEqual(parseCall("code.ink", { code: "x = 1", lang: "py" }), { kind: "codeInk", code: "x = 1", lang: "py" });
+  assert.deepEqual(parseCall("markdown", { text: "# a" }), { kind: "markdown", text: "# a" });
   assert.throws(() => parseCall("code.ink", { code: "x = 1" }));
   assert.equal(inkKept("x = 1", "py"), "a2c2f");
   assert.equal(inkKept("x = 1", "py"), "a2c2f");

@@ -6,6 +6,7 @@ import * as brand from "../brand.ts";
 import type { Inner, Progress } from "../core.ts";
 import { CoreError, asCoreError } from "../error.ts";
 import { inkKept } from "../highlight.ts";
+import { markdown } from "../markdown.ts";
 import * as prefs from "../prefs.ts";
 import type { ClientId, RequestId } from "../protocol.ts";
 import type { SpanContext } from "../trace.ts";
@@ -116,6 +117,8 @@ export function execute(inner: Inner, call: Call, progress: Progress, at: [Clien
         return Effect.succeed({});
       case "codeInk":
         return Effect.succeed({ ink: inkKept(call.code, call.lang) });
+      case "markdown":
+        return Effect.succeed({ md: markdown(call.text) });
       case "decisionDefer":
         prefs.deferDecision(inner.data, `${call.station}\t${call.thread}\t${call.seq}`, inner.host.nowMs());
         return Effect.succeed(null);

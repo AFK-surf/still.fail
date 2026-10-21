@@ -49,10 +49,6 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.commonmark)
-    implementation(libs.commonmark.ext.gfm.tables)
-    implementation(libs.commonmark.ext.gfm.strikethrough)
-    implementation(libs.commonmark.ext.task.list.items)
     implementation(libs.haze)
     // Signing in in a Custom Tab (screens/SettingParts.kt signIn).
     implementation(libs.androidx.browser)

@@ -1740,6 +1740,9 @@ data class ChatMessage (
 	val author: String,
 	val authorName: String? = null,
 	val text: String,
+	/// An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients
+	/// draw. Absent for a person's, drawn as they wrote it.
+	val md: JsonElement? = null,
 	val attachments: List<Attachment>,
 	val quotes: List<Quote>,
 	/// An agent's post that ended its turn: final, block (the words from before; `ending` has today's).
@@ -3018,7 +3021,7 @@ data class HistoryPhase (
 @Serializable
 data class HistoryPost (
 	val text: String,
-	/// `text` read as Markdown (markdown.ts): what the clients draw.
+	/// `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw.
 	val md: JsonElement,
 	val place: Place? = null,
 	val block: Boolean,
@@ -3038,7 +3041,7 @@ data class HistoryTask (
 	val failed: Boolean,
 	/// What a sub-agent answered.
 	val result: String? = null,
-	/// `result` read as Markdown (markdown.ts): what the clients draw.
+	/// `result` read as Markdown (markdown.ts), its runs of words in `result`: what the clients draw.
 	val md: JsonElement? = null
 )
 
@@ -3070,7 +3073,7 @@ data class HistoryStep (
 @Serializable
 data class HistoryText (
 	val text: String,
-	/// `text` read as Markdown (markdown.ts): what the clients draw.
+	/// `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw.
 	val md: JsonElement,
 	val subagent: Boolean
 )

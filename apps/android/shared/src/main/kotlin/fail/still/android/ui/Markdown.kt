@@ -1,4 +1,5 @@
-// Agents write Markdown; the phone reads it as the web phone does (web/src/Prose.tsx, Prose.css.ts and the message's
+// Agents write Markdown; the core reads it (client/core-ts/src/markdown.ts: a message comes with its `md`, other words
+// are read by the core's `markdown` call) and the phone draws that tree as the web phone does (web/src/Prose.tsx, Prose.css.ts and the message's
 // `.markdown` in styles/conversation.css.ts, at the phone's sizes: 15 with a 1.65 line). GFM: paragraphs with
 // emphasis, inline code, links and strikethrough; headings; lists (bulleted, numbered, tasks, nested) with hanging
 // indents; quotes beside a bar; code blocks with their language and a copy button on a row of their own (a finger
@@ -73,91 +74,73 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fail.still.android.LocalApp
 import fail.still.android.data.Attachment
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.delay
-import org.commonmark.ext.gfm.strikethrough.Strikethrough
-import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
-import org.commonmark.ext.gfm.tables.TableBlock
-import org.commonmark.ext.gfm.tables.TableBody
-import org.commonmark.ext.gfm.tables.TableCell
-import org.commonmark.ext.gfm.tables.TableHead
-import org.commonmark.ext.gfm.tables.TableRow
-import org.commonmark.ext.gfm.tables.TablesExtension
-import org.commonmark.ext.task.list.items.TaskListItemMarker
-import org.commonmark.ext.task.list.items.TaskListItemsExtension
-import org.commonmark.node.BlockQuote
-import org.commonmark.node.BulletList
-import org.commonmark.node.Code
-import org.commonmark.node.Emphasis
-import org.commonmark.node.FencedCodeBlock
-import org.commonmark.node.HardLineBreak
-import org.commonmark.node.Heading
-import org.commonmark.node.HtmlBlock
-import org.commonmark.node.HtmlInline
-import org.commonmark.node.Image
-import org.commonmark.node.IndentedCodeBlock
-import org.commonmark.node.Link
-import org.commonmark.node.ListBlock as MdList
-import org.commonmark.node.ListItem
-import org.commonmark.node.Node
-import org.commonmark.node.OrderedList
-import org.commonmark.node.Paragraph
-import org.commonmark.node.SoftLineBreak
-import org.commonmark.node.StrongEmphasis
-import org.commonmark.node.Text as TextNode
-import org.commonmark.node.ThematicBreak
-import org.commonmark.parser.Parser
 import kotlin.math.max
 import kotlin.math.roundToInt
 import fail.still.android.data.t
 
-private fun markdownParser(): Parser = Parser.builder()
-    .extensions(listOf(TablesExtension.create(), StrikethroughExtension.create(), TaskListItemsExtension.create()))
-    .build()
+/** A node of the core's Markdown (`Md`, client/core-ts/src/markdown.ts), its runs of words read out of its text. */
+internal sealed interface MdN
 
-/** A message's text as a document: [tablesApart] first, wherever it is parsed (as a chat is decoded, or as it is drawn). */
-internal fun parseMarkdown(text: String): Node = markdownParser().parse(tablesApart(text))
+/** Words. */
+internal class MdW(val words: String) : MdN
 
-/** A table's delimiter row: `|---|:--:|`, or `--- | ---` without the outer pipes. */
-private val tableDelimiter = Regex("""^ {0,3}\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$""")
+/** A node of a kind (`p`, `list`, `a`…): its children and what tells it apart (code's words read out). */
+internal class MdK(val kind: String, val kids: List<MdN>, val attrs: JsonObject) : MdN {
+    fun str(name: String): String? = (attrs[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
+    fun bool(name: String): Boolean? = (attrs[name] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+    fun int(name: String): Int? = (attrs[name] as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+}
 
-/**
- * GFM (and the web's parser) starts a table on a paragraph's last line (`**这些**` and then the table, no blank line
- * between); commonmark-java only on a paragraph of its own, and prints the table as text. So a blank line goes before
- * such a table's header (outside fenced code).
- */
-internal fun tablesApart(text: String): String {
-    if ('|' !in text || '-' !in text) return text
-    val lines = text.split('\n')
-    val out = StringBuilder(text.length + 8)
-    var fence: String? = null
-    lines.forEachIndexed { i, line ->
-        val lead = line.trimStart()
-        val open = fence
-        if (open == null && (lead.startsWith("```") || lead.startsWith("~~~"))) fence = lead.take(3)
-        else if (open != null && lead.startsWith(open)) fence = null
-        else if (open == null && i > 0 && i < lines.lastIndex && '|' in line && '|' in lines[i + 1] && tableDelimiter.matches(lines[i + 1]) &&
-            lines[i - 1].isNotBlank() && '|' !in lines[i - 1]) out.append('\n')
-        out.append(line)
-        if (i < lines.lastIndex) out.append('\n')
+private val NO_ATTRS = JsonObject(emptyMap())
+
+/** A run of words (client/core-ts/src/mdWords.ts): where it stands in `source` (`[start, end]`), or the words themselves. */
+private fun wordsOf(e: JsonElement?, source: String): String? = when {
+    e is JsonPrimitive && e.isString -> e.content
+    e is JsonArray && e.size == 2 && e[0] is JsonPrimitive && !(e[0] as JsonPrimitive).isString -> {
+        val from = ((e[0] as JsonPrimitive).intOrNull ?: 0).coerceIn(0, source.length)
+        source.substring(from, ((e[1] as? JsonPrimitive)?.intOrNull ?: from).coerceIn(from, source.length))
     }
-    return out.toString()
+    else -> null
 }
 
-private val documents = object : android.util.LruCache<String, Node>(256 * 1024) {
-    override fun sizeOf(key: String, value: Node) = key.length.coerceAtLeast(1)
+private fun nodeOf(e: JsonElement, source: String): MdN? {
+    wordsOf(e, source)?.let { return MdW(it) }
+    val a = e as? JsonArray ?: return null
+    val kind = (a.getOrNull(0) as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return null
+    val kids = (a.getOrNull(1) as? JsonArray)?.mapNotNull { nodeOf(it, source) }.orEmpty()
+    var attrs = a.getOrNull(if (a.getOrNull(1) is JsonArray) 2 else 1) as? JsonObject ?: NO_ATTRS
+    for (k in listOf("code", "content")) attrs[k]?.let { v -> wordsOf(v, source)?.let { attrs = JsonObject(attrs + (k to JsonPrimitive(it))) } }
+    return MdK(kind, kids, attrs)
+}
+
+/** The core's tree of `source` (`md`), its words read out. */
+internal fun mdOf(md: JsonElement?, source: String): List<MdN> = (md as? JsonArray)?.mapNotNull { nodeOf(it, source) }.orEmpty()
+
+/** The trees drawn lately, by their text. */
+private val trees = object : android.util.LruCache<String, List<MdN>>(256 * 1024) {
+    override fun sizeOf(key: String, value: List<MdN>) = key.length.coerceAtLeast(1)
 }
 
 /**
- * Parses `text` into the documents a message draws from, if not there yet: done off the UI thread as a chat's messages
- * are decoded (data/ChatDecoder.kt), so they are drawn whole as the chat first shows, not "laying out" first.
+ * The core's tree of a message's `text` (its `md`), read out here if not yet: done off the UI thread as a chat's
+ * messages are decoded (data/ChatDecoder.kt), so they are drawn whole as the chat first shows, not "laying out" first.
  */
-fun prepareMarkdown(text: String) {
-    if (text.isEmpty() || documents.get(text) != null) return
-    documents.put(text, parseMarkdown(text))
+fun prepareMarkdown(text: String, md: JsonElement?) {
+    if (text.isEmpty() || md == null || trees.get(text) != null) return
+    trees.put(text, mdOf(md, text))
 }
-
-private fun Node.children(): List<Node> = generateSequence(firstChild) { it.next }.toList()
 
 /**
  * A message's files its text places (the core's `placed`, client/core-ts/src/placed.ts), and how they are drawn:
@@ -256,22 +239,23 @@ class Screens(
 )
 
 /** A paragraph of only a link with a card (isCardLink): its address, and its words unless it is bare. */
-private fun screenAlone(node: Paragraph): Pair<String, String?>? =
-    when (val only = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }.singleOrNull()) {
-        is Link -> only.destination.takeIf { isCardLink(it) }?.let { href -> href to inlineText(only).takeUnless { isBareLink(it, href) } }
-        is TextNode -> only.literal.trim().takeIf { t -> bareLinks(t).singleOrNull() == t.indices && isCardLink(t) }?.let { it to null }
-        else -> null
-    }
+private fun screenAlone(node: MdK): Pair<String, String?>? {
+    val only = node.kids.filter { !blank(it) }.singleOrNull() as? MdK ?: return null
+    if (only.kind != "a") return null
+    val href = only.str("href")?.takeIf { isCardLink(it) } ?: return null
+    return href to inlineText(only).takeUnless { isBareLink(it, href) }
+}
+
+/** Words of nothing but spaces and line ends. */
+private fun blank(n: MdN) = n is MdW && n.words.isBlank()
 
 /** The links with cards (isCardLink) written bare among these words, which read as their titles. */
-private fun bareScreens(nodes: List<Node>): Set<String> = buildSet {
-    fun walk(n: Node) {
-        when (n) {
-            is TextNode -> bareLinks(n.literal).forEach { r -> n.literal.substring(r).takeIf { isCardLink(it) }?.let(::add) }
-            is Link -> if (isCardLink(n.destination) && isBareLink(inlineText(n), n.destination)) add(n.destination)
-            is Image -> Unit
-            else -> n.children().forEach(::walk)
-        }
+private fun bareScreens(nodes: List<MdN>): Set<String> = buildSet {
+    fun walk(n: MdN) {
+        if (n !is MdK || n.kind == "img") return
+        val href = n.str("href")
+        if (n.kind == "a" && href != null) { if (isCardLink(href) && isBareLink(inlineText(n), href)) add(href) }
+        else n.kids.forEach(::walk)
     }
     nodes.forEach(::walk)
 }
@@ -297,19 +281,29 @@ private class Piece(val top: Float, val bottom: Float, val draw: @Composable () 
 
 private class Ctx(val size: Int, val placing: Placing?, val fillTables: Boolean, val screens: Screens?)
 
+/**
+ * `text` as Markdown: `md`, the core's tree of it (a message's), or read by the core (`markdown`) as it is first drawn,
+ * "laying out" until it is.
+ */
 @Composable
-fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false, screens: Screens? = null) {
-    val cached = remember(text) { documents.get(text) }
+fun Markdown(text: String, modifier: Modifier = Modifier, size: Int = 15, placing: Placing? = null, fillTables: Boolean = false, screens: Screens? = null, md: JsonElement? = null) {
+    val core = LocalApp.current.core
+    val cached = remember(text, md) { trees.get(text) ?: md?.let { mdOf(it, text).also { tree -> trees.put(text, tree) } } }
     val ready by androidx.compose.runtime.produceState(cached?.let { text to it }, text) {
         value = cached?.let { text to it }
         if (cached == null) {
-            val doc = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { parseMarkdown(text) }
-            documents.put(text, doc)
-            value = text to doc
+            val tree = try {
+                mdOf(core.call("markdown", buildJsonObject { put("text", text) }).jsonObject["md"], text)
+            } catch (_: Exception) {
+                // A core that cannot say (one from before it read other words): the words as they are.
+                listOf(MdK("p", listOf(MdW(text)), NO_ATTRS))
+            }
+            trees.put(text, tree)
+            value = text to tree
         }
     }
-    val doc = ready?.takeIf { it.first == text }?.second
-    val blocks = remember(doc, size, placing, fillTables, screens) { doc?.let { pieces(it.children(), Ctx(size, placing, fillTables, screens), tight = false) } }
+    val tree = ready?.takeIf { it.first == text }?.second
+    val blocks = remember(tree, size, placing, fillTables, screens) { tree?.let { pieces(it, Ctx(size, placing, fillTables, screens), depth = 0) } }
     // What was written, in the text face chosen (ui/Fonts.kt); code in the code face, said where it is.
     val face = TextFont
     val style = LocalTextStyle.current
@@ -335,15 +329,38 @@ private fun Stack(pieces: List<Piece>) {
     }
 }
 
-private fun pieces(nodes: List<Node>, ctx: Ctx, tight: Boolean, task: Boolean? = null): List<Piece> =
-    nodes.flatMapIndexed { i, n -> if (n is TaskListItemMarker) emptyList() else piecesOf(n, ctx, tight, if (i == nodes.indexOfFirst { it is Paragraph }) task else null) }
+/** What stands as a block of its own; anything else is words, run on one another. */
+private val BLOCKS = setOf("p", "h", "pre", "quote", "list", "table", "hr")
 
-private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List<Piece> {
+/**
+ * Blocks one under another, and words beside them (a tight list's item holds its words) each run of them a paragraph
+ * with no margins of its own; `task`, a task item's box, ahead of its first words.
+ */
+private fun pieces(nodes: List<MdN>, ctx: Ctx, depth: Int, task: Boolean? = null): List<Piece> {
+    val out = mutableListOf<Piece>()
+    var run = mutableListOf<MdN>()
+    var boxed = false
+    fun box(): Boolean? = task.takeIf { !boxed }.also { boxed = true }
+    fun flush() {
+        if (run.any { !blank(it) }) out += paragraph(MdK("p", run, NO_ATTRS), ctx, 0f, box())
+        run = mutableListOf()
+    }
+    for (n in nodes) {
+        if (n is MdK && n.kind in BLOCKS) {
+            flush()
+            out += piecesOf(n, ctx, depth, if (n.kind == "p") box() else null)
+        } else run += n
+    }
+    flush()
+    return out
+}
+
+private fun piecesOf(node: MdK, ctx: Ctx, depth: Int, task: Boolean?): List<Piece> {
     val s = ctx.size.toFloat()
-    return when (node) {
-        is Paragraph -> paragraph(node, ctx, if (tight) 0f else s, task)
-        is Heading -> {
-            val (em, margin) = when (node.level) {
+    return when (node.kind) {
+        "p" -> paragraph(node, ctx, s, task)
+        "h" -> {
+            val (em, margin) = when (node.int("depth")) {
                 5 -> 0.83f to 1.67f * 0.83f * s
                 6 -> 0.67f to 2.33f * 0.67f * s
                 else -> 1f to -1f
@@ -351,11 +368,11 @@ private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List
             val fs = s * em
             val top = if (margin < 0) 14f else margin
             val bottom = if (margin < 0) 6f else margin
-            listOf(Piece(top, bottom) { Words(node, ctx, fs, FontWeight.Bold) })
+            listOf(Piece(top, bottom) { Words(node.kids, ctx, fs, FontWeight.Bold) })
         }
-        is BulletList, is OrderedList -> listOf(list(node as MdList, ctx, 1 + generateSequence(node.parent) { it.parent }.count { it is MdList }))
-        is BlockQuote -> {
-            val inner = pieces(node.children(), ctx, tight = false)
+        "list" -> listOf(list(node, ctx, depth + 1))
+        "quote" -> {
+            val inner = pieces(node.kids, ctx, depth)
             listOf(Piece(max(0f, inner.firstOrNull()?.top ?: 0f), max(8f, inner.lastOrNull()?.bottom ?: 0f)) {
                 Row(Modifier.height(IntrinsicSize.Min)) {
                     Box(Modifier.width(2.dp).fillMaxHeight().background(C.lineStrong))
@@ -363,18 +380,16 @@ private fun piecesOf(node: Node, ctx: Ctx, tight: Boolean, task: Boolean?): List
                 }
             })
         }
-        is FencedCodeBlock -> {
-            val language = node.info?.trim()?.substringBefore(' ')?.ifEmpty { null }
-            val code = node.literal.removeSuffix("\n")
+        "pre" -> {
+            val language = node.str("lang")
+            val code = node.str("code").orEmpty()
             if (language?.lowercase() == "mermaid" && code.isNotBlank()) listOf(Piece(0f, 4f) { Mermaid(code) })
-            else listOf(Piece(0f, 8f) { CodeBlock(code, language) })
+            // Its colours the core's, with the tree (none for code it does not colour).
+            else listOf(Piece(0f, 8f) { CodeBlock(code, language, known = KnownInk(node.str("ink"))) })
         }
-        is IndentedCodeBlock -> listOf(Piece(0f, 8f) { CodeBlock(node.literal.removeSuffix("\n"), null) })
-        is TableBlock -> listOf(Piece(0f, 8f) { Table(node, ctx) })
-        is ThematicBreak -> listOf(Piece(s / 2, s / 2) { Box(Modifier.fillMaxWidth().height(1.dp).background(webLine)) })
-        // Raw HTML is shown as written (react-markdown does not draw it).
-        is HtmlBlock -> listOf(Piece(s, s) { MdText(AnnotatedString(node.literal.trimEnd()), ctx.size.sp, lh(ctx.size.toFloat())) })
-        else -> pieces(node.children(), ctx, tight)
+        "table" -> listOf(Piece(0f, 8f) { Table(node, ctx) })
+        "hr" -> listOf(Piece(s / 2, s / 2) { Box(Modifier.fillMaxWidth().height(1.dp).background(webLine)) })
+        else -> pieces(node.kids, ctx, depth)
     }
 }
 
@@ -388,40 +403,43 @@ val LocalMdInk = androidx.compose.runtime.compositionLocalOf<Color?> { null }
  * them is that file shown (a line of its own), and one of only their images is them in a row. An image of theirs
  * among words is shown between the words around it.
  */
-private fun paragraph(node: Paragraph, ctx: Ctx, margin: Float, task: Boolean?): List<Piece> {
+private fun paragraph(node: MdK, ctx: Ctx, margin: Float, task: Boolean?): List<Piece> {
     val screens = ctx.screens
     if (screens != null && task == null) screenAlone(node)?.let { (href, words) -> return listOf(Piece(8f, 8f) { screens.card(href, words) }) }
     val placing = ctx.placing
     if (placing != null && placing.files.isNotEmpty()) {
-        val parts = node.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak && it !is TaskListItemMarker }
-        fun fileOf(n: Node): Attachment? = when (n) {
-            is Link -> placing.files[fileNameOf(n.destination)]
-            is Image -> placing.files[fileNameOf(n.destination)]
-            else -> null
-        }
+        val parts = node.kids.filter { !blank(it) }
+        fun fileOf(n: MdN): Attachment? = (n as? MdK)?.let { k ->
+            when (k.kind) {
+                "a" -> k.str("href")
+                "img" -> k.str("src")
+                else -> null
+            }
+        }?.let { placing.files[fileNameOf(it)] }
+        fun isImage(n: MdN) = n is MdK && n.kind == "img"
         val only = parts.singleOrNull()
-        if (only is Link && task == null) fileOf(only)?.let { f -> return listOf(Piece(8f, 8f) { placing.shown(f) }) }
-        val images = parts.map { if (it is Image) fileOf(it) else null }
+        if (only is MdK && only.kind == "a" && task == null) fileOf(only)?.let { f -> return listOf(Piece(8f, 8f) { placing.shown(f) }) }
+        val images = parts.map { if (isImage(it)) fileOf(it) else null }
         if (images.size > 1 && images.all { it != null } && task == null) return listOf(Piece(8f, 8f) { ImageRow(images.filterNotNull(), placing) })
         // Images of the message's among words: the words before, the image on a line of its own, the words after.
-        if (parts.any { it is Image && fileOf(it) != null }) {
+        if (parts.any { isImage(it) && fileOf(it) != null }) {
             val out = mutableListOf<Piece>()
-            var run = mutableListOf<Node>()
+            var run = mutableListOf<MdN>()
             fun flush() {
                 val nodes = run
                 val box = task.takeIf { out.isEmpty() }
-                if (nodes.any { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }) out += Piece(margin, margin) { Words(nodes, ctx, ctx.size.toFloat(), null, box) }
+                if (nodes.any { !blank(it) }) out += Piece(margin, margin) { Words(nodes, ctx, ctx.size.toFloat(), null, box) }
                 run = mutableListOf()
             }
-            for (n in node.children()) {
-                val f = if (n is Image) fileOf(n) else null
+            for (n in node.kids) {
+                val f = if (isImage(n)) fileOf(n) else null
                 if (f != null) { flush(); out += Piece(margin, margin) { Box(Modifier.padding(vertical = 8.dp)) { placing.shown(f) } } } else run += n
             }
             flush()
             return out
         }
     }
-    return listOf(Piece(margin, margin) { Words(node, ctx, ctx.size.toFloat(), null, task) })
+    return listOf(Piece(margin, margin) { Words(node.kids, ctx, ctx.size.toFloat(), null, task) })
 }
 
 /**
@@ -462,16 +480,17 @@ private fun ImageRow(files: List<Attachment>, placing: Placing) {
 }
 
 /** Items with their markers in the list's 20 of indent, so wrapped lines hang under the words. */
-private fun list(node: MdList, ctx: Ctx, depth: Int): Piece {
-    val tight = node.isTight
-    val items = node.children().filterIsInstance<ListItem>().mapIndexed { i, item ->
-        val task = taskOf(item)
-        val inner = pieces(item.children(), ctx, tight, task)
+private fun list(node: MdK, ctx: Ctx, depth: Int): Piece {
+    val ordered = node.bool("ordered") == true
+    val start = node.int("start") ?: 1
+    val items = node.kids.filterIsInstance<MdK>().filter { it.kind == "li" }.mapIndexed { i, item ->
+        // A tight list's item holds its words (no margins), a loose one's its paragraphs.
+        val inner = pieces(item.kids, ctx, depth, item.bool("checked"))
         Piece(inner.firstOrNull()?.top ?: 0f, inner.lastOrNull()?.bottom ?: 0f) {
             Row {
                 val ink = LocalMdInk.current ?: C.ink
-                if (node is OrderedList) Text(
-                    "${(node.markerStartNumber ?: 1) + i}.", color = ink, fontSize = ctx.size.sp, lineHeight = lh(ctx.size.toFloat()), textAlign = TextAlign.End, maxLines = 1, softWrap = false,
+                if (ordered) Text(
+                    "${start + i}.", color = ink, fontSize = ctx.size.sp, lineHeight = lh(ctx.size.toFloat()), textAlign = TextAlign.End, maxLines = 1, softWrap = false,
                     modifier = Modifier.width(20.dp).padding(end = 5.dp),
                 ) else Bullet(depth, ctx.size.toFloat(), ink)
                 Box(Modifier.weight(1f)) { Stack(inner) }
@@ -499,20 +518,13 @@ private fun Bullet(depth: Int, textSize: Float, ink: Color) {
     }
 }
 
-/** A task item's box: checked or not, or null when the item is no task. */
-private fun taskOf(item: ListItem): Boolean? {
-    val direct = item.firstChild as? TaskListItemMarker
-    val inPara = (item.firstChild as? Paragraph)?.firstChild as? TaskListItemMarker
-    return (direct ?: inPara)?.isChecked
-}
-
 /**
  * A code block as the web phone draws it: a quiet tinted block with no frame; above the code, on a row of its own
  * (there is no hover to bring the corner forward), its language and a copy button; highlighted when its language is
  * named. It scrolls sideways rather than wrapping.
  */
 @Composable
-fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Modifier = Modifier) {
+fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Modifier = Modifier, known: KnownInk? = null) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) { if (copied) { delay(1500); copied = false } }
@@ -533,7 +545,7 @@ fun CodeBlock(code: String, language: String?, bar: Boolean = true, modifier: Mo
             }
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp)) {
-            CodeInk(code, language, dark)
+            CodeInk(code, language, dark, known)
         }
     }
 }
@@ -548,9 +560,9 @@ val CodeWeight = FontWeight.Normal
  * past what its words allow, it scrolls sideways within the message.
  */
 @Composable
-private fun Table(table: TableBlock, ctx: Ctx) {
-    val rows = table.children().flatMap { part -> if (part is TableHead || part is TableBody) part.children() else emptyList() }.filterIsInstance<TableRow>()
-    val cells = rows.map { r -> r.children().filterIsInstance<TableCell>() }
+private fun Table(table: MdK, ctx: Ctx) {
+    val rows = table.kids.filterIsInstance<MdK>().filter { it.kind == "tr" }
+    val cells = rows.map { r -> r.kids.filterIsInstance<MdK>() }
     val columns = cells.maxOfOrNull { it.size } ?: 0
     if (columns == 0) return
     val line = webLine
@@ -563,7 +575,7 @@ private fun Table(table: TableBlock, ctx: Ctx) {
             Layout(
                 content = {
                     cells.forEachIndexed { r, row ->
-                        val header = row.firstOrNull()?.isHeader == true
+                        val header = row.firstOrNull()?.kind == "th"
                         for (c in 0 until columns) {
                             val cell = row.getOrNull(c)
                             // Middle-aligned, as the browser's cells are; a rule under every row but the last.
@@ -575,8 +587,8 @@ private fun Table(table: TableBlock, ctx: Ctx) {
                             ) {
                                 val images = cell?.let { cellImages(it, ctx) }
                                 if (images != null) CellImageRow(images, ctx.placing!!)
-                                else if (cell != null && header) androidx.compose.runtime.CompositionLocalProvider(LocalMdInk provides muted) { Words(cell, ctx, 12f, FontWeight.Medium) }
-                                else if (cell != null) Words(cell, ctx, 13f, null)
+                                else if (cell != null && header) androidx.compose.runtime.CompositionLocalProvider(LocalMdInk provides muted) { Words(cell.kids, ctx, 12f, FontWeight.Medium) }
+                                else if (cell != null) Words(cell.kids, ctx, 13f, null)
                             }
                         }
                     }
@@ -619,10 +631,10 @@ private fun Table(table: TableBlock, ctx: Ctx) {
  * A cell of only the message's images (`| ![](before.png) | ![](after.png) |`): them, side by side, each 160 wide at
  * most (the web's cell has the image fill it, as the table lets it); null for any other cell, drawn as words.
  */
-private fun cellImages(cell: TableCell, ctx: Ctx): List<Attachment>? {
+private fun cellImages(cell: MdK, ctx: Ctx): List<Attachment>? {
     val placing = ctx.placing ?: return null
-    val parts = cell.children().filter { !(it is TextNode && it.literal.isBlank()) && it !is SoftLineBreak }
-    val files = parts.map { n -> if (n is Image) placing.files[fileNameOf(n.destination)] else null }
+    val parts = cell.kids.filter { !blank(it) }
+    val files = parts.map { n -> (n as? MdK)?.takeIf { it.kind == "img" }?.str("src")?.let { placing.files[fileNameOf(it)] } }
     return files.takeIf { it.isNotEmpty() && it.all { f -> f != null } }?.filterNotNull()
 }
 
@@ -644,10 +656,7 @@ private const val TASK = "task"
 
 /** A block's words: its inline parts drawn (and, for a task item's first paragraph, its box ahead of them). */
 @Composable
-private fun Words(node: Node, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) = Words(node.children(), ctx, size, weight, task)
-
-@Composable
-private fun Words(nodes: List<Node>, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) {
+private fun Words(nodes: List<MdN>, ctx: Ctx, size: Float, weight: FontWeight?, task: Boolean? = null) {
     val text = inline(nodes, ctx, task)
     val inline = if (task == null) emptyMap() else mapOf(TASK to InlineTextContent(Placeholder(25.sp, 13.sp, PlaceholderVerticalAlign.TextCenter)) { TaskBox(task) })
     MdText(text, size.sp, lh(size), weight, inline = inline)
@@ -670,7 +679,7 @@ private fun TaskBox(checked: Boolean) {
 }
 
 @Composable
-private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString {
+private fun inline(nodes: List<MdN>, ctx: Ctx, task: Boolean?): AnnotatedString {
     // Inline code as the web has it: no box, the code face in its own colour, a little smaller.
     val code = SpanStyle(fontFamily = CodeFont, fontSize = TextUnit(0.9f, TextUnitType.Em), color = codeInline)
     // A web address alone in code: the code's face, the link's colour (the web's `a > code`).
@@ -683,53 +692,55 @@ private fun inline(nodes: List<Node>, ctx: Ctx, task: Boolean?): AnnotatedString
     return buildAnnotatedString {
         if (task != null) appendInlineContent(TASK, if (task) "[x]" else "[ ]")
         // `inLink`: within a link's words, where an address is only words.
-        fun walk(n: Node, inLink: Boolean) {
-            when (n) {
-                is TextNode -> if (inLink) append(n.literal) else appendLinked(n.literal, link, titles::get)
-                is Code -> if (!inLink && isWebAddress(n.literal)) withLink(LinkAnnotation.Url(n.literal.trim(), link)) { withStyle(codeLink) { append(n.literal) } }
-                    else withStyle(code) { append(n.literal) }
-                is Emphasis -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.children().forEach { walk(it, inLink) } }
-                is StrongEmphasis -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { n.children().forEach { walk(it, inLink) } }
-                is Strikethrough -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.children().forEach { walk(it, inLink) } }
-                is Link -> {
-                    val file = placing?.files?.get(fileNameOf(n.destination))
-                    val title = titles[n.destination]?.takeIf { isBareLink(inlineText(n), n.destination) }
+        fun walk(n: MdN, inLink: Boolean) {
+            // Words: a line end within them reads as a space, as the browser has it (a break of its own is `br`).
+            if (n is MdW) { append(n.words.replace('\n', ' ')); return }
+            n as MdK
+            when (n.kind) {
+                "code" -> {
+                    val content = n.str("content").orEmpty()
+                    if (!inLink && isWebAddress(content)) withLink(LinkAnnotation.Url(content.trim(), link)) { withStyle(codeLink) { append(content) } }
+                    else withStyle(code) { append(content) }
+                }
+                "i" -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { n.kids.forEach { walk(it, inLink) } }
+                "b" -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { n.kids.forEach { walk(it, inLink) } }
+                "s" -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { n.kids.forEach { walk(it, inLink) } }
+                "a" -> {
+                    val href = n.str("href").orEmpty()
+                    val file = placing?.files?.get(fileNameOf(href))
+                    val title = titles[href]?.takeIf { isBareLink(inlineText(n), href) }
                     when {
                         // A link within a sentence to one of the message's files: looks like any link, opens the file.
-                        file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.children().forEach { walk(it, true) } }
-                        title != null -> withLink(LinkAnnotation.Url(n.destination, link)) { append(title) }
-                        isChatLink(n.destination) -> appendRef(buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }, n.destination, accent)
+                        file != null -> withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { n.kids.forEach { walk(it, true) } }
+                        title != null -> withLink(LinkAnnotation.Url(href, link)) { append(title) }
+                        isChatLink(href) -> appendRef(AnnotatedString(n.kids.joinToString("") { inlineText(it) }), href, accent)
                         // Opened through LocalUriHandler: still.fail's own links in the app (App.kt → AppState.openLink), the rest by the system.
-                        else -> withLink(LinkAnnotation.Url(n.destination, link)) { n.children().forEach { walk(it, true) } }
+                        else -> withLink(LinkAnnotation.Url(href, link)) { n.kids.forEach { walk(it, true) } }
                     }
                 }
                 // An image the app cannot fetch (only the message's own files are fetched, through the station): its words, leading to it.
-                is Image -> {
-                    val words = buildAnnotatedString { n.children().forEach { c -> append(inlineText(c)) } }.ifEmpty { AnnotatedString(fileNameOf(n.destination)) }
+                "img" -> {
+                    val src = n.str("src").orEmpty()
+                    val words = n.str("alt")?.ifEmpty { null } ?: fileNameOf(src)
                     // One of the message's files (drawn as words only where it cannot be drawn itself): opens it.
-                    val file = placing?.files?.get(fileNameOf(n.destination))
+                    val file = placing?.files?.get(fileNameOf(src))
                     if (file != null) withLink(LinkAnnotation.Clickable("file:${file.path}", link) { placing.open(file) }) { append(words) }
-                    else withLink(LinkAnnotation.Url(n.destination, link)) { append(words) }
+                    else withLink(LinkAnnotation.Url(src, link)) { append(words) }
                 }
-                is SoftLineBreak -> append(' ')
-                is HardLineBreak -> append('\n')
-                is HtmlInline -> append(n.literal)
-                is TaskListItemMarker -> Unit
-                else -> n.children().forEach { walk(it, inLink) }
+                "br" -> append('\n')
+                else -> n.kids.forEach { walk(it, inLink) }
             }
         }
         nodes.forEach { walk(it, false) }
     }
 }
 
-private fun AnnotatedString.ifEmpty(other: () -> AnnotatedString) = if (isEmpty()) other() else this
-
 /** A node's words, plain. */
-private fun inlineText(n: Node): String = when (n) {
-    is TextNode -> n.literal
-    is Code -> n.literal
-    is SoftLineBreak, is HardLineBreak -> " "
-    else -> n.children().joinToString("") { inlineText(it) }
+private fun inlineText(n: MdN): String = when {
+    n is MdW -> n.words.replace('\n', ' ')
+    (n as MdK).kind == "code" -> n.str("content").orEmpty()
+    n.kind == "br" -> " "
+    else -> n.kids.joinToString("") { inlineText(it) }
 }
 
 @Composable

@@ -662,7 +662,7 @@ export const stories: Story[] = [
   },
 
   { id: "composer-cards", group: "对话", title: "输入框里的附件", render: () => stage(<ComposerCards />) },
-  { id: "code-colours", group: "对话", title: "代码块 · 各语言的颜色", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, padding: 24 }}><MdView md={CODE_COLOURS} /></div>) },
+  { id: "code-colours", group: "对话", title: "代码块 · 各语言的颜色", render: () => stage(<div className={conversationCss.markdown} style={{ maxWidth: 720, padding: 24 }}><MdView md={CODE_COLOURS.md} source={CODE_COLOURS.text} /></div>) },
   { id: "outbox-upload", group: "对话", title: "发出后还在上传的附件", render: () => stage(<OutboxUpload />) },
   { id: "runtime-missing", group: "对话", title: "缺少运行时 · 安装", app: true, demo: installDemo("missing") },
   { id: "runtime-installing", group: "对话", title: "缺少运行时 · 正在安装", app: true, demo: installDemo("installing") },

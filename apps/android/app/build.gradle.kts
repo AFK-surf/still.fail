@@ -140,10 +140,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.browser)
     // Markdown as the web reads it (GFM: tables, strikethrough, task lists; a bare URL stays text, as on the web).
-    implementation(libs.commonmark)
-    implementation(libs.commonmark.ext.gfm.tables)
-    implementation(libs.commonmark.ext.gfm.strikethrough)
-    implementation(libs.commonmark.ext.task.list.items)
     // Frosted bars: what scrolls under them shows through, blurred (Android 12+; tinted glass before).
     implementation(libs.haze)
     // Pushes while the app is not in front (Push.kt); set up by hand, without the google-services plugin.

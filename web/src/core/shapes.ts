@@ -1754,6 +1754,11 @@ export interface ChatMessage {
 	author: string;
 	authorName?: string;
 	text: string;
+	/**
+	 * An agent's or still.fail's words read as Markdown (markdown.ts), its runs of words in `text`: what the clients
+	 * draw. Absent for a person's, drawn as they wrote it.
+	 */
+	md?: unknown;
 	attachments: Attachment[];
 	quotes: Quote[];
 	/** An agent's post that ended its turn: final, block (the words from before; `ending` has today's). */
@@ -3033,7 +3038,7 @@ export interface HistoryPhase {
 /** A message the agent posted: where to, whether it ended its work blocked, whether it failed. */
 export interface HistoryPost {
 	text: string;
-	/** `text` read as Markdown (markdown.ts): what the clients draw. */
+	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
 	md: unknown;
 	place?: Place;
 	block: boolean;
@@ -3052,7 +3057,7 @@ export interface HistoryTask {
 	failed: boolean;
 	/** What a sub-agent answered. */
 	result?: string;
-	/** `result` read as Markdown (markdown.ts): what the clients draw. */
+	/** `result` read as Markdown (markdown.ts), its runs of words in `result`: what the clients draw. */
 	md?: unknown;
 }
 
@@ -3083,7 +3088,7 @@ export interface HistoryStep {
 /** The agent's own words; `subagent`: a sub-agent's. */
 export interface HistoryText {
 	text: string;
-	/** `text` read as Markdown (markdown.ts): what the clients draw. */
+	/** `text` read as Markdown (markdown.ts), its runs of words in `text`: what the clients draw. */
 	md: unknown;
 	subagent: boolean;
 }

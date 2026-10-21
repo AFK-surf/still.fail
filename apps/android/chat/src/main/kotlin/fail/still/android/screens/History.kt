@@ -309,7 +309,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 val icon = if (task.agent) Icons.Agent else Icons.Command
                 val color = if (task.failed) C.red else C.muted
                 val result = task.result
-                if (result != null) Message(icon, { Text(task.text, fontSize = 13.sp, color = color) }, result) { Markdown(result, size = 15) }
+                if (result != null) Message(icon, { Text(task.text, fontSize = 13.sp, color = color) }, result) { Markdown(result, size = 15, md = task.md) }
                 else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     IconIn(icon, 14.dp, color)
                     Text(task.text, fontSize = 13.sp, color = color)
@@ -342,7 +342,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
                 Text(after, fontSize = 13.sp, color = C.muted)
                 if (post.block) Pill("Block", C.blue)
                 if (post.failed) Pill(t("android-chat.history.send.failed"), C.red)
-            }, post.text) { Markdown(post.text, size = 15) }
+            }, post.text) { Markdown(post.text, size = 15, md = post.md) }
         }
         is HistoryBody.Mark -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             val wait = body.content.wait
@@ -358,7 +358,7 @@ private fun Item(item: HistoryItem, station: String, of: ChatOf, agent: ChatAgen
         is HistoryBody.Text -> Box(Modifier.let { if (body.content.subagent) it.padding(start = 12.dp) else it }) {
             val app = LocalApp.current
             val text = body.content.text
-            Brief(text) { app.reader = ReaderSpec({ Text(t("android-chat.history.wrote", "name" to agent.session.agentText), fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15) } }
+            Brief(text) { app.reader = ReaderSpec({ Text(t("android-chat.history.wrote", "name" to agent.session.agentText), fontSize = 13.sp, color = C.muted) }) { Markdown(text, size = 15, md = body.content.md) } }
         }
         is HistoryBody.Group -> Group(body.content)
     }

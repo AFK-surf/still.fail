@@ -77,6 +77,8 @@ export type Call =
   | { kind: "cacheUsage" }
   /// The colours of code a client holds itself (highlight.ts): code in Markdown it read, a tool's, a file's.
   | { kind: "codeInk"; code: string; lang: string }
+  /// Markdown a client holds itself read by the core (markdown.ts): a file's, a memory's.
+  | { kind: "markdown"; text: string }
   | { kind: "cacheClear"; station: string; thread: number }
   | { kind: "stationPreview"; station: string; port: number; method: string; path: string; headers: [string, string][]; body: Uint8Array; stream: boolean }
   | { kind: "previewSocket"; station: string; port: number; path: string; headers: [string, string][]; socket: string }
@@ -795,6 +797,8 @@ export function parseCall(name: string, params: unknown, bytes?: Uint8Array, mod
       ]);
       return { kind: "codeInk", code: p.code as string, lang: p.lang as string };
     }
+    case "markdown":
+      return { kind: "markdown", text: read(params, [["text", S, "req"]]).text as string };
     case "cache.clear": {
       const p = read(params, [
         ["station", S, "req"],

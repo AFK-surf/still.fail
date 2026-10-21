@@ -1,16 +1,19 @@
 // Markdown read once, here, for every client: an agent's words come to the clients parsed, as a compact tree (`Md`), so
-// neither the web's page nor the Android app parses a message itself, and the same words are read once however many
-// views and clients show them (a cache by the text). GitHub's flavour as the web read it before (micromark, as
-// react-markdown did): tables, strikethrough, task lists; a bare web address is linked where a reader sees it end
-// (bareLinks.ts), not at the next space as GFM's own finding does, and `www.…` and e-mail addresses stay text.
+// no client parses a message itself, and the same words are read once however many views and clients show them (a
+// cache by the text). GitHub's flavour as the web read it before (micromark, as react-markdown did): tables,
+// strikethrough, task lists; a bare web address is linked where a reader sees it end (bareLinks.ts), not at the next
+// space as GFM's own finding does, and `www.…` and e-mail addresses stay text.
 //
-// The tree (the same shape as Cue's, clients/packages/core/src/markdown/tree.ts there): text is itself; any other node
-// is `[kind, children?, attributes?]`, children told from attributes by being an array, attributes only what tells a
-// node apart (no source text, no defaults). Kinds are HTML's names where it has one:
-//   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?, ink?}] (`ink`: its colours, highlight.ts) · quote · ["list", [li…], {ordered?, start?}] ·
-//           ["li", […], {checked?}] (a tight list's item holds its words, a loose one's its paragraphs) ·
-//           ["table", [tr…], {align}] · tr · th · td · hr
-//   inline  b · i · s · ["code", {content}] · ["a", […], {href, title?}] · ["img", {src, alt?, title?}] · br
+// The tree (the shape of Cue's, clients/packages/core/src/markdown/tree.ts there): a run of words is where it stands in
+// the text (`[start, end]`, mdWords.ts), so the words go to the clients once, in the text beside the tree; or the words
+// themselves where reading changed them (an escape, an entity). Any other node is `[kind, children?, attributes?]`,
+// children told from attributes by being an array whose first item is not a number, attributes only what tells a node
+// apart (no defaults). Kinds are HTML's names where it has one:
+//   blocks  p · ["h", […], {depth}] · ["pre", {code, lang?, ink?}] (`code` words as a run is; `ink`: its colours,
+//           highlight.ts) · quote · ["list", [li…], {ordered?, start?}] · ["li", […], {checked?}] (a tight list's item
+//           holds its words, a loose one's its paragraphs) · ["table", [tr…], {align}] · tr · th · td · hr
+//   inline  b · i · s · ["code", {content}] (words as a run is) · ["a", […], {href, title?}] · ["img", {src, alt?,
+//           title?}] · br
 // Raw HTML is left out, as the web left it out. An address is as written: a client keeps what it may open.
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmStrikethroughFromMarkdown } from "mdast-util-gfm-strikethrough";
@@ -21,12 +24,13 @@ import { gfmTable } from "micromark-extension-gfm-table";
 import { gfmTaskListItem } from "micromark-extension-gfm-task-list-item";
 import { bareLinks } from "./bareLinks.ts";
 import { ink } from "./highlight.ts";
+import { type MdWords, wordsOf } from "./mdWords.ts";
 
-export type MdNode = string | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
+export type MdNode = MdWords | [kind: string] | [kind: string, children: MdNode[]] | [kind: string, attributes: Record<string, unknown>] | [kind: string, children: MdNode[], attributes: Record<string, unknown>];
 export type Md = MdNode[];
 
 // mdast as far as it is read here.
-type Node = { type: string; children?: Node[]; value?: string; depth?: number; lang?: string | null; ordered?: boolean | null; start?: number | null; spread?: boolean | null; checked?: boolean | null; align?: (string | null)[] | null; url?: string; title?: string | null; alt?: string | null; identifier?: string; label?: string | null; referenceType?: string };
+type Node = { type: string; position?: { start: { offset?: number }; end: { offset?: number } }; children?: Node[]; value?: string; depth?: number; lang?: string | null; ordered?: boolean | null; start?: number | null; spread?: boolean | null; checked?: boolean | null; align?: (string | null)[] | null; url?: string; title?: string | null; alt?: string | null; identifier?: string; label?: string | null; referenceType?: string };
 
 /// The tree of `text`: read once while it is kept (the latest texts, up to `KEPT_CHARS` of them).
 export function markdown(text: string): Md {
@@ -60,10 +64,25 @@ export function parse(text: string): Md {
   }) as Node;
   const defs = new Map<string, Node>();
   collect(root, defs);
-  return blocks(root.children ?? [], { defs, inLink: false });
+  return blocks(root.children ?? [], { defs, inLink: false, source: text });
 }
 
-type Cx = { defs: Map<string, Node>; inLink: boolean };
+type Cx = { defs: Map<string, Node>; inLink: boolean; source: string };
+
+/// `value` as a run of the text where the node read it from has it as it is, else the words themselves: the node whole
+/// (words), or what is inside its marks (code: after a fence's first line, after inline code's backticks).
+function run(value: string, n: Node, cx: Cx): MdWords {
+  const from = n.position?.start.offset;
+  const to = n.position?.end.offset;
+  if (value === "" || from === undefined || to === undefined) return value;
+  const source = cx.source;
+  if (n.type === "text") return to - from === value.length && source.startsWith(value, from) ? [from, to] : value;
+  let inside = from;
+  if (n.type === "code" && (source[from] === "`" || source[from] === "~")) inside = source.indexOf("\n", from) + 1 || to;
+  else if (n.type === "inlineCode") while (source[inside] === "`") inside++;
+  const at = source.indexOf(value, inside);
+  return at >= 0 && at + value.length <= to ? [at, at + value.length] : value;
+}
 
 function collect(node: Node, defs: Map<string, Node>): void {
   if (node.type === "definition" && node.identifier && !defs.has(normal(node.identifier))) defs.set(normal(node.identifier), node);
@@ -85,9 +104,10 @@ function block(n: Node, cx: Cx): MdNode[] {
     case "heading":
       return [["h", inlines(n.children ?? [], cx), { depth: n.depth ?? 1 }]];
     case "code": {
-      const code = n.value ?? "";
+      const value = n.value ?? "";
+      const code = run(value, n, cx);
       if (!n.lang) return [["pre", { code }]];
-      const colours = ink(code, n.lang);
+      const colours = ink(value, n.lang);
       return [["pre", colours === null ? { code, lang: n.lang } : { code, lang: n.lang, ink: colours }]];
     }
     case "blockquote":
@@ -117,15 +137,17 @@ function block(n: Node, cx: Cx): MdNode[] {
       return [];
     default:
       // Anything else that holds blocks (footnotes are not read): its blocks.
-      return n.children ? blocks(n.children, cx) : n.value ? [["p", [n.value]]] : [];
+      return n.children ? blocks(n.children, cx) : n.value ? [["p", [run(n.value, n, cx)]]] : [];
   }
 }
 
 function inlines(nodes: Node[], cx: Cx): MdNode[] {
   const out: MdNode[] = [];
   const push = (node: MdNode) => {
-    // Neighbouring texts as one.
-    if (typeof node === "string" && typeof out.at(-1) === "string") out[out.length - 1] = (out.at(-1) as string) + node;
+    // Neighbouring words as one: two runs that meet, or two of words themselves.
+    const last = out.at(-1);
+    if (typeof node === "string" && typeof last === "string") out[out.length - 1] = last + node;
+    else if (Array.isArray(node) && typeof node[0] === "number" && Array.isArray(last) && typeof last[0] === "number" && last[1] === node[0]) out[out.length - 1] = [last[0], node[1] as number];
     else if (node !== "") out.push(node);
   };
   for (const n of nodes) for (const node of inline(n, cx)) push(node);
@@ -134,8 +156,19 @@ function inlines(nodes: Node[], cx: Cx): MdNode[] {
 
 function inline(n: Node, cx: Cx): MdNode[] {
   switch (n.type) {
-    case "text":
-      return cx.inLink ? [n.value ?? ""] : bareLinks(n.value ?? "").map((part) => (typeof part === "string" ? part : ["a", [part.url], { href: part.url }]));
+    case "text": {
+      const value = n.value ?? "";
+      const whole = run(value, n, cx);
+      if (cx.inLink) return [whole];
+      // Its bare addresses as links, each part a run of the text where the whole is one.
+      let at = 0;
+      return bareLinks(value).map((part): MdNode => {
+        const words = typeof part === "string" ? part : part.url;
+        const piece: MdWords = typeof whole === "string" ? words : [whole[0] + at, whole[0] + at + words.length];
+        at += words.length;
+        return typeof part === "string" ? piece : ["a", [piece], { href: part.url }];
+      });
+    }
     case "strong":
       return [["b", inlines(n.children ?? [], cx)]];
     case "emphasis":
@@ -143,7 +176,7 @@ function inline(n: Node, cx: Cx): MdNode[] {
     case "delete":
       return [["s", inlines(n.children ?? [], cx)]];
     case "inlineCode":
-      return [["code", { content: n.value ?? "" }]];
+      return [["code", { content: run(n.value ?? "", n, cx) }]];
     case "break":
       return [["br"]];
     case "link":
@@ -153,13 +186,13 @@ function inline(n: Node, cx: Cx): MdNode[] {
     case "linkReference":
     case "imageReference": {
       const def = n.identifier ? cx.defs.get(normal(n.identifier)) : undefined;
-      if (!def) return [`${n.type === "imageReference" ? "!" : ""}[${n.label ?? n.alt ?? ""}]${n.referenceType === "full" ? `[${n.label ?? ""}]` : ""}`];
+      if (!def) return [run(`${n.type === "imageReference" ? "!" : ""}[${n.label ?? n.alt ?? ""}]${n.referenceType === "full" ? `[${n.label ?? ""}]` : ""}`, n, cx)];
       return n.type === "imageReference" ? [image(def.url ?? "", n.alt, def.title)] : [link(def.url ?? "", def.title, inlines(n.children ?? [], { ...cx, inLink: true }))];
     }
     case "html":
       return [];
     default:
-      return n.children ? inlines(n.children, cx) : n.value ? [n.value] : [];
+      return n.children ? inlines(n.children, cx) : n.value ? [run(n.value, n, cx)] : [];
   }
 }
 
@@ -174,17 +207,18 @@ function image(src: string, alt: string | null | undefined, title: string | null
   return ["img", attrs];
 }
 
-/// Its words as read, without the marks (what a quote of it carries, what a search finds).
-export function plainOf(md: Md): string {
+/// Its words as read from `source` (the text it was read from), without the marks (what a quote of it carries, what a
+/// search finds).
+export function plainOf(md: Md, source: string): string {
   const words = (node: MdNode): string => {
-    if (typeof node === "string") return node;
-    const [kind, first, second] = node;
-    const attrs = (Array.isArray(first) ? second : first) ?? {};
-    if (kind === "pre") return String(attrs.code ?? "");
-    if (kind === "code") return String(attrs.content ?? "");
+    if (typeof node === "string" || typeof node[0] === "number") return wordsOf(node, source);
+    const [kind, first, second] = node as [string, unknown, unknown];
+    const attrs = ((Array.isArray(first) ? second : first) ?? {}) as Record<string, unknown>;
+    if (kind === "pre") return wordsOf(attrs.code, source);
+    if (kind === "code") return wordsOf(attrs.content, source);
     if (kind === "img") return String(attrs.alt ?? "");
     if (kind === "br") return "\n";
-    return Array.isArray(first) ? first.map(words).join("") : "";
+    return Array.isArray(first) ? (first as MdNode[]).map(words).join("") : "";
   };
   return md.map(words).join("\n\n");
 }

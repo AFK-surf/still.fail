@@ -41,10 +41,10 @@ private val codeWork = Dispatchers.Default.limitedParallelism(2)
 /** Code up to this long (characters) is shaped plain on the UI thread as it is first drawn; longer, never. */
 private const val SHAPED_AT_ONCE = 4_000
 
-/** Code is only drawn here, in the colours the core says (`code.ink`); shaping thousands of colored spans happens off the
- *  UI thread. */
+/** Code is only drawn here, in the colours the core says (`known`: its Markdown's, else asked of it, `code.ink`);
+ *  shaping thousands of colored spans happens off the UI thread. */
 @Composable
-internal fun CodeInk(code: String, language: String?, dark: Boolean) {
+internal fun CodeInk(code: String, language: String?, dark: Boolean, known: KnownInk? = null) {
     val core = LocalApp.current.core
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -61,10 +61,10 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
             // first drawn, not "laying out" and then taller: coloured when the core has said its colours (the same
             // code drawn before), else plain, its colours coming after, off the UI thread.
             ?: if (code.length <= SHAPED_AT_ONCE) {
-                val known = inkKnown(code, key.language)
-                val laid = TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0).measure(paint(code, known?.ink, dark), style, softWrap = false)
-                if (known != null) codeLayouts.put(key, laid)
-                CodeLayout(key, laid, known != null)
+                val said = known ?: inkKnown(code, key.language)
+                val laid = TextMeasurer(fonts, Density(key.density, key.fontScale), direction, cacheSize = 0).measure(paint(code, said?.ink, dark), style, softWrap = false)
+                if (said != null) codeLayouts.put(key, laid)
+                CodeLayout(key, laid, said != null)
             } else null
     }
     val prepared by produceState(cached, key) {
@@ -76,7 +76,7 @@ internal fun CodeInk(code: String, language: String?, dark: Boolean) {
             val plain = withContext(codeWork) { measurer.measure(AnnotatedString(code), style, softWrap = false) }
             value = CodeLayout(key, plain, false)
         }
-        val ink = inkOf(core, code, key.language)
+        val ink = if (known != null) known.ink else inkOf(core, code, key.language)
         val colored = withContext(codeWork) { measurer.measure(paint(code, ink, dark), style, softWrap = false) }
         codeLayouts.put(key, colored)
         value = CodeLayout(key, colored, true)

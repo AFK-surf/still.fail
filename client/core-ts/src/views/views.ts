@@ -25,6 +25,7 @@ import { arr as arrU, deepFreeze, get as getU, isObject } from "../util.ts";
 import { ofAddress } from "../workspace.ts";
 import { presentHistory } from "../history.ts";
 import { archiveHintOf, type ArchiveHint } from "../prefs.ts";
+import { markdown } from "../markdown.ts";
 import { near, placeFiles } from "../placed.ts";
 import { archive } from "./archive.ts";
 import { Local, PENDING_PREFIX, type LocalChange } from "./local.ts";
@@ -1802,10 +1803,14 @@ function drawn<V extends Value | undefined>(out: V, uploadOf: (path: unknown) =>
     if (!isObject(m)) return m;
     const files = own(m.attachments);
     const out: J = { ...m, by: here(m.by), attachments: files };
-    // A person's words place nothing: their files are all below them.
-    if (m.authorKind !== "person" && Array.isArray(files) && files.length > 0) {
-      const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
-      if (placed.size > 0) out.placed = [...placed.keys()];
+    // A person's words are drawn as they wrote them and place nothing: their files are all below them. An agent's are
+    // Markdown, read here (once: markdown.ts keeps it by the words).
+    if (m.authorKind !== "person") {
+      out.md = markdown(str(m.text) ?? "");
+      if (Array.isArray(files) && files.length > 0) {
+        const { placed } = placeFiles(str(m.text) ?? "", files as J[]);
+        if (placed.size > 0) out.placed = [...placed.keys()];
+      }
     }
     return out;
   });

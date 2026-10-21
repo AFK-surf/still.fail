@@ -10,7 +10,6 @@ compose-bom = "2026.01.00"
 lifecycle = "2.10.0"
 browser = "1.9.0"
 webkit = "1.14.0"
-commonmark = "0.24.0"
 haze = "1.6.0"
 firebase-bom = "34.19.0"
 androidx-test-runner = "1.7.0"
@@ -33,10 +32,6 @@ androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-ru
 androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
 # A preview's message port carrying bytes as they are (screens/PreviewWeb.kt: WebMessageCompat's ArrayBuffer).
 androidx-webkit = { module = "androidx.webkit:webkit", version.ref = "webkit" }
-commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
-commonmark-ext-gfm-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
-commonmark-ext-gfm-strikethrough = { module = "org.commonmark:commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
-commonmark-ext-task-list-items = { module = "org.commonmark:commonmark-ext-task-list-items", version.ref = "commonmark" }
 haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebase-bom" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }

@@ -355,7 +355,8 @@ export function presentHistory(live: J, cx: Context): J {
             agent: n.chat,
             failed: n.failed,
             result: n.more,
-            md: n.more === null ? null : markdown(n.output ? `\`\`\`\n${n.more}\n\`\`\`` : n.more),
+            // A job's output is a block of code, all of it.
+            md: n.more === null ? null : n.output ? (n.more === "" ? [] : [["pre", { code: [0, n.more.length] }]]) : markdown(n.more),
           }))),
           messages: messages.flatMap((m, k) => {
             // A job's own words, as it wrote them (drawn in a monospaced font); still.fail's of any other kind, as they are.

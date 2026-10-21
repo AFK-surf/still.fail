@@ -1249,7 +1249,7 @@ private fun SaidRow(ctx: Here, m: ChatMessage, draft: Draft?, list: androidx.com
             Box(hold) { CompositionLocalProvider(fail.still.android.ui.LocalPickedWords provides words) {
                 // A person's words as yours are drawn: a reference to another chat as its chip (web Chat.tsx → PersonWords).
                 if (m.authorKind == "person") { if (m.text.isNotEmpty()) PersonWords(m.text) }
-                else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft)
+                else AgentWords(ctx, m.text, m.attachments, m.placed.orEmpty(), draft, md = m.md)
             } }
             // An agent's files are placed in its words (Prose.kt), the rest below them there.
             if (m.authorKind == "person") Files(ctx, m.attachments)

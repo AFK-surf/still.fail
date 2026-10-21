@@ -32,10 +32,11 @@ private val HTML = Regex("\\.html?$", RegexOption.IGNORE_CASE)
 
 /**
  * An agent's Markdown with its files: those its text names (`placed`, by name: the core decides which) shown there, the
- * rest below it. `draft`: where words a visualization asks to send go (the composer), for the person to send.
+ * rest below it. `draft`: where words a visualization asks to send go (the composer), for the person to send. `md`: the
+ * core's tree of the words (the message's), else the core reads them as they are first drawn.
  */
 @Composable
-fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names: List<String>, draft: Draft? = null) {
+fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names: List<String>, draft: Draft? = null, md: kotlinx.serialization.json.JsonElement? = null) {
     val (placed, rest) = remember(files, names) {
         val placed = names.mapNotNull { n -> files.firstOrNull { it.name == n }?.let { n to it } }.toMap()
         placed to files.filter { it !in placed.values }
@@ -54,7 +55,7 @@ fun AgentWords(ctx: Here, text: String, files: List<Attachment>, names: List<Str
     )
     val followUp: ((String) -> Boolean)? = draft?.let { d -> { words -> d.text = if (d.text.isBlank()) words else "${d.text.trimEnd()}\n$words"; d.focus++; true } }
     Column {
-        CompositionLocalProvider(LocalFollowUp provides followUp) { Markdown(text, placing = placing, screens = ScreenLinks) }
+        CompositionLocalProvider(LocalFollowUp provides followUp) { Markdown(text, placing = placing, screens = ScreenLinks, md = md) }
         if (rest.isNotEmpty()) Box(Modifier.padding(top = 4.dp)) { Files(ctx, rest) }
     }
     opened?.let { f -> OpenedFile(ctx, f) { opened = null } }
