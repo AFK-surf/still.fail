@@ -56,7 +56,10 @@ def main():
     for c in gone:
         print(f"{'would delete' if dry else 'delete'} {c['key']} ({c['ref']}, {c['size_in_bytes'] // 1_000_000} MB, {c['created_at']})")
         if not dry:
-            gh("api", "-X", "DELETE", f"repos/{repo}/actions/caches/{c['id']}")
+            r = subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{repo}/actions/caches/{c['id']}"], capture_output=True, text=True)
+            # (gone already, between the list and here: GitHub's own eviction, run 39606378560)
+            if r.returncode != 0 and "HTTP 404" not in r.stderr:
+                sys.exit(f"cache_prune: deleting {c['key']}: {r.stderr.strip()}")
         freed += c["size_in_bytes"]
     total = sum(c["size_in_bytes"] for c in caches)
     print(f"{len(gone)} of {len(caches)} caches, {freed // 1_000_000} MB of {total // 1_000_000} MB")
