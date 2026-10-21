@@ -24,6 +24,10 @@ export ANDROID_AVD_HOME=$HOME/.android/avd
 AVD=ci-$TARGET-$PROFILE
 [ -f "$ANDROID_AVD_HOME/$AVD.ini" ] || { echo "::error::no AVD $AVD in the Actions cache: run the android-sdk workflow"; exit 1; }
 ADB=$SDK/platform-tools/adb
+# adb's server up before the emulator: the emulator starts one itself as its boot completes, and an adb command of ours
+# at that moment started a second, the two racing for port 5037 ("could not install *smartsocket* listener: Address
+# already in use", 39530737354): one server, ours, which the emulator then finds
+$ADB start-server
 ANDROID_SDK_ROOT=$SDK "$EMU" -avd "$AVD" -port 5554 -no-window -gpu swiftshader_indirect -no-snapshot -noaudio \
   -no-boot-anim > "$RUNNER_TEMP/emulator.log" 2>&1 &
 E=$!
@@ -44,7 +48,9 @@ if ! kill -0 $W 2>/dev/null && kill -0 $E 2>/dev/null && [ $first = 0 ]; then
   kill $T 2>/dev/null || true
   echo "booted"
 else
-  if kill -0 $E 2>/dev/null; then
+  if ! kill -0 $W 2>/dev/null && kill -0 $E 2>/dev/null; then
+    echo "::error::the emulator's boot completed, adb could not reach it (exit $first)"
+  elif kill -0 $E 2>/dev/null; then
     echo "::error::the emulator not up after ${BOOT_MOST:-600} s"
   else
     echo "::error::the emulator ended before it was up (exit $first)"
