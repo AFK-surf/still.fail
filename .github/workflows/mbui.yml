@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-24.04
     # production's secrets (the key, the bucket's token) on main only: a branch's run builds, unsigned, and puts nothing
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -134,7 +134,7 @@ jobs:
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.mac == 'yes'
     runs-on: macos-15
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || '' }}
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       MBUI_FRESH: 1
       MBUI_CACHE: ${{ github.workspace }}/.ci/release
@@ -197,7 +197,7 @@ jobs:
     needs: what
     if: github.repository == 'AFK-surf/still.fail' && needs.what.outputs.ios == 'yes'
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       MBC_STORE: ${{ github.workspace }}/.ci/mbc-store
       HBC_CACHE: ${{ github.workspace }}/.ci/hbc

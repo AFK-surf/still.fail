@@ -30,7 +30,7 @@ jobs:
           # (mbui-android-ref's: the image Android's references are taken on, API 36)
           - { api: 36, target: google_apis, profile: pixel_7, avd: ci-36-google_apis-pixel_7, keyed: "36-" }
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/cache/restore@v4
         id: emu

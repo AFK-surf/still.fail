@@ -5,8 +5,11 @@
 # by mbui-render-windows (a Tester's draw list drawn offscreen), as the macOS job does (mbui-ci.yml).
 name: mbui-windows
 on:
+  # (on main as on a branch, only when what it builds changed: on every push to main it ran 77 times in three days,
+  # a commit to the station's code as well)
   push:
-    branches: [main, windows, images-android-win]
+    branches: [main]
+    paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**"]
   pull_request:
     paths: ["apps/mbui/mbui/**", ".github/workflows/mbui-windows.yml", ".github/actions/mbui-moonbit/**"]
   workflow_dispatch:
@@ -20,6 +23,7 @@ on:
 jobs:
   demo:
     runs-on: windows-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -77,6 +81,7 @@ jobs:
   stillfail:
     if: github.event_name == 'workflow_dispatch' && inputs.stillfail_ref != ''
     runs-on: windows-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mbui/mbui

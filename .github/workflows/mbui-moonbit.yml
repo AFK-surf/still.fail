@@ -30,7 +30,7 @@ jobs:
           # compression another, so its jobs find none of macos-15's)
           - { os: [self-hosted, mbui-render], bin: moonbit-darwin-aarch64.tar.gz, core: core-latest.tar.gz }
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: The latest release's ETags
         id: tag

@@ -38,7 +38,7 @@ jobs:
       matrix:
         run: [a, b]
     runs-on: windows-2025
-    timeout-minutes: 40
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/mbui/mbui
@@ -67,6 +67,7 @@ jobs:
     needs: offscreen
     if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@v4
         with: { pattern: render-windows-*, path: runs }

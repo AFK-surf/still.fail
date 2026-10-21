@@ -36,7 +36,7 @@ jobs:
   screens:
     if: github.repository == 'AFK-surf/still.fail'
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 10
     env:
       MBUI_FRESH: 1
     steps:

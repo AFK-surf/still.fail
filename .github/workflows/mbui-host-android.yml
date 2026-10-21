@@ -43,7 +43,7 @@ jobs:
       run:
         working-directory: apps/mbui/mbui
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         # (the merge commit and its base: what changed is told by them, scripts/ci_paths.py)
