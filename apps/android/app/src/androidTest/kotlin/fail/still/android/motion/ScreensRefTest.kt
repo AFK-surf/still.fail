@@ -7,15 +7,18 @@ package fail.still.android.motion
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.platform.graphics.HardwareRendererCompat
 import fail.still.android.AppState
 import fail.still.android.LocalApp
 import fail.still.android.Screen
@@ -28,6 +31,8 @@ import fail.still.android.ui.LocalUi
 import fail.still.android.ui.StillFailTheme
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -40,6 +45,40 @@ import org.junit.Test
 
 class ScreensRefTest {
     @get:Rule val rule: MotionRule = createAndroidComposeRule<ComponentActivity>()
+
+    /**
+     * The app's window as drawn now, where its composition is (the whole of it): a frame drawn and committed on the main
+     * thread, then PixelCopy of the window. Not `captureToImage`: it reads the node's semantics on this (the test's)
+     * thread, which observes snapshot reads for the window's owner while the main thread may be drawing it ("Detected
+     * multithreaded access to SnapshotStateObserver", settings, 2026-10-22). Nothing of the composition is read here.
+     */
+    private fun windowPicture(activity: ComponentActivity): Bitmap {
+        // (the test runner turns the hardware renderer's drawing off; on while pictured, as captureToImage has it)
+        val drawing = HardwareRendererCompat.isDrawingEnabled()
+        if (!drawing) HardwareRendererCompat.setDrawingEnabled(true)
+        try { return copyWindow(activity) } finally { if (!drawing) HardwareRendererCompat.setDrawingEnabled(false) }
+    }
+
+    private fun copyWindow(activity: ComponentActivity): Bitmap {
+        val window = activity.window
+        val where = Rect()
+        val drawn = CountDownLatch(1)
+        rule.runOnUiThread {
+            val view = activity.findViewById<ViewGroup>(android.R.id.content).getChildAt(0)
+            val at = IntArray(2).also { view.getLocationInWindow(it) }
+            where.set(at[0], at[1], at[0] + view.width, at[1] + view.height)
+            window.decorView.viewTreeObserver.registerFrameCommitCallback { drawn.countDown() }
+            window.decorView.invalidate()
+        }
+        // (the limits only failures: a frame and a copy are each the system's own word)
+        check(drawn.await(10, TimeUnit.SECONDS)) { "no frame drawn for the picture" }
+        val bitmap = Bitmap.createBitmap(where.width(), where.height(), Bitmap.Config.ARGB_8888)
+        val copied = CountDownLatch(1)
+        var result = -1
+        PixelCopy.request(window, where, bitmap, { r -> result = r; copied.countDown() }, Handler(Looper.getMainLooper()))
+        check(copied.await(10, TimeUnit.SECONDS) && result == PixelCopy.SUCCESS) { "the window not copied ($result)" }
+        return bitmap
+    }
 
     /** The screen `name` (client/fixtures/screens/`name`.json) drawn and pictured. */
     private fun ref(name: String) {
@@ -90,7 +129,7 @@ class ScreensRefTest {
         // frame, which may be one behind a paused clock), the whole of it, under the system's bars too; where those
         // bars are (their icons the system's, not the app's: left out of the comparison) beside it
         val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "screens").apply { mkdirs() }
-        val shot = rule.onRoot().captureToImage().asAndroidBitmap()
+        val shot = windowPicture(activity)
         FileOutputStream(File(dir, "$name.png")).use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
         var bars = intArrayOf(0, 0)
         rule.runOnUiThread {
