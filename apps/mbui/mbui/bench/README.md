@@ -18,7 +18,8 @@ waited for). No window opens.
 ```sh
 scripts/bench.sh                         # release build, every scene, append to bench/history.jsonl
 LABEL="what changed" scripts/bench.sh    # name the run
-SCENES=text,list FRAMES=600 REPEAT=5 scripts/bench.sh
+SCENES=text,list MS=500 REPEAT=5 scripts/bench.sh   # frames filling ~500 ms a scene
+FRAMES=300 scripts/bench.sh               # exactly nanoui's 300 frames
 NANOUI=~/nanoui ZIG=zig-0.17 scripts/bench.sh nanoui   # nanoui's own hill-climb too, then both side by side
 scripts/bench.sh compare                 # the last runs side by side (scripts/bench_compare.py)
 FLUTTER=…/bin/flutter HEAT=1 scripts/bench_flutter.sh   # Flutter's twin, at vsync, one other core kept busy
@@ -37,6 +38,18 @@ frame as a PNG, to look at.
 900×640 points at 2x, 30 frames of warm-up, then 300 measured; three runs
 per scene, the one with the lowest median frame kept. A frame advances
 time by 1/120 s.
+
+Where it is not nanoui's: a scene measures as many frames as fill about
+300 ms (`MS`), judged by the warm-up's later half, never fewer than 300.
+300 frames of the quicker scenes are over in 110 (list) to 180 ms
+(dashboard) of wall time, where one hiccup of the machine moves the
+median; about 300 ms is long enough for that to wash out and short enough
+to run the bench again and again to see how much it varies (after
+[matklad](https://matklad.github.io/2026/10/05/benchmark-milliseconds.html)).
+`FRAMES` fixes the count; `scripts/bench.sh nanoui` measures 300, as
+nanoui does. Times print as whole µs a frame (`history.jsonl` keeps
+them in ms, to the µs, as nanoui's does), with each scene's frame count
+and its measured run's wall time (`run_ms`).
 
 | metric | what |
 |---|---|
