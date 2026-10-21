@@ -675,6 +675,14 @@ fn decision_face(
       }
       rows.push(fn() {
         match kind {
+          // an agent's request for a vault item: approved here (Vault.kt), the 奏 page's the viewer's
+          "options" if text(card, "vault") != "" => {
+            let ws = match station.find("/") {
+              Some(i) => station.view(end_offset=i).to_string()
+              None => station
+            }
+            vault_approval(c, src, ws, text(card, "vault"), true)
+          }
           "options" =>
             match decision_options(c, pre + "options/" + key, options, true, None) {
               Some(o) if live => on_pick(o)

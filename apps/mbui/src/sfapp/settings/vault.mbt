@@ -183,6 +183,11 @@ fn library(c : @ui.Ctx, core : Core, ws : String, v : Json?) -> Array[() -> Unit
       }
     })
   })
+  // locked, the viewer's secrets saved before it still in plain text: encrypted into their vault
+  let left = number(v, "plainLeft").to_int()
+  if !plain && left > 0 {
+    blocks.push(fn() { plain_left(c, core, ws, left) })
+  }
   // the profiles' accounts it keeps, a section a kind as the Profile list groups them
   let profiles = (core.topic)("profiles", { "scope": str(ws) }).value
   for g in profile_groups(items(profiles, "items")) {
@@ -622,3 +627,45 @@ fn index_of(out : Array[(String, String, Array[Json])], g : String) -> Int? {
   }
   None
 }
+
+///|
+/// Security mode on, the viewer's secrets saved before it still in plain text (Vault.kt PlainLeft): how many, and 加密
+/// under the words in the card's corner (`vault.migrate`).
+fn plain_left(c : @ui.Ctx, core : Core, ws : String, n : Int) -> Unit {
+  card(c, foot=true, fn() {
+    c.box(style=plain_left_column, fn() {
+      c.box(style=@sf.full_width, fn() {
+        c.text(fill("android-settings.vault.migrate.title", [("n", n.to_string())]), style=@sf.body.then(@sf.full_words))
+        |> ignore
+        c.text(tr("android-settings.vault.migrate.body"), style=plain_left_body) |> ignore
+      })
+      |> ignore
+      if button(
+          c,
+          "vault-migrate",
+          tr("android-settings.vault.migrate.action"),
+          true,
+          busy=is_doing(core, ["vault.migrate"], [("workspace", ws)]),
+        ) {
+        act(
+          core,
+          tr("android-settings.vault.migrate.what"),
+          "vault.migrate",
+          obj([("workspace", str(ws))]),
+          done=tr("android-settings.vault.migrate.done"),
+        )
+      }
+    })
+    |> ignore
+  })
+  |> ignore
+}
+
+///|
+/// Its words, then its button, 12 apart (Vault.kt:493); the line under its title 13 on 19 in the muted.
+// kept across runs: a value (no field of it changes)
+let plain_left_column : @ui.Style = @ui.style(w=Full, gap=S3)
+
+///|
+// kept across runs: a value (no field of it changes)
+let plain_left_body : @ui.TextStyle = @ui.text_style(size=Sm, leading=L4_75, color=Muted, w=Full)

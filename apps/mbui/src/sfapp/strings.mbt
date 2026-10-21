@@ -169,6 +169,17 @@ let zh : Map[String, String] = {
   "web-main.outside.share": "分享并发送",
   "web-main.outside.anyway": "仍然发送",
   "web-main.outside.failed": "分享失败：{error}",
+  // a vault request on its card (vault_approval.mbt)
+  "android-settings.vault.approve.once": "仅本次",
+  "android-settings.vault.approve.onceDetail": "单次有效",
+  "android-settings.vault.approve.hour": "本对话 1 小时内",
+  "android-settings.vault.approve.hourDetail": "期间无需再次批准",
+  "android-settings.vault.approve.deny": "拒绝",
+  "android-settings.vault.approve.denyDetail": "通知 agent 已拒绝",
+  "android-settings.vault.approve.what": "批准",
+  "android-settings.vault.approve.denyWhat": "拒绝",
+  "android-settings.vault.approve.inApp": "请在客户端批准",
+  "android-settings.vault.approve.decided": "此申请已处理",
 }
 
 ///|

@@ -19,6 +19,8 @@ priv struct SettingsFixture {
   mut login : Bool
   /// the vault not set up on this device (settings-vault-off)
   mut vault_off : Bool
+  /// secrets of lin's still in plain text from before security mode (settings-vault-plain), until encrypted
+  mut plain_left : Int
   /// the skills shared (true) or no longer (false) since the run started (`skill.share`), by name
   skills_shared : Map[String, Bool]
   /// the quota's resets used on ChatGPT 团队 (`profile.resetQuota`)
@@ -37,6 +39,7 @@ let fx : SettingsFixture = {
   none: false,
   login: false,
   vault_off: false,
+  plain_left: 0,
   skills_shared: {},
   resets_used: 0,
   models_added: [],
@@ -74,6 +77,7 @@ fn fixture_reset() -> Unit {
   fx.none = false
   fx.login = false
   fx.vault_off = false
+  fx.plain_left = 0
   fixture_open.sheet = ""
   fixture_open.list = ""
   fixture_open.block = 0
@@ -122,6 +126,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-connect-menu" => up("connect-menu", "", 0)
     "settings-connect-mode" => up("connect-mode", "", 0)
     "settings-vault-off" => fx.vault_off = true
+    "settings-vault-plain" => fx.plain_left = 2
     "settings-vault-words" => recovery_words["ws1"] = fx_words()
     "settings-vault-add" => up("vault-add", "", 0)
     "settings-vault-editor" => up("vault-editor", "", 0)
@@ -151,7 +156,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-new-connect" | "settings-new-connect-platform" | "settings-new-connect-scan" => "new-connect:ws1/st1"
     "settings-slack-app" => "slack-app:ws1/st1#k1"
     "settings-vault-off" | "settings-vault-words" | "settings-vault-add" | "settings-vault-editor" => "vault"
-    "settings-vault-recover" => "vault"
+    "settings-vault-recover" | "settings-vault-plain" => "vault"
     "settings-vault-item" => "vault-item:v1#it1"
     "settings-decisions" => "decisions-settings"
     "settings-completion" => "completion"
@@ -1059,6 +1064,7 @@ pub fn fixture_topic(mode : String, name : String, params : Map[String, Json]) -
           ("locked", Json::boolean(true)),
           ("canSign", Json::boolean(true)),
           ("setUp", Json::boolean(!fx.vault_off)),
+          ("plainLeft", Json::number(fx.plain_left.to_double())),
           (
             "vaults",
             [
@@ -1214,6 +1220,12 @@ pub fn fixture_call(name : String, params : Json) -> Result[Json, Json]? {
       Some(Ok(obj([])))
     }
     "memory.get" => Some(Ok(fx_memory()))
+    // lin's secrets from before security mode encrypted into their vault
+    "vault.migrate" => {
+      fx.plain_left = 0
+      fx.version += 1
+      Some(Ok(obj([])))
+    }
     // a skill shared with the workspace's other stations, or no longer
     "skill.share" => {
       fx.skills_shared[text(p, "name")] = flag(p, "on")

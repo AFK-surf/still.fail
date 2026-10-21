@@ -1165,17 +1165,29 @@ fn decision_under(c : @ui.Ctx, src : Source, here : Here, m : Message) -> Unit {
           Some({ assignee_text: Some(a), .. }) => quiet(a)
           _ => ()
         }
-        match
-          decision_options(
-            c,
-            "options/" + m.ts,
-            options,
-            !resolved && !here.view.offline && !here.view.archived,
-            busy,
-            chosen~,
-          ) {
-          Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
-          _ => ()
+        match m.card {
+          // an agent's request for a vault item: approved here (Vault.kt), not answered in the chat
+          Some({ vault, assignee, .. }) if vault != "" => {
+            let ws = match here.station.find("/") {
+              Some(i) => here.station.view(end_offset=i).to_string()
+              None => here.station
+            }
+            let me = here.view.me
+            vault_approval(c, src, ws, vault, assignee == "" || me == "" || assignee.to_lower() == me.to_lower())
+          }
+          _ =>
+            match
+              decision_options(
+                c,
+                "options/" + m.ts,
+                options,
+                !resolved && !here.view.offline && !here.view.archived,
+                busy,
+                chosen~,
+              ) {
+              Some(o) if !resolved => answer_option(src, here.station, m.thread, m.seq, o.label)
+              _ => ()
+            }
         }
       })
       |> ignore
