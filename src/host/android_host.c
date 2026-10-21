@@ -1328,9 +1328,19 @@ JNIEXPORT void JNICALL Java_dev_mbui_Native_outside(JNIEnv *env, jclass c, jint 
 // (host_native.mbt's frame_awaiting): a run to a declared moment keeps its clock still while any is (MBView's
 // shotFrame, Native.awaiting).
 static int awaiting_n;
+// (in a run to a declared moment, what it awaits said on the log as it changes: a picture whose clock stands still is
+// told by what it stands for, not left to a timeout)
+static char awaiting_said[512];
 void mb_host_frame_awaiting(int32_t awaiting, moonbit_string_t what) {
-  (void)what;
   awaiting_n = awaiting;
+  if (!own_clock) return;
+  char now[512];
+  int n = Moonbit_array_length(what), m = 0;
+  for (int i = 0; i < n && m < (int)sizeof now - 1; i++) now[m++] = what[i] < 128 ? (char)what[i] : '?';
+  now[m] = 0;
+  if (strcmp(now, awaiting_said) == 0) return;
+  memcpy(awaiting_said, now, (size_t)m + 1);
+  LOG("shot: awaiting %d: %s", awaiting, now);
 }
 JNIEXPORT jint JNICALL Java_dev_mbui_Native_awaiting(JNIEnv *env, jclass c) { return awaiting_n; }
 
