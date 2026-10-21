@@ -23,7 +23,7 @@ import { Priority } from "./scheduler.ts";
 /// held a minute.
 export const SOCKET_RETRY_MS = 1_000;
 export const SOCKET_RETRY_MAX_MS = 60_000;
-/// An events socket that answered a ping before and then heard nothing this long is opened again.
+/// An events socket that heard nothing this long is opened again, including before its first heartbeat.
 export const SOCKET_IDLE_MS = 2 * 25_000 + 10_000;
 export { EVENTS_PROTOCOL } from "../account-provider.ts";
 /// still.fail cloud's operator lists.
@@ -518,13 +518,13 @@ export class CloudSync {
   }
 
   /// Holds an account's `/v1/events` socket open, reconnecting with backoff, until the account signs out (the fiber
-  /// is interrupted). Each open reads the account again; a socket that answered pings and went silent is opened anew;
+  /// is interrupted). Each open reads the account again; a socket that went silent is opened anew;
   /// one suspected as the UI comes back has another opened beside it, which takes its place once open.
   #follow(sub: string): Effect.Effect<void, never> {
     const core = this.#core;
     const self = this;
     type Opened = { frames: Pull<string>; scope: Scope.Closeable };
-    type Ev = { frame: string | null } | { broke: CoreError } | { idle: true } | { suspect: true } | { beside: Opened };
+    type Ev = { frame: string | null } | { broke: CoreError } | { idle: true } | { suspect: true } | { beside: Opened } | { replacementFailed: true };
     // A socket in a scope of its own inside `scope`: one replaced by another is closed alone.
     const openIn = (scope: Scope.Scope) =>
       Effect.gen(function* () {
@@ -548,7 +548,6 @@ export class CloudSync {
           core.status.socketUp(sub);
           // Nothing is replayed: what changed while it was closed is read now.
           core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, self.#account(sub));
-          let answers = false;
           let woke = false;
           let idle = false;
           let beside: Effect.Effect<Ev> | null = null;
@@ -559,13 +558,12 @@ export class CloudSync {
                 Effect.catch((e) => Effect.succeed<Ev>({ broke: asCoreError(e) })),
               ),
             ];
-            if (answers) racers.push(Effect.sleep(SOCKET_IDLE_MS).pipe(Effect.as<Ev>({ idle: true })));
+            racers.push(Effect.sleep(SOCKET_IDLE_MS).pipe(Effect.as<Ev>({ idle: true })));
             racers.push(beside ?? core.wakes.until((w) => w.suspectsConnections()).pipe(Effect.as<Ev>({ suspect: true })));
             const ev = yield* Effect.raceAllFirst(racers);
             if ("frame" in ev) {
               if (ev.frame === null) break;
-              if (ev.frame === "pong") answers = true;
-              else self.#onEvent(sub, ev.frame);
+              if (ev.frame !== "pong") self.#onEvent(sub, ev.frame);
             } else if ("broke" in ev) {
               const m = ev.broke.message;
               woke = m === GONE || m === NETWORK || m === t("core-misc.wake.gone") || m === t("core-misc.wake.network");
@@ -578,17 +576,19 @@ export class CloudSync {
               const opening = yield* Effect.forkIn(
                 openIn(scope).pipe(
                   Effect.map((f): Ev => ({ beside: f })),
-                  Effect.catch(() => Effect.never as Effect.Effect<Ev>),
+                  Effect.catch(() => Effect.succeed<Ev>({ replacementFailed: true })),
                 ),
                 scope,
               );
               beside = Fiber.join(opening);
+            } else if ("replacementFailed" in ev) {
+              // Keep the old socket, but listen for the next wake again.
+              beside = null;
             } else {
               beside = null;
               yield* Scope.close(socket.scope, Exit.void);
               socket = ev.beside;
               frames = socket.frames;
-              answers = false;
               core.scheduler.enqueue("cloud", `me/${sub}`, Priority.shown, self.#account(sub));
             }
           }

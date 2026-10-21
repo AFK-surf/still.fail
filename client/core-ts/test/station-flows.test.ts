@@ -1173,7 +1173,8 @@ test("a_stream_coming_back_after_its_link_went_is_told_what_it_missed_and_reads_
   // it says `missed` too.
   gate.resumes = false;
   end();
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  // The second in a row that ended at once: it waits twice as long.
+  await host.time.pass(2 * RECONNECT_MS + 50, 50);
   assert.equal(streams.at(-1)!.path, `/events?since=${encodeURIComponent("1f2e3d4c.10")}`);
   push("missed", {});
   await host.settle();
@@ -1803,12 +1804,13 @@ test("a_stream_gone_while_another_way_is_up_opens_again_with_the_station_still_r
   assert.equal(streams.length, opened + 1);
   assert.equal(streams.filter((x) => !x.closed).length, 1);
   assert.deepEqual([...new Set(seen)], ["online"]);
-  // One that ends as soon as it opens is opened again after RECONNECT_MS, the station still reached.
+  // One that ends as soon as it opens, after another that did not hold either (STREAM_HELD_MS), waits out twice
+  // RECONNECT_MS, the station still reached.
   end();
   await read();
   assert.equal(streams.length, opened + 1);
   assert.equal(linkOf(values, 1), "online");
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.time.pass(2 * RECONNECT_MS + 50, 50);
   await read();
   assert.equal(streams.length, opened + 2);
   assert.deepEqual([...new Set(seen)], ["online"]);
@@ -1818,7 +1820,7 @@ test("a_stream_gone_while_another_way_is_up_opens_again_with_the_station_still_r
   end();
   await read();
   assert.equal(linkOf(values, 1), "reconnecting");
-  await host.time.pass(RECONNECT_MS + 50, 50);
+  await host.time.pass(4 * RECONNECT_MS + 50, 50);
   await read();
   assert.equal(linkOf(values, 1), "online");
   core.close();

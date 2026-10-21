@@ -180,7 +180,7 @@ notices are only of the workspace the viewer is in (attend.ts).
 | `accounts` | — | signed-in accounts (no tokens) |
 | `workspaces` | — | every workspace of every account, with its account and pending invitations |
 | `workspace` | `workspace` | the workspace view (members, stations) |
-| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online or after 12 tries in a row missed, and at once when the cloud says it is back, the UI comes back or the station answers a request; one that was up is tried as coming back for its first 3 misses whatever the cloud says) / `error` + message |
+| `link` | `station` | the device's own link to the station: `connecting` (with `last`, how it was last time) / `online` / `reconnecting` / `offline` (not reached: retried with backoff, 2 s doubling to 60 s; every 10 minutes while still.fail cloud says the station is not online or after 12 tries in a row missed, and at once when the cloud says it is back, the UI comes back or the station answers a request; streams that end before the station's first keepalive (25 s) back off the same way, those in a row, until one holds or the UI comes back; one that was up is tried as coming back for its first 3 misses whatever the cloud says) / `error` + message |
 | `overview` | `station` | the admin API's `/overview` |
 | `sessions` | `station` | `/sessions` (the shown sessions' `SessionSummary`s) |
 | `archivedRows` | `station` | `/chats?archived=1`: the station's archived chats. Read only while a page shows it (every chat ever archived: read with each snapshot and archiving, it was a large part of what a slow link carried): again after `chat.archive`, `session.delete` while shown, else marked to be read as it is next shown |
@@ -251,7 +251,11 @@ that only notifications change it:
   one: the last id is written down in the same write as what its event
   changed (the `heard` record), and an app started again within the hour
   (a phone lets its process go often) reads nothing again either; taken up
-  so, the station's history is swept as after reading everything. The
+  so, the station's history is swept as after reading everything. Not while
+  the station is read afresh: a stream not resumed is told nothing of what
+  came before it, so the id is forgotten as that reading begins and written
+  down again once all of it was read; a core started before then (or after a
+  list could not be read) reads the station again. The
   station keeps what it told for an hour (while
   nobody follows too, for one coming back) and tells what came after first,
   with the same ids, then the viewer's sidebar rows and overview as they

@@ -188,7 +188,14 @@ export class StationsSync {
     const span = this.#core.tracer.span("station.read", Kind.Internal, parent);
     span.set("stillfail.station", address);
     const ctx = span.context;
-    const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx);
+    // Where the device is in the station's events is written down again once all of this is read (cursor.ts).
+    const link = this.#links.get(address);
+    if (link) {
+      link.cursor.reading();
+      this.#core.data.forgetRecord("heard", address);
+    }
+    const unread = () => link?.cursor.unread();
+    const read = (topic: Topic, path: string) => this.#read(address, topic, path, undefined, ctx, 0, unread);
     // The chats a UI has open, first: what was said in them after what is held, in the room kept for what is open. The
     // lists and the history behind them take a slow link a minute, and what an agent said while the stream was away
     // waited on them.
@@ -207,7 +214,12 @@ export class StationsSync {
       ...this.#slackConnects(address).map((id) => this.#enqueue(address, `slackApp/${id}`, Priority.background, read({ topic: "slackApp", station: address, connect: id }, `/connects/${encode(id)}/slack-app`))),
       ...this.also.map((part, i) => this.#enqueue(address, `also/${i}`, Priority.background, part.read(address))),
     ];
-    this.#core.runner.fork(Effect.ensuring(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), Effect.sync(() => span.end())));
+    // All read (what the events keep current: the lists' reads say where they could not be), where the device is.
+    const kept = Effect.sync(() => {
+      const keep = link?.cursor.read() ?? null;
+      if (keep !== null && this.#links.get(address) === link) this.#core.data.put("heard", address, keep);
+    });
+    this.#core.runner.fork(Effect.ensuring(Effect.andThen(Effect.ignore(Effect.all(done.map((d) => Deferred.await(d)), { mode: "result" })), kept), Effect.sync(() => span.end())));
   }
 
   /// A push came of a chat (`notice.bring`, `seq` the message it is about): what it says is brought onto the device now,
@@ -374,16 +386,21 @@ export class StationsSync {
 
   /// Reads one held topic: a 4xx while nothing is held is its error (the topic says so); anything else passes, and
   /// is read again a little later (less and less often, a few times) while the station stays reached.
-  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null, attempt = 0): Effect.Effect<void, CoreError> {
+  /// `unread`: told where it is not read (the station read afresh: cursor.ts).
+  #read(address: string, topic: Topic, path: string, shape?: (answer: unknown) => unknown, ctx: SpanContext | null = null, attempt = 0, unread?: () => void): Effect.Effect<void, CoreError> {
     return Effect.gen({ self: this }, function* () {
-      if (!this.reachable(address) || !this.#links.has(address)) return;
+      if (!this.reachable(address) || !this.#links.has(address)) return unread?.();
       const link = this.#links.get(address)!;
       const answer = yield* Effect.result(shape ? this.requests.call(link.addr, "GET", path, null, { quiet: true, ctx }) : this.#whole(link, topic, path, ctx));
       const key = topicKey(topic);
       if (answer._tag === "Success") {
         link.errors.delete(key);
         this.#core.data.set(topic, shape ? shape(answer.success) : answer.success);
-      } else if (this.#core.data.shared(topic) === undefined && answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
+        return;
+      }
+      // Not answered (a station's no is how it stands, read again or not).
+      if (answer.failure.status === undefined || answer.failure.status >= 500) unread?.();
+      if (this.#core.data.shared(topic) === undefined && answer.failure.status !== undefined && answer.failure.status >= 400 && answer.failure.status < 500) {
         link.errors.set(key, answer.failure);
         this.onChange(address, "errors", key);
       } else if ((answer.failure.status === undefined || answer.failure.status >= 500) && attempt < READ_RETRIES) {
