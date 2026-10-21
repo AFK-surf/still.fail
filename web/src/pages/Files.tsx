@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { useStations } from "../api.ts";
 import { useGo } from "../go.ts";
 import { StationContext, useStationList, type Station } from "../station.tsx";
-import { IconButton, Tip } from "../ui.tsx";
+import { IconButton } from "../ui.tsx";
 import { Close, Plus, ViewColumns } from "@stillfail/ui/icons.tsx";
 import { useDrive } from "../drive/useDrive.ts";
 import { nameOf, rootLabel } from "../drive/model.ts";
@@ -21,12 +21,17 @@ import * as pagesCss from "../styles/pages.css.ts";
 import * as driveCss from "./Drive.css.ts";
 import { t } from "../i18n.ts";
 
-/** A pane's name on its tab: its station, and the folder (its last part; a root pinned by its name, the home as 主目录). */
-export function paneName(p: Pane, views: readonly StationView[] | undefined): string {
+/** A pane's folder (its last part; a root pinned by its name, the home as 主目录) and its station's name. */
+export function paneParts(p: Pane, views: readonly StationView[] | undefined): { folder: string; station: string } {
   const v = views?.find((s) => s.station === p.station);
   const drive = v?.overview?.drive;
-  const folder = p.path ? nameOf(p.path) : drive?.home === p.root ? t("web-pages.drive.home") : rootLabel(drive?.roots, p.root);
-  return `${v?.name ?? ""} › ${folder}`;
+  return { folder: p.path ? nameOf(p.path) : drive?.home === p.root ? t("web-pages.drive.home") : rootLabel(drive?.roots, p.root), station: v?.name ?? "" };
+}
+
+/** A pane's name in a line: its station › its folder. */
+export function paneName(p: Pane, views: readonly StationView[] | undefined): string {
+  const { folder, station } = paneParts(p, views);
+  return `${station} › ${folder}`;
 }
 
 /** What a folder's page asks of the files' page around it: a folder opened in a new tab, or on the other side. */
@@ -82,22 +87,35 @@ export function FilesShell({ scope, here }: { scope: string; here: Pane }) {
   return (
     <Actions.Provider value={actions}>
     <div className={css.shell}>
-      <div className={css.bar} role="tablist" aria-label={t("web-pages.files.tabs")}>
-        <div className={css.tabs}>
-          {tabs.tabs.map((x) => (
-            <div key={x.id} className={css.tab} data-on={x.id === tabs.current || undefined} role="tab" aria-selected={x.id === tabs.current}>
-              <button type="button" className={css.tabName} title={tabTitle(x, name)} onClick={() => show(shown(tabs, x.id))}>
-                {x.panes.map((p, i) => <StationDot key={i} station={p.station} stations={stations} />)}
-                <span>{tabTitle(x, name)}</span>
-              </button>
-              {tabs.tabs.length > 1 && <button type="button" className={css.tabClose} aria-label={t("web-pages.files.closeTab")} onClick={() => show(closed(tabs, x.id))}><Close size={12} strokeWidth={2} /></button>}
-            </div>
-          ))}
-          <Tip label={t("web-pages.files.newTab")}><button type="button" className={css.tabAdd} aria-label={t("web-pages.files.newTab")} onClick={() => show(opened(tabs, frontOf(tabs)))}><Plus size={14} /></button></Tip>
-        </div>
+      {/* The tabs as Safari's compact ones: one groove, each tab an equal share of it, the one shown raised; its folder
+          first, its station after it, small. One tab alone has none (as Finder's window): only the bar's buttons. */}
+      <div className={css.bar}>
+        {tabs.tabs.length > 1 ? (
+          <div className={css.tabs} role="tablist" aria-label={t("web-pages.files.tabs")}>
+            {tabs.tabs.map((x) => (
+              <div key={x.id} className={css.tab} data-on={x.id === tabs.current || undefined} role="tab" aria-selected={x.id === tabs.current} title={tabTitle(x, name)}>
+                <button type="button" className={css.tabClose} aria-label={t("web-pages.files.closeTab")} onClick={() => show(closed(tabs, x.id))}><Close size={10} strokeWidth={2.4} /></button>
+                <button type="button" className={css.tabName} onClick={() => show(shown(tabs, x.id))}>
+                  {x.panes.map((p, i) => {
+                    const parts = paneParts(p, views);
+                    return (
+                      <span key={i} className={css.tabPart}>
+                        {i > 0 && <span className={css.tabSplit} aria-hidden="true" />}
+                        <StationDot station={p.station} stations={stations} />
+                        <span className={css.tabFolder}>{parts.folder}</span>
+                        <span className={css.tabStation}>{parts.station}</span>
+                      </span>
+                    );
+                  })}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : <div className={css.tabsNone} />}
         <div className={css.barEnd}>
           <TransfersButton scope={scope} />
           <span className={css.toggle} data-on={splitAt || undefined}><IconButton label={t(splitAt ? "web-pages.files.unsplit" : "web-pages.files.split")} icon={ViewColumns} onClick={() => show(split(tabs))} /></span>
+          <IconButton label={t("web-pages.files.newTab")} icon={Plus} onClick={() => show(opened(tabs, frontOf(tabs)))} />
         </div>
       </div>
       <div className={css.panes} data-split={splitAt || undefined}>

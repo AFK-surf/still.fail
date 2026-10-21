@@ -145,6 +145,7 @@ export function GoTo({ scope, here, onClose }: { scope: string; here: Pane; onCl
           ))}
         </div>
       )}
+      <p className={css.goKeys}>{t("web-pages.files.goToKeys")}</p>
     </Dialog>
   );
 }

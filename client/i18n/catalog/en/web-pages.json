@@ -1910,5 +1910,6 @@
   "web-pages.files.previewMore": "The start only: open it for the rest",
   "web-pages.files.size": "Size",
   "web-pages.files.modified": "Modified",
-  "web-pages.files.where": "Where"
+  "web-pages.files.where": "Where",
+  "web-pages.files.goToKeys": "↑↓ choose · Tab completes · ⏎ goes"
 }

@@ -1,38 +1,52 @@
 import { globalStyle, style } from "@vanilla-extract/css";
 import { vars } from "@stillfail/ui/styles/tokens.css.ts";
 import { pageHead } from "../styles/pages.css.ts";
+import { IN, inner } from "@stillfail/ui/styles/align.ts";
 import { headText } from "./Drive.css.ts";
 
 /** The files' page: its tabs' bar over what the tab shown shows, each side scrolling on its own. */
 export const shell = style({ flex: "1", minHeight: "0", minWidth: "0", display: "flex", flexDirection: "column" });
 
 export const bar = style({
-  flex: "none", display: "flex", alignItems: "flex-end", gap: "8px", padding: "8px 12px 0", borderBottom: `1px solid ${vars.line}`,
+  flex: "none", display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "6px 12px", boxSizing: "border-box",
+  borderBottom: `1px solid ${vars.line}`,
 });
-export const tabs = style({ flex: "1", minWidth: "0", display: "flex", alignItems: "flex-end", gap: "2px", overflowX: "auto", scrollbarWidth: "none" });
+/** The groove the tabs share, each an equal part of it (as Safari's compact tabs), drawn as the app's own segmented
+ * controls are (Drive.css.ts views): the one shown on the page's ground in it. */
+export const tabs = style({
+  flex: "1", minWidth: "0", display: "flex", gap: "2px", padding: "2px", borderRadius: vars.rField, cornerShape: vars.cornerShape,
+  background: `color-mix(in srgb, ${vars.text} 6%, transparent)`,
+});
+export const tabsNone = style({ flex: "1" });
 export const tab = style({
-  position: "relative", top: "1px", flex: "0 1 220px", minWidth: "96px", display: "flex", alignItems: "center",
-  border: "1px solid transparent", borderBottom: "0", borderRadius: `${vars.rField} ${vars.rField} 0 0`, color: vars.muted,
+  position: "relative", flex: "1 1 0", minWidth: "0", maxWidth: "280px", height: "28px", display: "flex", alignItems: "center",
+  borderRadius: `calc(${vars.rField} - 2px)`, color: vars.muted, transition: `background ${vars.dur} ${vars.easeOut}`,
   selectors: {
-    "&[data-on]": { background: vars.canvas, borderColor: vars.line, color: vars.text },
+    "&[data-on]": { background: vars.canvas, color: vars.text, boxShadow: `0 0 2px ${vars.shadow}, 0 0 0 .5px ${vars.line}` },
     "&:not([data-on]):hover": { background: vars.hover },
+    // A line between two tabs not shown, as Safari draws it.
+    "&:not([data-on]) + &:not([data-on])::before": { content: "''", position: "absolute", left: "-1px", top: "7px", bottom: "7px", width: "1px", background: vars.line },
   },
 });
 export const tabName = style({
-  flex: "1", minWidth: "0", display: "flex", alignItems: "center", gap: "6px", padding: "7px 4px 7px 10px", border: "0", background: "none",
-  color: "inherit", font: "inherit", fontSize: vars.textMeta, cursor: "pointer", textAlign: "left",
+  flex: "1", minWidth: "0", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", padding: "0 26px",
+  border: "0", background: "none", color: "inherit", font: "inherit", fontSize: vars.textMeta, cursor: "default",
 });
-globalStyle(`${tabName} > span:last-child`, { minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+export const tabPart = style({ minWidth: "0", display: "inline-flex", alignItems: "center", gap: "6px" });
+export const tabFolder = style({ minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: "500" });
+globalStyle(`${tab}:not([data-on]) ${tabFolder}`, { fontWeight: "400" });
+export const tabStation = style({ flex: "none", color: vars.subtle, fontSize: vars.textCaption });
+/** Between the two sides of a split tab. */
+export const tabSplit = style({ flex: "none", width: "1px", height: "12px", marginRight: "4px", background: vars.lineStrong });
+/** Closes a tab: at its left, shown as it is pointed at. */
 export const tabClose = style({
-  flex: "none", display: "grid", placeItems: "center", width: "20px", height: "20px", marginRight: "6px", padding: "0", border: "0",
-  borderRadius: vars.rOption, background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
-  selectors: { [`${tab}:hover &, ${tab}[data-on] &`]: { opacity: "1" }, "&:hover": { background: vars.hover, color: vars.text } },
+  position: "absolute", left: "6px", top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: "16px", height: "16px",
+  padding: "0", border: "0", borderRadius: "4px", background: "none", color: vars.muted, cursor: "pointer", opacity: "0",
+  selectors: { [`${tab}:hover &`]: { opacity: "1" }, "&:hover": { background: vars.hover, color: vars.text } },
 });
-export const tabAdd = style({
-  flex: "none", display: "grid", placeItems: "center", width: "28px", height: "28px", marginBottom: "3px", padding: "0", border: "0",
-  borderRadius: vars.rOption, background: "none", color: vars.muted, cursor: "pointer", selectors: { "&:hover": { background: vars.hover, color: vars.text } },
-});
-export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "6px", paddingBottom: "4px" });
+export const barEnd = style({ flex: "none", display: "flex", alignItems: "center", gap: "4px" });
+// The bar sits in the row that drags the desktop window (styles/shell.css.ts main): its tabs and buttons are still pressed.
+globalStyle(`[data-desktop] ${bar} :is(button, [role="tab"])`, { WebkitAppRegion: "no-drag" });
 /** A toggle in the accent while it is on (split). */
 export const toggle = style({ display: "contents" });
 globalStyle(`${toggle}[data-on] button`, { color: vars.accent });
@@ -101,11 +115,15 @@ export const clashAll = style({ display: "flex", alignItems: "center", gap: "8px
 
 // ── 复制到… ──
 
-export const copyTo = style({ display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: "0", height: "320px", border: `1px solid ${vars.line}`, borderRadius: vars.rField, overflow: "hidden" });
+/** Its rows 6 in from its corners, concentric with them (align.ts `inner`). */
+export const copyTo = style({
+  display: "grid", gridTemplateColumns: "180px minmax(0, 1fr)", gap: "0", height: "320px", border: `1px solid ${vars.line}`, borderRadius: vars.rField, overflow: "hidden",
+  vars: { [IN]: `calc(${vars.rField} - 6px)` },
+});
 export const copyStations = style({ display: "grid", alignContent: "start", gap: "2px", padding: "6px", borderRight: `1px solid ${vars.line}`, overflowY: "auto" });
 export const copyFolders = style({ display: "grid", alignContent: "start", gap: "2px", padding: "6px", overflowY: "auto" });
 export const copyRow = style({
-  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", padding: "6px 8px", border: "0", borderRadius: vars.rOption, background: "none",
+  display: "flex", alignItems: "center", gap: "8px", minWidth: "0", padding: "6px 8px", border: "0", borderRadius: inner, background: "none",
   color: vars.text, font: "inherit", fontSize: vars.textUi, textAlign: "left", cursor: "pointer",
   selectors: { "&:hover:not(:disabled)": { background: vars.hover }, "&[data-on]": { background: vars.selected }, "&:disabled": { color: vars.subtle, cursor: "default" } },
 });

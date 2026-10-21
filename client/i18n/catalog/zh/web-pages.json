@@ -1835,5 +1835,6 @@
   "web-pages.files.previewMore": "只显示了开头，打开看全部",
   "web-pages.files.size": "大小",
   "web-pages.files.modified": "修改",
-  "web-pages.files.where": "位置"
+  "web-pages.files.where": "位置",
+  "web-pages.files.goToKeys": "↑↓ 选择 · Tab 补全 · ⏎ 前往"
 }

@@ -24,3 +24,5 @@ export const goRow = style({
 globalStyle(`${goRow} > span`, { flex: "1", minWidth: "0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 globalStyle(`${goRow} > svg`, { flex: "none", color: vars.muted });
 globalStyle(`${goRow} kbd`, { flex: "none", padding: "0 5px", borderRadius: "4px", border: `1px solid ${vars.line}`, color: vars.muted, fontSize: vars.textCaption, fontFamily: "inherit" });
+/** Under the list: its keys, so no row sits in the dialog's corner. */
+export const goKeys = style({ margin: "10px 2px 0", color: vars.subtle, fontSize: vars.textCaption });
