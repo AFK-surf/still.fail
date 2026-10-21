@@ -1,6 +1,7 @@
 // The web services opened beside chats, kept for as long as the window is open: moving to another chat or page does
 // not close one (nor load it anew); it goes small into the bottom-right corner, still live, and back into its chat's
-// side panel when that is in view again. Only closing it (its tab in the chat, or × on the small one) ends it.
+// side panel when that is in view again. Only closing it (its tab in the chat, or × on the small one, which closes
+// that tab too: back in its chat it does not open again) ends it.
 //
 // The chat under the small ones makes way for them, as a whole (its messages and composer): whatever of it is marked
 // `data-avoid-previews` leaves them the window's side from their left edge on (`--avoid-previews`, its styles).
@@ -13,6 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { useHref, useLocation, useNavigate } from "react-router";
 import { fileService, ServiceFrame, type FileSource, type Restarting } from "./Preview.tsx";
 import { useLink } from "./station.tsx";
+import { dropTab } from "./chatTabs.ts";
 import { Close, Minus, Web } from "@stillfail/ui/icons.tsx";
 import { Tip } from "./ui.tsx";
 import { previewKey, viewportOf } from "./viewport.ts";
@@ -35,8 +37,9 @@ interface Kept {
   /** Its chat, with its tab open: where the small one goes back to. */
   back: string;
   restarting: Restarting | null;
-  /** Its chat's draft, where its marks go (annotate/Marks.tsx). */
+  /** Its chat's draft, where its marks go (annotate/Marks.tsx); also its chat's key, whose tab `tab` it is. */
   draftKey: string | undefined;
+  tab: string;
 }
 
 let kept: Kept[] = [];
@@ -76,7 +79,8 @@ export function PreviewSlot({ station, port, file, name, service: job, restartin
   const restarts = restarting?.restarts ?? null;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    keep({ key, station, port, file, name, service, external, back, restarting: restarts === null ? null : { restarts }, draftKey });
+    const tab = file ? service : `service:${service}`;
+    keep({ key, station, port, file, name, service, external, back, restarting: restarts === null ? null : { restarts }, draftKey, tab });
   }, [key, station, port, file?.session, file?.path, name, service, external, back, restarts, draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const slot = ref.current!;
@@ -452,7 +456,11 @@ export function Previews() {
               </Tip>
             )}
             <Tip label={t("common.close")}>
-              <button type="button" className={css.action} aria-label={t("web-main.previews.close", { name: entry.name })} onClick={(e) => { e.stopPropagation(); closePreview(entry.key); }}>
+              <button type="button" className={css.action} aria-label={t("web-main.previews.close", { name: entry.name })} onClick={(e) => {
+                e.stopPropagation();
+                closePreview(entry.key);
+                if (entry.draftKey) dropTab(entry.draftKey, entry.tab);
+              }}>
                 <Close size={12} strokeWidth={2} />
               </button>
             </Tip>
