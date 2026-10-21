@@ -138,7 +138,9 @@ import fail.still.android.ui.Icons
 import fail.still.android.ui.Markdown
 import fail.still.android.ui.Seg
 import fail.still.android.ui.ZoomState
-import fail.still.android.ui.highlight
+import fail.still.android.ui.inkKnown
+import fail.still.android.ui.inkOf
+import fail.still.android.ui.paint
 import fail.still.android.ui.zoomable
 import fail.still.android.ui.Smooth
 import fail.still.android.ui.smoothOutline
@@ -1046,7 +1048,10 @@ private fun TextViewer(bytes: ByteArray, kind: PreviewKind, language: String?, n
                 val lang = if (kind == PreviewKind.Markdown) "markdown" else if (kind == PreviewKind.Csv) null else language
                 if (lang != null && t.length <= HIGHLIGHT_LIMIT) {
                     val dark = C.dark
-                    val colored = remember(t, lang, dark) { highlight(t, lang, dark) }
+                    val core = LocalApp.current.core
+                    // Plain until the core says its colours (code.ink), at once where it has.
+                    val ink by produceState(inkKnown(t, lang)?.ink, t, lang) { value = inkOf(core, t, lang) }
+                    val colored = remember(t, ink, dark) { paint(t, ink, dark) }
                     Box(Modifier.horizontalScroll(rememberScrollState()).padding(start = 32.dp, end = 32.dp, top = 80.dp + top, bottom = 64.dp + bottom)) {
                         Text(colored, style = TextStyle(fontFamily = CodeFont, fontSize = 12.5.sp, lineHeight = 20.sp, color = C.ink), softWrap = false)
                     }

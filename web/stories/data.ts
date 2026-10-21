@@ -181,6 +181,16 @@ const HISTORY_ITEMS: { body: HistoryItem["body"]; turn?: HistoryItem["turn"] }[]
   { body: { kind: "mark", content: { text: "去 ffmpeg 两路收尾 · 等待中，最长 1h", wait: { since: WAITING_SINCE, seconds: 3600, what: "去 ffmpeg 两路收尾" }, ends: "waiting" } } },
   { body: own("Both parts of the ffmpeg removal are still finishing. The camera part is waiting on its last test run before reporting, and the export part is working through its remaining items.") },
 ];
+/** An agent's words with code in each family the core colours (client/core-ts/src/highlight.ts). */
+const CODE_COLOURS_TEXT = [
+  "```ts\n// 按工作区取最近的会话\nexport async function recent(ws: string, limit = 20): Promise<Session[]> {\n  const rows = await db.query(`select * from sessions where ws = ?`, [ws]);\n  return rows.slice(0, limit).map((r) => ({ key: r.key, title: r.title ?? null }));\n}\n```",
+  "```python\ndef ink(code: str, lang: str | None = None) -> str:\n    \"\"\"What each piece is.\"\"\"\n    if not lang:\n        return None  # plain\n    return encode(code, 0x10)\n```",
+  "```json\n{\"name\": \"still.fail\", \"version\": \"0.1.4404\", \"beta\": true, \"limits\": [256, null]}\n```",
+  "```bash\nexport PATH=$HOME/.local/bin:$PATH\npnpm install --frozen-lockfile | tee install.log\n```",
+  "```diff\n@@ -1,3 +1,3 @@ export function recent\n-  return rows;\n+  return rows.slice(0, limit);\n```",
+].join("\n\n");
+export const CODE_COLOURS = { text: CODE_COLOURS_TEXT, md: markdown(CODE_COLOURS_TEXT) };
+
 export const HISTORY: HistoryView = {
   items: HISTORY_ITEMS.map(({ body, turn }, n) => ({ key: `e${n}`, entries: [n, n], body, ...(turn ? { turn } : {}) })),
   live: [], edge: "已到会话开头", empty: false, loaded: true,

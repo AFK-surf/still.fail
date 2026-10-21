@@ -213,7 +213,7 @@ function tall(item: HistoryItem, per: number): number {
   const turn = item.turn ? TURN_PX : 0;
   switch (body.kind) {
     case "text": return turn + LINE_PX;
-    case "post": return turn + events([LINE_PX + 20 + folded(mdLines(body.content.md as Md, per * 0.9, POST_LINES + 1), POST_LINES, POST_LINE_PX), ...(body.content.ends ? [STATE_PX] : [])]);
+    case "post": return turn + events([LINE_PX + 20 + folded(mdLines(body.content.md as Md, body.content.text, per * 0.9, POST_LINES + 1), POST_LINES, POST_LINE_PX), ...(body.content.ends ? [STATE_PX] : [])]);
     case "received":
       return turn + events([
         ...(body.content.note ? [LINE_PX] : []),
@@ -303,7 +303,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
         <Ev icon={<Said {...ICON} size={14} />}>
           <OneLine lead={<span className={css.hTag}>{t(body.content.subagent ? "web-main.history.subagent" : "web-main.history.notSent")}</span>}
             line={firstLine(body.content.text)}>
-            <div className={`${conversationCss.markdown} ${css.hNote}`}><MdView md={body.content.md as Md} /></div>
+            <div className={`${conversationCss.markdown} ${css.hNote}`}><MdView md={body.content.md as Md} source={body.content.text} /></div>
           </OneLine>
         </Ev>
       );
@@ -317,7 +317,7 @@ const HistoryItemView = memo(function HistoryItemView({ item }: { item: HistoryI
               {body.content.failed && <Pill tone="red">{t("web-main.history.sendFailed")}</Pill>}
             </div>
             <div className={css.hCard} data-failed={body.content.failed}>
-              <Fold className={conversationCss.markdown} of={body.content.md as Md} lines={POST_LINES} head={headOf(body.content.md as Md)}><MdView md={body.content.md as Md} /></Fold>
+              <Fold className={conversationCss.markdown} of={body.content.md as Md} source={body.content.text} lines={POST_LINES} head={headOf(body.content.md as Md, body.content.text)}><MdView md={body.content.md as Md} source={body.content.text} /></Fold>
             </div>
           </Ev>
           {body.content.ends && <Ended ends={body.content.ends} text={t(body.content.ends === "human" ? "web-main.history.ends.human" : "web-main.history.ends.done")} />}
@@ -458,7 +458,7 @@ function Task({ task }: { task: HistoryTask }) {
             <span className={css.hOneText}>{task.text}</span>{open && <span className={css.hOneFold}>{t("web-main.fold")}</span>}
           </button>}
       {answer !== null && (open
-        ? <div className={css.hOneBody}><div className={`${conversationCss.markdown} ${css.hNote}`}><MdView md={task.md as Md} /></div></div>
+        ? <div className={css.hOneBody}><div className={`${conversationCss.markdown} ${css.hNote}`}><MdView md={task.md as Md} source={task.result ?? ""} /></div></div>
         : <div className={css.hOne}><span className={css.hOneText}>{answer}</span></div>)}
     </Ev>
   );
@@ -562,11 +562,11 @@ const longTrees = new WeakMap<Md, number>();
 const longTexts = new Map<string, number>();
 const heads = new WeakMap<Md, ReactNode>();
 /** The beginning of `md` a fold draws while folded, the same one for the same tree; null for words that may be short. */
-function headOf(md: Md): ReactNode {
+function headOf(md: Md, source: string): ReactNode {
   let head = heads.get(md);
   if (head === undefined) {
-    const cut = mdHead(md, HEAD_LINES);
-    heads.set(md, head = cut ? <MdView md={cut} /> : null);
+    const cut = mdHead(md, source, HEAD_LINES);
+    heads.set(md, head = cut ? <MdView md={cut} source={source} /> : null);
   }
   return head;
 }
@@ -578,10 +578,12 @@ function headOf(md: Md): ReactNode {
  * history coming in lays out the lines it shows, not all the words of its long entries (what it hides is then counted
  * from its words, about so many).
  */
-function Fold({ children, of, lines = 5, head = null, className }: { children: ReactNode;
+function Fold({ children, of, source, lines = 5, head = null, className }: { children: ReactNode;
   /** What it folds (an entry's tree, a message's words): whether it turned out long is kept by it, so its row made
    *  again as the reader scrolls back (or the history opened again) is folded as it comes, not measured anew. */
-  of: Md | string; lines?: number; head?: ReactNode; className?: string;
+  of: Md | string;
+  /** A tree's text, its runs of words read from it. */
+  source?: string; lines?: number; head?: ReactNode; className?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const per = useContext(Per);
@@ -631,7 +633,7 @@ function Fold({ children, of, lines = 5, head = null, className }: { children: R
   };
   // What it hides: measured, or (only its beginning drawn) counted from its words.
   const counted = cut && measured === 0;
-  const more = counted ? Math.max(1, (typeof of === "string" ? textLines(of, per, 999) : mdLines(of, per, 999)) - lines) : measured;
+  const more = counted ? Math.max(1, (typeof of === "string" ? textLines(of, per, 999) : mdLines(of, source ?? "", per, 999)) - lines) : measured;
   return (
     <div className={css.fold}>
       <div ref={box} className={`${css.foldBody}${className ? ` ${className}` : ""}`} style={{ "--fold-lines": lines } as CSSProperties}

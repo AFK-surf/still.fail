@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +44,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
+import fail.still.android.LocalApp
 import fail.still.android.data.t
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -124,7 +127,10 @@ private val mono: androidx.compose.ui.text.font.FontFamily @Composable @androidx
 @Composable
 private fun Block(text: String, language: String?) {
     val dark = C.dark
-    val colored = remember(text, language, dark) { highlight(text, language, dark) }
+    val core = LocalApp.current.core
+    // Plain until the core says its colours (code.ink), at once where it has.
+    val ink by produceState(inkKnown(text, language)?.ink, text, language) { value = inkOf(core, text, language) }
+    val colored = remember(text, ink, dark) { paint(text, ink, dark) }
     Box(Modifier.fillMaxWidth().clip(Smooth(12.dp)).background(codeGround).heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
         Text(colored, fontFamily = mono, fontSize = 12.sp, lineHeight = 18.6.sp, color = C.ink)
     }

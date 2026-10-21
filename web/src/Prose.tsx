@@ -1,12 +1,10 @@
-// Markdown as ember shows it: GitHub-flavoured, code blocks highlighted by
-// Shiki (VS Code's grammars) with their language named and a copy button.
-// Grammars load on demand, one chunk per language, with Shiki's JavaScript
-// regex engine so no wasm is fetched.
+// Markdown as still.fail shows it, drawn from the core's tree of it (`Md`, client/core-ts/src/markdown.ts), never
+// parsed here: an agent's message comes with its tree (the chat's `md`, read in the core's worker); other words (a
+// file, a memory) are read by the core's own reader, here, kept by their text. Code blocks in the colours the core
+// says (`ink`, client/core-ts/src/highlight.ts: vitesse light and dark, as every client paints them), with their
+// language named and a copy button.
 import { Check, Copy } from "@stillfail/ui/icons.tsx";
-import { Fragment, isValidElement, memo, useEffect, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
-import Markdown, { defaultUrlTransform, type Components } from "react-markdown";
-import remarkGfm from "remark-gfm";
-import type { HighlighterCore } from "shiki/core";
+import { Fragment, isValidElement, memo, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import type { Attachment } from "./core/shapes.ts";
 import type { Md, MdNode } from "./core/md.ts";
 import { inlineFile, inlineFiles } from "./Prose.css.ts";
@@ -16,101 +14,28 @@ import { adbOfLink, isChatLink, screenOfLink } from "./chatRefs.ts";
 import { ScreenCard, ScreenName } from "./screen/ScreenLink.tsx";
 import { AdbCard, AdbName } from "./AdbLink.tsx";
 import { bareLinks } from "./bareLinks.ts";
-import { nameOf, placeFiles } from "../../client/core-ts/src/placed.ts";
+import { nameOf } from "../../client/core-ts/src/placed.ts";
+import { inkKept, runsOf } from "../../client/core-ts/src/highlight.ts";
+import { markdown } from "../../client/core-ts/src/markdown.ts";
+import { isWords, wordsOf } from "../../client/core-ts/src/mdWords.ts";
 import { FileRef, LinkHover, pathIn } from "./Peeks.tsx";
 import { Tip } from "./ui.tsx";
 import { failure, useToast } from "@stillfail/ui/toast.tsx";
 import { Mermaid } from "./Viz.tsx";
 import { t } from "./i18n.ts";
 
-/** GFM's links found in bare text end only at a space, so in Chinese they swallow the words after them
- * (`（https://…/2854）已改到`): a bare address is linked where a reader sees it end (bareLinks.ts) instead, and
- * `www.…` and e-mail addresses stay text. [label](url) and <url> are links as written. */
-function linkBare() {
-  type Node = { type: string; value?: string; url?: string; title?: null; children?: Node[]; position?: { start: { offset?: number } } };
-  return (tree: Node, file: { value: unknown }) => {
-    const source = String(file.value);
-    const within = (nodes: Node[], inLink: boolean): Node[] => nodes.flatMap((n) => {
-      // GFM's own bare ones come without a position (www.…) or start at the address itself: their words, read again.
-      const start = n.position?.start.offset;
-      if (n.type === "link" && (start === undefined || (source[start] !== "[" && source[start] !== "<"))) return within(n.children ?? [], inLink);
-      if (n.type === "text" && !inLink) {
-        return bareLinks(n.value ?? "").map((part): Node => (typeof part === "string" ? { type: "text", value: part } : { type: "link", url: part.url, title: null, children: [{ type: "text", value: part.url }] }));
-      }
-      if (n.children) n.children = within(n.children, inLink || n.type === "link" || n.type === "linkReference");
-      return [n];
-    });
-    if (tree.children) tree.children = within(tree.children, false);
-  };
-}
-
-let highlighter: Promise<HighlighterCore> | null = null;
-/** Light and dark at once (Shiki's dual themes): light inline, dark as `--shiki-dark` vars the dark page picks (Prose.css.ts). */
-const THEMES = { light: "vitesse-light", dark: "vitesse-dark" } as const;
-
-function getHighlighter(): Promise<HighlighterCore> {
-  highlighter ??= (async () => {
-    const [{ createHighlighterCore }, { createJavaScriptRegexEngine }] = await Promise.all([import("shiki/core"), import("shiki/engine/javascript")]);
-    return createHighlighterCore({ themes: [import("shiki/themes/vitesse-light.mjs"), import("shiki/themes/vitesse-dark.mjs")], langs: [], engine: createJavaScriptRegexEngine() });
-  })();
-  return highlighter;
-}
-
-const cache = new Map<string, string>();
-
-/** Highlighted HTML for a block, or null when the language is unknown to Shiki. */
-async function highlight(code: string, language: string): Promise<string | null> {
-  const key = `${language}\n${code}`;
-  const hit = cache.get(key);
-  if (hit) return hit;
-  const { bundledLanguages } = await import("shiki/langs");
-  const lang = language.toLowerCase();
-  const load = bundledLanguages[lang as keyof typeof bundledLanguages];
-  if (!load) return null;
-  const h = await getHighlighter();
-  if (!h.getLoadedLanguages().includes(lang)) await h.loadLanguage(load);
-  const html = h.codeToHtml(code, { lang, themes: THEMES });
-  if (cache.size > 300) cache.delete(cache.keys().next().value!);
-  cache.set(key, html);
-  return html;
-}
-
-/** The plain text of rendered children. */
-function textOf(node: ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join("");
-  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
-  return "";
-}
-
-function CodeBlock({ children }: { children?: ReactNode }) {
-  const code = isValidElement<{ className?: string; children?: ReactNode }>(children) ? children : null;
-  const language = /language-([\w+#-]+)/.exec(code?.props.className ?? "")?.[1];
-  const text = textOf(code?.props.children ?? children).replace(/\n$/, "");
-  // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
-  if (language?.toLowerCase() === "mermaid" && text.trim()) return <Mermaid code={text} />;
-  return <Code text={text} language={language} />;
-}
-
-/** A block of code as markdown shows one: highlighted when its language is known (a name or a file extension Shiki knows), with a copy button. */
-export function Code({ text, language }: { text: string; language?: string | undefined }) {
+/** A block of code as markdown shows one: in the colours the core says of its language (`ink`: the core's tree's own, or
+ * read by the core's highlighter here), with a copy button. */
+export function Code({ text, language, ink }: { text: string; language?: string | undefined; ink?: string | null | undefined }) {
   const [copied, setCopied] = useState(false);
   const toast = useToast();
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    if (!language) return;
-    let live = true;
-    // While a reply streams the block keeps changing; highlight once it settles.
-    const timer = setTimeout(() => void highlight(text, language).then((h) => { if (live) setHtml(h); }, () => {}), cache.has(`${language}\n${text}`) ? 0 : 120);
-    return () => { live = false; clearTimeout(timer); };
-  }, [language, text]);
+  const colours = useMemo(() => (ink !== undefined ? ink : language ? inkKept(text, language.toLowerCase()) : null), [ink, text, language]);
   const copy = () => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }, (e: unknown) => toast(t("web-main.copyFailed", { error: failure(e) })));
   };
-  const current = html && cache.get(`${language}\n${text}`) === html ? html : null;
   return (
     <div className={css.codeBlock}>
       <div className={css.codeBar}>
@@ -119,16 +44,30 @@ export function Code({ text, language }: { text: string; language?: string | und
           {copied ? <Check size={12} /> : <Copy size={12} />}{copied ? t("common.copied") : t("common.copy")}
         </button>
       </div>
-      {current ? <div className={css.codeShiki} dangerouslySetInnerHTML={{ __html: current }} /> : <pre><code>{text}</code></pre>}
+      <pre className={css.codePre}><code>{colours ? runsOf(text, colours).map(([words, scope], i) => <span key={i} className={css.ink[scope]}>{words}</span>) : text}</code></pre>
     </div>
   );
+}
+
+/** The plain text of drawn children. */
+function textOf(node: ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children);
+  return "";
 }
 
 /** A link's words are the link itself (a bare link, not `[its words](link)`). */
 const bare = (href: string, words: string) => [href, safeDecode(href)].includes(words.trim());
 
-type Hast = { type: string; value?: string; tagName?: string; properties?: Record<string, unknown>; children?: Hast[] };
-const hastText = (n: Hast): string => n.value ?? (n.children ?? []).map(hastText).join("");
+/** An address as a page may open it: a web page's, mail's, or one within the app (a file's path, a chat's); any other
+ * scheme (`javascript:`) none. */
+function safeUrl(url: string): string {
+  const colon = url.indexOf(":");
+  const scheme = url.slice(0, colon);
+  if (colon < 0 || /[/?#]/.test(scheme) || /^(https?|ircs?|mailto|xmpp)$/i.test(scheme)) return url;
+  return "";
+}
 
 /** A link to a station's screen (screen/ScreenLink.tsx) or 共享调试 (AdbLink.tsx) alone on its line: its card; else null. */
 function linkCard(href: string, words: string, key?: number): ReactNode {
@@ -137,29 +76,6 @@ function linkCard(href: string, words: string, key?: number): ReactNode {
   if (adbOfLink(href)) return <div key={key} className={inlineFile}><AdbCard href={href} words={own} /></div>;
   return null;
 }
-
-/** A paragraph that is a link with a card and nothing else: the card (linkCard); else null. */
-function cardParagraph(node: Hast | undefined): ReactNode {
-  const parts = node?.children?.filter((c) => c.type !== "text" || c.value?.trim()) ?? [];
-  const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? parts[0]! : null;
-  const href = only && typeof only.properties?.href === "string" ? only.properties.href : null;
-  return href ? linkCard(href, hastText(only!)) : null;
-}
-
-const components: Components = {
-  p: ({ node, children, ...props }) => cardParagraph(node as Hast | undefined) ?? <p {...props}>{children}</p>,
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-  // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
-  table: ({ node: _, ...props }) => <div className={css.tableScroll}><table {...props} /></div>,
-  // A link to another chat: a reference to it, drawn as the composer showed it; a web link, with its card on hover; a
-  // file on the station by its path, its chip (Peeks.tsx).
-  a: ({ node: _, ...props }) => link(props),
-  // Inline code that is a file's path: its chip (a block of code is CodeBlock's, never drawn as this).
-  code: ({ node: _, className, children, ...props }) => {
-    if (className) return <code className={className} {...props}>{children}</code>;
-    return inlineCode(textOf(children), <code {...props}>{children}</code>, children);
-  },
-};
 
 /** Inline code (`code`, drawn as given) by what its words are: a web address alone is a link too, its ends the link's so
  * nothing after it is swallowed; a file's path, its chip. */
@@ -204,88 +120,88 @@ function rowItem(f: Attachment): CSSProperties {
   return { flex: `${r} ${r} ${Math.round(r * 120)}px`, maxWidth: `${Math.round(r * 200)}px`, "--ratio": r } as CSSProperties;
 }
 
+/** How a tree is drawn: the text its runs are of, and a message's files where its words place them. */
+type Cx = {
+  source: string;
+  /** A link or image naming one of the message's files: the file (placeFiles, client/core-ts/src/placed.ts). */
+  at: (url: string) => Attachment | undefined;
+  /** A file drawn where the words place it: shown whole (an image, a link on a line of its own), or a link (its words). */
+  draw: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode;
+};
+
 /**
- * Markdown. With `files` (from placeFiles, client/core-ts/src/placed.ts), a link or image naming one of the
- * message's files shows it there, as `file` draws it: shown whole for an
- * image, or a link on a line of its own; a link within a sentence stays a
- * link (its words), opening the file.
+ * Markdown, read by the core's reader (kept by its text), or `md`, the core's tree of `children` already. With `files`
+ * (from placeFiles, client/core-ts/src/placed.ts), a link or image naming one of the message's files shows it there, as
+ * `file` draws it: shown whole for an image, or a link on a line of its own; a link within a sentence stays a link (its
+ * words), opening the file.
  */
-// Parsing Markdown is the costly part of drawing a message: drawn again only when what it is given changes (a history
-// or chat that draws again for something else leaves its texts as they are).
-export const Prose = memo(function Prose({ children, files, file }: { children: string; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
-  // The components are made once and read the files as last given: new ones each render would be new component types,
-  // and React would draw what they hold anew (an image fetched again, flashing, whenever the message rendered).
-  const given = useRef({ files, file });
-  given.current = { files, file };
-  const placing = !!files?.size && !!file;
-  const withFiles = useMemo<Components>(() => {
-    if (!placing) return components;
-    const at = (url: unknown) => (typeof url === "string" ? given.current.files?.get(nameOf(url)) : undefined);
-    const draw = (f: Attachment, as: "shown" | "link", words?: ReactNode) => given.current.file?.(f, as, words);
-    return {
-      ...components,
-      p: ({ node, children, ...props }) => {
-        const parts = node?.children.filter((c) => c.type !== "text" || c.value.trim()) ?? [];
-        const only = parts.length === 1 && parts[0]!.type === "element" && parts[0]!.tagName === "a" ? at(parts[0]!.properties.href) : undefined;
-        if (only) return <div className={inlineFile}>{draw(only, "shown")}</div>;
-        const screen = cardParagraph(node as Hast | undefined);
-        if (screen) return screen;
-        // A paragraph of the message's images and nothing else: side by side, wrapping when they don't fit.
-        const images = parts.map((c) => (c.type === "element" && c.tagName === "img" ? at(c.properties.src) : undefined));
-        if (images.length > 1 && images.every(Boolean)) return <div className={inlineFiles}>{images.map((f, i) => <span key={i} className={css.inlineFilesItem} style={rowItem(f!)}>{draw(f!, "shown")}</span>)}</div>;
-        return <p {...props}>{children}</p>;
-      },
-      img: ({ node: _, ...props }) => { const f = at(props.src); return f ? <span className={inlineFile}>{draw(f, "shown")}</span> : <Tip label={props.title}><img {...props} title={undefined} /></Tip>; },
-      a: ({ node: _, ...props }) => { const f = at(props.href); return f ? draw(f, "link", props.children) : link(props); },
-    };
-  }, [placing]);
-  // Links to the files are kept as written (the default would empty a file:// one); any other goes through the default.
-  const url = (u: string) => (files?.has(nameOf(u)) ? u : defaultUrlTransform(u));
-  return <Markdown remarkPlugins={[remarkGfm, linkBare]} components={withFiles} urlTransform={url}>{children}</Markdown>;
+export const Prose = memo(function Prose({ children, md, files, file }: { children: string; md?: Md | undefined; files?: Map<string, Attachment>; file?: (f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode }) {
+  const tree = useMemo(() => md ?? (markdown(children) as Md), [md, children]);
+  return <MdView md={tree} source={children} files={files} file={file} />;
 });
 
 /**
- * An agent's Markdown as the core read it (`Md`, client/core-ts/src/markdown.ts): drawn here, never parsed. Each of its
+ * Markdown as the core read it (`Md`, client/core-ts/src/markdown.ts) from `source`: drawn here, never parsed. Each of its
  * blocks is drawn again only when it changes: the core hands the same tree for the same words, and a keyed delta keeps
  * what it does not change as it was (core/delta.ts), so a history that grows draws only what came.
  */
-export const MdView = memo(function MdView({ md }: { md: Md }) {
-  return <>{md.map((node, i) => <MdBlock key={i} node={node} />)}</>;
+export const MdView = memo(function MdView({ md, source, files, file }: { md: Md; source: string; files?: Map<string, Attachment> | undefined; file?: ((f: Attachment, as: "shown" | "link", words?: ReactNode) => ReactNode) | undefined }) {
+  // The files and how to draw one as last given: blocks drawn again only for new words or files to place, not for a
+  // new `file` function each render (an image fetched again, flashing).
+  const given = useRef({ files, file });
+  given.current = { files, file };
+  const placing = !!files?.size && !!file;
+  const cx = useMemo<Cx>(() => ({
+    source,
+    at: (url) => (placing ? given.current.files?.get(nameOf(url)) : undefined),
+    draw: (f, as, words) => given.current.file?.(f, as, words),
+  }), [source, placing, placing ? files : null]);
+  return <>{md.map((node, i) => <MdBlock key={i} node={node} cx={cx} />)}</>;
 });
 
-const MdBlock = memo(function MdBlock({ node }: { node: MdNode }) {
-  return drawMd(node, 0);
+const MdBlock = memo(function MdBlock({ node, cx }: { node: MdNode; cx: Cx }) {
+  return drawMd(node, 0, cx);
 });
 
-const attrsOf = (node: Exclude<MdNode, string>): Record<string, unknown> => ((Array.isArray(node[1]) ? node[2] : node[1]) ?? {}) as Record<string, unknown>;
-const kidsOf = (node: Exclude<MdNode, string>): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
+type Kind = Exclude<MdNode, string | [number, number]>;
+const attrsOf = (node: Kind): Record<string, unknown> => ((Array.isArray(node[1]) ? node[2] : node[1]) ?? {}) as Record<string, unknown>;
+const kidsOf = (node: Kind): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
 const str = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined);
 const ALIGN = new Set(["left", "right", "center"]);
 
-const mdText = (node: MdNode): string => (typeof node === "string" ? node : kidsOf(node).map(mdText).join(""));
+const mdText = (node: MdNode, cx: Cx): string => (isWords(node) ? wordsOf(node, cx.source) : kidsOf(node).map((k) => mdText(k, cx)).join(""));
 
-function drawMd(node: MdNode, key: number): ReactNode {
-  if (typeof node === "string") return node;
+function drawMd(node: MdNode, key: number, cx: Cx): ReactNode {
+  if (isWords(node)) return wordsOf(node, cx.source);
   const kind = node[0];
   const a = attrsOf(node);
-  const kids = () => kidsOf(node).map(drawMd);
+  const kids = () => kidsOf(node).map((k, i) => drawMd(k, i, cx));
   switch (kind) {
     case "p": {
-      // A link to a station's screen or 共享调试 alone: its card.
-      const parts = kidsOf(node).filter((c) => typeof c !== "string" || c.trim());
-      const only = parts.length === 1 && typeof parts[0] !== "string" && parts[0]![0] === "a" ? parts[0]! : null;
-      const href = only ? defaultUrlTransform(str(attrsOf(only).href) ?? "") : "";
-      return (only && linkCard(href, kidsOf(only).map(mdText).join(""), key)) || <p key={key}>{kids()}</p>;
+      const parts = kidsOf(node).filter((c) => !isWords(c) || wordsOf(c, cx.source).trim());
+      const only = parts.length === 1 && !isWords(parts[0]) && parts[0]![0] === "a" ? (parts[0] as Kind) : null;
+      if (only) {
+        const href = str(attrsOf(only).href) ?? "";
+        // A link alone naming one of the message's files: the file, shown; to a station's screen or 共享调试: its card.
+        const f = cx.at(href);
+        if (f) return <div key={key} className={inlineFile}>{cx.draw(f, "shown")}</div>;
+        const card = linkCard(safeUrl(href), mdText(only, cx), key);
+        if (card) return card;
+      }
+      // A paragraph of the message's images and nothing else: side by side, wrapping when they don't fit.
+      const images = parts.map((c) => (!isWords(c) && c[0] === "img" ? cx.at(str(attrsOf(c as Kind).src) ?? "") : undefined));
+      if (images.length > 1 && images.every(Boolean)) return <div key={key} className={inlineFiles}>{images.map((f, i) => <span key={i} className={css.inlineFilesItem} style={rowItem(f!)}>{cx.draw(f!, "shown")}</span>)}</div>;
+      return <p key={key}>{kids()}</p>;
     }
     case "h": {
       const H = `h${Math.min(6, Math.max(1, Number(a.depth) || 1))}` as "h1";
       return <H key={key}>{kids()}</H>;
     }
     case "pre": {
-      const code = str(a.code) ?? "";
+      const code = wordsOf(a.code, cx.source);
       const language = str(a.lang);
       // A mermaid block is a chart, drawn (Viz.tsx); anything else is code.
-      return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} />;
+      return language?.toLowerCase() === "mermaid" && code.trim() ? <Mermaid key={key} code={code} /> : <Code key={key} text={code} language={language} ink={str(a.ink) ?? null} />;
     }
     case "quote": return <blockquote key={key}>{kids()}</blockquote>;
     case "list": {
@@ -300,11 +216,12 @@ function drawMd(node: MdNode, key: number): ReactNode {
       const [head, ...rows] = kidsOf(node);
       const align = Array.isArray(a.align) ? a.align : [];
       const row = (r: MdNode | undefined, i: number) => {
-        if (!r || typeof r === "string") return null;
+        if (!r || isWords(r)) return null;
         return <tr key={i}>{kidsOf(r).map((cell, j) => {
-          if (typeof cell === "string") return null;
+          if (isWords(cell)) return null;
           const style = ALIGN.has(String(align[j])) ? { textAlign: align[j] as "left" } : undefined;
-          return cell[0] === "th" ? <th key={j} style={style}>{kidsOf(cell).map(drawMd)}</th> : <td key={j} style={style}>{kidsOf(cell).map(drawMd)}</td>;
+          const inner = kidsOf(cell).map((k, n) => drawMd(k, n, cx));
+          return cell[0] === "th" ? <th key={j} style={style}>{inner}</th> : <td key={j} style={style}>{inner}</td>;
         })}</tr>;
       };
       // A table wider than the message scrolls sideways within it, its cells keeping their words whole.
@@ -316,11 +233,21 @@ function drawMd(node: MdNode, key: number): ReactNode {
     case "s": return <del key={key}>{kids()}</del>;
     case "br": return <br key={key} />;
     case "code": {
-      const content = str(a.content) ?? "";
+      const content = wordsOf(a.content, cx.source);
       return <Fragment key={key}>{inlineCode(content, <code>{content}</code>, content)}</Fragment>;
     }
-    case "a": return <Fragment key={key}>{link({ href: defaultUrlTransform(str(a.href) ?? ""), title: str(a.title), children: kids() })}</Fragment>;
-    case "img": return <Tip key={key} label={str(a.title)}><img src={defaultUrlTransform(str(a.src) ?? "")} alt={str(a.alt) ?? ""} /></Tip>;
+    case "a": {
+      const href = str(a.href) ?? "";
+      const f = cx.at(href);
+      if (f) return <Fragment key={key}>{cx.draw(f, "link", kids())}</Fragment>;
+      return <Fragment key={key}>{link({ href: safeUrl(href), title: str(a.title), children: kids() })}</Fragment>;
+    }
+    case "img": {
+      const src = str(a.src) ?? "";
+      const f = cx.at(src);
+      if (f) return <span key={key} className={inlineFile}>{cx.draw(f, "shown")}</span>;
+      return <Tip key={key} label={str(a.title)}><img src={safeUrl(src)} alt={str(a.alt) ?? ""} /></Tip>;
+    }
     default: return <Fragment key={key}>{kids()}</Fragment>;
   }
 }

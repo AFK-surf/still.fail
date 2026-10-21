@@ -222,7 +222,7 @@ function Item({ item, station, chat, agentText }: { item: HistoryItem; station: 
             const I = task.agent ? Agent : Command;
             const label = <span className={css.mHTask} data-failed={task.failed || undefined}>{task.text}</span>;
             return task.result != null && task.md != null
-              ? <Message key={`t${i}`} icon={I} label={label} text={task.result} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={task.md as Md} /></div>} />
+              ? <Message key={`t${i}`} icon={I} label={label} text={task.result} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={task.md as Md} source={task.result ?? ""} /></div>} />
               : <p key={`t${i}`} className={`${css.mHMark} ${css.mHTask}`} data-failed={task.failed || undefined}><I size={14} />{task.text}</p>;
           })}
           {body.content.messages.map((m) => (
@@ -237,7 +237,7 @@ function Item({ item, station, chat, agentText }: { item: HistoryItem; station: 
         <Message icon={Send}
           label={<>{tNodes("web-mobile.history.sentTo", { place: body.content.place ? <PlaceMark station={station} chat={chat} place={body.content.place} /> : <span className={css.mHPlace}><SlackMark size={12} /><b> Slack</b></span> })}
             {body.content.block && <Pill text="Block" tone="blue" />}{body.content.failed && <Pill text={t("web-mobile.history.sendFailed")} tone="red" />}</>}
-          text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div>} />
+          text={body.content.text} full={<div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} source={body.content.text} /></div>} />
       );
     case "mark":
       return (
@@ -249,7 +249,7 @@ function Item({ item, station, chat, agentText }: { item: HistoryItem; station: 
     case "text":
       return (
         <div className={body.content.subagent ? css.mHSub : undefined}>
-          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} /></div> })} />
+          <Brief text={body.content.text} open={() => app.reader({ label: <span className={partsCss.mMuted}>{t("web-mobile.history.wrote", { agent: agentText })}</span>, content: <div className={`${rootCss.wide} ${conversationCss.markdown}`}><MdView md={body.content.md as Md} source={body.content.text} /></div> })} />
         </div>
       );
     case "group":

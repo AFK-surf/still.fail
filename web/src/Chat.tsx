@@ -17,6 +17,7 @@ import { Avatar, Button, Dialog, ElsewhereLogo, ICON, ModelLogo, Pill, Segmented
 import { ComposerSlot, useComposerHeight } from "./dock.tsx";
 import { chatPage } from "./chatPage.ts";
 import { Prose, withBareLinks } from "./Prose.tsx";
+import type { Md } from "./core/md.ts";
 import { placeFiles } from "../../client/core-ts/src/placed.ts";
 import { shortcutOf, useKeymap, usePageKeysAvailable, useShortcut } from "./keymap.ts";
 import { FileLink, FilePreview, fileHere, fileSize, Gallery, isImage, kindOf, useFileShown, useNear, useVideoStill } from "./FilePreview.tsx";
@@ -1031,7 +1032,7 @@ const MessageRow = memo(function MessageRow({ message: m, enter, emitted, caught
         ? <VaultAsk message={m} ask={ask} rows={options}>{options && thread !== null && <AskDismiss thread={thread} seq={m.seq} asked={!!m.asked} answered={!!(m.decision?.resolved || m.decision?.dismissed)} />}</VaultAsk>
         : m.authorKind === "person"
         ? <>{m.text && <PersonWords text={m.text} />}<Files files={besideQuotes(m.quotes, m.attachments)} /></>
-        : <ProseWithFiles text={m.text} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
+        : <ProseWithFiles text={m.text} md={m.md as Md | undefined} files={besideQuotes(m.quotes, m.attachments)} session={m.by.agent ?? null} from={m.by.from} />}
       {/* An agent's post asking to decide: its options right under it, or how it was settled (Decisions.tsx). */}
       {/* It asks what no one has decided (the core's `asked`): letting it go, right under it, closing with its options. */}
       {ask ? null : options && (m.card || m.options?.length) && !(m.card?.type === "login" && m.card.login)
@@ -1352,8 +1353,10 @@ function QuoteCard({ quote, onJump, comment, onRemove, picture }: { quote: Quote
 // ── files ───────────────────────────────────────────────────────────────
 
 /** An agent's Markdown with its files: those its text names shown there, the rest below it. */
-function ProseWithFiles({ text, files, session = null, from }: {
-  text: string; files: Attachment[] | undefined;
+function ProseWithFiles({ text, md, files, session = null, from }: {
+  text: string;
+  /** `text` as the core read it (the message's `md`). */ md?: Md | undefined;
+  files: Attachment[] | undefined;
   /** Its agent's: the files its paths name are that session's (Peeks.tsx). */ session?: string | null;
   /** Another chat's agent wrote it (session_send): its link, whose session (and station) the paths are of. */ from?: string | undefined;
 }) {
@@ -1372,7 +1375,7 @@ function ProseWithFiles({ text, files, session = null, from }: {
   return (
     <>
       <div className={conversationCss.markdown}>
-        <PathSession.Provider value={paths}><Prose files={placed} file={file}>{text}</Prose></PathSession.Provider>
+        <PathSession.Provider value={paths}><Prose md={md} files={placed} file={file}>{text}</Prose></PathSession.Provider>
       </div>
       <Files files={rest} />
     </>

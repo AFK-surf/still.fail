@@ -95,7 +95,12 @@ class FakeCore {
         }
         var beside: ByteArray? = null
         val out = try {
-            var ok = answer(name, params)
+            // Markdown read and code coloured as the core would (FakeMarkdown.kt; code plain), unless the test says.
+            var ok = when (name) {
+                "markdown" -> buildJsonObject { put("md", fakeMd(params["text"]?.jsonPrimitive?.content.orEmpty())) }
+                "code.ink" -> buildJsonObject { put("ink", JsonNull) }
+                else -> answer(name, params)
+            }
             val bytes = ((ok as? JsonObject)?.get("bytes") as? JsonPrimitive)?.takeIf { it.isString }?.content
             if (bytes != null) {
                 val raw = Base64.decode(bytes, Base64.DEFAULT)

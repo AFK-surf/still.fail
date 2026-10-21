@@ -1,7 +1,9 @@
 // The beginning of an agent's words, for a view that shows only their first lines (a history's fold): what is past
 // them is neither made nor laid out until a reader unfolds it. Nothing here reads Markdown: a client's page takes this
 // file alone (markdown.ts brings the parser).
+import { inkUpTo } from "./highlight.ts";
 import type { Md, MdNode } from "./markdown.ts";
+import { isWords, type MdWords, wordsOf } from "./mdWords.ts";
 
 // The widest a line is taken to be, in Latin letters (a wide character, CJK, counts two): no narrower than any view
 // draws one, so the lines counted here are never more than the lines drawn.
@@ -21,24 +23,27 @@ function sliced(text: string, room: number): string {
   return text.slice(0, hi >= 0xd800 && hi <= 0xdbff ? i - 1 : i);
 }
 
-const kidsOf = (node: Exclude<MdNode, string>): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
-const attrsOf = (node: Exclude<MdNode, string>): Record<string, unknown> | undefined => (Array.isArray(node[1]) ? node[2] : node[1]);
-const withKids = (node: Exclude<MdNode, string>, kids: MdNode[]): MdNode => {
+type Kind = Exclude<MdNode, MdWords>;
+const kidsOf = (node: Kind): MdNode[] => (Array.isArray(node[1]) ? node[1] : []);
+const attrsOf = (node: Kind): Record<string, unknown> | undefined => (Array.isArray(node[1]) ? node[2] : node[1]);
+const withKids = (node: Kind, kids: MdNode[]): MdNode => {
   const attrs = attrsOf(node);
   return attrs ? [node[0], kids, attrs] : [node[0], kids];
 };
+/// The first `length` units of a run of words, as it was given (a run of the text, or words).
+const cutWords = (words: MdWords, cut: string): MdWords => (typeof words === "string" ? cut : [words[0], words[0] + cut.length]);
 // What holds blocks, each on lines of its own; anything else that has children holds words running on one another.
 const BLOCKS = new Set(["quote", "list", "table"]);
 
 type Taken = { node: MdNode; lines: number; cut: boolean };
 
 /// `nodes` while they fill less than `room` lines: blocks one under another, or the words of one block.
-function taken(nodes: MdNode[], room: number, inline: boolean, per: number): { kept: MdNode[]; lines: number; cut: boolean } {
+function taken(nodes: MdNode[], room: number, inline: boolean, per: number, src: string): { kept: MdNode[]; lines: number; cut: boolean } {
   const kept: MdNode[] = [];
   let lines = 0;
   for (const node of nodes) {
     if (lines >= room) return { kept, lines, cut: true };
-    const t = inline ? word(node, room - lines, per) : block(node, room - lines, per);
+    const t = inline ? word(node, room - lines, per, src) : block(node, room - lines, per, src);
     kept.push(t.node);
     lines += t.lines;
     if (t.cut) return { kept, lines, cut: true };
@@ -46,56 +51,65 @@ function taken(nodes: MdNode[], room: number, inline: boolean, per: number): { k
   return { kept, lines, cut: false };
 }
 /// A block: at least a line, whatever it holds.
-function block(node: MdNode, room: number, per: number): Taken {
-  if (typeof node === "string") return word(node, room, per);
+function block(node: MdNode, room: number, per: number, src: string): Taken {
+  if (isWords(node)) return word(node, room, per, src);
   const kind = node[0];
   if (kind === "pre") {
     const a = attrsOf(node) ?? {};
-    const code = typeof a.code === "string" ? a.code : "";
+    const code = wordsOf(a.code, src);
     const rows = code.split("\n");
     // A chart is drawn from all of its words or not at all.
     if (rows.length <= room || String(a.lang ?? "").toLowerCase() === "mermaid") return { node, lines: rows.length, cut: false };
     const n = Math.ceil(room);
-    return { node: ["pre", { ...a, code: rows.slice(0, n).join("\n") }], lines: n, cut: true };
+    const head = rows.slice(0, n).join("\n");
+    // Its colours as far as it goes.
+    const ink = typeof a.ink === "string" ? inkUpTo(a.ink, head.length) : null;
+    const cut: Record<string, unknown> = { ...a, code: isWords(a.code) ? cutWords(a.code, head) : head };
+    if (ink === null) delete cut.ink;
+    else cut.ink = ink;
+    return { node: ["pre", cut], lines: n, cut: true };
   }
   // A row of a table is whole or not there.
   if (kind === "tr" || kind === "hr") return { node, lines: kind === "tr" ? 1 : 0, cut: false };
   const kids = kidsOf(node);
   // A list's item holds its words (a tight list) or its blocks (a loose one, or a list within it).
-  const blocks = BLOCKS.has(kind) || (kind === "li" && kids.some((k) => typeof k !== "string" && (k[0] === "p" || BLOCKS.has(k[0]) || k[0] === "pre")));
+  const blocks = BLOCKS.has(kind) || (kind === "li" && kids.some((k) => !isWords(k) && (k[0] === "p" || BLOCKS.has(k[0]) || k[0] === "pre")));
   if (blocks) {
     // Words beside blocks in an item (its own line, then a list within it): each run of them a line.
-    const t = taken(kids, room, false, per);
+    const t = taken(kids, room, false, per, src);
     return { node: t.cut ? withKids(node, t.kept) : node, lines: Math.max(1, t.lines), cut: t.cut };
   }
-  const t = taken(kids, room, true, per);
+  const t = taken(kids, room, true, per, src);
   return { node: t.cut ? withKids(node, t.kept) : node, lines: Math.max(1, Math.ceil(t.lines)), cut: t.cut };
 }
 /// Words within a block: the part of a line they take, a break a line.
-function word(node: MdNode, room: number, per: number): Taken {
-  if (typeof node === "string") {
-    const n = units(node);
+function word(node: MdNode, room: number, per: number, src: string): Taken {
+  if (isWords(node)) {
+    const words = wordsOf(node, src);
+    const n = units(words);
     if (n / per <= room) return { node, lines: n / per, cut: false };
-    return { node: sliced(node, Math.ceil(room * per)), lines: room, cut: true };
+    return { node: cutWords(node, sliced(words, Math.ceil(room * per))), lines: room, cut: true };
   }
   const kind = node[0];
   if (kind === "br") return { node, lines: 1, cut: false };
-  if (kind === "code") return { node, lines: units(String(attrsOf(node)?.content ?? "")) / per, cut: false };
+  if (kind === "code") return { node, lines: units(wordsOf(attrsOf(node)?.content, src)) / per, cut: false };
   const kids = kidsOf(node);
   if (!kids.length) return { node, lines: 0, cut: false };
-  if (BLOCKS.has(kind) || kind === "pre" || kind === "p") return block(node, room, per);
-  const t = taken(kids, room, true, per);
+  if (BLOCKS.has(kind) || kind === "pre" || kind === "p") return block(node, room, per, src);
+  const t = taken(kids, room, true, per, src);
   return { node: t.cut ? withKids(node, t.kept) : node, lines: t.lines, cut: t.cut };
 }
 
-/// The beginning of `md` that fills `lines` lines or more however wide it is drawn; null when all of it may fill fewer.
-export function mdHead(md: Md, lines: number): Md | null {
-  const t = taken(md, lines, false, LINE);
+/// The beginning of `md` (read from `source`) that fills `lines` lines or more however wide it is drawn; null when all
+/// of it may fill fewer.
+export function mdHead(md: Md, source: string, lines: number): Md | null {
+  const t = taken(md, lines, false, LINE, source);
   return t.cut ? t.kept : null;
 }
-/// The lines `md` fills at the least where a line holds `per` Latin letters, counted no further than `most`.
-export function mdLines(md: Md, per: number, most: number): number {
-  return Math.min(most, Math.ceil(taken(md, most, false, Math.max(1, per)).lines));
+/// The lines `md` (read from `source`) fills at the least where a line holds `per` Latin letters, counted no further
+/// than `most`.
+export function mdLines(md: Md, source: string, per: number, most: number): number {
+  return Math.min(most, Math.ceil(taken(md, most, false, Math.max(1, per), source).lines));
 }
 /// The same of plain words.
 export function textLines(text: string, per: number, most: number): number {
