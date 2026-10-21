@@ -186,8 +186,10 @@ export function certOk(lock: LockState, cert: BoxCert): string | null {
   return null;
 }
 
-/// Why `next` may not follow `prev` (null: it is the vault's first version), or null when it may.
-export function vaultOk(lock: LockState, prev: Vault | null, next: Vault): string | null {
+/// Why `next` may not follow `prev` (null: it is the vault's first version), or null when it may. `copy`: a later
+/// version brought from another station keeping the vault (docs/vault.md 副本), not necessarily the one right after:
+/// checked the same, but for its seq only being later than the one held (any, where none is).
+export function vaultOk(lock: LockState, prev: Vault | null, next: Vault, copy = false): string | null {
   const v = next as any;
   if (v === null || typeof v !== "object" || v.v !== 1 || v.ws !== lock.ws) return "a vault is {v: 1, ws, …} of this workspace";
   if (typeof v.id !== "string" || !VAULT_ID.test(v.id)) return "a vault's id is v_<ULID>";
@@ -199,10 +201,10 @@ export function vaultOk(lock: LockState, prev: Vault | null, next: Vault): strin
   if (v.recovery !== undefined && !b64(v.recovery, 200)) return "recovery is a seal";
   if (!sigShape(v.sig)) return "a vault is signed";
   if (prev === null) {
-    if (v.seq !== 0) return "a vault's first version is seq 0";
+    if (v.seq !== 0 && !copy) return "a vault's first version is seq 0";
   } else {
     if (v.id !== prev.id) return "another vault";
-    if (v.seq !== prev.seq + 1) return `seq ${prev.seq + 1} follows ${prev.seq}`;
+    if (copy ? v.seq <= prev.seq : v.seq !== prev.seq + 1) return copy ? `a copy is later than seq ${prev.seq}` : `seq ${prev.seq + 1} follows ${prev.seq}`;
     if (v.owner !== prev.owner) return "a vault's owner does not change";
     if (v.epoch < prev.epoch) return "the epoch does not go back";
     const devices = new Set(v.keys.map((k: any) => k?.cert?.device));
@@ -234,8 +236,9 @@ function listingOk(l: any): string | null {
   return null;
 }
 
-/// Why `next` may not follow `prev` (null: the item's first version) in `vault`, or null when it may.
-export function itemOk(lock: LockState, vault: Vault, prev: Item | null, next: Item): string | null {
+/// Why `next` may not follow `prev` (null: the item's first version) in `vault`, or null when it may. `copy`: a later
+/// version brought from another station (as `vaultOk`'s), which may be one written under an earlier epoch of the vault.
+export function itemOk(lock: LockState, vault: Vault, prev: Item | null, next: Item, copy = false): string | null {
   const i = next as any;
   if (i === null || typeof i !== "object" || i.v !== 1 || i.ws !== lock.ws || i.vault !== vault.id) return "an item is {v: 1, ws, vault, …} of this vault";
   if (typeof i.id !== "string" || !ITEM_ID.test(i.id)) return "an item's id is i_<ULID>";
@@ -248,13 +251,13 @@ export function itemOk(lock: LockState, vault: Vault, prev: Item | null, next: I
     if (why) return why;
   }
   if (!sigShape(i.sig)) return "an item is signed";
-  if (i.epoch > vault.epoch || (!i.deleted && i.epoch !== vault.epoch)) return `an item is written under the vault's epoch ${vault.epoch}`;
+  if (i.epoch > vault.epoch || (!i.deleted && !copy && i.epoch !== vault.epoch)) return `an item is written under the vault's epoch ${vault.epoch}`;
   if (prev === null) {
-    if (i.version !== 0) return "an item's first version is 0";
+    if (i.version !== 0 && !copy) return "an item's first version is 0";
   } else {
     if (i.id !== prev.id || i.vault !== prev.vault) return "another item";
     if (prev.deleted) return "the item was deleted";
-    if (i.version !== prev.version + 1) return `version ${prev.version + 1} follows ${prev.version}`;
+    if (copy ? i.version <= prev.version : i.version !== prev.version + 1) return copy ? `a copy is later than version ${prev.version}` : `version ${prev.version + 1} follows ${prev.version}`;
   }
   const by = signerOf(lock, i.sig.key);
   if (by === null || !vault.members.includes(by.sub)) return "an item is signed by a vault member's device in the lock";

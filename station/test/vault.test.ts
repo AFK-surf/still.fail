@@ -314,6 +314,59 @@ test("routes: a version out of order is a conflict, sent the one held; a bad one
   assert.equal((await s.ask("PUT", "/vault/vaults", "alice", { ...vaultOf(w, { id: `v_${ulid(2)}` }), ws: "OTHER" })).body.code, "vault_invalid");
 });
 
+test("a copy from another station: any later version, checked as one written here; never an earlier one", () => {
+  const w = lock();
+  const v0 = vaultOf(w, {});
+  const v3 = vaultOf(w, { seq: 3, members: [w.alice, w.bob] });
+  // Where none is held: whatever seq, but still its owner's, signed.
+  assert.equal(vaultOk(w.state, null, v3, true), null);
+  assert.match(vaultOk(w.state, null, vaultOf(w, { seq: 3, by: w.bob, members: [w.alice, w.bob] }), true)!, /owner's devices/);
+  assert.match(vaultOk(w.state, null, { ...v3, name: "Other" }, true)!, /signature/);
+  // Over one held: later only, the rules between them kept (bob out takes a new epoch).
+  assert.equal(vaultOk(w.state, v0, v3, true), null);
+  assert.match(vaultOk(w.state, v3, v0, true)!, /later than seq 3/);
+  assert.match(vaultOk(w.state, v3, vaultOf(w, { seq: 5 }), true)!, /new epoch/);
+  assert.equal(vaultOk(w.state, v3, vaultOf(w, { seq: 5, epoch: 1 }), true), null);
+  // Not a copy: the next one only, as before.
+  assert.match(vaultOk(w.state, v0, v3)!, /seq 1 follows 0/);
+  // Items: a later version, one written under an earlier epoch too; never after a deletion, never by a non-member.
+  const v1 = vaultOf(w, { seq: 1, epoch: 1 });
+  const old = itemOf({ by: w.alice, version: 2, epoch: 0 });
+  assert.equal(itemOk(w.state, v1, null, old, true), null);
+  assert.match(itemOk(w.state, v1, null, old)!, /epoch 1/);
+  assert.match(itemOk(w.state, v1, itemOf({ by: w.alice, version: 4 }), old, true)!, /later than version 4/);
+  assert.match(itemOk(w.state, v1, itemOf({ by: w.alice, version: 1, deleted: true }), old, true)!, /deleted/);
+  assert.match(itemOk(w.state, v1, null, itemOf({ by: w.carol, version: 2 }), true)!, /member's device/);
+  assert.match(itemOk(w.state, v1, null, itemOf({ by: w.alice, version: 2, epoch: 2 }), true)!, /epoch 1/);
+});
+
+test("routes: a copy brought from another station is kept where later, the one held answered where not", async () => {
+  const w = lock();
+  const s = station(w);
+  const v2 = vaultOf(w, { seq: 2, members: [w.alice, w.bob] });
+  // Not a copy, seq 2 on a station holding nothing is a conflict, as before.
+  assert.equal((await s.ask("PUT", "/vault/vaults", "alice", v2)).body.code, "vault_conflict");
+  // As a copy, brought by any member's device: kept, and told.
+  assert.equal((await s.ask("PUT", "/vault/vaults?copy=1", "bob", v2)).status, 200);
+  assert.deepEqual(s.told.pop(), { event: "vault", data: v2, to: ["alice", "bob"] });
+  // An earlier one: the one held, nothing told.
+  const told = s.told.length;
+  const back = await s.ask("PUT", "/vault/vaults?copy=1", "alice", vaultOf(w, { seq: 1, members: [w.alice, w.bob] }));
+  assert.equal(back.status, 200);
+  assert.equal(back.body.vault.seq, 2);
+  assert.equal(s.told.length, told);
+  // Forged: refused.
+  assert.equal((await s.ask("PUT", "/vault/vaults?copy=1", "bob", vaultOf(w, { seq: 3, by: w.bob, members: [w.alice, w.bob] }))).body.code, "vault_invalid");
+  // Items: version 3 where none is, then an earlier one answered with it; the next write here follows the copy.
+  const i3 = itemOf({ by: w.bob, version: 3 });
+  assert.equal((await s.ask("PUT", "/vault/items?copy=1", "alice", i3)).status, 200);
+  assert.equal((await s.ask("PUT", "/vault/items?copy=1", "alice", itemOf({ by: w.bob, version: 1 }))).body.item.version, 3);
+  assert.equal((await s.ask("PUT", "/vault/items", "alice", itemOf({ by: w.alice, version: 4 }))).status, 200);
+  assert.deepEqual((await s.ask("GET", `/vault/items?vault=${VAULT}`, "bob")).body.items.map((i: Item) => i.version), [4]);
+  // An item of a vault not held here: none to copy it into.
+  assert.equal((await s.ask("PUT", "/vault/items?copy=1", "alice", itemOf({ by: w.alice, vault: `v_${ulid(3)}` }))).body.code, "vault_unknown");
+});
+
 test("routes: box certificates, published by the lock's app devices, the latest of each", async () => {
   const w = lock();
   const s = station(w);

@@ -3,7 +3,9 @@
 // and whose they are, without it the control plane could add a device of its own and be given the keys. A member sees
 // the vaults they are a member of and those vaults' items; each write is checked against the lock and the version it
 // follows (vault/crypto.ts), and told to the members' streams as it is kept (`vault`, `vault-item`, `vault-box`; a
-// member taken out of a vault is told `vault-gone`). One station holds a vault: copies on other stations come later.
+// member taken out of a vault is told `vault-gone`). A vault is written on one station (its host) and copied to the
+// others by its members' devices (`?copy=1`: a later version than the one held, not necessarily the next; one not later
+// is answered with the one held, unchanged), so that agents on any station may ask for its secrets.
 import type { LockState } from "../../cloud/lock.ts";
 import type { Viewer } from "../../mesh/credential.ts";
 import { type BoxCert, type Item, type Vault, certOk, itemOk, vaultOk } from "../../vault/crypto.ts";
@@ -59,11 +61,14 @@ export const routes = ({ vaults, lock, events }: VaultDeps): Route[] => {
         if (next === null || typeof next !== "object" || typeof next.id !== "string") return refuse(400, "vault_invalid", "a vault, as JSON");
         if (next.ws !== r.viewer.workspace) return refuse(400, "vault_invalid", "a vault of another workspace");
         const prev = vaults.vault(l.ws, next.id);
+        const copy = param(r, "copy") === "1";
+        // A copy no later than the one held: nothing to change (it never goes back).
+        if (copy && prev !== null && Number.isSafeInteger(next.seq) && next.seq <= prev.seq) return json(200, JSON.stringify({ vault: prev }));
         // Not the version that follows the one held: the device writes on what it was told (it is sent along).
-        if (Number.isSafeInteger(next.seq) && next.seq !== (prev === null ? 0 : prev.seq + 1)) {
+        if (!copy && Number.isSafeInteger(next.seq) && next.seq !== (prev === null ? 0 : prev.seq + 1)) {
           return refuse(409, "vault_conflict", `seq ${prev === null ? 0 : prev.seq + 1} is the one that follows`, { vault: prev });
         }
-        const why = vaultOk(l, prev, next);
+        const why = vaultOk(l, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putVault(next);
         tell("vault", next, `vault\0${next.id}`, (v) => sees(next, v));
@@ -96,10 +101,12 @@ export const routes = ({ vaults, lock, events }: VaultDeps): Route[] => {
         const vault = vaults.vault(l.ws, next.vault);
         if (vault === null || !sees(vault, r.viewer)) return refuse(404, "vault_unknown", "no such vault here, or not one of yours");
         const prev = vaults.item(l.ws, vault.id, next.id);
-        if (Number.isSafeInteger(next.version) && next.version !== (prev === null ? 0 : prev.version + 1)) {
+        const copy = param(r, "copy") === "1";
+        if (copy && prev !== null && Number.isSafeInteger(next.version) && next.version <= prev.version) return json(200, JSON.stringify({ item: prev }));
+        if (!copy && Number.isSafeInteger(next.version) && next.version !== (prev === null ? 0 : prev.version + 1)) {
           return refuse(409, "vault_conflict", `version ${prev === null ? 0 : prev.version + 1} is the one that follows`, { item: prev });
         }
-        const why = itemOk(l, vault, prev, next);
+        const why = itemOk(l, vault, prev, next, copy);
         if (why !== null) return refuse(400, "vault_invalid", why);
         vaults.putItem(next);
         tell("vault-item", next, `vault-item\0${vault.id}\0${next.id}`, (v) => sees(vault, v));
