@@ -89,10 +89,16 @@ With the parts published and an empty cache, the first column plus their downloa
 
 ## Node
 
-One Node version everywhere, `.node-version`'s: CI (`.github/actions/setup`, and on the Macs `scripts/node-here.sh`),
-the station's releases (which name it in `NODE_VERSION` rather than carry it: the installer gets it once per version,
-`scripts/node-dist.sh` puts it beside the releases) and the desktop app, which runs its station on its own Electron as
-Node. It is Electron's Node: upgrading Electron, `.node-version` goes with it (`apps/desktop/build.sh` stops otherwise).
+One Node version everywhere, `.node-version`'s: CI (`.github/actions/setup`, and on the Macs `scripts/node-here.sh`)
+and the station's releases (which name it in `NODE_VERSION` rather than carry it: the installer gets it once per version,
+`scripts/node-dist.sh` puts it beside the releases). The desktop app runs its station on its own Electron as Node, the
+version `apps/desktop/electron-node-version` names (`apps/desktop/build.sh` stops when Electron's is another).
+
+The two differ only while a Node security release is newer than every Electron's Node: then `.node-version` takes the
+fixed Node at once and the app keeps its Electron's until an Electron carries it. Since 2026-10-21 (Node 24.22.1 for
+[its October security releases](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases); the newest
+Electron, 45.0.0, carries 24.22.0) the app's is 24.21.0, Electron 44.4.5's. Upgrading Electron to one with
+`.node-version`'s Node makes them one again.
 
 ## Tests: CI's and the side run's
 

@@ -43,7 +43,7 @@ win=${WIN:-}
 export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$HOME/Library/pnpm:$PATH"
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
-# The Node the station runs on (.node-version: Electron's), first.
+# The Node the station is built and checked on (.node-version), first.
 PATH="$(sh "$root/scripts/node-here.sh"):$PATH"
 target=darwin-arm64
 [ -z "$win" ] || target=win32-x64
@@ -76,10 +76,11 @@ rsync -a "$root/dist/cloud-web/" "$here/build/web/"
 cd "$here"
 # electron-builder packs the Electron that electron's install script fetches (pnpm may have skipped it).
 [ -d node_modules/electron/dist ] || node node_modules/electron/install.js
-# The app runs its station on its own Electron as Node (src/station.ts), and the station is built and checked on
-# .node-version's: the two the same, or the build stops (upgrading Electron, .node-version goes with it).
+# The app runs its station on its own Electron as Node (src/station.ts): the Node electron-node-version names, or the
+# build stops (upgrading Electron, that file goes with it). It is .node-version's whenever an Electron carries that
+# Node (docs/development.md).
 electron_node=$(ELECTRON_RUN_AS_NODE=1 node_modules/electron/dist/Electron.app/Contents/MacOS/Electron -p process.versions.node)
-[ "$electron_node" = "$(cat "$root/.node-version")" ] || { echo "Electron runs Node $electron_node, .node-version says $(cat "$root/.node-version"): make them the same" >&2; exit 1; }
+[ "$electron_node" = "$(cat "$here/electron-node-version")" ] || { echo "Electron runs Node $electron_node, electron-node-version says $(cat "$here/electron-node-version"): make them the same" >&2; exit 1; }
 pnpm exec esbuild src/main.ts src/core.ts src/preload.ts --bundle --platform=node --format=cjs --external:electron --outdir=build/app --log-level=warning \
   ${beta:+--define:process.env.STILLFAIL_CHANNEL='"beta"'}
 # The page marking in a preview's frame (web/src/annotate/frame.ts), which main.ts serves as its /_ember/annotate.js.
