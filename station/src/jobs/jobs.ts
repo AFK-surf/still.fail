@@ -46,7 +46,7 @@ const AWAKE_MS = 5 * 60_000;
 const STOP_GRACE_MS = 5000;
 const STOP_SETTLE_MS = 3000;
 /// How often a stopping job's group is looked at, once its leader is gone, for members it left behind.
-const STOP_LOOK_MS = 100;
+export const STOP_LOOK_MS = 100;
 /// How often a job an earlier station started is looked at (its end when it wrote no exit file).
 const FOLLOW_LOOK_MS = 1000;
 /// What /jobs/notify takes at most.
