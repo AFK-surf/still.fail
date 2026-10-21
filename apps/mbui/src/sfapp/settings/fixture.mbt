@@ -143,6 +143,8 @@ pub fn fixture_page(mode : String) -> String {
       fx_many_models.val = true
       run_list["session:s-c1"] = "model"
     }
+    // the fonts page at code's faces
+    "settings-fonts-code" => fonts_at.val = 2
     "settings-new-connect-platform" => fx_connect_step.val = "platform"
     "settings-new-connect-scan" => fx_connect_step.val = "feishuScan"
     _ => fx_connect_step.val = "team"
@@ -169,6 +171,7 @@ pub fn fixture_page(mode : String) -> String {
     "settings-bars" => "bars"
     "settings-kept" => "kept"
     "settings-changelog" => "changelog"
+    "settings-fonts-coming" | "settings-fonts-code" => "fonts"
     "settings-prices" => "prices:7"
     "settings-run" | "settings-run-models" => "run:ws1/st1#s-c1"
     "settings-add-people" | "settings-workspace-mark" => "workspace"

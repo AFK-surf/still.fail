@@ -666,6 +666,8 @@ fn bubble(c : @ui.Ctx, words : String, ts : String) -> Unit {
       pressed_bg=@sf.alpha(t.p.blue, 0.14),
       on_link=fn(h) { open_link(h) },
       on_link_hold=Some(link_held),
+      // what people wrote: in the face chosen for it (Chat.kt SendTextFaced)
+      words=true,
     )
     |> ignore
   })

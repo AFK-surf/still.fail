@@ -622,8 +622,9 @@ fn layout_text(
   indent? : Double = 0.0,
   line? : Double = 0.0,
   spacing? : Double = 0.0,
+  style? : Int = 0,
 ) -> TextLayout {
-  let s = shape(text, size, weight, spacing~)
+  let s = shape(text, size, weight, style~, spacing~)
   // greedy wrapping gives the same lines in any width from the widest
   // line up to the one they were made in (as Node::text_layout)
   if indent == 0.0 {

@@ -117,6 +117,7 @@ export const TOPICS: Record<string, Spec> = {
   agentEnvForm: { station: S, form: S },
   profileFlow: { station: S, form: S },
   changelog: {},
+  fonts: {},
   workspaceMarks: { workspace: ["string", "skip"] },
   decisions: { workspace: S },
   lock: { workspace: S },

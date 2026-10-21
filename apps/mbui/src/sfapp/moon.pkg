@@ -11,5 +11,6 @@ import {
   "stillfail/gallery",
   "stillfail/player",
   "mbui/host",
+  "mbui/zip",
   "stillfail/sfapp/settings",
 }

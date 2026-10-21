@@ -180,6 +180,8 @@ let zh : Map[String, String] = {
   "android-settings.vault.approve.denyWhat": "拒绝",
   "android-settings.vault.approve.inApp": "请在客户端批准",
   "android-settings.vault.approve.decided": "此申请已处理",
+  // a face's file not what it says (faces.mbt)
+  "android-settings.fonts.damaged": "文件已损坏",
 }
 
 ///|

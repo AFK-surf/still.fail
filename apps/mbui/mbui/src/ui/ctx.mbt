@@ -113,6 +113,8 @@ struct EditorState {
   mut sel_color : Int64
   /// what it holds is a secret (a key, a token, a password): drawn as dots, never copied or cut out of it
   mut secret : Bool
+  /// what people wrote (a message being written): set in the face given for it (faces.mbt, @host.face_text)
+  mut words : Bool
   /// how its words are drawn, as the app says (Ctx::editor's `look`): the same number of letters in the same places,
   /// and ranges of them in colours of their own
   mut look : ((String) -> (String, Array[(Int, Int, Int64)]))?

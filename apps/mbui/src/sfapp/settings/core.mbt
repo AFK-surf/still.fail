@@ -65,6 +65,15 @@ pub(all) struct Core {
   /// a station's login as its card, as wide as where it is (LoginCards.kt LoginCard: the chat's, src/sfapp/login_card.mbt),
   /// by station and id
   login_card : (@ui.Ctx, String, String, Bool) -> Unit
+  /// face `id` (at `index` in the faces' list; `variable`: one file for every weight) shown in itself on the fonts
+  /// page: the host face its preview is given to, 0 until it is here (src/sfapp/faces.mbt)
+  face_preview : (String, Int, Bool) -> Int
+  /// whether face `id` is what a place is set in now (all its files here)
+  face_here : (String) -> Bool
+  /// why face `id` could not be had here (its files unzipped wrong), "" none
+  face_failed : (String) -> String
+  /// the host face the app's own code face is in, for the fonts page's 默认
+  own_code_face : () -> Int
 }
 
 ///|
@@ -74,6 +83,8 @@ pub(all) enum Route {
   Home
   Me
   Appearance
+  /// 外观 › 字体 (Fonts.kt FontsScreen)
+  Fonts
   /// the workspace: its name, its people, its invitations (Settings.kt WorkspaceScreen)
   Workspace
   /// security mode (Security.kt)
@@ -500,6 +511,7 @@ pub fn reset() -> Unit {
   archive_reset()
   login_marked.val = None
   lock_prompts_reset()
+  fonts_at.val = 0
   adb_reset()
   keyed_fields.clear()
   notify_switched.val = None
@@ -591,13 +603,14 @@ pub fn reset() -> Unit {
 
 ///|
 /// A page by its name, for opening one from the start (MBUI_FIXTURE=settings-<name>, a scripted run): home, me,
-/// appearance, workspace, security, vault, stations, station:<address>, profiles, connects, memories, memory:<address>,
+/// appearance, fonts, workspace, security, vault, stations, station:<address>, profiles, connects, memories, memory:<address>,
 /// usage, archive.
 pub fn route_of(name : String) -> Route? {
   match name {
     "" | "home" => Some(Home)
     "me" => Some(Me)
     "appearance" => Some(Appearance)
+    "fonts" => Some(Fonts)
     "workspace" => Some(Workspace)
     "security" => Some(Security)
     "vault" => Some(Vault)
