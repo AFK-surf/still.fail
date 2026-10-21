@@ -90,6 +90,8 @@ android {
     sourceSets["main"].assets.srcDir(rootProject.file("../../web/src/viz"))
     // The words, in each language: the catalog the core and the web read too (client/i18n, data/I18n.kt).
     sourceSets["main"].assets.srcDir(rootProject.file("../../client/i18n/catalog"))
+    // The screens the mbui app is held to: the core's JSON each is drawn over (client/fixtures/screens, ScreensRefTest).
+    sourceSets["androidTest"].assets.srcDir(rootProject.file("../../client/fixtures"))
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

@@ -195,6 +195,7 @@ fn reset() -> Unit {
   app.held = 0
   app.held_long = false
   reset_row_menu()
+  update_anchor_reset()
   app.toast = ""
   read_views.clear()
   read_chats.clear()

@@ -1,0 +1,330 @@
+// What a chat offers as Android's does, over the fixture's chat with its views edited for each case: its station's tag
+// opens the station's card (PageParts.kt ChatStationChip), a notice's word installs a runtime or reports a failure,
+// one about a profile leads to it (Chat.kt SystemNotice), a waiting message's line installs (BlockedLine), a Slack
+// user's name in a history offers 这是我 (History.kt SlackName), and the chat's sheet opens it in Slack or Feishu.
+
+///|
+/// `v` with `more` said over its fields (an object; anything else as it is).
+fn with_fields(v : Json, more : Array[(String, Json)]) -> Json {
+  match v {
+    Object(m) => {
+      let o : Map[String, Json] = {}
+      for k, x in m {
+        o[k] = x
+      }
+      for kv in more {
+        o[kv.0] = kv.1
+      }
+      Json::object(o)
+    }
+    _ => v
+  }
+}
+
+///|
+/// The chat view's message `seq` with `more` over it.
+fn with_chat_message(chat : Json, seq : Double, more : Array[(String, Json)]) -> Json {
+  let ms = match chat {
+    Object(m) =>
+      match m.get("messages") {
+        Some(Array(a)) => a
+        _ => []
+      }
+    _ => []
+  }
+  with_fields(chat, [
+    (
+      "messages",
+      Json::array(ms.map(fn(x) { if number(Some(x), "seq") == seq { with_fields(x, more) } else { x } })),
+    ),
+  ])
+}
+
+///|
+/// The app over the fixture in `mode`, its topics' values edited by `edit` (by the topic's name), its calls kept and
+/// answered with `answer`'s (nothing by default).
+fn edited_core(
+  calls : Array[Made],
+  mode : String,
+  edit : (String, Json) -> Json,
+  answer? : (String) -> Json = fn(_) { Json::object({}) },
+  epoch? : Ref[Int] = Ref::new(0),
+) -> @ui.Tester {
+  reset()
+  let base = fixture(mode)
+  let src : Source = {
+    ..base,
+    topic: fn(name, params) {
+      let t = (base.topic)(name, params)
+      match t.value {
+        // (a change the test makes is a new version of what the core says)
+        Some(v) => { ..t, value: Some(edit(name, v)), version: t.version + epoch.val }
+        None => t
+      }
+    },
+    call: fn(name, params, done) {
+      calls.push({ name, params, bytes: None, done, heard: None })
+      done(Ok(answer(name)))
+    },
+  }
+  open_chat({ station: "ws1/st1", session: "s-c1", title: "整理发布清单", station_name: "Studio" })
+  open_fixture(mode)
+  let t = @ui.Tester::new(fn(c) { view(c, src) }, w=390.0, h=844.0)
+  t.run_for(@ui.nav_push_ms)
+  t
+}
+
+///|
+test "a chat with no agent in it: its station's tag in the bar opens the station's card" {
+  let calls : Array[Made] = []
+  let t = edited_core(calls, "chat", fn(name, v) {
+    match name {
+      "chat" => with_fields(v, [("agents", [])])
+      // (a name of its own, told apart from the messages that name it)
+      "stations" =>
+        match v {
+          Array(a) =>
+            Json::array(
+              a.map(fn(s) { if text(Some(s), "station") == "ws1/st1" { with_fields(s, [("name", "甲号机")]) } else { s } }),
+            )
+          _ => v
+        }
+      _ => v
+    }
+  })
+  assert_true(!@settings.sheet_up())
+  t.tap_text("甲号机")
+  t.frame()
+  assert_true(@settings.sheet_up(), msg="the station's card")
+  assert_true(t.find("机器详情") is Some(_))
+}
+
+///|
+test "a failure the viewer may report: 上报 asks first, then reports it and says what it was filed as" {
+  let calls : Array[Made] = []
+  let t = edited_core(
+    calls,
+    "chat",
+    fn(name, v) {
+      if name == "chat" {
+        with_chat_message(v, 9.0, [("text", "⚠️ 这一轮没跑完。"), ("reportable", true)])
+      } else {
+        v
+      }
+    },
+    answer=fn(name) { if name == "chat.report" { { "number": 42, "duplicate": false } } else { Json::object({}) } },
+  )
+  for _ in 0..<6 {
+    if t.find("这一轮没跑完") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("上报")
+  t.frame()
+  assert_true(@settings.sheet_up(), msg="asked first")
+  assert_true(named(calls, "chat.report").length() == 0)
+  // the sheet risen: its own declared end (a tap while it moves is what is under it's)
+  t.run_for(@kit.sheet_rest("settings-sheet") - t.time())
+  // the sheet's own 上报: its words alone on their node (the notice's is in a rich line of its own)
+  let (x, y) = words_node(t, "上报").unwrap()
+  t.tap(x, y)
+  t.frame()
+  let sent = named(calls, "chat.report")
+  assert_eq(sent.length(), 1)
+  assert_eq(number(Some(sent[0].params), "seq"), 9.0)
+  assert_eq(number(Some(sent[0].params), "thread"), 7.0)
+  assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
+  t.frame()
+  assert_true(t.find("已上报为 FB-42") is Some(_))
+}
+
+///|
+test "a notice that a runtime is missing: its word installs it (software.update)" {
+  let calls : Array[Made] = []
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 9.0, [
+        ("text", "Studio 上没有 codex。"),
+        ("install", { "runtime": "codex", "state": "missing", "title": "codex", "action": "安装" }),
+      ])
+    } else {
+      v
+    }
+  })
+  for _ in 0..<6 {
+    if t.find("Studio 上没有 codex") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  t.tap_text("安装")
+  let sent = named(calls, "software.update")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "id"), "codex")
+  assert_eq(text(Some(sent[0].params), "station"), "ws1/st1")
+}
+
+///|
+test "a notice about a profile: what went wrong (after its ：) leads to the profile's page" {
+  let calls : Array[Made] = []
+  let t = edited_core(calls, "chat", fn(name, v) {
+    if name == "chat" {
+      with_chat_message(v, 9.0, [("profile", "p1")])
+    } else {
+      v
+    }
+  })
+  for _ in 0..<6 {
+    if t.find("登录已失效") is Some(_) {
+      break
+    }
+    t.wheel(195.0, 400.0, -300.0)
+  }
+  // (the words after the ：, the pill's last: tapped at its right end)
+  let (x, y, w, h) = t.rect_of("登录已失效").unwrap()
+  t.tap(x + w - 20.0, y + h / 2.0)
+  t.run_for(@ui.nav_push_ms)
+  assert_true(app.nav.top() == Setting(@settings.Route::Profile("ws1/st1", "p1")))
+}
+
+///|
+test "a Slack user's name in a history: 这是我 binds them to the viewer (slack.identity)" {
+  let calls : Array[Made] = []
+  // the history's first item (what it received): from a Slack user
+  let slack_from = fn(it : Json) -> Json {
+    let body = field(Some(it), "body")
+    match body {
+      Some(b) if text(body, "kind") == "received" => {
+        let content = field(body, "content").unwrap_or(Json::object({}))
+        let msgs = items(Some(content), "messages").map(fn(m) {
+          with_fields(m, [("from", { "name": "林小满", "bound": false, "slackUser": "U1" })])
+        })
+        with_fields(it, [("body", with_fields(b, [("content", with_fields(content, [("messages", Json::array(msgs))]))]))])
+      }
+      _ => it
+    }
+  }
+  let t = edited_core(calls, "history", fn(name, v) {
+    if name == "history" {
+      with_fields(v, [("items", Json::array(items(Some(v), "items").map(slack_from)))])
+    } else {
+      v
+    }
+  })
+  t.tap_text("林小满")
+  assert_true(t.find("这是我") is Some(_), msg="its menu")
+  t.tap_text("这是我")
+  let sent = named(calls, "slack.identity")
+  assert_eq(sent.length(), 1)
+  assert_eq(text(Some(sent[0].params), "user"), "U1")
+  assert_true(flag(Some(sent[0].params), "bound"))
+}
+
+///|
+test "the chat's sheet: one from Slack or Feishu opens there" {
+  let calls : Array[Made] = []
+  let t = edited_core(calls, "chat-info", fn(name, v) {
+    if name == "chat" {
+      with_fields(v, [
+        ("slackUrl", "https://example.slack.com/archives/C1/p1"),
+        ("feishuUrl", "https://example.feishu.cn/client/chat/open?openChatId=oc_1"),
+      ])
+    } else {
+      v
+    }
+  })
+  t.tap_text("在飞书中打开")
+  assert_true(t.opened().contains("https://example.feishu.cn/client/chat/open?openChatId=oc_1"))
+  t.tap_text("在 Slack 中打开")
+  assert_true(t.opened().contains("https://example.slack.com/archives/C1/p1"))
+}
+
+///|
+test "a station's update in the bar: its word opens it (the core's), the popover's 立即更新 updates the station" {
+  let calls : Array[Made] = []
+  let open = Ref::new(false)
+  let epoch = Ref::new(0)
+  let t = edited_core(calls, "chat", epoch~, fn(name, v) {
+    if name == "chat" {
+      with_fields(v, [
+        (
+          "stationUpdate",
+          {
+            "tone": "update",
+            "text": "Studio 有新版本",
+            "label": "可更新",
+            "station": "Studio",
+            "detail": "更新时正在运行的 agent 会稍后继续。",
+            "from": "1.2.0",
+            "to": "1.3.0",
+            "version": "1.3.0",
+            "open": Json::boolean(open.val),
+            "canUpdate": true,
+            "dismissible": true,
+          },
+        ),
+      ])
+    } else {
+      v
+    }
+  })
+  t.tap_text("可更新")
+  let asked = named(calls, "station.updateNotice")
+  assert_eq(asked.length(), 1)
+  assert_eq(text(Some(asked[0].params), "action"), "open")
+  assert_eq(text(Some(asked[0].params), "version"), "1.3.0")
+  // the core says it is open
+  open.val = true
+  epoch.val += 1
+  t.frame()
+  assert_true(t.find("1.2.0 → 1.3.0") is Some(_))
+  assert_true(t.find("更新时正在运行的 agent 会稍后继续。") is Some(_))
+  t.tap_text("立即更新")
+  let updated = named(calls, "software.update")
+  assert_eq(updated.length(), 1)
+  assert_eq(text(Some(updated[0].params), "id"), "station")
+  // a tap beside it closes it
+  t.tap(195.0, 700.0)
+  let asked = named(calls, "station.updateNotice")
+  assert_eq(text(Some(asked[asked.length() - 1].params), "action"), "close")
+}
+
+///|
+/// The centre of a plain text node whose words are exactly `s` (Tester::find takes the first containing them, whichever
+/// kind of node).
+fn words_node(t : @ui.Tester, s : String) -> (Double, Double)? {
+  let want = " \"" + s + "\" "
+  for l in t.dump().split("\n") {
+    let l = l.trim_start(chars=" ").to_string()
+    if l.has_prefix("text ") && l.contains(want) {
+      // "text x,y wxh \"…\" lines=n"
+      let parts = l.split(" ").collect()
+      let xy = parts[1].split(",").collect()
+      let wh = parts[2].split("x").collect()
+      let x = dump_number(xy[0].to_string())
+      let y = dump_number(xy[1].to_string())
+      let w = dump_number(wh[0].to_string())
+      let h = dump_number(wh[1].to_string())
+      return Some((x + w / 2.0, y + h / 2.0))
+    }
+  }
+  None
+}
+
+///|
+/// A dump's number, its whole part (enough to tap in the middle of words): its digits, a minus before them.
+fn dump_number(s : String) -> Double {
+  let mut n = 0
+  let mut neg = false
+  for ch in s {
+    if ch == '.' {
+      break
+    } else if ch == '-' {
+      neg = true
+    } else if ch >= '0' && ch <= '9' {
+      n = n * 10 + (ch.to_int() - '0'.to_int())
+    }
+  }
+  (if neg { -n } else { n }).to_double()
+}

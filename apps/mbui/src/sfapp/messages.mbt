@@ -184,7 +184,7 @@ fn said(
   ignore(list)
   let k = ink()
   if m.system {
-    system_notice(c, m)
+    system_notice(c, src, here.station, m)
     return
   }
   if m.mine {
@@ -198,7 +198,7 @@ fn said(
         ()
       } else {
         match m.blocked {
-          Some(b) if b.state != "installed" => blocked_line(c, b)
+          Some(b) if b.state != "installed" => blocked_line(c, src, here.station, b)
           _ =>
             if m.waiting {
               under_way(c, tr("android-chat.chat.waitingAgent"))
@@ -302,11 +302,17 @@ fn under_way(c : @ui.Ctx, words : String) -> Unit {
 ///|
 /// Under the viewer's message that waits for a runtime the station does not have (Chat.kt BlockedLine): how that
 /// stands, red with a "!" while nothing is under way.
-fn blocked_line(c : @ui.Ctx, b : Install) -> Unit {
+fn blocked_line(c : @ui.Ctx, src : Source, station : String, b : Install) -> Unit {
   let t = @sf.theme()
   let stuck = b.state == "missing" || b.state == "failed"
   let color = if stuck { t.p.red } else { ink().muted }
-  c.box(dir=Row, gap=4.0, align=ACenter, fn() {
+  // the whole line installs it, while it may (as a message not delivered is sent again from its line)
+  let busy = b.action != "" && doing(install_key(station, b))
+  let id = if b.action != "" && !busy { c.id("blocked/" + b.runtime) } else { 0 }
+  if id != 0 && c.clicked(id) {
+    install_runtime(src, station, b)
+  }
+  c.box(style=blocked_row, id~, fn() {
     if b.state == "installing" {
       @sf.spinner(c, size=12.0) |> ignore
     } else if stuck {
@@ -323,7 +329,7 @@ fn blocked_line(c : @ui.Ctx, b : Install) -> Unit {
     c.text(b.title + pct + note, size=10.0, color~, line=16.0) |> ignore
     if b.action != "" {
       c.text("·", size=10.0, color=ink().muted, wrap=false, line=16.0) |> ignore
-      c.text(b.action, size=10.0, weight=600, color=ink().text, wrap=false, line=16.0)
+      c.text(b.action, size=10.0, weight=600, color=if busy { ink().muted } else { ink().text }, wrap=false, line=16.0)
       |> ignore
     }
   })
@@ -331,9 +337,14 @@ fn blocked_line(c : @ui.Ctx, b : Install) -> Unit {
 }
 
 ///|
+/// The blocked line's mark and words, 4 apart.
+// kept across runs: a value (no field of it changes)
+let blocked_row : @ui.Style = @ui.style(row=true, gap=S1, align=ACenter)
+
+///|
 /// What still.fail itself says (Chat.kt SystemNotice): a pill across the chat, one line cut short, no time; tapped,
 /// all its words and its time under them. A failure (⚠️ at its start) is the pill in red.
-fn system_notice(c : @ui.Ctx, m : Message) -> Unit {
+fn system_notice(c : @ui.Ctx, src : Source, station : String, m : Message) -> Unit {
   let t = @sf.theme()
   let failed = m.text.has_prefix("⚠️")
   let mut said = if failed {
@@ -371,6 +382,24 @@ fn system_notice(c : @ui.Ctx, m : Message) -> Unit {
     opened_notices[m.ts] = !opened_notices.get(m.ts).unwrap_or(false)
   }
   let open = opened_notices.get(m.ts).unwrap_or(false)
+  let first = match said.split("\n").find_first(fn(l) { l.trim(chars=" ").to_string() != "" }) {
+    Some(l) => l.to_string()
+    None => said
+  }
+  // in one about a profile (its sign-in failed), what went wrong (after its ：) leads to that profile's page
+  let colon = if m.profile == "" {
+    None
+  } else {
+    match said.find("：") {
+      Some(i) => Some(i + "：".length())
+      None => said.find(":").map(fn(i) { i + 1 })
+    }
+  }
+  let to_install = match m.install {
+    Some(i) if i.action != "" => Some(i)
+    _ => None
+  }
+  let report = m.reportable && to_install is None && colon is None
   c.box(w=Fill(1.0), gap=4.0, align=ACenter, fn() {
     c.box(
       max_w=c.width - 28.0,
@@ -380,29 +409,62 @@ fn system_notice(c : @ui.Ctx, m : Message) -> Unit {
       bg=ground,
       id~,
       fn() {
-        if open {
-          @sf.markdown(c, said, key="notice/" + m.ts, size=15.0, ink=color) |> ignore
-        } else {
-          let first = match said.split("\n").find_first(fn(l) { l.trim(chars=" ").to_string() != "" }) {
-            Some(l) => l.to_string()
-            None => said
-          }
-          let row = c.box(dir=Row, align=ACenter, fn() {
-            // cut short where it does not fit
-            c.box(fn() {
-              c.text(plain_words(first), size=15.0, color~, wrap=false, line=24.75) |> ignore
+        match colon {
+          Some(at) =>
+            c.rich(
+              [
+                @ui.span(said.view(end_offset=at).to_owned()),
+                @ui.span(said.view(start_offset=at).to_owned(), underline=true, link="profile"),
+              ],
+              key="notice-profile/" + m.ts,
+              style=if open { system_words_open } else { system_words },
+              color~,
+              link_color=color,
+              on_link=fn(_) { app.nav.push(Setting(@settings.Route::Profile(station, m.profile))) },
+            )
+            |> ignore
+          None =>
+            c.box(dir=Row, align=if report { AEnd } else { ACenter }, fn() {
+              // cut short where it does not fit, the word that acts on it after
+              c.box(fn() {
+                if open {
+                  @sf.markdown(c, said, key="notice/" + m.ts, size=15.0, ink=color) |> ignore
+                } else {
+                  c.text(plain_words(if to_install is Some(_) { said } else { first }), size=15.0, color~, wrap=false, line=24.75)
+                  |> ignore
+                }
+              })
+              |> ignore
+              match to_install {
+                Some(i) => notice_action(c, "notice-install/" + m.ts, i.action, color, doing(install_key(station, i)), fn() {
+                    install_runtime(src, station, i)
+                  })
+                None =>
+                  if report {
+                    let key = "chat.report/" + station + "/" + m.thread.to_string() + "/" + m.seq.to_string()
+                    let action = tr("common.report.action")
+                    notice_action(c, "notice-report/" + m.ts, action, color, doing(key), fn() {
+                      @settings.confirm(tr("common.report.title"), tr("common.report.lead") + "\n\n" + tr("common.report.sends"), action, fn() {
+                        act(
+                          src,
+                          action,
+                          key,
+                          "chat.report",
+                          { "station": Json::string(station), "thread": Json::number(m.thread), "seq": Json::number(m.seq) },
+                          ok=fn(v) {
+                            let number = match field(Some(v), "number") {
+                              Some(Number(n, ..)) => n.to_int().to_string()
+                              _ => "?"
+                            }
+                            toast_later(fill(if flag(Some(v), "duplicate") { "common.report.again" } else { "common.report.done" }, [("number", number)]))
+                          },
+                        )
+                      })
+                    })
+                  }
+              }
             })
             |> ignore
-            match m.install {
-              Some(i) if i.action != "" => {
-                c.text(" · ", size=15.0, color=@sf.alpha(color, 0.6), wrap=false) |> ignore
-                c.text(i.action, size=15.0, weight=600, color~, wrap=false, line=24.75)
-                |> ignore
-              }
-              _ => ()
-            }
-          })
-          ignore(row)
         }
       },
     )
@@ -412,6 +474,44 @@ fn system_notice(c : @ui.Ctx, m : Message) -> Unit {
     }
   })
   |> ignore
+}
+
+///|
+/// A word at a notice's end that acts on it (Chat.kt InstallAction, ReportAction): " · " fainter, then the word, semibold
+/// and underlined; while it is under way not offered.
+fn notice_action(c : @ui.Ctx, key : String, action : String, color : Int64, busy : Bool, run : () -> Unit) -> Unit {
+  let id = if busy { 0 } else { c.id(key) }
+  if id != 0 && c.clicked(id) {
+    run()
+  }
+  c.rich([@ui.span(" · ", color=@sf.alpha(color, notice_dot_alpha))], style=system_words, color~) |> ignore
+  c.box(id~, fn() { c.rich([@ui.span(action, weight=600, underline=true)], style=system_words, color~) |> ignore })
+  |> ignore
+}
+
+///|
+/// A notice's words (15 on a message's line), on one line; all of it once opened.
+// kept across runs: a value (no field of it changes)
+let system_words : @ui.TextStyle = @ui.text_style(size=Lg, leading=@sf.message_line, wrap=false)
+
+///|
+// kept across runs: a value (no field of it changes)
+let system_words_open : @ui.TextStyle = @ui.text_style(size=Lg, leading=@sf.message_line)
+
+///|
+/// The dot before a notice's word, its ink at 60%.
+let notice_dot_alpha : Double = 0.6
+
+///|
+/// What says a runtime is being installed on a station (`software.update` by its id).
+fn install_key(station : String, i : Install) -> String {
+  "software.update/" + station + "/" + i.runtime
+}
+
+///|
+/// Installs on `station` the runtime a notice or a waiting message says it lacks (`software.update`).
+fn install_runtime(src : Source, station : String, i : Install) -> Unit {
+  act(src, i.action, install_key(station, i), "software.update", { "station": Json::string(station), "id": Json::string(i.runtime) })
 }
 
 ///|

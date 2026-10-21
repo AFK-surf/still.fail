@@ -349,6 +349,11 @@ test "chat-link-menu" {
 }
 
 ///|
+test "chat-update" {
+  check("chat-update", @ui.nav_push_ms)
+}
+
+///|
 test "chat-flash" {
   check(
     "chat-flash",

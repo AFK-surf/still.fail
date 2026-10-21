@@ -387,6 +387,8 @@ fn fixture_chat_topic(f : Fixture, name : String, params : Map[String, Json]) ->
             with_viz_message(rich_chat(f.older))
           } else if f.mode == "chat-screens" {
             with_message(rich_chat(f.older), screens_answer)
+          } else if f.mode == "chat-update" {
+            with_station_update(rich_chat(f.older))
           } else {
             rich_chat(f.older)
           }
@@ -1027,11 +1029,7 @@ pub fn open_cards_fixture(mode : String) -> Unit {
     }
     // the bare address in the long answer held: its menu (link_menu.mbt)
     "chat-link-menu" => {
-      link_menu.href = "https://example.com/bench/list"
-      link_menu.x = 220.0
-      link_menu.top = 360.0
-      link_menu.bottom = 383.0
-      link_menu.open = true
+      link_menu_at("https://example.com/bench/list", 220.0, 360.0, 383.0)
     }
     _ => ()
   }
@@ -1192,4 +1190,29 @@ fn fixture_peek(on_value : (Json, Bytes?) -> Unit) -> Int {
   fix_later(0.0, fn() { on_value({ "frame": { "ts": 1 } }, Some(fixture_file_png("peek.png"))) })
   fix_stream_ids.val += 1
   fix_stream_ids.val
+}
+
+///|
+/// The chat with its station's update said in its bar and opened (MBUI_FIXTURE=chat-update: station_update.mbt).
+fn with_station_update(v : Json) -> Json {
+  match v {
+    Object(m) => {
+      let o = m.copy()
+      o["stationUpdate"] = {
+        "tone": "update",
+        "text": "Studio 有新版本",
+        "label": "可更新",
+        "station": "Studio",
+        "detail": "更新时正在运行的 agent 会在更新后继续。",
+        "from": "0.24.1",
+        "to": "0.25.0",
+        "version": "0.25.0",
+        "open": true,
+        "canUpdate": true,
+        "dismissible": true,
+      }
+      Json::object(o)
+    }
+    _ => v
+  }
 }
