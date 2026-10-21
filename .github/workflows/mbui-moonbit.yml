@@ -45,14 +45,14 @@ jobs:
       - uses: actions/cache/restore@v4
         id: had
         with:
-          path: ../moon-ci
+          path: ${{ runner.tool_cache }}/moon-ci
           key: ${{ steps.tag.outputs.key }}
           lookup-only: true
-      - name: Installed (MOON_HOME=../moon-ci, beside the checkout)
+      - name: "Installed (MOON_HOME: moon-ci in the runner's tool cache)"
         if: steps.had.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          export MOON_HOME=$(cd "$GITHUB_WORKSPACE/.." && pwd)/moon-ci
+          export MOON_HOME="$RUNNER_TOOL_CACHE/moon-ci"; [ "${{ runner.os }}" != Windows ] || MOON_HOME=$(cygpath -u "$MOON_HOME")
           if [ "${{ runner.os }}" = Windows ]; then
             MOON_HOME=$(cygpath -w "$MOON_HOME") powershell -NoProfile -Command "irm https://cli.moonbitlang.com/install/powershell.ps1 | iex"
           else
@@ -63,8 +63,16 @@ jobs:
       - if: steps.had.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ../moon-ci
+          path: ${{ runner.tool_cache }}/moon-ci
           key: ${{ steps.tag.outputs.key }}
+      # (put in, or this fails: a save that could not be made is only a warning of actions/cache/save's, run 39533061843's
+      # every put green with nothing saved)
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.tool_cache }}/moon-ci
+          key: ${{ steps.tag.outputs.key }}
+          lookup-only: true
+          fail-on-cache-miss: true
       # (what a job gets: the action over what was put in)
       - uses: actions/checkout@v4
         with: { sparse-checkout: .github/actions }
