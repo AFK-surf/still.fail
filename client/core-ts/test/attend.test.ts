@@ -137,7 +137,7 @@ test("a_hidden_tab_does_not_stop_animation_in_another_visible_tab", async () => 
   assert.equal(v.messages[1].said, true);
 });
 
-test("a_chat_is_read_while_its_end_shows_on_a_page_in_view", async () => {
+test("a_chat_is_read_while_its_end_shows_on_a_page_in_front", async () => {
   const host = new FakeHost();
   const attend = await run(Attend.load(host));
   let v = chat(1, false, [[1, 0, false], [2, 0, false]]);
@@ -154,6 +154,13 @@ test("a_chat_is_read_while_its_end_shows_on_a_page_in_view", async () => {
     assert.deepEqual(r.due, []);
   }
   attend.focus(1, focus({ chat: { station: "ws/st", thread: 7, end: true } }));
+  {
+    // In view but not in front (a window behind others, on another screen): not read.
+    const r = attend.chat("ws/st", null, v);
+    v = r.value;
+    assert.deepEqual(r.due, []);
+  }
+  attend.focus(1, focus({ focused: true }));
   {
     const r = attend.chat("ws/st", null, v);
     v = r.value;
