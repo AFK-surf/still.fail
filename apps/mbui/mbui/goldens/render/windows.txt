@@ -2,11 +2,12 @@
 # Direct3D 11 on WARP, offscreen. Checked: the system, WARP's and DirectWrite's versions and the fonts' bytes; the rest
 # is said. Any new: every reference made again in one PR (the render-windows workflow's artifact), said there; or,
 # where the new one draws every reference the same to the byte, a line of it beside the old (WARP 33648 on image
-# 20261018.275.1: run 39473079125's controls.png the reference's to the byte).
+# 20261018.275.1: run 39473079125's controls.png the reference's to the byte). Made again with WARP pinned
+# (Microsoft.Direct3D.WARP 1.0.21 beside the program, .github/actions/warp; run 39524573902's artifact): 1157 pixels
+# one step of a channel off the image's WARP's, the picture looked at beside the last.
 image win25-vs2026 20261007.264.1
 system Microsoft Windows NT 10.0.26100.0
-warp 10.0.26100.33438 (WinBuild.160101.0800)
-warp 10.0.26100.33648 (WinBuild.160101.0800)
+warp 1.0.21.0.20260922.2
 dwrite 10.0.26100.1 (WinBuild.160101.0800)
 fonts dd6d10eafb0a4cadca02b22ab335d816
 cpu AMD EPYC 7763 64-Core Processor

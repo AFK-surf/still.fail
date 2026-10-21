@@ -79,6 +79,18 @@ def main():
         for l in w.splitlines():
             if re.search(r"mCurrentFocus|mFocusedApp", l):
                 print("android_end:", l.strip())
+        # what the system said of the app's end, every process's (a kill under memory, lmkd's; WebView's renderer
+        # gone and the app with it; ActivityManager's "has died"): the crash buffer whole, the main and system
+        # buffers' lines about it
+        crash = subprocess.run(adb + ["logcat", "-d", "-b", "crash", "-v", "brief"], capture_output=True,
+                               text=True, errors="replace").stdout
+        for l in crash.splitlines()[-40:]:
+            print("android_end: crash:", l)
+        about = re.compile(app + r"|lowmemorykiller|lmkd|chromium|Render process|has died|Killing|am_kill", re.I)
+        sysl = subprocess.run(adb + ["logcat", "-d", "-b", "main,system,events", "-v", "brief"], capture_output=True,
+                              text=True, errors="replace").stdout
+        for l in [l for l in sysl.splitlines() if about.search(l)][-40:]:
+            print("android_end: system:", l)
     sys.exit(0 if ok else 1)
 
 

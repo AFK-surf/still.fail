@@ -735,6 +735,10 @@ extern "C" void mb_render_init_offscreen(double w, double h, double scale) {
     fprintf(stderr, "no Direct3D 11 WARP device\n");
     return;
   }
+  // which WARP drew it (the app's own beside it, as render_windows.sh puts the pinned one, or the system's)
+  HMODULE warp = GetModuleHandleW(L"d3d10warp.dll");
+  wchar_t warp_path[MAX_PATH];
+  if (warp && GetModuleFileNameW(warp, warp_path, MAX_PATH)) fwprintf(stderr, L"WARP %ls\n", warp_path);
   make_pipeline();
   vw = w;
   vh = h;

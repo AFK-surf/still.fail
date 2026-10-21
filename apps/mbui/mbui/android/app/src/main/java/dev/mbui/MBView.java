@@ -112,6 +112,8 @@ public class MBView extends GLSurfaceView implements GLSurfaceView.Renderer {
                     say.run();
                     return;
                 }
+                // (said, so a picture that never comes is told by what it waits for)
+                Host.log("shot: " + said.substring(5) + " waits for the window's focus");
                 getViewTreeObserver().addOnWindowFocusChangeListener(new ViewTreeObserver.OnWindowFocusChangeListener() {
                     @Override
                     public void onWindowFocusChanged(boolean focused) {
