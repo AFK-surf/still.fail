@@ -40,6 +40,11 @@ pass() { echo "PASS $1${2:+ ($2)}"; }
 fail() {
   echo "FAIL $1: $2"
   grep -a -E 'I/mbui .*IME |ImeTracker.*dev\.mbui' $O/$1.log | tail -6
+  # (where the keyboard's window is and what the system says it covers: a keyboard shown that the app's insets say
+  # nothing of, apart from one never shown)
+  $ADB -s $SERIAL shell dumpsys input_method | grep -a -E 'mInputShown|mShowRequested|mCurMethodId|mIsInputViewShown' | head -6
+  $ADB -s $SERIAL shell dumpsys window windows | grep -a -A4 'Window{.*InputMethod' | grep -a -E 'InputMethod|mFrame|mHasSurface|isVisible|mViewVisibility' | head -8
+  $ADB -s $SERIAL shell dumpsys window | grep -a -E 'InsetsSource .*ime|type=ime' | head -4
   failed=1
 }
 
