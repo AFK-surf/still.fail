@@ -141,8 +141,14 @@ case "${1:-build}" in
     ;;
   run)
     ID=$(device)
-    xcrun simctl install "$ID" $APPDIR
+    # the last run's app ended, its process gone (kqueue's NOTE_EXIT), before this one is installed over it and
+    # launched: SpringBoard still taking the last one down answers a launch "Busy (Application failed preflight
+    # checks)" (39467833461)
+    old=$(app_pid "$ID")
     xcrun simctl terminate "$ID" $BID 2>/dev/null || true
+    [ -z "$old" ] || python3 "$D/logwait.py" --pid "$old" --deadline 60 >/dev/null ||
+      { echo "ios.sh: $BID's last run ($old) did not end" >&2; exit 1; }
+    xcrun simctl install "$ID" $APPDIR
     mkdir -p $PWD/$OUT/shots "$(dirname "$LOG")"
     # the app's environment: SIMCTL_CHILD_<name> for each of ENV's
     IFS=';' read -ra kv <<< "${ENV:-}"
@@ -158,7 +164,9 @@ case "${1:-build}" in
     # ends at once). `simctl launch` itself can sit on for minutes after the app is up (seen on a loaded Mac), so its
     # end is not waited for, only its line once the app is up
     pid=
-    if python3 "$D/logwait.py" --log "$LOG" --line '^ios: launched' --deadline 120 >/dev/null; then
+    # (or `simctl launch` saying it refused it: said at once, not after the deadline)
+    if python3 "$D/logwait.py" --log "$LOG" --line '^ios: launched' --fail-log "$LOG.launch" \
+      --fail-line 'An error was encountered|failed to launch' --deadline 120 >/dev/null; then
       pid=$(app_pid "$ID")
       [ -n "$pid" ] || pid=$(python3 "$D/logwait.py" --log "$LOG.launch" --line "^$BID: [0-9]+" --deadline 120 | sed "s/^$BID: //")
     fi
