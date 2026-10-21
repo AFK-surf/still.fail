@@ -17,21 +17,27 @@ inputs:
   animations:
     description: "'false': the system's animations off"
     default: "true"
+  phase:
+    description: "all (default): started and booted; start: started only (the steps after build meanwhile); wait: a started one's boot followed to its end"
+    default: all
 runs:
   using: composite
   steps:
     - uses: actions/cache/restore@v4
+      if: inputs.phase != 'wait'
       id: emu
       with:
         path: ~/android-emu
         key: android-emulator-16428233
     - uses: actions/cache/restore@v4
+      if: inputs.phase != 'wait'
       id: img
       with:
         path: /usr/local/lib/android/sdk/system-images/android-${{ inputs.api }}/${{ inputs.target }}/x86_64
         key: android-image-${{ inputs.api }}-${{ inputs.target }}-x86_64-none
         restore-keys: android-image-${{ inputs.api }}-${{ inputs.target }}-x86_64-
     - uses: actions/cache/restore@v4
+      if: inputs.phase != 'wait'
       id: avd
       with:
         path: ~/.android/avd
@@ -44,5 +50,6 @@ runs:
         TARGET: ${{ inputs.target }}
         PROFILE: ${{ inputs.profile }}
         ANIMATIONS: ${{ inputs.animations }}
+        PHASE: ${{ inputs.phase }}
         IMG: ${{ steps.img.outputs.cache-matched-key }}
       run: bash "$GITHUB_ACTION_PATH/boot.sh"

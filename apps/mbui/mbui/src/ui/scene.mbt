@@ -337,6 +337,20 @@ fn Ctx::emit_text(
   let cy0 = clip_stack[k + 1]
   let cy1 = clip_stack[k + 3]
   let sc = self.scale
+  keep_text_runs(
+    tl,
+    ox,
+    oy,
+    fn(line) {
+      if center_in >= 0.0 && line < tl.line_w.length() {
+        dmax((center_in - tl.line_w[line]) / 2.0, 0.0)
+      } else {
+        0.0
+      }
+    },
+    cy0,
+    cy1,
+  )
   for c in 0..<n {
     let key = s.keys[c]
     if key < 0 {

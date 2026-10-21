@@ -43,8 +43,10 @@ jobs:
       - uses: actions/checkout@v5
         with: { fetch-depth: 0 }
       # Android's pictures taken anew: its app or the screens changed since main (on main: in the push), or the emulator
-      # they are taken on (this workflow's lines naming it, the emulator action's)
-      - id: what
+      # they are taken on (this workflow's lines naming it, the emulator action's); not where pictures taken over all of
+      # that as it is now came out the same as those kept (`key`: Android's code, the screens and their pictures kept,
+      # the emulator; a run whose take matched keeps a mark of it)
+      - id: changed
         run: |
           if [ "$GITHUB_EVENT_NAME" = push ]; then base=${{ github.event.before }}; else base=$(git merge-base origin/main HEAD); fi
           # (allowed.json the mbui app's, not Android's)
@@ -52,7 +54,24 @@ jobs:
               | grep -qE '^(apps/android/|client/fixtures/screens/)' \
             || git diff -U0 "$base" HEAD -- .github/workflows/mbui-android-ref.yml \
               | grep -qE '^[-+] .*(mbui-android-emulator|with: [{] api:)'; then
+            echo "refs=1" >> "$GITHUB_OUTPUT"; else echo "refs=0" >> "$GITHUB_OUTPUT"; fi
+          key=$({ git ls-files -s -- apps/android client/fixtures/screens | grep -v 'client/fixtures/screens/allowed.json$'
+            grep -E 'mbui-android-emulator|with: [{] api:' .github/workflows/mbui-android-ref.yml
+            git ls-files -s -- .github/actions/mbui-android-emulator; } | sha256sum | cut -c1-32)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        id: same
+        if: steps.changed.outputs.refs == '1'
+        with:
+          path: .ci/android-refs-same
+          key: mbui-android-refs-same-${{ steps.changed.outputs.key }}
+          lookup-only: true
+      - id: what
+        run: |
+          if [ "${{ steps.changed.outputs.refs }}" = 1 ] && [ "${{ steps.same.outputs.cache-hit }}" != true ]; then
             echo "refs=1" >> "$GITHUB_OUTPUT"; echo "Android's pictures taken anew"
+          elif [ "${{ steps.changed.outputs.refs }}" = 1 ]; then
+            echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept: taken over all this already, the same"
           else echo "refs=0" >> "$GITHUB_OUTPUT"; echo "Android's pictures as kept"; fi
       - uses: ./.github/actions/mbui-moonbit
       # the screens drawn in the Tester over the Android host's text (src/sfscreens/android_ref_wbtest.mbt), their draw
@@ -81,6 +100,12 @@ jobs:
       - name: The screens compared, every picture kept (no emulator)
         if: steps.emu.outputs.on == '0'
         run: bash apps/mbui/scripts/android-ref.sh ci
+      # the emulator from the Actions cache (the android-sdk workflow puts its build and this image in): nothing
+      # downloaded here (the system image's download broke off: "Error on ZipFile unknown archive", 39662296477);
+      # started now and booting while the apps are built, its boot followed before the screens are drawn
+      - uses: ./.github/actions/mbui-android-emulator
+        if: steps.emu.outputs.on == '1'
+        with: { api: "36", target: google_apis, profile: pixel_7, phase: start }
       - uses: actions/setup-java@v4
         if: steps.emu.outputs.on == '1'
         with: { distribution: temurin, java-version: 21 }
@@ -110,11 +135,9 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_motionTest: 1
         run: python3 apps/android/build.py --tasks :app:assembleDebug :app:assembleDebugAndroidTest
-      # the emulator from the Actions cache (the android-sdk workflow puts its build and this image in): nothing
-      # downloaded here (the system image's download broke off: "Error on ZipFile unknown archive", 39662296477)
       - uses: ./.github/actions/mbui-android-emulator
         if: steps.emu.outputs.on == '1'
-        with: { api: "36", target: google_apis, profile: pixel_7 }
+        with: { api: "36", target: google_apis, profile: pixel_7, phase: wait }
       - name: The screens, Android's and the mbui app's, compared
         if: steps.emu.outputs.on == '1'
         env:
@@ -125,6 +148,15 @@ jobs:
           MBUI_APK: ${{ steps.text.outputs.lacks == '1' && format('{0}/apps/mbui/android/app/build/outputs/apk/debug/app-debug.apk', github.workspace) || '' }}
           RENDER_APK: ${{ github.workspace }}/apps/mbui/mbui/android/app/build/outputs/apk/debug/app-debug.apk
         run: bash apps/mbui/scripts/android-ref.sh ci
+      # Android's pictures taken over all this came out as those kept: marked, not taken again for it
+      - name: Android's pictures the same as kept, marked
+        if: always() && steps.what.outputs.refs == '1' && hashFiles('apps/mbui/out/android-ref/refs-same') != ''
+        run: mkdir -p .ci/android-refs-same && cp apps/mbui/out/android-ref/refs-same .ci/android-refs-same/
+      - uses: actions/cache/save@v4
+        if: always() && steps.what.outputs.refs == '1' && hashFiles('apps/mbui/out/android-ref/refs-same') != ''
+        with:
+          path: .ci/android-refs-same
+          key: mbui-android-refs-same-${{ steps.changed.outputs.key }}
       # the pictures drawn now kept for the runs after, by their keys (those of this run's screens only; drawn right
       # whatever the comparison found)
       - name: The pictures kept, this run's screens'

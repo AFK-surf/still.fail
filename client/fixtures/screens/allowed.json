@@ -1,14 +1,17 @@
 {
   "chat-cards": {
-    "left": 301347,
-    "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line; mbui's picture drawn offscreen from the Tester's draw list since #981, no more taken off the app running: words' edges some hundreds of pixels apart from the app's own"
+    "left": 142940,
+    "why": "not yet as Android's: the top bar has no blur of what scrolls under it; the list stands at another place (Android's shows build.log's card at its top, the mbui app 发送到星火#发布 above it); the avatars of the title (你 against 林); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 20
   },
   "history": {
-    "left": 188013,
-    "why": "not yet as Android's: the steps lie closer together (each block some 10 to 15 px higher than Android's, more down the page); words a pixel apart along every line; mbui's picture drawn offscreen from the Tester's draw list since #981, no more taken off the app running: words' edges some hundreds of pixels apart from the app's own"
+    "left": 7548,
+    "why": "not yet as Android's: the steps lie closer together (each block some 10 to 15 px higher than Android's, more down the page); words a pixel apart along every line; words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 18
   },
   "settings": {
-    "left": 56870,
-    "why": "not yet as Android's: each row some 2 px shorter, so the rows drift up the page; 外观's value 浅色 where Android says 跟随系统; words a pixel apart; mbui's picture drawn offscreen from the Tester's draw list since #981, no more taken off the app running: words' edges some hundreds of pixels apart from the app's own"
+    "left": 8895,
+    "why": "not yet as Android's: each row some 2 px shorter, so the rows drift up the page; 外观's value 浅色 where Android says 跟随系统; words a pixel apart; words compared by where they stand since #989 (their boxes out of the pixels)",
+    "texts_left": 28
   }
 }

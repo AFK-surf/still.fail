@@ -141,6 +141,38 @@ fn android_screen(name : String, json : String) -> @ui.Tester raise {
 }
 
 ///|
+/// The words the Tester drew, a line at a time (Tester::text_runs: in points), with the window's scale: what
+/// android_ref.py holds to Android's lines by where they stand (MBUI/NAME.texts.json).
+fn text_runs_json(t : @ui.Tester, scale : Double) -> Json {
+  let lines : Array[Json] = t
+    .text_runs()
+    .map(fn(r) {
+      {
+        "t": Json::string(r.text),
+        "x0": Json::number(r.x0),
+        "x1": Json::number(r.x1),
+        "b": Json::number(r.base),
+        "top": Json::number(r.top),
+        "bot": Json::number(r.bottom),
+      }
+    })
+  { "scale": Json::number(scale), "lines": Json::array(lines) }
+}
+
+///|
+/// The scale of `name`'s window as its section's head says (1 where it says none).
+fn scale_of(name : String) -> Double {
+  match text_android(name) {
+    Some((parts, _)) =>
+      match parts.get(6) {
+        Some(p) => number_of(p).unwrap_or(1.0)
+        None => 1.0
+      }
+    None => 1.0
+  }
+}
+
+///|
 /// The window in a section's head (# NAME FRAME TIME WIDTH HEIGHT SCALE …).
 fn window_of(name : String, parts : Array[String]) -> (Double, Double, Double) raise {
   let num = fn(i : Int) {
@@ -175,6 +207,7 @@ test "still.fail's screens as Android's emulator gave the app its window and tex
       println("DLBEGIN " + name)
       println(t.drawlist(bytes=true))
       println("DLEND " + name)
+      println("TEXTRUNS " + name + " " + text_runs_json(t, scale_of(name)).stringify())
     }
   }
 }

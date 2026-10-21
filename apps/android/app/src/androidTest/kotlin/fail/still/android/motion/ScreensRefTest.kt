@@ -15,6 +15,11 @@ import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.ViewRootForTest
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.test.platform.app.InstrumentationRegistry
@@ -36,6 +41,9 @@ import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -137,9 +145,61 @@ class ScreensRefTest {
             bars = intArrayOf(insets.top, insets.bottom)
         }
         File(dir, "$name.bars").writeText("${bars[0]} ${bars[1]}\n")
+        // its lines of words, where they stand, as this picture has them (read on the main thread, as the composition
+        // is: never on the test's): what the mbui app's words are held to by place, not by their pixels
+        var lines = ""
+        rule.runOnUiThread { lines = textLines(activity) }
+        File(dir, "$name.texts.json").writeText(lines)
         // what the screen is said to show there, there (a fact of its state, not a wait for it to settle); else the
         // picture is no reference: it is kept as NAME.png beside the failure, for whoever looks
         for (words in shows) check(rule.onAllNodesWithText(words, substring = true).fetchSemanticsNodes().isNotEmpty()) { "$name: \"$words\" not shown" }
+    }
+
+    /**
+     * The window's lines of words as JSON (apps/mbui/scripts/android_ref.py texts): each text's lines as laid out, its
+     * words (the spaces it starts or ends in left out), the left of its first letter and the right of its last, its
+     * baseline, the line's top and bottom, in the window's pixels; those its clip hides left out. On the main thread.
+     */
+    private fun textLines(activity: ComponentActivity): String {
+        val roots = mutableListOf<ViewRootForTest>()
+        fun find(v: android.view.View) {
+            if (v is ViewRootForTest) roots += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))
+        }
+        find(activity.window.decorView)
+        return buildJsonArray {
+            fun walk(n: SemanticsNode) {
+                val get = n.config.getOrNull(SemanticsActions.GetTextLayoutResult)?.action
+                if (get != null) {
+                    val results = mutableListOf<TextLayoutResult>()
+                    get(results)
+                    val at = n.positionInWindow
+                    val clip = n.boundsInWindow
+                    for (r in results) {
+                        val text = r.layoutInput.text.text
+                        for (l in 0 until r.lineCount) {
+                            var a = r.getLineStart(l)
+                            var b = r.getLineEnd(l, visibleEnd = true)
+                            while (a < b && text[a].isWhitespace()) a++
+                            while (b > a && text[b - 1].isWhitespace()) b--
+                            val top = at.y + r.getLineTop(l)
+                            val bottom = at.y + r.getLineBottom(l)
+                            if (a >= b || bottom <= clip.top || top >= clip.bottom) continue
+                            add(buildJsonObject {
+                                put("t", text.substring(a, b))
+                                put("x0", at.x + r.getBoundingBox(a).left)
+                                put("x1", at.x + r.getBoundingBox(b - 1).right)
+                                put("b", at.y + r.getLineBaseline(l))
+                                put("top", top)
+                                put("bot", bottom)
+                            })
+                        }
+                    }
+                }
+                for (c in n.children) walk(c)
+            }
+            for (root in roots) walk(root.semanticsOwner.unmergedRootSemanticsNode)
+        }.toString()
     }
 
     /** A page the screen's file opens: `{"page": "chat" | "history" | "settings", …}`. */

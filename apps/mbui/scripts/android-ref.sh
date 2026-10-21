@@ -101,6 +101,9 @@ case "$cmd" in
     for n in $names; do
       $ADB pull /sdcard/Android/data/$M/files/screens/$n.png $R/$n.png > $O/pull.log 2>&1 \
         || { cat $O/pull.log; $ADB shell ls -la /sdcard/Android/data/$M/files/screens/; die "$n: no picture"; }
+      # (its lines of words, where they stand: compared with the mbui app's by place, not by pixels)
+      $ADB pull /sdcard/Android/data/$M/files/screens/$n.texts.json $R/$n.texts.json > $O/pull.log 2>&1 \
+        || { cat $O/pull.log; die "$n: no lines of words"; }
     done
     # the system's bars, where the app's window lies under them (the test's word: each screen's alike)
     bars=$($ADB shell cat /sdcard/Android/data/$M/files/screens/$(echo $names | cut -d' ' -f1).bars | tr -d '\r')
@@ -152,6 +155,9 @@ case "$cmd" in
     for n in $names; do
       awk -v n="$n" '$0 == "DLEND " n {p=0} p {print} $0 == "DLBEGIN " n {p=1}' $O/dl/print.txt > $O/dl/$n.dl
       [ -s $O/dl/$n.dl ] || die "$n: no draw list"
+      # (the words it drew, a line at a time: compared with Android's by where they stand, android_ref.py)
+      sed -n "s/^TEXTRUNS $n //p" $O/dl/print.txt > $O/dl/$n.texts.json
+      [ -s $O/dl/$n.texts.json ] || die "$n: no words' lines"
       { cat $O/dl/$n.dl; echo "$code"; cat $R/android.json; } | shasum -a 256 | cut -c1-32 > $O/dl/$n.key
     done
     ;;
@@ -168,6 +174,7 @@ case "$cmd" in
     draw=""
     for n in $names; do
       k=$(cat $O/dl/$n.key) || die "$n: no draw list (scripts/android-ref.sh lists)"
+      cp $O/dl/$n.texts.json $O/mbui/$n.texts.json
       if [ -f "$PICS/$k-$n.png" ]; then cp "$PICS/$k-$n.png" $O/mbui/$n.png; echo "$n: its picture kept ($k)"; else draw="$draw $n"; fi
     done
     [ -n "$draw" ] || exit 0
@@ -213,21 +220,23 @@ case "$cmd" in
     if [ "${REFS:-}" = 1 ] || [ ! -f $R/android.json ]; then
       rm -rf $O/kept && mkdir -p $O && { [ -f $R/android.json ] && cp -r $R $O/kept; true; }
       bash "$0" refs || exit 1
-      # the same pictures again (a reference that differs from itself is no reference: the run says where)
-      rm -rf $O/again && cp -r $R $O/again
-      bash "$0" refs > /dev/null || exit 1
-      python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
-        | sed 's/^/android-ref: Android twice: /'
-      python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names > /dev/null || fail=1
       # held to those kept as android_ref.py compares (a channel a step apart the same: the same picture has come out so
       # on another runner, at circles' edges), the kept ones then left as they are
       if [ -f $O/kept/android.json ] && cmp -s $O/kept/android.json $R/android.json \
         && python3 "$D/android_ref.py" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names > /dev/null; then
         (cd $ROOT && git checkout -- client/fixtures/screens/android)
+        # (said for the job: pictures taken over this code, these screens and this emulator are the ones kept)
+        echo same > $O/refs-same
       else
         echo "android-ref: Android's pictures are not the ones kept: commit this run's (its artifact's client/fixtures/screens/android) in the PR"
         [ -f $O/kept/android.json ] && python3 "$D/android_ref.py" "$O/kept" "$R" "$O/kept-diff" /nonexistent $names | grep '^| [a-z]'
         fail=1
+        # new ones taken again, to be references (one that differs from itself is none: the run says where); those the
+        # same as kept need not be, the kept ones having been so
+        rm -rf $O/again && cp -r $R $O/again
+        bash "$0" refs > /dev/null || exit 1
+        python3 "$D/android_ref.py" "$O/again" "$R" "$O/again-diff" /nonexistent $names | grep '^| [a-z]' \
+          | sed 's/^/android-ref: Android twice: /'
       fi
     fi
     # the Android host's text the Tester lacks, recorded (TEXT=1: the job found it lacking), then kept in the PR

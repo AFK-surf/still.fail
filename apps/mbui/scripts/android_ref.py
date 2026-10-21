@@ -16,9 +16,19 @@ fails when it differs by more, and is told to lower it when by fewer (the number
 emulator's bars) put where the window is on the emulator's screen (WIDTH × HEIGHT, its top TOP rows down: the bars'
 rows black, which the comparison leaves out), as Android's picture is of the whole screen.
 
+Words are compared by where they stand, not by their pixels (a line set a fraction of a pixel apart differs in every
+pixel along its edges, which hides what else differs): REFS/NAME.texts.json (Android's lines: ScreensRefTest, in the
+screen's pixels) and MBUI/NAME.texts.json (the mbui app's: the Tester's text runs, in points, with the window's scale
+and where it lies), each line {"t": words, "x0", "x1": its first letter's left, its last's right, "b": its baseline,
+"top", "bot"}. Their boxes (both apps', a pixel around) are left out of the pixels compared; the lines are paired by
+their words (in order where words repeat) and one counts as apart when its left, right or baseline is more than
+TEXT_PX from Android's, or when either app has a line the other has not. allowed.json's `texts_left`: how many lines
+are known apart still (the number only falls, as `left`).
+
 Out: OUT/NAME.png (Android | mbui | Android greyed with the differing pixels red, the allowed regions outlined blue,
-at half size), OUT/report.md (each screen's count and where its differences lie). Exit 1 when a screen differs
-outside its regions by more than its `left`, or a picture is missing or of another size.
+the words' boxes left out green, at half size), OUT/report.md (each screen's count and where its differences lie, its
+lines apart). Exit 1 when a screen differs outside its regions by more than its `left`, its lines apart are more than
+its `texts_left`, or a picture is missing or of another size.
 """
 import json
 import os
@@ -27,6 +37,37 @@ import sys
 import zlib
 
 CELL = 16
+# how far a line may stand from Android's (its left, right or baseline, in the screen's pixels) and be where it is
+TEXT_PX = 0.5
+# how far around a line's box its pixels are left out (antialiasing reaches past the box by a pixel)
+TEXT_PAD = 2
+
+
+def texts(path, top=0):
+    """A screen's lines (texts.json), in the screen's pixels: the mbui app's in points, with the window's scale, put
+    `top` rows down (where its window lies on the screen: {"scale", "lines"}); Android's in the screen's pixels already
+    (a list)."""
+    if not os.path.exists(path):
+        return None
+    d = json.load(open(path))
+    if not isinstance(d, dict):
+        return d
+    scale = d["scale"]
+    return [{"t": l["t"], "x0": l["x0"] * scale, "x1": l["x1"] * scale, "b": l["b"] * scale + top,
+             "top": l["top"] * scale + top, "bot": l["bot"] * scale + top} for l in d["lines"]]
+
+
+def pair(android, mbui):
+    """The lines paired by their words, in order where words repeat: (Android's, mbui's), and those of each alone."""
+    left = list(mbui)
+    pairs, alone_a = [], []
+    for a in android:
+        k = next((i for i, m in enumerate(left) if m["t"] == a["t"]), -1)
+        if k < 0:
+            alone_a.append(a)
+        else:
+            pairs.append((a, left.pop(k)))
+    return pairs, alone_a, left
 
 
 def load(path):
@@ -112,6 +153,8 @@ def main():
     os.makedirs(out, exist_ok=True)
     report, failed, lower = ["| screen | pixels differing | outside its regions (left) | where (x, y, w, h: pixels) |",
                              "|---|---|---|---|"], [], []
+    text_report = ["| screen | Android's lines | lines apart (texts_left) | which (pixels: mbui's less Android's) |",
+                   "|---|---|---|---|"]
     for name in names:
         a_path, m_path = os.path.join(refs, name + ".png"), os.path.join(mbui, name + ".png")
         if not os.path.exists(a_path) or not os.path.exists(m_path):
@@ -127,6 +170,30 @@ def main():
         mine = allowed.get(name, {})
         rects = [(r["x"], r["y"], r["x"] + r["w"], r["y"] + r["h"]) for r in mine.get("regions", [])]
         left = mine.get("left", 0)
+        # the words: compared by where they stand; their boxes left out of the pixels
+        a_texts = texts(os.path.join(refs, name + ".texts.json"))
+        m_texts = texts(os.path.join(mbui, name + ".texts.json"), top=bars["top"])
+        boxes = []
+        apart = []
+        if a_texts is not None and m_texts is not None:
+            for l in a_texts + m_texts:
+                boxes.append((int(l["x0"]) - TEXT_PAD, int(l["top"]) - TEXT_PAD, int(l["x1"]) + 1 + TEXT_PAD,
+                              int(l["bot"]) + 1 + TEXT_PAD))
+            pairs, alone_a, alone_m = pair(a_texts, m_texts)
+            for a, m in pairs:
+                d = (m["x0"] - a["x0"], m["x1"] - a["x1"], m["b"] - a["b"])
+                if max(abs(v) for v in d) > TEXT_PX:
+                    apart.append((max(abs(v) for v in d), f'"{a["t"][:24]}" left {d[0]:+.1f} right {d[1]:+.1f} '
+                                  f'baseline {d[2]:+.1f}'))
+            apart += [(1e9, f'"{a["t"][:24]}" Android\'s alone') for a in alone_a]
+            apart += [(1e9, f'"{m["t"][:24]}" mbui\'s alone') for m in alone_m]
+            apart.sort(key=lambda p: -p[0])
+        # (a row's boxes, for the rows they cover)
+        row_boxes = {}
+        for b in boxes:
+            for y in range(max(0, b[1]), min(ah, b[3])):
+                row_boxes.setdefault(y, []).append((b[0], b[2]))
+        texts_left = mine.get("texts_left", 0)
         inside = lambda x, y: any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in rects)
         total, outside, cells = 0, 0, {}
         diff_rows = []
@@ -136,11 +203,14 @@ def main():
             if y < bars["top"] or y >= ah - bars["bottom"]:
                 diff_rows.append(bytes(b"\xd0" * len(ar)))
                 continue
+            spans = row_boxes.get(y, [])
             for x in range(aw):
                 k = x * 3
                 g = (ar[k] * 30 + ar[k + 1] * 59 + ar[k + 2] * 11) // 100
                 g = 128 + g // 2
-                if abs(ar[k] - mr[k]) > 1 or abs(ar[k + 1] - mr[k + 1]) > 1 or abs(ar[k + 2] - mr[k + 2]) > 1:
+                if spans and any(x0 <= x < x1 for x0, x1 in spans):
+                    row[k:k + 3] = bytes((g // 2, g, g // 2))
+                elif abs(ar[k] - mr[k]) > 1 or abs(ar[k + 1] - mr[k + 1]) > 1 or abs(ar[k + 2] - mr[k + 2]) > 1:
                     total += 1
                     if not inside(x, y):
                         outside += 1
@@ -174,14 +244,24 @@ def main():
             failed.append(name)
         elif outside < left:
             lower.append(f"{name} {outside} (was {left})")
+        if a_texts is not None and m_texts is not None:
+            text_report.append(f"| {name} | {len(a_texts)} | {len(apart)} ({texts_left}) | "
+                               + "; ".join(t for _, t in apart[:8]) + " |")
+            if len(apart) > texts_left:
+                failed.append(name)
+            elif len(apart) < texts_left:
+                lower.append(f"{name} texts_left {len(apart)} (was {texts_left})")
+    if len(text_report) > 2:
+        report += [""] + text_report
     report.append("")
     report.append(f"Android | mbui | Android greyed, the pixels that differ red, the regions allowed.json lets differ "
-                  f"outlined blue: {out}/NAME.png.")
+                  f"outlined blue, the words' boxes (compared by where they stand) green: {out}/NAME.png.")
     open(os.path.join(out, "report.md"), "w").write("\n".join(report) + "\n")
     print("\n".join(report))
     if lower:
         print(f"android-ref: closer to Android's than allowed.json's `left` says, lower it: {', '.join(lower)}")
     if failed:
+        failed = sorted(set(failed))
         print(f"android-ref: {len(failed)} of {len(names)} screens differ from Android's by more than allowed.json "
               f"allows (its regions, its `left`): {', '.join(failed)}")
         sys.exit(1)

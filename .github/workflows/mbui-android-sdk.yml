@@ -1,8 +1,9 @@
 # mbui (apps/mbui/mbui, zzj3720/mbui merged in 2026-10-21): its own workflow, as it had it there, run in its directory.
 # What the emulator jobs boot (.github/actions/android-emulator), put in the Actions cache once each: the emulator's
 # build the references were made with (16428233, from Google's repository as a zip) and the x86_64 system images
-# (API 34; API 36, mbui-android-ref's), each by its revision (sdkmanager's, here alone). Asked each day; what is in already, nothing done. A download
-# that breaks off fails this run alone, the jobs going on with what is in.
+# (API 34; API 36, mbui-android-ref's), each by its revision (sdkmanager's, here alone): the one put in kept, a newer
+# only by taking it out. Asked each day; what is in already, nothing done. A download that breaks off fails this run
+# alone, the jobs going on with what is in.
 name: mbui-android-sdk
 on:
   schedule:
@@ -49,43 +50,62 @@ jobs:
         with:
           path: ~/android-emu
           key: android-emulator-16428233
-      - name: The system image's latest revision
-        id: rev
-        run: |
-          sdk=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
-          yes | $sdk --licenses > /dev/null || true
-          $sdk --install "system-images;android-${{ matrix.api }};${{ matrix.target }};x86_64" --channel=0 > /dev/null
-          rev=$(sed -n 's/^Pkg.Revision=//p' $ANDROID_HOME/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64/source.properties)
-          [ -n "$rev" ] || { echo "::error::no revision for the image"; exit 1; }
-          echo "key=android-image-${{ matrix.api }}-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
-          echo "rev=$rev" >> "$GITHUB_OUTPUT"
-          echo "revision $rev"
+      # the image as put in already, of whatever revision (the jobs' references were made on it: a newer one is put in
+      # only by taking this one out); none: the latest installed and put in. Nothing downloaded where it is in (an
+      # install each run, to read its revision, broke off now and then: "Error on ZipFile unknown archive", 39673756645)
       - uses: actions/cache/restore@v4
         id: img
         with:
           path: /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64
-          key: ${{ steps.rev.outputs.key }}
+          key: android-image-${{ matrix.api }}-${{ matrix.target }}-x86_64-none
+          restore-keys: android-image-${{ matrix.api }}-${{ matrix.target }}-x86_64-
           lookup-only: true
-      - if: steps.img.outputs.cache-hit != 'true'
+      - name: The image's revision (as put in, else the latest installed)
+        id: rev
+        run: |
+          pkg="system-images;android-${{ matrix.api }};${{ matrix.target }};x86_64"
+          echo "pkg=$pkg" >> "$GITHUB_OUTPUT"
+          kept="${{ steps.img.outputs.cache-matched-key }}"
+          if [ -n "$kept" ]; then
+            rev=${kept##*-}; echo "put=0" >> "$GITHUB_OUTPUT"
+          else
+            sdk=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+            yes | $sdk --licenses > /dev/null || true
+            $sdk --install "$pkg" --channel=0 > /dev/null
+            rev=$(sed -n 's/^Pkg.Revision=//p' $ANDROID_HOME/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64/source.properties)
+            [ -n "$rev" ] || { echo "::error::no revision for the image"; exit 1; }
+            echo "put=1" >> "$GITHUB_OUTPUT"
+          fi
+          echo "key=android-image-${{ matrix.api }}-${{ matrix.target }}-x86_64-$rev" >> "$GITHUB_OUTPUT"
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          echo "revision $rev"
+      - if: steps.rev.outputs.put == '1'
         uses: actions/cache/save@v4
         with:
           path: /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64
           key: ${{ steps.rev.outputs.key }}
-      # the AVD made over it (avdmanager, which asks for the SDK's emulator package: the image's install brought one),
-      # as a job boots it: config.ini's device, sizes and image by name; made once a revision, never in a job
-      - name: The AVD (${{ matrix.avd }})
-        run: |
-          export ANDROID_AVD_HOME=$HOME/.android/avd
-          rm -rf "$ANDROID_AVD_HOME" && mkdir -p "$ANDROID_AVD_HOME"
-          echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force -n ${{ matrix.avd }} \
-            --package "system-images;android-${{ matrix.api }};${{ matrix.target }};x86_64" --device ${{ matrix.profile }}
-          ls "$ANDROID_AVD_HOME"
       - uses: actions/cache/restore@v4
         id: avd
         with:
           path: ~/.android/avd
           key: android-avd-${{ matrix.keyed }}${{ matrix.target }}-${{ matrix.profile }}-${{ steps.rev.outputs.rev }}
           lookup-only: true
+      # no AVD over it yet: made (avdmanager, which asks for the SDK's emulator package: the image's install brought
+      # one) over the image (the one put in, taken out of the cache where it was not installed here), as a job boots
+      # it: config.ini's device, sizes and image by name; made once a revision, never in a job
+      - if: steps.avd.outputs.cache-hit != 'true' && steps.rev.outputs.put != '1'
+        uses: actions/cache/restore@v4
+        with:
+          path: /usr/local/lib/android/sdk/system-images/android-${{ matrix.api }}/${{ matrix.target }}/x86_64
+          key: ${{ steps.rev.outputs.key }}
+      - name: The AVD (${{ matrix.avd }})
+        if: steps.avd.outputs.cache-hit != 'true'
+        run: |
+          export ANDROID_AVD_HOME=$HOME/.android/avd
+          rm -rf "$ANDROID_AVD_HOME" && mkdir -p "$ANDROID_AVD_HOME"
+          echo no | $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd --force -n ${{ matrix.avd }} \
+            --package "${{ steps.rev.outputs.pkg }}" --device ${{ matrix.profile }}
+          ls "$ANDROID_AVD_HOME"
       - if: steps.avd.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
